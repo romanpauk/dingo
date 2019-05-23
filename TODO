@@ -1,0 +1,13 @@
+Messy list of ideas / bugs / various notes.
+
+RegisterBindings does now work for abstract classes
+TypeInstances that cannot live in factory can live in the context object or use a custom allocator
+unique_ptr rebind seems incomplete
+Cycle detection, later can be support through shared_ptr&, unique_ptr&... 
+Topo-sort during destruction
+Expose type instances and letting users reset the ones that are stable, creating a state pattern. This creates interesting threading issues and can benefit from container nesting.
+Resolving multiple implementations of some interface in a vector, map with custom key extractor, ...
+Thread safety - safe read / unsafe write, or finer locking
+Resolvability test, is_constructible should be enough to find out if container will resolve without exceptions
+Allocator for instances, types map and rest of the instance work
+Exception safety, I would have to somehow resolve on different container and merge after successful resolve
