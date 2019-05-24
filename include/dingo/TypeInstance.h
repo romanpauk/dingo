@@ -92,14 +92,15 @@ namespace dingo
                 {
                     ptr = PointerTraits< Type >::ToAddress(instance);
                 }
-            }))
+            }
+        ))
         {
             const std::string typeName = type.name();
             const std::string types = typeid(T).name();
             throw TypeNotConvertibleException();
         }
 
-            return ptr;
+        return ptr;
     }
 
     template< class T, bool > struct TypeInstanceDestructor

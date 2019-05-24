@@ -1,6 +1,5 @@
 Messy list of ideas / bugs / various notes.
 
-RegisterBindings does now work for abstract classes
 TypeInstances that cannot live in factory can live in the context object or use a custom allocator
 unique_ptr rebind seems incomplete
 Cycle detection, later can be support through shared_ptr&, unique_ptr&... 

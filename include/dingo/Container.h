@@ -61,7 +61,7 @@ namespace dingo
         > void RegisterBinding()
         {
             auto storage = std::make_shared< TypeStorage >();
-            Apply((std::tuple< TypeInterfaces... >*)0, [&](auto element)
+            Apply((TypeList< TypeInterfaces... >*)0, [&](auto element)
                 {
                     typedef typename decltype(element)::type TypeInterface;
 

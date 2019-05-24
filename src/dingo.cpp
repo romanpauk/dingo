@@ -9,7 +9,7 @@ namespace dingo {
 	struct IClass
 	{
 		virtual ~IClass() {}
-		// virtual const std::string& GetName() = 0;
+		virtual const std::string& GetName() = 0;
 	};
 
 	struct IClass1 : virtual IClass
@@ -86,7 +86,7 @@ namespace dingo {
 			AssertClass(*container.Resolve< C* >());
 			AssertClass(container.Resolve< C& >());
 
-			AssertTypeNotConvertible < C, std::tuple< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
+			AssertTypeNotConvertible < C, TypeList< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
 
 			Assert(C::Constructor == 1);
 			Assert(C::Destructor == 0);
@@ -110,7 +110,7 @@ namespace dingo {
 			AssertClass(*container.Resolve< C* >());
 			AssertClass(container.Resolve< C& >());
 
-			AssertTypeNotConvertible< C, std::tuple< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
+			AssertTypeNotConvertible< C, TypeList< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
 
 			Assert(C::Constructor == 1);
 			Assert(C::Destructor == 0);
@@ -137,7 +137,7 @@ namespace dingo {
 			AssertClass(*container.Resolve< std::shared_ptr< C >& >());
 			AssertClass(**container.Resolve< std::shared_ptr< C >* >());
 
-			AssertTypeNotConvertible< C, std::tuple< C, std::unique_ptr< C > > >(container);
+			AssertTypeNotConvertible< C, TypeList< C, std::unique_ptr< C > > >(container);
 
 			Assert(C::Constructor == 1);
 			Assert(C::Destructor == 0);
@@ -163,7 +163,7 @@ namespace dingo {
 			AssertClass(*container.Resolve< std::unique_ptr< C >& >());
 			AssertClass(**container.Resolve< std::unique_ptr< C >* >());
 
-			AssertTypeNotConvertible< C, std::tuple< C, std::unique_ptr< C > > >(container);
+			AssertTypeNotConvertible< C, TypeList< C, std::unique_ptr< C > > >(container);
 
 			Assert(C::Constructor == 1);
 			Assert(C::Destructor == 0);
@@ -382,5 +382,8 @@ int main()
 
 	TestSharedHierarchy();
 	TestUniqueHierarchy();
+
+    // TypeList< IClassX > a;
+    // ApplyX(a, [](auto x){});
 }
 
