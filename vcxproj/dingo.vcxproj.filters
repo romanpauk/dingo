@@ -30,9 +30,6 @@
     <ClInclude Include="..\include\dingo\TypeConstructor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\dingo\ContainerArgument.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\include\dingo\TypeInstance.h">
       <Filter>Header Files</Filter>
     </ClInclude>

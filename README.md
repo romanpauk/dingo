@@ -14,14 +14,14 @@ struct C { C(B*, std::unique_ptr< B >&, A&) {} }
 Container container;
 container.RegisterBinding< Storage< Shared, std::shared_ptr< A > > >();
 container.RegisterBinding< Storage< Shared, std::unique_ptr< B > > >();
-container.RegisterBinding< Storage, Unique, C > >();
+container.RegisterBinding< Storage< Unique, C > >();
 
 // Resolving the type C through container will instantiate A, B, and C.
 auto c = container.Resolve< C >();
 ```
 
 ### Goals
-The following goals are roughly based on what is either important, or interesting, in my work. It is perfectly possible someone else will find something else more important, or more interesting.
+The following goals are roughly based on what seemed either important or interesting in my job. It is perfectly possible someone else will find something else more important, or more interesting.
 
 #### Non-intrusive
 Constructor signature of registered types is detected automatically.
@@ -46,5 +46,5 @@ This comes from goal to be Natural, one would not expect types that can be moved
 It is possible to register a binding to the type under a key that is a base class of the type. As the correct cast is calculated at the time of registration, multiple inheritance is correctly supported. One instance can be resolved through multiple interfaces.
 
 #### Unit Tested
-Right now there is something that is more of a development help than a proper unit test, but at least it works.
+Right now there is something that is more of a development help than a proper unit test, but at least it works. See src/dingo.cpp.
 

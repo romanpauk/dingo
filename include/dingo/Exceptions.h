@@ -4,8 +4,7 @@
 
 namespace dingo
 {
-	struct TypeNotFoundException : std::exception {};
-	struct TypeNotConvertibleException : std::exception {};
-	struct TypeAmbiguousException : std::exception {};
-
+    struct TypeNotFoundException : std::exception {};
+    struct TypeNotConvertibleException : std::exception {};
+    struct TypeAmbiguousException : std::exception {};
 }

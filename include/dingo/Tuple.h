@@ -32,24 +32,24 @@ namespace dingo {
         }
     }
 
-	template < typename Function > void Apply(std::tuple<>*, Function) { return false; }
+    template < typename Function > void Apply(std::tuple<>*, Function) { return false; }
 
-	template < typename Function, typename Head > void Apply(std::tuple< Head >*, Function fn)
-	{
-		fn(ApplyIterator< Head >());
-	}
+    template < typename Function, typename Head > void Apply(std::tuple< Head >*, Function fn)
+    {
+        fn(ApplyIterator< Head >());
+    }
 
-	template < typename Function, typename Head, typename... Tail > void Apply(std::tuple< Head, Tail...>*, Function fn)
-	{
-		fn(ApplyIterator< Head >());
-		return Apply((std::tuple< Tail... >*)0, fn);
-	}
+    template < typename Function, typename Head, typename... Tail > void Apply(std::tuple< Head, Tail...>*, Function fn)
+    {
+        fn(ApplyIterator< Head >());
+        return Apply((std::tuple< Tail... >*)0, fn);
+    }
 
-	template <typename T, typename... Args> struct Contains;
-	template <typename T> struct Contains<std::tuple<>, T > : std::false_type {};
-	template <typename T, typename... Args> struct Contains<std::tuple< T, Args... >, T > : std::true_type {};
-	template <typename T, typename A, typename... Args> struct Contains<std::tuple< A, Args...>, T > : Contains<std::tuple< Args... >, T > {};
+    template <typename T, typename... Args> struct Contains;
+    template <typename T> struct Contains<std::tuple<>, T > : std::false_type {};
+    template <typename T, typename... Args> struct Contains<std::tuple< T, Args... >, T > : std::true_type {};
+    template <typename T, typename A, typename... Args> struct Contains<std::tuple< A, Args...>, T > : Contains<std::tuple< Args... >, T > {};
 
-	template <typename A, typename B> struct Concat { typedef decltype(std::tuple_cat(std::declval< A >(), std::declval< B >())) type; };
-	
+    template <typename A, typename B> struct Concat { typedef decltype(std::tuple_cat(std::declval< A >(), std::declval< B >())) type; };
+
 }

@@ -168,7 +168,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\include\dingo\Container.h" />
-    <ClInclude Include="..\include\dingo\ContainerArgument.h" />
     <ClInclude Include="..\include\dingo\Exceptions.h" />
     <ClInclude Include="..\include\dingo\Storage.h" />
     <ClInclude Include="..\include\dingo\Tuple.h" />

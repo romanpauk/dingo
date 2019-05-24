@@ -8,7 +8,7 @@ namespace dingo {
         operator T& ();
 
         template < typename T, typename = typename std::enable_if_t< !std::is_same_v< DisabledType, typename std::decay_t< T > > > >
-        operator T&& ();
+        operator T && ();
     };
 
     template <typename T, size_t N = 120, typename = void, typename... Args>
