@@ -363,6 +363,27 @@ namespace dingo {
 
 		container.Resolve< B& >();
 	}
+
+    void TestRecursion()
+    {
+        struct B;
+        struct A
+        {
+            A(B&) {}
+        };
+
+        struct B
+        {
+            B(std::shared_ptr< A >) {}
+        };
+
+        Container container;
+        container.RegisterBinding< Storage< dingo::Shared, std::shared_ptr< A > > >();
+        container.RegisterBinding< Storage< dingo::Shared, B > >();
+
+        AssertThrow(container.Resolve< A >(), TypeRecursionException);
+        AssertThrow(container.Resolve< B >(), TypeRecursionException);
+    }
 }
 
 int main()
@@ -382,6 +403,8 @@ int main()
 
 	TestSharedHierarchy();
 	TestUniqueHierarchy();
+
+    TestRecursion();
 
     // TypeList< IClassX > a;
     // ApplyX(a, [](auto x){});

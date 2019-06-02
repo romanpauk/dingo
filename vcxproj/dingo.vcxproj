@@ -167,6 +167,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\include\dingo\ArenaAllocator.h" />
     <ClInclude Include="..\include\dingo\Container.h" />
     <ClInclude Include="..\include\dingo\Exceptions.h" />
     <ClInclude Include="..\include\dingo\Storage.h" />

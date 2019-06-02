@@ -6,10 +6,16 @@ namespace dingo
 
     template< typename TypeInterface, typename Storage, bool Destroyable > struct TypeInstanceCache
     {
-        ITypeInstance* Resolve(Context& context, Storage& storage)
+        template < typename Context > ITypeInstance* Resolve(Context& context, Storage& storage)
         {
-            return new TypeInstance< TypeInterface, Storage >(storage.Resolve(context));
+            auto allocator = context.template GetAllocator< TypeInstance< TypeInterface, Storage > >();
+            auto instance = allocator.allocate(1);
+            new (instance) TypeInstance< TypeInterface, Storage >(storage.Resolve(context));
+            context.AddInstance(instance);
+            return instance;
         }
+
+        bool IsCached() { return false; }
     };
 
     template< typename TypeInterface, typename Storage > struct TypeInstanceCache< TypeInterface, Storage, false >
@@ -25,6 +31,8 @@ namespace dingo
             return &*instance_;
         }
 
+        bool IsCached() { return instance_.operator bool(); }
+
     private:
         std::optional< TypeInstance< TypeInterface, Storage > > instance_;
     };
@@ -33,6 +41,7 @@ namespace dingo
     {
         virtual ~ITypeInstanceFactory() {}
         virtual ITypeInstance* Resolve(Context& context) = 0;
+        virtual bool IsCached() = 0;
     };
 
     template <
@@ -46,7 +55,7 @@ namespace dingo
         Storage storage_;
         typedef decltype(storage_.Resolve(std::declval< Context& >())) ResolveType;
         typedef typename RebindType < ResolveType, TypeInterface >::type InterfaceType;
-        TypeInstanceCache< InterfaceType, Storage, Storage::Destroyable > instance_;
+        TypeInstanceCache< InterfaceType, Storage, Storage::Destroyable > cache_;
 
     public:
         TypeInstanceFactory()
@@ -54,7 +63,12 @@ namespace dingo
 
         ITypeInstance* Resolve(Context& context) override
         {
-            return instance_.Resolve(context, storage_);
+            return cache_.Resolve(context, storage_);
+        }
+
+        bool IsCached() override
+        {
+            return cache_.IsCached();
         }
     };
 
@@ -69,7 +83,7 @@ namespace dingo
         std::shared_ptr< Storage > storage_;
         typedef decltype(storage_->Resolve(std::declval< Context& >())) ResolveType;
         typedef typename RebindType < ResolveType, TypeInterface >::type InterfaceType;
-        TypeInstanceCache< InterfaceType, Storage, Storage::Destroyable > instance_;
+        TypeInstanceCache< InterfaceType, Storage, Storage::Destroyable > cache_;
 
     public:
         TypeInstanceFactory(std::shared_ptr< Storage > storage)
@@ -78,7 +92,12 @@ namespace dingo
 
         ITypeInstance* Resolve(Context& context) override
         {
-            return instance_.Resolve(context, *storage_);
+            return cache_.Resolve(context, *storage_);
+        }
+
+        bool IsCached() override
+        {
+            return cache_.IsCached();
         }
     };
 }
