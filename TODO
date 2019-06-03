@@ -1,8 +1,7 @@
 Messy list of ideas / bugs / various notes.
 
-TypeInstances that cannot live in factory can live in the context object or use a custom allocator
 unique_ptr rebind seems incomplete
-Cycle detection, later can be support through shared_ptr&, unique_ptr&... 
+Support cycles through shared_ptr&, unique_ptr&... 
 Topo-sort during destruction
 Expose type instances and letting users reset the ones that are stable, creating a state pattern. This creates interesting threading issues and can benefit from container nesting.
 Resolving multiple implementations of some interface in a vector, map with custom key extractor, ...

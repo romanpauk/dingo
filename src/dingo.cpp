@@ -3,6 +3,7 @@
 #include "dingo/Tuple.h"
 #include "dingo/StorageShared.h"
 #include "dingo/StorageUnique.h"
+#include "dingo/PerformanceCounter.h"
 
 namespace dingo {
 
@@ -384,13 +385,52 @@ namespace dingo {
         AssertThrow(container.Resolve< A >(), TypeRecursionException);
         AssertThrow(container.Resolve< B >(), TypeRecursionException);
     }
+
+    void TestResolvePerformance()
+    {
+        struct A {};
+        struct B { B(A&&) {} };
+        struct C { C(A&&, B&&) {} };
+
+        PerformanceCounter counter;
+        PerformanceCounter counter2;
+
+        Container container;
+        container.RegisterBinding< Storage< dingo::Unique, A > >();
+        container.RegisterBinding< Storage< dingo::Unique, B > >();
+        container.RegisterBinding< Storage< dingo::Unique, C > >();
+
+        const size_t N = 10000000;
+        for (size_t i = 0; i < N; ++i)
+        {
+            counter.Start();
+            container.Resolve< C >();
+            counter.Stop();
+        }
+
+        std::cout << N << " Resolve() took " << counter.GetElapsed() << std::endl;
+
+/*
+        // const size_t N = 10000000;
+        for (size_t i = 0; i < N; ++i)
+        {
+            counter2.Start();
+            A a;
+            B b(A());
+            C c(A(), B());
+            counter2.Stop();
+        }
+
+        std::cout << N << " Fake() took " << counter2.GetElapsed() << std::endl;
+*/
+    }
 }
 
 int main()
 {
 	using namespace dingo;
 
-	TestType();
+    TestType();
 	TestSharedValue();
 	TestSharedPointer();
 	TestSharedSharedPtr();
@@ -405,8 +445,6 @@ int main()
 	TestUniqueHierarchy();
 
     TestRecursion();
-
-    // TypeList< IClassX > a;
-    // ApplyX(a, [](auto x){});
+    TestResolvePerformance();    
 }
 

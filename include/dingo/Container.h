@@ -6,13 +6,41 @@
 #include "dingo/TypeInstanceFactory.h"
 #include "dingo/ArenaAllocator.h"
 
-#include <set>
 #include <unordered_map>
-#include <queue>
+#include <forward_list>
 
 namespace dingo
 {
     class Container;
+
+    template < typename T > struct TypeRecursionGuard
+    {
+        TypeRecursionGuard(bool typeInitialized)
+            : typeInitialized_(typeInitialized)
+        {
+            if (typeInitialized_) return;
+            
+            if (!visited_)
+            {
+                visited_ = true;
+            }
+            else
+            {
+                throw TypeRecursionException();
+            }
+        }
+
+        ~TypeRecursionGuard()
+        {
+            if (typeInitialized_) return;
+            visited_ = false;
+        }
+
+        static thread_local bool visited_;
+        bool typeInitialized_;
+    };
+
+    template < typename T > thread_local bool TypeRecursionGuard< T >::visited_ = false;
 
     class Context
     {
@@ -21,64 +49,33 @@ namespace dingo
             : container_(container)
             , arena_(buffer_)
             , allocator_(arena_)
-            , types_(allocator_)
             , instances_(allocator_)
         {}
 
         template < typename T > T Resolve();
 
-        struct TypeRecursionGuard
-        {
-            TypeRecursionGuard(Context& context, const std::type_info& type, bool typeInitialized)
-                : context_(context)
-                , type_(type)
-                , typeInitialized_(typeInitialized)
-            {
-                if(typeInitialized_) return;
-
-                if(!context.types_.insert(&type_).second)
-                {
-                    throw TypeRecursionException();
-                }
-            }
-            
-            ~TypeRecursionGuard()
-            {
-                if(typeInitialized_) return;
-
-                context_.types_.erase(&type_);
-            }
-
-            Context& context_;
-            const std::type_info& type_;
-            bool typeInitialized_;
-        };
-
         template < typename T > ArenaAllocator< T > GetAllocator() { return allocator_; }
           
         void AddInstance(ITypeInstance* instance)
         {
-            instances_.push_back(instance);
+            instances_.push_front(instance);
         }
 
         ~Context()
         {
-            while (!instances_.empty())
+            for (auto& instance : instances_)
             {
-                instances_.back()->~ITypeInstance();
-                instances_.pop_back();
+                instance->~ITypeInstance();
             }
         }
         
     private:
+        Container& container_;
+
         std::array< unsigned char, 1024 > buffer_;
         Arena arena_;
-        ArenaAllocator< void > allocator_;
-
-        std::set< const std::type_info*, std::less< const std::type_info* >, ArenaAllocator< const std::type_info* > > types_;
-        std::list< ITypeInstance*, ArenaAllocator< ITypeInstance* > > instances_;
-
-        Container& container_;
+        ArenaAllocator< void > allocator_;     
+        std::forward_list< ITypeInstance*, ArenaAllocator< ITypeInstance* > > instances_;
     };
 
     class Container
@@ -152,10 +149,8 @@ namespace dingo
             auto it = type_.find(typeid(Type));
             if (it != type_.end())
             {
-                Context::TypeRecursionGuard guard(context, typeid(Type), it->second->IsCached());
+                TypeRecursionGuard< Type > guard(it->second->IsCached());
                 auto instance = it->second->Resolve(context);
-                // std::unique_ptr< ITypeInstance > cleanup;
-                // if (instance->Destroyable()) cleanup.reset(instance);
                 return TypeInstanceGetter< T >::Get(*instance);                
             }
 
@@ -168,7 +163,7 @@ namespace dingo
             static_assert(std::is_convertible_v< typename TypeDecay< Type >::type*, typename TypeDecay< TypeInterface >::type* >);
         }
 
-        std::unordered_map< std::type_index, std::unique_ptr< ITypeInstanceFactory > > type_;
+        std::map< std::type_index, std::unique_ptr< ITypeInstanceFactory > > type_;
     };
 
     template < typename T > T Context::Resolve()

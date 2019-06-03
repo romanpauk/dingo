@@ -6,7 +6,7 @@ namespace dingo {
 
     class Arena
     {
-        template < typename T > class ArenaAllocator;
+        template < typename T > friend class ArenaAllocator;
 
     public:
         template < size_t Size > Arena(std::array< unsigned char, Size >& arena)
@@ -15,6 +15,9 @@ namespace dingo {
             , end_(arena.data() + arena.size())
         {}
 
+        bool operator == (const Arena& arena) { return base_ == arena.base_; }
+
+    private:
         unsigned char* base_;
         unsigned char* current_;
         unsigned char* end_;
@@ -38,8 +41,7 @@ namespace dingo {
 
         value_type* allocate(std::size_t n)
         {
-            const auto align = std::alignment_of_v< value_type >;
-            unsigned char* ptr = (unsigned char*)(uintptr_t(arena_.current_ + align - 1) & ~(align - 1));
+            unsigned char* ptr = (unsigned char*)(uintptr_t(arena_.current_ + alignof(value_type) - 1) & ~(alignof(value_type) - 1));
 
             if (ptr + n * sizeof(value_type) < arena_.end_)
             {
@@ -75,9 +77,9 @@ namespace dingo {
 
     };
 
-    template <class T, class U> bool operator==(ArenaAllocator<T> const&, ArenaAllocator<U> const&) noexcept
+    template <class T, class U> bool operator==(ArenaAllocator<T> const& lhs, ArenaAllocator<U> const& rhs) noexcept
     {
-        return true;
+        return lhs.arena_ == rhs.arena_;
     }
 
     template <class T, class U> bool operator!=(ArenaAllocator<T> const& x, ArenaAllocator<U> const& y) noexcept

@@ -41,8 +41,6 @@ namespace dingo
         virtual void* GetLvalueReferenceType(const std::type_info&) = 0;
         virtual void* GetRvalueReferenceType(const std::type_info&) = 0;
         virtual void* GetPointerType(const std::type_info&) = 0;
-
-        virtual bool Destroyable() = 0;
     };
 
     template < class T > struct TypeInstanceGetter
@@ -143,8 +141,6 @@ namespace dingo
             this->SetTransferred(true);
             return ptr;
         }
-
-        bool Destroyable() override { return TypeStorage::Destroyable; }
 
     private:
         T instance_;
