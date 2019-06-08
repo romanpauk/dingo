@@ -41,9 +41,10 @@ namespace dingo
     };
 
     template < typename Type, typename Conversions > class Storage< Shared, Type, Conversions >
+        : public IResettable
     {
     public:
-        static const bool Destroyable = false;
+        static const bool IsCaching = true;
 
         typedef Conversions Conversions;
         typedef Type Type;
@@ -54,15 +55,11 @@ namespace dingo
 
         ~Storage()
         {
-            if (initialized_)
-            {
-                reinterpret_cast<Type*>(&instance_)->~Type();
-            }
+            Reset();
         }
 
         Type* Resolve(Context& context)
         {
-            // TODO: thread-safe
             if (!initialized_)
             {
                 TypeFactory< typename TypeDecay< Type >::type >::template Construct< Type*, Container::ConstructorArgument< Type > >(context, &instance_);
@@ -72,64 +69,82 @@ namespace dingo
             return reinterpret_cast<Type*>(&instance_);
         }
 
+        bool IsResolved() const { return initialized_; }
+
+        void Reset() override
+        {
+            if (initialized_)
+            {
+                initialized_ = false;
+                reinterpret_cast<Type*>(&instance_)->~Type();
+            }
+        }
+
     private:
         std::aligned_storage_t< sizeof(Type) > instance_;
         bool initialized_;
     };
 
-    template < typename Type, typename Conversions > class Storage< Shared, Type*, Conversions >
-        : public Storage< Shared, std::unique_ptr< Type >, Conversions >
-    {
-    public:
-        Type* Resolve(Context& context)
+        template < typename Type, typename Conversions > class Storage< Shared, Type*, Conversions >
+            : public Storage< Shared, std::unique_ptr< Type >, Conversions >
         {
-            return Storage< Shared, std::unique_ptr< Type >, Conversions >::Resolve(context).get();
-        }
-    };
-
-    template < typename Type, typename Conversions > class Storage< Shared, std::shared_ptr< Type >, Conversions >
-    {
-    public:
-        static const bool Destroyable = false;
-
-        typedef Conversions Conversions;
-        typedef Type Type;
-
-        std::shared_ptr< Type >& Resolve(Context& context)
-        {
-            // TODO: thread-safe
-            if (!instance_)
+        public:
+            Type* Resolve(Context& context)
             {
-                instance_ = TypeFactory< Type >::template Construct< std::shared_ptr< Type >, Container::ConstructorArgument< Type > >(context);
+                return Storage< Shared, std::unique_ptr< Type >, Conversions >::Resolve(context).get();
             }
+        };
 
-            return instance_;
-        }
-
-    private:
-        std::shared_ptr< Type > instance_;
-    };
-
-    template < typename Type, typename Conversions > class Storage< Shared, std::unique_ptr< Type >, Conversions >
-    {
-    public:
-        static const bool Destroyable = false;
-
-        typedef Conversions Conversions;
-        typedef Type Type;
-
-        std::unique_ptr< Type >& Resolve(Context& context)
-        {
-            // TODO: thread-safe
-            if (!instance_)
+            template < typename Type, typename Conversions > class Storage< Shared, std::shared_ptr< Type >, Conversions >
+                : public IResettable
             {
-                instance_ = TypeFactory< Type >::template Construct< std::unique_ptr< Type >, Container::ConstructorArgument< Type > >(context);
-            }
+            public:
+                static const bool IsCaching = true;
 
-            return instance_;
-        }
+                typedef Conversions Conversions;
+                typedef Type Type;
 
-    private:
-        std::unique_ptr< Type > instance_;
-    };
+                std::shared_ptr< Type >& Resolve(Context& context)
+                {
+                    if (!instance_)
+                    {
+                        instance_ = TypeFactory< Type >::template Construct< std::shared_ptr< Type >, Container::ConstructorArgument< Type > >(context);
+                    }
+
+                    return instance_;
+                }
+
+                void Reset() override { instance_.reset(); }
+                bool IsResolved() { return instance_.get() != nullptr; }
+
+            private:
+                std::shared_ptr< Type > instance_;
+            };
+
+                template < typename Type, typename Conversions > class Storage< Shared, std::unique_ptr< Type >, Conversions >
+                    : public IResettable
+                {
+                public:
+                    static const bool IsCaching = true;
+
+                    typedef Conversions Conversions;
+                    typedef Type Type;
+
+                    std::unique_ptr< Type >& Resolve(Context& context)
+                    {
+                        // TODO: thread-safe
+                        if (!instance_)
+                        {
+                            instance_ = TypeFactory< Type >::template Construct< std::unique_ptr< Type >, Container::ConstructorArgument< Type > >(context);
+                        }
+
+                        return instance_;
+                    }
+
+                    void Reset() override { instance_.reset(); }
+                    bool IsResolved() { return instance_.get() != nullptr; }
+
+                private:
+                    std::unique_ptr< Type > instance_;
+                };
 }

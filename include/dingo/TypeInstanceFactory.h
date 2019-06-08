@@ -1,47 +1,50 @@
 #pragma once
 
+#include "dingo/ArenaAllocator.h"
+#include "dingo/Context.h"
+#include "dingo/ITypeInstanceFactory.h"
+
 namespace dingo
 {
     class Context;
 
-    template< typename TypeInterface, typename Storage, bool Destroyable > struct TypeInstanceCache
+    template< typename TypeInterface, typename Storage, bool IsCaching > struct TypeInstanceCache
+        : public IResettable
     {
         template < typename Context > ITypeInstance* Resolve(Context& context, Storage& storage)
         {
             auto allocator = context.template GetAllocator< TypeInstance< TypeInterface, Storage > >();
             auto instance = allocator.allocate(1);
             new (instance) TypeInstance< TypeInterface, Storage >(storage.Resolve(context));
-            context.AddInstance(instance);
+            context.AddTypeInstance(instance);
             return instance;
         }
 
-        bool IsCached() { return false; }
+        bool IsResolved() { return false; }
+        void Reset() override {}
     };
 
-    template< typename TypeInterface, typename Storage > struct TypeInstanceCache< TypeInterface, Storage, false >
+    template< typename TypeInterface, typename Storage > struct TypeInstanceCache< TypeInterface, Storage, true >
+        : public IResettable
     {
         ITypeInstance* Resolve(Context& context, Storage& storage)
         {
-            // TODO: thread-safe
             if (!instance_)
             {
+                if (!storage.IsResolved()) context.AddResettable(&storage);
+                context.AddResettable(this);
+
                 instance_.emplace(storage.Resolve(context));
             }
 
             return &*instance_;
         }
 
-        bool IsCached() { return instance_.operator bool(); }
+        bool IsResolved() { return instance_.operator bool(); }
+        void Reset() override { instance_.reset(); }
 
     private:
         std::optional< TypeInstance< TypeInterface, Storage > > instance_;
-    };
-
-    struct ITypeInstanceFactory
-    {
-        virtual ~ITypeInstanceFactory() {}
-        virtual ITypeInstance* Resolve(Context& context) = 0;
-        virtual bool IsCached() = 0;
     };
 
     template <
@@ -55,7 +58,7 @@ namespace dingo
         Storage storage_;
         typedef decltype(storage_.Resolve(std::declval< Context& >())) ResolveType;
         typedef typename RebindType < ResolveType, TypeInterface >::type InterfaceType;
-        TypeInstanceCache< InterfaceType, Storage, Storage::Destroyable > cache_;
+        TypeInstanceCache< InterfaceType, Storage, Storage::IsCaching > cache_;
 
     public:
         TypeInstanceFactory()
@@ -66,9 +69,14 @@ namespace dingo
             return cache_.Resolve(context, storage_);
         }
 
-        bool IsCached() override
+        bool IsResolved() override
         {
-            return cache_.IsCached();
+            return cache_.IsResolved();
+        }
+
+        bool IsCaching() override
+        {
+            return Storage::IsCaching;
         }
     };
 
@@ -83,7 +91,7 @@ namespace dingo
         std::shared_ptr< Storage > storage_;
         typedef decltype(storage_->Resolve(std::declval< Context& >())) ResolveType;
         typedef typename RebindType < ResolveType, TypeInterface >::type InterfaceType;
-        TypeInstanceCache< InterfaceType, Storage, Storage::Destroyable > cache_;
+        TypeInstanceCache< InterfaceType, Storage, Storage::IsCaching > cache_;
 
     public:
         TypeInstanceFactory(std::shared_ptr< Storage > storage)
@@ -95,9 +103,14 @@ namespace dingo
             return cache_.Resolve(context, *storage_);
         }
 
-        bool IsCached() override
+        bool IsResolved() override
         {
-            return cache_.IsCached();
+            return cache_.IsResolved();
+        }
+
+        bool IsCaching() override
+        {
+            return Storage::IsCaching;
         }
     };
 }

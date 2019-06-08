@@ -5,365 +5,366 @@
 #include "dingo/StorageUnique.h"
 #include "dingo/PerformanceCounter.h"
 
-namespace dingo {
+namespace dingo
+{
+    struct IClass
+    {
+        virtual ~IClass() {}
+        virtual const std::string& GetName() = 0;
+    };
 
-	struct IClass
-	{
-		virtual ~IClass() {}
-		virtual const std::string& GetName() = 0;
-	};
+    struct IClass1 : virtual IClass
+    {
+        virtual ~IClass1() {}
+    };
 
-	struct IClass1 : virtual IClass
-	{
-		virtual ~IClass1() {}
-	};
+    struct IClass2 : virtual IClass
+    {
+        virtual ~IClass2() {}
+    };
 
-	struct IClass2 : virtual IClass
-	{
-		virtual ~IClass2() {}
-	};
+    template < size_t Counter > struct Class : IClass1, IClass2
+    {
+        Class() : name_("Class") { ++Constructor; }
+        ~Class() { ++Destructor; }
+        Class(const Class& cls) : name_(cls.name_) { ++CopyConstructor; }
+        Class(Class&& cls) : name_(std::move(cls.name_)) { ++MoveConstructor; }
 
-	template < size_t Counter > struct Class : IClass1, IClass2
-	{
-		Class() : name_("Class") { ++Constructor; }
-		~Class() { ++Destructor; }
-		Class(const Class& cls) : name_(cls.name_) { ++CopyConstructor; }
-		Class(Class&& cls) : name_(std::move(cls.name_)) { ++MoveConstructor; }
+        const std::string& GetName() { return name_; }
 
-		const std::string& GetName() { return name_; }
+        static size_t Constructor;
+        static size_t CopyConstructor;
+        static size_t MoveConstructor;
+        static size_t Destructor;
 
-		static size_t Constructor;
-		static size_t CopyConstructor;
-		static size_t MoveConstructor;
-		static size_t Destructor;
+    private:
+        std::string name_;
+    };
 
-	private:
-		std::string name_;
-	};
-
-	template < size_t Counter > size_t Class< Counter >::Constructor;
-	template < size_t Counter > size_t Class< Counter >::CopyConstructor;
-	template < size_t Counter > size_t Class< Counter >::MoveConstructor;
-	template < size_t Counter > size_t Class< Counter >::Destructor;
+    template < size_t Counter > size_t Class< Counter >::Constructor;
+    template < size_t Counter > size_t Class< Counter >::CopyConstructor;
+    template < size_t Counter > size_t Class< Counter >::MoveConstructor;
+    template < size_t Counter > size_t Class< Counter >::Destructor;
 
 #define AssertThrow(code, exception) try { (code); std::abort(); } catch(exception&) {}
 #define Assert(code) do { if(!(code)) std::abort(); } while(false)
 
-	template< typename Type, typename NonConvertibleTypes > void AssertTypeNotConvertible(Container& container)
-	{
-		Apply((NonConvertibleTypes*)0, [&](auto element)
-			{
-				AssertThrow(container.Resolve< decltype(element)::type >(), dingo::TypeNotConvertibleException);
-			});
-	}
+    template< typename Type, typename NonConvertibleTypes > void AssertTypeNotConvertible(Container& container)
+    {
+        Apply((NonConvertibleTypes*)0, [&](auto element)
+        {
+            AssertThrow(container.Resolve< decltype(element)::type >(), dingo::TypeNotConvertibleException);
+        });
+    }
 
-	template < class T > void AssertClass(T&& cls)
-	{
-		Assert(cls.GetName() == "Class");
-	}
+    template < class T > void AssertClass(T&& cls)
+    {
+        Assert(cls.GetName() == "Class");
+    }
 
-	void TestType()
-	{
-		struct A {};
-		struct B {
-			B(std::shared_ptr< A >) {}
-		};
+    void TestType()
+    {
+        struct A {};
+        struct B
+        {
+            B(std::shared_ptr< A >) {}
+        };
 
-		TypeConstructor< B >::Construct(nullptr);
-		TypeConstructor< B* >::Construct(nullptr);
-		TypeConstructor< std::unique_ptr< B > >::Construct(nullptr);
-		TypeConstructor< std::shared_ptr< B > >::Construct(nullptr);
-		TypeConstructor< std::optional< B > >::Construct(nullptr);
+        TypeConstructor< B >::Construct(nullptr);
+        TypeConstructor< B* >::Construct(nullptr);
+        TypeConstructor< std::unique_ptr< B > >::Construct(nullptr);
+        TypeConstructor< std::shared_ptr< B > >::Construct(nullptr);
+        TypeConstructor< std::optional< B > >::Construct(nullptr);
 
-	}
+    }
 
-	void TestSharedValue()
-	{
-		typedef Class< __COUNTER__ > C;
-		{
-			Container container;
-			container.RegisterBinding< Storage< Shared, C > >();
+    void TestSharedValue()
+    {
+        typedef Class< __COUNTER__ > C;
+        {
+            Container container;
+            container.RegisterBinding< Storage< Shared, C > >();
 
-			AssertClass(*container.Resolve< C* >());
-			AssertClass(container.Resolve< C& >());
+            AssertClass(*container.Resolve< C* >());
+            AssertClass(container.Resolve< C& >());
 
-			AssertTypeNotConvertible < C, TypeList< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
+            AssertTypeNotConvertible < C, TypeList< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
 
-			Assert(C::Constructor == 1);
-			Assert(C::Destructor == 0);
-			Assert(C::CopyConstructor == 0);
-			Assert(C::MoveConstructor == 0);
-		}
+            Assert(C::Constructor == 1);
+            Assert(C::Destructor == 0);
+            Assert(C::CopyConstructor == 0);
+            Assert(C::MoveConstructor == 0);
+        }
 
-		{
-			Assert(C::Destructor == 1);
-		}
-	}
+        {
+            Assert(C::Destructor == 1);
+        }
+    }
 
-	void TestSharedPointer()
-	{
-		typedef Class< __COUNTER__ > C;
+    void TestSharedPointer()
+    {
+        typedef Class< __COUNTER__ > C;
 
-		{
-			Container container;
-			container.RegisterBinding< Storage< Shared, C* > >();
-						
-			AssertClass(*container.Resolve< C* >());
-			AssertClass(container.Resolve< C& >());
+        {
+            Container container;
+            container.RegisterBinding< Storage< Shared, C* > >();
 
-			AssertTypeNotConvertible< C, TypeList< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
+            AssertClass(*container.Resolve< C* >());
+            AssertClass(container.Resolve< C& >());
 
-			Assert(C::Constructor == 1);
-			Assert(C::Destructor == 0);
-			Assert(C::CopyConstructor == 0);
-			Assert(C::MoveConstructor == 0);
-		}
+            AssertTypeNotConvertible< C, TypeList< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
 
-		{
-			Assert(C::Destructor == 1);
-		}
-	}
+            Assert(C::Constructor == 1);
+            Assert(C::Destructor == 0);
+            Assert(C::CopyConstructor == 0);
+            Assert(C::MoveConstructor == 0);
+        }
 
-	void TestSharedSharedPtr()
-	{
-		typedef Class< __COUNTER__ > C;
+        {
+            Assert(C::Destructor == 1);
+        }
+    }
 
-		{
-			Container container;
-			container.RegisterBinding< Storage< Shared, std::shared_ptr< C > > >();
+    void TestSharedSharedPtr()
+    {
+        typedef Class< __COUNTER__ > C;
 
-			AssertClass(*container.Resolve< C* >());
-			AssertClass(container.Resolve< C& >());
-			AssertClass(*container.Resolve< std::shared_ptr< C > >());
-			AssertClass(*container.Resolve< std::shared_ptr< C >& >());
-			AssertClass(**container.Resolve< std::shared_ptr< C >* >());
+        {
+            Container container;
+            container.RegisterBinding< Storage< Shared, std::shared_ptr< C > > >();
 
-			AssertTypeNotConvertible< C, TypeList< C, std::unique_ptr< C > > >(container);
+            AssertClass(*container.Resolve< C* >());
+            AssertClass(container.Resolve< C& >());
+            AssertClass(*container.Resolve< std::shared_ptr< C > >());
+            AssertClass(*container.Resolve< std::shared_ptr< C >& >());
+            AssertClass(**container.Resolve< std::shared_ptr< C >* >());
 
-			Assert(C::Constructor == 1);
-			Assert(C::Destructor == 0);
-			Assert(C::CopyConstructor == 0);
-			Assert(C::MoveConstructor == 0);
-		}
+            AssertTypeNotConvertible< C, TypeList< C, std::unique_ptr< C > > >(container);
 
-		{
-			Assert(C::Destructor == 1);
-		}
-	}
+            Assert(C::Constructor == 1);
+            Assert(C::Destructor == 0);
+            Assert(C::CopyConstructor == 0);
+            Assert(C::MoveConstructor == 0);
+        }
 
-	void TestSharedUniquePtr()
-	{
-		typedef Class< __COUNTER__ > C;
+        {
+            Assert(C::Destructor == 1);
+        }
+    }
 
-		{
-			Container container;
-			container.RegisterBinding< Storage< Shared, std::unique_ptr< C > > >();
+    void TestSharedUniquePtr()
+    {
+        typedef Class< __COUNTER__ > C;
 
-			AssertClass(*container.Resolve< C* >());
-			AssertClass(container.Resolve< C& >());
-			AssertClass(*container.Resolve< std::unique_ptr< C >& >());
-			AssertClass(**container.Resolve< std::unique_ptr< C >* >());
+        {
+            Container container;
+            container.RegisterBinding< Storage< Shared, std::unique_ptr< C > > >();
 
-			AssertTypeNotConvertible< C, TypeList< C, std::unique_ptr< C > > >(container);
+            AssertClass(*container.Resolve< C* >());
+            AssertClass(container.Resolve< C& >());
+            AssertClass(*container.Resolve< std::unique_ptr< C >& >());
+            AssertClass(**container.Resolve< std::unique_ptr< C >* >());
 
-			Assert(C::Constructor == 1);
-			Assert(C::Destructor == 0);
-			Assert(C::CopyConstructor == 0);
-			Assert(C::MoveConstructor == 0);
-		}
+            AssertTypeNotConvertible< C, TypeList< C, std::unique_ptr< C > > >(container);
 
-		{
-			Assert(C::Destructor == 1);
-		}
-	}
-	
-	void TestUniqueValue()
-	{
-		{
-			typedef Class< __COUNTER__ > C;
+            Assert(C::Constructor == 1);
+            Assert(C::Destructor == 0);
+            Assert(C::CopyConstructor == 0);
+            Assert(C::MoveConstructor == 0);
+        }
 
-			{
-				Container container;
-				container.RegisterBinding< Storage< Unique, C > >();
+        {
+            Assert(C::Destructor == 1);
+        }
+    }
 
-				{
-					AssertClass(container.Resolve< C&& >());
-					Assert(C::Constructor == 1);
-					Assert(C::MoveConstructor == 2);
-					Assert(C::CopyConstructor == 0);
-				}
+    void TestUniqueValue()
+    {
+        {
+            typedef Class< __COUNTER__ > C;
 
-				Assert(C::Destructor == 3);
-			}
+            {
+                Container container;
+                container.RegisterBinding< Storage< Unique, C > >();
 
-			Assert(C::Destructor == 3);
-		}
+                {
+                    AssertClass(container.Resolve< C&& >());
+                    Assert(C::Constructor == 1);
+                    Assert(C::MoveConstructor == 2);
+                    Assert(C::CopyConstructor == 0);
+                }
 
-		{
-			typedef Class< __COUNTER__ > C;
+                Assert(C::Destructor == 3);
+            }
 
-			{
-				Container container;
-				container.RegisterBinding< Storage< Unique, C > >();
+            Assert(C::Destructor == 3);
+        }
 
-				{
-					// TODO: This is quite stupid, it does allocation, move, than copy in TypeInstanceGetter
-					AssertClass(container.Resolve< C >());
-					Assert(C::Constructor == 1);
-					Assert(C::MoveConstructor == 1);
-					Assert(C::CopyConstructor == 1);
-				}
+        {
+            typedef Class< __COUNTER__ > C;
 
-				Assert(C::Destructor == 3);
-			}
+            {
+                Container container;
+                container.RegisterBinding< Storage< Unique, C > >();
 
-			Assert(C::Destructor == 3);
-		}
+                {
+                    // TODO: This is quite stupid, it does allocation, move, than copy in TypeInstanceGetter
+                    AssertClass(container.Resolve< C >());
+                    Assert(C::Constructor == 1);
+                    Assert(C::MoveConstructor == 1);
+                    Assert(C::CopyConstructor == 1);
+                }
 
-		{
-			typedef Class< __COUNTER__ > C;
+                Assert(C::Destructor == 3);
+            }
 
-			{
-				Container container;
-				container.RegisterBinding< Storage< Unique, std::unique_ptr< C > > >();
+            Assert(C::Destructor == 3);
+        }
 
-				{
-					AssertClass(*container.Resolve< std::unique_ptr< C > >());
-					Assert(C::Constructor == 1);
-					Assert(C::MoveConstructor == 0);
-					Assert(C::CopyConstructor == 0);
-				}
+        {
+            typedef Class< __COUNTER__ > C;
 
-				Assert(C::Destructor == 1);
-			}
+            {
+                Container container;
+                container.RegisterBinding< Storage< Unique, std::unique_ptr< C > > >();
 
-			Assert(C::Destructor == 1);
-		}
-	}
+                {
+                    AssertClass(*container.Resolve< std::unique_ptr< C > >());
+                    Assert(C::Constructor == 1);
+                    Assert(C::MoveConstructor == 0);
+                    Assert(C::CopyConstructor == 0);
+                }
 
-	void TestUniquePointer()
-	{
-		{
-			typedef Class< __COUNTER__ > C;
+                Assert(C::Destructor == 1);
+            }
 
-			{
-				Container container;
-				container.RegisterBinding< Storage< Unique, C* > >();
-				AssertClass(container.Resolve< C >());
-				Assert(C::Constructor == 1);
-				Assert(C::CopyConstructor == 1); // TODO: this is stupid. There should be no copy, just move.
-				Assert(C::MoveConstructor == 0);
-			}
+            Assert(C::Destructor == 1);
+        }
+    }
 
-			Assert(C::Destructor == 2);
-		}
+    void TestUniquePointer()
+    {
+        {
+            typedef Class< __COUNTER__ > C;
 
-		{
-			typedef Class< __COUNTER__ > C;
+            {
+                Container container;
+                container.RegisterBinding< Storage< Unique, C* > >();
+                AssertClass(container.Resolve< C >());
+                Assert(C::Constructor == 1);
+                Assert(C::CopyConstructor == 1); // TODO: this is stupid. There should be no copy, just move.
+                Assert(C::MoveConstructor == 0);
+            }
 
-			{
-				Container container;
-				container.RegisterBinding< Storage< Unique, C* > >();
-				auto c = container.Resolve< C* >();
-				AssertClass(*c);
-				Assert(C::Constructor == 1);
-				Assert(C::CopyConstructor == 0);
-				Assert(C::MoveConstructor == 0);
-				Assert(C::Destructor == 0);
+            Assert(C::Destructor == 2);
+        }
 
-				delete c;
-				Assert(C::Destructor == 1);
-			}
+        {
+            typedef Class< __COUNTER__ > C;
 
-			Assert(C::Destructor == 1);
-		}
-	}
+            {
+                Container container;
+                container.RegisterBinding< Storage< Unique, C* > >();
+                auto c = container.Resolve< C* >();
+                AssertClass(*c);
+                Assert(C::Constructor == 1);
+                Assert(C::CopyConstructor == 0);
+                Assert(C::MoveConstructor == 0);
+                Assert(C::Destructor == 0);
 
-	void TestMultipleInterfaces()
-	{
-		typedef Class< __COUNTER__ > C;
+                delete c;
+                Assert(C::Destructor == 1);
+            }
 
-		dingo::Container container;
-		container.RegisterBinding< Storage< Shared, C >, IClass, IClass1, IClass2 >();
+            Assert(C::Destructor == 1);
+        }
+    }
 
-		{
-			auto c = container.Resolve< IClass* >();
-			Assert(dynamic_cast<C*>(c));
-		}
+    void TestMultipleInterfaces()
+    {
+        typedef Class< __COUNTER__ > C;
 
-		{
-			auto c = container.Resolve< IClass1* >();
-			Assert(dynamic_cast<C*>(c));
-		}
+        dingo::Container container;
+        container.RegisterBinding< Storage< Shared, C >, IClass, IClass1, IClass2 >();
 
-		{
-			auto c = container.Resolve< IClass2* >();
-			Assert(dynamic_cast<C*>(c));
-		}
-	}
+        {
+            auto c = container.Resolve< IClass* >();
+            Assert(dynamic_cast<C*>(c));
+        }
 
-	void TestSharedHierarchy()
-	{
-		struct S: Class< __COUNTER__ >
-		{};
+        {
+            auto c = container.Resolve< IClass1* >();
+            Assert(dynamic_cast<C*>(c));
+        }
 
-		struct U: Class< __COUNTER__ >
-		{
-			U(S& s1) 
-			{
-				AssertClass(s1);
-			}
-		};
+        {
+            auto c = container.Resolve< IClass2* >();
+            Assert(dynamic_cast<C*>(c));
+        }
+    }
 
-		struct B: Class< __COUNTER__ >
-		{
-			B(S s1, S& s2, S* s3, std::shared_ptr< S >* s4, std::shared_ptr< S >& s5, std::shared_ptr< S > s6,
-			  U u1, U& u2, U* u3, std::unique_ptr< U >* u4, std::unique_ptr< U >& u5
-			) 
-			{
-				AssertClass(s1);
-				AssertClass(s2);
-				AssertClass(*s3);
-				AssertClass(**s4);
-				AssertClass(*s5);
-				AssertClass(*s6);
+    void TestSharedHierarchy()
+    {
+        struct S : Class< __COUNTER__ >
+        {};
 
-				AssertClass(u1);
-				AssertClass(u2);
-				AssertClass(*u3);
-				AssertClass(**u4);
-				AssertClass(*u5);
-			}
-		};
+        struct U : Class< __COUNTER__ >
+        {
+            U(S& s1)
+            {
+                AssertClass(s1);
+            }
+        };
 
-		Container container;
-		container.RegisterBinding< Storage< Shared, std::shared_ptr< S > > >();
-		container.RegisterBinding< Storage< Shared, std::unique_ptr< U > > >();
-		container.RegisterBinding< Storage< Shared, B > >();
+        struct B : Class< __COUNTER__ >
+        {
+            B(S s1, S& s2, S* s3, std::shared_ptr< S >* s4, std::shared_ptr< S >& s5, std::shared_ptr< S > s6,
+                U u1, U& u2, U* u3, std::unique_ptr< U >* u4, std::unique_ptr< U >& u5
+            )
+            {
+                AssertClass(s1);
+                AssertClass(s2);
+                AssertClass(*s3);
+                AssertClass(**s4);
+                AssertClass(*s5);
+                AssertClass(*s6);
 
-		container.Resolve< B& >();
-	}
+                AssertClass(u1);
+                AssertClass(u2);
+                AssertClass(*u3);
+                AssertClass(**u4);
+                AssertClass(*u5);
+            }
+        };
 
-	void TestUniqueHierarchy()
-	{
-		struct S
-		{};
+        Container container;
+        container.RegisterBinding< Storage< Shared, std::shared_ptr< S > > >();
+        container.RegisterBinding< Storage< Shared, std::unique_ptr< U > > >();
+        container.RegisterBinding< Storage< Shared, B > >();
 
-		struct U
-		{};
+        container.Resolve< B& >();
+    }
 
-		struct B
-		{
-			B(std::shared_ptr< S >&&) {}
-		};
+    void TestUniqueHierarchy()
+    {
+        struct S
+        {};
 
-		Container container;
-		container.RegisterBinding< Storage< dingo::Unique, std::shared_ptr< S > > >();
-		container.RegisterBinding< Storage< dingo::Unique, std::unique_ptr< U > > >();
-		container.RegisterBinding< Storage< dingo::Shared, B > >();
+        struct U
+        {};
 
-		container.Resolve< B& >();
-	}
+        struct B
+        {
+            B(std::shared_ptr< S >&&) {}
+        };
+
+        Container container;
+        container.RegisterBinding< Storage< dingo::Unique, std::shared_ptr< S > > >();
+        container.RegisterBinding< Storage< dingo::Unique, std::unique_ptr< U > > >();
+        container.RegisterBinding< Storage< dingo::Shared, B > >();
+
+        container.Resolve< B& >();
+    }
 
     void TestRecursion()
     {
@@ -400,7 +401,7 @@ namespace dingo {
         container.RegisterBinding< Storage< dingo::Unique, B > >();
         container.RegisterBinding< Storage< dingo::Unique, C > >();
 
-        const size_t N = 10000000;
+        const size_t N = 1000000;
         for (size_t i = 0; i < N; ++i)
         {
             counter.Start();
@@ -410,41 +411,74 @@ namespace dingo {
 
         std::cout << N << " Resolve() took " << counter.GetElapsed() << std::endl;
 
-/*
-        // const size_t N = 10000000;
-        for (size_t i = 0; i < N; ++i)
-        {
-            counter2.Start();
-            A a;
-            B b(A());
-            C c(A(), B());
-            counter2.Stop();
-        }
+        /*
+                // const size_t N = 10000000;
+                for (size_t i = 0; i < N; ++i)
+                {
+                    counter2.Start();
+                    A a;
+                    B b(A());
+                    C c(A(), B());
+                    counter2.Stop();
+                }
 
-        std::cout << N << " Fake() took " << counter2.GetElapsed() << std::endl;
-*/
+                std::cout << N << " Fake() took " << counter2.GetElapsed() << std::endl;
+        */
+    }
+
+    void TestResolveRollback()
+    {
+        typedef Class< __COUNTER__ > A;
+        typedef Class< __COUNTER__ > B;
+        struct Ex {};
+        struct C
+        {
+            C(A&, B&) { throw Ex(); }
+        };
+
+        Container container;
+        container.RegisterBinding< Storage< dingo::Shared, A > >();
+        container.RegisterBinding< Storage< dingo::Shared, B > >();
+        container.RegisterBinding< Storage< dingo::Shared, C > >();
+
+        AssertThrow(container.Resolve< C& >(), Ex);
+        Assert(A::Constructor == 1);
+        Assert(A::Destructor == 1);
+        Assert(B::Constructor == 1);
+        Assert(B::Destructor == 1);
+
+        container.Resolve< A& >();
+        Assert(A::Constructor == 2);
+        Assert(A::Destructor == 1);
+        AssertThrow(container.Resolve< C >(), Ex);
+        Assert(A::Constructor == 2);
+        Assert(A::Destructor == 1);
+        Assert(B::Constructor == 2);
+        Assert(B::Destructor == 2);
     }
 }
 
 int main()
 {
-	using namespace dingo;
+    using namespace dingo;
 
     TestType();
-	TestSharedValue();
-	TestSharedPointer();
-	TestSharedSharedPtr();
-	TestSharedUniquePtr();
+    TestSharedValue();
+    TestSharedPointer();
+    TestSharedSharedPtr();
+    TestSharedUniquePtr();
 
-	TestUniqueValue();
-	TestUniquePointer();
+    TestUniqueValue();
+    TestUniquePointer();
 
-	TestMultipleInterfaces();
+    TestMultipleInterfaces();
 
-	TestSharedHierarchy();
-	TestUniqueHierarchy();
+    TestSharedHierarchy();
+    TestUniqueHierarchy();
 
     TestRecursion();
-    TestResolvePerformance();    
+    TestResolvePerformance();
+
+    TestResolveRollback();
 }
 

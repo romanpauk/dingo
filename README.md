@@ -2,7 +2,7 @@
 Dependency Injection Container for C++, with DI, next-gen and an 'o' in a name.
 
 ## Introduction
-This is a prototype of dependency injection library I am working on. It was never used in production. Developed with VS2019.
+This is a prototype of header-only, dependency injection library I am working on. Developed with VS2019.
 
 ```c++
 // Classes to be managed by the container
@@ -40,7 +40,7 @@ Type held as std::shared_ptr is constructed using std::make_shared.
 Flexible means that it should be possible to implement various enhancements without touching core code too much. Template class specializations are used to tweak the behavior and functionality for different storage types, instance creation or passing instances through type-erasure boundary. I've a lot of ideas, so I am going to test the flexibility soon.
 
 #### Optimal
-This comes from goal to be Natural, one would not expect types that can be moved to be copied, or unnecessary copies created. For instances with shared storage, there is no memory allocation in Resolve<> call, hopefully there will be none even for instances with unique storage. The container should have low footprint.
+This comes from goal to be Natural, one would not expect types that can be moved to be copied, or unnecessary copies created. The container should have low footprint and behave correctly in case of exceptions thrown from client code. Heap allocations are done only during RegisterBinding calls.
 
 #### Usable as Key/Value Container
 It is possible to register a binding to the type under a key that is a base class of the type. As the correct cast is calculated at the time of registration, multiple inheritance is correctly supported. One instance can be resolved through multiple interfaces.

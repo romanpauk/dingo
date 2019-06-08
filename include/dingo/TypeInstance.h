@@ -73,24 +73,24 @@ namespace dingo
         void* ptr = nullptr;
 
         if (!ApplyType((T*)0, type, [&](auto element)
+        {
+            if (IsSmartPtr< Type >::value)
             {
-                if (IsSmartPtr< Type >::value)
+                if (IsSmartPtr< std::decay_t< decltype(element)::type > >::value)
                 {
-                    if (IsSmartPtr< std::decay_t< decltype(element)::type > >::value)
-                    {
-                        ptr = &instance;
+                    ptr = &instance;
 
-                    }
-                    else
-                    {
-                        ptr = PointerTraits< Type >::ToAddress(instance);
-                    }
                 }
                 else
                 {
                     ptr = PointerTraits< Type >::ToAddress(instance);
                 }
             }
+            else
+            {
+                ptr = PointerTraits< Type >::ToAddress(instance);
+            }
+        }
         ))
         {
             const std::string typeName = type.name();
@@ -107,7 +107,7 @@ namespace dingo
         void Destroy(T&) {}
     };
 
-    template< class T > struct TypeInstanceDestructor< T*, true >
+    template< class T > struct TypeInstanceDestructor< T*, false >
     {
         bool Transferred = false;
         void SetTransferred(bool value) { Transferred = value; }
@@ -116,7 +116,7 @@ namespace dingo
 
     template < typename T, typename TypeStorage > class TypeInstance
         : public ITypeInstance
-        , private TypeInstanceDestructor< T, TypeStorage::Destroyable >
+        , private TypeInstanceDestructor< T, TypeStorage::IsCaching >
     {
         typedef typename TypeStorage::Conversions Conversions;
 
@@ -136,7 +136,6 @@ namespace dingo
 
         void* GetPointerType(const std::type_info& type) override
         {
-            // TODO: thread-safe...
             void* ptr = GetPtr< Conversions::PointerTypes >(type, instance_);
             this->SetTransferred(true);
             return ptr;

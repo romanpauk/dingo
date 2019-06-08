@@ -1,6 +1,7 @@
 #pragma once
 
-namespace dingo {
+namespace dingo
+{
     template < typename... Types > struct TypeList {};
 
     template < typename T > struct ApplyIterator

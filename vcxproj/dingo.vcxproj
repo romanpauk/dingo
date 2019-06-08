@@ -169,7 +169,10 @@
   <ItemGroup>
     <ClInclude Include="..\include\dingo\ArenaAllocator.h" />
     <ClInclude Include="..\include\dingo\Container.h" />
+    <ClInclude Include="..\include\dingo\Context.h" />
     <ClInclude Include="..\include\dingo\Exceptions.h" />
+    <ClInclude Include="..\include\dingo\IResettable.h" />
+    <ClInclude Include="..\include\dingo\ITypeInstanceFactory.h" />
     <ClInclude Include="..\include\dingo\Storage.h" />
     <ClInclude Include="..\include\dingo\Tuple.h" />
     <ClInclude Include="..\include\dingo\Type.h" />

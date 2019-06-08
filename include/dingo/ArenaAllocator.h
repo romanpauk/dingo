@@ -1,7 +1,7 @@
 #pragma once
 
-namespace dingo {
-
+namespace dingo
+{
     template < typename T > class ArenaAllocator;
 
     class Arena
@@ -29,13 +29,13 @@ namespace dingo {
     public:
         using value_type    = T;
 
-        ArenaAllocator(Arena& arena) noexcept 
+        ArenaAllocator(Arena& arena) noexcept
             : arena_(arena)
-        {}  
+        {}
 
         template <class U> friend class ArenaAllocator;
 
-        template <class U> ArenaAllocator(ArenaAllocator<U> const& alloc) noexcept 
+        template <class U> ArenaAllocator(ArenaAllocator<U> const& alloc) noexcept
             : arena_(alloc.arena_)
         {}
 
@@ -45,23 +45,23 @@ namespace dingo {
 
             if (ptr + n * sizeof(value_type) < arena_.end_)
             {
-                value_type* p = reinterpret_cast< value_type* >(ptr);
-                ptr += n * sizeof(value_type); 
+                value_type* p = reinterpret_cast<value_type*>(ptr);
+                ptr += n * sizeof(value_type);
                 arena_.current_ = ptr;
                 return p;
             }
             else
             {
-    #ifdef _DEBUG
+            #ifdef _DEBUG
                 throw TypeAllocateFailedException();
-    #endif
+            #endif
                 return static_cast<value_type*>(::operator new (n * sizeof(value_type)));
-            }        
+            }
         }
 
-        void deallocate(value_type* p, std::size_t) noexcept  
+        void deallocate(value_type* p, std::size_t) noexcept
         {
-            auto ptr = reinterpret_cast< unsigned char* >(p);
+            auto ptr = reinterpret_cast<unsigned char*>(p);
             if (ptr >= arena_.base_ && ptr < arena_.end_)
             {
                 // This is from arena
@@ -85,5 +85,5 @@ namespace dingo {
     template <class T, class U> bool operator!=(ArenaAllocator<T> const& x, ArenaAllocator<U> const& y) noexcept
     {
         return !(x == y);
-}
+    }
 }

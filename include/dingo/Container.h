@@ -5,9 +5,9 @@
 #include "dingo/Exceptions.h"
 #include "dingo/TypeInstanceFactory.h"
 #include "dingo/ArenaAllocator.h"
+#include "dingo/Context.h"
 
-#include <unordered_map>
-#include <forward_list>
+#include <map>
 
 namespace dingo
 {
@@ -19,7 +19,7 @@ namespace dingo
             : typeInitialized_(typeInitialized)
         {
             if (typeInitialized_) return;
-            
+
             if (!visited_)
             {
                 visited_ = true;
@@ -41,42 +41,6 @@ namespace dingo
     };
 
     template < typename T > thread_local bool TypeRecursionGuard< T >::visited_ = false;
-
-    class Context
-    {
-    public:
-        Context(Container& container)
-            : container_(container)
-            , arena_(buffer_)
-            , allocator_(arena_)
-            , instances_(allocator_)
-        {}
-
-        template < typename T > T Resolve();
-
-        template < typename T > ArenaAllocator< T > GetAllocator() { return allocator_; }
-          
-        void AddInstance(ITypeInstance* instance)
-        {
-            instances_.push_front(instance);
-        }
-
-        ~Context()
-        {
-            for (auto& instance : instances_)
-            {
-                instance->~ITypeInstance();
-            }
-        }
-        
-    private:
-        Container& container_;
-
-        std::array< unsigned char, 1024 > buffer_;
-        Arena arena_;
-        ArenaAllocator< void > allocator_;     
-        std::forward_list< ITypeInstance*, ArenaAllocator< ITypeInstance* > > instances_;
-    };
 
     class Container
     {
@@ -107,7 +71,7 @@ namespace dingo
         > void RegisterBinding()
         {
             CheckInterface< TypeInterface, TypeStorage::Type >();
-            type_[typeid(TypeInterface)] = std::make_unique< TypeInstanceFactory< TypeInterface, TypeStorage::Type, TypeStorage > >();
+            typeFactories_[typeid(TypeInterface)] = std::make_unique< TypeInstanceFactory< TypeInterface, TypeStorage::Type, TypeStorage > >();
         }
 
         template <
@@ -117,13 +81,14 @@ namespace dingo
         > void RegisterBinding()
         {
             auto storage = std::make_shared< TypeStorage >();
-            Apply((TypeList< TypeInterfaces... >*)0, [&](auto element)
-                {
-                    typedef typename decltype(element)::type TypeInterface;
 
-                    CheckInterface< TypeInterface, TypeStorage::Type >();
-                    type_[typeid(TypeInterface)] = std::make_unique< TypeInstanceFactory< TypeInterface, TypeStorage::Type, std::shared_ptr< TypeStorage > > >(storage);
-                });
+            Apply((TypeList< TypeInterfaces... >*)0, [&](auto element)
+            {
+                typedef typename decltype(element)::type TypeInterface;
+
+                CheckInterface< TypeInterface, TypeStorage::Type >();
+                typeFactories_[typeid(TypeInterface)] = std::make_unique< TypeInstanceFactory< TypeInterface, TypeStorage::Type, std::shared_ptr< TypeStorage > > >(storage);
+            });
         }
 
         template <
@@ -146,12 +111,13 @@ namespace dingo
         > R Resolve(Context& context)
         {
             typedef typename TypeDecay< T >::type Type;
-            auto it = type_.find(typeid(Type));
-            if (it != type_.end())
+
+            auto it = typeFactories_.find(typeid(Type));
+            if (it != typeFactories_.end())
             {
-                TypeRecursionGuard< Type > guard(it->second->IsCached());
+                TypeRecursionGuard< Type > guard(it->second->IsResolved());
                 auto instance = it->second->Resolve(context);
-                return TypeInstanceGetter< T >::Get(*instance);                
+                return TypeInstanceGetter< T >::Get(*instance);
             }
 
             throw TypeNotFoundException();
@@ -163,7 +129,7 @@ namespace dingo
             static_assert(std::is_convertible_v< typename TypeDecay< Type >::type*, typename TypeDecay< TypeInterface >::type* >);
         }
 
-        std::map< std::type_index, std::unique_ptr< ITypeInstanceFactory > > type_;
+        std::map< std::type_index, std::unique_ptr< ITypeInstanceFactory > > typeFactories_;
     };
 
     template < typename T > T Context::Resolve()
