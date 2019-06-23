@@ -1,5 +1,4 @@
 # Dingo
-# Dingo
 Dependency Injection Container for C++, with DI, next-gen and an 'o' in a name.
 
 ## Introduction
