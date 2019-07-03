@@ -182,6 +182,7 @@
     <ClInclude Include="..\include\dingo\TypeInstanceFactory.h" />
     <ClInclude Include="..\include\dingo\StorageShared.h" />
     <ClInclude Include="..\include\dingo\StorageUnique.h" />
+    <ClInclude Include="..\include\dingo\TypeTraits.h" />
     <ClInclude Include="..\src\pch.h" />
   </ItemGroup>
   <ItemGroup>

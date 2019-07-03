@@ -9,4 +9,6 @@
 #include <tuple>
 #include <array>
 #include <forward_list>
+#include <list>
+
 #include <windows.h>

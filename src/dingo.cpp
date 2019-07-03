@@ -437,9 +437,9 @@ namespace dingo
         };
 
         Container container;
-        container.RegisterBinding< Storage< dingo::Shared, A > >();
-        container.RegisterBinding< Storage< dingo::Shared, B > >();
-        container.RegisterBinding< Storage< dingo::Shared, C > >();
+        container.RegisterBinding< Storage< Shared, A > >();
+        container.RegisterBinding< Storage< Shared, B > >();
+        container.RegisterBinding< Storage< Shared, C > >();
 
         AssertThrow(container.Resolve< C& >(), Ex);
         Assert(A::Constructor == 1);
@@ -455,6 +455,43 @@ namespace dingo
         Assert(A::Destructor == 1);
         Assert(B::Constructor == 2);
         Assert(B::Destructor == 2);
+    }
+
+    void TestResolveMultiple()
+    {
+        struct I {};
+        struct A: I {};
+        struct B: I {};
+        struct C 
+        {
+            C(std::vector< I* > v, std::list< I* >, std::set< I* >) : v_(v) {}
+            std::vector< I* > v_;
+        };
+
+        Container container;
+        container.RegisterBinding< Storage< Shared, A >, A, I >();
+        container.RegisterBinding< Storage< Shared, B >, B, I >();
+        container.RegisterBinding< Storage< Shared, C > >();
+
+        {
+            auto vector = container.Resolve< std::vector< I* > >();
+            Assert(vector.size() == 2);
+
+            auto list = container.Resolve< std::list< I* > >();
+            Assert(list.size() == 2);
+
+            auto set = container.Resolve< std::set< I* > >();
+            Assert(set.size() == 2);
+        }
+
+        {
+            AssertThrow(container.Resolve< std::vector< std::shared_ptr< I > > >(), TypeNotConvertibleException);
+        }
+
+        {
+            auto& c = container.Resolve< C& >();
+            Assert(c.v_.size() == 2);
+        }
     }
 }
 
@@ -480,5 +517,6 @@ int main()
     TestResolvePerformance();
 
     TestResolveRollback();
+    TestResolveMultiple();
 }
 
