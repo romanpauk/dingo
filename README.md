@@ -8,8 +8,8 @@ This is a prototype of header-only, dependency injection library. Developed with
 ```c++
 // Classes to be managed by the container
 struct A { A() {} };
-struct B { B(A&, std::shared_ptr< A >) {} }
-struct C { C(B*, std::unique_ptr< B >&, A&) {} }
+struct B { B(A&, std::shared_ptr< A >) {} };
+struct C { C(B*, std::unique_ptr< B >&, A&) {} };
 
 // Registration into container with different storages / lifetime policies
 Container container;
@@ -19,6 +19,18 @@ container.RegisterBinding< Storage< Unique, C > >();
 
 // Resolving the type C through container will instantiate A, B, and C.
 auto c = container.Resolve< C >();
+
+// Preliminary multibinding support
+struct ICommand { virtual ~ICommand() {} };
+struct Command1: I {};
+struct Command2: I {};
+struct CommandProcessor { CommandProcessor(std::vector< ICommand* >) {} };
+
+container.RegisterBinding< Storage< Shared, Command1 >, Command1, ICommand >();
+container.RegisterBinding< Storage< Shared, Command2 >, Command2, ICommand >();
+container.RegisterBinding< Storage< Shared, CommandProcessor > >();
+container.Resolve< std::list< ICommand* > >();
+container.Resolve< CommandProcessor >();
 ```
 
 ### Goals
