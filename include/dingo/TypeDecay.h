@@ -9,4 +9,7 @@ namespace dingo
     template < class T, class Deleter > struct TypeDecay< std::unique_ptr< T, Deleter >& > : std::decay< T > {};
     template < class T > struct TypeDecay< std::shared_ptr< T > > : std::decay< T > {};
     template < class T > struct TypeDecay< std::shared_ptr< T >& > : std::decay< T > {};
+
+    template < class T> using TypeDecay_t = typename TypeDecay< T >::type;
+    
 }

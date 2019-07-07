@@ -112,7 +112,7 @@ namespace dingo
             >
         > R Resolve(Context& context)
         {
-            typedef typename TypeDecay< T >::type Type;
+            typedef TypeDecay_t< T > Type;
 
             auto range = typeFactories_.equal_range(typeid(Type));
             if (range.first != range.second)
@@ -128,17 +128,17 @@ namespace dingo
 
         template <
             typename T
-        > std::enable_if_t< !IsContainer< typename TypeDecay< T >::type >::value, T > ResolveMultiple(Context& context)
+        > std::enable_if_t< !ContainerTraits< TypeDecay_t< T > >::IsContainer, T > ResolveMultiple(Context& context)
         {
             throw TypeNotFoundException();
         }
 
         template <
             typename T
-        > std::enable_if_t< IsContainer< typename TypeDecay< T >::type >::value, T > ResolveMultiple(Context& context)
+        > std::enable_if_t< ContainerTraits< TypeDecay_t< T > >::IsContainer, T > ResolveMultiple(Context& context)
         {
-            typedef typename TypeDecay< T >::type Type;
-            typedef typename TypeDecay< typename Type::value_type >::type ValueType;
+            typedef TypeDecay_t< T > Type;
+            typedef TypeDecay_t< typename Type::value_type > ValueType;
 
             auto range = typeFactories_.equal_range(typeid(ValueType));
             
@@ -164,7 +164,7 @@ namespace dingo
         template < class TypeInterface, class Type > void CheckInterface()
         {
             static_assert(!std::is_reference_v< TypeInterface >);
-            static_assert(std::is_convertible_v< typename TypeDecay< Type >::type*, typename TypeDecay< TypeInterface >::type* >);
+            static_assert(std::is_convertible_v< TypeDecay_t< Type >*, TypeDecay_t< TypeInterface >* >);
         }
 
         std::multimap< std::type_index, std::unique_ptr< ITypeInstanceFactory > > typeFactories_;
