@@ -3,6 +3,7 @@
 #include "dingo/Tuple.h"
 #include "dingo/StorageShared.h"
 #include "dingo/StorageUnique.h"
+#include "dingo/StorageCyclical.h"
 #include "dingo/PerformanceCounter.h"
 
 namespace dingo
@@ -387,6 +388,39 @@ namespace dingo
         AssertThrow(container.Resolve< B >(), TypeRecursionException);
     }
 
+    void TestRecursionCyclical()
+    {
+        struct B;
+        struct A: Class< __COUNTER__ >
+        {
+            A(B& b): b_(b) {}
+
+            B& b_;
+        };
+
+        struct B: Class< __COUNTER__ >
+        {
+            B(A& a): a_(a) 
+            {
+                AssertThrow(a.GetName(), dingo::TypeNotConstructedException);
+            }
+
+            A& a_;
+        };
+
+        Container container;
+        container.RegisterBinding< Storage< dingo::Cyclical, A > >();
+        container.RegisterBinding< Storage< dingo::Cyclical, B > >();
+
+        auto& a = container.Resolve< A& >();
+        AssertClass(a);
+        AssertClass(a.b_);
+
+        auto& b = container.Resolve< B& >();
+        AssertClass(b);
+        AssertClass(b.a_);
+    }
+
     void TestResolvePerformance()
     {
         struct A {};
@@ -514,6 +548,8 @@ int main()
     TestUniqueHierarchy();
 
     TestRecursion();
+    TestRecursionCyclical();
+
     TestResolvePerformance();
 
     TestResolveRollback();

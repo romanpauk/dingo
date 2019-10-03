@@ -21,24 +21,14 @@ namespace dingo
             , allocator_(arena_)
             , typeInstances_(allocator_)
             , resettables_(allocator_)
+            , constructibles_(allocator_)
         {}
 
-        template < typename T > T Resolve();
-
-        template < typename T > ArenaAllocator< T > GetAllocator() { return allocator_; }
-
-        void AddTypeInstance(ITypeInstance* instance)
+        ~Context() noexcept(false)
         {
-            typeInstances_.push_front(instance);
-        }
+            // TODO: due to cleanup we really should not call this from dtor like this...
+            Construct();
 
-        void AddResettable(IResettable* ptr)
-        {
-            resettables_.push_front(ptr);
-        }
-
-        ~Context()
-        {
             if (std::uncaught_exceptions())
             {
                 // Rollback changes in container
@@ -55,6 +45,52 @@ namespace dingo
             }
         }
 
+        template < typename T > T Resolve();
+
+        template < typename T > ArenaAllocator< T > GetAllocator() { return allocator_; }
+
+        void AddTypeInstance(ITypeInstance* instance)
+        {
+            typeInstances_.push_front(instance);
+        }
+
+        void AddResettable(IResettable* ptr)
+        {
+            resettables_.push_front(ptr);
+        }
+
+        void AddConstructible(IConstructible* ptr)
+        {
+            constructibles_.push_back(ptr);
+        }
+
+        bool IsConstructibleAddress(void* ptr)
+        {
+            for (auto& constructible : constructibles_)
+            {
+                if (constructible->HasAddress(ptr))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        void Construct()
+        {
+            // Note that Construct() can grow constructibles_.
+            for(auto it = constructibles_.begin(); it != constructibles_.end(); ++it)
+            {
+                (*it)->Construct(*this, 0);
+            }
+
+            for (auto& constructible : constructibles_)
+            {
+                constructible->Construct(*this, 1);
+            }
+        }
+
     private:
         Container& container_;
 
@@ -64,6 +100,7 @@ namespace dingo
 
         std::forward_list< ITypeInstance*, ArenaAllocator< ITypeInstance* > > typeInstances_;
         std::forward_list< IResettable*, ArenaAllocator< IResettable* > > resettables_;
+        std::list< IConstructible*, ArenaAllocator< IConstructible* > > constructibles_;
     };
 
 }
