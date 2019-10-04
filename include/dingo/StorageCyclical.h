@@ -3,8 +3,8 @@
 #include "dingo/TypeDecay.h"
 #include "dingo/Type.h"
 #include "dingo/Storage.h"
-
-#include <windows.h>
+#include "dingo/VirtualBuffer.h"
+#include "dingo/IConstructible.h"
 
 namespace dingo
 {
@@ -18,53 +18,6 @@ namespace dingo
         typedef TypeList< U* > PointerTypes;
     };
     
-    class VirtualBuffer
-    {
-    public:
-        VirtualBuffer(size_t size)
-            : address_()
-            , size_(size)
-        {}
-
-        ~VirtualBuffer()
-        {
-            Reset();
-        }
-
-        void SetAccessible(bool accessible)
-        {
-            // TODO: retval
-            DWORD old;
-            VirtualProtect(address_, size_, accessible ? PAGE_READWRITE : PAGE_NOACCESS, &old);
-        }
-
-        void* GetPointer() 
-        {
-            if (!address_)
-            {
-                // TODO: retval
-                address_ = VirtualAlloc(0, size_, MEM_COMMIT, PAGE_READWRITE);
-            }
-
-            return address_;
-        }
-
-        void Reset()
-        {
-            if (address_)
-            {
-                VirtualFree(address_, 0, MEM_RELEASE);
-                address_ = 0;
-            }
-        }
-
-        size_t Size() const { return size_; }
-
-    private:
-        void* address_;
-        size_t size_;
-    };
-
     template < typename Type, typename Conversions > class Storage< Cyclical, Type, Conversions >
         : public IResettable
         , public IConstructible
@@ -89,10 +42,8 @@ namespace dingo
         {
             if (!initialized_)
             {
-                initialized_ = true;
-
                 context.AddConstructible(this);
-                buffer_.SetAccessible(false);
+                initialized_ = true;
             }
 
             return reinterpret_cast<Type*>(buffer_.GetPointer());
@@ -106,6 +57,7 @@ namespace dingo
             {
                 initialized_ = false;
                 
+                // TODO: scope exit
                 try
                 {
                     reinterpret_cast<Type*>(buffer_.GetPointer())->~Type();
@@ -138,9 +90,8 @@ namespace dingo
             }
         }
 
-        bool HasAddress(void* ptr) override
+        bool HasAddress(uintptr_t address) override
         {
-            auto address = reinterpret_cast<uintptr_t>(ptr);
             auto bufferAddress = reinterpret_cast<uintptr_t>(buffer_.GetPointer());
             return address >= bufferAddress && address < bufferAddress + buffer_.Size();
         }
@@ -150,11 +101,8 @@ namespace dingo
         {
             if (code == EXCEPTION_ACCESS_VIOLATION)
             {
-                return EXCEPTION_EXECUTE_HANDLER;
-
-                // TODO: bug here...
-                if(context.IsConstructibleAddress(ep->ExceptionRecord->ExceptionAddress))
-                    return EXCEPTION_EXECUTE_HANDLER;
+                if (context.IsConstructibleAddress((uintptr_t)ep->ExceptionRecord->ExceptionInformation[1]))
+                    return EXCEPTION_EXECUTE_HANDLER;                
             }
 
             return EXCEPTION_CONTINUE_SEARCH;

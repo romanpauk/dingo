@@ -2,9 +2,11 @@
 
 #include "dingo/ArenaAllocator.h"
 #include "dingo/IResettable.h"
+#include "dingo/IConstructible.h"
 
 #include <array>
 #include <forward_list>
+#include <list>
 
 namespace dingo
 {
@@ -64,11 +66,11 @@ namespace dingo
             constructibles_.push_back(ptr);
         }
 
-        bool IsConstructibleAddress(void* ptr)
+        bool IsConstructibleAddress(uintptr_t address)
         {
             for (auto& constructible : constructibles_)
             {
-                if (constructible->HasAddress(ptr))
+                if (constructible->HasAddress(address))
                 {
                     return true;
                 }
@@ -79,7 +81,7 @@ namespace dingo
 
         void Construct()
         {
-            // Note that Construct() can grow constructibles_.
+            // Note that invocation of Construct() can grow constructibles_.
             for(auto it = constructibles_.begin(); it != constructibles_.end(); ++it)
             {
                 (*it)->Construct(*this, 0);

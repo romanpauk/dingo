@@ -171,6 +171,7 @@
     <ClInclude Include="..\include\dingo\Container.h" />
     <ClInclude Include="..\include\dingo\Context.h" />
     <ClInclude Include="..\include\dingo\Exceptions.h" />
+    <ClInclude Include="..\include\dingo\IConstructible.h" />
     <ClInclude Include="..\include\dingo\IResettable.h" />
     <ClInclude Include="..\include\dingo\ITypeInstanceFactory.h" />
     <ClInclude Include="..\include\dingo\Storage.h" />
@@ -184,6 +185,7 @@
     <ClInclude Include="..\include\dingo\StorageShared.h" />
     <ClInclude Include="..\include\dingo\StorageUnique.h" />
     <ClInclude Include="..\include\dingo\TypeTraits.h" />
+    <ClInclude Include="..\include\dingo\VirtualBuffer.h" />
     <ClInclude Include="..\src\pch.h" />
   </ItemGroup>
   <ItemGroup>
