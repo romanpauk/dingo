@@ -41,7 +41,6 @@ namespace dingo
     };
 
     template < typename Type, typename Conversions > class Storage< Unique, Type, Conversions >
-        : public IResettable
     {
     public:
         static const bool IsCaching = false;
@@ -54,7 +53,6 @@ namespace dingo
             return TypeFactory< typename TypeDecay< Type >::type >::template Construct< Type, Container::ConstructorArgument< TypeDecay< Type >::type > >(context);
         }
 
-        void Reset() override {}
         bool IsResolved() { return false; }
     };
 }
