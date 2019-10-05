@@ -7,6 +7,7 @@
 #include "dingo/TypeInstanceFactory.h"
 #include "dingo/ArenaAllocator.h"
 #include "dingo/Context.h"
+#include "dingo/ScopeGuard.h"
 
 #include <map>
 #include <vector>
@@ -99,6 +100,7 @@ namespace dingo
         > R Resolve()
         {
             Context context(*this);
+            auto guard = MakeScopeGuard([&context] { if (!std::uncaught_exceptions()) { context.Construct(); } });
             return Resolve< T, true >(context);
         }
 

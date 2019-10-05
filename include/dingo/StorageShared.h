@@ -85,66 +85,66 @@ namespace dingo
         bool initialized_;
     };
 
-        template < typename Type, typename Conversions > class Storage< Shared, Type*, Conversions >
-            : public Storage< Shared, std::unique_ptr< Type >, Conversions >
+    template < typename Type, typename Conversions > class Storage< Shared, Type*, Conversions >
+        : public Storage< Shared, std::unique_ptr< Type >, Conversions >
+    {
+    public:
+        Type* Resolve(Context& context)
         {
-        public:
-            Type* Resolve(Context& context)
+            return Storage< Shared, std::unique_ptr< Type >, Conversions >::Resolve(context).get();
+        }
+    };
+
+    template < typename Type, typename Conversions > class Storage< Shared, std::shared_ptr< Type >, Conversions >
+        : public IResettable
+    {
+    public:
+        static const bool IsCaching = true;
+
+        typedef Conversions Conversions;
+        typedef Type Type;
+
+        std::shared_ptr< Type >& Resolve(Context& context)
+        {
+            if (!instance_)
             {
-                return Storage< Shared, std::unique_ptr< Type >, Conversions >::Resolve(context).get();
+                instance_ = TypeFactory< Type >::template Construct< std::shared_ptr< Type >, Container::ConstructorArgument< Type > >(context);
             }
-        };
 
-            template < typename Type, typename Conversions > class Storage< Shared, std::shared_ptr< Type >, Conversions >
-                : public IResettable
+            return instance_;
+        }
+
+        void Reset() override { instance_.reset(); }
+        bool IsResolved() { return instance_.get() != nullptr; }
+
+    private:
+        std::shared_ptr< Type > instance_;
+    };
+
+    template < typename Type, typename Conversions > class Storage< Shared, std::unique_ptr< Type >, Conversions >
+        : public IResettable
+    {
+    public:
+        static const bool IsCaching = true;
+
+        typedef Conversions Conversions;
+        typedef Type Type;
+
+        std::unique_ptr< Type >& Resolve(Context& context)
+        {
+            // TODO: thread-safe
+            if (!instance_)
             {
-            public:
-                static const bool IsCaching = true;
+                instance_ = TypeFactory< Type >::template Construct< std::unique_ptr< Type >, Container::ConstructorArgument< Type > >(context);
+            }
 
-                typedef Conversions Conversions;
-                typedef Type Type;
+            return instance_;
+        }
 
-                std::shared_ptr< Type >& Resolve(Context& context)
-                {
-                    if (!instance_)
-                    {
-                        instance_ = TypeFactory< Type >::template Construct< std::shared_ptr< Type >, Container::ConstructorArgument< Type > >(context);
-                    }
+        void Reset() override { instance_.reset(); }
+        bool IsResolved() { return instance_.get() != nullptr; }
 
-                    return instance_;
-                }
-
-                void Reset() override { instance_.reset(); }
-                bool IsResolved() { return instance_.get() != nullptr; }
-
-            private:
-                std::shared_ptr< Type > instance_;
-            };
-
-                template < typename Type, typename Conversions > class Storage< Shared, std::unique_ptr< Type >, Conversions >
-                    : public IResettable
-                {
-                public:
-                    static const bool IsCaching = true;
-
-                    typedef Conversions Conversions;
-                    typedef Type Type;
-
-                    std::unique_ptr< Type >& Resolve(Context& context)
-                    {
-                        // TODO: thread-safe
-                        if (!instance_)
-                        {
-                            instance_ = TypeFactory< Type >::template Construct< std::unique_ptr< Type >, Container::ConstructorArgument< Type > >(context);
-                        }
-
-                        return instance_;
-                    }
-
-                    void Reset() override { instance_.reset(); }
-                    bool IsResolved() { return instance_.get() != nullptr; }
-
-                private:
-                    std::unique_ptr< Type > instance_;
-                };
+    private:
+        std::unique_ptr< Type > instance_;
+    };
 }

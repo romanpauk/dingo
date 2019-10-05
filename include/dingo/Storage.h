@@ -3,6 +3,8 @@
 namespace dingo
 {
     struct Shared {};
+    struct SharedCyclical {};
+
     struct Unique {};
 
     template < typename Storage, typename Type, typename U > class Conversions;

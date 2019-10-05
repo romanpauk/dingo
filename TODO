@@ -1,10 +1,9 @@
 Messy list of ideas / bugs / various notes.
 
 unique_ptr rebind seems incomplete
-Support cycles through shared_ptr&, unique_ptr&... 
 Topo-sort during destruction
 Expose type instances and letting users reset the ones that are stable, creating a state pattern. This creates interesting threading issues and can benefit from container nesting.
-Resolving multiple implementations of some interface in a vector, map with custom key extractor, ...
+Resolving multiple - map with custom key extractor, ...
 Thread safety - safe read / unsafe write, or finer locking
 Resolvability test, is_constructible should be enough to find out if container will resolve without exceptions
 Suport custom allocators for type map

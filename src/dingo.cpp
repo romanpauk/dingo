@@ -2,6 +2,7 @@
 #include "dingo/Container.h"
 #include "dingo/Tuple.h"
 #include "dingo/StorageShared.h"
+#include "dingo/StorageSharedCyclical.h"
 #include "dingo/StorageUnique.h"
 #include "dingo/PerformanceCounter.h"
 
@@ -387,6 +388,42 @@ namespace dingo
         AssertThrow(container.Resolve< B >(), TypeRecursionException);
     }
 
+    void TestRecursionCyclical()
+    {
+        struct B;
+        struct A: Class< __COUNTER__ >
+        {
+            A(B& b): b_(b) {}
+
+            B& b_;
+        };
+
+        struct B: Class< __COUNTER__ >
+        {
+            B(std::shared_ptr< A > aptr, A& a): aptr_(aptr), a_(a)
+            {
+                AssertThrow(aptr_->GetName(), dingo::TypeNotConstructedException);
+                AssertThrow(a_.GetName(), dingo::TypeNotConstructedException);
+            }
+
+            std::shared_ptr< A > aptr_;
+            A& a_;
+        };
+
+        Container container;
+        container.RegisterBinding< Storage< dingo::SharedCyclical, std::shared_ptr< A > > >();
+        container.RegisterBinding< Storage< dingo::SharedCyclical, B > >();
+
+        auto& a = container.Resolve< A& >();
+        AssertClass(a);
+        AssertClass(a.b_);
+
+        auto& b = container.Resolve< B& >();
+        AssertClass(b);
+        AssertClass(b.a_);
+        AssertClass(*b.aptr_);       
+    }
+
     void TestResolvePerformance()
     {
         struct A {};
@@ -464,8 +501,11 @@ namespace dingo
         struct B: I {};
         struct C 
         {
-            C(std::vector< I* > v, std::list< I* >, std::set< I* >) : v_(v) {}
+            C(std::vector< I* > v, std::list< I* > l, std::set< I* > s) : v_(v), l_(l), s_(s) {}
+
             std::vector< I* > v_;
+            std::list< I* > l_;
+            std::set< I* > s_;
         };
 
         Container container;
@@ -491,6 +531,8 @@ namespace dingo
         {
             auto& c = container.Resolve< C& >();
             Assert(c.v_.size() == 2);
+            Assert(c.l_.size() == 2);
+            Assert(c.s_.size() == 2);
         }
     }
 }
@@ -514,7 +556,9 @@ int main()
     TestUniqueHierarchy();
 
     TestRecursion();
-    TestResolvePerformance();
+    TestRecursionCyclical();
+
+    // TestResolvePerformance();
 
     TestResolveRollback();
     TestResolveMultiple();

@@ -101,6 +101,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>../include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <ExceptionHandling>Async</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -118,6 +119,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>../include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <ExceptionHandling>Async</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -137,6 +139,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>../include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <ExceptionHandling>Async</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -158,6 +161,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>../include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <ExceptionHandling>Async</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -171,9 +175,12 @@
     <ClInclude Include="..\include\dingo\Container.h" />
     <ClInclude Include="..\include\dingo\Context.h" />
     <ClInclude Include="..\include\dingo\Exceptions.h" />
+    <ClInclude Include="..\include\dingo\IConstructible.h" />
     <ClInclude Include="..\include\dingo\IResettable.h" />
     <ClInclude Include="..\include\dingo\ITypeInstanceFactory.h" />
+    <ClInclude Include="..\include\dingo\ScopeGuard.h" />
     <ClInclude Include="..\include\dingo\Storage.h" />
+    <ClInclude Include="..\include\dingo\StorageSharedCyclical.h" />
     <ClInclude Include="..\include\dingo\Tuple.h" />
     <ClInclude Include="..\include\dingo\Type.h" />
     <ClInclude Include="..\include\dingo\TypeDecay.h" />
@@ -183,6 +190,7 @@
     <ClInclude Include="..\include\dingo\StorageShared.h" />
     <ClInclude Include="..\include\dingo\StorageUnique.h" />
     <ClInclude Include="..\include\dingo\TypeTraits.h" />
+    <ClInclude Include="..\include\dingo\VirtualPointer.h" />
     <ClInclude Include="..\src\pch.h" />
   </ItemGroup>
   <ItemGroup>
