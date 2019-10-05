@@ -2,8 +2,8 @@
 #include "dingo/Container.h"
 #include "dingo/Tuple.h"
 #include "dingo/StorageShared.h"
+#include "dingo/StorageSharedCyclical.h"
 #include "dingo/StorageUnique.h"
-#include "dingo/StorageCyclical.h"
 #include "dingo/PerformanceCounter.h"
 
 namespace dingo
@@ -400,17 +400,19 @@ namespace dingo
 
         struct B: Class< __COUNTER__ >
         {
-            B(A& a): a_(a) 
+            B(std::shared_ptr< A > aptr, A& a): aptr_(aptr), a_(a)
             {
-                AssertThrow(a.GetName(), dingo::TypeNotConstructedException);
+                AssertThrow(aptr_->GetName(), dingo::TypeNotConstructedException);
+                AssertThrow(a_.GetName(), dingo::TypeNotConstructedException);
             }
 
+            std::shared_ptr< A > aptr_;
             A& a_;
         };
 
         Container container;
-        container.RegisterBinding< Storage< dingo::Cyclical, A > >();
-        container.RegisterBinding< Storage< dingo::Cyclical, B > >();
+        container.RegisterBinding< Storage< dingo::SharedCyclical, std::shared_ptr< A > > >();
+        container.RegisterBinding< Storage< dingo::SharedCyclical, B > >();
 
         auto& a = container.Resolve< A& >();
         AssertClass(a);
@@ -419,6 +421,7 @@ namespace dingo
         auto& b = container.Resolve< B& >();
         AssertClass(b);
         AssertClass(b.a_);
+        AssertClass(*b.aptr_);       
     }
 
     void TestResolvePerformance()

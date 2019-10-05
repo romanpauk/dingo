@@ -66,13 +66,13 @@
     <ClInclude Include="..\include\dingo\TypeTraits.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\dingo\StorageCyclical.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\dingo\VirtualBuffer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\include\dingo\IConstructible.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\dingo\StorageSharedCyclical.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\dingo\VirtualPointer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

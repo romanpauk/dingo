@@ -175,7 +175,7 @@
     <ClInclude Include="..\include\dingo\IResettable.h" />
     <ClInclude Include="..\include\dingo\ITypeInstanceFactory.h" />
     <ClInclude Include="..\include\dingo\Storage.h" />
-    <ClInclude Include="..\include\dingo\StorageCyclical.h" />
+    <ClInclude Include="..\include\dingo\StorageSharedCyclical.h" />
     <ClInclude Include="..\include\dingo\Tuple.h" />
     <ClInclude Include="..\include\dingo\Type.h" />
     <ClInclude Include="..\include\dingo\TypeDecay.h" />
@@ -185,7 +185,7 @@
     <ClInclude Include="..\include\dingo\StorageShared.h" />
     <ClInclude Include="..\include\dingo\StorageUnique.h" />
     <ClInclude Include="..\include\dingo\TypeTraits.h" />
-    <ClInclude Include="..\include\dingo\VirtualBuffer.h" />
+    <ClInclude Include="..\include\dingo\VirtualPointer.h" />
     <ClInclude Include="..\src\pch.h" />
   </ItemGroup>
   <ItemGroup>
