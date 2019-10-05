@@ -4,72 +4,108 @@
 #include "dingo/ScopeGuard.h"
 
 #include <windows.h>
+#include <cassert>
 
 namespace dingo
 {
-    template < typename T > class VirtualPointer
+    class VirtualBuffer
     {
     public:
-        VirtualPointer()
+        VirtualBuffer()
             : instance_()
         {}
 
-        ~VirtualPointer()
+        ~VirtualBuffer()
         {
             Reset();
-         }
+        }
 
-        void SetAccessible(bool accessible)
+        void Reserve(size_t size)
         {
-            DWORD old;
-            if(!VirtualProtect(instance_, sizeof(T), accessible ? PAGE_READWRITE : PAGE_NOACCESS, &old))
+            assert(!instance_);
+
+            instance_ = VirtualAlloc(0, size, MEM_COMMIT, PAGE_NOACCESS);
+            if (!instance_)
             {
                 throw VirtualPointerException();
             }
         }
 
-        T* Get() { return instance_; }
-        const T* Get() const { return instance_; }
-
-        void Reserve()
+        void Reset()
         {
-            if (!instance_)
+            if(instance_)
             {
-                instance_ = reinterpret_cast<T*>(VirtualAlloc(0, sizeof(T), MEM_COMMIT, PAGE_NOACCESS));
-                if(!instance_)
+                auto instance = instance_;
+                instance_ = 0;
+
+                if (!VirtualFree(instance, 0, MEM_RELEASE))
                 {
                     throw VirtualPointerException();
                 }
             }
         }
 
+        void* Get() { return instance_; }
+        const void* Get() const { return instance_; }
+
+        void SetAccessible(bool accessible, size_t size)
+        {
+            DWORD old;
+            if (!VirtualProtect(instance_, size, accessible ? PAGE_READWRITE : PAGE_NOACCESS, &old))
+            {
+                throw VirtualPointerException();
+            }
+        }
+    private:
+        void* instance_;
+    };
+
+    template < typename T > class VirtualPointer
+    {
+    public:
+        VirtualPointer()
+            : constructed_()
+        {}
+
+        ~VirtualPointer()
+        {
+            Reset();
+        }
+
+        void SetConstructed() { constructed_ = true; }
+        void SetAccessible(bool accessible) { buffer_.SetAccessible(accessible, sizeof(T)); }
+
+        T* Get() { return reinterpret_cast< T* >(buffer_.Get()); }
+        const T* Get() const { return reinterpret_cast<const T*>(buffer_.Get()); }
+
+        void Reserve() { buffer_.Reserve(sizeof(T)); }
+
         void Reset()
         {
-            if (instance_)
+            if(constructed_)
             {
-                auto instance = instance_;
-                instance_ = 0;
+                // Make sure we can call the dtor
+                SetAccessible(true);
+            }
 
-                auto guard = MakeScopeGuard([instance]
-                {
-                    if (!VirtualFree(instance, 0, MEM_RELEASE))
-                    {
-                        throw VirtualPointerException();
-                    }
-                });
+            auto guard = MakeScopeGuard([&] { buffer_.Reset(); });
 
-                instance->~T();
+            if(constructed_)
+            {
+                constructed_ = false;
+                Get()->~T();
             }
         }
 
         bool HasAddress(uintptr_t address) const
         {
-            auto instanceAddress = reinterpret_cast<uintptr_t>(instance_);
+            auto instanceAddress = reinterpret_cast<uintptr_t>(buffer_.Get());
             return address >= instanceAddress && address < instanceAddress + sizeof(T);
         }
 
     private:
-        T* instance_;
+        VirtualBuffer buffer_;
+        bool constructed_;
     };
 
 }

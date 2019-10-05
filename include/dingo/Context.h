@@ -12,7 +12,19 @@ namespace dingo
 {
     class Container;
 
+    template < typename T > class ContextTracking
+    {
+    public:
+        ContextTracking() { CurrentContext = static_cast < T* >(this); }
+        ~ContextTracking() { CurrentContext = nullptr; }
+
+        static thread_local T* CurrentContext;
+    };
+
+    template < typename T > thread_local T* ContextTracking< T >::CurrentContext;
+
     class Context
+        : public ContextTracking< Context >
     {
         friend class Container;
 
@@ -48,20 +60,9 @@ namespace dingo
 
         template < typename T > ArenaAllocator< T > GetAllocator() { return allocator_; }
 
-        void AddTypeInstance(ITypeInstance* instance)
-        {
-            typeInstances_.push_front(instance);
-        }
-
-        void AddResettable(IResettable* ptr)
-        {
-            resettables_.push_front(ptr);
-        }
-
-        void AddConstructible(IConstructible* ptr)
-        {
-            constructibles_.push_back(ptr);
-        }
+        void AddTypeInstance(ITypeInstance* instance) { typeInstances_.push_front(instance); }
+        void AddResettable(IResettable* ptr) { resettables_.push_front(ptr); }
+        void AddConstructible(IConstructible* ptr) { constructibles_.push_back(ptr); }
 
         bool IsConstructibleAddress(uintptr_t address)
         {
@@ -78,7 +79,7 @@ namespace dingo
 
         void Construct()
         {
-            // Note that invocation of Construct() can grow constructibles_.
+            // Note that invocation of Construct(_, 0) can grow constructibles_.
             for(auto it = constructibles_.begin(); it != constructibles_.end(); ++it)
             {
                 (*it)->Construct(*this, 0);
