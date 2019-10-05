@@ -501,8 +501,11 @@ namespace dingo
         struct B: I {};
         struct C 
         {
-            C(std::vector< I* > v, std::list< I* >, std::set< I* >) : v_(v) {}
+            C(std::vector< I* > v, std::list< I* > l, std::set< I* > s) : v_(v), l_(l), s_(s) {}
+
             std::vector< I* > v_;
+            std::list< I* > l_;
+            std::set< I* > s_;
         };
 
         Container container;
@@ -528,6 +531,8 @@ namespace dingo
         {
             auto& c = container.Resolve< C& >();
             Assert(c.v_.size() == 2);
+            Assert(c.l_.size() == 2);
+            Assert(c.s_.size() == 2);
         }
     }
 }
@@ -553,7 +558,7 @@ int main()
     TestRecursion();
     TestRecursionCyclical();
 
-    TestResolvePerformance();
+    // TestResolvePerformance();
 
     TestResolveRollback();
     TestResolveMultiple();

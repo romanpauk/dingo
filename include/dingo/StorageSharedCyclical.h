@@ -106,7 +106,6 @@ namespace dingo
         {
             if (!instance_)
             {
-                // TODO: get rid of this shared_ptr
                 virtualInstance_ = std::make_shared< VirtualPointer< Type > >();
                 virtualInstance_->Reserve();
 

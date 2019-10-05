@@ -1,5 +1,8 @@
 #pragma once
 
+#include "dingo/Exceptions.h"
+#include "dingo/ScopeGuard.h"
+
 #include <windows.h>
 
 namespace dingo
@@ -18,9 +21,11 @@ namespace dingo
 
         void SetAccessible(bool accessible)
         {
-            // TODO: retval
             DWORD old;
-            VirtualProtect(instance_, sizeof(T), accessible ? PAGE_READWRITE : PAGE_NOACCESS, &old);
+            if(!VirtualProtect(instance_, sizeof(T), accessible ? PAGE_READWRITE : PAGE_NOACCESS, &old))
+            {
+                throw VirtualPointerException();
+            }
         }
 
         T* Get() { return instance_; }
@@ -30,8 +35,11 @@ namespace dingo
         {
             if (!instance_)
             {
-                // TODO: retval
                 instance_ = reinterpret_cast<T*>(VirtualAlloc(0, sizeof(T), MEM_COMMIT, PAGE_NOACCESS));
+                if(!instance_)
+                {
+                    throw VirtualPointerException();
+                }
             }
         }
 
@@ -39,10 +47,18 @@ namespace dingo
         {
             if (instance_)
             {
-                instance_->~T();
-
-                VirtualFree(instance_, 0, MEM_RELEASE);
+                auto instance = instance_;
                 instance_ = 0;
+
+                auto guard = MakeScopeGuard([instance]
+                {
+                    if (!VirtualFree(instance, 0, MEM_RELEASE))
+                    {
+                        throw VirtualPointerException();
+                    }
+                });
+
+                instance->~T();
             }
         }
 

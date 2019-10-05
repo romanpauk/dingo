@@ -10,6 +10,8 @@ namespace dingo
     struct TypeRecursionException : std::exception {};
     struct TypeNotConstructedException : std::exception {};
 
+    struct VirtualPointerException : std::exception {};
+
 #ifdef _DEBUG
     struct TypeAllocateFailedException : std::exception {};
 #endif

@@ -26,11 +26,8 @@ namespace dingo
             , constructibles_(allocator_)
         {}
 
-        ~Context() noexcept(false)
+        ~Context()
         {
-            // TODO: due to cleanup we really should not call this from dtor like this...
-            Construct();
-
             if (std::uncaught_exceptions())
             {
                 // Rollback changes in container
