@@ -65,7 +65,8 @@ namespace dingo
             Context& context_;
         };
 
-        Container()
+        Container(Container* parent = nullptr)
+            : parent_(parent)
         {}
 
         template <
@@ -125,6 +126,20 @@ namespace dingo
                 return TypeInstanceGetter< T >::Get(*instance);
             }
 
+            if (parent_)
+            {
+                // TODO: this is not as trivial as it seems
+                // Having an interface, we need to find its factory. 
+                // Having the factory, we need to find all it's interfaces and clone them togehter, so multibindings work correctly.
+
+                auto parentRange = parent->typeFactories_.equal_range(typeid(Type));
+                if (parentRange.first != parentRange.second)
+                {
+                    auto it = parentRange.first;
+                    typeFactories_.emplace(it.first, it.second->Clone());
+                }
+            }
+
             return ResolveMultiple< T >(context);
         }
 
@@ -169,6 +184,7 @@ namespace dingo
             static_assert(std::is_convertible_v< TypeDecay_t< Type >*, TypeDecay_t< TypeInterface >* >);
         }
 
+        Container* parent_;
         std::multimap< std::type_index, std::unique_ptr< ITypeInstanceFactory > > typeFactories_;
     };
 

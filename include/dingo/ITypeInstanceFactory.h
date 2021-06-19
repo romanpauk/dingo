@@ -13,5 +13,6 @@ namespace dingo
         virtual ITypeInstance* Resolve(Context& context) = 0;
         virtual bool IsCaching() = 0;
         virtual bool IsResolved() = 0;
+        virtual std::vector< std::unique_ptr< ITypeInstanceFactory > > Clone() = 0;
     };
 }

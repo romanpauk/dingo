@@ -112,5 +112,10 @@ namespace dingo
         {
             return Storage::IsCaching;
         }
+
+        std::unique_ptr< ITypeInstanceFactory > Clone() override
+        {
+            return std::make_unique< TypeInstanceFactory< TypeInterface, Type, Storage > >(std::make_shared< Storage >());
+        }
     };
 }
