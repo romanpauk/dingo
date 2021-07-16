@@ -1,5 +1,5 @@
 #include "dingo/Container.h"
-#include "dingo/Tuple.h"
+#include <dingo/type_list.h>
 #include "dingo/StorageShared.h"
 #include "dingo/StorageSharedCyclical.h"
 #include "dingo/StorageUnique.h"
@@ -22,7 +22,7 @@ namespace dingo
             AssertClass(*container.Resolve< C* >());
             AssertClass(container.Resolve< C& >());
 
-            AssertTypeNotConvertible < C, TypeList< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
+            AssertTypeNotConvertible < C, type_list< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
 
             BOOST_TEST(C::Constructor == 1);
             BOOST_TEST(C::Destructor == 0);
@@ -46,7 +46,7 @@ namespace dingo
             AssertClass(*container.Resolve< C* >());
             AssertClass(container.Resolve< C& >());
 
-            AssertTypeNotConvertible< C, TypeList< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
+            AssertTypeNotConvertible< C, type_list< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
 
             BOOST_TEST(C::Constructor == 1);
             BOOST_TEST(C::Destructor == 0);
@@ -73,7 +73,7 @@ namespace dingo
             AssertClass(*container.Resolve< std::shared_ptr< C >& >());
             AssertClass(**container.Resolve< std::shared_ptr< C >* >());
 
-            AssertTypeNotConvertible< C, TypeList< C, std::unique_ptr< C > > >(container);
+            AssertTypeNotConvertible< C, type_list< C, std::unique_ptr< C > > >(container);
 
             BOOST_TEST(C::Constructor == 1);
             BOOST_TEST(C::Destructor == 0);
@@ -99,7 +99,7 @@ namespace dingo
             AssertClass(*container.Resolve< std::unique_ptr< C >& >());
             AssertClass(**container.Resolve< std::unique_ptr< C >* >());
 
-            AssertTypeNotConvertible< C, TypeList< C, std::unique_ptr< C > > >(container);
+            AssertTypeNotConvertible< C, type_list< C, std::unique_ptr< C > > >(container);
 
             BOOST_TEST(C::Constructor == 1);
             BOOST_TEST(C::Destructor == 0);

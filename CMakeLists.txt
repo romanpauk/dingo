@@ -30,9 +30,9 @@ target_sources(dingo INTERFACE
     include/dingo/StorageShared.h
     include/dingo/StorageSharedCyclical.h
     include/dingo/StorageUnique.h
-    include/dingo/Tuple.h
     include/dingo/TypeInstance.h
     include/dingo/TypeInstanceFactory.h
+    include/dingo/type_list.h
     include/dingo/VirtualPointer.h
 )
 

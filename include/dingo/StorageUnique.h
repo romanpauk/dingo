@@ -10,34 +10,34 @@ namespace dingo
 
     template < typename Type, typename U > struct Conversions< Unique, Type, U >
     {
-        typedef TypeList< U > ValueTypes;
-        typedef TypeList<> LvalueReferenceTypes;
-        typedef TypeList< U&& > RvalueReferenceTypes;
-        typedef TypeList<> PointerTypes;
+        typedef type_list< U > ValueTypes;
+        typedef type_list<> LvalueReferenceTypes;
+        typedef type_list< U&& > RvalueReferenceTypes;
+        typedef type_list<> PointerTypes;
     };
 
     template < typename Type, typename U > struct Conversions< Unique, Type*, U >
     {
-        typedef TypeList< U > ValueTypes;
-        typedef TypeList<> LvalueReferenceTypes;
-        typedef TypeList< U&& > RvalueReferenceTypes;
-        typedef TypeList< U* > PointerTypes;
+        typedef type_list< U > ValueTypes;
+        typedef type_list<> LvalueReferenceTypes;
+        typedef type_list< U&& > RvalueReferenceTypes;
+        typedef type_list< U* > PointerTypes;
     };
 
     template < typename Type, typename U > struct Conversions< Unique, std::shared_ptr< Type >, U >
     {
-        typedef TypeList< std::shared_ptr< U > > ValueTypes;
-        typedef TypeList<> LvalueReferenceTypes;
-        typedef TypeList< std::shared_ptr< U >&& > RvalueReferenceTypes;
-        typedef TypeList<> PointerTypes;
+        typedef type_list< std::shared_ptr< U > > ValueTypes;
+        typedef type_list<> LvalueReferenceTypes;
+        typedef type_list< std::shared_ptr< U >&& > RvalueReferenceTypes;
+        typedef type_list<> PointerTypes;
     };
 
     template < typename Type, typename U > struct Conversions< Unique, std::unique_ptr< Type >, U >
     {
-        typedef TypeList< std::unique_ptr< U > > ValueTypes;
-        typedef TypeList<> LvalueReferenceTypes;
-        typedef TypeList< std::unique_ptr< U >&& > RvalueReferenceTypes;
-        typedef TypeList<> PointerTypes;
+        typedef type_list< std::unique_ptr< U > > ValueTypes;
+        typedef type_list<> LvalueReferenceTypes;
+        typedef type_list< std::unique_ptr< U >&& > RvalueReferenceTypes;
+        typedef type_list<> PointerTypes;
     };
 
     template < typename Type, typename Conversions > class Storage< Unique, Type, Conversions >

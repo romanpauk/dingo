@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dingo/Tuple.h"
+#include "dingo/type_list.h"
 #include "dingo/Exceptions.h"
 
 namespace dingo
@@ -72,7 +72,7 @@ namespace dingo
     {
         void* ptr = nullptr;
 
-        if (!ApplyType((T*)0, type, [&](auto element)
+        if (!for_type((T*)0, type, [&](auto element)
         {
             if (IsSmartPtr< Type >::value)
             {

@@ -2,6 +2,7 @@
 
 #include <dingo/decay.h>
 #include <dingo/class_factory.h>
+#include <dingo/type_list.h>
 #include "dingo/Storage.h"
 
 namespace dingo
@@ -10,34 +11,34 @@ namespace dingo
 
     template < typename Type, typename U > struct Conversions< Shared, Type, U >
     {
-        typedef TypeList<> ValueTypes;
-        typedef TypeList< U& > LvalueReferenceTypes;
-        typedef TypeList<> RvalueReferenceTypes;
-        typedef TypeList< U* > PointerTypes;
+        typedef type_list<> ValueTypes;
+        typedef type_list< U& > LvalueReferenceTypes;
+        typedef type_list<> RvalueReferenceTypes;
+        typedef type_list< U* > PointerTypes;
     };
 
     template < typename Type, typename U > struct Conversions< Shared, Type*, U >
     {
-        typedef TypeList<> ValueTypes;
-        typedef TypeList< U& > LvalueReferenceTypes;
-        typedef TypeList<> RvalueReferenceTypes;
-        typedef TypeList< U* > PointerTypes;
+        typedef type_list<> ValueTypes;
+        typedef type_list< U& > LvalueReferenceTypes;
+        typedef type_list<> RvalueReferenceTypes;
+        typedef type_list< U* > PointerTypes;
     };
 
     template < typename Type, typename U > struct Conversions< Shared, std::shared_ptr< Type >, U >
     {
-        typedef TypeList< std::shared_ptr< U > > ValueTypes;
-        typedef TypeList< U&, std::shared_ptr< U >& > LvalueReferenceTypes;
-        typedef TypeList<> RvalueReferenceTypes;
-        typedef TypeList< U*, std::shared_ptr< U >* > PointerTypes;
+        typedef type_list< std::shared_ptr< U > > ValueTypes;
+        typedef type_list< U&, std::shared_ptr< U >& > LvalueReferenceTypes;
+        typedef type_list<> RvalueReferenceTypes;
+        typedef type_list< U*, std::shared_ptr< U >* > PointerTypes;
     };
 
     template < typename Type, typename U > struct Conversions< Shared, std::unique_ptr< Type >, U >
     {
-        typedef TypeList<> ValueTypes;
-        typedef TypeList< U*, std::unique_ptr< U >* > PointerTypes;
-        typedef TypeList< U&, std::unique_ptr< U >& > LvalueReferenceTypes;
-        typedef TypeList<> RvalueReferenceTypes;
+        typedef type_list<> ValueTypes;
+        typedef type_list< U*, std::unique_ptr< U >* > PointerTypes;
+        typedef type_list< U&, std::unique_ptr< U >& > LvalueReferenceTypes;
+        typedef type_list<> RvalueReferenceTypes;
     };
 
     template < typename Type, typename Conversions > class Storage< Shared, Type, Conversions >

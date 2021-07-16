@@ -85,7 +85,7 @@ namespace dingo
         {
             auto storage = std::make_shared< TypeStorage >();
 
-            Apply((TypeList< TypeInterfaces... >*)0, [&](auto element)
+            for_each((type_list< TypeInterfaces... >*)0, [&](auto element)
             {
                 typedef typename decltype(element)::type TypeInterface;
 

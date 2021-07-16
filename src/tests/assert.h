@@ -4,7 +4,7 @@ namespace dingo
 {
     template< typename Type, typename NonConvertibleTypes > void AssertTypeNotConvertible(Container& container)
     {
-        Apply((NonConvertibleTypes*)0, [&](auto element)
+        for_each((NonConvertibleTypes*)0, [&](auto element)
         {
             BOOST_CHECK_THROW(container.Resolve< decltype(element)::type >(), dingo::TypeNotConvertibleException);
         });
