@@ -17,7 +17,7 @@ target_sources(dingo INTERFACE
     include/dingo/class_factory.h
     include/dingo/collection_traits.h
     include/dingo/constructor.h
-    include/dingo/Container.h
+    include/dingo/container.h
     include/dingo/Context.h
     include/dingo/decay.h
     include/dingo/Exceptions.h
