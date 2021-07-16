@@ -40,6 +40,8 @@ set(Boost_USE_STATIC_LIBS ON)
 find_package(Boost COMPONENTS unit_test_framework)
       
 add_executable(dingotest 
+    src/tests/assert.h
+    src/tests/class.h
     src/tests/dingo.cpp
     src/tests/testmodule.cpp
     src/tests/pch.h

@@ -7,63 +7,11 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include "class.h"
+#include "assert.h"
+
 namespace dingo
 {
-    struct IClass
-    {
-        virtual ~IClass() {}
-        virtual const std::string& GetName() = 0;
-    };
-
-    struct IClass1 : virtual IClass
-    {
-        virtual ~IClass1() {}
-    };
-
-    struct IClass2 : virtual IClass
-    {
-        virtual ~IClass2() {}
-    };
-
-    template < size_t Counter > struct Class : IClass1, IClass2
-    {
-        Class() : name_("Class") { ++Constructor; }
-        ~Class() { ++Destructor; }
-        Class(const Class& cls) : name_(cls.name_) { ++CopyConstructor; }
-        Class(Class&& cls) : name_(std::move(cls.name_)) { ++MoveConstructor; }
-
-        const std::string& GetName() { return name_; }
-
-        static size_t Constructor;
-        static size_t CopyConstructor;
-        static size_t MoveConstructor;
-        static size_t Destructor;
-
-    private:
-        std::string name_;
-    };
-
-    template < size_t Counter > size_t Class< Counter >::Constructor;
-    template < size_t Counter > size_t Class< Counter >::CopyConstructor;
-    template < size_t Counter > size_t Class< Counter >::MoveConstructor;
-    template < size_t Counter > size_t Class< Counter >::Destructor;
-
-#define AssertThrow(code, exception) try { (code); std::abort(); } catch(exception&) {}
-#define Assert(code) do { if(!(code)) std::abort(); } while(false)
-
-    template< typename Type, typename NonConvertibleTypes > void AssertTypeNotConvertible(Container& container)
-    {
-        Apply((NonConvertibleTypes*)0, [&](auto element)
-        {
-            AssertThrow(container.Resolve< decltype(element)::type >(), dingo::TypeNotConvertibleException);
-        });
-    }
-
-    template < class T > void AssertClass(T&& cls)
-    {
-        Assert(cls.GetName() == "Class");
-    }
-
     BOOST_AUTO_TEST_CASE(TestType)
     {
         struct A {};
@@ -92,14 +40,14 @@ namespace dingo
 
             AssertTypeNotConvertible < C, TypeList< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
 
-            Assert(C::Constructor == 1);
-            Assert(C::Destructor == 0);
-            Assert(C::CopyConstructor == 0);
-            Assert(C::MoveConstructor == 0);
+            BOOST_TEST(C::Constructor == 1);
+            BOOST_TEST(C::Destructor == 0);
+            BOOST_TEST(C::CopyConstructor == 0);
+            BOOST_TEST(C::MoveConstructor == 0);
         }
 
         {
-            Assert(C::Destructor == 1);
+            BOOST_TEST(C::Destructor == 1);
         }
     }
 
@@ -116,14 +64,14 @@ namespace dingo
 
             AssertTypeNotConvertible< C, TypeList< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
 
-            Assert(C::Constructor == 1);
-            Assert(C::Destructor == 0);
-            Assert(C::CopyConstructor == 0);
-            Assert(C::MoveConstructor == 0);
+            BOOST_TEST(C::Constructor == 1);
+            BOOST_TEST(C::Destructor == 0);
+            BOOST_TEST(C::CopyConstructor == 0);
+            BOOST_TEST(C::MoveConstructor == 0);
         }
 
         {
-            Assert(C::Destructor == 1);
+            BOOST_TEST(C::Destructor == 1);
         }
     }
 
@@ -143,14 +91,14 @@ namespace dingo
 
             AssertTypeNotConvertible< C, TypeList< C, std::unique_ptr< C > > >(container);
 
-            Assert(C::Constructor == 1);
-            Assert(C::Destructor == 0);
-            Assert(C::CopyConstructor == 0);
-            Assert(C::MoveConstructor == 0);
+            BOOST_TEST(C::Constructor == 1);
+            BOOST_TEST(C::Destructor == 0);
+            BOOST_TEST(C::CopyConstructor == 0);
+            BOOST_TEST(C::MoveConstructor == 0);
         }
 
         {
-            Assert(C::Destructor == 1);
+            BOOST_TEST(C::Destructor == 1);
         }
     }
 
@@ -169,14 +117,14 @@ namespace dingo
 
             AssertTypeNotConvertible< C, TypeList< C, std::unique_ptr< C > > >(container);
 
-            Assert(C::Constructor == 1);
-            Assert(C::Destructor == 0);
-            Assert(C::CopyConstructor == 0);
-            Assert(C::MoveConstructor == 0);
+            BOOST_TEST(C::Constructor == 1);
+            BOOST_TEST(C::Destructor == 0);
+            BOOST_TEST(C::CopyConstructor == 0);
+            BOOST_TEST(C::MoveConstructor == 0);
         }
 
         {
-            Assert(C::Destructor == 1);
+            BOOST_TEST(C::Destructor == 1);
         }
     }
 
@@ -191,15 +139,15 @@ namespace dingo
 
                 {
                     AssertClass(container.Resolve< C&& >());
-                    Assert(C::Constructor == 1);
-                    Assert(C::MoveConstructor == 2);
-                    Assert(C::CopyConstructor == 0);
+                    BOOST_TEST(C::Constructor == 1);
+                    BOOST_TEST(C::MoveConstructor == 2);
+                    BOOST_TEST(C::CopyConstructor == 0);
                 }
 
-                Assert(C::Destructor == 3);
+                BOOST_TEST(C::Destructor == 3);
             }
 
-            Assert(C::Destructor == 3);
+            BOOST_TEST(C::Destructor == 3);
         }
 
         {
@@ -212,15 +160,15 @@ namespace dingo
                 {
                     // TODO: This is quite stupid, it does allocation, move, than copy in TypeInstanceGetter
                     AssertClass(container.Resolve< C >());
-                    Assert(C::Constructor == 1);
-                    Assert(C::MoveConstructor == 1);
-                    Assert(C::CopyConstructor == 1);
+                    BOOST_TEST(C::Constructor == 1);
+                    BOOST_TEST(C::MoveConstructor == 1);
+                    BOOST_TEST(C::CopyConstructor == 1);
                 }
 
-                Assert(C::Destructor == 3);
+                BOOST_TEST(C::Destructor == 3);
             }
 
-            Assert(C::Destructor == 3);
+            BOOST_TEST(C::Destructor == 3);
         }
 
         {
@@ -232,15 +180,15 @@ namespace dingo
 
                 {
                     AssertClass(*container.Resolve< std::unique_ptr< C > >());
-                    Assert(C::Constructor == 1);
-                    Assert(C::MoveConstructor == 0);
-                    Assert(C::CopyConstructor == 0);
+                    BOOST_TEST(C::Constructor == 1);
+                    BOOST_TEST(C::MoveConstructor == 0);
+                    BOOST_TEST(C::CopyConstructor == 0);
                 }
 
-                Assert(C::Destructor == 1);
+                BOOST_TEST(C::Destructor == 1);
             }
 
-            Assert(C::Destructor == 1);
+            BOOST_TEST(C::Destructor == 1);
         }
     }
 
@@ -253,12 +201,12 @@ namespace dingo
                 Container container;
                 container.RegisterBinding< Storage< Unique, C* > >();
                 AssertClass(container.Resolve< C >());
-                Assert(C::Constructor == 1);
-                Assert(C::CopyConstructor == 1); // TODO: this is stupid. There should be no copy, just move.
-                Assert(C::MoveConstructor == 0);
+                BOOST_TEST(C::Constructor == 1);
+                BOOST_TEST(C::CopyConstructor == 1); // TODO: this is stupid. There should be no copy, just move.
+                BOOST_TEST(C::MoveConstructor == 0);
             }
 
-            Assert(C::Destructor == 2);
+            BOOST_TEST(C::Destructor == 2);
         }
 
         {
@@ -269,16 +217,16 @@ namespace dingo
                 container.RegisterBinding< Storage< Unique, C* > >();
                 auto c = container.Resolve< C* >();
                 AssertClass(*c);
-                Assert(C::Constructor == 1);
-                Assert(C::CopyConstructor == 0);
-                Assert(C::MoveConstructor == 0);
-                Assert(C::Destructor == 0);
+                BOOST_TEST(C::Constructor == 1);
+                BOOST_TEST(C::CopyConstructor == 0);
+                BOOST_TEST(C::MoveConstructor == 0);
+                BOOST_TEST(C::Destructor == 0);
 
                 delete c;
-                Assert(C::Destructor == 1);
+                BOOST_TEST(C::Destructor == 1);
             }
 
-            Assert(C::Destructor == 1);
+            BOOST_TEST(C::Destructor == 1);
         }
     }
 
@@ -291,17 +239,17 @@ namespace dingo
 
         {
             auto c = container.Resolve< IClass* >();
-            Assert(dynamic_cast<C*>(c));
+            BOOST_TEST(dynamic_cast<C*>(c));
         }
 
         {
             auto c = container.Resolve< IClass1* >();
-            Assert(dynamic_cast<C*>(c));
+            BOOST_TEST(dynamic_cast<C*>(c));
         }
 
         {
             auto c = container.Resolve< IClass2* >();
-            Assert(dynamic_cast<C*>(c));
+            BOOST_TEST(dynamic_cast<C*>(c));
         }
     }
 
@@ -385,10 +333,11 @@ namespace dingo
         container.RegisterBinding< Storage< dingo::Shared, std::shared_ptr< A > > >();
         container.RegisterBinding< Storage< dingo::Shared, B > >();
 
-        AssertThrow(container.Resolve< A >(), TypeRecursionException);
-        AssertThrow(container.Resolve< B >(), TypeRecursionException);
+        BOOST_CHECK_THROW(container.Resolve< A >(), TypeRecursionException);
+        BOOST_CHECK_THROW(container.Resolve< B >(), TypeRecursionException);
     }
 
+#if 0
     BOOST_AUTO_TEST_CASE(TestRecursionCyclical)
     {
         struct B;
@@ -403,8 +352,8 @@ namespace dingo
         {
             B(std::shared_ptr< A > aptr, A& a): aptr_(aptr), a_(a)
             {
-                AssertThrow(aptr_->GetName(), dingo::TypeNotConstructedException);
-                AssertThrow(a_.GetName(), dingo::TypeNotConstructedException);
+                BOOST_CHECK_THROW(aptr_->GetName(), dingo::TypeNotConstructedException);
+                BOOST_CHECK_THROW(a_.GetName(), dingo::TypeNotConstructedException);
             }
 
             std::shared_ptr< A > aptr_;
@@ -424,7 +373,9 @@ namespace dingo
         AssertClass(b.a_);
         AssertClass(*b.aptr_);       
     }
+#endif 
 
+#if 0
     BOOST_AUTO_TEST_CASE(TestResolvePerformance)
     {
         struct A {};
@@ -463,6 +414,7 @@ namespace dingo
                 std::cout << N << " Fake() took " << counter2.GetElapsed() << std::endl;
         */
     }
+#endif
 
     BOOST_AUTO_TEST_CASE(TestResolveRollback)
     {
@@ -479,20 +431,20 @@ namespace dingo
         container.RegisterBinding< Storage< Shared, B > >();
         container.RegisterBinding< Storage< Shared, C > >();
 
-        AssertThrow(container.Resolve< C& >(), Ex);
-        Assert(A::Constructor == 1);
-        Assert(A::Destructor == 1);
-        Assert(B::Constructor == 1);
-        Assert(B::Destructor == 1);
+        BOOST_CHECK_THROW(container.Resolve< C& >(), Ex);
+        BOOST_TEST(A::Constructor == 1);
+        BOOST_TEST(A::Destructor == 1);
+        BOOST_TEST(B::Constructor == 1);
+        BOOST_TEST(B::Destructor == 1);
 
         container.Resolve< A& >();
-        Assert(A::Constructor == 2);
-        Assert(A::Destructor == 1);
-        AssertThrow(container.Resolve< C >(), Ex);
-        Assert(A::Constructor == 2);
-        Assert(A::Destructor == 1);
-        Assert(B::Constructor == 2);
-        Assert(B::Destructor == 2);
+        BOOST_TEST(A::Constructor == 2);
+        BOOST_TEST(A::Destructor == 1);
+        BOOST_CHECK_THROW(container.Resolve< C >(), Ex);
+        BOOST_TEST(A::Constructor == 2);
+        BOOST_TEST(A::Destructor == 1);
+        BOOST_TEST(B::Constructor == 2);
+        BOOST_TEST(B::Destructor == 2);
     }
 
     BOOST_AUTO_TEST_CASE(TestResolveMultiple)
@@ -516,24 +468,24 @@ namespace dingo
 
         {
             auto vector = container.Resolve< std::vector< I* > >();
-            Assert(vector.size() == 2);
+            BOOST_TEST(vector.size() == 2);
 
             auto list = container.Resolve< std::list< I* > >();
-            Assert(list.size() == 2);
+            BOOST_TEST(list.size() == 2);
 
             auto set = container.Resolve< std::set< I* > >();
-            Assert(set.size() == 2);
+            BOOST_TEST(set.size() == 2);
         }
 
         {
-            AssertThrow(container.Resolve< std::vector< std::shared_ptr< I > > >(), TypeNotConvertibleException);
+            BOOST_CHECK_THROW(container.Resolve< std::vector< std::shared_ptr< I > > >(), TypeNotConvertibleException);
         }
 
         {
             auto& c = container.Resolve< C& >();
-            Assert(c.v_.size() == 2);
-            Assert(c.l_.size() == 2);
-            Assert(c.s_.size() == 2);
+            BOOST_TEST(c.v_.size() == 2);
+            BOOST_TEST(c.l_.size() == 2);
+            BOOST_TEST(c.s_.size() == 2);
         }
     }
 }
