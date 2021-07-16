@@ -6,6 +6,6 @@ namespace dingo
     {
     public:
         virtual ~IResettable() {};
-        virtual void Reset() = 0;
+        virtual void reset() = 0;
     };
 }

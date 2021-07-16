@@ -17,7 +17,7 @@ namespace dingo
         typedef Class< __COUNTER__ > C;
         {
             container container;
-            container.register_binding< Storage< Shared, C > >();
+            container.register_binding< storage< shared, C > >();
 
             AssertClass(*container.resolve< C* >());
             AssertClass(container.resolve< C& >());
@@ -41,7 +41,7 @@ namespace dingo
 
         {
             container container;
-            container.register_binding< Storage< Shared, C* > >();
+            container.register_binding< storage< shared, C* > >();
 
             AssertClass(*container.resolve< C* >());
             AssertClass(container.resolve< C& >());
@@ -65,7 +65,7 @@ namespace dingo
 
         {
             container container;
-            container.register_binding< Storage< Shared, std::shared_ptr< C > > >();
+            container.register_binding< storage< shared, std::shared_ptr< C > > >();
 
             AssertClass(*container.resolve< C* >());
             AssertClass(container.resolve< C& >());
@@ -92,7 +92,7 @@ namespace dingo
 
         {
             container container;
-            container.register_binding< Storage< Shared, std::unique_ptr< C > > >();
+            container.register_binding< storage< shared, std::unique_ptr< C > > >();
 
             AssertClass(*container.resolve< C* >());
             AssertClass(container.resolve< C& >());
@@ -119,7 +119,7 @@ namespace dingo
 
             {
                 container container;
-                container.register_binding< Storage< Unique, C > >();
+                container.register_binding< storage< unique, C > >();
 
                 {
                     AssertClass(container.resolve< C&& >());
@@ -139,7 +139,7 @@ namespace dingo
 
             {
                 container container;
-                container.register_binding< Storage< Unique, C > >();
+                container.register_binding< storage< unique, C > >();
 
                 {
                     // TODO: This is quite stupid, it does allocation, move, than copy in TypeInstanceGetter
@@ -160,7 +160,7 @@ namespace dingo
 
             {
                 container container;
-                container.register_binding< Storage< Unique, std::unique_ptr< C > > >();
+                container.register_binding< storage< unique, std::unique_ptr< C > > >();
 
                 {
                     AssertClass(*container.resolve< std::unique_ptr< C > >());
@@ -183,7 +183,7 @@ namespace dingo
 
             {
                 container container;
-                container.register_binding< Storage< Unique, C* > >();
+                container.register_binding< storage< unique, C* > >();
                 AssertClass(container.resolve< C >());
                 BOOST_TEST(C::Constructor == 1);
                 BOOST_TEST(C::CopyConstructor == 1); // TODO: this is stupid. There should be no copy, just move.
@@ -198,7 +198,7 @@ namespace dingo
 
             {
                 container container;
-                container.register_binding< Storage< Unique, C* > >();
+                container.register_binding< storage< unique, C* > >();
                 auto c = container.resolve< C* >();
                 AssertClass(*c);
                 BOOST_TEST(C::Constructor == 1);
@@ -219,7 +219,7 @@ namespace dingo
         typedef Class< __COUNTER__ > C;
 
         dingo::container container;
-        container.register_binding< Storage< Shared, C >, IClass, IClass1, IClass2 >();
+        container.register_binding< storage< shared, C >, IClass, IClass1, IClass2 >();
 
         {
             auto c = container.resolve< IClass* >();
@@ -272,9 +272,9 @@ namespace dingo
         };
 
         container container;
-        container.register_binding< Storage< Shared, std::shared_ptr< S > > >();
-        container.register_binding< Storage< Shared, std::unique_ptr< U > > >();
-        container.register_binding< Storage< Shared, B > >();
+        container.register_binding< storage< shared, std::shared_ptr< S > > >();
+        container.register_binding< storage< shared, std::unique_ptr< U > > >();
+        container.register_binding< storage< shared, B > >();
 
         container.resolve< B& >();
     }
@@ -293,9 +293,9 @@ namespace dingo
         };
 
         container container;
-        container.register_binding< Storage< dingo::Unique, std::shared_ptr< S > > >();
-        container.register_binding< Storage< dingo::Unique, std::unique_ptr< U > > >();
-        container.register_binding< Storage< dingo::Shared, B > >();
+        container.register_binding< storage< dingo::unique, std::shared_ptr< S > > >();
+        container.register_binding< storage< dingo::unique, std::unique_ptr< U > > >();
+        container.register_binding< storage< dingo::shared, B > >();
 
         container.resolve< B& >();
     }
@@ -314,8 +314,8 @@ namespace dingo
         };
 
         container container;
-        container.register_binding< Storage< dingo::Shared, std::shared_ptr< A > > >();
-        container.register_binding< Storage< dingo::Shared, B > >();
+        container.register_binding< storage< dingo::shared, std::shared_ptr< A > > >();
+        container.register_binding< storage< dingo::shared, B > >();
 
         BOOST_CHECK_THROW(container.resolve< A >(), type_recursion_exception);
         BOOST_CHECK_THROW(container.resolve< B >(), type_recursion_exception);
@@ -411,9 +411,9 @@ namespace dingo
         };
 
         container container;
-        container.register_binding< Storage< Shared, A > >();
-        container.register_binding< Storage< Shared, B > >();
-        container.register_binding< Storage< Shared, C > >();
+        container.register_binding< storage< shared, A > >();
+        container.register_binding< storage< shared, B > >();
+        container.register_binding< storage< shared, C > >();
 
         BOOST_CHECK_THROW(container.resolve< C& >(), Ex);
         BOOST_TEST(A::Constructor == 1);
@@ -446,9 +446,9 @@ namespace dingo
         };
 
         container container;
-        container.register_binding< Storage< Shared, A >, A, I >();
-        container.register_binding< Storage< Shared, B >, B, I >();
-        container.register_binding< Storage< Shared, C > >();
+        container.register_binding< storage< shared, A >, A, I >();
+        container.register_binding< storage< shared, B >, B, I >();
+        container.register_binding< storage< shared, C > >();
 
         {
             auto vector = container.resolve< std::vector< I* > >();

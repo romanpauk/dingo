@@ -18,7 +18,7 @@ namespace dingo
         : public class_instance_factory_i
     {
         Storage storage_;
-        typedef decltype(storage_.Resolve(std::declval< resolving_context& >())) ResolveType;
+        typedef decltype(storage_.resolve(std::declval< resolving_context& >())) ResolveType;
         typedef typename rebind_type < ResolveType, TypeInterface >::type InterfaceType;
         class_instance_cache< InterfaceType, Storage, Storage::IsCaching > cache_;
 
@@ -51,7 +51,7 @@ namespace dingo
         : public class_instance_factory_i
     {
         std::shared_ptr< Storage > storage_;
-        typedef decltype(storage_->Resolve(std::declval< resolving_context& >())) ResolveType;
+        typedef decltype(storage_->resolve(std::declval< resolving_context& >())) ResolveType;
         typedef typename rebind_type < ResolveType, TypeInterface >::type InterfaceType;
         class_instance_cache< InterfaceType, Storage, Storage::IsCaching > cache_;
 

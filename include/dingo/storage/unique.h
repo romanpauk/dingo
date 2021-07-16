@@ -7,8 +7,10 @@
 namespace dingo
 {
     class Container;
+    
+    struct unique {};
 
-    template < typename Type, typename U > struct Conversions< Unique, Type, U >
+    template < typename Type, typename U > struct conversions< unique, Type, U >
     {
         typedef type_list< U > ValueTypes;
         typedef type_list<> LvalueReferenceTypes;
@@ -16,7 +18,7 @@ namespace dingo
         typedef type_list<> PointerTypes;
     };
 
-    template < typename Type, typename U > struct Conversions< Unique, Type*, U >
+    template < typename Type, typename U > struct conversions< unique, Type*, U >
     {
         typedef type_list< U > ValueTypes;
         typedef type_list<> LvalueReferenceTypes;
@@ -24,7 +26,7 @@ namespace dingo
         typedef type_list< U* > PointerTypes;
     };
 
-    template < typename Type, typename U > struct Conversions< Unique, std::shared_ptr< Type >, U >
+    template < typename Type, typename U > struct conversions< unique, std::shared_ptr< Type >, U >
     {
         typedef type_list< std::shared_ptr< U > > ValueTypes;
         typedef type_list<> LvalueReferenceTypes;
@@ -32,7 +34,7 @@ namespace dingo
         typedef type_list<> PointerTypes;
     };
 
-    template < typename Type, typename U > struct Conversions< Unique, std::unique_ptr< Type >, U >
+    template < typename Type, typename U > struct conversions< unique, std::unique_ptr< Type >, U >
     {
         typedef type_list< std::unique_ptr< U > > ValueTypes;
         typedef type_list<> LvalueReferenceTypes;
@@ -40,7 +42,7 @@ namespace dingo
         typedef type_list<> PointerTypes;
     };
 
-    template < typename Type, typename Conversions > class Storage< Unique, Type, Conversions >
+    template < typename Type, typename Conversions > class storage< unique, Type, Conversions >
     {
     public:
         static const bool IsCaching = false;
@@ -48,11 +50,11 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
-        Type Resolve(resolving_context& context)
+        Type resolve(resolving_context& context)
         {
             return class_factory< decay_t< Type > >::template construct< Type, constructor_argument< decay_t< Type > > >(context);
         }
 
-        bool IsResolved() { return false; }
+        bool is_resolved() { return false; }
     };
 }

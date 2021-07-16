@@ -43,7 +43,7 @@ namespace dingo
                 // Rollback changes in container
                 for (auto& resettable : resettables_)
                 {
-                    resettable->Reset();
+                    resettable->reset();
                 }
             }
 

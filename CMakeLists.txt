@@ -29,10 +29,10 @@ target_sources(dingo INTERFACE
     include/dingo/PerformanceCounter.h
     include/dingo/resolving_context.h
     include/dingo/scope_guard.h
-    include/dingo/Storage.h
-    include/dingo/StorageShared.h
-    include/dingo/StorageSharedCyclical.h
-    include/dingo/StorageUnique.h
+    include/dingo/storage.h
+    include/dingo/storage/shared.h
+    include/dingo/storage/shared_cyclical.h
+    include/dingo/storage/unique.h
     include/dingo/type_list.h
     include/dingo/VirtualPointer.h
 )

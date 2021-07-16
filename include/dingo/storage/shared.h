@@ -9,7 +9,9 @@ namespace dingo
 {
     class container;
 
-    template < typename Type, typename U > struct Conversions< Shared, Type, U >
+    struct shared {};
+
+    template < typename Type, typename U > struct conversions< shared, Type, U >
     {
         typedef type_list<> ValueTypes;
         typedef type_list< U& > LvalueReferenceTypes;
@@ -17,7 +19,7 @@ namespace dingo
         typedef type_list< U* > PointerTypes;
     };
 
-    template < typename Type, typename U > struct Conversions< Shared, Type*, U >
+    template < typename Type, typename U > struct conversions< shared, Type*, U >
     {
         typedef type_list<> ValueTypes;
         typedef type_list< U& > LvalueReferenceTypes;
@@ -25,7 +27,7 @@ namespace dingo
         typedef type_list< U* > PointerTypes;
     };
 
-    template < typename Type, typename U > struct Conversions< Shared, std::shared_ptr< Type >, U >
+    template < typename Type, typename U > struct conversions< shared, std::shared_ptr< Type >, U >
     {
         typedef type_list< std::shared_ptr< U > > ValueTypes;
         typedef type_list< U&, std::shared_ptr< U >& > LvalueReferenceTypes;
@@ -33,7 +35,7 @@ namespace dingo
         typedef type_list< U*, std::shared_ptr< U >* > PointerTypes;
     };
 
-    template < typename Type, typename U > struct Conversions< Shared, std::unique_ptr< Type >, U >
+    template < typename Type, typename U > struct conversions< shared, std::unique_ptr< Type >, U >
     {
         typedef type_list<> ValueTypes;
         typedef type_list< U*, std::unique_ptr< U >* > PointerTypes;
@@ -41,7 +43,7 @@ namespace dingo
         typedef type_list<> RvalueReferenceTypes;
     };
 
-    template < typename Type, typename Conversions > class Storage< Shared, Type, Conversions >
+    template < typename Type, typename Conversions > class storage< shared, Type, Conversions >
         : public IResettable
     {
     public:
@@ -50,16 +52,16 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
-        Storage()
+        storage()
             : initialized_(false)
         {}
 
-        ~Storage()
+        ~storage()
         {
-            Reset();
+            reset();
         }
 
-        Type* Resolve(resolving_context& context)
+        Type* resolve(resolving_context& context)
         {
             if (!initialized_)
             {
@@ -70,9 +72,9 @@ namespace dingo
             return reinterpret_cast<Type*>(&instance_);
         }
 
-        bool IsResolved() const { return initialized_; }
+        bool is_resolved() const { return initialized_; }
 
-        void Reset() override
+        void reset() override
         {
             if (initialized_)
             {
@@ -86,17 +88,17 @@ namespace dingo
         bool initialized_;
     };
 
-    template < typename Type, typename Conversions > class Storage< Shared, Type*, Conversions >
-        : public Storage< Shared, std::unique_ptr< Type >, Conversions >
+    template < typename Type, typename Conversions > class storage< shared, Type*, Conversions >
+        : public storage< shared, std::unique_ptr< Type >, Conversions >
     {
     public:
-        Type* Resolve(resolving_context& context)
+        Type* resolve(resolving_context& context)
         {
-            return Storage< Shared, std::unique_ptr< Type >, Conversions >::Resolve(context).get();
+            return storage< shared, std::unique_ptr< Type >, Conversions >::resolve(context).get();
         }
     };
 
-    template < typename Type, typename Conversions > class Storage< Shared, std::shared_ptr< Type >, Conversions >
+    template < typename Type, typename Conversions > class storage< shared, std::shared_ptr< Type >, Conversions >
         : public IResettable
     {
     public:
@@ -105,7 +107,7 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
-        std::shared_ptr< Type >& Resolve(resolving_context& context)
+        std::shared_ptr< Type >& resolve(resolving_context& context)
         {
             if (!instance_)
             {
@@ -115,14 +117,14 @@ namespace dingo
             return instance_;
         }
 
-        void Reset() override { instance_.reset(); }
-        bool IsResolved() { return instance_.get() != nullptr; }
+        void reset() override { instance_.reset(); }
+        bool is_resolved() { return instance_.get() != nullptr; }
 
     private:
         std::shared_ptr< Type > instance_;
     };
 
-    template < typename Type, typename Conversions > class Storage< Shared, std::unique_ptr< Type >, Conversions >
+    template < typename Type, typename Conversions > class storage< shared, std::unique_ptr< Type >, Conversions >
         : public IResettable
     {
     public:
@@ -131,7 +133,7 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
-        std::unique_ptr< Type >& Resolve(resolving_context& context)
+        std::unique_ptr< Type >& resolve(resolving_context& context)
         {
             // TODO: thread-safe
             if (!instance_)
@@ -142,8 +144,8 @@ namespace dingo
             return instance_;
         }
 
-        void Reset() override { instance_.reset(); }
-        bool IsResolved() { return instance_.get() != nullptr; }
+        void reset() override { instance_.reset(); }
+        bool is_resolved() { return instance_.get() != nullptr; }
 
     private:
         std::unique_ptr< Type > instance_;
