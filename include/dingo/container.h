@@ -85,7 +85,7 @@ namespace dingo
         > R resolve()
         {
             resolving_context context(*this);
-            auto guard = make_scope_guard([&context] { if (!std::uncaught_exceptions()) { context.Construct(); } });
+            auto guard = make_scope_guard([&context] { if (!std::uncaught_exceptions()) { context.finalize(); } });
             return resolve< T, true >(context);
         }
 

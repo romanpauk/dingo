@@ -16,7 +16,7 @@ namespace dingo
             auto allocator = context.template get_allocator< TypeInstance< TypeInterface, Storage > >();
             auto instance = allocator.allocate(1);
             new (instance) TypeInstance< TypeInterface, Storage >(storage.Resolve(context));
-            context.AddTypeInstance(instance);
+            context.register_type_instance(instance);
             return instance;
         }
 
@@ -31,8 +31,12 @@ namespace dingo
         {
             if (!instance_)
             {
-                if (!storage.IsResolved()) context.AddResettable(&storage);
-                context.AddResettable(this);
+                if (!storage.IsResolved())
+                {
+                    context.register_resettable(&storage);
+                }
+
+                context.register_resettable(this);
 
                 instance_.emplace(storage.Resolve(context));
             }

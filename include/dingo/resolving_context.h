@@ -26,8 +26,6 @@ namespace dingo
     class resolving_context
         : public ContextTracking< resolving_context >
     {
-        friend class Container;
-
     public:
         resolving_context(container& container)
             : container_(container)
@@ -60,11 +58,11 @@ namespace dingo
 
         template < typename T > arena_allocator< T > get_allocator() { return allocator_; }
 
-        void AddTypeInstance(ITypeInstance* instance) { type_instances_.push_front(instance); }
-        void AddResettable(IResettable* ptr) { resettables_.push_front(ptr); }
-        void AddConstructible(IConstructible* ptr) { constructibles_.push_back(ptr); }
+        void register_type_instance(ITypeInstance* instance) { type_instances_.push_front(instance); }
+        void register_resettable(IResettable* ptr) { resettables_.push_front(ptr); }
+        void register_constructible(IConstructible* ptr) { constructibles_.push_back(ptr); }
 
-        bool IsConstructibleAddress(uintptr_t address)
+        bool is_constructible_address(uintptr_t address)
         {
             for (auto& constructible : constructibles_)
             {
@@ -77,7 +75,7 @@ namespace dingo
             return false;
         }
 
-        void Construct()
+        void finalize()
         {
             // Note that invocation of Construct(_, 0) can grow constructibles_.
             for(auto it = constructibles_.begin(); it != constructibles_.end(); ++it)
