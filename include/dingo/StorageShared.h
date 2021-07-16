@@ -7,7 +7,7 @@
 
 namespace dingo
 {
-    class Container;
+    class container;
 
     template < typename Type, typename U > struct Conversions< Shared, Type, U >
     {
@@ -59,7 +59,7 @@ namespace dingo
             Reset();
         }
 
-        Type* Resolve(Context& context)
+        Type* Resolve(resolving_context& context)
         {
             if (!initialized_)
             {
@@ -90,7 +90,7 @@ namespace dingo
         : public Storage< Shared, std::unique_ptr< Type >, Conversions >
     {
     public:
-        Type* Resolve(Context& context)
+        Type* Resolve(resolving_context& context)
         {
             return Storage< Shared, std::unique_ptr< Type >, Conversions >::Resolve(context).get();
         }
@@ -105,7 +105,7 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
-        std::shared_ptr< Type >& Resolve(Context& context)
+        std::shared_ptr< Type >& Resolve(resolving_context& context)
         {
             if (!instance_)
             {
@@ -131,7 +131,7 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
-        std::unique_ptr< Type >& Resolve(Context& context)
+        std::unique_ptr< Type >& Resolve(resolving_context& context)
         {
             // TODO: thread-safe
             if (!instance_)

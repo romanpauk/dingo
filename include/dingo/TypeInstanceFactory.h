@@ -1,12 +1,12 @@
 #pragma once
 
 #include "dingo/ArenaAllocator.h"
-#include "dingo/Context.h"
+#include <dingo/resolving_context.h>
 #include "dingo/ITypeInstanceFactory.h"
 
 namespace dingo
 {
-    class Context;
+    class resolving_context;
 
     template< typename TypeInterface, typename Storage, bool IsCaching > struct TypeInstanceCache
         : public IResettable
@@ -27,7 +27,7 @@ namespace dingo
     template< typename TypeInterface, typename Storage > struct TypeInstanceCache< TypeInterface, Storage, true >
         : public IResettable
     {
-        ITypeInstance* Resolve(Context& context, Storage& storage)
+        ITypeInstance* Resolve(resolving_context& context, Storage& storage)
         {
             if (!instance_)
             {
@@ -56,7 +56,7 @@ namespace dingo
         : public ITypeInstanceFactory
     {
         Storage storage_;
-        typedef decltype(storage_.Resolve(std::declval< Context& >())) ResolveType;
+        typedef decltype(storage_.Resolve(std::declval< resolving_context& >())) ResolveType;
         typedef typename RebindType < ResolveType, TypeInterface >::type InterfaceType;
         TypeInstanceCache< InterfaceType, Storage, Storage::IsCaching > cache_;
 
@@ -64,7 +64,7 @@ namespace dingo
         TypeInstanceFactory()
         {}
 
-        ITypeInstance* Resolve(Context& context) override
+        ITypeInstance* Resolve(resolving_context& context) override
         {
             return cache_.Resolve(context, storage_);
         }
@@ -89,7 +89,7 @@ namespace dingo
         : public ITypeInstanceFactory
     {
         std::shared_ptr< Storage > storage_;
-        typedef decltype(storage_->Resolve(std::declval< Context& >())) ResolveType;
+        typedef decltype(storage_->Resolve(std::declval< resolving_context& >())) ResolveType;
         typedef typename RebindType < ResolveType, TypeInterface >::type InterfaceType;
         TypeInstanceCache< InterfaceType, Storage, Storage::IsCaching > cache_;
 
@@ -98,7 +98,7 @@ namespace dingo
             : storage_(storage)
         {}
 
-        ITypeInstance* Resolve(Context& context) override
+        ITypeInstance* Resolve(resolving_context& context) override
         {
             return cache_.Resolve(context, *storage_);
         }

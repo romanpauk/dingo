@@ -23,22 +23,22 @@ namespace dingo
 
     template < typename T > thread_local T* ContextTracking< T >::CurrentContext;
 
-    class Context
-        : public ContextTracking< Context >
+    class resolving_context
+        : public ContextTracking< resolving_context >
     {
         friend class Container;
 
     public:
-        Context(container& container)
+        resolving_context(container& container)
             : container_(container)
             , arena_(buffer_)
             , allocator_(arena_)
-            , typeInstances_(allocator_)
+            , type_instances_(allocator_)
             , resettables_(allocator_)
             , constructibles_(allocator_)
         {}
 
-        ~Context()
+        ~resolving_context()
         {
             if (std::uncaught_exceptions())
             {
@@ -50,17 +50,17 @@ namespace dingo
             }
 
             // Destroy temporary instances
-            for (auto& typeInstance : typeInstances_)
+            for (auto& typeInstance : type_instances_)
             {
                 typeInstance->~ITypeInstance();
             }
         }
 
-        template < typename T > T Resolve();
+        template < typename T > T resolve();
 
         template < typename T > ArenaAllocator< T > GetAllocator() { return allocator_; }
 
-        void AddTypeInstance(ITypeInstance* instance) { typeInstances_.push_front(instance); }
+        void AddTypeInstance(ITypeInstance* instance) { type_instances_.push_front(instance); }
         void AddResettable(IResettable* ptr) { resettables_.push_front(ptr); }
         void AddConstructible(IConstructible* ptr) { constructibles_.push_back(ptr); }
 
@@ -98,7 +98,7 @@ namespace dingo
         Arena arena_;
         ArenaAllocator< void > allocator_;
 
-        std::forward_list< ITypeInstance*, ArenaAllocator< ITypeInstance* > > typeInstances_;
+        std::forward_list< ITypeInstance*, ArenaAllocator< ITypeInstance* > > type_instances_;
         std::forward_list< IResettable*, ArenaAllocator< IResettable* > > resettables_;
         std::list< IConstructible*, ArenaAllocator< IConstructible* > > constructibles_;
     };

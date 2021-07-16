@@ -18,13 +18,13 @@ target_sources(dingo INTERFACE
     include/dingo/collection_traits.h
     include/dingo/constructor.h
     include/dingo/container.h
-    include/dingo/Context.h
     include/dingo/decay.h
     include/dingo/Exceptions.h
     include/dingo/IConstructible.h
     include/dingo/IResettable.h
     include/dingo/ITypeInstanceFactory.h
     include/dingo/PerformanceCounter.h
+    include/dingo/resolving_context.h
     include/dingo/ScopeGuard.h
     include/dingo/Storage.h
     include/dingo/StorageShared.h

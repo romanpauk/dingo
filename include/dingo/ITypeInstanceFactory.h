@@ -2,7 +2,7 @@
 
 namespace dingo
 {
-    class Context;
+    class resolving_context;
     class ITypeInstance;
 
     class ITypeInstanceFactory
@@ -10,7 +10,7 @@ namespace dingo
     public:
         virtual ~ITypeInstanceFactory() {}
 
-        virtual ITypeInstance* Resolve(Context& context) = 0;
+        virtual ITypeInstance* Resolve(resolving_context& context) = 0;
         virtual bool IsCaching() = 0;
         virtual bool IsResolved() = 0;
     };

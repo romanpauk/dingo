@@ -6,7 +6,7 @@
 #include "dingo/Exceptions.h"
 #include "dingo/TypeInstanceFactory.h"
 #include "dingo/ArenaAllocator.h"
-#include "dingo/Context.h"
+#include <dingo/resolving_context.h>
 #include "dingo/ScopeGuard.h"
 
 #include <map>
@@ -47,22 +47,22 @@ namespace dingo
 
     class container
     {
-        friend class Context;
+        friend class resolving_context;
 
     public:
         template < typename DisabledType > class ConstructorArgument
         {
         public:
-            ConstructorArgument(Context& context)
+            ConstructorArgument(resolving_context& context)
                 : context_(context)
             {}
 
-            template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T* () { return context_.Resolve< T* >(); }
-            template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T& () { return context_.Resolve< T& >(); }
-            template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T&& () { return context_.Resolve< T&& >(); }
+            template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T* () { return context_.resolve< T* >(); }
+            template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T& () { return context_.resolve< T& >(); }
+            template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T&& () { return context_.resolve< T&& >(); }
 
         private:
-            Context& context_;
+            resolving_context& context_;
         };
 
         container()
@@ -99,7 +99,7 @@ namespace dingo
             , typename R = std::conditional_t< std::is_rvalue_reference_v< T >, std::remove_reference_t< T >, T >
         > R resolve()
         {
-            Context context(*this);
+            resolving_context context(*this);
             auto guard = MakeScopeGuard([&context] { if (!std::uncaught_exceptions()) { context.Construct(); } });
             return resolve< T, true >(context);
         }
@@ -112,7 +112,7 @@ namespace dingo
                 RemoveRvalueReferences,
                 std::conditional_t < std::is_rvalue_reference_v< T >, std::remove_reference_t< T >, T >, T
             >
-        > R resolve(Context& context)
+        > R resolve(resolving_context& context)
         {
             typedef decay_t< T > Type;
 
@@ -130,14 +130,14 @@ namespace dingo
 
         template <
             typename T
-        > std::enable_if_t< !collection_traits< decay_t< T > >::is_collection, T > resolve_multiple(Context& context)
+        > std::enable_if_t< !collection_traits< decay_t< T > >::is_collection, T > resolve_multiple(resolving_context& context)
         {
             throw TypeNotFoundException();
         }
 
         template <
             typename T
-        > std::enable_if_t< collection_traits< decay_t< T > >::is_collection, T > resolve_multiple(Context& context)
+        > std::enable_if_t< collection_traits< decay_t< T > >::is_collection, T > resolve_multiple(resolving_context& context)
         {
             typedef decay_t< T > Type;
             typedef decay_t< typename Type::value_type > ValueType;
@@ -172,7 +172,7 @@ namespace dingo
         std::multimap< std::type_index, std::unique_ptr< ITypeInstanceFactory > > type_factories_;
     };
 
-    template < typename T > T Context::Resolve()
+    template < typename T > T resolving_context::resolve()
     {
         return container_.resolve< T, false >(*this);
     }

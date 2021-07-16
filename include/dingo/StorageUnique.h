@@ -48,7 +48,7 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
-        Type Resolve(Context& context)
+        Type Resolve(resolving_context& context)
         {
             return class_factory< decay_t< Type > >::template construct< Type, container::ConstructorArgument< decay_t< Type > > >(context);
         }

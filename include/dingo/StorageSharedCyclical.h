@@ -8,7 +8,7 @@
 
 namespace dingo
 {
-    class Container;
+    class container;
 
     template < typename Type, typename U > struct Conversions< SharedCyclical, Type, U >: Conversions< Shared, Type, U > {};
     template < typename Type, typename U > struct Conversions< SharedCyclical, std::shared_ptr< Type >, U >: Conversions< Shared, std::shared_ptr< Type >, U > {};
@@ -26,7 +26,7 @@ namespace dingo
             const _se_translator_function translator_;
         };
 
-        void Construct(Context& context, int phase, VirtualPointer< Type >& instance)
+        void Construct(resolving_context& context, int phase, VirtualPointer< Type >& instance)
         {
             instance.SetAccessible(true);
 
@@ -63,7 +63,7 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
-        Type* Resolve(Context& context)
+        Type* Resolve(resolving_context& context)
         {
             if (!instance_.Get())
             {
@@ -77,7 +77,7 @@ namespace dingo
         bool IsResolved() const { return instance_.Get(); }
         void Reset() override { instance_.Reset(); }
 
-        void Construct(Context& context, int phase) override { CyclicalSupport< Type >::Construct(context, phase, instance_); }
+        void Construct(resolving_context& context, int phase) override { CyclicalSupport< Type >::Construct(context, phase, instance_); }
 
         bool HasAddress(uintptr_t address) override { return instance_.HasAddress(address); }
 
@@ -96,7 +96,7 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
-        std::shared_ptr< Type >& Resolve(Context& context)
+        std::shared_ptr< Type >& Resolve(resolving_context& context)
         {
             if (!instance_)
             {
@@ -115,7 +115,7 @@ namespace dingo
         bool IsResolved() const { return instance_.get() != nullptr; }
         void Reset() override { instance_.reset(); virtualInstance_.reset(); }
 
-        void Construct(Context& context, int phase) override { CyclicalSupport< Type >::Construct(context, phase, *virtualInstance_); }
+        void Construct(resolving_context& context, int phase) override { CyclicalSupport< Type >::Construct(context, phase, *virtualInstance_); }
 
         bool HasAddress(uintptr_t address) override { return virtualInstance_->HasAddress(address); }
 
