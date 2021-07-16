@@ -1,8 +1,8 @@
 #include <dingo/container.h>
 #include <dingo/type_list.h>
-#include "dingo/StorageShared.h"
-#include "dingo/StorageSharedCyclical.h"
-#include "dingo/StorageUnique.h"
+#include "dingo/storage/shared.h"
+#include "dingo/storage/shared_cyclical.h"
+#include "dingo/storage/unique.h"
 #include "dingo/PerformanceCounter.h"
 
 #include <boost/test/unit_test.hpp>
