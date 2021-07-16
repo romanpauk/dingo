@@ -13,7 +13,7 @@ add_library(dingo INTERFACE)
 target_include_directories(dingo INTERFACE include)
 
 target_sources(dingo INTERFACE
-    include/dingo/ArenaAllocator.h
+    include/dingo/arena_allocator.h
     include/dingo/class_factory.h
     include/dingo/collection_traits.h
     include/dingo/constructor.h

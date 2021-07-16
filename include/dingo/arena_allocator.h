@@ -1,21 +1,23 @@
 #pragma once
 
+// https://howardhinnant.github.io/allocator_boilerplate.html
+
 namespace dingo
 {
-    template < typename T > class ArenaAllocator;
+    template < typename T > class arena_allocator;
 
-    class Arena
+    class arena
     {
-        template < typename T > friend class ArenaAllocator;
+        template < typename T > friend class arena_allocator;
 
     public:
-        template < size_t Size > Arena(std::array< unsigned char, Size >& arena)
+        template < size_t Size > arena(std::array< unsigned char, Size >& arena)
             : base_(arena.data())
             , current_(arena.data())
             , end_(arena.data() + arena.size())
         {}
 
-        bool operator == (const Arena& arena) { return base_ == arena.base_; }
+        bool operator == (const arena& arena) { return base_ == arena.base_; }
 
     private:
         unsigned char* base_;
@@ -24,18 +26,18 @@ namespace dingo
     };
 
     template < typename T >
-    class ArenaAllocator
+    class arena_allocator
     {
     public:
         using value_type    = T;
 
-        ArenaAllocator(Arena& arena) noexcept
+        arena_allocator(arena& arena) noexcept
             : arena_(arena)
         {}
 
-        template <class U> friend class ArenaAllocator;
+        template <class U> friend class arena_allocator;
 
-        template <class U> ArenaAllocator(ArenaAllocator<U> const& alloc) noexcept
+        template <class U> arena_allocator(arena_allocator<U> const& alloc) noexcept
             : arena_(alloc.arena_)
         {}
 
@@ -73,16 +75,15 @@ namespace dingo
         }
 
     private:
-        Arena& arena_;
-
+        arena& arena_;
     };
 
-    template <class T, class U> bool operator==(ArenaAllocator<T> const& lhs, ArenaAllocator<U> const& rhs) noexcept
+    template <class T, class U> bool operator==(arena_allocator<T> const& lhs, arena_allocator<U> const& rhs) noexcept
     {
         return lhs.arena_ == rhs.arena_;
     }
 
-    template <class T, class U> bool operator!=(ArenaAllocator<T> const& x, ArenaAllocator<U> const& y) noexcept
+    template <class T, class U> bool operator!=(arena_allocator<T> const& x, arena_allocator<U> const& y) noexcept
     {
         return !(x == y);
     }

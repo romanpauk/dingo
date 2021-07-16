@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dingo/ArenaAllocator.h"
+#include <dingo/arena_allocator.h>
 #include "dingo/IResettable.h"
 #include "dingo/IConstructible.h"
 
@@ -58,7 +58,7 @@ namespace dingo
 
         template < typename T > T resolve();
 
-        template < typename T > ArenaAllocator< T > GetAllocator() { return allocator_; }
+        template < typename T > arena_allocator< T > get_allocator() { return allocator_; }
 
         void AddTypeInstance(ITypeInstance* instance) { type_instances_.push_front(instance); }
         void AddResettable(IResettable* ptr) { resettables_.push_front(ptr); }
@@ -95,12 +95,12 @@ namespace dingo
         container& container_;
 
         std::array< unsigned char, 1024 > buffer_;
-        Arena arena_;
-        ArenaAllocator< void > allocator_;
+        arena arena_;
+        arena_allocator< void > allocator_;
 
-        std::forward_list< ITypeInstance*, ArenaAllocator< ITypeInstance* > > type_instances_;
-        std::forward_list< IResettable*, ArenaAllocator< IResettable* > > resettables_;
-        std::list< IConstructible*, ArenaAllocator< IConstructible* > > constructibles_;
+        std::forward_list< ITypeInstance*, arena_allocator< ITypeInstance* > > type_instances_;
+        std::forward_list< IResettable*, arena_allocator< IResettable* > > resettables_;
+        std::list< IConstructible*, arena_allocator< IConstructible* > > constructibles_;
     };
 
     template < typename DisabledType > class constructor_argument

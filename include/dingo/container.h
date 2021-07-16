@@ -5,7 +5,7 @@
 #include "dingo/TypeInstance.h"
 #include "dingo/Exceptions.h"
 #include "dingo/TypeInstanceFactory.h"
-#include "dingo/ArenaAllocator.h"
+#include <dingo/arena_allocator.h>
 #include <dingo/resolving_context.h>
 #include <dingo/scope_guard.h>
 
@@ -129,7 +129,7 @@ namespace dingo
 
             auto range = type_factories_.equal_range(typeid(ValueType));
             
-            auto results = context.GetAllocator< Type >().allocate(1);
+            auto results = context.get_allocator< Type >().allocate(1);
             new (results) Type;
             collection_traits< Type >::reserve(*results, std::distance(range.first, range.second));
             

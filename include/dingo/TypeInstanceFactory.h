@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dingo/ArenaAllocator.h"
+#include <dingo/arena_allocator.h>
 #include <dingo/resolving_context.h>
 #include "dingo/ITypeInstanceFactory.h"
 
@@ -13,7 +13,7 @@ namespace dingo
     {
         template < typename Context > ITypeInstance* Resolve(Context& context, Storage& storage)
         {
-            auto allocator = context.template GetAllocator< TypeInstance< TypeInterface, Storage > >();
+            auto allocator = context.template get_allocator< TypeInstance< TypeInterface, Storage > >();
             auto instance = allocator.allocate(1);
             new (instance) TypeInstance< TypeInterface, Storage >(storage.Resolve(context));
             context.AddTypeInstance(instance);
