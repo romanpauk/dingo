@@ -7,7 +7,7 @@
 #include "dingo/TypeInstanceFactory.h"
 #include "dingo/ArenaAllocator.h"
 #include <dingo/resolving_context.h>
-#include "dingo/ScopeGuard.h"
+#include <dingo/scope_guard.h>
 
 #include <map>
 #include <vector>
@@ -50,21 +50,6 @@ namespace dingo
         friend class resolving_context;
 
     public:
-        template < typename DisabledType > class ConstructorArgument
-        {
-        public:
-            ConstructorArgument(resolving_context& context)
-                : context_(context)
-            {}
-
-            template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T* () { return context_.resolve< T* >(); }
-            template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T& () { return context_.resolve< T& >(); }
-            template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T&& () { return context_.resolve< T&& >(); }
-
-        private:
-            resolving_context& context_;
-        };
-
         container()
         {}
 
@@ -100,7 +85,7 @@ namespace dingo
         > R resolve()
         {
             resolving_context context(*this);
-            auto guard = MakeScopeGuard([&context] { if (!std::uncaught_exceptions()) { context.Construct(); } });
+            auto guard = make_scope_guard([&context] { if (!std::uncaught_exceptions()) { context.Construct(); } });
             return resolve< T, true >(context);
         }
 

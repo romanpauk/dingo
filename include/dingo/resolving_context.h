@@ -103,4 +103,18 @@ namespace dingo
         std::list< IConstructible*, ArenaAllocator< IConstructible* > > constructibles_;
     };
 
+    template < typename DisabledType > class constructor_argument
+    {
+    public:
+        constructor_argument(resolving_context& context)
+            : context_(context)
+        {}
+
+        template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T* () { return context_.resolve< T* >(); }
+        template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T& () { return context_.resolve< T& >(); }
+        template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T && () { return context_.resolve< T&& >(); }
+
+    private:
+        resolving_context& context_;
+    };
 }

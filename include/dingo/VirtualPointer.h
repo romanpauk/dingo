@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dingo/Exceptions.h"
-#include "dingo/ScopeGuard.h"
+#include <dingo/scope_guard.h>
 
 #include <windows.h>
 #include <cassert>

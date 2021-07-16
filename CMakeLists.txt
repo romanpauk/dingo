@@ -25,7 +25,7 @@ target_sources(dingo INTERFACE
     include/dingo/ITypeInstanceFactory.h
     include/dingo/PerformanceCounter.h
     include/dingo/resolving_context.h
-    include/dingo/ScopeGuard.h
+    include/dingo/scope_guard.h
     include/dingo/Storage.h
     include/dingo/StorageShared.h
     include/dingo/StorageSharedCyclical.h
