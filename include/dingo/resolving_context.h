@@ -1,6 +1,6 @@
 #pragma once
 
-#include <dingo/arena_allocator.h>
+#include <dingo/memory/arena_allocator.h>
 #include "dingo/IResettable.h"
 #include "dingo/IConstructible.h"
 

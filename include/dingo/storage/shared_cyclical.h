@@ -2,9 +2,9 @@
 
 #include <dingo/decay.h>
 #include <dingo/class_factory.h>
-#include "dingo/Storage.h"
-#include "dingo/VirtualPointer.h"
-#include "dingo/IConstructible.h"
+#include <dingo/storage.h>
+#include <dingo/memory/VirtualPointer.h>
+#include <dingo/IConstructible.h>
 
 namespace dingo
 {

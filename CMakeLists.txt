@@ -13,19 +13,20 @@ add_library(dingo INTERFACE)
 target_include_directories(dingo INTERFACE include)
 
 target_sources(dingo INTERFACE
-    include/dingo/arena_allocator.h
+    include/dingo/class_constructor.h
     include/dingo/class_factory.h
     include/dingo/class_instance.h
     include/dingo/class_instance_cache.h
     include/dingo/class_instance_factory.h   
     include/dingo/class_instance_factory_i.h
     include/dingo/collection_traits.h
-    include/dingo/constructor.h
     include/dingo/container.h
     include/dingo/decay.h
     include/dingo/exceptions.h
     include/dingo/IConstructible.h
     include/dingo/IResettable.h
+    include/dingo/memory/arena_allocator.h
+    include/dingo/memory/VirtualPointer.h
     include/dingo/PerformanceCounter.h
     include/dingo/resolving_context.h
     include/dingo/scope_guard.h
@@ -34,7 +35,6 @@ target_sources(dingo INTERFACE
     include/dingo/storage/shared_cyclical.h
     include/dingo/storage/unique.h
     include/dingo/type_list.h
-    include/dingo/VirtualPointer.h
 )
 
 set(Boost_USE_STATIC_LIBS ON)

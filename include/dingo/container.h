@@ -5,7 +5,7 @@
 #include <dingo/class_instance.h>
 #include <dingo/exceptions.h>
 #include <dingo/class_instance_factory.h>
-#include <dingo/arena_allocator.h>
+#include <dingo/memory/arena_allocator.h>
 #include <dingo/resolving_context.h>
 #include <dingo/scope_guard.h>
 

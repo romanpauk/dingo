@@ -2,7 +2,7 @@
 
 #include <type_traits>
 
-#include <dingo/constructor.h>
+#include <dingo/class_constructor.h>
 
 namespace dingo
 {
@@ -26,12 +26,12 @@ namespace dingo
 
         template < typename Type, typename Arg, typename Context > static Type construct(Context& ctx)
         {
-            return constructor< Type >::invoke((sizeof(Args), Arg(ctx))...);
+            return class_constructor< Type >::invoke((sizeof(Args), Arg(ctx))...);
         }
 
         template < typename Type, typename Arg, typename Context > static Type construct(Context& ctx, void* ptr)
         {
-            return constructor< Type >::invoke(ptr, (sizeof(Args), Arg(ctx))...);
+            return class_constructor< Type >::invoke(ptr, (sizeof(Args), Arg(ctx))...);
         }
     };
 

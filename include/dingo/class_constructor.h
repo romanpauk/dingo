@@ -5,7 +5,7 @@
 
 namespace dingo
 {
-    template < typename T > struct constructor
+    template < typename T > struct class_constructor
     {
         template < typename... Args > static T invoke(Args&& ... args)
         {
@@ -13,7 +13,7 @@ namespace dingo
         }
     };
 
-    template < typename T > struct constructor< T* >
+    template < typename T > struct class_constructor< T* >
     {
         template < typename... Args > static T* invoke(Args&& ... args)
         {
@@ -26,7 +26,7 @@ namespace dingo
         }
     };
 
-    template < typename T > struct constructor< T& >
+    template < typename T > struct class_constructor< T& >
     {
         template < typename... Args > static T& invoke(Args&& ... args)
         {
@@ -34,7 +34,7 @@ namespace dingo
         }
     };
 
-    template < typename T > struct constructor< std::unique_ptr< T > >
+    template < typename T > struct class_constructor< std::unique_ptr< T > >
     {
         template < typename... Args > static std::unique_ptr< T > invoke(Args&& ... args)
         {
@@ -42,7 +42,7 @@ namespace dingo
         }
     };
 
-    template < typename T > struct constructor< std::shared_ptr< T > >
+    template < typename T > struct class_constructor< std::shared_ptr< T > >
     {
         template < typename... Args > static std::shared_ptr< T > invoke(Args&& ... args)
         {
@@ -50,7 +50,7 @@ namespace dingo
         }
     };
 
-    template < typename T > struct constructor< std::optional< T > >
+    template < typename T > struct class_constructor< std::optional< T > >
     {
         template < typename... Args > static std::optional< T > invoke(Args&& ... args)
         {
