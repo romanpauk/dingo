@@ -10,7 +10,7 @@
 
 namespace dingo
 {
-    class Container;
+    class container;
 
     template < typename T > class ContextTracking
     {
@@ -29,7 +29,7 @@ namespace dingo
         friend class Container;
 
     public:
-        Context(Container& container)
+        Context(container& container)
             : container_(container)
             , arena_(buffer_)
             , allocator_(arena_)
@@ -92,7 +92,7 @@ namespace dingo
         }
 
     private:
-        Container& container_;
+        container& container_;
 
         std::array< unsigned char, 1024 > buffer_;
         Arena arena_;

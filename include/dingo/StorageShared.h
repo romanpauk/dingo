@@ -63,7 +63,7 @@ namespace dingo
         {
             if (!initialized_)
             {
-                class_factory< decay_t< Type > >::template construct< Type*, Container::ConstructorArgument< Type > >(context, &instance_);
+                class_factory< decay_t< Type > >::template construct< Type*, container::ConstructorArgument< Type > >(context, &instance_);
                 initialized_ = true;
             }
 
@@ -109,7 +109,7 @@ namespace dingo
         {
             if (!instance_)
             {
-                instance_ = class_factory< Type >::template construct< std::shared_ptr< Type >, Container::ConstructorArgument< Type > >(context);
+                instance_ = class_factory< Type >::template construct< std::shared_ptr< Type >, container::ConstructorArgument< Type > >(context);
             }
 
             return instance_;
@@ -136,7 +136,7 @@ namespace dingo
             // TODO: thread-safe
             if (!instance_)
             {
-                instance_ = class_factory< Type >::template construct< std::unique_ptr< Type >, Container::ConstructorArgument< Type > >(context);
+                instance_ = class_factory< Type >::template construct< std::unique_ptr< Type >, container::ConstructorArgument< Type > >(context);
             }
 
             return instance_;

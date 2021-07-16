@@ -50,7 +50,7 @@ namespace dingo
 
         Type Resolve(Context& context)
         {
-            return class_factory< decay_t< Type > >::template construct< Type, Container::ConstructorArgument< decay_t< Type > > >(context);
+            return class_factory< decay_t< Type > >::template construct< Type, container::ConstructorArgument< decay_t< Type > > >(context);
         }
 
         bool IsResolved() { return false; }

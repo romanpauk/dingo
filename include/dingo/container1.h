@@ -14,7 +14,7 @@
 
 namespace dingo
 {
-    class Container;
+    class container;
 
     template < typename T > struct TypeRecursionGuard
     {
@@ -45,7 +45,7 @@ namespace dingo
 
     template < typename T > thread_local bool TypeRecursionGuard< T >::visited_ = false;
 
-    class Container
+    class container
     {
         friend class Context;
 
@@ -65,23 +65,23 @@ namespace dingo
             Context& context_;
         };
 
-        Container()
+        container()
         {}
 
         template <
             typename TypeStorage,
             typename TypeInterface = decay_t< typename TypeStorage::Type >
-        > void RegisterBinding()
+        > void register_binding()
         {
-            CheckInterface< TypeInterface, TypeStorage::Type >();
-            typeFactories_.emplace(typeid(TypeInterface), std::make_unique< TypeInstanceFactory< TypeInterface, TypeStorage::Type, TypeStorage > >());
+            check_interface_requirements< TypeInterface, TypeStorage::Type >();
+            type_factories_.emplace(typeid(TypeInterface), std::make_unique< TypeInstanceFactory< TypeInterface, TypeStorage::Type, TypeStorage > >());
         }
 
         template <
             typename TypeStorage,
             typename... TypeInterfaces,
             typename = std::enable_if_t< (sizeof...(TypeInterfaces) > 1) >
-        > void RegisterBinding()
+        > void register_binding()
         {
             auto storage = std::make_shared< TypeStorage >();
 
@@ -89,19 +89,19 @@ namespace dingo
             {
                 typedef typename decltype(element)::type TypeInterface;
 
-                CheckInterface< TypeInterface, TypeStorage::Type >();
-                typeFactories_.emplace(typeid(TypeInterface), std::make_unique< TypeInstanceFactory< TypeInterface, TypeStorage::Type, std::shared_ptr< TypeStorage > > >(storage));
+                check_interface_requirements< TypeInterface, TypeStorage::Type >();
+                type_factories_.emplace(typeid(TypeInterface), std::make_unique< TypeInstanceFactory< TypeInterface, TypeStorage::Type, std::shared_ptr< TypeStorage > > >(storage));
             });
         }
 
         template <
             typename T
             , typename R = std::conditional_t< std::is_rvalue_reference_v< T >, std::remove_reference_t< T >, T >
-        > R Resolve()
+        > R resolve()
         {
             Context context(*this);
             auto guard = MakeScopeGuard([&context] { if (!std::uncaught_exceptions()) { context.Construct(); } });
-            return Resolve< T, true >(context);
+            return resolve< T, true >(context);
         }
 
     private:
@@ -112,11 +112,11 @@ namespace dingo
                 RemoveRvalueReferences,
                 std::conditional_t < std::is_rvalue_reference_v< T >, std::remove_reference_t< T >, T >, T
             >
-        > R Resolve(Context& context)
+        > R resolve(Context& context)
         {
             typedef decay_t< T > Type;
 
-            auto range = typeFactories_.equal_range(typeid(Type));
+            auto range = type_factories_.equal_range(typeid(Type));
             if (range.first != range.second)
             {
                 auto it = range.first;
@@ -125,24 +125,24 @@ namespace dingo
                 return TypeInstanceGetter< T >::Get(*instance);
             }
 
-            return ResolveMultiple< T >(context);
+            return resolve_multiple< T >(context);
         }
 
         template <
             typename T
-        > std::enable_if_t< !collection_traits< decay_t< T > >::is_collection, T > ResolveMultiple(Context& context)
+        > std::enable_if_t< !collection_traits< decay_t< T > >::is_collection, T > resolve_multiple(Context& context)
         {
             throw TypeNotFoundException();
         }
 
         template <
             typename T
-        > std::enable_if_t< collection_traits< decay_t< T > >::is_collection, T > ResolveMultiple(Context& context)
+        > std::enable_if_t< collection_traits< decay_t< T > >::is_collection, T > resolve_multiple(Context& context)
         {
             typedef decay_t< T > Type;
             typedef decay_t< typename Type::value_type > ValueType;
 
-            auto range = typeFactories_.equal_range(typeid(ValueType));
+            auto range = type_factories_.equal_range(typeid(ValueType));
             
             auto results = context.GetAllocator< Type >().allocate(1);
             new (results) Type;
@@ -163,17 +163,17 @@ namespace dingo
             throw TypeNotFoundException();
         }
 
-        template < class TypeInterface, class Type > void CheckInterface()
+        template < class TypeInterface, class Type > void check_interface_requirements()
         {
             static_assert(!std::is_reference_v< TypeInterface >);
             static_assert(std::is_convertible_v< decay_t< Type >*, decay_t< TypeInterface >* >);
         }
 
-        std::multimap< std::type_index, std::unique_ptr< ITypeInstanceFactory > > typeFactories_;
+        std::multimap< std::type_index, std::unique_ptr< ITypeInstanceFactory > > type_factories_;
     };
 
     template < typename T > T Context::Resolve()
     {
-        return container_.Resolve< T, false >(*this);
+        return container_.resolve< T, false >(*this);
     }
 }

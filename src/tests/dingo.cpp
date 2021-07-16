@@ -1,4 +1,4 @@
-#include "dingo/Container.h"
+#include "dingo/container.h"
 #include <dingo/type_list.h>
 #include "dingo/StorageShared.h"
 #include "dingo/StorageSharedCyclical.h"
@@ -16,11 +16,11 @@ namespace dingo
     {
         typedef Class< __COUNTER__ > C;
         {
-            Container container;
-            container.RegisterBinding< Storage< Shared, C > >();
+            container container;
+            container.register_binding< Storage< Shared, C > >();
 
-            AssertClass(*container.Resolve< C* >());
-            AssertClass(container.Resolve< C& >());
+            AssertClass(*container.resolve< C* >());
+            AssertClass(container.resolve< C& >());
 
             AssertTypeNotConvertible < C, type_list< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
 
@@ -40,11 +40,11 @@ namespace dingo
         typedef Class< __COUNTER__ > C;
 
         {
-            Container container;
-            container.RegisterBinding< Storage< Shared, C* > >();
+            container container;
+            container.register_binding< Storage< Shared, C* > >();
 
-            AssertClass(*container.Resolve< C* >());
-            AssertClass(container.Resolve< C& >());
+            AssertClass(*container.resolve< C* >());
+            AssertClass(container.resolve< C& >());
 
             AssertTypeNotConvertible< C, type_list< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
 
@@ -64,14 +64,14 @@ namespace dingo
         typedef Class< __COUNTER__ > C;
 
         {
-            Container container;
-            container.RegisterBinding< Storage< Shared, std::shared_ptr< C > > >();
+            container container;
+            container.register_binding< Storage< Shared, std::shared_ptr< C > > >();
 
-            AssertClass(*container.Resolve< C* >());
-            AssertClass(container.Resolve< C& >());
-            AssertClass(*container.Resolve< std::shared_ptr< C > >());
-            AssertClass(*container.Resolve< std::shared_ptr< C >& >());
-            AssertClass(**container.Resolve< std::shared_ptr< C >* >());
+            AssertClass(*container.resolve< C* >());
+            AssertClass(container.resolve< C& >());
+            AssertClass(*container.resolve< std::shared_ptr< C > >());
+            AssertClass(*container.resolve< std::shared_ptr< C >& >());
+            AssertClass(**container.resolve< std::shared_ptr< C >* >());
 
             AssertTypeNotConvertible< C, type_list< C, std::unique_ptr< C > > >(container);
 
@@ -91,13 +91,13 @@ namespace dingo
         typedef Class< __COUNTER__ > C;
 
         {
-            Container container;
-            container.RegisterBinding< Storage< Shared, std::unique_ptr< C > > >();
+            container container;
+            container.register_binding< Storage< Shared, std::unique_ptr< C > > >();
 
-            AssertClass(*container.Resolve< C* >());
-            AssertClass(container.Resolve< C& >());
-            AssertClass(*container.Resolve< std::unique_ptr< C >& >());
-            AssertClass(**container.Resolve< std::unique_ptr< C >* >());
+            AssertClass(*container.resolve< C* >());
+            AssertClass(container.resolve< C& >());
+            AssertClass(*container.resolve< std::unique_ptr< C >& >());
+            AssertClass(**container.resolve< std::unique_ptr< C >* >());
 
             AssertTypeNotConvertible< C, type_list< C, std::unique_ptr< C > > >(container);
 
@@ -118,11 +118,11 @@ namespace dingo
             typedef Class< __COUNTER__ > C;
 
             {
-                Container container;
-                container.RegisterBinding< Storage< Unique, C > >();
+                container container;
+                container.register_binding< Storage< Unique, C > >();
 
                 {
-                    AssertClass(container.Resolve< C&& >());
+                    AssertClass(container.resolve< C&& >());
                     BOOST_TEST(C::Constructor == 1);
                     BOOST_TEST(C::MoveConstructor == 2);
                     BOOST_TEST(C::CopyConstructor == 0);
@@ -138,12 +138,12 @@ namespace dingo
             typedef Class< __COUNTER__ > C;
 
             {
-                Container container;
-                container.RegisterBinding< Storage< Unique, C > >();
+                container container;
+                container.register_binding< Storage< Unique, C > >();
 
                 {
                     // TODO: This is quite stupid, it does allocation, move, than copy in TypeInstanceGetter
-                    AssertClass(container.Resolve< C >());
+                    AssertClass(container.resolve< C >());
                     BOOST_TEST(C::Constructor == 1);
                     BOOST_TEST(C::MoveConstructor == 1);
                     BOOST_TEST(C::CopyConstructor == 1);
@@ -159,11 +159,11 @@ namespace dingo
             typedef Class< __COUNTER__ > C;
 
             {
-                Container container;
-                container.RegisterBinding< Storage< Unique, std::unique_ptr< C > > >();
+                container container;
+                container.register_binding< Storage< Unique, std::unique_ptr< C > > >();
 
                 {
-                    AssertClass(*container.Resolve< std::unique_ptr< C > >());
+                    AssertClass(*container.resolve< std::unique_ptr< C > >());
                     BOOST_TEST(C::Constructor == 1);
                     BOOST_TEST(C::MoveConstructor == 0);
                     BOOST_TEST(C::CopyConstructor == 0);
@@ -182,9 +182,9 @@ namespace dingo
             typedef Class< __COUNTER__ > C;
 
             {
-                Container container;
-                container.RegisterBinding< Storage< Unique, C* > >();
-                AssertClass(container.Resolve< C >());
+                container container;
+                container.register_binding< Storage< Unique, C* > >();
+                AssertClass(container.resolve< C >());
                 BOOST_TEST(C::Constructor == 1);
                 BOOST_TEST(C::CopyConstructor == 1); // TODO: this is stupid. There should be no copy, just move.
                 BOOST_TEST(C::MoveConstructor == 0);
@@ -197,9 +197,9 @@ namespace dingo
             typedef Class< __COUNTER__ > C;
 
             {
-                Container container;
-                container.RegisterBinding< Storage< Unique, C* > >();
-                auto c = container.Resolve< C* >();
+                container container;
+                container.register_binding< Storage< Unique, C* > >();
+                auto c = container.resolve< C* >();
                 AssertClass(*c);
                 BOOST_TEST(C::Constructor == 1);
                 BOOST_TEST(C::CopyConstructor == 0);
@@ -218,21 +218,21 @@ namespace dingo
     {
         typedef Class< __COUNTER__ > C;
 
-        dingo::Container container;
-        container.RegisterBinding< Storage< Shared, C >, IClass, IClass1, IClass2 >();
+        dingo::container container;
+        container.register_binding< Storage< Shared, C >, IClass, IClass1, IClass2 >();
 
         {
-            auto c = container.Resolve< IClass* >();
+            auto c = container.resolve< IClass* >();
             BOOST_TEST(dynamic_cast<C*>(c));
         }
 
         {
-            auto c = container.Resolve< IClass1* >();
+            auto c = container.resolve< IClass1* >();
             BOOST_TEST(dynamic_cast<C*>(c));
         }
 
         {
-            auto c = container.Resolve< IClass2* >();
+            auto c = container.resolve< IClass2* >();
             BOOST_TEST(dynamic_cast<C*>(c));
         }
     }
@@ -271,12 +271,12 @@ namespace dingo
             }
         };
 
-        Container container;
-        container.RegisterBinding< Storage< Shared, std::shared_ptr< S > > >();
-        container.RegisterBinding< Storage< Shared, std::unique_ptr< U > > >();
-        container.RegisterBinding< Storage< Shared, B > >();
+        container container;
+        container.register_binding< Storage< Shared, std::shared_ptr< S > > >();
+        container.register_binding< Storage< Shared, std::unique_ptr< U > > >();
+        container.register_binding< Storage< Shared, B > >();
 
-        container.Resolve< B& >();
+        container.resolve< B& >();
     }
 
     BOOST_AUTO_TEST_CASE(TestUniqueHierarchy)
@@ -292,12 +292,12 @@ namespace dingo
             B(std::shared_ptr< S >&&) {}
         };
 
-        Container container;
-        container.RegisterBinding< Storage< dingo::Unique, std::shared_ptr< S > > >();
-        container.RegisterBinding< Storage< dingo::Unique, std::unique_ptr< U > > >();
-        container.RegisterBinding< Storage< dingo::Shared, B > >();
+        container container;
+        container.register_binding< Storage< dingo::Unique, std::shared_ptr< S > > >();
+        container.register_binding< Storage< dingo::Unique, std::unique_ptr< U > > >();
+        container.register_binding< Storage< dingo::Shared, B > >();
 
-        container.Resolve< B& >();
+        container.resolve< B& >();
     }
 
     BOOST_AUTO_TEST_CASE(TestRecursion)
@@ -313,12 +313,12 @@ namespace dingo
             B(std::shared_ptr< A >) {}
         };
 
-        Container container;
-        container.RegisterBinding< Storage< dingo::Shared, std::shared_ptr< A > > >();
-        container.RegisterBinding< Storage< dingo::Shared, B > >();
+        container container;
+        container.register_binding< Storage< dingo::Shared, std::shared_ptr< A > > >();
+        container.register_binding< Storage< dingo::Shared, B > >();
 
-        BOOST_CHECK_THROW(container.Resolve< A >(), TypeRecursionException);
-        BOOST_CHECK_THROW(container.Resolve< B >(), TypeRecursionException);
+        BOOST_CHECK_THROW(container.resolve< A >(), TypeRecursionException);
+        BOOST_CHECK_THROW(container.resolve< B >(), TypeRecursionException);
     }
 
 #if 0
@@ -344,15 +344,15 @@ namespace dingo
             A& a_;
         };
 
-        Container container;
-        container.RegisterBinding< Storage< dingo::SharedCyclical, std::shared_ptr< A > > >();
-        container.RegisterBinding< Storage< dingo::SharedCyclical, B > >();
+        container container;
+        container.register_binding< Storage< dingo::SharedCyclical, std::shared_ptr< A > > >();
+        container.register_binding< Storage< dingo::SharedCyclical, B > >();
 
-        auto& a = container.Resolve< A& >();
+        auto& a = container.resolve< A& >();
         AssertClass(a);
         AssertClass(a.b_);
 
-        auto& b = container.Resolve< B& >();
+        auto& b = container.resolve< B& >();
         AssertClass(b);
         AssertClass(b.a_);
         AssertClass(*b.aptr_);       
@@ -369,16 +369,16 @@ namespace dingo
         PerformanceCounter counter;
         PerformanceCounter counter2;
 
-        Container container;
-        container.RegisterBinding< Storage< dingo::Unique, A > >();
-        container.RegisterBinding< Storage< dingo::Unique, B > >();
-        container.RegisterBinding< Storage< dingo::Unique, C > >();
+        container container;
+        container.register_binding< Storage< dingo::Unique, A > >();
+        container.register_binding< Storage< dingo::Unique, B > >();
+        container.register_binding< Storage< dingo::Unique, C > >();
 
         const size_t N = 1000000;
         for (size_t i = 0; i < N; ++i)
         {
             counter.Start();
-            container.Resolve< C >();
+            container.resolve< C >();
             counter.Stop();
         }
 
@@ -410,21 +410,21 @@ namespace dingo
             C(A&, B&) { throw Ex(); }
         };
 
-        Container container;
-        container.RegisterBinding< Storage< Shared, A > >();
-        container.RegisterBinding< Storage< Shared, B > >();
-        container.RegisterBinding< Storage< Shared, C > >();
+        container container;
+        container.register_binding< Storage< Shared, A > >();
+        container.register_binding< Storage< Shared, B > >();
+        container.register_binding< Storage< Shared, C > >();
 
-        BOOST_CHECK_THROW(container.Resolve< C& >(), Ex);
+        BOOST_CHECK_THROW(container.resolve< C& >(), Ex);
         BOOST_TEST(A::Constructor == 1);
         BOOST_TEST(A::Destructor == 1);
         BOOST_TEST(B::Constructor == 1);
         BOOST_TEST(B::Destructor == 1);
 
-        container.Resolve< A& >();
+        container.resolve< A& >();
         BOOST_TEST(A::Constructor == 2);
         BOOST_TEST(A::Destructor == 1);
-        BOOST_CHECK_THROW(container.Resolve< C >(), Ex);
+        BOOST_CHECK_THROW(container.resolve< C >(), Ex);
         BOOST_TEST(A::Constructor == 2);
         BOOST_TEST(A::Destructor == 1);
         BOOST_TEST(B::Constructor == 2);
@@ -445,28 +445,28 @@ namespace dingo
             std::set< I* > s_;
         };
 
-        Container container;
-        container.RegisterBinding< Storage< Shared, A >, A, I >();
-        container.RegisterBinding< Storage< Shared, B >, B, I >();
-        container.RegisterBinding< Storage< Shared, C > >();
+        container container;
+        container.register_binding< Storage< Shared, A >, A, I >();
+        container.register_binding< Storage< Shared, B >, B, I >();
+        container.register_binding< Storage< Shared, C > >();
 
         {
-            auto vector = container.Resolve< std::vector< I* > >();
+            auto vector = container.resolve< std::vector< I* > >();
             BOOST_TEST(vector.size() == 2);
 
-            auto list = container.Resolve< std::list< I* > >();
+            auto list = container.resolve< std::list< I* > >();
             BOOST_TEST(list.size() == 2);
 
-            auto set = container.Resolve< std::set< I* > >();
+            auto set = container.resolve< std::set< I* > >();
             BOOST_TEST(set.size() == 2);
         }
 
         {
-            BOOST_CHECK_THROW(container.Resolve< std::vector< std::shared_ptr< I > > >(), TypeNotConvertibleException);
+            BOOST_CHECK_THROW(container.resolve< std::vector< std::shared_ptr< I > > >(), TypeNotConvertibleException);
         }
 
         {
-            auto& c = container.Resolve< C& >();
+            auto& c = container.resolve< C& >();
             BOOST_TEST(c.v_.size() == 2);
             BOOST_TEST(c.l_.size() == 2);
             BOOST_TEST(c.s_.size() == 2);
