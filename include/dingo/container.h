@@ -3,7 +3,7 @@
 #include <dingo/decay.h>
 #include <dingo/collection_traits.h>
 #include <dingo/class_instance.h>
-#include "dingo/Exceptions.h"
+#include <dingo/exceptions.h>
 #include <dingo/class_instance_factory.h>
 #include <dingo/arena_allocator.h>
 #include <dingo/resolving_context.h>

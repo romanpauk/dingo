@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dingo/Exceptions.h"
+#include <dingo/exceptions.h>
 #include <dingo/scope_guard.h>
 
 #include <windows.h>

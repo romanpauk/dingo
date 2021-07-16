@@ -1,7 +1,7 @@
 #pragma once
 
 #include <dingo/type_list.h>
-#include "dingo/Exceptions.h"
+#include <dingo/exceptions.h>
 
 namespace dingo
 {
