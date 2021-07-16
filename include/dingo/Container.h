@@ -1,7 +1,7 @@
 #pragma once
 
 #include <dingo/decay.h>
-#include "dingo/TypeTraits.h"
+#include <dingo/collection_traits.h>
 #include "dingo/TypeInstance.h"
 #include "dingo/Exceptions.h"
 #include "dingo/TypeInstanceFactory.h"
@@ -130,14 +130,14 @@ namespace dingo
 
         template <
             typename T
-        > std::enable_if_t< !ContainerTraits< decay_t< T > >::IsContainer, T > ResolveMultiple(Context& context)
+        > std::enable_if_t< !collection_traits< decay_t< T > >::is_collection, T > ResolveMultiple(Context& context)
         {
             throw TypeNotFoundException();
         }
 
         template <
             typename T
-        > std::enable_if_t< ContainerTraits< decay_t< T > >::IsContainer, T > ResolveMultiple(Context& context)
+        > std::enable_if_t< collection_traits< decay_t< T > >::is_collection, T > ResolveMultiple(Context& context)
         {
             typedef decay_t< T > Type;
             typedef decay_t< typename Type::value_type > ValueType;
@@ -146,7 +146,7 @@ namespace dingo
             
             auto results = context.GetAllocator< Type >().allocate(1);
             new (results) Type;
-            ContainerTraits< Type >::Reserve(*results, std::distance(range.first, range.second));
+            collection_traits< Type >::reserve(*results, std::distance(range.first, range.second));
             
             if (range.first != range.second)
             {
@@ -154,7 +154,7 @@ namespace dingo
                 {
                     TypeRecursionGuard< ValueType > guard(it->second->IsResolved());
                     auto instance = it->second->Resolve(context);
-                    ContainerTraits< Type >::Add(*results, TypeInstanceGetter< typename Type::value_type >::Get(*instance));
+                    collection_traits< Type >::add(*results, TypeInstanceGetter< typename Type::value_type >::Get(*instance));
                 }
 
                 return *results;
