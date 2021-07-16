@@ -3,7 +3,7 @@
 namespace dingo
 {
     template< typename TypeInterface, typename Storage, bool IsCaching > struct class_instance_cache
-        : public IResettable
+        : public resettable_i
     {
         template < typename Context > class_instance_i* resolve(Context& context, Storage& storage)
         {
@@ -19,7 +19,7 @@ namespace dingo
     };
 
     template< typename TypeInterface, typename Storage > struct class_instance_cache< TypeInterface, Storage, true >
-        : public IResettable
+        : public resettable_i
     {
         class_instance_i* resolve(resolving_context& context, Storage& storage)
         {

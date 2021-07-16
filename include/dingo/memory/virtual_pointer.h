@@ -88,7 +88,7 @@ namespace dingo
                 SetAccessible(true);
             }
 
-            auto guard = MakeScopeGuard([&] { buffer_.Reset(); });
+            auto guard = scope_guard([&] { buffer_.Reset(); });
 
             if(constructed_)
             {

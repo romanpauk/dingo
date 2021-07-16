@@ -1,4 +1,4 @@
-#include <dingo/constructor.h>
+#include <dingo/class_constructor.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -12,12 +12,12 @@ namespace dingo
             B(std::shared_ptr< A >) {}
         };
 
-        constructor< A >::invoke();
-        constructor< B >::invoke(nullptr);
-        constructor< B* >::invoke(nullptr);
-        constructor< std::unique_ptr< B > >::invoke(nullptr);
-        constructor< std::shared_ptr< B > >::invoke(nullptr);
-        constructor< std::optional< B > >::invoke(nullptr);
+        class_constructor< A >::invoke();
+        class_constructor< B >::invoke(nullptr);
+        class_constructor< B* >::invoke(nullptr);
+        class_constructor< std::unique_ptr< B > >::invoke(nullptr);
+        class_constructor< std::shared_ptr< B > >::invoke(nullptr);
+        class_constructor< std::optional< B > >::invoke(nullptr);
     }
 
 }

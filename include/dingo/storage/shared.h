@@ -44,7 +44,7 @@ namespace dingo
     };
 
     template < typename Type, typename Conversions > class storage< shared, Type, Conversions >
-        : public IResettable
+        : public resettable_i
     {
     public:
         static const bool IsCaching = true;
@@ -99,7 +99,7 @@ namespace dingo
     };
 
     template < typename Type, typename Conversions > class storage< shared, std::shared_ptr< Type >, Conversions >
-        : public IResettable
+        : public resettable_i
     {
     public:
         static const bool IsCaching = true;
@@ -125,7 +125,7 @@ namespace dingo
     };
 
     template < typename Type, typename Conversions > class storage< shared, std::unique_ptr< Type >, Conversions >
-        : public IResettable
+        : public resettable_i
     {
     public:
         static const bool IsCaching = true;

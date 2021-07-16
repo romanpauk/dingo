@@ -1,8 +1,8 @@
 #pragma once
 
 #include <dingo/memory/arena_allocator.h>
-#include "dingo/IResettable.h"
-#include "dingo/IConstructible.h"
+#include <dingo/resettable_i.h>
+#include <dingo/constructible_i.h>
 
 #include <array>
 #include <forward_list>
@@ -59,14 +59,14 @@ namespace dingo
         template < typename T > arena_allocator< T > get_allocator() { return allocator_; }
 
         void register_type_instance(class_instance_i* instance) { type_instances_.push_front(instance); }
-        void register_resettable(IResettable* ptr) { resettables_.push_front(ptr); }
-        void register_constructible(IConstructible* ptr) { constructibles_.push_back(ptr); }
+        void register_resettable(resettable_i* ptr) { resettables_.push_front(ptr); }
+        void register_constructible(constructible_i* ptr) { constructibles_.push_back(ptr); }
 
-        bool is_constructible_address(uintptr_t address)
+        bool has_constructible_address(uintptr_t address)
         {
             for (auto& constructible : constructibles_)
             {
-                if (constructible->HasAddress(address))
+                if (constructible->has_address(address))
                 {
                     return true;
                 }
@@ -80,12 +80,12 @@ namespace dingo
             // Note that invocation of Construct(_, 0) can grow constructibles_.
             for(auto it = constructibles_.begin(); it != constructibles_.end(); ++it)
             {
-                (*it)->Construct(*this, 0);
+                (*it)->construct(*this, 0);
             }
 
             for (auto& constructible : constructibles_)
             {
-                constructible->Construct(*this, 1);
+                constructible->construct(*this, 1);
             }
         }
 
@@ -97,8 +97,8 @@ namespace dingo
         arena_allocator< void > allocator_;
 
         std::forward_list< class_instance_i*, arena_allocator< class_instance_i* > > type_instances_;
-        std::forward_list< IResettable*, arena_allocator< IResettable* > > resettables_;
-        std::list< IConstructible*, arena_allocator< IConstructible* > > constructibles_;
+        std::forward_list< resettable_i*, arena_allocator< resettable_i* > > resettables_;
+        std::list< constructible_i*, arena_allocator< constructible_i* > > constructibles_;
     };
 
     template < typename DisabledType > class constructor_argument

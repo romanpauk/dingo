@@ -20,14 +20,14 @@ target_sources(dingo INTERFACE
     include/dingo/class_instance_factory.h   
     include/dingo/class_instance_factory_i.h
     include/dingo/collection_traits.h
+    include/dingo/constructible_i.h
     include/dingo/container.h
     include/dingo/decay.h
     include/dingo/exceptions.h
-    include/dingo/IConstructible.h
-    include/dingo/IResettable.h
     include/dingo/memory/arena_allocator.h
-    include/dingo/memory/VirtualPointer.h
-    include/dingo/PerformanceCounter.h
+    include/dingo/memory/virtual_pointer.h
+    include/dingo/performance_counter.h
+    include/dingo/resettable_i.h
     include/dingo/resolving_context.h
     include/dingo/scope_guard.h
     include/dingo/storage.h
@@ -45,6 +45,10 @@ add_executable(dingotest
     src/tests/class.h
     src/tests/constructor.cpp
     src/tests/dingo.cpp
+    src/tests/multibindings.cpp
+    src/tests/performance.cpp
+    src/tests/shared.cpp
+    src/tests/unique.cpp
     src/tests/testmodule.cpp
     src/tests/pch.h
 )

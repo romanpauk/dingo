@@ -2,10 +2,10 @@
 
 namespace dingo
 {
-    class IResettable
+    class resettable_i
     {
     public:
-        virtual ~IResettable() {};
+        virtual ~resettable_i() {};
         virtual void reset() = 0;
     };
 }

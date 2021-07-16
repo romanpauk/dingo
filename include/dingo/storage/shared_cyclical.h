@@ -3,8 +3,8 @@
 #include <dingo/decay.h>
 #include <dingo/class_factory.h>
 #include <dingo/storage.h>
-#include <dingo/memory/VirtualPointer.h>
-#include <dingo/IConstructible.h>
+#include <dingo/memory/virtual_pointer.h>
+#include <dingo/constructible_i.h>
 
 namespace dingo
 {
@@ -18,23 +18,23 @@ namespace dingo
     template < typename Type > struct CyclicalSupport
     {
     protected:
-        class SEHScopedTranslator
+        class seh_translator
         {
         public:
-            SEHScopedTranslator(_se_translator_function translator): translator_(_set_se_translator(translator)) {}
-            ~SEHScopedTranslator() { _set_se_translator(translator_); }
+            seh_translator(_se_translator_function translator): translator_(_set_se_translator(translator)) {}
+            ~seh_translator() { _set_se_translator(translator_); }
 
         private:
             const _se_translator_function translator_;
         };
 
-        void Construct(resolving_context& context, int phase, VirtualPointer< Type >& instance)
+        void construct(resolving_context& context, int phase, VirtualPointer< Type >& instance)
         {
             instance.SetAccessible(true);
 
             if (phase == 0)
             {
-                SEHScopedTranslator translator(SEHExceptionHandler);
+                seh_translator translator(seh_handler);
                 class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type > >(context, instance.Get());
                 
                 instance.SetConstructed();
@@ -42,11 +42,12 @@ namespace dingo
             }
         }
 
-        static void SEHExceptionHandler(unsigned int u, EXCEPTION_POINTERS* ex)
+    private:
+        static void seh_handler(unsigned int u, EXCEPTION_POINTERS* ex)
         {
             if (ex->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION)
             {
-                if (ContextTracking< Context >::CurrentContext->IsConstructibleAddress((uintptr_t)ex->ExceptionRecord->ExceptionInformation[1]))
+                if (ContextTracking< resolving_context >::CurrentContext->has_constructible_address((uintptr_t)ex->ExceptionRecord->ExceptionInformation[1]))
                 {
                     throw type_not_constructed_exception();
                 }
@@ -56,8 +57,8 @@ namespace dingo
 
     template < typename Type, typename Conversions > class storage< shared_cyclical, Type, Conversions >
         : public CyclicalSupport< Type >
-        , public IResettable
-        , public IConstructible
+        , public resettable_i
+        , public constructible_i
     {
     public:
         static const bool IsCaching = true;
@@ -70,7 +71,7 @@ namespace dingo
             if (!instance_.Get())
             {
                 instance_.Reserve();
-                context.AddConstructible(this);
+                context.register_constructible(this);
             }
 
             return instance_.Get();
@@ -79,9 +80,9 @@ namespace dingo
         bool is_resolved() const { return instance_.Get(); }
         void reset() override { instance_.Reset(); }
 
-        void construct(resolving_context& context, int phase) override { CyclicalSupport< Type >::Construct(context, phase, instance_); }
+        void construct(resolving_context& context, int phase) override { CyclicalSupport< Type >::construct(context, phase, instance_); }
 
-        bool HasAddress(uintptr_t address) override { return instance_.HasAddress(address); }
+        bool has_address(uintptr_t address) override { return instance_.HasAddress(address); }
 
     private:
         VirtualPointer< Type > instance_;
@@ -89,8 +90,8 @@ namespace dingo
 
     template < typename Type, typename Conversions > class storage< shared_cyclical, std::shared_ptr< Type >, Conversions >
         : public CyclicalSupport< Type >
-        , public IResettable
-        , public IConstructible        
+        , public resettable_i
+        , public constructible_i     
     {
     public:
         static const bool IsCaching = true;
@@ -108,7 +109,7 @@ namespace dingo
                 auto virtualInstance = virtualInstance_;
                 instance_.reset(virtualInstance_->Get(), [virtualInstance](Type*) {});
 
-                context.AddConstructible(this);
+                context.register_constructible(this);
             }
 
             return instance_;
@@ -117,9 +118,9 @@ namespace dingo
         bool is_resolved() const { return instance_.get() != nullptr; }
         void reset() override { instance_.reset(); virtualInstance_.reset(); }
 
-        void construct(resolving_context& context, int phase) override { CyclicalSupport< Type >::Construct(context, phase, *virtualInstance_); }
+        void construct(resolving_context& context, int phase) override { CyclicalSupport< Type >::construct(context, phase, *virtualInstance_); }
 
-        bool HasAddress(uintptr_t address) override { return virtualInstance_->HasAddress(address); }
+        bool has_address(uintptr_t address) override { return virtualInstance_->HasAddress(address); }
 
     private:
         std::shared_ptr< Type > instance_;
