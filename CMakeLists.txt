@@ -14,6 +14,7 @@ target_include_directories(dingo INTERFACE include)
 
 target_sources(dingo INTERFACE
     include/dingo/ArenaAllocator.h
+    include/dingo/class_factory.h
     include/dingo/constructor.h
     include/dingo/Container.h
     include/dingo/Context.h
@@ -28,7 +29,6 @@ target_sources(dingo INTERFACE
     include/dingo/StorageSharedCyclical.h
     include/dingo/StorageUnique.h
     include/dingo/Tuple.h
-    include/dingo/Type.h
     include/dingo/TypeDecay.h
     include/dingo/TypeInstance.h
     include/dingo/TypeInstanceFactory.h

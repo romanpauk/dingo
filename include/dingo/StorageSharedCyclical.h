@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dingo/TypeDecay.h"
-#include "dingo/Type.h"
+#include <dingo/class_factory.h>
 #include "dingo/Storage.h"
 #include "dingo/VirtualPointer.h"
 #include "dingo/IConstructible.h"
