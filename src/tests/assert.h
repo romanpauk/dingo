@@ -6,7 +6,7 @@ namespace dingo
     {
         for_each((NonConvertibleTypes*)0, [&](auto element)
         {
-            BOOST_CHECK_THROW(container.resolve< decltype(element)::type >(), dingo::TypeNotConvertibleException);
+            BOOST_CHECK_THROW(container.resolve< decltype(element)::type >(), type_not_convertible_exception);
         });
     }
 

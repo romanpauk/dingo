@@ -55,7 +55,7 @@ namespace dingo
             else
             {
             #ifdef _DEBUG
-                throw TypeAllocateFailedException();
+                throw arena_allocation_exception();
             #endif
                 return static_cast<value_type*>(::operator new (n * sizeof(value_type)));
             }

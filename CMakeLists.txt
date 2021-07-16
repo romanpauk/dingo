@@ -23,7 +23,7 @@ target_sources(dingo INTERFACE
     include/dingo/constructor.h
     include/dingo/container.h
     include/dingo/decay.h
-    include/dingo/Exceptions.h
+    include/dingo/exceptions.h
     include/dingo/IConstructible.h
     include/dingo/IResettable.h
     include/dingo/PerformanceCounter.h

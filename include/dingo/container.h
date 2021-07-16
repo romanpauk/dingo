@@ -29,7 +29,7 @@ namespace dingo
             }
             else
             {
-                throw TypeRecursionException();
+                throw type_recursion_exception();
             }
         }
 
@@ -117,7 +117,7 @@ namespace dingo
             typename T
         > std::enable_if_t< !collection_traits< decay_t< T > >::is_collection, T > resolve_multiple(resolving_context& context)
         {
-            throw TypeNotFoundException();
+            throw type_not_found_exception();
         }
 
         template <
@@ -145,7 +145,7 @@ namespace dingo
                 return *results;
             }
 
-            throw TypeNotFoundException();
+            throw type_not_found_exception();
         }
 
         template < class TypeInterface, class Type > void check_interface_requirements()

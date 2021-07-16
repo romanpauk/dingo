@@ -27,7 +27,7 @@ namespace dingo
             instance_ = VirtualAlloc(0, size, MEM_COMMIT, PAGE_NOACCESS);
             if (!instance_)
             {
-                throw VirtualPointerException();
+                throw virtual_pointer_exception();
             }
         }
 
@@ -40,7 +40,7 @@ namespace dingo
 
                 if (!VirtualFree(instance, 0, MEM_RELEASE))
                 {
-                    throw VirtualPointerException();
+                    throw virtual_pointer_exception();
                 }
             }
         }
@@ -53,7 +53,7 @@ namespace dingo
             DWORD old;
             if (!VirtualProtect(instance_, size, accessible ? PAGE_READWRITE : PAGE_NOACCESS, &old))
             {
-                throw VirtualPointerException();
+                throw virtual_pointer_exception();
             }
         }
     private:

@@ -317,8 +317,8 @@ namespace dingo
         container.register_binding< Storage< dingo::Shared, std::shared_ptr< A > > >();
         container.register_binding< Storage< dingo::Shared, B > >();
 
-        BOOST_CHECK_THROW(container.resolve< A >(), TypeRecursionException);
-        BOOST_CHECK_THROW(container.resolve< B >(), TypeRecursionException);
+        BOOST_CHECK_THROW(container.resolve< A >(), type_recursion_exception);
+        BOOST_CHECK_THROW(container.resolve< B >(), type_recursion_exception);
     }
 
 #if 0
@@ -462,7 +462,7 @@ namespace dingo
         }
 
         {
-            BOOST_CHECK_THROW(container.resolve< std::vector< std::shared_ptr< I > > >(), TypeNotConvertibleException);
+            BOOST_CHECK_THROW(container.resolve< std::vector< std::shared_ptr< I > > >(), type_not_convertible_exception);
         }
 
         {
