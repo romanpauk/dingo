@@ -50,7 +50,7 @@ namespace dingo
             // Destroy temporary instances
             for (auto& typeInstance : type_instances_)
             {
-                typeInstance->~ITypeInstance();
+                typeInstance->~class_instance_i();
             }
         }
 
@@ -58,7 +58,7 @@ namespace dingo
 
         template < typename T > arena_allocator< T > get_allocator() { return allocator_; }
 
-        void register_type_instance(ITypeInstance* instance) { type_instances_.push_front(instance); }
+        void register_type_instance(class_instance_i* instance) { type_instances_.push_front(instance); }
         void register_resettable(IResettable* ptr) { resettables_.push_front(ptr); }
         void register_constructible(IConstructible* ptr) { constructibles_.push_back(ptr); }
 
@@ -96,7 +96,7 @@ namespace dingo
         arena arena_;
         arena_allocator< void > allocator_;
 
-        std::forward_list< ITypeInstance*, arena_allocator< ITypeInstance* > > type_instances_;
+        std::forward_list< class_instance_i*, arena_allocator< class_instance_i* > > type_instances_;
         std::forward_list< IResettable*, arena_allocator< IResettable* > > resettables_;
         std::list< IConstructible*, arena_allocator< IConstructible* > > constructibles_;
     };

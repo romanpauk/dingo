@@ -15,6 +15,10 @@ target_include_directories(dingo INTERFACE include)
 target_sources(dingo INTERFACE
     include/dingo/arena_allocator.h
     include/dingo/class_factory.h
+    include/dingo/class_instance.h
+    include/dingo/class_instance_cache.h
+    include/dingo/class_instance_factory.h   
+    include/dingo/class_instance_factory_i.h
     include/dingo/collection_traits.h
     include/dingo/constructor.h
     include/dingo/container.h
@@ -22,7 +26,6 @@ target_sources(dingo INTERFACE
     include/dingo/Exceptions.h
     include/dingo/IConstructible.h
     include/dingo/IResettable.h
-    include/dingo/ITypeInstanceFactory.h
     include/dingo/PerformanceCounter.h
     include/dingo/resolving_context.h
     include/dingo/scope_guard.h
@@ -30,8 +33,6 @@ target_sources(dingo INTERFACE
     include/dingo/StorageShared.h
     include/dingo/StorageSharedCyclical.h
     include/dingo/StorageUnique.h
-    include/dingo/TypeInstance.h
-    include/dingo/TypeInstanceFactory.h
     include/dingo/type_list.h
     include/dingo/VirtualPointer.h
 )

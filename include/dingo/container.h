@@ -2,9 +2,9 @@
 
 #include <dingo/decay.h>
 #include <dingo/collection_traits.h>
-#include "dingo/TypeInstance.h"
+#include <dingo/class_instance.h>
 #include "dingo/Exceptions.h"
-#include "dingo/TypeInstanceFactory.h"
+#include <dingo/class_instance_factory.h>
 #include <dingo/arena_allocator.h>
 #include <dingo/resolving_context.h>
 #include <dingo/scope_guard.h>
@@ -59,7 +59,7 @@ namespace dingo
         > void register_binding()
         {
             check_interface_requirements< TypeInterface, TypeStorage::Type >();
-            type_factories_.emplace(typeid(TypeInterface), std::make_unique< TypeInstanceFactory< TypeInterface, TypeStorage::Type, TypeStorage > >());
+            type_factories_.emplace(typeid(TypeInterface), std::make_unique< class_instance_factory< TypeInterface, TypeStorage::Type, TypeStorage > >());
         }
 
         template <
@@ -75,7 +75,7 @@ namespace dingo
                 typedef typename decltype(element)::type TypeInterface;
 
                 check_interface_requirements< TypeInterface, TypeStorage::Type >();
-                type_factories_.emplace(typeid(TypeInterface), std::make_unique< TypeInstanceFactory< TypeInterface, TypeStorage::Type, std::shared_ptr< TypeStorage > > >(storage));
+                type_factories_.emplace(typeid(TypeInterface), std::make_unique< class_instance_factory< TypeInterface, TypeStorage::Type, std::shared_ptr< TypeStorage > > >(storage));
             });
         }
 
@@ -105,9 +105,9 @@ namespace dingo
             if (range.first != range.second)
             {
                 auto it = range.first;
-                TypeRecursionGuard< Type > guard(it->second->IsResolved());
-                auto instance = it->second->Resolve(context);
-                return TypeInstanceGetter< T >::Get(*instance);
+                TypeRecursionGuard< Type > guard(it->second->is_resolved());
+                auto instance = it->second->resolve(context);
+                return class_instance_getter< T >::get(*instance);
             }
 
             return resolve_multiple< T >(context);
@@ -137,9 +137,9 @@ namespace dingo
             {
                 for (auto it = range.first; it != range.second; ++it)
                 {
-                    TypeRecursionGuard< ValueType > guard(it->second->IsResolved());
-                    auto instance = it->second->Resolve(context);
-                    collection_traits< Type >::add(*results, TypeInstanceGetter< typename Type::value_type >::Get(*instance));
+                    TypeRecursionGuard< ValueType > guard(it->second->is_resolved());
+                    auto instance = it->second->resolve(context);
+                    collection_traits< Type >::add(*results, class_instance_getter< typename Type::value_type >::get(*instance));
                 }
 
                 return *results;
@@ -154,7 +154,7 @@ namespace dingo
             static_assert(std::is_convertible_v< decay_t< Type >*, decay_t< TypeInterface >* >);
         }
 
-        std::multimap< std::type_index, std::unique_ptr< ITypeInstanceFactory > > type_factories_;
+        std::multimap< std::type_index, std::unique_ptr< class_instance_factory_i > > type_factories_;
     };
 
     template < typename T > T resolving_context::resolve()
