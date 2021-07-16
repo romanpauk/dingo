@@ -14,6 +14,7 @@ target_include_directories(dingo INTERFACE include)
 
 target_sources(dingo INTERFACE
     include/dingo/ArenaAllocator.h
+    include/dingo/constructor.h
     include/dingo/Container.h
     include/dingo/Context.h
     include/dingo/Exceptions.h
@@ -28,7 +29,6 @@ target_sources(dingo INTERFACE
     include/dingo/StorageUnique.h
     include/dingo/Tuple.h
     include/dingo/Type.h
-    include/dingo/TypeConstructor.h
     include/dingo/TypeDecay.h
     include/dingo/TypeInstance.h
     include/dingo/TypeInstanceFactory.h
@@ -42,6 +42,7 @@ find_package(Boost COMPONENTS unit_test_framework)
 add_executable(dingotest 
     src/tests/assert.h
     src/tests/class.h
+    src/tests/constructor.cpp
     src/tests/dingo.cpp
     src/tests/testmodule.cpp
     src/tests/pch.h

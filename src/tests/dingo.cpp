@@ -12,22 +12,6 @@
 
 namespace dingo
 {
-    BOOST_AUTO_TEST_CASE(TestType)
-    {
-        struct A {};
-        struct B
-        {
-            B(std::shared_ptr< A >) {}
-        };
-
-        TypeConstructor< B >::Construct(nullptr);
-        TypeConstructor< B* >::Construct(nullptr);
-        TypeConstructor< std::unique_ptr< B > >::Construct(nullptr);
-        TypeConstructor< std::shared_ptr< B > >::Construct(nullptr);
-        TypeConstructor< std::optional< B > >::Construct(nullptr);
-
-    }
-
     BOOST_AUTO_TEST_CASE(TestSharedValue)
     {
         typedef Class< __COUNTER__ > C;

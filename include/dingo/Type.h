@@ -1,5 +1,5 @@
 #pragma once
-#include "dingo/TypeConstructor.h"
+#include "dingo/constructor.h"
 
 namespace dingo
 {
@@ -23,12 +23,12 @@ namespace dingo
 
         template < typename Type, typename Arg, typename Context > static Type Construct(Context& ctx)
         {
-            return TypeConstructor< Type >::Construct((sizeof(Args), Arg(ctx))...);
+            return constructor< Type >::invoke((sizeof(Args), Arg(ctx))...);
         }
 
         template < typename Type, typename Arg, typename Context > static Type Construct(Context& ctx, void* ptr)
         {
-            return TypeConstructor< Type >::Construct(ptr, (sizeof(Args), Arg(ctx))...);
+            return constructor< Type >::invoke(ptr, (sizeof(Args), Arg(ctx))...);
         }
     };
 
