@@ -18,6 +18,7 @@ target_sources(dingo INTERFACE
     include/dingo/constructor.h
     include/dingo/Container.h
     include/dingo/Context.h
+    include/dingo/decay.h
     include/dingo/Exceptions.h
     include/dingo/IConstructible.h
     include/dingo/IResettable.h
@@ -29,7 +30,6 @@ target_sources(dingo INTERFACE
     include/dingo/StorageSharedCyclical.h
     include/dingo/StorageUnique.h
     include/dingo/Tuple.h
-    include/dingo/TypeDecay.h
     include/dingo/TypeInstance.h
     include/dingo/TypeInstanceFactory.h
     include/dingo/TypeTraits.h

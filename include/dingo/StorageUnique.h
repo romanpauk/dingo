@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dingo/TypeDecay.h"
+#include <dingo/decay.h>
 #include <dingo/class_factory.h>
 #include "dingo/Storage.h"
 
@@ -50,7 +50,7 @@ namespace dingo
 
         Type Resolve(Context& context)
         {
-            return class_factory< typename TypeDecay< Type >::type >::template construct< Type, Container::ConstructorArgument< TypeDecay< Type >::type > >(context);
+            return class_factory< decay_t< Type > >::template construct< Type, Container::ConstructorArgument< decay_t< Type > > >(context);
         }
 
         bool IsResolved() { return false; }

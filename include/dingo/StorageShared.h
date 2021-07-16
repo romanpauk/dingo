@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dingo/TypeDecay.h"
+#include <dingo/decay.h>
 #include <dingo/class_factory.h>
 #include "dingo/Storage.h"
 
@@ -62,7 +62,7 @@ namespace dingo
         {
             if (!initialized_)
             {
-                class_factory< typename TypeDecay< Type >::type >::template construct< Type*, Container::ConstructorArgument< Type > >(context, &instance_);
+                class_factory< decay_t< Type > >::template construct< Type*, Container::ConstructorArgument< Type > >(context, &instance_);
                 initialized_ = true;
             }
 

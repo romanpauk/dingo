@@ -1,6 +1,6 @@
 #pragma once
 
-#include "TypeDecay.h"
+#include <dingo/decay.h>
 
 #include <list>
 #include <vector>
@@ -37,5 +37,5 @@ namespace dingo
         };
     }
 
-    template < class T > struct ContainerTraits: detail::ContainerTraits< TypeDecay_t< T > > {};
+    template < class T > struct ContainerTraits: detail::ContainerTraits< decay_t< T > > {};
 }

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dingo/TypeDecay.h"
+#include <dingo/decay.h>
 #include <dingo/class_factory.h>
 #include "dingo/Storage.h"
 #include "dingo/VirtualPointer.h"

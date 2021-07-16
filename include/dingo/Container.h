@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dingo/TypeDecay.h"
+#include <dingo/decay.h>
 #include "dingo/TypeTraits.h"
 #include "dingo/TypeInstance.h"
 #include "dingo/Exceptions.h"
@@ -70,7 +70,7 @@ namespace dingo
 
         template <
             typename TypeStorage,
-            typename TypeInterface = typename TypeDecay< typename TypeStorage::Type >::type
+            typename TypeInterface = decay_t< typename TypeStorage::Type >
         > void RegisterBinding()
         {
             CheckInterface< TypeInterface, TypeStorage::Type >();
@@ -114,7 +114,7 @@ namespace dingo
             >
         > R Resolve(Context& context)
         {
-            typedef TypeDecay_t< T > Type;
+            typedef decay_t< T > Type;
 
             auto range = typeFactories_.equal_range(typeid(Type));
             if (range.first != range.second)
@@ -130,17 +130,17 @@ namespace dingo
 
         template <
             typename T
-        > std::enable_if_t< !ContainerTraits< TypeDecay_t< T > >::IsContainer, T > ResolveMultiple(Context& context)
+        > std::enable_if_t< !ContainerTraits< decay_t< T > >::IsContainer, T > ResolveMultiple(Context& context)
         {
             throw TypeNotFoundException();
         }
 
         template <
             typename T
-        > std::enable_if_t< ContainerTraits< TypeDecay_t< T > >::IsContainer, T > ResolveMultiple(Context& context)
+        > std::enable_if_t< ContainerTraits< decay_t< T > >::IsContainer, T > ResolveMultiple(Context& context)
         {
-            typedef TypeDecay_t< T > Type;
-            typedef TypeDecay_t< typename Type::value_type > ValueType;
+            typedef decay_t< T > Type;
+            typedef decay_t< typename Type::value_type > ValueType;
 
             auto range = typeFactories_.equal_range(typeid(ValueType));
             
@@ -166,7 +166,7 @@ namespace dingo
         template < class TypeInterface, class Type > void CheckInterface()
         {
             static_assert(!std::is_reference_v< TypeInterface >);
-            static_assert(std::is_convertible_v< TypeDecay_t< Type >*, TypeDecay_t< TypeInterface >* >);
+            static_assert(std::is_convertible_v< decay_t< Type >*, decay_t< TypeInterface >* >);
         }
 
         std::multimap< std::type_index, std::unique_ptr< ITypeInstanceFactory > > typeFactories_;
