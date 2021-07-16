@@ -1,12 +1,13 @@
 project(dingo)
-
 cmake_minimum_required(VERSION 3.19)
+enable_testing()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+
 add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/MP>")
-add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/bigobj>")
+add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/EHa>")
 add_link_options("$<$<CXX_COMPILER_ID:MSVC>:LINKER:/DEBUG:FASTLINK>")
-enable_testing()
 
 add_library(dingo INTERFACE)
 target_include_directories(dingo INTERFACE include)
@@ -35,13 +36,14 @@ target_sources(dingo INTERFACE
     include/dingo/VirtualPointer.h
 )
 
-find_package(Boost)
-if(Boost_FOUND)
-    add_executable(dingotest 
-        src/tests/dingo.cpp
-        src/tests/pch.h
-    )
-    add_test(dingotest COMMAND dingotest)
-    target_link_libraries(dingotest dingo Boost::boost)
-    target_precompile_headers(dingotest PRIVATE src/tests/pch.h)
-endif()
+set(Boost_USE_STATIC_LIBS ON)
+find_package(Boost COMPONENTS unit_test_framework)
+      
+add_executable(dingotest 
+    src/tests/dingo.cpp
+    src/tests/testmodule.cpp
+    src/tests/pch.h
+)
+add_test(dingotest COMMAND dingotest)
+target_link_libraries(dingotest dingo Boost::boost Boost::unit_test_framework)
+target_precompile_headers(dingotest PRIVATE src/tests/pch.h)

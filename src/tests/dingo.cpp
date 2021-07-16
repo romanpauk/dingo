@@ -1,10 +1,11 @@
-#include "pch.h"
 #include "dingo/Container.h"
 #include "dingo/Tuple.h"
 #include "dingo/StorageShared.h"
 #include "dingo/StorageSharedCyclical.h"
 #include "dingo/StorageUnique.h"
 #include "dingo/PerformanceCounter.h"
+
+#include <boost/test/unit_test.hpp>
 
 namespace dingo
 {
@@ -63,7 +64,7 @@ namespace dingo
         Assert(cls.GetName() == "Class");
     }
 
-    void TestType()
+    BOOST_AUTO_TEST_CASE(TestType)
     {
         struct A {};
         struct B
@@ -79,7 +80,7 @@ namespace dingo
 
     }
 
-    void TestSharedValue()
+    BOOST_AUTO_TEST_CASE(TestSharedValue)
     {
         typedef Class< __COUNTER__ > C;
         {
@@ -102,7 +103,7 @@ namespace dingo
         }
     }
 
-    void TestSharedPointer()
+    BOOST_AUTO_TEST_CASE(TestSharedPointer)
     {
         typedef Class< __COUNTER__ > C;
 
@@ -126,7 +127,7 @@ namespace dingo
         }
     }
 
-    void TestSharedSharedPtr()
+    BOOST_AUTO_TEST_CASE(TestSharedSharedPtr)
     {
         typedef Class< __COUNTER__ > C;
 
@@ -153,7 +154,7 @@ namespace dingo
         }
     }
 
-    void TestSharedUniquePtr()
+    BOOST_AUTO_TEST_CASE(TestSharedUniquePtr)
     {
         typedef Class< __COUNTER__ > C;
 
@@ -179,7 +180,7 @@ namespace dingo
         }
     }
 
-    void TestUniqueValue()
+    BOOST_AUTO_TEST_CASE(TestUniqueValue)
     {
         {
             typedef Class< __COUNTER__ > C;
@@ -243,7 +244,7 @@ namespace dingo
         }
     }
 
-    void TestUniquePointer()
+    BOOST_AUTO_TEST_CASE(TestUniquePointer)
     {
         {
             typedef Class< __COUNTER__ > C;
@@ -281,7 +282,7 @@ namespace dingo
         }
     }
 
-    void TestMultipleInterfaces()
+    BOOST_AUTO_TEST_CASE(TestMultipleInterfaces)
     {
         typedef Class< __COUNTER__ > C;
 
@@ -304,7 +305,7 @@ namespace dingo
         }
     }
 
-    void TestSharedHierarchy()
+    BOOST_AUTO_TEST_CASE(TestSharedHierarchy)
     {
         struct S : Class< __COUNTER__ >
         {};
@@ -346,7 +347,7 @@ namespace dingo
         container.Resolve< B& >();
     }
 
-    void TestUniqueHierarchy()
+    BOOST_AUTO_TEST_CASE(TestUniqueHierarchy)
     {
         struct S
         {};
@@ -367,7 +368,7 @@ namespace dingo
         container.Resolve< B& >();
     }
 
-    void TestRecursion()
+    BOOST_AUTO_TEST_CASE(TestRecursion)
     {
         struct B;
         struct A
@@ -388,7 +389,7 @@ namespace dingo
         AssertThrow(container.Resolve< B >(), TypeRecursionException);
     }
 
-    void TestRecursionCyclical()
+    BOOST_AUTO_TEST_CASE(TestRecursionCyclical)
     {
         struct B;
         struct A: Class< __COUNTER__ >
@@ -424,7 +425,7 @@ namespace dingo
         AssertClass(*b.aptr_);       
     }
 
-    void TestResolvePerformance()
+    BOOST_AUTO_TEST_CASE(TestResolvePerformance)
     {
         struct A {};
         struct B { B(A&&) {} };
@@ -463,7 +464,7 @@ namespace dingo
         */
     }
 
-    void TestResolveRollback()
+    BOOST_AUTO_TEST_CASE(TestResolveRollback)
     {
         typedef Class< __COUNTER__ > A;
         typedef Class< __COUNTER__ > B;
@@ -494,7 +495,7 @@ namespace dingo
         Assert(B::Destructor == 2);
     }
 
-    void TestResolveMultiple()
+    BOOST_AUTO_TEST_CASE(TestResolveMultiple)
     {
         struct I {};
         struct A: I {};
@@ -536,31 +537,3 @@ namespace dingo
         }
     }
 }
-
-int main()
-{
-    using namespace dingo;
-
-    TestType();
-    TestSharedValue();
-    TestSharedPointer();
-    TestSharedSharedPtr();
-    TestSharedUniquePtr();
-
-    TestUniqueValue();
-    TestUniquePointer();
-
-    TestMultipleInterfaces();
-
-    TestSharedHierarchy();
-    TestUniqueHierarchy();
-
-    TestRecursion();
-    TestRecursionCyclical();
-
-    // TestResolvePerformance();
-
-    TestResolveRollback();
-    TestResolveMultiple();
-}
-
