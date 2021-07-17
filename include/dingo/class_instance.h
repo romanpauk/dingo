@@ -3,6 +3,7 @@
 #include <dingo/type_list.h>
 #include <dingo/exceptions.h>
 #include <dingo/rebind_type.h>
+#include <dingo/class_instance_i.h>
 
 namespace dingo
 {
@@ -16,17 +17,6 @@ namespace dingo
     template < class T > struct pointer_traits< T* > { static void* get_address(T* ptr) { return ptr; } };
     template < class T > struct pointer_traits< std::shared_ptr< T > > { static void* get_address(std::shared_ptr< T >& ptr) { return ptr.get(); } };
     template < class T > struct pointer_traits< std::unique_ptr< T > > { static void* get_address(std::unique_ptr< T >& ptr) { return ptr.get(); } };
-
-    class class_instance_i
-    {
-    public:
-        virtual ~class_instance_i() {};
-
-        virtual void* get_value(const std::type_info&) = 0;
-        virtual void* get_lvalue_reference(const std::type_info&) = 0;
-        virtual void* get_rvalue_reference(const std::type_info&) = 0;
-        virtual void* get_pointer(const std::type_info&) = 0;
-    };
 
     template < class T > struct class_instance_getter
     {

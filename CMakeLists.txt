@@ -19,6 +19,7 @@ target_sources(dingo INTERFACE
     include/dingo/class_instance_cache.h
     include/dingo/class_instance_factory.h   
     include/dingo/class_instance_factory_i.h
+    include/dingo/class_instance_i.h
     include/dingo/class_recursion_guard.h
     include/dingo/collection_traits.h
     include/dingo/constructible_i.h
