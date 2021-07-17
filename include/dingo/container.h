@@ -5,46 +5,15 @@
 #include <dingo/class_instance.h>
 #include <dingo/exceptions.h>
 #include <dingo/class_instance_factory.h>
+#include <dingo/class_recursion_guard.h>
 #include <dingo/memory/arena_allocator.h>
 #include <dingo/resolving_context.h>
 #include <dingo/scope_guard.h>
 
 #include <map>
-#include <vector>
 
 namespace dingo
 {
-    class container;
-
-    template < typename T > struct TypeRecursionGuard
-    {
-        TypeRecursionGuard(bool typeInitialized)
-            : typeInitialized_(typeInitialized)
-        {
-            if (typeInitialized_) return;
-
-            if (!visited_)
-            {
-                visited_ = true;
-            }
-            else
-            {
-                throw type_recursion_exception();
-            }
-        }
-
-        ~TypeRecursionGuard()
-        {
-            if (typeInitialized_) return;
-            visited_ = false;
-        }
-
-        static thread_local bool visited_;
-        bool typeInitialized_;
-    };
-
-    template < typename T > thread_local bool TypeRecursionGuard< T >::visited_ = false;
-
     class container
     {
         friend class resolving_context;
@@ -105,7 +74,7 @@ namespace dingo
             if (range.first != range.second)
             {
                 auto it = range.first;
-                TypeRecursionGuard< Type > guard(it->second->is_resolved());
+                class_recursion_guard< Type > guard(!it->second->is_resolved());
                 auto instance = it->second->resolve(context);
                 return class_instance_getter< T >::get(*instance);
             }
@@ -137,7 +106,7 @@ namespace dingo
             {
                 for (auto it = range.first; it != range.second; ++it)
                 {
-                    TypeRecursionGuard< ValueType > guard(it->second->is_resolved());
+                    class_recursion_guard< ValueType > guard(!it->second->is_resolved());
                     auto instance = it->second->resolve(context);
                     collection_traits< Type >::add(*results, class_instance_getter< typename Type::value_type >::get(*instance));
                 }

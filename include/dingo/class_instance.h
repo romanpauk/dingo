@@ -2,6 +2,7 @@
 
 #include <dingo/type_list.h>
 #include <dingo/exceptions.h>
+#include <dingo/rebind_type.h>
 
 namespace dingo
 {
@@ -15,22 +16,6 @@ namespace dingo
     template < class T > struct pointer_traits< T* > { static void* get_address(T* ptr) { return ptr; } };
     template < class T > struct pointer_traits< std::shared_ptr< T > > { static void* get_address(std::shared_ptr< T >& ptr) { return ptr.get(); } };
     template < class T > struct pointer_traits< std::unique_ptr< T > > { static void* get_address(std::unique_ptr< T >& ptr) { return ptr.get(); } };
-
-    struct runtime_type {};
-
-    template < class T, class U > struct rebind_type { typedef U type; };
-    template < class T, class U > struct rebind_type< T&, U > { typedef U& type; };
-    template < class T, class U > struct rebind_type< T&&, U > { typedef U&& type; };
-    template < class T, class U > struct rebind_type< T*, U > { typedef U* type; };
-    template < class T, class U > struct rebind_type< std::shared_ptr< T >, U > { typedef std::shared_ptr< U > type; };
-    template < class T, class U > struct rebind_type< std::shared_ptr< T >&, U > { typedef std::shared_ptr< U >& type; };
-    template < class T, class U > struct rebind_type< std::shared_ptr< T >&&, U > { typedef std::shared_ptr< U >&& type; };
-    template < class T, class U > struct rebind_type< std::shared_ptr< T >*, U > { typedef std::shared_ptr< U >* type; };
-
-    // TODO: how to rebind those properly?
-    template < class T, class Deleter, class U > struct rebind_type< std::unique_ptr< T, Deleter >, U > { typedef std::unique_ptr< U, std::default_delete< U > > type; };
-    template < class T, class Deleter, class U > struct rebind_type< std::unique_ptr< T, Deleter >&, U > { typedef std::unique_ptr< U, std::default_delete< U > >& type; };
-    template < class T, class Deleter, class U > struct rebind_type< std::unique_ptr< T, Deleter >*, U > { typedef std::unique_ptr< U, std::default_delete< U > >* type; };
 
     class class_instance_i
     {
@@ -79,7 +64,6 @@ namespace dingo
                 if (is_smart_ptr< std::decay_t< decltype(element)::type > >::value)
                 {
                     ptr = &instance;
-
                 }
                 else
                 {

@@ -19,6 +19,7 @@ target_sources(dingo INTERFACE
     include/dingo/class_instance_cache.h
     include/dingo/class_instance_factory.h   
     include/dingo/class_instance_factory_i.h
+    include/dingo/class_recursion_guard.h
     include/dingo/collection_traits.h
     include/dingo/constructible_i.h
     include/dingo/container.h
@@ -27,6 +28,7 @@ target_sources(dingo INTERFACE
     include/dingo/memory/arena_allocator.h
     include/dingo/memory/virtual_pointer.h
     include/dingo/performance_counter.h
+    include/dingo/rebind_type.h
     include/dingo/resettable_i.h
     include/dingo/resolving_context.h
     include/dingo/scope_guard.h
