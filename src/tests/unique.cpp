@@ -12,7 +12,7 @@ namespace dingo
     BOOST_AUTO_TEST_CASE(TestUniqueValue)
     {
         {
-            typedef Class< __COUNTER__ > C;
+            typedef Class< TestUniqueValue, __COUNTER__ > C;
 
             {
                 container container;
@@ -32,7 +32,7 @@ namespace dingo
         }
 
         {
-            typedef Class< __COUNTER__ > C;
+            typedef Class< TestUniqueValue, __COUNTER__ > C;
 
             {
                 container container;
@@ -53,7 +53,7 @@ namespace dingo
         }
 
         {
-            typedef Class< __COUNTER__ > C;
+            typedef Class< TestUniqueValue, __COUNTER__ > C;
 
             {
                 container container;
@@ -76,7 +76,7 @@ namespace dingo
     BOOST_AUTO_TEST_CASE(TestUniquePointer)
     {
         {
-            typedef Class< __COUNTER__ > C;
+            typedef Class< TestUniquePointer, __COUNTER__ > C;
 
             {
                 container container;
@@ -91,7 +91,7 @@ namespace dingo
         }
 
         {
-            typedef Class< __COUNTER__ > C;
+            typedef Class< TestUniquePointer, __COUNTER__ > C;
 
             {
                 container container;

@@ -6,6 +6,7 @@
 
 namespace dingo
 {
+#if !defined(_DEBUG)
     BOOST_AUTO_TEST_CASE(TestResolvePerformance)
     {
         struct A {};
@@ -44,4 +45,5 @@ namespace dingo
         std::cout << N << " Fake() took " << counter2.GetElapsed() << std::endl;
         */
     }
+#endif
 }

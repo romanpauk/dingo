@@ -10,7 +10,7 @@ namespace dingo
 {
     BOOST_AUTO_TEST_CASE(TestMultipleInterfaces)
     {
-        typedef Class< __COUNTER__ > C;
+        typedef Class< TestMultipleInterfaces, __COUNTER__ > C;
 
         dingo::container container;
         container.register_binding< storage< shared, C >, IClass, IClass1, IClass2 >();

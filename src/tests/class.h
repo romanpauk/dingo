@@ -20,7 +20,7 @@ namespace dingo
         virtual ~IClass2() {}
     };
 
-    template < size_t Counter > struct Class : IClass1, IClass2
+    template < typename TestFn, size_t Counter > struct Class : IClass1, IClass2
     {
         Class() : name_("Class") { ++Constructor; }
         ~Class() { ++Destructor; }
@@ -38,8 +38,8 @@ namespace dingo
         std::string name_;
     };
 
-    template < size_t Counter > size_t Class< Counter >::Constructor;
-    template < size_t Counter > size_t Class< Counter >::CopyConstructor;
-    template < size_t Counter > size_t Class< Counter >::MoveConstructor;
-    template < size_t Counter > size_t Class< Counter >::Destructor;
+    template < typename TestFn, size_t Counter > size_t Class< TestFn, Counter >::Constructor;
+    template < typename TestFn, size_t Counter > size_t Class< TestFn, Counter >::CopyConstructor;
+    template < typename TestFn, size_t Counter > size_t Class< TestFn, Counter >::MoveConstructor;
+    template < typename TestFn, size_t Counter > size_t Class< TestFn, Counter >::Destructor;
 }

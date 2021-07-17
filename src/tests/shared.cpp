@@ -11,7 +11,7 @@ namespace dingo
 {
     BOOST_AUTO_TEST_CASE(TestSharedValue)
     {
-        typedef Class< __COUNTER__ > C;
+        typedef Class< TestSharedValue, __COUNTER__ > C;
         {
             container container;
             container.register_binding< storage< shared, C > >();
@@ -34,7 +34,7 @@ namespace dingo
 
     BOOST_AUTO_TEST_CASE(TestSharedPointer)
     {
-        typedef Class< __COUNTER__ > C;
+        typedef Class< TestSharedPointer, __COUNTER__ > C;
 
         {
             container container;
@@ -58,7 +58,7 @@ namespace dingo
 
     BOOST_AUTO_TEST_CASE(TestSharedSharedPtr)
     {
-        typedef Class< __COUNTER__ > C;
+        typedef Class< TestSharedSharedPtr, __COUNTER__ > C;
 
         {
             container container;
@@ -85,7 +85,7 @@ namespace dingo
 
     BOOST_AUTO_TEST_CASE(TestSharedUniquePtr)
     {
-        typedef Class< __COUNTER__ > C;
+        typedef Class< TestSharedUniquePtr, __COUNTER__ > C;
 
         {
             container container;
@@ -111,10 +111,10 @@ namespace dingo
 
     BOOST_AUTO_TEST_CASE(TestSharedHierarchy)
     {
-        struct S : Class< __COUNTER__ >
+        struct S : Class< TestSharedHierarchy, __COUNTER__ >
         {};
 
-        struct U : Class< __COUNTER__ >
+        struct U : Class< TestSharedHierarchy, __COUNTER__ >
         {
             U(S& s1)
             {
@@ -122,7 +122,7 @@ namespace dingo
             }
         };
 
-        struct B : Class< __COUNTER__ >
+        struct B : Class< TestSharedHierarchy, __COUNTER__ >
         {
             B(S s1, S& s2, S* s3, std::shared_ptr< S >* s4, std::shared_ptr< S >& s5, std::shared_ptr< S > s6,
                 U u1, U& u2, U* u3, std::unique_ptr< U >* u4, std::unique_ptr< U >& u5

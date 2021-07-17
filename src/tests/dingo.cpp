@@ -56,14 +56,14 @@ namespace dingo
     BOOST_AUTO_TEST_CASE(TestRecursionCyclical)
     {
         struct B;
-        struct A: Class< __COUNTER__ >
+        struct A: Class< TestRecursionCyclical, __COUNTER__ >
         {
             A(B& b): b_(b) {}
 
             B& b_;
         };
 
-        struct B: Class< __COUNTER__ >
+        struct B: Class< TestRecursionCyclical, __COUNTER__ >
         {
             B(std::shared_ptr< A > aptr, A& a): aptr_(aptr), a_(a)
             {
@@ -91,8 +91,8 @@ namespace dingo
 
     BOOST_AUTO_TEST_CASE(TestResolveRollback)
     {
-        typedef Class< __COUNTER__ > A;
-        typedef Class< __COUNTER__ > B;
+        typedef Class< TestResolveRollback, __COUNTER__ > A;
+        typedef Class< TestResolveRollback, __COUNTER__ > B;
         struct Ex {};
         struct C
         {
