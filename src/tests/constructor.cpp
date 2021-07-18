@@ -14,7 +14,7 @@ namespace dingo
 
         class_constructor< A >::invoke();
         class_constructor< B >::invoke(nullptr);
-        class_constructor< B* >::invoke(nullptr);
+        delete class_constructor< B* >::invoke(nullptr);
         class_constructor< std::unique_ptr< B > >::invoke(nullptr);
         class_constructor< std::shared_ptr< B > >::invoke(nullptr);
         class_constructor< std::optional< B > >::invoke(nullptr);

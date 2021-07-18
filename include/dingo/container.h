@@ -98,6 +98,8 @@ namespace dingo
 
             auto range = type_factories_.equal_range(typeid(ValueType));
             
+            // TODO: destructor for results is not called, leaking the memory.
+            // Unfortunatelly for the case when this is called from resolve(), return value is T&.
             auto results = context.get_allocator< Type >().allocate(1);
             new (results) Type;
             collection_traits< Type >::reserve(*results, std::distance(range.first, range.second));
