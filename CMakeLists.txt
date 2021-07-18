@@ -17,9 +17,11 @@ target_sources(dingo INTERFACE
     include/dingo/class_factory.h
     include/dingo/class_instance.h
     include/dingo/class_instance_cache.h
+    include/dingo/class_instance_destructor.h
     include/dingo/class_instance_factory.h   
     include/dingo/class_instance_factory_i.h
     include/dingo/class_instance_i.h
+    include/dingo/class_instance_traits.h
     include/dingo/class_recursion_guard.h
     include/dingo/collection_traits.h
     include/dingo/constructible_i.h
@@ -38,6 +40,7 @@ target_sources(dingo INTERFACE
     include/dingo/storage/shared_cyclical.h
     include/dingo/storage/unique.h
     include/dingo/type_list.h
+    include/dingo/type_traits.h
 )
 
 set(Boost_USE_STATIC_LIBS ON)

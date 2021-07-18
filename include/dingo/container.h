@@ -76,7 +76,7 @@ namespace dingo
                 auto it = range.first;
                 class_recursion_guard< Type > guard(!it->second->is_resolved());
                 auto instance = it->second->resolve(context);
-                return class_instance_getter< T >::get(*instance);
+                return class_instance_traits< T >::get(*instance);
             }
 
             return resolve_multiple< T >(context);
@@ -108,7 +108,7 @@ namespace dingo
                 {
                     class_recursion_guard< ValueType > guard(!it->second->is_resolved());
                     auto instance = it->second->resolve(context);
-                    collection_traits< Type >::add(*results, class_instance_getter< typename Type::value_type >::get(*instance));
+                    collection_traits< Type >::add(*results, class_instance_traits< typename Type::value_type >::get(*instance));
                 }
 
                 return *results;
