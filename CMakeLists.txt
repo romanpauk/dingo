@@ -38,6 +38,7 @@ target_sources(dingo INTERFACE
     include/dingo/storage.h
     include/dingo/storage/shared.h
     include/dingo/storage/shared_cyclical.h
+    include/dingo/storage/shared_cyclical_protected.h
     include/dingo/storage/unique.h
     include/dingo/type_list.h
     include/dingo/type_traits.h
@@ -50,6 +51,7 @@ add_executable(dingotest
     src/tests/assert.h
     src/tests/class.h
     src/tests/constructor.cpp
+    src/tests/cyclical.cpp
     src/tests/dingo.cpp
     src/tests/multibindings.cpp
     src/tests/performance.cpp

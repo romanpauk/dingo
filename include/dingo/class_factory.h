@@ -29,9 +29,9 @@ namespace dingo
             return class_constructor< Type >::invoke((sizeof(Args), Arg(ctx))...);
         }
 
-        template < typename Type, typename Arg, typename Context > static Type construct(Context& ctx, void* ptr)
+        template < typename Type, typename Arg, typename Context > static void construct(Context& ctx, void* ptr)
         {
-            return class_constructor< Type >::invoke(ptr, (sizeof(Args), Arg(ctx))...);
+            class_constructor< Type >::invoke(ptr, (sizeof(Args), Arg(ctx))...);
         }
     };
 

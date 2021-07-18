@@ -2,7 +2,7 @@
 
 #include <dingo/decay.h>
 #include <dingo/class_factory.h>
-#include "dingo/Storage.h"
+#include <dingo/storage.h>
 
 namespace dingo
 {

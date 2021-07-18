@@ -62,8 +62,6 @@ namespace dingo
             }
             ))
             {
-                const std::string typeName = type.name();
-                const std::string types = typeid(T).name();
                 throw type_not_convertible_exception();
             }
 

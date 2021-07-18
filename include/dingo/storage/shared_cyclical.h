@@ -6,58 +6,32 @@
 #include <dingo/memory/virtual_pointer.h>
 #include <dingo/constructible_i.h>
 
+#include <memory>
+
 namespace dingo
 {
     class container;
 
     struct shared_cyclical {};
 
-    template < typename Type, typename U > struct conversions< shared_cyclical, Type, U >: conversions< shared, Type, U > {};
-    template < typename Type, typename U > struct conversions< shared_cyclical, std::shared_ptr< Type >, U >: conversions< shared, std::shared_ptr< Type >, U > {};
-
-    template < typename Type > struct CyclicalSupport
+    template < typename Type, typename U > struct conversions< shared_cyclical, Type, U >
     {
-    protected:
-        class seh_translator
-        {
-        public:
-            seh_translator(_se_translator_function translator): translator_(_set_se_translator(translator)) {}
-            ~seh_translator() { _set_se_translator(translator_); }
+        typedef type_list<> ValueTypes;
+        typedef type_list< U& > LvalueReferenceTypes;
+        typedef type_list<> RvalueReferenceTypes;
+        typedef type_list< U* > PointerTypes;
+    };
 
-        private:
-            const _se_translator_function translator_;
-        };
-
-        void construct(resolving_context& context, int phase, VirtualPointer< Type >& instance)
-        {
-            instance.SetAccessible(true);
-
-            if (phase == 0)
-            {
-                seh_translator translator(seh_handler);
-                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type > >(context, instance.Get());
-                
-                instance.SetConstructed();
-                instance.SetAccessible(false);
-            }
-        }
-
-    private:
-        static void seh_handler(unsigned int u, EXCEPTION_POINTERS* ex)
-        {
-            if (ex->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION)
-            {
-                if (ContextTracking< resolving_context >::CurrentContext->has_constructible_address((uintptr_t)ex->ExceptionRecord->ExceptionInformation[1]))
-                {
-                    throw type_not_constructed_exception();
-                }
-            }
-        }
+    template < typename Type, typename U > struct conversions< shared_cyclical, Type*, U >
+    {
+        typedef type_list<> ValueTypes;
+        typedef type_list< U& > LvalueReferenceTypes;
+        typedef type_list<> RvalueReferenceTypes;
+        typedef type_list< U* > PointerTypes;
     };
 
     template < typename Type, typename Conversions > class storage< shared_cyclical, Type, Conversions >
-        : public CyclicalSupport< Type >
-        , public resettable_i
+        : public resettable_i
         , public constructible_i
     {
     public:
@@ -66,31 +40,127 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
+        storage()
+            : constructed_()
+            , resolved_()
+        {}
+
+        ~storage()
+        {
+            reset();
+        }
+
         Type* resolve(resolving_context& context)
         {
-            if (!instance_.Get())
+            if (!resolved_)
             {
-                instance_.Reserve();
+                resolved_ = true;
+                context.register_constructible(this);
+            }
+            
+            return reinterpret_cast< Type* >(&instance_);
+        }
+
+        bool is_resolved() const { return resolved_; }
+        
+        void reset() override
+        {
+            if (constructed_)
+            {
+                constructed_ = resolved_ = false;
+                reinterpret_cast<Type*>(&instance_)->~Type();
+            }
+        }
+
+        void construct(resolving_context& context, int phase) override 
+        { 
+            if (phase == 0)
+            {
+                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type > >(context, reinterpret_cast<Type*>(&instance_));
+                constructed_ = true;
+            } 
+        }
+
+        bool has_address(uintptr_t address) override { return false; }
+
+    private:
+        std::aligned_storage_t< sizeof(Type) > instance_;
+        bool resolved_;
+        bool constructed_;
+    };
+
+/*
+    template < typename Type, typename Conversions > class storage< shared_cyclical, Type*, Conversions >
+        : public storage< shared_cyclical, std::unique_ptr< Type >, Conversions >
+    {
+    public:
+        Type* resolve(resolving_context& context)
+        {
+            return storage< shared, std::unique_ptr< Type >, Conversions >::resolve(context).get();
+        }
+    };
+
+    template < typename Type, typename Conversions > class storage< shared_cyclical, std::unique_ptr< Type >, Conversions >
+        : public resettable_i
+        , public constructible_i
+    {
+    public:
+        static const bool IsCaching = true;
+
+        typedef Conversions Conversions;
+        typedef Type Type;
+
+        storage()
+            : constructed_()
+            , resolved_()
+        {}
+
+        ~storage()
+        {
+            reset();
+        }
+
+        std::unique_ptr< Type >& resolve(resolving_context& context)
+        {
+            if (!resolved_)
+            {
+                resolved_ = true;
                 context.register_constructible(this);
             }
 
-            return instance_.Get();
+            return *reinterpret_cast<std::unique_ptr<Type>*>(&instance_);
         }
 
-        bool is_resolved() const { return instance_.Get(); }
-        void reset() override { instance_.Reset(); }
+        bool is_resolved() const { return resolved_; }
 
-        void construct(resolving_context& context, int phase) override { CyclicalSupport< Type >::construct(context, phase, instance_); }
+        void reset() override
+        {
+            if (constructed_)
+            {
+                constructed_ = resolved_ = false;
+                reinterpret_cast<std::unique_ptr<Type>*>(&instance_)->~unique_ptr< Type >();
+            }
+        }
 
-        bool has_address(uintptr_t address) override { return instance_.HasAddress(address); }
+        void construct(resolving_context& context, int phase) override
+        {
+            if (phase == 0)
+            {
+                class_factory< decay_t< Type > >::template construct< std::unique_ptr< Type >, constructor_argument< Type > >(context, reinterpret_cast<std::unique_ptr< Type >*>(&instance_));
+                constructed_ = true;
+            }
+        }
+
+        bool has_address(uintptr_t address) override { return false; }
 
     private:
-        VirtualPointer< Type > instance_;
+        std::aligned_storage_t< sizeof(std::unique_ptr< Type >) > instance_;
+        bool resolved_;
+        bool constructed_;
     };
 
     template < typename Type, typename Conversions > class storage< shared_cyclical, std::shared_ptr< Type >, Conversions >
-        : public CyclicalSupport< Type >
-        , public resettable_i
+        : public resettable_i
         , public constructible_i     
     {
     public:
@@ -101,29 +171,24 @@ namespace dingo
 
         std::shared_ptr< Type >& resolve(resolving_context& context)
         {
-            if (!instance_)
+            if (!resolved_)
             {
-                virtualInstance_ = std::make_shared< VirtualPointer< Type > >();
-                virtualInstance_->Reserve();
-
-                auto virtualInstance = virtualInstance_;
-                instance_.reset(virtualInstance_->Get(), [virtualInstance](Type*) {});
-
+                resolved_ = true;
                 context.register_constructible(this);
             }
 
-            return instance_;
+            return reinterpret_cast< std::shared_ptr< Type >* >(&instance_);
         }
 
-        bool is_resolved() const { return instance_.get() != nullptr; }
+        bool is_resolved() const { return resolved_; }
         void reset() override { instance_.reset(); virtualInstance_.reset(); }
 
-        void construct(resolving_context& context, int phase) override { CyclicalSupport< Type >::construct(context, phase, *virtualInstance_); }
+        void construct(resolving_context& context, int phase) override { cyclical_support_protected< Type >::construct(context, phase, *virtualInstance_); }
 
         bool has_address(uintptr_t address) override { return virtualInstance_->HasAddress(address); }
 
     private:
-        std::shared_ptr< Type > instance_;
-        std::shared_ptr< VirtualPointer< Type > > virtualInstance_;
+        std::aligned_storage_t< sizeof(std::shared_ptr< Type >) > instance_;
     };
+*/
 }
