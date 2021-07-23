@@ -13,6 +13,7 @@ add_library(dingo INTERFACE)
 target_include_directories(dingo INTERFACE include)
 
 target_sources(dingo INTERFACE
+    include/dingo/annotated.h
     include/dingo/class_constructor.h
     include/dingo/class_factory.h
     include/dingo/class_instance.h
@@ -48,6 +49,7 @@ set(Boost_USE_STATIC_LIBS ON)
 find_package(Boost COMPONENTS unit_test_framework)
       
 add_executable(dingotest 
+    src/tests/annotated.cpp
     src/tests/assert.h
     src/tests/class.h
     src/tests/constructor.cpp

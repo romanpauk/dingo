@@ -7,8 +7,6 @@
 
 namespace dingo
 {
-    class container;
-
     struct shared {};
 
     template < typename Type, typename U > struct conversions< shared, Type, U >
@@ -43,7 +41,7 @@ namespace dingo
         typedef type_list<> RvalueReferenceTypes;
     };
 
-    template < typename Type, typename Conversions > class storage< shared, Type, Conversions >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, Type, Conversions >
         : public resettable_i
     {
     public:
@@ -61,11 +59,11 @@ namespace dingo
             reset();
         }
 
-        Type* resolve(resolving_context& context)
+        template < typename Container > Type* resolve(resolving_context< Container >& context)
         {
             if (!initialized_)
             {
-                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type > >(context, &instance_);
+                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, resolving_context< Container > > >(context, &instance_);
                 initialized_ = true;
             }
 
@@ -88,17 +86,17 @@ namespace dingo
         bool initialized_;
     };
 
-    template < typename Type, typename Conversions > class storage< shared, Type*, Conversions >
-        : public storage< shared, std::unique_ptr< Type >, Conversions >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, Type*, Conversions >
+        : public storage< Container, shared, std::unique_ptr< Type >, Conversions >
     {
     public:
-        Type* resolve(resolving_context& context)
+        template < typename Container > Type* resolve(resolving_context< Container >& context)
         {
-            return storage< shared, std::unique_ptr< Type >, Conversions >::resolve(context).get();
+            return storage< Container, shared, std::unique_ptr< Type >, Conversions >::resolve(context).get();
         }
     };
 
-    template < typename Type, typename Conversions > class storage< shared, std::shared_ptr< Type >, Conversions >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, std::shared_ptr< Type >, Conversions >
         : public resettable_i
     {
     public:
@@ -107,11 +105,11 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
-        std::shared_ptr< Type >& resolve(resolving_context& context)
+        template < typename Container > std::shared_ptr< Type > resolve(resolving_context< Container >& context)
         {
             if (!instance_)
             {
-                instance_ = class_factory< Type >::template construct< std::shared_ptr< Type >, constructor_argument< Type > >(context);
+                instance_ = class_factory< Type >::template construct< std::shared_ptr< Type >, constructor_argument< Type, resolving_context< Container > > >(context);
             }
 
             return instance_;
@@ -124,7 +122,7 @@ namespace dingo
         std::shared_ptr< Type > instance_;
     };
 
-    template < typename Type, typename Conversions > class storage< shared, std::unique_ptr< Type >, Conversions >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, std::unique_ptr< Type >, Conversions >
         : public resettable_i
     {
     public:
@@ -133,12 +131,12 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
-        std::unique_ptr< Type >& resolve(resolving_context& context)
+        template < typename Container > std::unique_ptr< Type >& resolve(resolving_context< Container >& context)
         {
             // TODO: thread-safe
             if (!instance_)
             {
-                instance_ = class_factory< Type >::template construct< std::unique_ptr< Type >, constructor_argument< Type > >(context);
+                instance_ = class_factory< Type >::template construct< std::unique_ptr< Type >, constructor_argument< Type, resolving_context< Container > > >(context);
             }
 
             return instance_;

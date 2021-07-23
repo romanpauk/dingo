@@ -18,7 +18,7 @@ namespace dingo
 
     public:
         template < typename Ty > class_instance(Ty&& instance)
-            : instance_(std::forward< Ty&& >(instance))
+            : instance_(std::forward< Ty >(instance))
         {}
 
         ~class_instance()

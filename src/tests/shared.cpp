@@ -9,12 +9,12 @@
 
 namespace dingo
 {
-    BOOST_AUTO_TEST_CASE(TestSharedValue)
+    BOOST_AUTO_TEST_CASE(test_shared_value)
     {
-        typedef Class< TestSharedValue, __COUNTER__ > C;
+        typedef Class< test_shared_value, __COUNTER__ > C;
         {
-            container container;
-            container.register_binding< storage< shared, C > >();
+            container<> container;
+            container.register_binding< storage< dingo::container<>, shared, C > >();
 
             AssertClass(*container.resolve< C* >());
             AssertClass(container.resolve< C& >());
@@ -32,13 +32,13 @@ namespace dingo
         }
     }
 
-    BOOST_AUTO_TEST_CASE(TestSharedPointer)
+    BOOST_AUTO_TEST_CASE(test_shared_raw_ptr)
     {
-        typedef Class< TestSharedPointer, __COUNTER__ > C;
+        typedef Class< test_shared_raw_ptr, __COUNTER__ > C;
 
         {
-            container container;
-            container.register_binding< storage< shared, C* > >();
+            container<> container;
+            container.register_binding< storage< dingo::container<>, shared, C* > >();
 
             AssertClass(*container.resolve< C* >());
             AssertClass(container.resolve< C& >());
@@ -56,13 +56,13 @@ namespace dingo
         }
     }
 
-    BOOST_AUTO_TEST_CASE(TestSharedSharedPtr)
+    BOOST_AUTO_TEST_CASE(test_shared_shared_ptr)
     {
-        typedef Class< TestSharedSharedPtr, __COUNTER__ > C;
+        typedef Class< test_shared_shared_ptr, __COUNTER__ > C;
 
         {
             container container;
-            container.register_binding< storage< shared, std::shared_ptr< C > > >();
+            container.register_binding< storage< dingo::container<>, shared, std::shared_ptr< C > > >();
 
             AssertClass(*container.resolve< C* >());
             AssertClass(container.resolve< C& >());
@@ -83,13 +83,13 @@ namespace dingo
         }
     }
 
-    BOOST_AUTO_TEST_CASE(TestSharedUniquePtr)
+    BOOST_AUTO_TEST_CASE(test_shared_unique_ptr)
     {
-        typedef Class< TestSharedUniquePtr, __COUNTER__ > C;
+        typedef Class< test_shared_unique_ptr, __COUNTER__ > C;
 
         {
             container container;
-            container.register_binding< storage< shared, std::unique_ptr< C > > >();
+            container.register_binding< storage< dingo::container<>, shared, std::unique_ptr< C > > >();
 
             AssertClass(*container.resolve< C* >());
             AssertClass(container.resolve< C& >());
@@ -109,12 +109,12 @@ namespace dingo
         }
     }
 
-    BOOST_AUTO_TEST_CASE(TestSharedHierarchy)
+    BOOST_AUTO_TEST_CASE(test_shared_hierarchy)
     {
-        struct S : Class< TestSharedHierarchy, __COUNTER__ >
+        struct S : Class< test_shared_hierarchy, __COUNTER__ >
         {};
 
-        struct U : Class< TestSharedHierarchy, __COUNTER__ >
+        struct U : Class< test_shared_hierarchy, __COUNTER__ >
         {
             U(S& s1)
             {
@@ -122,7 +122,7 @@ namespace dingo
             }
         };
 
-        struct B : Class< TestSharedHierarchy, __COUNTER__ >
+        struct B : Class< test_shared_hierarchy, __COUNTER__ >
         {
             B(S s1, S& s2, S* s3, std::shared_ptr< S >* s4, std::shared_ptr< S >& s5, std::shared_ptr< S > s6,
                 U u1, U& u2, U* u3, std::unique_ptr< U >* u4, std::unique_ptr< U >& u5
@@ -144,9 +144,9 @@ namespace dingo
         };
 
         container container;
-        container.register_binding< storage< shared, std::shared_ptr< S > > >();
-        container.register_binding< storage< shared, std::unique_ptr< U > > >();
-        container.register_binding< storage< shared, B > >();
+        container.register_binding< storage< dingo::container<>, shared, std::shared_ptr< S > > >();
+        container.register_binding< storage< dingo::container<>, shared, std::unique_ptr< U > > >();
+        container.register_binding< storage< dingo::container<>, shared, B > >();
 
         container.resolve< B& >();
     }

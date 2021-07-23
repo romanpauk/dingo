@@ -8,8 +8,6 @@
 
 namespace dingo
 {
-    class container;
-
     struct shared_cyclical_protected {};
 
     template < typename Type, typename U > struct conversions< shared_cyclical_protected, Type, U >: conversions< shared, Type, U > {};
@@ -28,14 +26,14 @@ namespace dingo
             const _se_translator_function translator_;
         };
 
-        void construct(resolving_context& context, int phase, VirtualPointer< Type >& instance)
+        template < typename Container > void construct(resolving_context< Container >& context, int phase, VirtualPointer< Type >& instance)
         {
             instance.SetAccessible(true);
 
             if (phase == 0)
             {
                 seh_translator translator(seh_handler);
-                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type > >(context, instance.Get());
+                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, Container > >(context, instance.Get());
                 
                 instance.SetConstructed();
                 instance.SetAccessible(false);
@@ -55,10 +53,10 @@ namespace dingo
         }
     };
 
-    template < typename Type, typename Conversions > class storage< shared_cyclical_protected, Type, Conversions >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, shared_cyclical_protected, Type, Conversions >
         : public cyclical_support_protected< Type >
         , public resettable_i
-        , public constructible_i
+        , public constructible_i< Container >
     {
     public:
         static const bool IsCaching = true;
@@ -66,7 +64,7 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
-        Type* resolve(resolving_context& context)
+        Type* resolve(resolving_context< Container >& context)
         {
             if (!instance_.Get())
             {
@@ -80,7 +78,7 @@ namespace dingo
         bool is_resolved() const { return instance_.Get(); }
         void reset() override { instance_.Reset(); }
 
-        void construct(resolving_context& context, int phase) override { cyclical_support_protected< Type >::construct(context, phase, instance_); }
+        void construct(resolving_context< Container >& context, int phase) override { cyclical_support_protected< Type >::construct(context, phase, instance_); }
 
         bool has_address(uintptr_t address) override { return instance_.HasAddress(address); }
 
@@ -88,10 +86,10 @@ namespace dingo
         VirtualPointer< Type > instance_;
     };
 
-    template < typename Type, typename Conversions > class storage< shared_cyclical_protected, std::shared_ptr< Type >, Conversions >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, shared_cyclical_protected, std::shared_ptr< Type >, Conversions >
         : public cyclical_support_protected< Type >
         , public resettable_i
-        , public constructible_i     
+        , public constructible_i < Container >   
     {
     public:
         static const bool IsCaching = true;
@@ -99,7 +97,7 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
-        std::shared_ptr< Type >& resolve(resolving_context& context)
+        std::shared_ptr< Type >& resolve(resolving_context< Container >& context)
         {
             if (!instance_)
             {
@@ -118,7 +116,7 @@ namespace dingo
         bool is_resolved() const { return instance_.get() != nullptr; }
         void reset() override { instance_.reset(); virtualInstance_.reset(); }
 
-        void construct(resolving_context& context, int phase) override { cyclical_support_protected< Type >::construct(context, phase, *virtualInstance_); }
+        void construct(resolving_context< Container >& context, int phase) override { cyclical_support_protected< Type >::construct(context, phase, *virtualInstance_); }
 
         bool has_address(uintptr_t address) override { return virtualInstance_->HasAddress(address); }
 

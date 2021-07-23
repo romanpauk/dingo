@@ -12,7 +12,7 @@
 
 namespace dingo
 {
-    BOOST_AUTO_TEST_CASE(TestRecursion)
+    BOOST_AUTO_TEST_CASE(test_recursion)
     {
         struct B;
         struct A
@@ -25,32 +25,60 @@ namespace dingo
             B(std::shared_ptr< A >) {}
         };
 
-        container container;
-        container.register_binding< storage< dingo::shared, std::shared_ptr< A > > >();
-        container.register_binding< storage< dingo::shared, B > >();
+        container<> container;
+        container.register_binding< storage< dingo::container<>, shared, std::shared_ptr< A > > >();
+        container.register_binding< storage< dingo::container<>, shared, B > >();
 
         BOOST_CHECK_THROW(container.resolve< A >(), type_recursion_exception);
         BOOST_CHECK_THROW(container.resolve< B >(), type_recursion_exception);
     }
 
-    BOOST_AUTO_TEST_CASE(TestRecursionCyclical)
+    BOOST_AUTO_TEST_CASE(test_shared_cyclical_value)
     {
         struct B;
-        struct A : Class< TestRecursionCyclical, __COUNTER__ >
+        struct A : Class< test_shared_cyclical_value, __COUNTER__ >
         {
             A(B& b) : b_(b) {}
             B& b_;
         };
 
-        struct B : Class< TestRecursionCyclical, __COUNTER__ >
+        struct B : Class< test_shared_cyclical_value, __COUNTER__ >
         {
             B(A& a) : a_(a) {}
             A& a_;
         };
 
-        container container;
-        container.register_binding< storage< shared_cyclical, A > >();
-        container.register_binding< storage< shared_cyclical, B > >();
+        container<> container;
+        container.register_binding< storage< dingo::container<>, shared_cyclical, A > >();
+        container.register_binding< storage< dingo::container<>, shared_cyclical, B > >();
+
+        auto& a = container.resolve< A& >();
+        AssertClass(a);
+        AssertClass(a.b_);
+
+        auto& b = container.resolve< B& >();
+        AssertClass(b);
+        AssertClass(b.a_);
+    }
+
+    BOOST_AUTO_TEST_CASE(test_shared_cyclical_shared_ptr)
+    {
+        struct B;
+        struct A : Class< test_shared_cyclical_shared_ptr, __COUNTER__ >
+        {
+            A(B& b) : b_(b) {}
+            B& b_;
+        };
+
+        struct B : Class< test_shared_cyclical_shared_ptr, __COUNTER__ >
+        {
+            B(A& a) : a_(a) {}
+            A& a_;
+        };
+
+        container<> container;
+        container.register_binding< storage< dingo::container<>, shared_cyclical, std::shared_ptr< A > > >();
+        container.register_binding< storage< dingo::container<>, shared_cyclical, std::shared_ptr< B > > >();
 
         auto& a = container.resolve< A& >();
         AssertClass(a);

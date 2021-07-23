@@ -10,8 +10,6 @@
 
 namespace dingo
 {
-    class container;
-
     template < typename T > class ContextTracking
     {
     public:
@@ -23,14 +21,13 @@ namespace dingo
 
     template < typename T > thread_local T* ContextTracking< T >::CurrentContext;
 
-    class resolving_context
-        : public ContextTracking< resolving_context >
+    template< typename Container > class resolving_context
+        : public ContextTracking< resolving_context< Container > >
     {
     public:
-        resolving_context(container& container)
+        resolving_context(Container& container)
             : container_(container)
-            , arena_(buffer_)
-            , allocator_(arena_)
+            , allocator_(arena_, container.get_allocator())
             , type_instances_(allocator_)
             , resettables_(allocator_)
             , constructibles_(allocator_)
@@ -54,13 +51,17 @@ namespace dingo
             }
         }
 
-        template < typename T > T resolve();
+
+        template < typename T > T resolve()
+        {
+            return this->container_.resolve< T, false >(*this);
+        }
 
         template < typename T > arena_allocator< T > get_allocator() { return allocator_; }
 
         void register_type_instance(class_instance_i* instance) { type_instances_.push_front(instance); }
         void register_resettable(resettable_i* ptr) { resettables_.push_front(ptr); }
-        void register_constructible(constructible_i* ptr) { constructibles_.push_back(ptr); }
+        void register_constructible(constructible_i< Container >* ptr) { constructibles_.push_back(ptr); }
 
         bool has_constructible_address(uintptr_t address)
         {
@@ -90,21 +91,20 @@ namespace dingo
         }
 
     private:
-        container& container_;
+        Container& container_;
 
-        std::array< unsigned char, 1024 > buffer_;
-        arena arena_;
-        arena_allocator< void > allocator_;
+        arena< 1024 > arena_;
+        arena_allocator< void, typename Container::allocator_type > allocator_;
 
-        std::forward_list< class_instance_i*, arena_allocator< class_instance_i* > > type_instances_;
-        std::forward_list< resettable_i*, arena_allocator< resettable_i* > > resettables_;
-        std::list< constructible_i*, arena_allocator< constructible_i* > > constructibles_;
+        std::forward_list< class_instance_i*, arena_allocator< class_instance_i*, typename Container::allocator_type > > type_instances_;
+        std::forward_list< resettable_i*, arena_allocator< resettable_i*, typename Container::allocator_type > > resettables_;
+        std::list< constructible_i< Container >*, arena_allocator< constructible_i< Container >*, typename Container::allocator_type > > constructibles_;
     };
 
-    template < typename DisabledType > class constructor_argument
+    template < typename DisabledType, typename Context > class constructor_argument
     {
     public:
-        constructor_argument(resolving_context& context)
+        constructor_argument(Context& context)
             : context_(context)
         {}
 
@@ -113,6 +113,6 @@ namespace dingo
         template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T && () { return context_.resolve< T&& >(); }
 
     private:
-        resolving_context& context_;
+        Context& context_;
     };
 }

@@ -7,26 +7,22 @@
 
 namespace dingo
 {
-    class resolving_context;
-
     template <
+        typename Container,
         typename TypeInterface,
         typename Type,
         typename Storage
     >
     class class_instance_factory
-        : public class_instance_factory_i
+        : public class_instance_factory_i< Container >
     {
         Storage storage_;
-        typedef decltype(storage_.resolve(std::declval< resolving_context& >())) ResolveType;
+        typedef decltype(storage_.resolve(std::declval< resolving_context< Container >& >())) ResolveType;
         typedef typename rebind_type < ResolveType, TypeInterface >::type InterfaceType;
         class_instance_cache< InterfaceType, Storage, Storage::IsCaching > cache_;
 
     public:
-        class_instance_factory()
-        {}
-
-        class_instance_i* resolve(resolving_context& context) override
+        class_instance_i* resolve(resolving_context< Container >& context) override
         {
             return cache_.resolve(context, storage_);
         }
@@ -43,15 +39,16 @@ namespace dingo
     };
 
     template <
+        typename Container,
         typename TypeInterface,
         typename Type,
         typename Storage
     >
-    class class_instance_factory< TypeInterface, Type, std::shared_ptr< Storage > >
-        : public class_instance_factory_i
+    class class_instance_factory< Container, TypeInterface, Type, std::shared_ptr< Storage > >
+        : public class_instance_factory_i< Container >
     {
         std::shared_ptr< Storage > storage_;
-        typedef decltype(storage_->resolve(std::declval< resolving_context& >())) ResolveType;
+        typedef decltype(storage_->resolve(std::declval< resolving_context< Container >& >())) ResolveType;
         typedef typename rebind_type < ResolveType, TypeInterface >::type InterfaceType;
         class_instance_cache< InterfaceType, Storage, Storage::IsCaching > cache_;
 
@@ -60,7 +57,7 @@ namespace dingo
             : storage_(storage)
         {}
 
-        class_instance_i* resolve(resolving_context& context) override
+        class_instance_i* resolve(resolving_context< Container >& context) override
         {
             return cache_.resolve(context, *storage_);
         }

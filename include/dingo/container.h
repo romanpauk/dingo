@@ -9,33 +9,38 @@
 #include <dingo/memory/arena_allocator.h>
 #include <dingo/resolving_context.h>
 #include <dingo/scope_guard.h>
+#include <dingo/annotated.h>
 
 #include <map>
 
 namespace dingo
 {
-    class container
+    template < typename Allocator = std::allocator< char > > class container
     {
-        friend class resolving_context;
+        friend class resolving_context< container< Allocator > >;
 
     public:
-        container()
-        {}
+        typedef Allocator allocator_type;
+
+        allocator_type& get_allocator() { return allocator_; }
 
         template <
             typename TypeStorage,
-            typename TypeInterface = decay_t< typename TypeStorage::Type >
-        > void register_binding()
+            typename TypeInterface = decay_t< typename TypeStorage::Type >,
+            typename... Args
+        > void register_binding(Args&&...)
         {
-            check_interface_requirements< TypeInterface, TypeStorage::Type >();
-            type_factories_.emplace(typeid(TypeInterface), std::make_unique< class_instance_factory< TypeInterface, TypeStorage::Type, TypeStorage > >());
+            check_interface_requirements< unannotated_type_t< TypeInterface >, TypeStorage::Type >();
+            type_factories_.emplace(typeid(TypeInterface), std::make_unique<
+                class_instance_factory< container< Allocator >, unannotated_type_t< TypeInterface >, TypeStorage::Type, TypeStorage > >(std::forward< Args >...));
         }
 
         template <
             typename TypeStorage,
             typename... TypeInterfaces,
+            typename... Args,
             typename = std::enable_if_t< (sizeof...(TypeInterfaces) > 1) >
-        > void register_binding()
+        > void register_binding(Args&&...)
         {
             auto storage = std::make_shared< TypeStorage >();
 
@@ -43,17 +48,17 @@ namespace dingo
             {
                 typedef typename decltype(element)::type TypeInterface;
 
-                check_interface_requirements< TypeInterface, TypeStorage::Type >();
-                type_factories_.emplace(typeid(TypeInterface), std::make_unique< class_instance_factory< TypeInterface, TypeStorage::Type, std::shared_ptr< TypeStorage > > >(storage));
+                check_interface_requirements< unannotated_type_t< TypeInterface >, TypeStorage::Type >();
+                type_factories_.emplace(typeid(TypeInterface), std::make_unique< class_instance_factory< container< Allocator >, unannotated_type_t< TypeInterface >, TypeStorage::Type, std::shared_ptr< TypeStorage > > >(storage, std::forward< Args >...));
             });
         }
 
         template <
             typename T
-            , typename R = std::conditional_t< std::is_rvalue_reference_v< T >, std::remove_reference_t< T >, T >
+            , typename R = unannotated_type_t< std::conditional_t< std::is_rvalue_reference_v< T >, std::remove_reference_t< T >, T > >
         > R resolve()
         {
-            resolving_context context(*this);
+            resolving_context< container< Allocator > > context(*this);
             auto guard = make_scope_guard([&context] { if (!std::uncaught_exceptions()) { context.finalize(); } });
             return resolve< T, true >(context);
         }
@@ -62,11 +67,13 @@ namespace dingo
         template <
             typename T
             , bool RemoveRvalueReferences
-            , typename R = std::conditional_t<
-                RemoveRvalueReferences,
-                std::conditional_t < std::is_rvalue_reference_v< T >, std::remove_reference_t< T >, T >, T
+            , typename R = unannotated_type_t <
+                std::conditional_t<
+                    RemoveRvalueReferences,
+                    std::conditional_t < std::is_rvalue_reference_v< T >, std::remove_reference_t< T >, T >, T
+                >
             >
-        > R resolve(resolving_context& context)
+        > R resolve(resolving_context< container< Allocator > >& context)
         {
             typedef decay_t< T > Type;
 
@@ -84,26 +91,26 @@ namespace dingo
 
         template <
             typename T
-        > std::enable_if_t< !collection_traits< decay_t< T > >::is_collection, T > resolve_multiple(resolving_context& context)
+        > std::enable_if_t< !collection_traits< decay_t< T > >::is_collection, T > resolve_multiple(resolving_context< container< Allocator > >& context)
         {
             throw type_not_found_exception();
         }
 
         template <
             typename T
-        > std::enable_if_t< collection_traits< decay_t< T > >::is_collection, T > resolve_multiple(resolving_context& context)
+        > std::enable_if_t< collection_traits< decay_t< T > >::is_collection, T > resolve_multiple(resolving_context< container< Allocator > >& context)
         {
             typedef decay_t< T > Type;
             typedef decay_t< typename Type::value_type > ValueType;
 
             auto range = type_factories_.equal_range(typeid(ValueType));
-            
+
             // TODO: destructor for results is not called, leaking the memory.
             // Unfortunatelly for the case when this is called from resolve(), return value is T&.
             auto results = context.get_allocator< Type >().allocate(1);
             new (results) Type;
             collection_traits< Type >::reserve(*results, std::distance(range.first, range.second));
-            
+
             if (range.first != range.second)
             {
                 for (auto it = range.first; it != range.second; ++it)
@@ -125,11 +132,21 @@ namespace dingo
             static_assert(std::is_convertible_v< decay_t< Type >*, decay_t< TypeInterface >* >);
         }
 
-        std::multimap< std::type_index, std::unique_ptr< class_instance_factory_i > > type_factories_;
-    };
+        allocator_type allocator_;
 
-    template < typename T > T resolving_context::resolve()
-    {
-        return container_.resolve< T, false >(*this);
-    }
+        std::multimap <
+            std::type_index,
+            std::unique_ptr< class_instance_factory_i< container< Allocator > > >,
+            std::less< std::type_index >,
+            Allocator
+            /*
+            std::allocator_traits< Allocator >::rebind_alloc <
+                std::pair <
+                    const std::type_index,
+                    std::unique_ptr< class_instance_factory_i< container< Allocator > > >
+                >
+            >
+            */
+        > type_factories_;
+    };
 }

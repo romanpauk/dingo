@@ -16,10 +16,10 @@ namespace dingo
         performance_counter counter;
         performance_counter counter2;
 
-        container container;
-        container.register_binding< storage< unique, A > >();
-        container.register_binding< storage< unique, B > >();
-        container.register_binding< storage< unique, C > >();
+        container<> container;
+        container.register_binding< storage< dingo::container<>, unique, A > >();
+        container.register_binding< storage< dingo::container<>, unique, B > >();
+        container.register_binding< storage< dingo::container<>, unique, C > >();
 
         const size_t N = 1000000;
         for (size_t i = 0; i < N; ++i)

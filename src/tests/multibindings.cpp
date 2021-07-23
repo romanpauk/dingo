@@ -1,34 +1,80 @@
 #include <dingo/container.h>
 #include <dingo/storage/shared.h>
+#include <dingo/storage/shared_cyclical.h>
+#include <dingo/storage/unique.h>
 
 #include <boost/test/unit_test.hpp>
+#include <boost/mpl/list.hpp>
 
 #include "class.h"
 #include "assert.h"
 
 namespace dingo
 {
-    BOOST_AUTO_TEST_CASE(TestMultipleInterfaces)
+    // TODO: shared_cyclical throws
+    typedef boost::mpl::list< shared /*, shared_cyclical */ > test_types_value;
+    BOOST_AUTO_TEST_CASE_TEMPLATE(test_multiple_interfaces_shared_value, Policy, test_types_value)
     {
-        typedef Class< TestMultipleInterfaces, __COUNTER__ > C;
+        typedef Class< test_multiple_interfaces_shared_value, __COUNTER__ > C;
 
-        dingo::container container;
-        container.register_binding< storage< shared, C >, IClass, IClass1, IClass2 >();
+        container<> container;
+        container.register_binding< storage< dingo::container<>, Policy, C >, IClass, IClass1, IClass2 >();
 
-        {
-            auto c = container.resolve< IClass* >();
-            BOOST_TEST(dynamic_cast<C*>(c));
-        }
+        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
+        BOOST_TEST(dynamic_cast<C*>(container.resolve< IClass1* >()));
+        BOOST_TEST(dynamic_cast<C*>(container.resolve< IClass2* >()));
+    }
 
-        {
-            auto c = container.resolve< IClass1* >();
-            BOOST_TEST(dynamic_cast<C*>(c));
-        }
+    // TODO: shared_cyclical crashes
+    typedef boost::mpl::list< shared /*, shared_cyclical*/ > test_types_shared_ptr;
+    BOOST_AUTO_TEST_CASE_TEMPLATE(test_multiple_interfaces_shared_shared_ptr, Policy, test_types_shared_ptr)
+    {
+        typedef Class< test_multiple_interfaces_shared_shared_ptr, __COUNTER__ > C;
 
-        {
-            auto c = container.resolve< IClass2* >();
-            BOOST_TEST(dynamic_cast<C*>(c));
-        }
+        container<> container;
+        container.register_binding< storage< dingo::container<>, Policy, std::shared_ptr< C > >, IClass, IClass1, IClass2 >();
+
+        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
+        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass >& >().get()));
+        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass1& >()));
+        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass1 > >().get()));
+        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass2& >()));
+        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass2 >* >()->get()));
+    }
+
+    /*
+    // TODO: does not compile
+    BOOST_AUTO_TEST_CASE(test_multiple_interfaces_shared_unique_ptr)
+    {
+        typedef Class< test_multiple_interfaces_shared_unique_ptr, __COUNTER__ > C;
+
+        container<> container;
+        container.register_binding< storage< dingo::container<>, shared, std::unique_ptr< C > >, IClass, IClass1, IClass2 >();
+    }
+    */
+
+    BOOST_AUTO_TEST_CASE(test_multiple_interfaces_unique_shared_ptr)
+    {
+        typedef Class< test_multiple_interfaces_unique_shared_ptr, __COUNTER__ > C;
+
+        container<> container;
+        container.register_binding< storage< dingo::container<>, unique, std::shared_ptr< C > >, IClass, IClass1, IClass2 >();
+
+        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass > >().get()));
+        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass1 > >().get()));
+        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass2 > >().get()));
+    }
+
+    BOOST_AUTO_TEST_CASE(test_multiple_interfaces_unique_unique_ptr)
+    {
+        typedef Class< test_multiple_interfaces_unique_unique_ptr, __COUNTER__ > C;
+
+        container<> container;
+        container.register_binding< storage< dingo::container<>, unique, std::unique_ptr< C > >, IClass, IClass1, IClass2 >();
+
+        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::unique_ptr< IClass > >().get()));
+        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::unique_ptr< IClass1 > >().get()));
+        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::unique_ptr< IClass2 > >().get()));
     }
 
 // TODO: this is not correctly implemented, it leaks memory

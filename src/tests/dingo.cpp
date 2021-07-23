@@ -24,10 +24,10 @@ namespace dingo
             B(std::shared_ptr< S >&&) {}
         };
 
-        container container;
-        container.register_binding< storage< unique, std::shared_ptr< S > > >();
-        container.register_binding< storage< unique, std::unique_ptr< U > > >();
-        container.register_binding< storage< shared, B > >();
+        container<> container;
+        container.register_binding< storage< dingo::container<>, unique, std::shared_ptr< S > > >();
+        container.register_binding< storage< dingo::container<>, unique, std::unique_ptr< U > > >();
+        container.register_binding< storage< dingo::container<>, shared, B > >();
 
         container.resolve< B& >();
     }
@@ -41,10 +41,10 @@ namespace dingo
             C(A&, B&) { throw Ex(); }
         };
 
-        container container;
-        container.register_binding< storage< shared, A > >();
-        container.register_binding< storage< shared, B > >();
-        container.register_binding< storage< shared, C > >();
+        container<> container;
+        container.register_binding< storage< dingo::container<>, shared, A > >();
+        container.register_binding< storage< dingo::container<>, shared, B > >();
+        container.register_binding< storage< dingo::container<>, shared, C > >();
 
         BOOST_CHECK_THROW(container.resolve< C& >(), Ex);
         BOOST_TEST(A::Constructor == 1);

@@ -15,8 +15,8 @@ namespace dingo
             typedef Class< TestUniqueValue, __COUNTER__ > C;
 
             {
-                container container;
-                container.register_binding< storage< unique, C > >();
+                container<> container;
+                container.register_binding< storage< dingo::container<>, unique, C > >();
 
                 {
                     AssertClass(container.resolve< C&& >());
@@ -35,8 +35,8 @@ namespace dingo
             typedef Class< TestUniqueValue, __COUNTER__ > C;
 
             {
-                container container;
-                container.register_binding< storage< unique, C > >();
+                container<> container;
+                container.register_binding< storage< dingo::container<>, unique, C > >();
 
                 {
                     // TODO: This is quite stupid, it does allocation, move, than copy in TypeInstanceGetter
@@ -56,8 +56,8 @@ namespace dingo
             typedef Class< TestUniqueValue, __COUNTER__ > C;
 
             {
-                container container;
-                container.register_binding< storage< unique, std::unique_ptr< C > > >();
+                container<> container;
+                container.register_binding< storage< dingo::container<>, unique, std::unique_ptr< C > > >();
 
                 {
                     AssertClass(*container.resolve< std::unique_ptr< C > >());
@@ -79,8 +79,8 @@ namespace dingo
             typedef Class< TestUniquePointer, __COUNTER__ > C;
 
             {
-                container container;
-                container.register_binding< storage< unique, C* > >();
+                container<> container;
+                container.register_binding< storage< dingo::container<>, unique, C* > >();
                 AssertClass(container.resolve< C >());
                 BOOST_TEST(C::Constructor == 1);
                 BOOST_TEST(C::CopyConstructor == 1); // TODO: this is stupid. There should be no copy, just move.
@@ -94,8 +94,8 @@ namespace dingo
             typedef Class< TestUniquePointer, __COUNTER__ > C;
 
             {
-                container container;
-                container.register_binding< storage< unique, C* > >();
+                container<> container;
+                container.register_binding< storage< dingo::container<>, unique, C* > >();
                 auto c = container.resolve< C* >();
                 AssertClass(*c);
                 BOOST_TEST(C::Constructor == 1);

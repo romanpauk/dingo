@@ -6,8 +6,6 @@
 
 namespace dingo
 {
-    class Container;
-    
     struct unique {};
 
     template < typename Type, typename U > struct conversions< unique, Type, U >
@@ -42,7 +40,7 @@ namespace dingo
         typedef type_list<> PointerTypes;
     };
 
-    template < typename Type, typename Conversions > class storage< unique, Type, Conversions >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, unique, Type, Conversions >
     {
     public:
         static const bool IsCaching = false;
@@ -50,9 +48,9 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
-        Type resolve(resolving_context& context)
+        template < typename Container > Type resolve(resolving_context< Container >& context)
         {
-            return class_factory< decay_t< Type > >::template construct< Type, constructor_argument< decay_t< Type > > >(context);
+            return class_factory< decay_t< Type > >::template construct< Type, constructor_argument< decay_t< Type >, resolving_context< Container > > >(context);
         }
 
         bool is_resolved() { return false; }

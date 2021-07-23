@@ -1,5 +1,9 @@
 #pragma once
 
+#if defined(_WIN32)
+#define _ENFORCE_MATCHING_ALLOCATORS 0
+#endif
+
 #include <map>
 #include <type_traits>
 #include <memory>

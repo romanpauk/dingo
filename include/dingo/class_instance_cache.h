@@ -21,7 +21,7 @@ namespace dingo
     template< typename TypeInterface, typename Storage > struct class_instance_cache< TypeInterface, Storage, true >
         : public resettable_i
     {
-        class_instance_i* resolve(resolving_context& context, Storage& storage)
+        template < typename Context > class_instance_i* resolve(Context& context, Storage& storage)
         {
             if (!instance_)
             {

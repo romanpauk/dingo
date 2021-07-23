@@ -2,7 +2,7 @@
 
 namespace dingo
 {
-    template< typename Type, typename NonConvertibleTypes > void AssertTypeNotConvertible(container& container)
+    template< typename Type, typename NonConvertibleTypes, typename Container > void AssertTypeNotConvertible(Container& container)
     {
         for_each((NonConvertibleTypes*)0, [&](auto element)
         {
