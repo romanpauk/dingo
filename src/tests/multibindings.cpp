@@ -11,37 +11,61 @@
 
 namespace dingo
 {
-    // TODO: shared_cyclical throws
-    typedef boost::mpl::list< shared /*, shared_cyclical */ > test_types_value;
-    BOOST_AUTO_TEST_CASE_TEMPLATE(test_multiple_interfaces_shared_value, Policy, test_types_value)
+    BOOST_AUTO_TEST_CASE(test_multiple_interfaces_shared_value)
     {
         typedef Class< test_multiple_interfaces_shared_value, __COUNTER__ > C;
 
         container<> container;
-        container.register_binding< storage< dingo::container<>, Policy, C >, IClass, IClass1, IClass2 >();
+        container.register_binding< storage< dingo::container<>, shared, C >, IClass, IClass1, IClass2 >();
 
         BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
-        BOOST_TEST(dynamic_cast<C*>(container.resolve< IClass1* >()));
+        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass1& >()));
         BOOST_TEST(dynamic_cast<C*>(container.resolve< IClass2* >()));
     }
 
-    // TODO: shared_cyclical crashes
-    typedef boost::mpl::list< shared /*, shared_cyclical*/ > test_types_shared_ptr;
-    BOOST_AUTO_TEST_CASE_TEMPLATE(test_multiple_interfaces_shared_shared_ptr, Policy, test_types_shared_ptr)
+    BOOST_AUTO_TEST_CASE(test_multiple_interfaces_shared_cyclical_value)
+    {
+        typedef Class< test_multiple_interfaces_shared_cyclical_value, __COUNTER__ > C;
+
+        container<> container;
+        container.register_binding< storage< dingo::container<>, shared_cyclical, C >, /*IClass, */IClass1, IClass2 >();
+
+        // TODO: virtual base issues
+        // BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
+        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass1& >()));
+        BOOST_TEST(dynamic_cast<C*>(container.resolve< IClass2* >()));
+    }
+
+    BOOST_AUTO_TEST_CASE(test_multiple_interfaces_shared_shared_ptr)
     {
         typedef Class< test_multiple_interfaces_shared_shared_ptr, __COUNTER__ > C;
 
         container<> container;
-        container.register_binding< storage< dingo::container<>, Policy, std::shared_ptr< C > >, IClass, IClass1, IClass2 >();
+        container.register_binding< storage< dingo::container<>, shared, std::shared_ptr< C > >, IClass, IClass1, IClass2 >();
 
         BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
         BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass >& >().get()));
         BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass1& >()));
-        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass1 > >().get()));
+        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass1 >& >().get()));
         BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass2& >()));
         BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass2 >* >()->get()));
     }
 
+    BOOST_AUTO_TEST_CASE(test_multiple_interfaces_shared_cyclical_shared_ptr)
+    {
+        typedef Class< test_multiple_interfaces_shared_cyclical_shared_ptr, __COUNTER__ > C;
+
+        container<> container;
+        container.register_binding< storage< dingo::container<>, shared_cyclical, std::shared_ptr< C > >, IClass1, IClass2 >();
+
+        // TODO: virtual base issues with cyclical_shared
+        // BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
+        // BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass >& >().get()));
+        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass1& >()));
+        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass1 >& >().get()));
+        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass2& >()));
+        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass2 >* >()->get()));
+    }
     /*
     // TODO: does not compile
     BOOST_AUTO_TEST_CASE(test_multiple_interfaces_shared_unique_ptr)

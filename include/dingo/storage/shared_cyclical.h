@@ -167,18 +167,29 @@ namespace dingo
     };
 */
 
-    template < typename T > class release_deleter
+    template < typename T > class shared_cyclical_deleter
     {
     public:
-        release_deleter()
-            : released_(new std::atomic< bool >(false))
+        shared_cyclical_deleter()
+            : constructed_(new std::atomic< bool >(false))
         {}
 
-        void release() { released_->store(true); }
-        void operator()(T* ptr) { if (!*released_) delete ptr; }
+        void set_constructed() { constructed_->store(true); }
+
+        void operator()(T* ptr) 
+        {
+            if (constructed_->load())
+            {
+                delete ptr;
+            }
+            else
+            {
+                delete[] reinterpret_cast<char*>(ptr);
+            } 
+        }
 
     private:
-        std::shared_ptr< std::atomic< bool > > released_;
+        std::shared_ptr< std::atomic< bool > > constructed_;
     };
 
     template < typename Container, typename Type, typename Conversions > class storage< Container, shared_cyclical, std::shared_ptr< Type >, Conversions >
@@ -191,60 +202,27 @@ namespace dingo
         typedef Conversions Conversions;
         typedef Type Type;
 
-        storage()
-            : resolved_()
-            , constructed_()
-        {}
-
-        ~storage()
-        {
-            // TODO: we need special type to handle the shared_ptr use case, eg. memory allocation / deallocation / destructor phases
-            // should go together, some shared_cyclical_ptr.
-            // This code is not right as the pointer can outlive this class.
-            reset();
-        }
-
         std::shared_ptr< Type > resolve(resolving_context< Container >& context)
         {
-            if (!resolved_)
+            if (!instance_)
             {
-                resolved_ = true;
-
-                instance_.reset(reinterpret_cast<Type*>(new char[sizeof(Type)]), release_deleter< Type >());
-
+                instance_.reset(reinterpret_cast<Type*>(new char[sizeof(Type)]), shared_cyclical_deleter< Type >());
                 context.register_constructible(this);
             }
 
             return instance_;
         }
 
-        bool is_resolved() const { return resolved_; }
+        bool is_resolved() const { return instance_.get() != nullptr; }
        
-        void reset() override
-        {
-            if (!constructed_)
-            {
-                if (instance_)
-                {
-                    if (auto deleter = std::get_deleter< release_deleter<Type> >(instance_))
-                    {
-                        deleter->release();
-                        char* ptr = reinterpret_cast<char*>(instance_.get());
-                        delete[] ptr;
-                    }
-                }
-            }
-
-            instance_.reset();
-            constructed_ = resolved_ = false;
-        }
+        void reset() override { instance_.reset(); }
 
         void construct(resolving_context< Container >& context, int phase) override
         {
             if (phase == 0)
             {
                 class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, resolving_context< Container > > >(context, instance_.get());
-                constructed_ = true;
+                std::get_deleter< shared_cyclical_deleter<Type> >(instance_)->set_constructed();
             }
         }
 
@@ -252,7 +230,5 @@ namespace dingo
 
     private:
         std::shared_ptr< Type > instance_;
-        bool resolved_;
-        bool constructed_;
     };
 }
