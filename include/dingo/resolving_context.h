@@ -110,7 +110,9 @@ namespace dingo
 
         template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T* () { return context_.resolve< T* >(); }
         template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T& () { return context_.resolve< T& >(); }
-        template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T && () { return context_.resolve< T&& >(); }
+        template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T&& () { return context_.resolve< T&& >(); }
+        
+        template < typename T, typename Tag, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator annotated< T, Tag > () { return context_.resolve< annotated< T, Tag > >(); }
 
     private:
         Context& context_;

@@ -38,18 +38,48 @@ namespace dingo
     BOOST_AUTO_TEST_CASE(test_annotated_interface)
     {
         struct I { virtual ~I() {} };
+
         struct A : I {};
         struct B : I {};
-        struct C : I {};
+
+        struct C: I
+        {
+            C(
+                annotated< I&, tag< 1 > > ref,
+                annotated< I*, tag< 1 > > ptr,
+                annotated< std::shared_ptr< I >, tag< 2 > > sharedptr
+            ) 
+                : ref_(ref)
+                , ptr_(ptr)
+                , sharedptr_(sharedptr)
+            {
+                BOOST_TEST(dynamic_cast<A*>(&ref_));
+                BOOST_TEST(dynamic_cast<A*>(ptr_));
+                BOOST_TEST(dynamic_cast<B*>(sharedptr_.get()));
+            }
+
+            I& ref_;
+            I* ptr_;
+            std::shared_ptr< I > sharedptr_;
+        };
 
         container<> container;
 
         container.register_binding< storage< dingo::container<>, shared, A >, annotated< I, tag< 1 > > >();
-        container.register_binding< storage< dingo::container<>, shared, B >, annotated< I, tag< 2 > > >();
-        container.register_binding< storage< dingo::container<>, shared, std::shared_ptr< C > >, annotated< I, tag< 3 > > >();
+        container.register_binding< storage< dingo::container<>, shared, std::shared_ptr< B > >, annotated< I, tag< 2 > > >();
+        container.register_binding< storage< dingo::container<>, shared, std::shared_ptr< C > >, C, annotated< I, tag< 3 > > >();
+
+        I& aref = container.resolve< annotated< I&, tag< 1 > > >();
+        BOOST_TEST(dynamic_cast<A*>(&aref));
         
-        BOOST_TEST(dynamic_cast<A*>(&container.resolve< annotated< I, tag< 1 > >& >()));
-        BOOST_TEST(dynamic_cast<B*>(&container.resolve< annotated< I, tag< 2 > >& >()));
-        BOOST_TEST(dynamic_cast<C*>(&container.resolve< annotated< I, tag< 3 > >& >()));
+        I* bptr = container.resolve< annotated< I*, tag< 2 > > >();
+        BOOST_TEST(dynamic_cast<B*>(bptr));
+
+        std::shared_ptr< I > bsharedptr = container.resolve< annotated< std::shared_ptr< I >, tag< 2 > > >();
+        BOOST_TEST(dynamic_cast<B*>(bsharedptr.get()));
+
+        BOOST_TEST(dynamic_cast<C*>(&container.resolve< C& >()));
+        I& cref = container.resolve< annotated< I&, tag< 3 > > >();
+        BOOST_TEST(dynamic_cast<C*>(&cref));
     }
 }

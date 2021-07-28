@@ -2,8 +2,26 @@
 
 namespace dingo
 {
-    template < typename T, typename Tag > struct annotated: public T {};
-    
+    template < typename T, typename Tag > struct annotated
+    {
+        annotated(T&& value): value_(std::move(value)) {}
+
+        template < typename Ty > operator Ty&& () && { return std::forward< Ty >(value_); }
+        template < typename Ty > operator Ty& () & { return value_; }
+
+    private:
+        T value_;
+    };
+
+    template < typename T, typename Tag > struct annotated< T&, Tag >
+    {
+        annotated(T& value): value_(value) {}
+        operator T& () { return value_; }
+
+    private:
+        T& value_;
+    };
+
     struct none {};
 
     template < typename T > struct annotated_type { using type = annotated< T, none >; };
@@ -11,10 +29,29 @@ namespace dingo
 
     template < class T > using annotated_type_t = typename annotated_type< T >::type;
 
-    template < typename T > struct unannotated_type { using type = T; };
-    template < typename T, typename Tag > struct unannotated_type< annotated< T, Tag > > { using type = T; };
-    template < typename T, typename Tag > struct unannotated_type< annotated< T, Tag >& > { using type = T&; };
-    // template < typename T, typename Tag > struct unannotated_type< annotated< T, Tag >&& > { using type = T; };
+    template < typename T > struct annotated_traits
+    {
+        using type = T;
+    };
 
-    template < class T > using unannotated_type_t = typename unannotated_type< T >::type;
+    template < typename T, typename Tag > struct annotated_traits < annotated< T, Tag > >
+    {
+        using type = T;
+    };
+
+    template < typename T, typename Tag > struct annotated_traits < annotated< T, Tag >& >
+    {
+        using type = T&;
+    };
+
+    template < typename T, typename Tag > struct annotated_traits < annotated< T, Tag >&& >
+    {
+        using type = T&&;
+    };
+
+    template < typename T, typename Tag > struct annotated_traits < annotated< T, Tag >* >
+    {
+        using type = T*;
+    };
+
 }

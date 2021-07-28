@@ -30,9 +30,9 @@ namespace dingo
             typename... Args
         > void register_binding(Args&&...)
         {
-            check_interface_requirements< unannotated_type_t< TypeInterface >, TypeStorage::Type >();
+            check_interface_requirements< annotated_traits< TypeInterface >::type, TypeStorage::Type >();
             type_factories_.emplace(typeid(TypeInterface), std::make_unique<
-                class_instance_factory< container< Allocator >, unannotated_type_t< TypeInterface >, TypeStorage::Type, TypeStorage > >(std::forward< Args >...));
+                class_instance_factory< container< Allocator >, annotated_traits< TypeInterface >::type, TypeStorage::Type, TypeStorage > >(std::forward< Args >...));
         }
 
         template <
@@ -48,14 +48,14 @@ namespace dingo
             {
                 typedef typename decltype(element)::type TypeInterface;
 
-                check_interface_requirements< unannotated_type_t< TypeInterface >, TypeStorage::Type >();
-                type_factories_.emplace(typeid(TypeInterface), std::make_unique< class_instance_factory< container< Allocator >, unannotated_type_t< TypeInterface >, TypeStorage::Type, std::shared_ptr< TypeStorage > > >(storage, std::forward< Args >...));
+                check_interface_requirements< annotated_traits< TypeInterface >::type, TypeStorage::Type >();
+                type_factories_.emplace(typeid(TypeInterface), std::make_unique< class_instance_factory< container< Allocator >, annotated_traits< TypeInterface >::type, TypeStorage::Type, std::shared_ptr< TypeStorage > > >(storage, std::forward< Args >...));
             });
         }
 
         template <
             typename T
-            , typename R = unannotated_type_t< std::conditional_t< std::is_rvalue_reference_v< T >, std::remove_reference_t< T >, T > >
+            , typename R = typename annotated_traits< std::conditional_t< std::is_rvalue_reference_v< T >, std::remove_reference_t< T >, T > >::type
         > R resolve()
         {
             resolving_context< container< Allocator > > context(*this);
@@ -67,11 +67,10 @@ namespace dingo
         template <
             typename T
             , bool RemoveRvalueReferences
-            , typename R = unannotated_type_t <
+            , typename R = 
                 std::conditional_t<
-                    RemoveRvalueReferences,
-                    std::conditional_t < std::is_rvalue_reference_v< T >, std::remove_reference_t< T >, T >, T
-                >
+                RemoveRvalueReferences,
+                std::conditional_t < std::is_rvalue_reference_v< T >, std::remove_reference_t< T >, T >, T
             >
         > R resolve(resolving_context< container< Allocator > >& context)
         {
@@ -83,7 +82,7 @@ namespace dingo
                 auto it = range.first;
                 class_recursion_guard< Type > guard(!it->second->is_resolved());
                 auto instance = it->second->resolve(context);
-                return class_instance_traits< T >::get(*instance);
+                return class_instance_traits< annotated_traits< T >::type >::get(*instance);
             }
 
             return resolve_multiple< T >(context);
