@@ -31,6 +31,7 @@ namespace dingo
 
         container.resolve< B& >();
     }
+    
     BOOST_AUTO_TEST_CASE(TestResolveRollback)
     {
         typedef Class< TestResolveRollback, __COUNTER__ > A;

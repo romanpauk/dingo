@@ -2,7 +2,7 @@
 Dependency Injection Container for C++, with DI, next-gen and an 'o' in a name.
 
 ## Introduction
-This is a prototype of header-only, dependency injection library. 
+Dingo is a header-only, dependency injection library that preforms recursive instantiation of registered types. 
 It has no dependencies except for the C++ standard library.
 
 ```c++
@@ -34,41 +34,42 @@ container.resolve< CommandProcessor >();
 ``` 
 
 ### Features
-#### Non-intrusive
-Constructor signature of registered types is detected automatically.
 
-#### Run-time Based
-Container can be used from multiple modules. This is a requirement for larger projects with not so clean dependencies. The drawback is that errors are propagated in runtime, but in practice this can be mitigated by having unit test that is checking if types in the container will correctly resolve.
+#### Non-intrusive class registration
+Constructor signatures of registered types are detected automatically from constructor signature. 
 
-#### Behaving Naturally
-Natural means that the container tries to preserve usual type semantics of types it manages, without imposing requirements on managed types. It tries to be as opaque as possible. 
-1) Internal instance storage is customisable, the container does not require some concrete storage.
-2) Internal instance creation is further customized based on type being created.
-Type held as std::shared_ptr is constructed using std::make_shared.
-3) Internal instance can be converted to based on conversion rules specified during binding registration. Default conversions are quite permissive, allowing all conversions that can be done manually.
+#### Runtime-based usage
+Container can be used from multiple modules, specifically it can be filled in one module and used in other modules. This is a requirement for larger projects with not so clean dependencies. Compared to the compile-time DI solutions, errors are propagated in runtime as exceptions.
 
-Thread-safety guarantees are the same as for STL containers - safe for reading, unsafe for writing. The catch is that one cannot tell if resolve will be reading or writing.
+#### Naturally-behaving
+The container tries to preserve usual type semantics of types it manages, without imposing requirements on managed types. It tries to be as transparent as possible to the managed type. Registered type can be automatically converted to types that are 'reachable' from the base type.
+
+#### Exception-safe
+When exception occurs in user-provided code, the state of the container is not changed.
+
+#### Thread-safe
+The thread-safety guarante is the same as for STL containers: thread-safe for reading and not thread-safe for writing. The catch is that one cannot tell if resolving operation will be reading or writing.
 
 #### Flexible
-It should be possible to implement various enhancements without touching core code too much. Template class specializations are used to tweak the behavior and functionality for different storage types, instance creation or passing instances through type-erasure boundary. 
+The code is decomposed so it is possible to implement various enhancements without touching core code too much. Template class specializations are used to tweak the behavior and functionality for different storage types, instance creation or passing instances through type-erasure boundary. 
 
 #### Optimal
-Unnecessary copyies of managed types are avoided if possible.
+Unnecessary copyies of managed types are avoided if possible, the type is treated as it is natural for its storage type.
 
 #### Usable as Service Locator
 It is possible to register a binding to the type under a key that is a base class of the type. As the correct cast is calculated at the time of registration, multiple inheritance is correctly supported. One instance can be resolved through multiple interfaces.
 
 #### Multibindings Support
-It is possible to resolve multiple implementations of an interface as a collection.
+It is possible to resolve multiple implementations of an interface as a collection. See [multibindings.cpp](src/tests/multibindings.cpp).
 
 #### Annotations Support
-It is possible to register different implementations with the same interface, disambiguating them with a user-provided tag.
+It is possible to register different implementations with the same interface, disambiguating the registration with an user-provided tag. See [annotations.cpp](src/tests/annotations.cpp).
 
 #### Support for Cycles
 With shared_cyclical storage, cycles between types are supported. This is implemented using two-phase construction.
-More an experiment than something practical, virtual memory protection can be used to throw upon access of not-yet-constructed class.
+More an experiment than something practical, virtual memory protection can be used to throw upon access of not-yet-constructed class. See [cyclical.cpp](src/tests/cyclical.cpp).
 
 #### Unit Tests
-The functionality is covered with tests written using Boost Test.
+The functionality is covered with tests written using Boost Test. See current [test coverage](src/tests).
 
 
