@@ -37,6 +37,7 @@ target_sources(dingo INTERFACE
     include/dingo/resolving_context.h
     include/dingo/scope_guard.h
     include/dingo/storage.h
+    include/dingo/storage/external.h
     include/dingo/storage/shared.h
     include/dingo/storage/shared_cyclical.h
     include/dingo/storage/shared_cyclical_protected.h
@@ -55,6 +56,7 @@ add_executable(dingotest
     src/tests/constructor.cpp
     src/tests/cyclical.cpp
     src/tests/dingo.cpp
+    src/tests/external.cpp
     src/tests/multibindings.cpp
     src/tests/performance.cpp
     src/tests/shared.cpp

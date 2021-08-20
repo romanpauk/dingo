@@ -57,7 +57,7 @@ namespace dingo
 
             {
                 container<> container;
-                container.register_binding< storage< dingo::container<>, unique, std::unique_ptr< C > > >();
+                container.register_binding< storage< dingo::container<>, unique, std::unique_ptr< C > >, C, IClass >();
 
                 {
                     AssertClass(*container.resolve< std::unique_ptr< C > >());
@@ -80,7 +80,7 @@ namespace dingo
 
             {
                 container<> container;
-                container.register_binding< storage< dingo::container<>, unique, C* > >();
+                container.register_binding< storage< dingo::container<>, unique, C* >, C, IClass >();
                 AssertClass(container.resolve< C >());
                 BOOST_TEST(C::Constructor == 1);
                 BOOST_TEST(C::CopyConstructor == 1); // TODO: this is stupid. There should be no copy, just move.

@@ -22,6 +22,10 @@ namespace dingo
         class_instance_cache< InterfaceType, Storage, Storage::IsCaching > cache_;
 
     public:
+        template < typename... Args > class_instance_factory(Args&&... args)
+            : storage_(std::forward< Args >(args)...)
+        {}
+
         class_instance_i* resolve(resolving_context< Container >& context) override
         {
             return cache_.resolve(context, storage_);

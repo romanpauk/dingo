@@ -28,11 +28,11 @@ namespace dingo
             typename TypeStorage,
             typename TypeInterface = decay_t< typename TypeStorage::Type >,
             typename... Args
-        > void register_binding(Args&&...)
+        > void register_binding(Args&&... args)
         {
             check_interface_requirements< annotated_traits< TypeInterface >::type, TypeStorage::Type >();
             type_factories_.emplace(typeid(TypeInterface), std::make_unique<
-                class_instance_factory< container< Allocator >, annotated_traits< TypeInterface >::type, TypeStorage::Type, TypeStorage > >(std::forward< Args >...));
+                class_instance_factory< container< Allocator >, annotated_traits< TypeInterface >::type, TypeStorage::Type, TypeStorage > >(std::forward< Args >(args)...));
         }
 
         template <
@@ -40,16 +40,16 @@ namespace dingo
             typename... TypeInterfaces,
             typename... Args,
             typename = std::enable_if_t< (sizeof...(TypeInterfaces) > 1) >
-        > void register_binding(Args&&...)
+        > void register_binding(Args&&... args)
         {
-            auto storage = std::make_shared< TypeStorage >();
+            auto storage = std::make_shared< TypeStorage >(std::forward< Args >(args)...);
 
             for_each((type_list< TypeInterfaces... >*)0, [&](auto element)
             {
                 typedef typename decltype(element)::type TypeInterface;
 
                 check_interface_requirements< annotated_traits< TypeInterface >::type, TypeStorage::Type >();
-                type_factories_.emplace(typeid(TypeInterface), std::make_unique< class_instance_factory< container< Allocator >, annotated_traits< TypeInterface >::type, TypeStorage::Type, std::shared_ptr< TypeStorage > > >(storage, std::forward< Args >...));
+                type_factories_.emplace(typeid(TypeInterface), std::make_unique< class_instance_factory< container< Allocator >, annotated_traits< TypeInterface >::type, TypeStorage::Type, std::shared_ptr< TypeStorage > > >(storage));
             });
         }
 

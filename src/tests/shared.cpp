@@ -14,7 +14,7 @@ namespace dingo
         typedef Class< test_shared_value, __COUNTER__ > C;
         {
             container<> container;
-            container.register_binding< storage< dingo::container<>, shared, C > >();
+            container.register_binding< storage< dingo::container<>, shared, C >, C, IClass >();
 
             AssertClass(*container.resolve< C* >());
             AssertClass(container.resolve< C& >());
@@ -38,7 +38,7 @@ namespace dingo
 
         {
             container<> container;
-            container.register_binding< storage< dingo::container<>, shared, C* > >();
+            container.register_binding< storage< dingo::container<>, shared, C* >, C, IClass >();
 
             AssertClass(*container.resolve< C* >());
             AssertClass(container.resolve< C& >());
@@ -62,7 +62,7 @@ namespace dingo
 
         {
             container container;
-            container.register_binding< storage< dingo::container<>, shared, std::shared_ptr< C > > >();
+            container.register_binding< storage< dingo::container<>, shared, std::shared_ptr< C > >, C, IClass >();
 
             AssertClass(*container.resolve< C* >());
             AssertClass(container.resolve< C& >());
