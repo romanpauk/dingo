@@ -1,13 +1,15 @@
 #pragma once
 
+#include <utility>
+
 namespace dingo
 {
     template < typename T, typename Tag > struct annotated
     {
         annotated(T&& value): value_(std::move(value)) {}
 
-        template < typename Ty > operator Ty&& () && { return std::forward< Ty >(value_); }
-        template < typename Ty > operator Ty& () & { return value_; }
+        operator T& () & { return value_; }
+        operator T&& () && { return std::move(value_); }
 
     private:
         T value_;

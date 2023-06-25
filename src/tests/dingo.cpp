@@ -1,17 +1,19 @@
 #include <dingo/container.h>
 #include <dingo/type_list.h>
 #include <dingo/storage/shared.h>
+#if defined(_WIN32)
 #include <dingo/storage/shared_cyclical_protected.h>
+#endif
 #include <dingo/storage/unique.h>
 
-#include <boost/test/unit_test.hpp>
+#include <gtest/gtest.h>
 
 #include "class.h"
 #include "assert.h"
 
 namespace dingo
 {
-    BOOST_AUTO_TEST_CASE(TestUniqueHierarchy)
+    TEST(dingo, unique_hierarchy)
     {
         struct S
         {};
@@ -32,10 +34,11 @@ namespace dingo
         container.resolve< B& >();
     }
     
-    BOOST_AUTO_TEST_CASE(TestResolveRollback)
+    TEST(dingo, resolve_rollback)
     {
-        typedef Class< TestResolveRollback, __COUNTER__ > A;
-        typedef Class< TestResolveRollback, __COUNTER__ > B;
+        struct resolve_rollback {};
+        typedef Class< resolve_rollback, __COUNTER__ > A;
+        typedef Class< resolve_rollback, __COUNTER__ > B;
         struct Ex {};
         struct C
         {
@@ -47,19 +50,19 @@ namespace dingo
         container.register_binding< storage< dingo::container<>, shared, B > >();
         container.register_binding< storage< dingo::container<>, shared, C > >();
 
-        BOOST_CHECK_THROW(container.resolve< C& >(), Ex);
-        BOOST_TEST(A::Constructor == 1);
-        BOOST_TEST(A::Destructor == 1);
-        BOOST_TEST(B::Constructor == 1);
-        BOOST_TEST(B::Destructor == 1);
+        ASSERT_THROW(container.resolve< C& >(), Ex);
+        ASSERT_EQ(A::Constructor, 1);
+        ASSERT_EQ(A::Destructor, 1);
+        ASSERT_EQ(B::Constructor, 1);
+        ASSERT_EQ(B::Destructor, 1);
 
         container.resolve< A& >();
-        BOOST_TEST(A::Constructor == 2);
-        BOOST_TEST(A::Destructor == 1);
-        BOOST_CHECK_THROW(container.resolve< C >(), Ex);
-        BOOST_TEST(A::Constructor == 2);
-        BOOST_TEST(A::Destructor == 1);
-        BOOST_TEST(B::Constructor == 2);
-        BOOST_TEST(B::Destructor == 2);
+        ASSERT_EQ(A::Constructor, 2);
+        ASSERT_EQ(A::Destructor, 1);
+        ASSERT_THROW(container.resolve< C >(), Ex);
+        ASSERT_EQ(A::Constructor, 2);
+        ASSERT_EQ(A::Destructor, 1);
+        ASSERT_EQ(B::Constructor, 2);
+        ASSERT_EQ(B::Destructor, 2);
     }
 }

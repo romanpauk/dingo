@@ -1,5 +1,6 @@
 #pragma once
 
+// TODO: remove "Middle"
 namespace dingo
 {
     template < typename... Types > struct type_list {};
@@ -22,7 +23,7 @@ namespace dingo
         return false;
     }
 
-    template < typename Function, typename Head, typename... Tail > bool for_type(type_list< Head, Tail...>*, const std::type_info& type, Function&& fn)
+    template < typename Function, typename Head, typename Middle, typename... Tail > bool for_type(type_list< Head, Middle, Tail...>*, const std::type_info& type, Function&& fn)
     {
         if (typeid(Head) == type)
         {
@@ -31,20 +32,20 @@ namespace dingo
         }
         else
         {
-            return for_type((type_list< Tail... >*)0, type, std::forward< Function >(fn));
+            return for_type((type_list< Middle, Tail... >*)0, type, std::forward< Function >(fn));
         }
     }
 
-    template < typename Function > void for_each(type_list<>, Function&&) { return false; }
+    template < typename Function > void for_each(type_list<>, Function&&) {}
 
     template < typename Function, typename Head > void for_each(type_list< Head >*, Function&& fn)
     {
         fn(type_list_iterator< Head >());
     }
 
-    template < typename Function, typename Head, typename... Tail > void for_each(type_list< Head, Tail...>*, Function&& fn)
+    template < typename Function, typename Head, typename Middle, typename... Tail > void for_each(type_list< Head, Middle, Tail...>*, Function&& fn)
     {
         fn(type_list_iterator< Head >());
-        return for_each((type_list< Tail... >*)0, std::forward< Function >(fn));
+        for_each((type_list< Middle, Tail... >*)0, std::forward< Function >(fn));
     }
 }

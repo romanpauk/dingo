@@ -41,14 +41,14 @@ namespace dingo
         typedef type_list<> RvalueReferenceTypes;
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, Type, Conversions >
+    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, shared, TypeT, ConversionsT >
         : public resettable_i
     {
     public:
         static const bool IsCaching = true;
 
-        typedef Conversions Conversions;
-        typedef Type Type;
+        using Conversions = ConversionsT;
+        using Type = TypeT;
 
         storage()
             : initialized_(false)
@@ -59,11 +59,11 @@ namespace dingo
             reset();
         }
 
-        template < typename Container > Type* resolve(resolving_context< Container >& context)
+        template < typename ContainerT > Type* resolve(resolving_context< ContainerT >& context)
         {
             if (!initialized_)
             {
-                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, resolving_context< Container > > >(context, &instance_);
+                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, resolving_context< ContainerT > > >(context, &instance_);
                 initialized_ = true;
             }
 
@@ -90,26 +90,26 @@ namespace dingo
         : public storage< Container, shared, std::unique_ptr< Type >, Conversions >
     {
     public:
-        template < typename Container > Type* resolve(resolving_context< Container >& context)
+        template < typename ContainerT > Type* resolve(resolving_context< ContainerT >& context)
         {
-            return storage< Container, shared, std::unique_ptr< Type >, Conversions >::resolve(context).get();
+            return storage< ContainerT, shared, std::unique_ptr< Type >, Conversions >::resolve(context).get();
         }
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, std::shared_ptr< Type >, Conversions >
+    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, shared, std::shared_ptr< TypeT >, ConversionsT >
         : public resettable_i
     {
     public:
         static const bool IsCaching = true;
 
-        typedef Conversions Conversions;
-        typedef Type Type;
+        using Conversions = ConversionsT;
+        using Type = TypeT;
 
-        template < typename Container > std::shared_ptr< Type > resolve(resolving_context< Container >& context)
+        template < typename ContainerT > std::shared_ptr< Type > resolve(resolving_context< ContainerT >& context)
         {
             if (!instance_)
             {
-                instance_ = class_factory< Type >::template construct< std::shared_ptr< Type >, constructor_argument< Type, resolving_context< Container > > >(context);
+                instance_ = class_factory< Type >::template construct< std::shared_ptr< Type >, constructor_argument< Type, resolving_context< ContainerT > > >(context);
             }
 
             return instance_;
@@ -122,21 +122,21 @@ namespace dingo
         std::shared_ptr< Type > instance_;
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, std::unique_ptr< Type >, Conversions >
+    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, shared, std::unique_ptr< TypeT >, ConversionsT >
         : public resettable_i
     {
     public:
         static const bool IsCaching = true;
 
-        typedef Conversions Conversions;
-        typedef Type Type;
+        using Conversions = ConversionsT;
+        using Type = TypeT;
 
-        template < typename Container > std::unique_ptr< Type >& resolve(resolving_context< Container >& context)
+        template < typename ContainerT > std::unique_ptr< Type >& resolve(resolving_context< ContainerT >& context)
         {
             // TODO: thread-safe
             if (!instance_)
             {
-                instance_ = class_factory< Type >::template construct< std::unique_ptr< Type >, constructor_argument< Type, resolving_context< Container > > >(context);
+                instance_ = class_factory< Type >::template construct< std::unique_ptr< Type >, constructor_argument< Type, resolving_context< ContainerT > > >(context);
             }
 
             return instance_;

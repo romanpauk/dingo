@@ -54,7 +54,7 @@ namespace dingo
 
         template < typename T > T resolve()
         {
-            return this->container_.resolve< T, false >(*this);
+            return this->container_.template resolve< T, false >(*this);
         }
 
         template < typename T > arena_allocator< T > get_allocator() { return allocator_; }
@@ -96,9 +96,13 @@ namespace dingo
         arena< 1024 > arena_;
         arena_allocator< void, typename Container::allocator_type > allocator_;
 
-        std::forward_list< class_instance_i*, arena_allocator< class_instance_i*, typename Container::allocator_type > > type_instances_;
-        std::forward_list< resettable_i*, arena_allocator< resettable_i*, typename Container::allocator_type > > resettables_;
-        std::list< constructible_i< Container >*, arena_allocator< constructible_i< Container >*, typename Container::allocator_type > > constructibles_;
+        // TODO: rebind alloc
+        std::forward_list< class_instance_i*, 
+            arena_allocator< class_instance_i*, typename std::allocator_traits< typename Container::allocator_type >::template rebind_alloc< class_instance_i* > > > type_instances_;
+        std::forward_list< resettable_i*, 
+            arena_allocator< resettable_i*, typename std::allocator_traits< typename Container::allocator_type >::template rebind_alloc< resettable_i* > > > resettables_;
+        std::list< constructible_i< Container >*, 
+            arena_allocator< constructible_i< Container >*, typename std::allocator_traits< typename Container::allocator_type >::template rebind_alloc< constructible_i< Container >* > > > constructibles_;
     };
 
     template < typename DisabledType, typename Context > class constructor_argument
@@ -108,11 +112,11 @@ namespace dingo
             : context_(context)
         {}
 
-        template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T* () { return context_.resolve< T* >(); }
-        template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T& () { return context_.resolve< T& >(); }
-        template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T&& () { return context_.resolve< T&& >(); }
+        template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T* () { return context_.template resolve< T* >(); }
+        template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T& () { return context_.template resolve< T& >(); }
+        template < typename T, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator T&& () { return context_.template resolve< T&& >(); }
         
-        template < typename T, typename Tag, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator annotated< T, Tag > () { return context_.resolve< annotated< T, Tag > >(); }
+        template < typename T, typename Tag, typename = std::enable_if_t< !std::is_same_v< DisabledType, std::decay_t< T > > > > operator annotated< T, Tag > () { return context_.template resolve< annotated< T, Tag > >(); }
 
     private:
         Context& context_;

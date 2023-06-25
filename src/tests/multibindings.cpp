@@ -3,57 +3,60 @@
 #include <dingo/storage/shared_cyclical.h>
 #include <dingo/storage/unique.h>
 
-#include <boost/test/unit_test.hpp>
-#include <boost/mpl/list.hpp>
+#include <gtest/gtest.h>
 
 #include "class.h"
 #include "assert.h"
 
 namespace dingo
 {
-    BOOST_AUTO_TEST_CASE(test_multiple_interfaces_shared_value)
+    TEST(multibindings, multiple_interfaces_shared_value)
     {
-        typedef Class< test_multiple_interfaces_shared_value, __COUNTER__ > C;
+        struct multiple_interfaces_shared_value {};
+        typedef Class< multiple_interfaces_shared_value, __COUNTER__ > C;
 
         container<> container;
         container.register_binding< storage< dingo::container<>, shared, C >, IClass, IClass1, IClass2 >();
 
-        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
-        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass1& >()));
-        BOOST_TEST(dynamic_cast<C*>(container.resolve< IClass2* >()));
+        ASSERT_TRUE(dynamic_cast<C*>(&container.resolve< IClass& >()));
+        ASSERT_TRUE(dynamic_cast<C*>(&container.resolve< IClass1& >()));
+        ASSERT_TRUE(dynamic_cast<C*>(container.resolve< IClass2* >()));
     }
 
-    BOOST_AUTO_TEST_CASE(test_multiple_interfaces_shared_cyclical_value)
+    TEST(multibindings, multiple_interfaces_shared_cyclical_value)
     {
-        typedef Class< test_multiple_interfaces_shared_cyclical_value, __COUNTER__ > C;
+        struct multiple_interfaces_shared_cyclical_value {};
+        typedef Class< multiple_interfaces_shared_cyclical_value, __COUNTER__ > C;
 
         container<> container;
         container.register_binding< storage< dingo::container<>, shared_cyclical, C >, /*IClass, */IClass1, IClass2 >();
 
         // TODO: virtual base issues
         // BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
-        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass1& >()));
-        BOOST_TEST(dynamic_cast<C*>(container.resolve< IClass2* >()));
+        ASSERT_TRUE(dynamic_cast<C*>(&container.resolve< IClass1& >()));
+        ASSERT_TRUE(dynamic_cast<C*>(container.resolve< IClass2* >()));
     }
 
-    BOOST_AUTO_TEST_CASE(test_multiple_interfaces_shared_shared_ptr)
+    TEST(multibindings, multiple_interfaces_shared_shared_ptr)
     {
-        typedef Class< test_multiple_interfaces_shared_shared_ptr, __COUNTER__ > C;
+        struct multiple_interfaces_shared_shared_ptr {};
+        typedef Class< multiple_interfaces_shared_shared_ptr, __COUNTER__ > C;
 
         container<> container;
         container.register_binding< storage< dingo::container<>, shared, std::shared_ptr< C > >, IClass, IClass1, IClass2 >();
 
-        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
-        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass >& >().get()));
-        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass1& >()));
-        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass1 >& >().get()));
-        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass2& >()));
-        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass2 >* >()->get()));
+        ASSERT_TRUE(dynamic_cast<C*>(&container.resolve< IClass& >()));
+        ASSERT_TRUE(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass >& >().get()));
+        ASSERT_TRUE(dynamic_cast<C*>(&container.resolve< IClass1& >()));
+        ASSERT_TRUE(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass1 >& >().get()));
+        ASSERT_TRUE(dynamic_cast<C*>(&container.resolve< IClass2& >()));
+        ASSERT_TRUE(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass2 >* >()->get()));
     }
 
-    BOOST_AUTO_TEST_CASE(test_multiple_interfaces_shared_cyclical_shared_ptr)
+    TEST(multibindings, multiple_interfaces_shared_cyclical_shared_ptr)
     {
-        typedef Class< test_multiple_interfaces_shared_cyclical_shared_ptr, __COUNTER__ > C;
+        struct multiple_interfaces_shared_cyclical_shared_ptr {};
+        typedef Class< multiple_interfaces_shared_cyclical_shared_ptr, __COUNTER__ > C;
 
         container<> container;
         container.register_binding< storage< dingo::container<>, shared_cyclical, std::shared_ptr< C > >, IClass1, IClass2 >();
@@ -61,11 +64,12 @@ namespace dingo
         // TODO: virtual base issues with cyclical_shared
         // BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
         // BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass >& >().get()));
-        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass1& >()));
-        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass1 >& >().get()));
-        BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass2& >()));
-        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass2 >* >()->get()));
+        ASSERT_TRUE(dynamic_cast<C*>(&container.resolve< IClass1& >()));
+        ASSERT_TRUE(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass1 >& >().get()));
+        ASSERT_TRUE(dynamic_cast<C*>(&container.resolve< IClass2& >()));
+        ASSERT_TRUE(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass2 >* >()->get()));
     }
+
     /*
     // TODO: does not compile
     BOOST_AUTO_TEST_CASE(test_multiple_interfaces_shared_unique_ptr)
@@ -77,28 +81,30 @@ namespace dingo
     }
     */
 
-    BOOST_AUTO_TEST_CASE(test_multiple_interfaces_unique_shared_ptr)
+    TEST(multibindings, multiple_interfaces_unique_shared_ptr)
     {
-        typedef Class< test_multiple_interfaces_unique_shared_ptr, __COUNTER__ > C;
+        struct multiple_interfaces_unique_shared_ptr {};
+        typedef Class< multiple_interfaces_unique_shared_ptr, __COUNTER__ > C;
 
         container<> container;
         container.register_binding< storage< dingo::container<>, unique, std::shared_ptr< C > >, IClass, IClass1, IClass2 >();
 
-        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass > >().get()));
-        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass1 > >().get()));
-        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass2 > >().get()));
+        ASSERT_TRUE(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass > >().get()));
+        ASSERT_TRUE(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass1 > >().get()));
+        ASSERT_TRUE(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass2 > >().get()));
     }
 
-    BOOST_AUTO_TEST_CASE(test_multiple_interfaces_unique_unique_ptr)
+    TEST(multibindings, multiple_interfaces_unique_unique_ptr)
     {
-        typedef Class< test_multiple_interfaces_unique_unique_ptr, __COUNTER__ > C;
+        struct multiple_interfaces_unique_unique_ptr {};
+        typedef Class< multiple_interfaces_unique_unique_ptr, __COUNTER__ > C;
 
         container<> container;
         container.register_binding< storage< dingo::container<>, unique, std::unique_ptr< C > >, IClass, IClass1, IClass2 >();
 
-        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::unique_ptr< IClass > >().get()));
-        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::unique_ptr< IClass1 > >().get()));
-        BOOST_TEST(dynamic_cast<C*>(container.resolve< std::unique_ptr< IClass2 > >().get()));
+        ASSERT_TRUE(dynamic_cast<C*>(container.resolve< std::unique_ptr< IClass > >().get()));
+        ASSERT_TRUE(dynamic_cast<C*>(container.resolve< std::unique_ptr< IClass1 > >().get()));
+        ASSERT_TRUE(dynamic_cast<C*>(container.resolve< std::unique_ptr< IClass2 > >().get()));
     }
 
 // TODO: this is not correctly implemented, it leaks memory

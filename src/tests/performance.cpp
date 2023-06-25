@@ -2,7 +2,7 @@
 #include <dingo/performance_counter.h>
 #include <dingo/storage/unique.h>
 
-#include <boost/test/unit_test.hpp>
+#include <gtest/gtest.h>
 
 namespace dingo
 {

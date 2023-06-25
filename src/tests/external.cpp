@@ -1,16 +1,17 @@
 #include <dingo/container.h>
 #include <dingo/storage/external.h>
 
-#include <boost/test/unit_test.hpp>
+#include <gtest/gtest.h>
 
 #include "class.h"
 #include "assert.h"
 
 namespace dingo
 {
-    BOOST_AUTO_TEST_CASE(test_external_value)
+    TEST(external, value)
     {
-        typedef Class< test_external_value, __COUNTER__ > C;
+        struct external_value {};
+        typedef Class< external_value, __COUNTER__ > C;
         C c;
 
         {
@@ -23,41 +24,44 @@ namespace dingo
         }
     }
 
-    BOOST_AUTO_TEST_CASE(test_external_ref)
+    TEST(external, ref)
     {
-        typedef Class< test_external_ref, __COUNTER__ > C;
+        struct external_ref {};
+        typedef Class< external_ref, __COUNTER__ > C;
         C c;
 
         {
             container<> container;
             container.register_binding< storage< dingo::container<>, external, C& >, C, IClass >(c);
 
-            BOOST_TEST(container.resolve< C* >() == &c);
+            ASSERT_EQ(container.resolve< C* >(), &c);
             AssertClass(*container.resolve< C* >());
             AssertClass(container.resolve< C& >());
             AssertClass(container.resolve< IClass& >());
         }
     }
 
-    BOOST_AUTO_TEST_CASE(test_external_ptr)
+    TEST(external, ptr)
     {
-        typedef Class< test_external_ptr, __COUNTER__ > C;
+        struct external_ptr {};
+        typedef Class< external_ptr, __COUNTER__ > C;
         C c;
 
         {
             container<> container;
             container.register_binding< storage< dingo::container<>, external, C* >, C, IClass >(&c);
 
-            BOOST_TEST(container.resolve< C* >() == &c);
+            ASSERT_EQ(container.resolve< C* >(), &c);
             AssertClass(*container.resolve< C* >());
             AssertClass(container.resolve< C& >());
             AssertClass(container.resolve< IClass& >());
         }
     }
 
-    BOOST_AUTO_TEST_CASE(test_external_shared_ptr_lvalue)
+    TEST(external, shared_ptr)
     {
-        typedef Class< test_external_shared_ptr_lvalue, __COUNTER__ > C;
+        struct external_shared_ptr_lvalue {};
+        typedef Class< external_shared_ptr_lvalue, __COUNTER__ > C;
         auto c = std::make_shared< C >();
 
         {
@@ -72,9 +76,10 @@ namespace dingo
         }
     }
 
-    BOOST_AUTO_TEST_CASE(test_external_shared_ptr_rvalue)
+    TEST(external, shared_ptr_ref)
     {
-        typedef Class< test_external_shared_ptr_rvalue, __COUNTER__ > C;
+        struct external_shared_ptr_rvalue {};
+        typedef Class< external_shared_ptr_rvalue, __COUNTER__ > C;
         auto c = std::make_shared< C >();
 
         {
@@ -89,9 +94,10 @@ namespace dingo
         }
     }
 
-    BOOST_AUTO_TEST_CASE(test_external_unique_ptr_lvalue)
+    TEST(external, unique_ptr_ref)
     {
-        typedef Class< test_external_unique_ptr_lvalue, __COUNTER__ > C;
+        struct external_unique_ptr_lvalue {};
+        typedef Class< external_unique_ptr_lvalue, __COUNTER__ > C;
         auto c = std::make_unique< C >();
 
         {
@@ -103,9 +109,10 @@ namespace dingo
         }
     }
 
-    BOOST_AUTO_TEST_CASE(test_external_unique_ptr_rvalue)
+    TEST(external, unique_ptr_move)
     {
-        typedef Class< test_external_unique_ptr_rvalue, __COUNTER__ > C;
+        struct external_unique_ptr_rvalue {};
+        typedef Class< external_unique_ptr_rvalue, __COUNTER__ > C;
         auto c = std::make_unique< C >();
 
         {

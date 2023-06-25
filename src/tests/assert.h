@@ -6,12 +6,12 @@ namespace dingo
     {
         for_each((NonConvertibleTypes*)0, [&](auto element)
         {
-            BOOST_CHECK_THROW(container.resolve< decltype(element)::type >(), type_not_convertible_exception);
+            ASSERT_THROW(container.template resolve< typename decltype(element)::type >(), type_not_convertible_exception);
         });
     }
 
     template < class T > void AssertClass(T&& cls)
     {
-        BOOST_TEST(cls.GetName() == "Class");
+        ASSERT_EQ(cls.GetName(), "Class");
     }
 }

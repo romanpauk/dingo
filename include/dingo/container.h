@@ -12,6 +12,7 @@
 #include <dingo/annotated.h>
 
 #include <map>
+#include <typeindex>
 
 namespace dingo
 {
@@ -30,9 +31,9 @@ namespace dingo
             typename... Args
         > void register_binding(Args&&... args)
         {
-            check_interface_requirements< annotated_traits< TypeInterface >::type, TypeStorage::Type >();
+            check_interface_requirements< typename annotated_traits< TypeInterface >::type, typename TypeStorage::Type >();
             type_factories_.emplace(typeid(TypeInterface), std::make_unique<
-                class_instance_factory< container< Allocator >, annotated_traits< TypeInterface >::type, TypeStorage::Type, TypeStorage > >(std::forward< Args >(args)...));
+                class_instance_factory< container< Allocator >, typename annotated_traits< TypeInterface >::type, typename TypeStorage::Type, TypeStorage > >(std::forward< Args >(args)...));
         }
 
         template <
@@ -48,8 +49,8 @@ namespace dingo
             {
                 typedef typename decltype(element)::type TypeInterface;
 
-                check_interface_requirements< annotated_traits< TypeInterface >::type, TypeStorage::Type >();
-                type_factories_.emplace(typeid(TypeInterface), std::make_unique< class_instance_factory< container< Allocator >, annotated_traits< TypeInterface >::type, TypeStorage::Type, std::shared_ptr< TypeStorage > > >(storage));
+                check_interface_requirements< typename annotated_traits< TypeInterface >::type, typename TypeStorage::Type >();
+                type_factories_.emplace(typeid(TypeInterface), std::make_unique< class_instance_factory< container< Allocator >, typename annotated_traits< TypeInterface >::type, typename TypeStorage::Type, std::shared_ptr< TypeStorage > > >(storage));
             });
         }
 
@@ -82,7 +83,7 @@ namespace dingo
                 auto it = range.first;
                 class_recursion_guard< Type > guard(!it->second->is_resolved());
                 auto instance = it->second->resolve(context);
-                return class_instance_traits< annotated_traits< T >::type >::get(*instance);
+                return class_instance_traits< typename annotated_traits< T >::type >::get(*instance);
             }
 
             return resolve_multiple< T >(context);
@@ -106,7 +107,7 @@ namespace dingo
 
             // TODO: destructor for results is not called, leaking the memory.
             // Unfortunatelly for the case when this is called from resolve(), return value is T&.
-            auto results = context.get_allocator< Type >().allocate(1);
+            auto results = context.template get_allocator< Type >().allocate(1);
             new (results) Type;
             collection_traits< Type >::reserve(*results, std::distance(range.first, range.second));
 
@@ -136,8 +137,8 @@ namespace dingo
         std::multimap <
             std::type_index,
             std::unique_ptr< class_instance_factory_i< container< Allocator > > >,
-            std::less< std::type_index >,
-            Allocator
+            std::less< std::type_index >
+            //Allocator
             /*
             std::allocator_traits< Allocator >::rebind_alloc <
                 std::pair <

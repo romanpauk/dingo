@@ -3,7 +3,7 @@
 #include <dingo/annotated.h>
 #include <dingo/storage/shared.h>
 
-#include <boost/test/unit_test.hpp>
+#include <gtest/gtest.h>
 
 #include "class.h"
 #include "assert.h"
@@ -13,7 +13,7 @@ namespace dingo
     template < size_t N > struct tag {};
 
     /*
-    BOOST_AUTO_TEST_CASE(test_annotated_value)
+    TEST(annotated, value)
     {        
         struct A
         {
@@ -35,7 +35,7 @@ namespace dingo
     }
     */
 
-    BOOST_AUTO_TEST_CASE(test_annotated_interface)
+    TEST(annotated, interface)
     {
         struct I { virtual ~I() {} };
 
@@ -53,9 +53,9 @@ namespace dingo
                 , ptr_(ptr)
                 , sharedptr_(sharedptr)
             {
-                BOOST_TEST(dynamic_cast<A*>(&ref_));
-                BOOST_TEST(dynamic_cast<A*>(ptr_));
-                BOOST_TEST(dynamic_cast<B*>(sharedptr_.get()));
+                EXPECT_TRUE(dynamic_cast<A*>(&ref_));
+                EXPECT_TRUE(dynamic_cast<A*>(ptr_));
+                EXPECT_TRUE(dynamic_cast<B*>(sharedptr_.get()));
             }
 
             I& ref_;
@@ -70,16 +70,16 @@ namespace dingo
         container.register_binding< storage< dingo::container<>, shared, std::shared_ptr< C > >, C, annotated< I, tag< 3 > > >();
 
         I& aref = container.resolve< annotated< I&, tag< 1 > > >();
-        BOOST_TEST(dynamic_cast<A*>(&aref));
+        ASSERT_TRUE(dynamic_cast<A*>(&aref));
         
         I* bptr = container.resolve< annotated< I*, tag< 2 > > >();
-        BOOST_TEST(dynamic_cast<B*>(bptr));
+        ASSERT_TRUE(dynamic_cast<B*>(bptr));
 
         std::shared_ptr< I > bsharedptr = container.resolve< annotated< std::shared_ptr< I >, tag< 2 > > >();
-        BOOST_TEST(dynamic_cast<B*>(bsharedptr.get()));
+        ASSERT_TRUE(dynamic_cast<B*>(bsharedptr.get()));
 
-        BOOST_TEST(dynamic_cast<C*>(&container.resolve< C& >()));
+        ASSERT_TRUE(dynamic_cast<C*>(&container.resolve< C& >()));
         I& cref = container.resolve< annotated< I&, tag< 3 > > >();
-        BOOST_TEST(dynamic_cast<C*>(&cref));
+        ASSERT_TRUE(dynamic_cast<C*>(&cref));
     }
 }

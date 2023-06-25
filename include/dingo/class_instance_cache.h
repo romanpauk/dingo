@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 namespace dingo
 {
     template< typename TypeInterface, typename Storage, bool IsCaching > struct class_instance_cache

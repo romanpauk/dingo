@@ -1,10 +1,10 @@
 #include <dingo/class_constructor.h>
 
-#include <boost/test/unit_test.hpp>
+#include <gtest/gtest.h>
 
 namespace dingo
 {
-    BOOST_AUTO_TEST_CASE(constructor_test)
+    TEST(constructor, basic)
     {
         struct A {};
         struct B
@@ -19,5 +19,4 @@ namespace dingo
         class_constructor< std::shared_ptr< B > >::invoke(nullptr);
         class_constructor< std::optional< B > >::invoke(nullptr);
     }
-
 }

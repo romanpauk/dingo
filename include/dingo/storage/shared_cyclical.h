@@ -7,6 +7,7 @@
 #include <dingo/constructible_i.h>
 
 #include <memory>
+#include <atomic>
 
 namespace dingo
 {
@@ -36,15 +37,15 @@ namespace dingo
         typedef type_list< U*, std::shared_ptr< U >* > PointerTypes;
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, shared_cyclical, Type, Conversions >
+    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, shared_cyclical, TypeT, ConversionsT >
         : public resettable_i
         , public constructible_i< Container >
     {
     public:
         static const bool IsCaching = true;
 
-        typedef Conversions Conversions;
-        typedef Type Type;
+        using Conversions = ConversionsT;
+        using Type = TypeT;
 
         storage()
             : constructed_()
@@ -56,7 +57,7 @@ namespace dingo
             reset();
         }
 
-        template < typename Container > Type* resolve(resolving_context< Container >& context)
+        template < typename ContainerT > Type* resolve(resolving_context< ContainerT >& context)
         {
             if (!resolved_)
             {
@@ -192,15 +193,15 @@ namespace dingo
         std::shared_ptr< std::atomic< bool > > constructed_;
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, shared_cyclical, std::shared_ptr< Type >, Conversions >
+    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, shared_cyclical, std::shared_ptr< TypeT >, ConversionsT >
         : public resettable_i
         , public constructible_i< Container >    
     {
     public:
         static const bool IsCaching = true;
 
-        typedef Conversions Conversions;
-        typedef Type Type;
+        using Conversions = ConversionsT;
+        using Type = TypeT;
 
         std::shared_ptr< Type > resolve(resolving_context< Container >& context)
         {

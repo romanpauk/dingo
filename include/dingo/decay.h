@@ -2,6 +2,9 @@
 
 #include <dingo/annotated.h>
 
+#include <type_traits>
+#include <memory>
+
 namespace dingo
 {
     template < class T > struct decay : std::decay< T > {};

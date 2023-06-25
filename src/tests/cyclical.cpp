@@ -2,17 +2,19 @@
 #include <dingo/type_list.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>
+#if defined(_WIN32)
 #include <dingo/storage/shared_cyclical_protected.h>
+#endif
 #include <dingo/storage/unique.h>
 
-#include <boost/test/unit_test.hpp>
+#include <gtest/gtest.h>
 
 #include "class.h"
 #include "assert.h"
 
 namespace dingo
 {
-    BOOST_AUTO_TEST_CASE(test_recursion_exception)
+    TEST(cyclical, recursion_exception)
     {
         struct B;
         struct A
@@ -29,20 +31,21 @@ namespace dingo
         container.register_binding< storage< dingo::container<>, shared, std::shared_ptr< A > > >();
         container.register_binding< storage< dingo::container<>, shared, B > >();
 
-        BOOST_CHECK_THROW(container.resolve< A >(), type_recursion_exception);
-        BOOST_CHECK_THROW(container.resolve< B >(), type_recursion_exception);
+        ASSERT_THROW(container.resolve< A >(), type_recursion_exception);
+        ASSERT_THROW(container.resolve< B >(), type_recursion_exception);
     }
 
-    BOOST_AUTO_TEST_CASE(test_shared_cyclical_value)
+    TEST(cyclical, shared_cyclical_value)
     {
         struct B;
-        struct A : Class< test_shared_cyclical_value, __COUNTER__ >
+        struct shared_cyclical_value {};
+        struct A : Class< shared_cyclical_value, __COUNTER__ >
         {
             A(B& b) : b_(b) {}
             B& b_;
         };
 
-        struct B : Class< test_shared_cyclical_value, __COUNTER__ >
+        struct B : Class< shared_cyclical_value, __COUNTER__ >
         {
             B(A& a, IClass& ia) : a_(a), ia_(ia) {}
             A& a_;
@@ -67,10 +70,11 @@ namespace dingo
         AssertClass(c);
     }
 
-    BOOST_AUTO_TEST_CASE(test_shared_cyclical_shared_ptr)
+    TEST(cyclical, shared_cyclical_shared_ptr)
     {
         struct B;
-        struct A : Class< test_shared_cyclical_shared_ptr, __COUNTER__ >
+        struct shared_cyclical_shared_ptr {};
+        struct A : Class< shared_cyclical_shared_ptr, __COUNTER__ >
         {
             A(B& b, IClass1& ib, std::shared_ptr< IClass1 >& ibptr) : b_(b), ib_(ib), ibptr_(ibptr) {}
             B& b_;
@@ -80,7 +84,7 @@ namespace dingo
             // Conversion to IClass& ib_; crashes during constructor as the object is not healthy during construction.
         };
 
-        struct B : Class< test_shared_cyclical_shared_ptr, __COUNTER__ >
+        struct B : Class< shared_cyclical_shared_ptr, __COUNTER__ >
         {
             B(A& a, IClass& ia, std::shared_ptr< IClass >& iaptr) : a_(a), ia_(ia), iaptr_(iaptr) {}
             A& a_;

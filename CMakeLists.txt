@@ -1,13 +1,39 @@
 project(dingo)
 cmake_minimum_required(VERSION 3.19)
 enable_testing()
-
+include(FetchContent)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/MP>")
-add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/EHa>")
-add_link_options("$<$<CXX_COMPILER_ID:MSVC>:LINKER:/DEBUG:FASTLINK>")
+find_program(CCACHE_FOUND ccache)
+if(CCACHE_FOUND)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache) 
+endif(CCACHE_FOUND)
+
+option(DINGO_ENABLE_TESTING "enable testing through googletest" ON)
+option(DINGO_ENABLE_BENCHMARK "enable benchmarking through googlebenchmark" ON)
+
+if(DINGO_ENABLE_TESTING)
+    FetchContent_Declare(googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG main)
+
+    if(MSVC)
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    endif()
+
+    FetchContent_MakeAvailable(googletest)
+endif()
+
+if(DINGO_ENABLE_BENCHMARK)
+    FetchContent_Declare(benchmark
+        GIT_REPOSITORY https://github.com/google/benchmark.git
+        GIT_TAG main) 
+       
+    set(BENCHMARK_ENABLE_TESTING off)
+    FetchContent_MakeAvailable(benchmark)
+endif()
 
 add_library(dingo INTERFACE)
 target_include_directories(dingo INTERFACE include)
@@ -44,26 +70,22 @@ target_sources(dingo INTERFACE
     include/dingo/storage/unique.h
     include/dingo/type_list.h
     include/dingo/type_traits.h
+    Readme.md
 )
-
-set(Boost_USE_STATIC_LIBS ON)
-find_package(Boost COMPONENTS unit_test_framework)
-      
-add_executable(dingotest 
-    src/tests/annotated.cpp
-    src/tests/assert.h
-    src/tests/class.h
-    src/tests/constructor.cpp
-    src/tests/cyclical.cpp
-    src/tests/dingo.cpp
-    src/tests/external.cpp
-    src/tests/multibindings.cpp
-    src/tests/performance.cpp
-    src/tests/shared.cpp
-    src/tests/unique.cpp
-    src/tests/testmodule.cpp
-    src/tests/pch.h
-)
-add_test(dingotest COMMAND dingotest)
-target_link_libraries(dingotest dingo Boost::boost Boost::unit_test_framework)
-target_precompile_headers(dingotest PRIVATE src/tests/pch.h)
+    
+if(DINGO_ENABLE_TESTING)
+    add_executable(dingo_test 
+        src/tests/annotated.cpp
+        src/tests/assert.h
+        src/tests/class.h
+        src/tests/constructor.cpp
+        src/tests/cyclical.cpp
+        src/tests/dingo.cpp
+        src/tests/external.cpp
+        src/tests/multibindings.cpp
+        src/tests/shared.cpp
+        src/tests/unique.cpp
+    )
+    add_test(dingo_test COMMAND dingo_test)
+    target_link_libraries(dingo_test dingo gtest_main)
+endif()

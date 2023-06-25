@@ -67,7 +67,7 @@ namespace dingo
             , Allocator(std::forward< Args >(args)...)
         {}
 
-        template < typename T, typename Allocator > friend class arena_allocator;
+        template < typename U, typename AllocatorU > friend class arena_allocator;
 
         template < typename U, typename AllocatorU > arena_allocator(const arena_allocator< U, AllocatorU >& alloc) noexcept
             : arena_(alloc.arena_)

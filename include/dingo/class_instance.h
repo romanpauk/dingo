@@ -26,27 +26,26 @@ namespace dingo
             this->destroy(instance_);
         }
 
-        void* get_value(const std::type_info& type) override { return get_type_ptr< Conversions::ValueTypes >(type, instance_); }
-        void* get_lvalue_reference(const std::type_info& type) override { return get_type_ptr< Conversions::LvalueReferenceTypes >(type, instance_); }
-        void* get_rvalue_reference(const std::type_info& type) override { return get_type_ptr< Conversions::RvalueReferenceTypes >(type, instance_); }
+        void* get_value(const std::type_info& type) override { return get_type_ptr< typename Conversions::ValueTypes >(type, instance_); }
+        void* get_lvalue_reference(const std::type_info& type) override { return get_type_ptr< typename Conversions::LvalueReferenceTypes >(type, instance_); }
+        void* get_rvalue_reference(const std::type_info& type) override { return get_type_ptr< typename Conversions::RvalueReferenceTypes >(type, instance_); }
 
         void* get_pointer(const std::type_info& type) override
         {
-            void* ptr = get_type_ptr< Conversions::PointerTypes >(type, instance_);
-            set_transferred(true);
+            void* ptr = get_type_ptr< typename Conversions::PointerTypes >(type, instance_);
+            this->set_transferred(true);
             return ptr;
         }
 
     private:
-        template< typename T, typename Type > static void* get_type_ptr(const std::type_info& type, Type& instance)
+        template< typename Ty, typename Type > static void* get_type_ptr(const std::type_info& type, Type& instance)
         {
             void* ptr = nullptr;
-
-            if (!for_type((T*)0, type, [&](auto element)
+            if (!for_type((Ty*)0, type, [&](auto element)
             {
                 if (type_traits< Type >::is_smart_ptr)
                 {
-                    if (type_traits< std::remove_pointer_t< std::decay_t< decltype(element)::type > > >::is_smart_ptr)
+                    if (type_traits< std::remove_pointer_t< std::decay_t< typename decltype(element)::type > > >::is_smart_ptr)
                     {
                         ptr = &instance;
                     }
@@ -64,7 +63,6 @@ namespace dingo
             {
                 throw type_not_convertible_exception();
             }
-
             return ptr;
         }
 

@@ -3,6 +3,7 @@
 #include <dingo/exceptions.h>
 #include <dingo/scope_guard.h>
 
+#if defined(_WIN32)
 #include <windows.h>
 #include <cassert>
 
@@ -107,5 +108,5 @@ namespace dingo
         VirtualBuffer buffer_;
         bool constructed_;
     };
-
 }
+#endif
