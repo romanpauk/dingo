@@ -11,10 +11,10 @@ namespace dingo
 
     template < typename Type, typename U > struct conversions< external, Type, U >
     {
-        typedef type_list<> ValueTypes;
-        typedef type_list< U& > LvalueReferenceTypes;
-        typedef type_list<> RvalueReferenceTypes;
-        typedef type_list< U* > PointerTypes;
+        using value_types = type_list<>;
+        using lvalue_reference_types = type_list< U& >;
+        using rvalue_reference_types = type_list<>;
+        using pointer_types = type_list< U* >;
     };
 
     template < typename Type, typename U > struct conversions< external, Type&, U >
@@ -27,10 +27,10 @@ namespace dingo
 
     template < typename Type, typename U > struct conversions< external, std::shared_ptr< Type >, U >
     {
-        typedef type_list< std::shared_ptr< U > > ValueTypes;
-        typedef type_list< U&, std::shared_ptr< U >& > LvalueReferenceTypes;
-        typedef type_list<> RvalueReferenceTypes;
-        typedef type_list< U*, std::shared_ptr< U >* > PointerTypes;
+        using value_types = type_list< std::shared_ptr< U > >;
+        using lvalue_reference_types = type_list< U&, std::shared_ptr< U >& >;
+        using rvalue_reference_types = type_list<>;
+        using pointer_types = type_list< U*, std::shared_ptr< U >* >;
     };
 
     template < typename Type, typename U > struct conversions< external, std::shared_ptr< Type >&, U >
@@ -39,24 +39,24 @@ namespace dingo
     
     template < typename Type, typename U > struct conversions< external, std::unique_ptr< Type >, U >
     {
-        typedef type_list<> ValueTypes;
-        typedef type_list< U*, std::unique_ptr< U >* > PointerTypes;
-        typedef type_list< U&, std::unique_ptr< U >& > LvalueReferenceTypes;
-        typedef type_list<> RvalueReferenceTypes;
+        using value_types = type_list<>;
+        using pointer_types = type_list< U*, std::unique_ptr< U >* >;
+        using lvalue_reference_types = type_list< U&, std::unique_ptr< U >& >;
+        using rvalue_reference_types = type_list<>;
     };
 
     template < typename Type, typename U > struct conversions< external, std::unique_ptr< Type >&, U >
         : public conversions< external, std::unique_ptr< Type >, U >
     {};
 
-    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, external, TypeT, ConversionsT >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, external, Type, Conversions >
         : public resettable_i
     {
     public:
-        static const bool IsCaching = true;
+        static constexpr bool is_caching = true;
 
-        using Conversions = ConversionsT;
-        using Type = TypeT;
+        using conversions = Conversions;
+        using type = Type;
 
         storage(Type&& instance)
             : instance_(std::move(instance))
@@ -65,7 +65,7 @@ namespace dingo
         ~storage()
         {}
 
-        template < typename ContainerT > Type& resolve(resolving_context< ContainerT >& context)
+        Type& resolve(resolving_context< Container >& context)
         {
             return instance_;
         }
@@ -78,14 +78,14 @@ namespace dingo
         Type instance_;
     };
 
-    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, external, TypeT&, ConversionsT >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, external, Type&, Conversions >
         : public resettable_i
     {
     public:
-        static const bool IsCaching = true;
+        static constexpr bool is_caching = true;
 
-        using Conversions = ConversionsT;
-        using Type = TypeT;
+        using conversions = Conversions;
+        using type = Type;
 
         storage(Type& instance)
             : instance_(instance)
@@ -107,14 +107,14 @@ namespace dingo
         Type& instance_;
     };
 
-    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, external, TypeT*, ConversionsT >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, external, Type*, Conversions >
         : public resettable_i
     {
     public:
-        static const bool IsCaching = true;
+        static constexpr bool is_caching = true;
 
-        using Conversions = ConversionsT;
-        using Type = TypeT;
+        using conversions = Conversions;
+        using type = Type;
 
         storage(Type* instance)
             : instance_(instance)
@@ -123,7 +123,7 @@ namespace dingo
         ~storage()
         {}
 
-        template < typename ContainerT > Type* resolve(resolving_context< ContainerT >& context)
+        Type* resolve(resolving_context< Container >& context)
         {
             return instance_;
         }
@@ -136,14 +136,14 @@ namespace dingo
         Type* instance_;
     };
 
-    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, external, std::shared_ptr< TypeT >, ConversionsT >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, external, std::shared_ptr< Type >, Conversions >
         : public resettable_i
     {
     public:
-        static const bool IsCaching = true;
+        static constexpr bool is_caching = true;
 
-        using Conversions = ConversionsT;
-        using Type = TypeT;
+        using conversions = Conversions;
+        using type = Type;
 
         storage(std::shared_ptr< Type > instance)
             : instance_(instance)
@@ -152,7 +152,7 @@ namespace dingo
         ~storage()
         {}
 
-        template < typename ContainerT > std::shared_ptr< Type > resolve(resolving_context< ContainerT >& context)
+        std::shared_ptr< Type > resolve(resolving_context< Container >& context)
         {
             return instance_;
         }
@@ -165,14 +165,14 @@ namespace dingo
         std::shared_ptr< Type > instance_;
     };
 
-    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, external, std::shared_ptr< TypeT >&, ConversionsT >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, external, std::shared_ptr< Type >&, Conversions >
         : public resettable_i
     {
     public:
-        static const bool IsCaching = true;
+        static constexpr bool is_caching = true;
 
-        using Conversions = ConversionsT;
-        using Type = TypeT;
+        using conversions = Conversions;
+        using type = Type;
 
         storage(std::shared_ptr< Type >& instance)
             : instance_(instance)
@@ -181,7 +181,7 @@ namespace dingo
         ~storage()
         {}
 
-        template < typename ContainerT > std::shared_ptr< Type > resolve(resolving_context< ContainerT >& context)
+        std::shared_ptr< Type > resolve(resolving_context< Container >& context)
         {
             return instance_;
         }
@@ -194,14 +194,14 @@ namespace dingo
         std::shared_ptr< Type >& instance_;
     };
     
-    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, external, std::unique_ptr< TypeT >, ConversionsT >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, external, std::unique_ptr< Type >, Conversions >
         : public resettable_i
     {
     public:
-        static const bool IsCaching = true;
+        static constexpr bool is_caching = true;
 
-        using Conversions = ConversionsT;
-        using Type = TypeT;
+        using conversions = Conversions;
+        using type = Type;
 
         storage(std::unique_ptr< Type >&& instance)
             : instance_(std::move(instance))
@@ -210,7 +210,7 @@ namespace dingo
         ~storage()
         {}
 
-        template < typename ContainerT > std::unique_ptr< Type >& resolve(resolving_context< ContainerT >& context)
+        std::unique_ptr< Type >& resolve(resolving_context< Container >& context)
         {
             return instance_;
         }
@@ -223,14 +223,14 @@ namespace dingo
         std::unique_ptr< Type > instance_;
     };
 
-    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, external, std::unique_ptr< TypeT >&, ConversionsT >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, external, std::unique_ptr< Type >&, Conversions >
         : public resettable_i
     {
     public:
-        static const bool IsCaching = true;
+        static constexpr bool is_caching = true;
 
-        using Conversions = ConversionsT;
-        using Type = TypeT;
+        using conversions = Conversions;
+        using type = Type;
 
         storage(std::unique_ptr< Type >& instance)
             : instance_(instance)
@@ -239,7 +239,7 @@ namespace dingo
         ~storage()
         {}
 
-        template < typename ContainerT > std::unique_ptr< Type >& resolve(resolving_context< ContainerT >& context)
+        std::unique_ptr< Type >& resolve(resolving_context< Container >& context)
         {
             return instance_;
         }

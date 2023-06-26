@@ -59,10 +59,10 @@ namespace dingo
         , public constructible_i< Container >
     {
     public:
-        static const bool IsCaching = true;
+        static constexpr bool is_caching = true;
 
-        typedef Conversions Conversions;
-        typedef Type Type;
+        using conversions = Conversions;
+        using type = Type;
 
         Type* resolve(resolving_context< Container >& context)
         {
@@ -92,10 +92,10 @@ namespace dingo
         , public constructible_i < Container >   
     {
     public:
-        static const bool IsCaching = true;
+        static constexpr bool is_caching = true;
 
-        typedef Conversions Conversions;
-        typedef Type Type;
+        using conversions = Conversions;
+        using type = Type;
 
         std::shared_ptr< Type >& resolve(resolving_context< Container >& context)
         {

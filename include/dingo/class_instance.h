@@ -12,9 +12,9 @@ namespace dingo
 { 
     template < typename T, typename TypeStorage > class class_instance
         : public class_instance_i
-        , private class_instance_destructor< T, TypeStorage::IsCaching >
+        , private class_instance_destructor< T, TypeStorage::is_caching >
     {
-        typedef typename TypeStorage::Conversions Conversions;
+        using conversions = typename TypeStorage::conversions;
 
     public:
         template < typename Ty > class_instance(Ty&& instance)
@@ -26,13 +26,13 @@ namespace dingo
             this->destroy(instance_);
         }
 
-        void* get_value(const std::type_info& type) override { return get_type_ptr< typename Conversions::ValueTypes >(type, instance_); }
-        void* get_lvalue_reference(const std::type_info& type) override { return get_type_ptr< typename Conversions::LvalueReferenceTypes >(type, instance_); }
-        void* get_rvalue_reference(const std::type_info& type) override { return get_type_ptr< typename Conversions::RvalueReferenceTypes >(type, instance_); }
+        void* get_value(const std::type_info& type) override { return get_type_ptr< typename conversions::value_types >(type, instance_); }
+        void* get_lvalue_reference(const std::type_info& type) override { return get_type_ptr< typename conversions::lvalue_reference_types >(type, instance_); }
+        void* get_rvalue_reference(const std::type_info& type) override { return get_type_ptr< typename conversions::rvalue_reference_types >(type, instance_); }
 
         void* get_pointer(const std::type_info& type) override
         {
-            void* ptr = get_type_ptr< typename Conversions::PointerTypes >(type, instance_);
+            void* ptr = get_type_ptr< typename conversions::pointer_types >(type, instance_);
             this->set_transferred(true);
             return ptr;
         }

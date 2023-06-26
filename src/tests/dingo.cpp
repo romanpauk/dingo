@@ -1,9 +1,6 @@
 #include <dingo/container.h>
 #include <dingo/type_list.h>
 #include <dingo/storage/shared.h>
-#if defined(_WIN32)
-#include <dingo/storage/shared_cyclical_protected.h>
-#endif
 #include <dingo/storage/unique.h>
 
 #include <gtest/gtest.h>

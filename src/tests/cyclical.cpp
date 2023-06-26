@@ -97,7 +97,7 @@ namespace dingo
         container.register_binding< storage< dingo::container<>, shared_cyclical, std::shared_ptr< B > >, B, IClass1 >();
 
         // TODO: container.resolve< IClass& >();
-        // Virtual base has some issues.
+        // Virtual base has some issues, the type needs to be constructed for casting to work.
 
         auto& a = container.resolve< A& >();
         AssertClass(a);
@@ -114,31 +114,33 @@ namespace dingo
 
 #if 0
 #if defined(_WIN32)
-    BOOST_AUTO_TEST_CASE(TestRecursionCyclicalProtected)
+    TEST(cyclical, protection_throws)
     {
+        struct recursion_cyclical_protected {};
+
         struct B;
-        struct A : Class< TestRecursionCyclicalProtected, __COUNTER__ >
+        struct A : Class< recursion_cyclical_protected, __COUNTER__ >
         {
             A(B& b) : b_(b) {}
 
             B& b_;
         };
 
-        struct B : Class< TestRecursionCyclicalProtected, __COUNTER__ >
+        struct B : Class< recursion_cyclical_protected, __COUNTER__ >
         {
             B(std::shared_ptr< A > aptr, A& a) : aptr_(aptr), a_(a)
             {
-                BOOST_CHECK_THROW(aptr_->GetName(), type_not_constructed_exception);
-                BOOST_CHECK_THROW(a_.GetName(), type_not_constructed_exception);
+                EXPECT_THROW(aptr_->GetName(), type_not_constructed_exception);
+                EXPECT_THROW(a_.GetName(), type_not_constructed_exception);
             }
 
             std::shared_ptr< A > aptr_;
             A& a_;
         };
 
-        container container;
-        container.register_binding< storage< shared_cyclical_protected, std::shared_ptr< A > > >();
-        container.register_binding< storage< shared_cyclical_protected, B > >();
+        container<> container;
+        container.register_binding< storage< dingo::container<>, shared_cyclical_protected, std::shared_ptr< A > > >();
+        container.register_binding< storage< dingo::container<>, shared_cyclical_protected, B > >();
 
         auto& a = container.resolve< A& >();
         AssertClass(a);

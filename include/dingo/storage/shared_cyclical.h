@@ -15,37 +15,37 @@ namespace dingo
 
     template < typename Type, typename U > struct conversions< shared_cyclical, Type, U >
     {
-        typedef type_list<> ValueTypes;
-        typedef type_list< U& > LvalueReferenceTypes;
-        typedef type_list<> RvalueReferenceTypes;
-        typedef type_list< U* > PointerTypes;
+        using value_types = type_list<>;
+        using lvalue_reference_types = type_list< U& >;
+        using rvalue_reference_types = type_list<>;
+        using pointer_types = type_list< U* >;
     };
 
     template < typename Type, typename U > struct conversions< shared_cyclical, Type*, U >
     {
-        typedef type_list<> ValueTypes;
-        typedef type_list< U& > LvalueReferenceTypes;
-        typedef type_list<> RvalueReferenceTypes;
-        typedef type_list< U* > PointerTypes;
+        using value_types = type_list<>;
+        using lvalue_reference_types = type_list< U& >;
+        using rvalue_reference_types = type_list<>;
+        using pointer_types = type_list< U* >;
     };
 
     template < typename Type, typename U > struct conversions< shared_cyclical, std::shared_ptr< Type >, U >
     {
-        typedef type_list<> ValueTypes;
-        typedef type_list< U&, std::shared_ptr< U >& > LvalueReferenceTypes;
-        typedef type_list<> RvalueReferenceTypes;
-        typedef type_list< U*, std::shared_ptr< U >* > PointerTypes;
+        using value_types = type_list<>;
+        using lvalue_reference_types = type_list< U&, std::shared_ptr< U >& >;
+        using rvalue_reference_types = type_list<>;
+        using pointer_types = type_list< U*, std::shared_ptr< U >* >;
     };
 
-    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, shared_cyclical, TypeT, ConversionsT >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, shared_cyclical, Type, Conversions >
         : public resettable_i
         , public constructible_i< Container >
     {
     public:
-        static const bool IsCaching = true;
+        static constexpr bool is_caching = true;
 
-        using Conversions = ConversionsT;
-        using Type = TypeT;
+        using conversions = Conversions;
+        using type = Type;
 
         storage()
             : constructed_()
@@ -57,7 +57,7 @@ namespace dingo
             reset();
         }
 
-        template < typename ContainerT > Type* resolve(resolving_context< ContainerT >& context)
+        Type* resolve(resolving_context< Container >& context)
         {
             if (!resolved_)
             {
@@ -113,10 +113,10 @@ namespace dingo
         , public constructible_i
     {
     public:
-        static const bool IsCaching = true;
+        static constexpr bool is_caching = true;
 
-        typedef Conversions Conversions;
-        typedef Type Type;
+        using conversions = Conversions;
+        using type = Type;
 
         storage()
             : constructed_()
@@ -193,15 +193,15 @@ namespace dingo
         std::shared_ptr< std::atomic< bool > > constructed_;
     };
 
-    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, shared_cyclical, std::shared_ptr< TypeT >, ConversionsT >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, shared_cyclical, std::shared_ptr< Type >, Conversions >
         : public resettable_i
-        , public constructible_i< Container >    
+        , public constructible_i< Container >
     {
     public:
-        static const bool IsCaching = true;
+        static const bool is_caching = true;
 
-        using Conversions = ConversionsT;
-        using Type = TypeT;
+        using conversions = Conversions;
+        using type = Type;
 
         std::shared_ptr< Type > resolve(resolving_context< Container >& context)
         {

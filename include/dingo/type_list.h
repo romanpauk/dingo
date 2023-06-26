@@ -7,7 +7,7 @@ namespace dingo
 
     template < typename T > struct type_list_iterator
     {
-        typedef T type;
+        using type = T;
     };
 
     template < typename Function > bool for_type(type_list<>*, const std::type_info&, Function&&) { return false; }

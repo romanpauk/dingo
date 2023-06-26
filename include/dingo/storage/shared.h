@@ -11,44 +11,44 @@ namespace dingo
 
     template < typename Type, typename U > struct conversions< shared, Type, U >
     {
-        typedef type_list<> ValueTypes;
-        typedef type_list< U& > LvalueReferenceTypes;
-        typedef type_list<> RvalueReferenceTypes;
-        typedef type_list< U* > PointerTypes;
+        using value_types = type_list<>;
+        using lvalue_reference_types = type_list< U& >;
+        using rvalue_reference_types = type_list<>;
+        using pointer_types = type_list< U* >;
     };
 
     template < typename Type, typename U > struct conversions< shared, Type*, U >
     {
-        typedef type_list<> ValueTypes;
-        typedef type_list< U& > LvalueReferenceTypes;
-        typedef type_list<> RvalueReferenceTypes;
-        typedef type_list< U* > PointerTypes;
+        using value_types = type_list<>;
+        using lvalue_reference_types = type_list< U& >;
+        using rvalue_reference_types = type_list<>;
+        using pointer_types = type_list< U* >;
     };
 
     template < typename Type, typename U > struct conversions< shared, std::shared_ptr< Type >, U >
     {
-        typedef type_list< std::shared_ptr< U > > ValueTypes;
-        typedef type_list< U&, std::shared_ptr< U >& > LvalueReferenceTypes;
-        typedef type_list<> RvalueReferenceTypes;
-        typedef type_list< U*, std::shared_ptr< U >* > PointerTypes;
+        using value_types = type_list< std::shared_ptr< U > >;
+        using lvalue_reference_types = type_list< U&, std::shared_ptr< U >& >;
+        using rvalue_reference_types = type_list<>;
+        using pointer_types = type_list< U*, std::shared_ptr< U >* >;
     };
 
     template < typename Type, typename U > struct conversions< shared, std::unique_ptr< Type >, U >
     {
-        typedef type_list<> ValueTypes;
-        typedef type_list< U*, std::unique_ptr< U >* > PointerTypes;
-        typedef type_list< U&, std::unique_ptr< U >& > LvalueReferenceTypes;
-        typedef type_list<> RvalueReferenceTypes;
+        using value_types = type_list<>;
+        using pointer_types = type_list< U*, std::unique_ptr< U >* >;
+        using lvalue_reference_types = type_list< U&, std::unique_ptr< U >& >;
+        using rvalue_reference_types = type_list<>;
     };
 
-    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, shared, TypeT, ConversionsT >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, Type, Conversions >
         : public resettable_i
     {
     public:
-        static const bool IsCaching = true;
+        static const bool is_caching = true;
 
-        using Conversions = ConversionsT;
-        using Type = TypeT;
+        using conversions = Conversions;
+        using type = Type;
 
         storage()
             : initialized_(false)
@@ -59,11 +59,11 @@ namespace dingo
             reset();
         }
 
-        template < typename ContainerT > Type* resolve(resolving_context< ContainerT >& context)
+        Type* resolve(resolving_context< Container >& context)
         {
             if (!initialized_)
             {
-                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, resolving_context< ContainerT > > >(context, &instance_);
+                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, resolving_context< Container > > >(context, &instance_);
                 initialized_ = true;
             }
 
@@ -96,20 +96,20 @@ namespace dingo
         }
     };
 
-    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, shared, std::shared_ptr< TypeT >, ConversionsT >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, std::shared_ptr< Type >, Conversions >
         : public resettable_i
     {
     public:
-        static const bool IsCaching = true;
+        static constexpr bool is_caching = true;
 
-        using Conversions = ConversionsT;
-        using Type = TypeT;
+        using conversions = Conversions;
+        using type = Type;
 
-        template < typename ContainerT > std::shared_ptr< Type > resolve(resolving_context< ContainerT >& context)
+        std::shared_ptr< Type > resolve(resolving_context< Container >& context)
         {
             if (!instance_)
             {
-                instance_ = class_factory< Type >::template construct< std::shared_ptr< Type >, constructor_argument< Type, resolving_context< ContainerT > > >(context);
+                instance_ = class_factory< Type >::template construct< std::shared_ptr< Type >, constructor_argument< Type, resolving_context< Container > > >(context);
             }
 
             return instance_;
@@ -122,21 +122,21 @@ namespace dingo
         std::shared_ptr< Type > instance_;
     };
 
-    template < typename Container, typename TypeT, typename ConversionsT > class storage< Container, shared, std::unique_ptr< TypeT >, ConversionsT >
+    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, std::unique_ptr< Type >, Conversions >
         : public resettable_i
     {
     public:
-        static const bool IsCaching = true;
+        static constexpr bool is_caching = true;
 
-        using Conversions = ConversionsT;
-        using Type = TypeT;
+        using conversions = Conversions;
+        using type = Type;
 
-        template < typename ContainerT > std::unique_ptr< Type >& resolve(resolving_context< ContainerT >& context)
+        std::unique_ptr< Type >& resolve(resolving_context< Container >& context)
         {
             // TODO: thread-safe
             if (!instance_)
             {
-                instance_ = class_factory< Type >::template construct< std::unique_ptr< Type >, constructor_argument< Type, resolving_context< ContainerT > > >(context);
+                instance_ = class_factory< Type >::template construct< std::unique_ptr< Type >, constructor_argument< Type, resolving_context< Container > > >(context);
             }
 
             return instance_;

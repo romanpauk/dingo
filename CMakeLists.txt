@@ -57,7 +57,6 @@ target_sources(dingo INTERFACE
     include/dingo/exceptions.h
     include/dingo/memory/arena_allocator.h
     include/dingo/memory/virtual_pointer.h
-    include/dingo/performance_counter.h
     include/dingo/rebind_type.h
     include/dingo/resettable_i.h
     include/dingo/resolving_context.h
@@ -70,7 +69,7 @@ target_sources(dingo INTERFACE
     include/dingo/storage/unique.h
     include/dingo/type_list.h
     include/dingo/type_traits.h
-    Readme.md
+    README.md
 )
     
 if(DINGO_ENABLE_TESTING)

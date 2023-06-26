@@ -5,8 +5,7 @@
 #include <dingo/constructible_i.h>
 
 #include <array>
-#include <forward_list>
-#include <list>
+#include <deque>
 
 namespace dingo
 {
@@ -59,8 +58,8 @@ namespace dingo
 
         template < typename T > arena_allocator< T > get_allocator() { return allocator_; }
 
-        void register_type_instance(class_instance_i* instance) { type_instances_.push_front(instance); }
-        void register_resettable(resettable_i* ptr) { resettables_.push_front(ptr); }
+        void register_type_instance(class_instance_i* instance) { type_instances_.push_back(instance); }
+        void register_resettable(resettable_i* ptr) { resettables_.push_back(ptr); }
         void register_constructible(constructible_i< Container >* ptr) { constructibles_.push_back(ptr); }
 
         bool has_constructible_address(uintptr_t address)
@@ -93,15 +92,15 @@ namespace dingo
     private:
         Container& container_;
 
-        arena< 1024 > arena_;
+        arena< 1 << 12 > arena_;
         arena_allocator< void, typename Container::allocator_type > allocator_;
 
-        // TODO: rebind alloc
-        std::forward_list< class_instance_i*, 
+        // TODO: rebind alloc somehow better
+        std::deque< class_instance_i*,
             arena_allocator< class_instance_i*, typename std::allocator_traits< typename Container::allocator_type >::template rebind_alloc< class_instance_i* > > > type_instances_;
-        std::forward_list< resettable_i*, 
+        std::deque< resettable_i*, 
             arena_allocator< resettable_i*, typename std::allocator_traits< typename Container::allocator_type >::template rebind_alloc< resettable_i* > > > resettables_;
-        std::list< constructible_i< Container >*, 
+        std::deque< constructible_i< Container >*, 
             arena_allocator< constructible_i< Container >*, typename std::allocator_traits< typename Container::allocator_type >::template rebind_alloc< constructible_i< Container >* > > > constructibles_;
     };
 

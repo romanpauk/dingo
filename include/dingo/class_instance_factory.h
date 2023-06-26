@@ -17,9 +17,9 @@ namespace dingo
         : public class_instance_factory_i< Container >
     {
         Storage storage_;
-        typedef decltype(storage_.resolve(std::declval< resolving_context< Container >& >())) ResolveType;
-        typedef typename rebind_type < ResolveType, TypeInterface >::type InterfaceType;
-        class_instance_cache< InterfaceType, Storage, Storage::IsCaching > cache_;
+        using ResolveType = decltype(storage_.resolve(std::declval< resolving_context< Container >& >()));
+        using InterfaceType = typename rebind_type < ResolveType, TypeInterface >::type;
+        class_instance_cache< InterfaceType, Storage, Storage::is_caching > cache_;
 
     public:
         template < typename... Args > class_instance_factory(Args&&... args)
@@ -38,7 +38,7 @@ namespace dingo
 
         bool is_persistent() override
         {
-            return Storage::IsCaching;
+            return Storage::is_caching;
         }
     };
 
@@ -52,9 +52,9 @@ namespace dingo
         : public class_instance_factory_i< Container >
     {
         std::shared_ptr< Storage > storage_;
-        typedef decltype(storage_->resolve(std::declval< resolving_context< Container >& >())) ResolveType;
-        typedef typename rebind_type < ResolveType, TypeInterface >::type InterfaceType;
-        class_instance_cache< InterfaceType, Storage, Storage::IsCaching > cache_;
+        using ResolveType = decltype(storage_->resolve(std::declval< resolving_context< Container >& >()));
+        using InterfaceType = typename rebind_type < ResolveType, TypeInterface >::type;
+        class_instance_cache< InterfaceType, Storage, Storage::is_caching > cache_;
 
     public:
         class_instance_factory(std::shared_ptr< Storage > storage)
@@ -73,7 +73,7 @@ namespace dingo
 
         bool is_persistent() override
         {
-            return Storage::IsCaching;
+            return Storage::is_caching;
         }
     };
 }
