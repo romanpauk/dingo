@@ -6,6 +6,7 @@
 
 #include <array>
 #include <deque>
+#include <list>
 
 namespace dingo
 {
@@ -100,7 +101,7 @@ namespace dingo
             arena_allocator< class_instance_i*, typename std::allocator_traits< typename Container::allocator_type >::template rebind_alloc< class_instance_i* > > > type_instances_;
         std::deque< resettable_i*, 
             arena_allocator< resettable_i*, typename std::allocator_traits< typename Container::allocator_type >::template rebind_alloc< resettable_i* > > > resettables_;
-        std::deque< constructible_i< Container >*, 
+        std::list< constructible_i< Container >*, 
             arena_allocator< constructible_i< Container >*, typename std::allocator_traits< typename Container::allocator_type >::template rebind_alloc< constructible_i< Container >* > > > constructibles_;
     };
 
