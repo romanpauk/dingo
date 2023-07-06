@@ -1,7 +1,6 @@
 #pragma once
 
 #include <dingo/exceptions.h>
-#include <dingo/scope_guard.h>
 
 #if defined(_WIN32)
 #include <windows.h>

@@ -1,27 +1,46 @@
-#pragma once
+    #pragma once
 
-#include <dingo/decay.h>
-#include <dingo/collection_traits.h>
+#include <dingo/annotated.h>
 #include <dingo/class_instance.h>
-#include <dingo/exceptions.h>
 #include <dingo/class_instance_factory.h>
-#include <dingo/class_recursion_guard.h>
+#include <dingo/collection_traits.h>
+#include <dingo/decay.h>
+#include <dingo/exceptions.h>
 #include <dingo/memory/arena_allocator.h>
 #include <dingo/resolving_context.h>
-#include <dingo/scope_guard.h>
-#include <dingo/annotated.h>
+#include <dingo/rtti.h>
+#include <dingo/type_map.h>
 
 #include <map>
 #include <typeindex>
+#include <optional>
 
 namespace dingo
-{
-    template < typename Allocator = std::allocator< char > > class container
-    {
-        friend class resolving_context< container< Allocator > >;
+{    
+    struct dynamic_container_traits {
+        using rtti_type = dynamic_rtti;
+        template< typename Value, typename Allocator > using type_factory_map_type = dynamic_type_map< rtti_type, Value, Allocator >;
+    };
+ 
+    template< typename Tag = void > struct static_container_traits {
+        using rtti_type = static_rtti;
+        template< typename Value, typename Allocator > using type_factory_map_type = static_type_map< rtti_type, Tag, Value, Allocator >;
+        
+    };
 
+    template < typename ContainerTraits = dynamic_container_traits, typename Allocator = std::allocator< char > > class container
+    {
     public:
         using allocator_type = Allocator;
+        using container_type = container< ContainerTraits, Allocator >;
+        using rtti_type = typename ContainerTraits::rtti_type;
+
+        friend class resolving_context< container_type >;
+
+        container(Allocator allocator = Allocator())
+            : allocator_(allocator)
+            , type_factories_(allocator)
+        {}
 
         allocator_type& get_allocator() { return allocator_; }
 
@@ -29,11 +48,11 @@ namespace dingo
             typename TypeStorage,
             typename TypeInterface = decay_t< typename TypeStorage::type >,
             typename... Args
-        > void register_binding(Args&&... args)
-        {
+        > void register_binding(Args&&... args) {
             check_interface_requirements< typename annotated_traits< TypeInterface >::type, typename TypeStorage::type >();
-            type_factories_.emplace(typeid(TypeInterface), std::make_unique<
-                class_instance_factory< container< Allocator >, typename annotated_traits< TypeInterface >::type, typename TypeStorage::type, TypeStorage > >(std::forward< Args >(args)...));
+            register_type_factory< TypeInterface, TypeStorage >(
+                std::make_unique< class_instance_factory< container_type, typename annotated_traits< TypeInterface >::type, typename TypeStorage::type, TypeStorage > >(std::forward< Args >(args)...)
+            );
         }
 
         template <
@@ -41,30 +60,47 @@ namespace dingo
             typename... TypeInterfaces,
             typename... Args,
             typename = std::enable_if_t< (sizeof...(TypeInterfaces) > 1) >
-        > void register_binding(Args&&... args)
-        {
+        > void register_binding(Args&&... args) {
             auto storage = std::make_shared< TypeStorage >(std::forward< Args >(args)...);
-
-            for_each((type_list< TypeInterfaces... >*)0, [&](auto element)
-            {
+            for_each((type_list< TypeInterfaces... >*)0, [&](auto element) {
                 using TypeInterface = typename decltype(element)::type;
-
                 check_interface_requirements< typename annotated_traits< TypeInterface >::type, typename TypeStorage::type >();
-                type_factories_.emplace(typeid(TypeInterface), std::make_unique< class_instance_factory< container< Allocator >, typename annotated_traits< TypeInterface >::type, typename TypeStorage::type, std::shared_ptr< TypeStorage > > >(storage));
+                register_type_factory< TypeInterface, TypeStorage >(
+                    std::make_unique< class_instance_factory< container_type, typename annotated_traits< TypeInterface >::type, typename TypeStorage::type, std::shared_ptr< TypeStorage > > >(storage)
+                );
             });
         }
 
         template <
             typename T
             , typename R = typename annotated_traits< std::conditional_t< std::is_rvalue_reference_v< T >, std::remove_reference_t< T >, T > >::type
-        > R resolve()
-        {
-            resolving_context< container< Allocator > > context(*this);
-            auto guard = make_scope_guard([&context] { if (!std::uncaught_exceptions()) { context.finalize(); } });
-            return resolve< T, true >(context);
+        > R resolve() {
+            // TODO: commented code provides quite big speedup, investigate
+            //std::aligned_storage_t< sizeof(resolving_context< container_type >) > storage;
+            //new (&storage) resolving_context< container_type >(*this);
+            //auto& context = *reinterpret_cast< resolving_context< container_type >* >(&storage);
+            
+            resolving_context< container_type > context(*this);
+            context.increment();
+            auto&& instance = resolve< T, true >(context);
+            context.decrement();
+            return std::forward< T >(instance);
         }
 
     private:
+        template< typename TypeInterface, typename TypeStorage, typename Factory > void register_type_factory(Factory&& factory) {
+            auto pb = type_factories_.template insert<TypeInterface>(
+                typename ContainerTraits::template type_factory_map_type< 
+                    std::unique_ptr< class_instance_factory_i< container_type > >,
+                    allocator_type
+                >(allocator_)
+            );
+
+            if(!pb.first.template insert< std::pair< TypeInterface, typename TypeStorage::type >* >(std::forward< Factory >(factory)).second) {
+                throw type_already_registered_exception();
+            }
+        }
+
         template <
             typename T
             , bool RemoveRvalueReferences
@@ -73,17 +109,14 @@ namespace dingo
                 RemoveRvalueReferences,
                 std::conditional_t < std::is_rvalue_reference_v< T >, std::remove_reference_t< T >, T >, T
             >
-        > R resolve(resolving_context< container< Allocator > >& context)
-        {
+        > R resolve(resolving_context< container_type >& context) {
             using Type = decay_t< T >;
 
-            auto range = type_factories_.equal_range(typeid(Type));
-            if (range.first != range.second)
-            {
-                auto it = range.first;
-                class_recursion_guard< Type > guard(!it->second->is_resolved());
-                auto instance = it->second->resolve(context);
-                return class_instance_traits< typename annotated_traits< T >::type >::get(*instance);
+            auto factories = type_factories_.template at<Type>();
+            if (factories->size() == 1) {
+                auto& factory = factories->front();
+                auto instance = factory->resolve(context);
+                return class_instance_traits< rtti_type, typename annotated_traits< T >::type >::get(*instance);
             }
 
             return resolve_multiple< T >(context);
@@ -91,15 +124,13 @@ namespace dingo
 
         template <
             typename T
-        > std::enable_if_t< !collection_traits< decay_t< T > >::is_collection, T > resolve_multiple(resolving_context< container< Allocator > >& context)
-        {
+        > std::enable_if_t< !collection_traits< decay_t< T > >::is_collection, T > resolve_multiple(resolving_context< container_type >& context) {
             throw type_not_found_exception();
         }
 
         template <
             typename T
-        > std::enable_if_t< collection_traits< decay_t< T > >::is_collection, T > resolve_multiple(resolving_context< container< Allocator > >& context)
-        {
+        > std::enable_if_t< collection_traits< decay_t< T > >::is_collection, T > resolve_multiple(resolving_context< container_type >& context) {
             using Type = decay_t< T >;
             using ValueType = decay_t< typename Type::value_type >;
 
@@ -110,14 +141,10 @@ namespace dingo
             auto results = context.template get_allocator< Type >().allocate(1);
             new (results) Type;
             collection_traits< Type >::reserve(*results, std::distance(range.first, range.second));
-
-            if (range.first != range.second)
-            {
-                for (auto it = range.first; it != range.second; ++it)
-                {
-                    class_recursion_guard< ValueType > guard(!it->second->is_resolved());
+            if (range.first != range.second) {
+                for (auto it = range.first; it != range.second; ++it) {
                     auto instance = it->second->resolve(context);
-                    collection_traits< Type >::add(*results, class_instance_traits< typename Type::value_type >::get(*instance));
+                    collection_traits< Type >::add(*results, class_instance_traits< rtti_type, typename Type::value_type >::get(*instance));
                 }
 
                 return *results;
@@ -126,26 +153,19 @@ namespace dingo
             throw type_not_found_exception();
         }
 
-        template < class TypeInterface, class Type > void check_interface_requirements()
-        {
+        template < class TypeInterface, class Type > void check_interface_requirements() {
             static_assert(!std::is_reference_v< TypeInterface >);
             static_assert(std::is_convertible_v< decay_t< Type >*, decay_t< TypeInterface >* >);
         }
 
         allocator_type allocator_;
-
-        using multimap_allocator_type = typename std::allocator_traits< allocator_type >::template rebind_alloc <
-            std::pair <
-                const std::type_index,
-                std::unique_ptr< class_instance_factory_i< container< allocator_type > > >
-            >
-        >;
-
-        std::multimap <
-            std::type_index,
-            std::unique_ptr< class_instance_factory_i< container< allocator_type > > >,
-            std::less< std::type_index >,
-            multimap_allocator_type
+        
+        typename ContainerTraits::template type_factory_map_type< 
+            typename ContainerTraits::template type_factory_map_type< 
+                std::unique_ptr< class_instance_factory_i< container_type > >,
+                allocator_type
+            >,
+            allocator_type 
         > type_factories_;
     };
 }

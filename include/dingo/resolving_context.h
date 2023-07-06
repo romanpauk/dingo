@@ -7,6 +7,7 @@
 #include <array>
 #include <deque>
 #include <list>
+#include <forward_list>
 
 namespace dingo
 {
@@ -24,85 +25,107 @@ namespace dingo
     template< typename Container > class resolving_context
         : public ContextTracking< resolving_context< Container > >
     {
+        static constexpr size_t size = 32;
+
     public:
         resolving_context(Container& container)
             : container_(container)
             , allocator_(arena_, container.get_allocator())
-            , type_instances_(allocator_)
-            , resettables_(allocator_)
-            , constructibles_(allocator_)
+            , class_instances_size_()
+            , resettables_size_()
+            , constructibles_size_()
+            , resolve_counter_()
         {}
 
-        ~resolving_context()
+        ~resolving_context() 
         {
-            if (std::uncaught_exceptions())
+            if(resolve_counter_ == 0) 
             {
-                // Rollback changes in container
-                for (auto& resettable : resettables_)
+                if (constructibles_size_) 
                 {
-                    resettable->reset();
+                    // Do the two phase construction required for cyclical dependencies
+                    for(int state = 0; state < 2; state++) 
+                    {
+                        // Note that invocation of construct(_, 0) can grow constructibles_.
+                        for(size_t i = 0; i < constructibles_size_; ++i)
+                            constructibles_[i]->construct(*this, state);
+                    }
                 }
             }
-
-            // Destroy temporary instances
-            for (auto& typeInstance : type_instances_)
+            else 
             {
-                typeInstance->~class_instance_i();
+                // Rollback changes in container
+                for (size_t i = 0; i < resettables_size_; ++i)
+                {
+                    resettables_[i]->reset();
+                }
+            }
+            
+            // Destroy temporary instances
+            for (size_t i = 0; i < class_instances_size_; ++i)
+            {
+                class_instances_[i]->~class_instance_destructor_i();
             }
         }
-
-
-        template < typename T > T resolve()
-        {
+        
+        template < typename T > T resolve() {
             return this->container_.template resolve< T, false >(*this);
         }
 
         template < typename T > arena_allocator< T > get_allocator() { return allocator_; }
 
-        void register_type_instance(class_instance_i* instance) { type_instances_.push_back(instance); }
-        void register_resettable(resettable_i* ptr) { resettables_.push_back(ptr); }
-        void register_constructible(constructible_i< Container >* ptr) { constructibles_.push_back(ptr); }
+        void register_class_instance(class_instance_destructor_i< typename Container::rtti_type >* ptr) {
+            check_size(class_instances_size_);
+            class_instances_[class_instances_size_++] = ptr; 
+        }
+
+        void register_resettable(resettable_i* ptr) { 
+            check_size(resettables_size_);
+            resettables_[resettables_size_++] = ptr; 
+        }
+
+        void register_constructible(constructible_i< Container >* ptr) { 
+            check_size(constructibles_size_);
+            constructibles_[constructibles_size_++] = ptr; 
+        }
 
         bool has_constructible_address(uintptr_t address)
         {
-            for (auto& constructible : constructibles_)
+            for (size_t i = 0; i < constructibles_size_; ++i)
             {
-                if (constructible->has_address(address))
-                {
+                if (constructibles_[i]->has_address(address))
                     return true;
-                }
             }
 
             return false;
         }
 
-        void finalize()
-        {
-            // Note that invocation of Construct(_, 0) can grow constructibles_.
-            for(auto it = constructibles_.begin(); it != constructibles_.end(); ++it)
-            {
-                (*it)->construct(*this, 0);
-            }
-
-            for (auto& constructible : constructibles_)
-            {
-                constructible->construct(*this, 1);
-            }
-        }
+        // Use this counter to determine if exception was thrown or not (std::uncaught_exceptions is slow).
+        void increment() { ++resolve_counter_; }
+        void decrement() { --resolve_counter_; }
 
     private:
+        void check_size(size_t count) {
+            if(size == count)
+                throw type_overflow_exception();
+        }
+        
         Container& container_;
-
-        arena< 1 << 12 > arena_;
+        
+        // TODO: who needs this?
+        arena< 1024 > arena_;
         arena_allocator< void, typename Container::allocator_type > allocator_;
 
-        // TODO: rebind alloc somehow better
-        std::deque< class_instance_i*,
-            arena_allocator< class_instance_i*, typename std::allocator_traits< typename Container::allocator_type >::template rebind_alloc< class_instance_i* > > > type_instances_;
-        std::deque< resettable_i*, 
-            arena_allocator< resettable_i*, typename std::allocator_traits< typename Container::allocator_type >::template rebind_alloc< resettable_i* > > > resettables_;
-        std::list< constructible_i< Container >*, 
-            arena_allocator< constructible_i< Container >*, typename std::allocator_traits< typename Container::allocator_type >::template rebind_alloc< constructible_i< Container >* > > > constructibles_;
+        // TODO: this is fast, but non-generic, needs more work
+        std::array< class_instance_destructor_i< typename Container::rtti_type >*, size > class_instances_;
+        std::array< resettable_i*, size > resettables_;
+        std::array< constructible_i< Container >*, size > constructibles_;
+
+        size_t class_instances_size_;
+        size_t resettables_size_;
+        size_t constructibles_size_;
+
+        size_t resolve_counter_;
     };
 
     template < typename DisabledType, typename Context > class constructor_argument

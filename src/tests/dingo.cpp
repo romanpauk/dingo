@@ -7,32 +7,32 @@
 
 #include "class.h"
 #include "assert.h"
+#include "containers.h"
 
-namespace dingo
-{
-    TEST(dingo, unique_hierarchy)
-    {
-        struct S
-        {};
+namespace dingo {
+    template <typename T> struct dingo_test : public testing::Test {};
+    TYPED_TEST_SUITE(dingo_test, container_types);
 
-        struct U
-        {};
+    TYPED_TEST(dingo_test, unique_hierarchy) {
+        using container_type = TypeParam;
 
-        struct B
-        {
+        struct S {};
+        struct U {};
+        struct B {
             B(std::shared_ptr< S >&&) {}
         };
 
-        container<> container;
-        container.register_binding< storage< dingo::container<>, unique, std::shared_ptr< S > > >();
-        container.register_binding< storage< dingo::container<>, unique, std::unique_ptr< U > > >();
-        container.register_binding< storage< dingo::container<>, shared, B > >();
+        container_type container;
+        container.template register_binding< storage< container_type, unique, std::shared_ptr< S > > >();
+        container.template register_binding< storage< container_type, unique, std::unique_ptr< U > > >();
+        container.template register_binding< storage< container_type, shared, B > >();
 
-        container.resolve< B& >();
+        container.template resolve< B& >();
     }
     
-    TEST(dingo, resolve_rollback)
-    {
+    TYPED_TEST(dingo_test, resolve_rollback) {
+        using container_type = TypeParam;
+
         struct resolve_rollback {};
         typedef Class< resolve_rollback, __COUNTER__ > A;
         typedef Class< resolve_rollback, __COUNTER__ > B;
@@ -42,24 +42,47 @@ namespace dingo
             C(A&, B&) { throw Ex(); }
         };
 
-        container<> container;
-        container.register_binding< storage< dingo::container<>, shared, A > >();
-        container.register_binding< storage< dingo::container<>, shared, B > >();
-        container.register_binding< storage< dingo::container<>, shared, C > >();
+        container_type container;
+        container.template register_binding< storage< container_type, shared, A > >();
+        container.template register_binding< storage< container_type, shared, B > >();
+        container.template register_binding< storage< container_type, shared, C > >();
 
-        ASSERT_THROW(container.resolve< C& >(), Ex);
+        ASSERT_THROW(container.template resolve< C& >(), Ex);
         ASSERT_EQ(A::Constructor, 1);
         ASSERT_EQ(A::Destructor, 1);
         ASSERT_EQ(B::Constructor, 1);
         ASSERT_EQ(B::Destructor, 1);
 
-        container.resolve< A& >();
+        container.template resolve< A& >();
         ASSERT_EQ(A::Constructor, 2);
         ASSERT_EQ(A::Destructor, 1);
-        ASSERT_THROW(container.resolve< C >(), Ex);
+        ASSERT_THROW(container.template resolve< C >(), Ex);
         ASSERT_EQ(A::Constructor, 2);
         ASSERT_EQ(A::Destructor, 1);
         ASSERT_EQ(B::Constructor, 2);
         ASSERT_EQ(B::Destructor, 2);
+    }
+
+    TYPED_TEST(dingo_test, type_already_registered) {
+        using container_type = TypeParam;
+
+        struct type_already_registered {};
+        typedef Class< type_already_registered, __COUNTER__ > A;
+        
+        container_type container;
+        {
+            container.template register_binding< storage< container_type, shared, A > >();
+            auto reg = [&]{
+                container.template register_binding< storage< container_type, shared, A > >();
+            };
+            ASSERT_THROW(reg(), dingo::type_already_registered_exception);
+        }
+        {
+            container.template register_binding< storage< container_type, shared, A >, IClass >();
+            auto reg = [&]{
+                container.template register_binding< storage< container_type, shared, A >, IClass >();
+            };
+            ASSERT_THROW(reg(), dingo::type_already_registered_exception);
+        }
     }
 }

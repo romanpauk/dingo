@@ -9,7 +9,9 @@ namespace dingo
     struct type_ambiguous_exception : std::exception {};
     struct type_recursion_exception : std::exception {};
     struct type_not_constructed_exception : std::exception {};
-
+    struct type_already_registered_exception : std::exception {};
+    struct type_overflow_exception : std::exception {};
+    
     struct virtual_pointer_exception : std::exception {};
 
 #ifdef _DEBUG

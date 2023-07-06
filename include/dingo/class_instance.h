@@ -9,10 +9,9 @@
 #include <dingo/class_instance_destructor.h>
 
 namespace dingo
-{ 
-    template < typename T, typename TypeStorage > class class_instance
-        : public class_instance_i
-        , private class_instance_destructor< T, TypeStorage::is_caching >
+{
+    template < typename RTTI, typename T, typename TypeStorage > class class_instance
+        : public class_instance_destructor< RTTI, T, TypeStorage >
     {
         using conversions = typename TypeStorage::conversions;
 
@@ -21,45 +20,46 @@ namespace dingo
             : instance_(std::forward< Ty >(instance))
         {}
 
-        ~class_instance()
-        {
-            this->destroy(instance_);
+        // TODO: this is a bit convoluted, destroy() is invoked from class_instance_destructor
+        // (if required). The intention is for class_instance to be trivially destructible if 
+        // the instance_ is.
+        void destroy() {
+            class_instance_destructor< RTTI, T, TypeStorage >::destroy(instance_);
         }
 
-        void* get_value(const std::type_info& type) override { return get_type_ptr< typename conversions::value_types >(type, instance_); }
-        void* get_lvalue_reference(const std::type_info& type) override { return get_type_ptr< typename conversions::lvalue_reference_types >(type, instance_); }
-        void* get_rvalue_reference(const std::type_info& type) override { return get_type_ptr< typename conversions::rvalue_reference_types >(type, instance_); }
+        void* get_value(const typename RTTI::type_index& type) override { 
+            return get_type_ptr< typename conversions::value_types >(type, instance_); 
+        }
 
-        void* get_pointer(const std::type_info& type) override
-        {
+        void* get_lvalue_reference(const typename RTTI::type_index& type) override { 
+            return get_type_ptr< typename conversions::lvalue_reference_types >(type, instance_); 
+        }
+        
+        void* get_rvalue_reference(const typename RTTI::type_index& type) override { 
+            return get_type_ptr< typename conversions::rvalue_reference_types >(type, instance_); 
+        }
+
+        void* get_pointer(const typename RTTI::type_index& type) override {
             void* ptr = get_type_ptr< typename conversions::pointer_types >(type, instance_);
             this->set_transferred(true);
             return ptr;
         }
 
     private:
-        template< typename Ty, typename Type > static void* get_type_ptr(const std::type_info& type, Type& instance)
-        {
+        template< typename Ty, typename Type > static void* get_type_ptr(const typename RTTI::type_index& type, Type& instance) {
             void* ptr = nullptr;
-            if (!for_type((Ty*)0, type, [&](auto element)
-            {
-                if (type_traits< Type >::is_smart_ptr)
-                {
-                    if (type_traits< std::remove_pointer_t< std::decay_t< typename decltype(element)::type > > >::is_smart_ptr)
-                    {
+            if (!for_type<RTTI>((Ty*)0, type, [&](auto element) {
+                if (type_traits< Type >::is_smart_ptr) {
+                    if (type_traits< std::remove_pointer_t< std::decay_t< typename decltype(element)::type > > >::is_smart_ptr) {
                         ptr = &instance;
-                    }
-                    else
-                    {
+                    } else {
                         ptr = type_traits< Type >::get_address(instance);
                     }
                 }
-                else
-                {
+                else {
                     ptr = type_traits< Type >::get_address(instance);
                 }
-            }
-            ))
+            }))
             {
                 throw type_not_convertible_exception();
             }

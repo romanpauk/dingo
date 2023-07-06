@@ -3,15 +3,11 @@
 namespace dingo
 {
     template < typename > class resolving_context;
-    class class_instance_i;
+    template < typename > class class_instance_i;
 
-    template < typename Container > class class_instance_factory_i
-    {
+    template < typename Container > class class_instance_factory_i {
     public:
         virtual ~class_instance_factory_i() {}
-
-        virtual class_instance_i* resolve(resolving_context< Container >& context) = 0;
-        virtual bool is_persistent() = 0;
-        virtual bool is_resolved() = 0;
+        virtual class_instance_i< typename Container::rtti_type >* resolve(resolving_context< Container >& context) = 0;
     };
 }

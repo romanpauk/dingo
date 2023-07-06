@@ -17,17 +17,17 @@ container.register_binding< storage< container<>, shared, std::shared_ptr< A > >
 container.register_binding< storage< container<>, shared, std::unique_ptr< B > > >();
 container.register_binding< storage< container<>, unique, C > >();
 
-// Resolving the type C through container will instantiate A, B, and C.
-auto c = container.resolve< C >();
+// Resolving the type C through container will instantiate A, B, and call C's constructor
+// with required types.
 
 // Multibinding support
 struct ICommand { virtual ~ICommand() {} };
-struct Command1: I {};
-struct Command2: I {};
+struct Command1: ICommand {};
+struct Command2: ICommand {};
 struct CommandProcessor { CommandProcessor(std::vector< ICommand* >) {} };
 
-container.register_binding< storage< container<>, shared, Command1 >, Command1, ICommand >();
-container.register_binding< storage< container<>, shared, Command2 >, Command2, ICommand >();
+container.register_binding< storage< container<>, shared, Command1 >, ICommand >();
+container.register_binding< storage< container<>, shared, Command2 >, ICommand >();
 container.register_binding< storage< container<>, shared, CommandProcessor > >();
 container.resolve< std::list< ICommand* > >();
 container.resolve< CommandProcessor >();
@@ -35,34 +35,25 @@ container.resolve< CommandProcessor >();
 
 ### Features
 
-#### Non-intrusive class registration
+#### Non-intrusive Class Registration
 Constructor signatures of registered types are detected automatically from constructor signature. 
 
-#### Runtime-based usage
+#### Runtime-based Usage
 Container can be used from multiple modules, specifically it can be filled in one module and used in other modules. This is a requirement for larger projects with not so clean dependencies. Compared to the compile-time DI solutions, errors are propagated in runtime as exceptions.
 
-#### Naturally-behaving
+#### Non-intrusive
 The container tries to preserve usual type semantics of types it manages, without imposing requirements on managed types. It tries to be as transparent as possible to the managed type. Registered type can be automatically converted to types that are 'reachable' from the base type using usual conversions.
 
 #### Exception-safe
-When exception occurs in user-provided code, the state of the container is not changed.
-
-#### Thread-safe
-The thread-safety guarante is the same as for STL containers: thread-safe for reading and not thread-safe for writing. The catch is that one cannot tell if resolving operation will be reading or writing.
+When exception occurs in user-provided code, the state of the container is not changed. Implemented using roll-back.
 
 #### Flexible
-The code is decomposed so it is possible to implement various enhancements without touching core code too much. Template class specializations are used to tweak the behavior and functionality for different storage types, instance creation or passing instances through type-erasure boundary. 
-
-#### Optimal
-Unnecessary copies of managed types are avoided if possible, the type is treated as it is natural for its storage type.
+Template class specializations are used to tweak the behavior and functionality for different storage types, instance creation or passing instances through type-erasure boundary. Standard RTTI is optional and emulation can be used. Single-module-single-container use-case is optimized with static type maps.
 
 #### Usable as Service Locator
-It is possible to register a binding to the type under a key that is a base class of the type. As the upcast is compiled at the time of a registration, multiple inheritance is correctly supported. One instance can be resolved through multiple interfaces.
+It is possible to register a binding to the type under a key that is a base class of the type. As an upcast is compiled at the time of a registration, multiple inheritance is correctly supported. One instance can be resolved through multiple interfaces.
 
-#### Multibindings Support
-It is possible to resolve multiple implementations of an interface as a collection. See [multibindings.cpp](src/tests/multibindings.cpp).
-
-#### Annotated Type Support
+#### Support for Annotated Types
 It is possible to register different implementations with the same interface, disambiguating the registration with an user-provided tag. See [annotated.cpp](src/tests/annotated.cpp).
 
 #### Support for Cycles

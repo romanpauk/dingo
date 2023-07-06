@@ -2,7 +2,7 @@
 
 #include <dingo/memory/arena_allocator.h>
 #include <dingo/resolving_context.h>
-#include <dingo/class_instance_cache.h>
+#include <dingo/class_instance_resolver.h>
 #include <dingo/class_instance_factory_i.h>
 
 namespace dingo
@@ -19,26 +19,15 @@ namespace dingo
         Storage storage_;
         using ResolveType = decltype(storage_.resolve(std::declval< resolving_context< Container >& >()));
         using InterfaceType = typename rebind_type < ResolveType, TypeInterface >::type;
-        class_instance_cache< InterfaceType, Storage, Storage::is_caching > cache_;
+        class_instance_resolver< typename Container::rtti_type, InterfaceType, Storage > resolver_;
 
     public:
         template < typename... Args > class_instance_factory(Args&&... args)
             : storage_(std::forward< Args >(args)...)
         {}
 
-        class_instance_i* resolve(resolving_context< Container >& context) override
-        {
-            return cache_.resolve(context, storage_);
-        }
-
-        bool is_resolved() override
-        {
-            return cache_.is_resolved();
-        }
-
-        bool is_persistent() override
-        {
-            return Storage::is_caching;
+        class_instance_i< typename Container::rtti_type >* resolve(resolving_context< Container >& context) override {
+            return resolver_.resolve(context, storage_);
         }
     };
 
@@ -54,26 +43,15 @@ namespace dingo
         std::shared_ptr< Storage > storage_;
         using ResolveType = decltype(storage_->resolve(std::declval< resolving_context< Container >& >()));
         using InterfaceType = typename rebind_type < ResolveType, TypeInterface >::type;
-        class_instance_cache< InterfaceType, Storage, Storage::is_caching > cache_;
+        class_instance_resolver< typename Container::rtti_type, InterfaceType, Storage > resolver_;
 
     public:
         class_instance_factory(std::shared_ptr< Storage > storage)
             : storage_(storage)
         {}
 
-        class_instance_i* resolve(resolving_context< Container >& context) override
-        {
-            return cache_.resolve(context, *storage_);
-        }
-
-        bool is_resolved() override
-        {
-            return cache_.is_resolved();
-        }
-
-        bool is_persistent() override
-        {
-            return Storage::is_caching;
+        class_instance_i< typename Container::rtti_type >* resolve(resolving_context< Container >& context) override {
+            return resolver_.resolve(context, *storage_);
         }
     };
 }

@@ -7,36 +7,38 @@
 
 #include "class.h"
 #include "assert.h"
+#include "containers.h"
 
 namespace dingo
 {
+    template <typename T> struct annotated_test : public testing::Test {};
+    TYPED_TEST_SUITE(annotated_test, container_types);
+
     template < size_t N > struct tag {};
 
     /*
-    TEST(annotated, value)
-    {        
-        struct A
-        {
-            A(
-                annotated< int, tag< 1 > > value1, 
-                annotated< int, tag< 2 > > value10
-            ) {}
+    TYPED_TEST(annotated_test, value) { 
+        using container_type = TypeParam;
+
+        struct A {
+            A(annotated< int, tag< 1 > > value1, annotated< int, tag< 2 > > value10) {}
         };
 
         // TODO: support constant / lambda factory
-        container<> container;
-        container.register_binding< storage< dingo::container<>, unique, annotated< int, tag< 1 > > > >(1);
-        container.register_binding< storage< dingo::container<>, unique, annotated< int, tag< 2 > > > >([]{ return 10; });
-        container.register_binding< storage< dingo::container<>, unique, A > >();
+        container_type container;
+        container.template register_binding< storage< container_type, unique, annotated< int, tag< 1 > > > >(1);
+        container.template register_binding< storage< container_type, unique, annotated< int, tag< 2 > > > >([]{ return 10; });
+        container.template register_binding< storage< container_type, unique, A > >();
 
-        container.resolve< annotated< int, tag< 1 > > >();
-        container.resolve< annotated< int, tag< 2 > > >();
-        container.resolve< A >();
+        container.template resolve< annotated< int, tag< 1 > > >();
+        container.template resolve< annotated< int, tag< 2 > > >();
+        container.template resolve< A >();
     }
     */
 
-    TEST(annotated, interface)
-    {
+    TYPED_TEST(annotated_test, interface) {
+        using container_type = TypeParam;
+
         struct I { virtual ~I() {} };
 
         struct A : I {};
@@ -63,23 +65,23 @@ namespace dingo
             std::shared_ptr< I > sharedptr_;
         };
 
-        container<> container;
+        container_type container;
 
-        container.register_binding< storage< dingo::container<>, shared, A >, annotated< I, tag< 1 > > >();
-        container.register_binding< storage< dingo::container<>, shared, std::shared_ptr< B > >, annotated< I, tag< 2 > > >();
-        container.register_binding< storage< dingo::container<>, shared, std::shared_ptr< C > >, C, annotated< I, tag< 3 > > >();
+        container.template register_binding< storage< container_type, shared, A >, annotated< I, tag< 1 > > >();
+        container.template register_binding< storage< container_type, shared, std::shared_ptr< B > >, annotated< I, tag< 2 > > >();
+        container.template register_binding< storage< container_type, shared, std::shared_ptr< C > >, C, annotated< I, tag< 3 > > >();
 
-        I& aref = container.resolve< annotated< I&, tag< 1 > > >();
+        I& aref = container.template resolve< annotated< I&, tag< 1 > > >();
         ASSERT_TRUE(dynamic_cast<A*>(&aref));
         
-        I* bptr = container.resolve< annotated< I*, tag< 2 > > >();
+        I* bptr = container.template resolve< annotated< I*, tag< 2 > > >();
         ASSERT_TRUE(dynamic_cast<B*>(bptr));
 
-        std::shared_ptr< I > bsharedptr = container.resolve< annotated< std::shared_ptr< I >, tag< 2 > > >();
+        std::shared_ptr< I > bsharedptr = container.template resolve< annotated< std::shared_ptr< I >, tag< 2 > > >();
         ASSERT_TRUE(dynamic_cast<B*>(bsharedptr.get()));
 
-        ASSERT_TRUE(dynamic_cast<C*>(&container.resolve< C& >()));
-        I& cref = container.resolve< annotated< I&, tag< 3 > > >();
+        ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve< C& >()));
+        I& cref = container.template resolve< annotated< I&, tag< 3 > > >();
         ASSERT_TRUE(dynamic_cast<C*>(&cref));
     }
 }

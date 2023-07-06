@@ -34,6 +34,8 @@ namespace dingo
         static size_t MoveConstructor;
         static size_t Destructor;
 
+        static size_t GetTotalInstances() { return Constructor + CopyConstructor + MoveConstructor; }
+
     private:
         std::string name_;
     };

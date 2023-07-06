@@ -10,11 +10,11 @@ namespace dingo
         using type = T;
     };
 
-    template < typename Function > bool for_type(type_list<>*, const std::type_info&, Function&&) { return false; }
+    template < typename RTTI, typename Function > bool for_type(type_list<>*, const typename RTTI::type_index&, Function&&) { return false; }
 
-    template < typename Function, typename Head > bool for_type(type_list< Head >*, const std::type_info& type, Function&& fn)
+    template < typename RTTI, typename Function, typename Head > bool for_type(type_list< Head >*, const typename RTTI::type_index& type, Function&& fn)
     {
-        if (typeid(Head) == type)
+        if (RTTI::template get_type_index<Head>() == type)
         {
             fn(type_list_iterator< Head >());
             return true;
@@ -23,16 +23,16 @@ namespace dingo
         return false;
     }
 
-    template < typename Function, typename Head, typename Middle, typename... Tail > bool for_type(type_list< Head, Middle, Tail...>*, const std::type_info& type, Function&& fn)
+    template < typename RTTI, typename Function, typename Head, typename Middle, typename... Tail > bool for_type(type_list< Head, Middle, Tail...>*, const typename RTTI::type_index& type, Function&& fn)
     {
-        if (typeid(Head) == type)
+        if (RTTI::template get_type_index<Head>() == type)
         {
             fn(type_list_iterator< Head >());
             return true;
         }
         else
         {
-            return for_type((type_list< Middle, Tail... >*)0, type, std::forward< Function >(fn));
+            return for_type<RTTI>((type_list< Middle, Tail... >*)0, type, std::forward< Function >(fn));
         }
     }
 

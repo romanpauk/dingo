@@ -1,5 +1,5 @@
-project(dingo)
 cmake_minimum_required(VERSION 3.19)
+project(dingo)
 enable_testing()
 include(FetchContent)
 set(CMAKE_CXX_STANDARD 17)
@@ -43,11 +43,11 @@ target_sources(dingo INTERFACE
     include/dingo/class_constructor.h
     include/dingo/class_factory.h
     include/dingo/class_instance.h
-    include/dingo/class_instance_cache.h
     include/dingo/class_instance_destructor.h
     include/dingo/class_instance_factory.h   
     include/dingo/class_instance_factory_i.h
     include/dingo/class_instance_i.h
+    include/dingo/class_instance_resolver.h
     include/dingo/class_instance_traits.h
     include/dingo/class_recursion_guard.h
     include/dingo/collection_traits.h
@@ -60,7 +60,7 @@ target_sources(dingo INTERFACE
     include/dingo/rebind_type.h
     include/dingo/resettable_i.h
     include/dingo/resolving_context.h
-    include/dingo/scope_guard.h
+    include/dingo/rtti.h
     include/dingo/storage.h
     include/dingo/storage/external.h
     include/dingo/storage/shared.h
@@ -68,6 +68,7 @@ target_sources(dingo INTERFACE
     include/dingo/storage/shared_cyclical_protected.h
     include/dingo/storage/unique.h
     include/dingo/type_list.h
+    include/dingo/type_map.h
     include/dingo/type_traits.h
     README.md
 )
@@ -78,6 +79,7 @@ if(DINGO_ENABLE_TESTING)
         src/tests/assert.h
         src/tests/class.h
         src/tests/constructor.cpp
+        src/tests/containers.h
         src/tests/cyclical.cpp
         src/tests/dingo.cpp
         src/tests/external.cpp
@@ -88,3 +90,16 @@ if(DINGO_ENABLE_TESTING)
     add_test(dingo_test COMMAND dingo_test)
     target_link_libraries(dingo_test dingo gtest_main)
 endif()
+
+if(DINGO_ENABLE_BENCHMARK)
+    add_executable(dingo_benchmark
+        benchmark/main.cpp
+    )
+
+    target_link_libraries(dingo_benchmark 
+        dingo
+        benchmark::benchmark
+    )
+    target_include_directories(dingo_benchmark PRIVATE benchmark)
+endif()
+
