@@ -1,8 +1,9 @@
 #include <optional>
 #include <map>
+// #include <unordered_map>
 #include <memory>
 
-namespace dingo
+namespace dingo 
 {
     template< typename RTTI, typename Value, typename Allocator > struct dynamic_type_map 
     {
@@ -34,6 +35,7 @@ namespace dingo
         >;
 
         std::map< typename RTTI::type_index, Value, std::less< typename RTTI::type_index >, map_allocator_type > values_;
+        //std::unordered_map< typename RTTI::type_index, Value, typename RTTI::type_index::hasher, std::equal_to< typename RTTI::type_index >, map_allocator_type > values_;
     };
     
     template < typename Tag, typename Value > struct static_type_map_node_data {

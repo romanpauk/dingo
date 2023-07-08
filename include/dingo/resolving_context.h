@@ -9,23 +9,12 @@
 #include <list>
 #include <forward_list>
 
-namespace dingo
-{
-    template < typename T > class ContextTracking
-    {
-    public:
-        ContextTracking() { CurrentContext = static_cast < T* >(this); }
-        ~ContextTracking() { CurrentContext = nullptr; }
-
-        static thread_local T* CurrentContext;
-    };
-
-    template < typename T > thread_local T* ContextTracking< T >::CurrentContext;
-
-    template< typename Container > class resolving_context
-        : public ContextTracking< resolving_context< Container > >
-    {
+namespace dingo {
+    template< typename Container > class resolving_context {
         static constexpr size_t size = 32;
+        static constexpr size_t arena_size = 1024 * 4;
+
+        using arena_type = arena< arena_size >;
 
     public:
         resolving_context(Container& container)
@@ -72,7 +61,7 @@ namespace dingo
             return this->container_.template resolve< T, false >(*this);
         }
 
-        template < typename T > arena_allocator< T > get_allocator() { return allocator_; }
+        template < typename T > arena_allocator< T, arena_type, typename Container::allocator_type > get_allocator() { return allocator_; }
 
         void register_class_instance(class_instance_destructor_i< typename Container::rtti_type >* ptr) {
             check_size(class_instances_size_);
@@ -113,8 +102,8 @@ namespace dingo
         Container& container_;
         
         // TODO: who needs this?
-        arena< 1024 > arena_;
-        arena_allocator< void, typename Container::allocator_type > allocator_;
+        arena_type arena_;
+        arena_allocator< void, arena_type, typename Container::allocator_type > allocator_;
 
         // TODO: this is fast, but non-generic, needs more work
         std::array< class_instance_destructor_i< typename Container::rtti_type >*, size > class_instances_;

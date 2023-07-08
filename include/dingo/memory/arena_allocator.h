@@ -5,51 +5,29 @@
 
 namespace dingo
 {
-    template < typename T, typename Allocator > class arena_allocator;
+    template < typename T, typename Arena, typename Allocator > class arena_allocator;
 
-    class arena_base
-    {
-        template < typename T, typename Allocator > friend class arena_allocator;
-
+    template< size_t N > class arena {
     public:
-        template < size_t Size > arena_base(std::array< unsigned char, Size >& arena)
-            : base_(arena.data())
-            , current_(arena.data())
-            , end_(arena.data() + arena.size())
-            , allocated_()
-        {}
+        arena(): current_(buffer_.data()) {}
 
-        bool operator == (const arena_base& arena) { return base_ == arena.base_; }
-
-        arena_base& operator = (const arena_base& other)
-        {
-            base_ = other.base_;
-            current_ = other.current_;
-            end_ = other.end_;
-            allocated_ = other.allocated_;
-            return *this;
+        template< size_t Alignment > void* allocate(size_t bytes) {
+            unsigned char* ptr = (unsigned char*)(uintptr_t(current_ + Alignment - 1) & ~(Alignment - 1));
+            if (ptr + bytes < buffer_.data() + N) {
+                void* p = ptr;
+                current_ = ptr + bytes;
+                return p;
+            }
+            
+            return nullptr;
         }
 
-        size_t get_allocated() const { return allocated_; }
-
     private:
-        unsigned char* base_;
-        unsigned char* current_;
-        unsigned char* end_;
-        size_t allocated_;
-    };
-
-    template< size_t N > class arena : public arena_base
-    {
-    public:
-        arena()
-            : arena_base(buffer_)
-        {}
-
         std::array< unsigned char, N > buffer_;
+        unsigned char* current_;
     };
 
-    template < typename T, typename Allocator = std::allocator< T > > class arena_allocator
+    template < typename T, typename Arena, typename Allocator = std::allocator< T > > class arena_allocator
         : public Allocator
     {
     public:
@@ -58,23 +36,23 @@ namespace dingo
         template< typename U > struct rebind
         {
             using other = arena_allocator< U,
-                typename std::allocator_traits< Allocator >::template rebind_alloc< U >
+                Arena, typename std::allocator_traits< Allocator >::template rebind_alloc< U >
             >;
         };
 
-        template < typename... Args > arena_allocator(arena_base& arena, Args&&... args) noexcept
-            : arena_(arena)
+        template < typename... Args > arena_allocator(Arena& arena, Args&&... args) noexcept
+            : arena_(&arena)
             , Allocator(std::forward< Args >(args)...)
         {}
 
-        template < typename U, typename AllocatorU > friend class arena_allocator;
+        template < typename U, typename ArenaU, typename AllocatorU > friend class arena_allocator;
 
-        template < typename U, typename AllocatorU > arena_allocator(const arena_allocator< U, AllocatorU >& alloc) noexcept
+        template < typename U, typename AllocatorU > arena_allocator(const arena_allocator< U, Arena, AllocatorU >& alloc) noexcept
             : arena_(alloc.arena_)
             , Allocator(alloc)
         {}
 
-        arena_allocator< T, Allocator >& operator = (const arena_allocator< T, Allocator >& other)
+        arena_allocator< T, Arena, Allocator >& operator = (const arena_allocator< T, Arena, Allocator >& other)
         {
             arena_ = other.arena_;
             return *this;
@@ -82,52 +60,27 @@ namespace dingo
 
         value_type* allocate(std::size_t n)
         {
-            unsigned char* ptr = (unsigned char*)(uintptr_t(arena_.current_ + alignof(value_type) - 1) & ~(alignof(value_type) - 1));
-
-            size_t bytes = n * sizeof(value_type);
-            if (ptr + bytes < arena_.end_)
-            {
-                value_type* p = reinterpret_cast<value_type*>(ptr);
-                ptr += bytes;
-                arena_.allocated_ += bytes;
-                arena_.current_ = ptr;
-                return p;
-            }
-            else
-            {
+            void *ptr = arena_->template allocate< alignof(value_type) >(sizeof(value_type) * n);
+            if (ptr) {
+                return reinterpret_cast<value_type*>(ptr);
+            } else {
                 assert(false);
-                return Allocator::allocate(n);
+                throw std::bad_alloc();
             }
         }
 
-        void deallocate(value_type* p, std::size_t n) noexcept
-        {
-            auto ptr = reinterpret_cast<unsigned char*>(p);
-            if (ptr >= arena_.base_ && ptr < arena_.end_)
-            {
-                // This is from arena
-                arena_.allocated_ -= n * sizeof(value_type);
-                if (arena_.allocated_ == 0)
-                {
-                    arena_.current_ = arena_.base_;
-                }
-            }
-            else
-            {
-                Allocator::deallocate(p, n);
-            }
-        }
+        void deallocate(value_type* p, std::size_t n) noexcept {}
 
     private:
-        arena_base& arena_;
+        Arena* arena_;
     };
 
-    template < typename T, typename U, typename Allocator > bool operator == (arena_allocator< T, Allocator > const& lhs, arena_allocator< U, Allocator > const& rhs) noexcept
+    template < typename T, typename U, typename Arena, typename Allocator > bool operator == (arena_allocator< T, Arena, Allocator > const& lhs, arena_allocator< U, Arena, Allocator > const& rhs) noexcept
     {
         return lhs.arena_ == rhs.arena_;
     }
 
-    template < typename T, typename U, typename Allocator > bool operator != (arena_allocator< T, Allocator > const& x, arena_allocator< U, Allocator > const& y) noexcept
+    template < typename T, typename U, typename Arena, typename Allocator > bool operator != (arena_allocator< T, Arena, Allocator > const& x, arena_allocator< U, Arena, Allocator > const& y) noexcept
     {
         return !(x == y);
     }

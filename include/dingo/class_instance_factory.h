@@ -18,7 +18,7 @@ namespace dingo
     {
         Storage storage_;
         using ResolveType = decltype(storage_.resolve(std::declval< resolving_context< Container >& >()));
-        using InterfaceType = typename rebind_type < ResolveType, TypeInterface >::type;
+        using InterfaceType = rebind_type_t < ResolveType, TypeInterface >;
         class_instance_resolver< typename Container::rtti_type, InterfaceType, Storage > resolver_;
 
     public:

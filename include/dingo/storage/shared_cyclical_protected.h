@@ -8,6 +8,18 @@
 
 namespace dingo
 {
+/*
+    template < typename T > class ContextTracking
+    {
+    public:
+        ContextTracking() { CurrentContext = static_cast < T* >(this); }
+        ~ContextTracking() { CurrentContext = nullptr; }
+
+        static thread_local T* CurrentContext;
+    };
+
+    template < typename T > thread_local T* ContextTracking< T >::CurrentContext;
+*/
     struct shared_cyclical_protected {};
 
     template < typename Type, typename U > struct conversions< shared_cyclical_protected, Type, U >: conversions< shared, Type, U > {};

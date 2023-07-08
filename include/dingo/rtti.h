@@ -12,6 +12,9 @@ namespace dingo {
             bool operator < (const type_index& other) const { return value_ < other.value_; }
             bool operator == (const type_index& other) const { return value_ == other.value_; }
 
+            struct hasher {
+                size_t operator()(const type_index& index) const { return std::hash< decltype(value_) >()(index.value_); }
+            };
         private:
             std::type_index value_;
         };
@@ -45,6 +48,9 @@ namespace dingo {
             bool operator < (const type_index& other) const { return value_ < other.value_; }
             bool operator == (const type_index& other) const { return value_ == other.value_; }
 
+            struct hasher {
+                size_t operator()(const type_index& index) const { return std::hash< decltype(value_) >()(index.value_); }
+            };
         private:
             size_t value_;
         };
