@@ -49,7 +49,6 @@ namespace dingo
             typename TypeInterface = decay_t< typename TypeStorage::type >,
             typename... Args
         > void register_binding(Args&&... args) {
-            check_interface_requirements< typename annotated_traits< TypeInterface >::type, typename TypeStorage::type >();
             register_type_factory< TypeInterface, TypeStorage >(
                 std::make_unique< class_instance_factory< container_type, typename annotated_traits< TypeInterface >::type, typename TypeStorage::type, TypeStorage > >(std::forward< Args >(args)...)
             );
@@ -62,9 +61,8 @@ namespace dingo
             typename = std::enable_if_t< (sizeof...(TypeInterfaces) > 1) >
         > void register_binding(Args&&... args) {
             auto storage = std::make_shared< TypeStorage >(std::forward< Args >(args)...);
-            for_each((type_list< TypeInterfaces... >*)0, [&](auto element) {
+            for_each(type_list< TypeInterfaces... >{}, [&](auto element) {
                 using TypeInterface = typename decltype(element)::type;
-                check_interface_requirements< typename annotated_traits< TypeInterface >::type, typename TypeStorage::type >();
                 register_type_factory< TypeInterface, TypeStorage >(
                     std::make_unique< class_instance_factory< container_type, typename annotated_traits< TypeInterface >::type, typename TypeStorage::type, std::shared_ptr< TypeStorage > > >(storage)
                 );
@@ -89,6 +87,7 @@ namespace dingo
 
     private:
         template< typename TypeInterface, typename TypeStorage, typename Factory > void register_type_factory(Factory&& factory) {
+            check_interface_requirements< typename annotated_traits< TypeInterface >::type, typename TypeStorage::type >();
             auto pb = type_factories_.template insert<TypeInterface>(
                 typename ContainerTraits::template type_factory_map_type< 
                     std::unique_ptr< class_instance_factory_i< container_type > >,
@@ -96,7 +95,7 @@ namespace dingo
                 >(allocator_)
             );
 
-            if(!pb.first.template insert< std::pair< TypeInterface, typename TypeStorage::type >* >(std::forward< Factory >(factory)).second) {
+            if(!pb.first.template insert< type_list< TypeInterface, typename TypeStorage::type > >(std::forward< Factory >(factory)).second) {
                 throw type_already_registered_exception();
             }
         }
@@ -161,7 +160,7 @@ namespace dingo
         allocator_type allocator_;
         
         typename ContainerTraits::template type_factory_map_type< 
-            typename ContainerTraits::template type_factory_map_type< 
+            typename ContainerTraits::template type_factory_map_type<
                 std::unique_ptr< class_instance_factory_i< container_type > >,
                 allocator_type
             >,

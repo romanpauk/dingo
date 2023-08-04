@@ -75,17 +75,17 @@ target_sources(dingo INTERFACE
     
 if(DINGO_ENABLE_TESTING)
     add_executable(dingo_test 
-        src/tests/annotated.cpp
-        src/tests/assert.h
-        src/tests/class.h
-        src/tests/constructor.cpp
-        src/tests/containers.h
-        src/tests/cyclical.cpp
-        src/tests/dingo.cpp
-        src/tests/external.cpp
-        src/tests/multibindings.cpp
-        src/tests/shared.cpp
-        src/tests/unique.cpp
+        test/annotated.cpp
+        test/assert.h
+        test/class.h
+        test/constructor.cpp
+        test/containers.h
+        test/cyclical.cpp
+        test/dingo.cpp
+        test/external.cpp
+        test/multibindings.cpp
+        test/shared.cpp
+        test/unique.cpp
     )
     add_test(dingo_test COMMAND dingo_test)
     target_link_libraries(dingo_test dingo gtest_main)

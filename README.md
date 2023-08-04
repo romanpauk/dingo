@@ -54,13 +54,13 @@ Template class specializations are used to tweak the behavior and functionality 
 It is possible to register a binding to the type under a key that is a base class of the type. As an upcast is compiled at the time of a registration, multiple inheritance is correctly supported. One instance can be resolved through multiple interfaces.
 
 #### Support for Annotated Types
-It is possible to register different implementations with the same interface, disambiguating the registration with an user-provided tag. See [annotated.cpp](src/tests/annotated.cpp).
+It is possible to register different implementations with the same interface, disambiguating the registration with an user-provided tag. See [annotated.cpp](test/annotated.cpp).
 
 #### Support for Cycles
 With shared_cyclical storage, cycles between types are supported. This is implemented using two-phase construction.
-More an experiment than something practical, virtual memory protection can be used to throw upon access of not-yet-constructed class. See [cyclical.cpp](src/tests/cyclical.cpp).
+More an experiment than something practical, virtual memory protection can be used to throw upon access of not-yet-constructed class. See [cyclical.cpp](test/cyclical.cpp).
 
 #### Unit Tests
-The functionality is covered with tests written using google test. See available [test coverage](src/tests).
+The functionality is covered with tests written using google test. See available [test coverage](test).
 
 

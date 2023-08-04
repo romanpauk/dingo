@@ -7,7 +7,7 @@ namespace dingo
     struct IClass
     {
         virtual ~IClass() {}
-        virtual const std::string& GetName() = 0;
+        virtual const std::string& GetName() const = 0;
     };
 
     struct IClass1 : virtual IClass
@@ -27,7 +27,7 @@ namespace dingo
         Class(const Class& cls) : name_(cls.name_) { ++CopyConstructor; }
         Class(Class&& cls) : name_(std::move(cls.name_)) { ++MoveConstructor; }
 
-        const std::string& GetName() { return name_; }
+        const std::string& GetName() const { return name_; }
 
         static size_t Constructor;
         static size_t CopyConstructor;

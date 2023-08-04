@@ -46,9 +46,9 @@ namespace dingo
         }
 
     private:
-        template< typename Ty, typename Type > static void* get_type_ptr(const typename RTTI::type_index& type, Type& instance) {
+        template< typename Types, typename Type > static void* get_type_ptr(const typename RTTI::type_index& type, Type& instance) {
             void* ptr = nullptr;
-            if (!for_type<RTTI>((Ty*)0, type, [&](auto element) {
+            if (!for_type<RTTI>(Types{}, type, [&](auto element) {
                 if (type_traits< Type >::is_smart_ptr) {
                     if (type_traits< std::remove_pointer_t< std::decay_t< typename decltype(element)::type > > >::is_smart_ptr) {
                         ptr = &instance;
