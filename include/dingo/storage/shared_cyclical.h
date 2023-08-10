@@ -84,7 +84,7 @@ namespace dingo
         { 
             if (phase == 0)
             {
-                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, resolving_context< Container > > >(context, reinterpret_cast<Type*>(&instance_));
+                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, resolving_context< Container > > >(reinterpret_cast<Type*>(&instance_), context);
                 constructed_ = true;
             } 
         }
@@ -222,7 +222,7 @@ namespace dingo
         {
             if (phase == 0)
             {
-                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, resolving_context< Container > > >(context, instance_.get());
+                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, resolving_context< Container > > >(instance_.get(), context);
                 std::get_deleter< shared_cyclical_deleter<Type> >(instance_)->set_constructed();
             }
         }

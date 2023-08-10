@@ -29,7 +29,7 @@ namespace dingo
             return class_constructor< Type >::invoke(((void)sizeof(Args), Arg(ctx))...);
         }
 
-        template < typename Type, typename Arg, typename Context > static void construct(Context& ctx, void* ptr)
+        template < typename Type, typename Arg, typename Context > static void construct(void* ptr, Context& ctx)
         {
             class_constructor< Type >::invoke(ptr, ((void)sizeof(Args), Arg(ctx))...);
         }

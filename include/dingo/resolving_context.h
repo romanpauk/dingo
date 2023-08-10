@@ -19,7 +19,6 @@ namespace dingo {
     public:
         resolving_context(Container& container)
             : container_(container)
-            , allocator_(arena_, container.get_allocator())
             , class_instances_size_()
             , resettables_size_()
             , constructibles_size_()
@@ -53,7 +52,7 @@ namespace dingo {
             // Destroy temporary instances
             for (size_t i = 0; i < class_instances_size_; ++i)
             {
-                class_instances_[i]->~class_instance_destructor_i();
+                class_instances_[i]->reset();
             }
         }
         
@@ -61,9 +60,7 @@ namespace dingo {
             return this->container_.template resolve< T, false >(*this);
         }
 
-        template < typename T > arena_allocator< T, arena_type, typename Container::allocator_type > get_allocator() { return allocator_; }
-
-        void register_class_instance(class_instance_destructor_i< typename Container::rtti_type >* ptr) {
+        void register_class_instance(resettable_i* ptr) {
             check_size(class_instances_size_);
             class_instances_[class_instances_size_++] = ptr; 
         }
@@ -101,12 +98,8 @@ namespace dingo {
         
         Container& container_;
         
-        // TODO: who needs this?
-        arena_type arena_;
-        arena_allocator< void, arena_type, typename Container::allocator_type > allocator_;
-
         // TODO: this is fast, but non-generic, needs more work
-        std::array< class_instance_destructor_i< typename Container::rtti_type >*, size > class_instances_;
+        std::array< resettable_i*, size > class_instances_;
         std::array< resettable_i*, size > resettables_;
         std::array< constructible_i< Container >*, size > constructibles_;
 

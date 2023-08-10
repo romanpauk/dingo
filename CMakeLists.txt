@@ -87,7 +87,7 @@ if(DINGO_ENABLE_TESTING)
         test/shared.cpp
         test/unique.cpp
     )
-    add_test(dingo_test COMMAND dingo_test)
+    add_test(NAME dingo_test COMMAND dingo_test)
     target_link_libraries(dingo_test dingo gtest_main)
 endif()
 

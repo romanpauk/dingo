@@ -5,53 +5,60 @@
 #include <dingo/class_instance_resolver.h>
 #include <dingo/class_instance_factory_i.h>
 
-namespace dingo
-{
-    template <
+namespace dingo {
+    // TODO: this is bit convoluted, ideally merge resolver with factory
+    
+    template< typename T > struct class_instance_storage_traits {
+        using type = T;
+        static T& get(type& storage) { return storage; }
+    };
+
+    template< typename T > struct class_instance_storage_traits< std::shared_ptr< T > > {
+        using type = std::shared_ptr< T >;
+        static T& get(type& storage) { return *storage; }
+    };
+
+    template<
         typename Container,
         typename TypeInterface,
         typename Type,
-        typename Storage
+        typename Storage 
     >
     class class_instance_factory
         : public class_instance_factory_i< Container >
     {
-        Storage storage_;
-        using ResolveType = decltype(storage_.resolve(std::declval< resolving_context< Container >& >()));
+        using storage_traits = class_instance_storage_traits< Storage >;
+        typename storage_traits::type storage_;
+        using ResolveType = decltype(storage_traits::get(storage_).resolve(std::declval< resolving_context< Container >& >()));
         using InterfaceType = rebind_type_t < ResolveType, TypeInterface >;
-        class_instance_resolver< typename Container::rtti_type, InterfaceType, Storage > resolver_;
+        class_instance_resolver< typename Container::rtti_type, InterfaceType, decay_t< Storage > > resolver_;
 
     public:
         template < typename... Args > class_instance_factory(Args&&... args)
             : storage_(std::forward< Args >(args)...)
         {}
 
-        class_instance_i< typename Container::rtti_type >* resolve(resolving_context< Container >& context) override {
-            return resolver_.resolve(context, storage_);
+        // TODO: we will need two pairs of calls - context-aware and context-less
+        // First, resolution will be attempted without context.
+        //      Sufficient for trivial types or already resolved types (or types composed from those...), simply anything, that does not
+        //      throw during construction.
+        // Second, resolution will continue with context
+        //      Could that use pointer to context, so in resolver we check if context is needed and if so, continue with pointer to the 
+        //      stack?
+        void* get_value(resolving_context< Container >& context, const typename Container::rtti_type::type_index& type) override { 
+            return resolver_.resolve(context, storage_traits::get(storage_))->get_value(type); 
         }
-    };
 
-    template <
-        typename Container,
-        typename TypeInterface,
-        typename Type,
-        typename Storage
-    >
-    class class_instance_factory< Container, TypeInterface, Type, std::shared_ptr< Storage > >
-        : public class_instance_factory_i< Container >
-    {
-        std::shared_ptr< Storage > storage_;
-        using ResolveType = decltype(storage_->resolve(std::declval< resolving_context< Container >& >()));
-        using InterfaceType = typename rebind_type < ResolveType, TypeInterface >::type;
-        class_instance_resolver< typename Container::rtti_type, InterfaceType, Storage > resolver_;
+        void* get_lvalue_reference(resolving_context< Container >& context, const typename Container::rtti_type::type_index& type) override {
+            return resolver_.resolve(context, storage_traits::get(storage_))->get_lvalue_reference(type); 
+        }
 
-    public:
-        class_instance_factory(std::shared_ptr< Storage > storage)
-            : storage_(storage)
-        {}
+        void* get_rvalue_reference(resolving_context< Container >& context, const typename Container::rtti_type::type_index& type) override {
+            return resolver_.resolve(context, storage_traits::get(storage_))->get_rvalue_reference(type); 
+        }
 
-        class_instance_i< typename Container::rtti_type >* resolve(resolving_context< Container >& context) override {
-            return resolver_.resolve(context, *storage_);
+        void* get_pointer(resolving_context< Container >& context, const typename Container::rtti_type::type_index& type) override {
+            return resolver_.resolve(context, storage_traits::get(storage_))->get_pointer(type); 
         }
     };
 }

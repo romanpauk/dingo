@@ -26,7 +26,7 @@ namespace dingo
                 {
                     AssertClass(container.template resolve< C&& >());
                     ASSERT_EQ(C::Constructor, 1);
-                    ASSERT_EQ(C::MoveConstructor, 3);
+                    ASSERT_EQ(C::MoveConstructor, 2);
                     ASSERT_EQ(C::CopyConstructor, 0);
                 }
 
@@ -47,7 +47,7 @@ namespace dingo
                     // TODO: This is quite stupid, it does allocation, move, than copy in TypeInstanceGetter
                     AssertClass(container.template resolve< C >());
                     ASSERT_EQ(C::Constructor, 1);
-                    ASSERT_EQ(C::MoveConstructor, 2); // TODO ?
+                    ASSERT_EQ(C::MoveConstructor, 1); // TODO ?
                     ASSERT_EQ(C::CopyConstructor, 1);
                 }
 
@@ -92,7 +92,7 @@ namespace dingo
                 AssertClass(container.template resolve< C >());
                 ASSERT_EQ(C::Constructor, 1);
                 ASSERT_EQ(C::CopyConstructor, 1); // TODO: this is stupid. There should be no copy, just move.
-                ASSERT_EQ(C::MoveConstructor, 1);
+                ASSERT_EQ(C::MoveConstructor, 0);
             }
 
             ASSERT_EQ(C::Destructor, C::GetTotalInstances());

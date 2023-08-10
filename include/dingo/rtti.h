@@ -13,10 +13,10 @@ namespace dingo {
             bool operator == (const type_index& other) const { return value_ == other.value_; }
 
             struct hasher {
-                size_t operator()(const type_index& index) const { return std::hash< decltype(value_) >()(index.value_); }
+                size_t operator()(const type_index& index) const { return std::hash< std::type_index >()(index.value_); }
             };
         private:
-            std::type_index value_;
+            const std::type_index value_;
         };
 
         template< typename T > static type_index get_type_index() {
@@ -34,9 +34,9 @@ namespace dingo {
     template < typename Tag > size_t static_type_index_base<Tag>::counter_;
 
     template < typename T > struct static_type_index_cache {
-        static size_t value;
+        static const size_t value;
     };
-    template < typename T > size_t static_type_index_cache< T >::value = static_type_index_base<void>::generate_id();
+    template < typename T > const size_t static_type_index_cache< T >::value = static_type_index_base<void>::generate_id();
 
     class static_rtti {
     public:
@@ -49,10 +49,10 @@ namespace dingo {
             bool operator == (const type_index& other) const { return value_ == other.value_; }
 
             struct hasher {
-                size_t operator()(const type_index& index) const { return std::hash< decltype(value_) >()(index.value_); }
+                size_t operator()(const type_index& index) const { return std::hash< size_t >()(index.value_); }
             };
         private:
-            size_t value_;
+            const size_t value_;
         };
 
         template< typename T > static type_index get_type_index() {

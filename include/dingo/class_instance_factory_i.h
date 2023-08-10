@@ -8,6 +8,10 @@ namespace dingo
     template < typename Container > class class_instance_factory_i {
     public:
         virtual ~class_instance_factory_i() {}
-        virtual class_instance_i< typename Container::rtti_type >* resolve(resolving_context< Container >& context) = 0;
+        
+        virtual void* get_value(resolving_context< Container >&, const typename Container::rtti_type::type_index&) = 0;
+        virtual void* get_lvalue_reference(resolving_context< Container >&, const typename Container::rtti_type::type_index&) = 0;
+        virtual void* get_rvalue_reference(resolving_context< Container >&, const typename Container::rtti_type::type_index&) = 0;
+        virtual void* get_pointer(resolving_context< Container >&, const typename Container::rtti_type::type_index&) = 0;
     };
 }

@@ -63,7 +63,7 @@ namespace dingo
         {
             if (!initialized_)
             {
-                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, resolving_context< Container > > >(context, &instance_);
+                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, resolving_context< Container > > >(&instance_, context);
                 initialized_ = true;
             }
 

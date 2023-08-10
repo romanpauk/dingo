@@ -52,7 +52,5 @@ namespace dingo
         {
             return class_factory< decay_t< Type > >::template construct< Type, constructor_argument< decay_t< Type >, resolving_context< Container > > >(context);
         }
-
-        bool is_resolved() { return false; }
     };
 }

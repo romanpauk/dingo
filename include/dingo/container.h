@@ -73,16 +73,15 @@ namespace dingo
             typename T
             , typename R = typename annotated_traits< std::conditional_t< std::is_rvalue_reference_v< T >, std::remove_reference_t< T >, T > >::type
         > R resolve() {
-            // TODO: commented code provides quite big speedup, investigate
+            // TODO: it is the destructor that is slowing the resolving
             //std::aligned_storage_t< sizeof(resolving_context< container_type >) > storage;
             //new (&storage) resolving_context< container_type >(*this);
             //auto& context = *reinterpret_cast< resolving_context< container_type >* >(&storage);
             
+            // TODO: context needs to be placed here, but initialized on the fly later if needed.
+            // The only use of it is for cleanup during exception and for cyclical types.
             resolving_context< container_type > context(*this);
-            context.increment();
-            auto&& instance = resolve< T, true >(context);
-            context.decrement();
-            return std::forward< T >(instance);
+            return resolve< T, true >(context);
         }
 
     private:
@@ -114,8 +113,8 @@ namespace dingo
             auto factories = type_factories_.template at<Type>();
             if (factories->size() == 1) {
                 auto& factory = factories->front();
-                auto instance = factory->resolve(context);
-                return class_instance_traits< rtti_type, typename annotated_traits< T >::type >::get(*instance);
+                // TODO: no longer class instance
+                return class_instance_traits< rtti_type, typename annotated_traits< T >::type >::resolve(*factory, context);
             }
 
             return resolve_multiple< T >(context);
@@ -142,8 +141,7 @@ namespace dingo
             collection_traits< Type >::reserve(*results, std::distance(range.first, range.second));
             if (range.first != range.second) {
                 for (auto it = range.first; it != range.second; ++it) {
-                    auto instance = it->second->resolve(context);
-                    collection_traits< Type >::add(*results, class_instance_traits< rtti_type, typename Type::value_type >::get(*instance));
+                    collection_traits< Type >::add(*results, class_instance_traits< rtti_type, typename Type::value_type >::resolve(*it->second, context));
                 }
 
                 return *results;

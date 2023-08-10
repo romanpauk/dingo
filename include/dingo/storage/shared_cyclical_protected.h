@@ -45,7 +45,7 @@ namespace dingo
             if (phase == 0)
             {
                 seh_translator translator(seh_handler);
-                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, Container > >(context, instance.Get());
+                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, Container > >(instance.Get(), context);
                 
                 instance.SetConstructed();
                 instance.SetAccessible(false);
