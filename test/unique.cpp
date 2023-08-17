@@ -22,11 +22,11 @@ namespace dingo
             {
                 container_type container;
                 container.template register_binding< storage< container_type, unique, C > >();
-
+                AssertTypeNotConvertible< C, type_list<C&, C*> >(container);
                 {
                     AssertClass(container.template resolve< C&& >());
                     ASSERT_EQ(C::Constructor, 1);
-                    ASSERT_EQ(C::MoveConstructor, 2);
+                    ASSERT_EQ(C::MoveConstructor, 2);   // TODO
                     ASSERT_EQ(C::CopyConstructor, 0);
                 }
 
@@ -44,10 +44,9 @@ namespace dingo
                 container.template register_binding< storage< container_type, unique, C > >();
 
                 {
-                    // TODO: This is quite stupid, it does allocation, move, than copy in TypeInstanceGetter
                     AssertClass(container.template resolve< C >());
                     ASSERT_EQ(C::Constructor, 1);
-                    ASSERT_EQ(C::MoveConstructor, 1); // TODO ?
+                    ASSERT_EQ(C::MoveConstructor, 1);   // TODO
                     ASSERT_EQ(C::CopyConstructor, 1);
                 }
 
@@ -63,7 +62,7 @@ namespace dingo
             {
                 container_type container;
                 container.template register_binding< storage< container_type, unique, std::unique_ptr< C > >, C, IClass >();
-
+                AssertTypeNotConvertible< C, type_list<C, C&, C&&, C*> >(container);
                 {
                     AssertClass(*container.template resolve< std::unique_ptr< C > >());
                     ASSERT_EQ(C::Constructor, 1);
@@ -83,6 +82,10 @@ namespace dingo
         using container_type = TypeParam;
 
         struct unique_pointer {};
+    /*
+        // TODO: if something is stored as a pointer and is unique, we have to force pointer ownership transfer
+        // by disallowing anything else than pointer resolution
+
         {
             typedef Class< unique_pointer, __COUNTER__ > C;
 
@@ -97,13 +100,15 @@ namespace dingo
 
             ASSERT_EQ(C::Destructor, C::GetTotalInstances());
         }
-
+    */
         {
             typedef Class< unique_pointer, __COUNTER__ > C;
 
             {
                 container_type container;
                 container.template register_binding< storage< container_type, unique, C* > >();
+                AssertTypeNotConvertible< C, type_list<C, C&, C&&> >(container);
+                
                 auto c = container.template resolve< C* >();
                 AssertClass(*c);
                 ASSERT_EQ(C::Constructor, 1);

@@ -3,6 +3,7 @@
 #include <dingo/decay.h>
 #include <dingo/class_factory.h>
 #include <dingo/storage.h>
+#include <dingo/type_list.h>
 
 namespace dingo
 {
@@ -18,9 +19,9 @@ namespace dingo
 
     template < typename Type, typename U > struct conversions< unique, Type*, U >
     {
-        using value_types = type_list< U >;
+        using value_types = type_list<>;
         using lvalue_reference_types = type_list<>;
-        using rvalue_reference_types = type_list< U&& >;
+        using rvalue_reference_types = type_list<>;
         using pointer_types = type_list< U* >;
     };
 

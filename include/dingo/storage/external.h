@@ -49,6 +49,8 @@ namespace dingo
         : public conversions< external, std::unique_ptr< Type >, U >
     {};
 
+    // TODO: external storage needs a lot of refactoring
+    
     template < typename Container, typename Type, typename Conversions > class storage< Container, external, Type, Conversions >
         : public resettable_i
     {

@@ -1,9 +1,9 @@
     #pragma once
 
 #include <dingo/annotated.h>
-#include <dingo/class_instance.h>
 #include <dingo/class_instance_factory.h>
 #include <dingo/collection_traits.h>
+#include <dingo/class_instance_traits.h>
 #include <dingo/decay.h>
 #include <dingo/exceptions.h>
 #include <dingo/memory/arena_allocator.h>
@@ -80,6 +80,11 @@ namespace dingo
             
             // TODO: context needs to be placed here, but initialized on the fly later if needed.
             // The only use of it is for cleanup during exception and for cyclical types.
+
+            // TODO: another idea - returning address of an temporary is fast
+            // So what if we create home for that temporary and in-place construct the unique object there?
+            // This is now in resolver_.
+            
             resolving_context< container_type > context(*this);
             return resolve< T, true >(context);
         }

@@ -3,6 +3,7 @@
 #include <dingo/memory/arena_allocator.h>
 #include <dingo/resettable_i.h>
 #include <dingo/constructible_i.h>
+#include <dingo/exceptions.h>
 
 #include <array>
 #include <deque>

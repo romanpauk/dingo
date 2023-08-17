@@ -23,7 +23,7 @@ namespace dingo {
             AssertClass(*container.template resolve< C* >());
             AssertClass(container.template resolve< C& >());
 
-            AssertTypeNotConvertible < C, type_list< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
+            AssertTypeNotConvertible < C, type_list< std::shared_ptr< C >, std::unique_ptr< C > > >(container);
 
             ASSERT_EQ(C::Constructor, 1);
             ASSERT_EQ(C::Destructor, 0);
@@ -49,7 +49,7 @@ namespace dingo {
             AssertClass(*container.template resolve< C* >());
             AssertClass(container.template resolve< C& >());
 
-            AssertTypeNotConvertible< C, type_list< C, std::shared_ptr< C >, std::unique_ptr< C > > >(container);
+            AssertTypeNotConvertible< C, type_list< std::shared_ptr< C >, std::unique_ptr< C > > >(container);
 
             ASSERT_EQ(C::Constructor, 1);
             ASSERT_EQ(C::Destructor, 0);
@@ -78,7 +78,7 @@ namespace dingo {
             AssertClass(*container.template resolve< std::shared_ptr< C >& >());
             AssertClass(**container.template resolve< std::shared_ptr< C >* >());
 
-            AssertTypeNotConvertible< C, type_list< C, std::unique_ptr< C > > >(container);
+            AssertTypeNotConvertible< C, type_list< std::unique_ptr< C > > >(container);
 
             ASSERT_EQ(C::Constructor, 1);
             ASSERT_EQ(C::Destructor, 0);
@@ -106,7 +106,7 @@ namespace dingo {
             AssertClass(*container.template resolve< std::unique_ptr< C >& >());
             AssertClass(**container.template resolve< std::unique_ptr< C >* >());
 
-            AssertTypeNotConvertible< C, type_list< C, std::unique_ptr< C > > >(container);
+            AssertTypeNotConvertible< C, type_list< std::unique_ptr< C > > >(container);
 
             ASSERT_EQ(C::Constructor, 1);
             ASSERT_EQ(C::Destructor, 0);

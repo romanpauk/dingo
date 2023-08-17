@@ -42,14 +42,10 @@ target_sources(dingo INTERFACE
     include/dingo/annotated.h
     include/dingo/class_constructor.h
     include/dingo/class_factory.h
-    include/dingo/class_instance.h
-    include/dingo/class_instance_destructor.h
-    include/dingo/class_instance_factory.h   
+    include/dingo/class_instance_factory.h
     include/dingo/class_instance_factory_i.h
-    include/dingo/class_instance_i.h
     include/dingo/class_instance_resolver.h
     include/dingo/class_instance_traits.h
-    include/dingo/class_recursion_guard.h
     include/dingo/collection_traits.h
     include/dingo/constructible_i.h
     include/dingo/container.h

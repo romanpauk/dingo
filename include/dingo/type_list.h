@@ -22,4 +22,14 @@ namespace dingo
         fn(type_list_iterator< Head >());
         for_each(type_list< Tail... >{}, std::forward< Function >(fn));
     }
+
+    template < typename RTTI > bool find_type(type_list<>, const typename RTTI::type_index&) { return false; }
+
+    template < typename RTTI, typename Head, typename... Tail > bool find_type(type_list< Head, Tail...>, const typename RTTI::type_index& type) {
+        if (RTTI::template get_type_index<Head>() == type) {
+            return true;
+        } else {
+            return find_type<RTTI>(type_list< Tail... >{}, type);
+        }
+    }
 }

@@ -6,22 +6,20 @@
 
 BENCHMARK_MAIN();
 
-int ClassCounter = 0;
+volatile int ClassCounter = 0;
 template< size_t N > class Class {
 public:
-    Class() {
-        ClassCounter += 1;
-    }
-
+    Class() { ClassCounter++; }
     int GetCounter() { return ClassCounter; }
 };
 
 static void resolve_baseline_unique(benchmark::State& state) {
+    int counter = 0;
     for (auto _ : state) {
         Class<0> cls;
-        benchmark::DoNotOptimize(cls.GetCounter());
+        counter += cls.GetCounter();
     }
-
+    benchmark::DoNotOptimize(counter);
     state.SetBytesProcessed(state.iterations());
 }
 
@@ -31,20 +29,22 @@ template< typename ContainerTraits > static void resolve_container_unique(benchm
     container_type container;
     container.template register_binding< dingo::storage< container_type, dingo::unique, Class<0> > >();
     
+    int counter = 0;
     for (auto _ : state) {
         auto cls = container.template resolve<Class<0>>();
-        benchmark::DoNotOptimize(cls.GetCounter());
+        counter += cls.GetCounter();
     }
-   
+    benchmark::DoNotOptimize(counter);
     state.SetBytesProcessed(state.iterations());
 }
 
 static void resolve_baseline_shared(benchmark::State& state) {
     Class<0> cls;
+    int counter = 0;
     for (auto _ : state) {
-        benchmark::DoNotOptimize(cls.GetCounter());
+        counter += cls.GetCounter();
     }
-
+    benchmark::DoNotOptimize(counter);
     state.SetBytesProcessed(state.iterations());
 }
 
@@ -54,11 +54,12 @@ template< typename ContainerTraits > static void resolve_container_shared(benchm
     container_type container;
     container.template register_binding< dingo::storage< container_type, dingo::shared, Class<0> > >();
     
+    int counter = 0;
     for (auto _ : state) {
         auto& cls = container.template resolve<Class<0>&>();
-        benchmark::DoNotOptimize(cls.GetCounter());
+        counter += cls.GetCounter();
     }
-   
+    benchmark::DoNotOptimize(counter);
     state.SetBytesProcessed(state.iterations());
 }
 
