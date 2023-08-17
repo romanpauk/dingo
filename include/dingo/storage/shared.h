@@ -41,111 +41,93 @@ namespace dingo
         using pointer_types = type_list< U*, std::unique_ptr< U >* >;
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, Type, Conversions >
-        : public resettable_i
-    {
-    public:
-        static const bool is_caching = true;
-
-        using conversions = Conversions;
-        using type = Type;
-
-        storage()
-            : initialized_(false)
-        {}
-
-        ~storage()
-        {
+    template < typename Type > struct storage_instance< Type, shared > {
+        ~storage_instance() {
+            // TODO: should be trivial for trivial T
             reset();
         }
 
-        Type* resolve(resolving_context< Container >& context)
-        {
-            if (!initialized_)
-            {
-                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, resolving_context< Container > > >(&instance_, context);
-                initialized_ = true;
-            }
+        template< typename Context > void construct(Context& context) {
+            assert(!initialized_);
+            class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, Context > >(&instance_, context);
+            initialized_ = true;
+        }
 
+        Type* get() const {
             return reinterpret_cast<Type*>(&instance_);
         }
 
-        bool is_resolved() const { return initialized_; }
-
-        void reset() override
-        {
-            if (initialized_)
-            {
+        void reset() {
+            if (initialized_) {
                 initialized_ = false;
-                reinterpret_cast<Type*>(&instance_)->~Type();
+                get()->~Type();
             }
         }
 
+        bool empty() const { return !initialized_; }
+
     private:
-        std::aligned_storage_t< sizeof(Type) > instance_;
-        bool initialized_;
+        mutable std::aligned_storage_t< sizeof(Type), alignof(Type) > instance_;
+        bool initialized_ = false;
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, Type*, Conversions >
-        : public storage< Container, shared, std::unique_ptr< Type >, Conversions >
-    {
-    public:
-        template < typename ContainerT > Type* resolve(resolving_context< ContainerT >& context)
-        {
-            return storage< ContainerT, shared, std::unique_ptr< Type >, Conversions >::resolve(context).get();
+    template < typename Type > struct storage_instance< std::unique_ptr<Type>, shared > {
+        template< typename Context > void construct(Context& context) {
+            assert(!instance_);
+            instance_ = class_factory< Type >::template construct< std::unique_ptr< Type >, constructor_argument< Type, Context > >(context);
         }
+
+        std::unique_ptr<Type>& get() const { return instance_; }
+        void reset() { instance_.reset(); }
+        bool empty() const { return instance_.get() == nullptr; } 
+
+    private:
+        mutable std::unique_ptr<Type> instance_;
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, std::shared_ptr< Type >, Conversions >
+    template < typename Type > struct storage_instance< std::shared_ptr<Type>, shared > {
+        template< typename Context > void construct(Context& context) {
+            assert(!instance_);
+            instance_ = class_factory< Type >::template construct< std::shared_ptr< Type >, constructor_argument< Type, Context > >(context);
+        }
+
+        // TODO: this can't be reference so we can construct shared_ptr<Base> from shared_ptr<Type> later
+        std::shared_ptr<Type> get() const { return instance_; }
+        void reset() { instance_.reset(); }
+        bool empty() const { return instance_.get() == nullptr; } 
+
+    private:
+        mutable std::shared_ptr<Type> instance_;
+    };
+
+    template < typename Type > struct storage_instance< Type*, shared >
+        : public storage_instance< std::unique_ptr< Type >, shared > 
+    {
+        template< typename Context > void construct(Context& context) {
+            storage_instance< std::unique_ptr< Type >, shared >::construct(context);
+        }
+
+        Type* get() const { return storage_instance< std::unique_ptr< Type >, shared >::get().get(); }
+    };
+
+    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, Type, Conversions >
         : public resettable_i
     {
+        storage_instance< Type, shared > instance_;
+
     public:
         static constexpr bool is_caching = true;
 
         using conversions = Conversions;
         using type = Type;
 
-        std::shared_ptr< Type > resolve(resolving_context< Container >& context)
-        {
-            if (!instance_)
-            {
-                instance_ = class_factory< Type >::template construct< std::shared_ptr< Type >, constructor_argument< Type, resolving_context< Container > > >(context);
-            }
-
-            return instance_;
+        auto resolve(resolving_context< Container >& context) -> decltype(instance_.get()) {
+            if (instance_.empty())
+                instance_.construct(context);
+            return instance_.get();
         }
 
+        bool is_resolved() const { return !instance_.empty(); }
         void reset() override { instance_.reset(); }
-        bool is_resolved() { return instance_.get() != nullptr; }
-
-    private:
-        std::shared_ptr< Type > instance_;
-    };
-
-    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, std::unique_ptr< Type >, Conversions >
-        : public resettable_i
-    {
-    public:
-        static constexpr bool is_caching = true;
-
-        using conversions = Conversions;
-        using type = Type;
-
-        std::unique_ptr< Type >& resolve(resolving_context< Container >& context)
-        {
-            // TODO: thread-safe
-            if (!instance_)
-            {
-                instance_ = class_factory< Type >::template construct< std::unique_ptr< Type >, constructor_argument< Type, resolving_context< Container > > >(context);
-            }
-
-            return instance_;
-        }
-
-        void reset() override { instance_.reset(); }
-        bool is_resolved() { return instance_.get() != nullptr; }
-
-    private:
-        std::unique_ptr< Type > instance_;
     };
 }

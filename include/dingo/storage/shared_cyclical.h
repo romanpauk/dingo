@@ -37,199 +37,116 @@ namespace dingo
         using pointer_types = type_list< U*, std::shared_ptr< U >* >;
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, shared_cyclical, Type, Conversions >
-        : public resettable_i
-        , public constructible_i< Container >
-    {
+    template < typename Type > class storage_instance< Type, shared_cyclical > {
     public:
-        static constexpr bool is_caching = true;
-
-        using conversions = Conversions;
-        using type = Type;
-
-        storage()
-            : constructed_()
-            , resolved_()
-        {}
-
-        ~storage()
-        {
+        ~storage_instance() {
+            // TODO: should not have dtor for trivially-destructible Type
             reset();
         }
 
-        Type* resolve(resolving_context< Container >& context)
-        {
-            if (!resolved_)
-            {
-                resolved_ = true;
-                context.register_constructible(this);
-            }
-            
-            return reinterpret_cast< Type* >(&instance_);
+        template< typename Context > Type* resolve(Context& context) {
+            assert(!resolved_);
+            resolved_ = true;
+            return get();
         }
 
-        bool is_resolved() const { return resolved_; }
+        Type* get() { return reinterpret_cast< Type* >(&instance_); }
+
+        template< typename Context > void construct(Context& context) {
+            class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, Context > >(&instance_, context);
+            constructed_ = true;
+        }
         
-        void reset() override
-        {
-            if (constructed_)
-            {
+        bool empty() const { return !resolved_; }
+        
+        void reset() {
+            resolved_ = false;
+            if (constructed_) {
+                constructed_ = false;
                 reinterpret_cast<Type*>(&instance_)->~Type();
             }
-
-            constructed_ = resolved_ = false;
         }
-
-        void construct(resolving_context< Container >& context, int phase) override 
-        { 
-            if (phase == 0)
-            {
-                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, resolving_context< Container > > >(reinterpret_cast<Type*>(&instance_), context);
-                constructed_ = true;
-            } 
-        }
-
-        bool has_address(uintptr_t address) override { return false; }
-
     private:
-        std::aligned_storage_t< sizeof(Type) > instance_;
-        bool resolved_;
-        bool constructed_;
+        std::aligned_storage_t< sizeof(Type), alignof(Type) > instance_;
+        bool resolved_ = false;
+        bool constructed_ = false;
     };
 
-/*
-    template < typename Type, typename Conversions > class storage< shared_cyclical, Type*, Conversions >
-        : public storage< shared_cyclical, std::unique_ptr< Type >, Conversions >
-    {
+    template < typename T > class storage_instance_deleter {
     public:
-        Type* resolve(resolving_context& context)
-        {
-            return storage< shared, std::unique_ptr< Type >, Conversions >::resolve(context).get();
-        }
-    };
-
-    template < typename Type, typename Conversions > class storage< shared_cyclical, std::unique_ptr< Type >, Conversions >
-        : public resettable_i
-        , public constructible_i
-    {
-    public:
-        static constexpr bool is_caching = true;
-
-        using conversions = Conversions;
-        using type = Type;
-
-        storage()
-            : constructed_()
-            , resolved_()
-        {}
-
-        ~storage()
-        {
-            reset();
-        }
-
-        std::unique_ptr< Type >& resolve(resolving_context& context)
-        {
-            if (!resolved_)
-            {
-                resolved_ = true;
-                context.register_constructible(this);
-            }
-
-            return *reinterpret_cast<std::unique_ptr<Type>*>(&instance_);
-        }
-
-        bool is_resolved() const { return resolved_; }
-
-        void reset() override
-        {
-            if (constructed_)
-            {
-                constructed_ = resolved_ = false;
-                reinterpret_cast<std::unique_ptr<Type>*>(&instance_)->~unique_ptr< Type >();
-            }
-        }
-
-        void construct(resolving_context& context, int phase) override
-        {
-            if (phase == 0)
-            {
-                class_factory< decay_t< Type > >::template construct< std::unique_ptr< Type >, constructor_argument< Type > >(context, reinterpret_cast<std::unique_ptr< Type >*>(&instance_));
-                constructed_ = true;
-            }
-        }
-
-        bool has_address(uintptr_t address) override { return false; }
-
-    private:
-        std::aligned_storage_t< sizeof(std::unique_ptr< Type >) > instance_;
-        bool resolved_;
-        bool constructed_;
-    };
-*/
-
-    template < typename T > class shared_cyclical_deleter
-    {
-    public:
-        shared_cyclical_deleter()
+        storage_instance_deleter()
             : constructed_(new std::atomic< bool >(false))
         {}
 
         void set_constructed() { constructed_->store(true); }
 
-        void operator()(T* ptr) 
-        {
-            if (constructed_->load())
-            {
+        void operator()(T* ptr) {
+            if (constructed_->load()) {
                 delete ptr;
-            }
-            else
-            {
+            } else {
                 delete[] reinterpret_cast<char*>(ptr);
-            } 
+            }
         }
 
     private:
         std::shared_ptr< std::atomic< bool > > constructed_;
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, shared_cyclical, std::shared_ptr< Type >, Conversions >
+    template < typename Type > class storage_instance< std::shared_ptr<Type>, shared_cyclical > {
+    public:
+        template< typename Context > std::shared_ptr< Type > resolve(Context& context) {
+            assert(!instance_);
+            instance_.reset(reinterpret_cast<Type*>(new char[sizeof(Type)]), storage_instance_deleter< Type >());
+            return instance_;
+        }
+
+        std::shared_ptr<Type> get() { return instance_; }
+
+        template< typename Context > void construct(Context& context) {
+            assert(!constructed_);
+            class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, Context > >(instance_.get(), context);
+            std::get_deleter< storage_instance_deleter<Type> >(instance_)->set_constructed();
+            constructed_ = true;
+        }
+        
+        bool empty() const { return !instance_; }
+        
+        void reset() { instance_.reset(); }
+
+    private:
+        std::shared_ptr<Type> instance_;
+        bool constructed_ = false;
+    };
+
+    template < typename Container, typename Type, typename Conversions > class storage< Container, shared_cyclical, Type, Conversions >
         : public resettable_i
         , public constructible_i< Container >
     {
+        storage_instance< Type, shared_cyclical > instance_;
+
     public:
-        static const bool is_caching = true;
+        static constexpr bool is_caching = true;
 
         using conversions = Conversions;
         using type = Type;
 
-        std::shared_ptr< Type > resolve(resolving_context< Container >& context)
-        {
-            if (!instance_)
-            {
-                instance_.reset(reinterpret_cast<Type*>(new char[sizeof(Type)]), shared_cyclical_deleter< Type >());
+        auto resolve(resolving_context< Container >& context) -> decltype(instance_.get()) {
+            if (instance_.empty()) {
                 context.register_constructible(this);
+                return instance_.resolve(context);
             }
-
-            return instance_;
+            return instance_.get();
         }
 
-        bool is_resolved() const { return instance_.get() != nullptr; }
-       
+        bool is_resolved() const { return !instance_.empty(); }
+        
         void reset() override { instance_.reset(); }
 
-        void construct(resolving_context< Container >& context, int phase) override
-        {
+        void construct(resolving_context< Container >& context, int phase) override { 
             if (phase == 0)
-            {
-                class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, resolving_context< Container > > >(instance_.get(), context);
-                std::get_deleter< shared_cyclical_deleter<Type> >(instance_)->set_constructed();
-            }
+                instance_.construct(context);
         }
 
         bool has_address(uintptr_t address) override { return false; }
-
-    private:
-        std::shared_ptr< Type > instance_;
     };
 }

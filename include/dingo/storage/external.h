@@ -49,208 +49,108 @@ namespace dingo
         : public conversions< external, std::unique_ptr< Type >, U >
     {};
 
-    // TODO: external storage needs a lot of refactoring
-    
-    template < typename Container, typename Type, typename Conversions > class storage< Container, external, Type, Conversions >
-        : public resettable_i
-    {
+    template< typename Type > class storage_instance< Type, external > {
     public:
-        static constexpr bool is_caching = true;
-
-        using conversions = Conversions;
-        using type = Type;
-
-        storage(Type&& instance)
-            : instance_(std::move(instance))
+        template< typename T > storage_instance(T&& instance):
+            instance_(std::forward<T>(instance))
         {}
 
-        ~storage()
-        {}
-
-        Type& resolve(resolving_context< Container >& context)
-        {
-            return instance_;
-        }
-
-        bool is_resolved() const { return true; }
-
-        void reset() override {}
+        Type& get() { return instance_; }
 
     private:
         Type instance_;
     };
-
-    template < typename Container, typename Type, typename Conversions > class storage< Container, external, Type&, Conversions >
-        : public resettable_i
-    {
+    
+    template< typename Type > class storage_instance< Type&, external > {
     public:
-        static constexpr bool is_caching = true;
-
-        using conversions = Conversions;
-        using type = Type;
-
-        storage(Type& instance)
-            : instance_(instance)
+        storage_instance(Type& instance):
+            instance_(instance)
         {}
 
-        ~storage()
-        {}
-
-        template < typename ContainerT > Type& resolve(resolving_context< ContainerT >& context)
-        {
-            return instance_;
-        }
-
-        bool is_resolved() const { return true; }
-
-        void reset() override {}
+        Type& get() { return instance_; }
 
     private:
         Type& instance_;
     };
-
-    template < typename Container, typename Type, typename Conversions > class storage< Container, external, Type*, Conversions >
-        : public resettable_i
-    {
+    
+    template< typename Type > class storage_instance< Type*, external > {
     public:
-        static constexpr bool is_caching = true;
-
-        using conversions = Conversions;
-        using type = Type;
-
-        storage(Type* instance)
-            : instance_(instance)
+        storage_instance(Type* instance):
+            instance_(instance)
         {}
 
-        ~storage()
-        {}
-
-        Type* resolve(resolving_context< Container >& context)
-        {
-            return instance_;
-        }
-
-        bool is_resolved() const { return true; }
-
-        void reset() override {}
+        Type* get() { return instance_; }
 
     private:
         Type* instance_;
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, external, std::shared_ptr< Type >, Conversions >
-        : public resettable_i
-    {
+    template< typename Type > class storage_instance< std::shared_ptr<Type>, external > {
     public:
-        static constexpr bool is_caching = true;
-
-        using conversions = Conversions;
-        using type = Type;
-
-        storage(std::shared_ptr< Type > instance)
-            : instance_(instance)
+        template< typename T > storage_instance(T&& instance):
+            instance_(std::forward<T>(instance))
         {}
 
-        ~storage()
-        {}
-
-        std::shared_ptr< Type > resolve(resolving_context< Container >& context)
-        {
-            return instance_;
-        }
-
-        bool is_resolved() const { return true; }
-
-        void reset() override {}
+        std::shared_ptr<Type> get() { return instance_; }
 
     private:
-        std::shared_ptr< Type > instance_;
+        std::shared_ptr<Type> instance_;
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, external, std::shared_ptr< Type >&, Conversions >
-        : public resettable_i
-    {
+    template< typename Type > class storage_instance< std::shared_ptr<Type>&, external > {
     public:
-        static constexpr bool is_caching = true;
-
-        using conversions = Conversions;
-        using type = Type;
-
-        storage(std::shared_ptr< Type >& instance)
-            : instance_(instance)
+        storage_instance(std::shared_ptr<Type>& instance):
+            instance_(instance)
         {}
 
-        ~storage()
-        {}
-
-        std::shared_ptr< Type > resolve(resolving_context< Container >& context)
-        {
-            return instance_;
-        }
-
-        bool is_resolved() const { return true; }
-
-        void reset() override {}
+        std::shared_ptr<Type> get() { return instance_; }
 
     private:
-        std::shared_ptr< Type >& instance_;
-    };
-    
-    template < typename Container, typename Type, typename Conversions > class storage< Container, external, std::unique_ptr< Type >, Conversions >
-        : public resettable_i
-    {
-    public:
-        static constexpr bool is_caching = true;
-
-        using conversions = Conversions;
-        using type = Type;
-
-        storage(std::unique_ptr< Type >&& instance)
-            : instance_(std::move(instance))
-        {}
-
-        ~storage()
-        {}
-
-        std::unique_ptr< Type >& resolve(resolving_context< Container >& context)
-        {
-            return instance_;
-        }
-
-        bool is_resolved() const { return true; }
-
-        void reset() override {}
-
-    private:
-        std::unique_ptr< Type > instance_;
+        std::shared_ptr<Type>& instance_;
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, external, std::unique_ptr< Type >&, Conversions >
+    template< typename Type > class storage_instance< std::unique_ptr<Type>, external > {
+    public:
+        template< typename T > storage_instance(T&& instance):
+            instance_(std::forward<T>(instance))
+        {}
+
+        std::unique_ptr<Type>& get() { return instance_; }
+
+    private:
+        std::unique_ptr<Type> instance_;
+    };
+
+    template< typename Type > class storage_instance< std::unique_ptr<Type>&, external > {
+    public:
+        storage_instance(std::unique_ptr<Type>& instance):
+            instance_(instance)
+        {}
+
+        std::unique_ptr<Type>& get() { return instance_; }
+
+    private:
+        std::unique_ptr<Type>& instance_;
+    };
+
+    template < typename Container, typename Type, typename Conversions > class storage< Container, external, Type, Conversions >
         : public resettable_i
     {
+        storage_instance<Type, external> instance_;
+
     public:
         static constexpr bool is_caching = true;
 
         using conversions = Conversions;
         using type = Type;
 
-        storage(std::unique_ptr< Type >& instance)
-            : instance_(instance)
+        template< typename T > storage(T&& instance)
+            : instance_(std::forward<T>(instance))
         {}
 
-        ~storage()
-        {}
-
-        std::unique_ptr< Type >& resolve(resolving_context< Container >& context)
-        {
-            return instance_;
-        }
-
-        bool is_resolved() const { return true; }
+        auto resolve(resolving_context< Container >& context) -> decltype(instance_.get()) { return instance_.get(); }
+        constexpr bool is_resolved() const { return true; }
 
         void reset() override {}
-
-    private:
-        std::unique_ptr< Type >& instance_;
     };
 }
