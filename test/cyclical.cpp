@@ -25,8 +25,8 @@ namespace dingo {
         struct B { B(std::shared_ptr< A >) {} };
 
         container_type container;
-        container.template register_binding< storage< container_type, shared, std::shared_ptr< A > > >();
-        container.template register_binding< storage< container_type, shared, B > >();
+        container.template register_binding< storage< shared, std::shared_ptr< A > > >();
+        container.template register_binding< storage< shared, B > >();
 
         ASSERT_THROW(container.template resolve< A >(), type_recursion_exception);
         ASSERT_THROW(container.template resolve< B >(), type_recursion_exception);
@@ -49,8 +49,8 @@ namespace dingo {
         };
 
         container_type container;
-        container.template register_binding< storage< container_type, shared_cyclical, A >, A, IClass >();
-        container.template register_binding< storage< container_type, shared_cyclical, B > >();
+        container.template register_binding< storage< shared_cyclical, A, container_type >, A, IClass >();
+        container.template register_binding< storage< shared_cyclical, B, container_type > >();
 
         auto& a = container.template resolve< A& >();
         AssertClass(a);
@@ -89,8 +89,8 @@ namespace dingo {
         };
 
         container_type container;
-        container.template register_binding< storage< container_type, shared_cyclical, std::shared_ptr< A > >, A, IClass >();
-        container.template register_binding< storage< container_type, shared_cyclical, std::shared_ptr< B > >, B, IClass1 >();
+        container.template register_binding< storage< shared_cyclical, std::shared_ptr< A >, container_type >, A, IClass >();
+        container.template register_binding< storage< shared_cyclical, std::shared_ptr< B >, container_type >, B, IClass1 >();
 
         // TODO: container.resolve< IClass& >();
         // Virtual base has some issues, the type needs to be constructed for casting to work.
@@ -133,8 +133,8 @@ namespace dingo {
         };
 
         container_type container;
-        container.template register_binding< storage< container_type, shared_cyclical_protected, std::shared_ptr< A > > >();
-        container.template register_binding< storage< container_type, shared_cyclical_protected, B > >();
+        container.template register_binding< storage< shared_cyclical_protected, std::shared_ptr< A >, container_type > >();
+        container.template register_binding< storage< shared_cyclical_protected, B, container_type > >();
 
         auto& a = container.template resolve< A& >();
         AssertClass(a);

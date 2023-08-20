@@ -23,9 +23,9 @@ namespace dingo {
         };
 
         container_type container;
-        container.template register_binding< storage< container_type, unique, std::shared_ptr< S > > >();
-        container.template register_binding< storage< container_type, unique, std::unique_ptr< U > > >();
-        container.template register_binding< storage< container_type, shared, B > >();
+        container.template register_binding< storage< unique, std::shared_ptr< S > > >();
+        container.template register_binding< storage< unique, std::unique_ptr< U > > >();
+        container.template register_binding< storage< shared, B > >();
 
         container.template resolve< B& >();
     }
@@ -43,9 +43,9 @@ namespace dingo {
         };
 
         container_type container;
-        container.template register_binding< storage< container_type, shared, A > >();
-        container.template register_binding< storage< container_type, shared, B > >();
-        container.template register_binding< storage< container_type, shared, C > >();
+        container.template register_binding< storage< shared, A > >();
+        container.template register_binding< storage< shared, B > >();
+        container.template register_binding< storage< shared, C > >();
 
         ASSERT_THROW(container.template resolve< C& >(), Ex);
         ASSERT_EQ(A::Constructor, 1);
@@ -71,16 +71,16 @@ namespace dingo {
         
         container_type container;
         {
-            container.template register_binding< storage< container_type, shared, A > >();
+            container.template register_binding< storage< shared, A > >();
             auto reg = [&]{
-                container.template register_binding< storage< container_type, shared, A > >();
+                container.template register_binding< storage< shared, A > >();
             };
             ASSERT_THROW(reg(), dingo::type_already_registered_exception);
         }
         {
-            container.template register_binding< storage< container_type, shared, A >, IClass >();
+            container.template register_binding< storage< shared, A >, IClass >();
             auto reg = [&]{
-                container.template register_binding< storage< container_type, shared, A >, IClass >();
+                container.template register_binding< storage< shared, A >, IClass >();
             };
             ASSERT_THROW(reg(), dingo::type_already_registered_exception);
         }

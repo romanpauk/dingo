@@ -27,7 +27,7 @@ template< typename ContainerTraits > static void resolve_container_unique(benchm
 {
     using container_type = dingo::container< ContainerTraits >;
     container_type container;
-    container.template register_binding< dingo::storage< container_type, dingo::unique, Class<0> > >();
+    container.template register_binding< dingo::storage< dingo::unique, Class<0> > >();
     
     int counter = 0;
     for (auto _ : state) {
@@ -52,7 +52,7 @@ template< typename ContainerTraits > static void resolve_container_shared(benchm
 {
     using container_type = dingo::container< ContainerTraits >;
     container_type container;
-    container.template register_binding< dingo::storage< container_type, dingo::shared, Class<0> > >();
+    container.template register_binding< dingo::storage< dingo::shared, Class<0> > >();
     
     int counter = 0;
     for (auto _ : state) {

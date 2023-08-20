@@ -21,7 +21,7 @@ namespace dingo
 
             {
                 container_type container;
-                container.template register_binding< storage< container_type, unique, C > >();
+                container.template register_binding< storage< unique, C > >();
                 AssertTypeNotConvertible< C, type_list<C&, C*> >(container);
                 {
                     AssertClass(container.template resolve< C&& >());
@@ -41,7 +41,7 @@ namespace dingo
 
             {
                 container_type container;
-                container.template register_binding< storage< container_type, unique, C > >();
+                container.template register_binding< storage< unique, C > >();
 
                 {
                     AssertClass(container.template resolve< C >());
@@ -61,7 +61,7 @@ namespace dingo
 
             {
                 container_type container;
-                container.template register_binding< storage< container_type, unique, std::unique_ptr< C > >, C, IClass >();
+                container.template register_binding< storage< unique, std::unique_ptr< C > >, C, IClass >();
                 AssertTypeNotConvertible< C, type_list<C, C&, C&&, C*> >(container);
                 {
                     AssertClass(*container.template resolve< std::unique_ptr< C > >());
@@ -106,7 +106,7 @@ namespace dingo
 
             {
                 container_type container;
-                container.template register_binding< storage< container_type, unique, C* > >();
+                container.template register_binding< storage< unique, C* > >();
                 AssertTypeNotConvertible< C, type_list<C, C&, C&&> >(container);
                 
                 auto c = container.template resolve< C* >();

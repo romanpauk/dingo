@@ -110,7 +110,7 @@ namespace dingo
         Type* get() const { return storage_instance< std::unique_ptr< Type >, shared >::get().get(); }
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, shared, Type, Conversions >
+    template < typename Type, typename Conversions > class storage< shared, Type, void, Conversions >
         : public resettable_i
     {
         storage_instance< Type, shared > instance_;
@@ -121,7 +121,7 @@ namespace dingo
         using conversions = Conversions;
         using type = Type;
 
-        auto resolve(resolving_context< Container >& context) -> decltype(instance_.get()) {
+        template< typename Context > auto resolve(Context& context) -> decltype(instance_.get()) {
             if (instance_.empty())
                 instance_.construct(context);
             return instance_.get();

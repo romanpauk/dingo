@@ -67,9 +67,9 @@ namespace dingo
 
         container_type container;
 
-        container.template register_binding< storage< container_type, shared, A >, annotated< I, tag< 1 > > >();
-        container.template register_binding< storage< container_type, shared, std::shared_ptr< B > >, annotated< I, tag< 2 > > >();
-        container.template register_binding< storage< container_type, shared, std::shared_ptr< C > >, C, annotated< I, tag< 3 > > >();
+        container.template register_binding< storage< shared, A >, annotated< I, tag< 1 > > >();
+        container.template register_binding< storage< shared, std::shared_ptr< B > >, annotated< I, tag< 2 > > >();
+        container.template register_binding< storage< shared, std::shared_ptr< C > >, C, annotated< I, tag< 3 > > >();
 
         I& aref = container.template resolve< annotated< I&, tag< 1 > > >();
         ASSERT_TRUE(dynamic_cast<A*>(&aref));

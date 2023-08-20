@@ -20,7 +20,7 @@ namespace dingo {
         typedef Class< multiple_interfaces_shared_value, __COUNTER__ > C;
 
         container_type container;
-        container.template register_binding< storage< container_type, shared, C >, IClass, IClass1, IClass2 >();
+        container.template register_binding< storage< shared, C >, IClass, IClass1, IClass2 >();
 
         ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve< IClass& >()));
         ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve< IClass1& >()));
@@ -34,7 +34,7 @@ namespace dingo {
         typedef Class< multiple_interfaces_shared_cyclical_value, __COUNTER__ > C;
 
         container_type container;
-        container.template register_binding< storage< container_type, shared_cyclical, C >, /*IClass, */IClass1, IClass2 >();
+        container.template register_binding< storage< shared_cyclical, C, container_type >, /*IClass, */IClass1, IClass2 >();
 
         // TODO: virtual base issues
         // BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
@@ -49,7 +49,7 @@ namespace dingo {
         typedef Class< multiple_interfaces_shared_shared_ptr, __COUNTER__ > C;
 
         container_type container;
-        container.template register_binding< storage< container_type, shared, std::shared_ptr< C > >, IClass, IClass1, IClass2 >();
+        container.template register_binding< storage< shared, std::shared_ptr< C > >, IClass, IClass1, IClass2 >();
 
         ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve< IClass& >()));
         ASSERT_TRUE(dynamic_cast<C*>(container.template resolve< std::shared_ptr< IClass >& >().get()));
@@ -66,7 +66,7 @@ namespace dingo {
         typedef Class< multiple_interfaces_shared_cyclical_shared_ptr, __COUNTER__ > C;
 
         container_type container;
-        container.template register_binding< storage< container_type, shared_cyclical, std::shared_ptr< C > >, IClass1, IClass2 >();
+        container.template register_binding< storage< shared_cyclical, std::shared_ptr< C >, container_type >, IClass1, IClass2 >();
 
         // TODO: virtual base issues with cyclical_shared
         // BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
@@ -97,7 +97,7 @@ namespace dingo {
         typedef Class< multiple_interfaces_unique_shared_ptr, __COUNTER__ > C;
 
         container_type container;
-        container.template register_binding< storage< container_type, unique, std::shared_ptr< C > >, IClass, IClass1, IClass2 >();
+        container.template register_binding< storage< unique, std::shared_ptr< C > >, IClass, IClass1, IClass2 >();
 
         ASSERT_TRUE(dynamic_cast<C*>(container.template resolve< std::shared_ptr< IClass > >().get()));
         ASSERT_TRUE(dynamic_cast<C*>(container.template resolve< std::shared_ptr< IClass1 > >().get()));
@@ -111,7 +111,7 @@ namespace dingo {
         typedef Class< multiple_interfaces_unique_unique_ptr, __COUNTER__ > C;
 
         container_type container;
-        container.template register_binding< storage< container_type, unique, std::unique_ptr< C > >, IClass, IClass1, IClass2 >();
+        container.template register_binding< storage< unique, std::unique_ptr< C > >, IClass, IClass1, IClass2 >();
 
         ASSERT_TRUE(dynamic_cast<C*>(container.template resolve< std::unique_ptr< IClass > >().get()));
         ASSERT_TRUE(dynamic_cast<C*>(container.template resolve< std::unique_ptr< IClass1 > >().get()));

@@ -41,7 +41,7 @@ namespace dingo
         using pointer_types = type_list<>;
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, unique, Type, Conversions >
+    template < typename Type, typename Conversions > class storage< unique, Type, void, Conversions >
     {
     public:
         static constexpr bool is_caching = false;
@@ -49,8 +49,8 @@ namespace dingo
         using conversions = Conversions;
         using type = Type;
 
-        Type resolve(resolving_context< Container >& context) {
-            return class_factory< decay_t< Type > >::template construct< Type, constructor_argument< decay_t< Type >, resolving_context< Container > > >(context);
+        template<typename Context> Type resolve(Context& context) {
+            return class_factory< decay_t< Type > >::template construct< Type, constructor_argument< decay_t< Type >, Context > >(context);
         }
     };
 }

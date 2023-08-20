@@ -18,7 +18,7 @@ namespace dingo {
         typedef Class< shared_value, __COUNTER__ > C;
         {
             container_type container;
-            container.template register_binding< storage< container_type, shared, C >, C, IClass >();
+            container.template register_binding< storage< shared, C >, C, IClass >();
 
             AssertClass(*container.template resolve< C* >());
             AssertClass(container.template resolve< C& >());
@@ -44,7 +44,7 @@ namespace dingo {
 
         {
             container_type container;
-            container.template register_binding< storage< container_type, shared, C* >, C, IClass >();
+            container.template register_binding< storage< shared, C* >, C, IClass >();
 
             AssertClass(*container.template resolve< C* >());
             AssertClass(container.template resolve< C& >());
@@ -70,7 +70,7 @@ namespace dingo {
 
         {
             container_type container;
-            container.template register_binding< storage< container_type, shared, std::shared_ptr< C > >, C, IClass >();
+            container.template register_binding< storage< shared, std::shared_ptr< C > >, C, IClass >();
 
             AssertClass(*container.template resolve< C* >());
             AssertClass(container.template resolve< C& >());
@@ -99,7 +99,7 @@ namespace dingo {
 
         {
             container_type container;
-            container.template register_binding< storage< container_type, shared, std::unique_ptr< C > > >();
+            container.template register_binding< storage< shared, std::unique_ptr< C > > >();
 
             AssertClass(*container.template resolve< C* >());
             AssertClass(container.template resolve< C& >());
@@ -150,9 +150,9 @@ namespace dingo {
         };
 
         container_type container;
-        container.template register_binding< storage< container_type, shared, std::shared_ptr< S > > >();
-        container.template register_binding< storage< container_type, shared, std::unique_ptr< U > > >();
-        container.template register_binding< storage< container_type, shared, B > >();
+        container.template register_binding< storage< shared, std::shared_ptr< S > > >();
+        container.template register_binding< storage< shared, std::unique_ptr< U > > >();
+        container.template register_binding< storage< shared, B > >();
 
         container.template resolve< B& >();
     }

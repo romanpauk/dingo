@@ -118,19 +118,20 @@ namespace dingo
         bool constructed_ = false;
     };
 
-    template < typename Container, typename Type, typename Conversions > class storage< Container, shared_cyclical, Type, Conversions >
+    template < typename Type, typename Conversions, typename Container > class storage< shared_cyclical, Type, Container, Conversions >
         : public resettable_i
         , public constructible_i< Container >
     {
+        static_assert(!std::is_same_v< Container, void >, "concrete container type required");
+        
         storage_instance< Type, shared_cyclical > instance_;
-
     public:
         static constexpr bool is_caching = true;
 
         using conversions = Conversions;
         using type = Type;
 
-        auto resolve(resolving_context< Container >& context) -> decltype(instance_.get()) {
+        template<typename Context> auto resolve(Context& context) -> decltype(instance_.get()) {
             if (instance_.empty()) {
                 context.register_constructible(this);
                 return instance_.resolve(context);

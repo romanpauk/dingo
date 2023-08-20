@@ -20,7 +20,7 @@ namespace dingo {
 
         {
             container_type container;
-            container.template register_binding< storage< container_type, external, C >, C, IClass >(std::move(c));
+            container.template register_binding< storage< external, C >, C, IClass >(std::move(c));
 
             AssertClass(*container.template resolve< C* >());
             AssertClass(container.template resolve< C& >());
@@ -37,7 +37,7 @@ namespace dingo {
 
         {
             container_type container;
-            container.template register_binding< storage< container_type, external, C& >, C, IClass >(c);
+            container.template register_binding< storage< external, C& >, C, IClass >(c);
 
             ASSERT_EQ(container.template resolve< C* >(), &c);
             AssertClass(*container.template resolve< C* >());
@@ -55,7 +55,7 @@ namespace dingo {
 
         {
             container_type container;
-            container.template register_binding< storage< container_type, external, C* >, C, IClass >(&c);
+            container.template register_binding< storage< external, C* >, C, IClass >(&c);
 
             ASSERT_EQ(container.template resolve< C* >(), &c);
             AssertClass(*container.template resolve< C* >());
@@ -73,7 +73,7 @@ namespace dingo {
 
         {
             container_type container;
-            container.template register_binding< storage< container_type, external, std::shared_ptr< C > >, C, IClass >(c);
+            container.template register_binding< storage< external, std::shared_ptr< C > >, C, IClass >(c);
             AssertClass(container.template resolve< C& >());
             AssertClass(*container.template resolve< C* >());
             AssertClass(*container.template resolve< std::shared_ptr< C > >());
@@ -92,7 +92,7 @@ namespace dingo {
 
         {
             container_type container;
-            container.template register_binding < storage< container_type, external, std::shared_ptr< C >& >, C, IClass >(c); //, C, IClass >(c);
+            container.template register_binding < storage< external, std::shared_ptr< C >& >, C, IClass >(c); //, C, IClass >(c);
             container.template resolve< C& >();
             container.template resolve< C* >();
             container.template resolve< std::shared_ptr< C > >();
@@ -111,7 +111,7 @@ namespace dingo {
 
         {
             container_type container;
-            container.template register_binding< storage< container_type, external, std::unique_ptr< C >& > >(c);
+            container.template register_binding< storage< external, std::unique_ptr< C >& > >(c);
             container.template resolve< C& >();
             container.template resolve< C* >();
             container.template resolve< std::unique_ptr< C >& >();
@@ -127,7 +127,7 @@ namespace dingo {
 
         {
             container_type container;
-            container.template register_binding< storage< container_type, external, std::unique_ptr< C > > >(std::move(c));
+            container.template register_binding< storage< external, std::unique_ptr< C > > >(std::move(c));
             container.template resolve< C& >();
             container.template resolve< C* >();
             container.template resolve< std::unique_ptr< C >& >();
