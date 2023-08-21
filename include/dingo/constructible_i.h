@@ -7,7 +7,7 @@ namespace dingo
     template < typename Container > class constructible_i
     {
     public:
-        virtual ~constructible_i() {};
+        virtual ~constructible_i() = default;
 
         virtual void construct(resolving_context< Container >& context, int phase) = 0;
         virtual bool has_address(uintptr_t) = 0;

@@ -52,7 +52,6 @@ target_sources(dingo INTERFACE
     include/dingo/decay.h
     include/dingo/exceptions.h
     include/dingo/memory/arena_allocator.h
-    include/dingo/memory/virtual_pointer.h
     include/dingo/rebind_type.h
     include/dingo/resettable_i.h
     include/dingo/resolving_context.h
@@ -61,7 +60,6 @@ target_sources(dingo INTERFACE
     include/dingo/storage/external.h
     include/dingo/storage/shared.h
     include/dingo/storage/shared_cyclical.h
-    include/dingo/storage/shared_cyclical_protected.h
     include/dingo/storage/unique.h
     include/dingo/type_list.h
     include/dingo/type_map.h

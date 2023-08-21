@@ -41,10 +41,9 @@ namespace dingo
         using pointer_types = type_list< U*, std::unique_ptr< U >* >;
     };
 
-    template < typename Type > struct storage_instance< Type, shared > {
-        ~storage_instance() {
-            // TODO: should be trivial for trivial T
-            reset();
+    template< typename Type > struct storage_instance_base {
+        Type* get() const {
+            return reinterpret_cast<Type*>(&instance_);
         }
 
         template< typename Context > void construct(Context& context) {
@@ -52,23 +51,42 @@ namespace dingo
             class_factory< decay_t< Type > >::template construct< Type*, constructor_argument< Type, Context > >(&instance_, context);
             initialized_ = true;
         }
+            
+        bool empty() const { return !initialized_; }
 
-        Type* get() const {
-            return reinterpret_cast<Type*>(&instance_);
+    protected:
+        mutable std::aligned_storage_t< sizeof(Type), alignof(Type) > instance_;
+        bool initialized_ = false;
+    };
+
+    template< typename Type, 
+        bool IsTriviallyDestructible = std::is_trivially_destructible_v< Type > > struct storage_instance_dtor;
+
+    template< typename Type > struct storage_instance_dtor< Type, true >
+        : storage_instance_base< Type > 
+    {
+        void reset() { this->initialized_ = false; }
+    };
+
+    template< typename Type > struct storage_instance_dtor< Type, false >
+        : storage_instance_base< Type >
+    {
+        ~storage_instance_dtor() {
+            reset();
         }
 
         void reset() {
-            if (initialized_) {
-                initialized_ = false;
-                get()->~Type();
+            if (this->initialized_) {
+                this->initialized_ = false;
+                this->get()->~Type();
             }
         }
-
-        bool empty() const { return !initialized_; }
-
-    private:
-        mutable std::aligned_storage_t< sizeof(Type), alignof(Type) > instance_;
-        bool initialized_ = false;
+    };
+    
+    template < typename Type > struct storage_instance< Type, shared >
+        : storage_instance_dtor< Type >
+    {
+        static_assert(std::is_trivially_destructible_v< Type > == std::is_trivially_destructible_v< storage_instance_dtor< Type > >);
     };
 
     template < typename Type > struct storage_instance< std::unique_ptr<Type>, shared > {
@@ -113,6 +131,8 @@ namespace dingo
     template < typename Type, typename Conversions > class storage< shared, Type, void, Conversions >
         : public resettable_i
     {
+        // TODO
+        //static_assert(std::is_trivially_destructible_v< Type > == std::is_trivially_destructible_v< storage_instance< Type, shared > >);
         storage_instance< Type, shared > instance_;
 
     public:

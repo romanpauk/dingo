@@ -80,8 +80,6 @@ container.register_binding< storage< shared, B > >();
 A& a = container.resolve< A& >();
 ``` 
 
-More an experiment than something practical, virtual memory protection can be used to throw upon access of not-yet-constructed class. See [cyclical.cpp](test/cyclical.cpp).
-
 #### Unit Tests
 The functionality is covered with tests written using google test. See available [test coverage](test).
 

@@ -121,18 +121,6 @@ namespace dingo
         std::unique_ptr<Type> instance_;
     };
 
-    template< typename Type > class storage_instance< std::unique_ptr<Type>&, external > {
-    public:
-        storage_instance(std::unique_ptr<Type>& instance):
-            instance_(instance)
-        {}
-
-        std::unique_ptr<Type>& get() { return instance_; }
-
-    private:
-        std::unique_ptr<Type>& instance_;
-    };
-
     template < typename Type, typename Conversions > class storage< external, Type, void, Conversions >
         : public resettable_i
     {

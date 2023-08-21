@@ -5,7 +5,7 @@ namespace dingo
     class resettable_i
     {
     public:
-        virtual ~resettable_i() {};
+        virtual ~resettable_i() = default;
         virtual void reset() = 0;
     };
 }

@@ -2,9 +2,6 @@
 #include <dingo/type_list.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>
-#if defined(_WIN32)
-#include <dingo/storage/shared_cyclical_protected.h>
-#endif
 #include <dingo/storage/unique.h>
 
 #include <gtest/gtest.h>
@@ -107,44 +104,4 @@ namespace dingo {
         AssertClass(b.ia_);
         AssertClass(*b.iaptr_);
     }
-
-#if 0
-#if defined(_WIN32)
-    TYPED_TEST(cyclical_test, protection_throws) {
-        using container_type = TypeParam;
-
-        struct recursion_cyclical_protected {};
-
-        struct B;
-        struct A : Class< recursion_cyclical_protected, __COUNTER__ > {
-            A(B& b) : b_(b) {}
-
-            B& b_;
-        };
-
-        struct B : Class< recursion_cyclical_protected, __COUNTER__ > {
-            B(std::shared_ptr< A > aptr, A& a) : aptr_(aptr), a_(a) {
-                EXPECT_THROW(aptr_->GetName(), type_not_constructed_exception);
-                EXPECT_THROW(a_.GetName(), type_not_constructed_exception);
-            }
-
-            std::shared_ptr< A > aptr_;
-            A& a_;
-        };
-
-        container_type container;
-        container.template register_binding< storage< shared_cyclical_protected, std::shared_ptr< A >, container_type > >();
-        container.template register_binding< storage< shared_cyclical_protected, B, container_type > >();
-
-        auto& a = container.template resolve< A& >();
-        AssertClass(a);
-        AssertClass(a.b_);
-
-        auto& b = container.template resolve< B& >();
-        AssertClass(b);
-        AssertClass(b.a_);
-        AssertClass(*b.aptr_);
-    }
-#endif
-#endif
 }

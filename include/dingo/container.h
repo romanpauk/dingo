@@ -28,6 +28,7 @@ namespace dingo
         
     };
 
+    // TODO wrt. multibindinds, is this like map/multimap?
     template < typename ContainerTraits = dynamic_container_traits, typename Allocator = std::allocator< char > > class container
     {
     public:

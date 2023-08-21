@@ -3,7 +3,6 @@
 #include <dingo/decay.h>
 #include <dingo/class_factory.h>
 #include <dingo/storage.h>
-#include <dingo/memory/virtual_pointer.h>
 #include <dingo/constructible_i.h>
 
 #include <memory>
