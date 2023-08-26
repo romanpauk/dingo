@@ -7,6 +7,7 @@
 
 namespace dingo
 {
+    // TODO: this has misleadnig name
     template < class T > struct decay : std::decay< T > {};
     template < class T > struct decay< T* > : decay< T > {};
     template < class T > struct decay< T& > : decay< T > {};
