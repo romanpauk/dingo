@@ -1,5 +1,7 @@
 #pragma once
 
+#include <dingo/type_traits.h>
+
 namespace dingo
 {
     template < typename... Types > struct type_list {};
@@ -30,6 +32,16 @@ namespace dingo
             return true;
         } else {
             return find_type<RTTI>(type_list< Tail... >{}, type);
+        }
+    }
+
+    template < typename RTTI > constexpr bool has_smart_ptr(type_list<>) { return false; }
+
+    template < typename RTTI, typename Head, typename... Tail > constexpr bool has_smart_ptr(type_list< Head, Tail...>) {
+        if constexpr (type_traits< std::remove_reference_t< std::remove_pointer_t< Head > > >::is_smart_ptr) {
+            return true;
+        } else {
+            return has_smart_ptr<RTTI>(type_list< Tail... >{});
         }
     }
 }

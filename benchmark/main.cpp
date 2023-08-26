@@ -1,6 +1,7 @@
 #include <dingo/container.h>
 #include <dingo/storage/unique.h>
 #include <dingo/storage/shared.h>
+#include <dingo/storage/external.h>
 
 #include <benchmark/benchmark.h>
 
@@ -63,6 +64,22 @@ template< typename ContainerTraits > static void resolve_container_shared(benchm
     state.SetBytesProcessed(state.iterations());
 }
 
+template< typename ContainerTraits > static void resolve_container_external(benchmark::State& state) 
+{
+    using container_type = dingo::container< ContainerTraits >;
+    container_type container;
+    Class<0> c;
+    container.template register_binding< dingo::storage< dingo::external, Class<0> > >(c);
+    
+    int counter = 0;
+    for (auto _ : state) {
+        auto& cls = container.template resolve<Class<0>&>();
+        counter += cls.GetCounter();
+    }
+    benchmark::DoNotOptimize(counter);
+    state.SetBytesProcessed(state.iterations());
+}
+
 BENCHMARK(resolve_baseline_unique);
 BENCHMARK_TEMPLATE(resolve_container_unique, dingo::static_container_traits<>)->UseRealTime();
 BENCHMARK_TEMPLATE(resolve_container_unique, dingo::dynamic_container_traits)->UseRealTime();
@@ -70,3 +87,6 @@ BENCHMARK_TEMPLATE(resolve_container_unique, dingo::dynamic_container_traits)->U
 BENCHMARK(resolve_baseline_shared);
 BENCHMARK_TEMPLATE(resolve_container_shared, dingo::static_container_traits<>)->UseRealTime();
 BENCHMARK_TEMPLATE(resolve_container_shared, dingo::dynamic_container_traits)->UseRealTime();
+
+BENCHMARK_TEMPLATE(resolve_container_external, dingo::static_container_traits<>)->UseRealTime();
+BENCHMARK_TEMPLATE(resolve_container_external, dingo::dynamic_container_traits)->UseRealTime();

@@ -5,6 +5,7 @@
 #include <dingo/resettable_i.h>
 #include <dingo/type_list.h>
 #include <dingo/type_traits.h>
+#include <dingo/type_conversion.h>
 
 #include <optional>
 #include <cstdlib>
@@ -18,6 +19,13 @@ namespace dingo
         {}
 
         T& get() { return instance_; }
+
+        auto get_address() {
+            if constexpr(std::is_pointer_v< T >) 
+                return instance_; 
+            else
+                return std::addressof(instance_);
+        }
 
     private:
         T instance_;
@@ -71,11 +79,10 @@ namespace dingo
     template< typename RTTI, typename TypeInterface, typename Storage, bool IsCaching = Storage::is_caching > struct class_instance_resolver
         : public resettable_i
     {
-        // TODO: this is based on the knowledge what unique storage can return, so it is unique-specialization...
-
         void reset() override { instance_.reset(); }
 
         template < typename Conversions, typename Context > void* resolve(Context& context, Storage& storage, const typename RTTI::type_index& type) {
+        #if 1
             if (!find_type< RTTI >(Conversions{}, type))
                 throw type_not_convertible_exception();
             
@@ -87,19 +94,19 @@ namespace dingo
 
             instance_.emplace(storage.resolve(context));
 
-            // TODO: this can't be used as it returns contained type address and for unique storage,
-            // contained type addresses are not allowed. The conversion seems to be more part
-            // of storage, like this whole class is tailored to unique storage too much
-            //
-            // return type_traits< TypeInterface >::get_address(instance_->instance);
+            return convert_type3<RTTI>(type, instance_->get_address());
+        #else
+            return convert_type2<RTTI, std::remove_pointer_t< decltype(instance_->get_address()) > >(Conversions{}, type, [&] {
+                class_recursion_guard< decay_t< typename Storage::type > > recursion_guard;
+                (recursion_guard);
 
-            if constexpr(std::is_pointer_v< TypeInterface >) {
-                // assert(type_traits< TypeInterface >::get_address(instance_->instance) == instance_->instance);
-                return instance_->get();
-            } else {
-                // assert(type_traits< TypeInterface >::get_address(instance_->instance) == &instance_->instance);
-                return &instance_->get();
-            }
+                class_instance_reset< decay_t< typename Storage::type > > storage_reset(context, this);
+                (storage_reset);
+
+                instance_.emplace(storage.resolve(context));
+                return instance_->get_address();
+            });
+        #endif
         }
         
     private:
@@ -112,6 +119,7 @@ namespace dingo
         void reset() override { instance_.reset(); }
     
         template < typename Conversions, typename Context > void* resolve(Context& context, Storage& storage, const typename RTTI::type_index& type) {
+        #if 1
             if (!find_type< RTTI >(Conversions{}, type))
                 throw type_not_convertible_exception();
 
@@ -128,14 +136,27 @@ namespace dingo
                 instance_.emplace(storage.resolve(context));
                 context.decrement();
             }
-
-            // TODO: this is to support very unfortunate casting of smart_ptr(s)<T> to T&...
-            if constexpr (type_traits< std::remove_reference_t< TypeInterface > >::is_smart_ptr) {
-                if (type.is_smart_ptr())
-                    return &instance_->get();
-            }
             
-            return type_traits< std::remove_reference_t< TypeInterface > >::get_address(instance_->get());
+            return convert_type3<RTTI>(type, instance_->get_address());
+        #else
+            return convert_type2<RTTI, std::remove_pointer_t< decltype(instance_->get_address()) > >(Conversions{}, type, [&] {
+                if (!instance_) {
+                    class_recursion_guard< decay_t< typename Storage::type > > recursion_guard;
+                    (recursion_guard);
+
+                    class_storage_reset< decay_t< typename Storage::type > > storage_reset(context, &storage);
+                    (storage_reset);
+                    
+                    // TODO: not all types will need a rollback
+                    context.register_resettable(this);
+                    context.increment();
+                    instance_.emplace(storage.resolve(context));
+                    context.decrement();
+                }
+
+                return instance_->get_address();
+            });
+        #endif
         }
     
     private:

@@ -10,7 +10,6 @@ namespace dingo
         virtual ~constructible_i() = default;
 
         virtual void construct(resolving_context< Container >& context, int phase) = 0;
-        virtual bool has_address(uintptr_t) = 0;
     };
 
 }

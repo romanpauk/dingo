@@ -51,7 +51,6 @@ target_sources(dingo INTERFACE
     include/dingo/container.h
     include/dingo/decay.h
     include/dingo/exceptions.h
-    include/dingo/memory/arena_allocator.h
     include/dingo/rebind_type.h
     include/dingo/resettable_i.h
     include/dingo/resolving_context.h
@@ -61,6 +60,7 @@ target_sources(dingo INTERFACE
     include/dingo/storage/shared.h
     include/dingo/storage/shared_cyclical.h
     include/dingo/storage/unique.h
+    include/dingo/type_conversion.h
     include/dingo/type_list.h
     include/dingo/type_map.h
     include/dingo/type_traits.h
@@ -95,5 +95,6 @@ if(DINGO_ENABLE_BENCHMARK)
         benchmark::benchmark
     )
     target_include_directories(dingo_benchmark PRIVATE benchmark)
+    target_link_options(dingo_benchmark PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:LINKER:--demangle>)
 endif()
 

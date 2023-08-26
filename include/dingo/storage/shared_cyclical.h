@@ -111,7 +111,7 @@ namespace dingo
         bool empty() const { return !instance_; }
         
         void reset() { instance_.reset(); }
-
+        
     private:
         std::shared_ptr<Type> instance_;
         bool constructed_ = false;
@@ -146,7 +146,5 @@ namespace dingo
             if (phase == 0)
                 instance_.construct(context);
         }
-
-        bool has_address(uintptr_t address) override { return false; }
     };
 }

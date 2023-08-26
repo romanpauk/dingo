@@ -1,6 +1,5 @@
 #pragma once
 
-#include <dingo/memory/arena_allocator.h>
 #include <dingo/resolving_context.h>
 #include <dingo/class_instance_resolver.h>
 #include <dingo/class_instance_factory_i.h>

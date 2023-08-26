@@ -127,7 +127,7 @@ namespace dingo
         storage_instance<Type, external> instance_;
 
     public:
-        static constexpr bool is_caching = true;
+        static constexpr bool is_caching = false;
 
         using conversions = Conversions;
         using type = Type;

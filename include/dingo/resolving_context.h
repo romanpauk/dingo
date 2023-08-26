@@ -1,6 +1,5 @@
 #pragma once
 
-#include <dingo/memory/arena_allocator.h>
 #include <dingo/resettable_i.h>
 #include <dingo/constructible_i.h>
 #include <dingo/exceptions.h>
@@ -12,10 +11,7 @@
 
 namespace dingo {
     template< typename Container > class resolving_context {
-        static constexpr size_t size = 32;
-        static constexpr size_t arena_size = 1024 * 4;
-
-        using arena_type = arena< arena_size >;
+        static constexpr size_t size = 32; // TODO
 
     public:
         resolving_context(Container& container)
@@ -74,17 +70,6 @@ namespace dingo {
         void register_constructible(constructible_i< Container >* ptr) { 
             check_size(constructibles_size_);
             constructibles_[constructibles_size_++] = ptr; 
-        }
-
-        bool has_constructible_address(uintptr_t address)
-        {
-            for (size_t i = 0; i < constructibles_size_; ++i)
-            {
-                if (constructibles_[i]->has_address(address))
-                    return true;
-            }
-
-            return false;
         }
 
         // Use this counter to determine if exception was thrown or not (std::uncaught_exceptions is slow).

@@ -6,7 +6,6 @@
 #include <dingo/class_instance_traits.h>
 #include <dingo/decay.h>
 #include <dingo/exceptions.h>
-#include <dingo/memory/arena_allocator.h>
 #include <dingo/resolving_context.h>
 #include <dingo/rtti.h>
 #include <dingo/type_map.h>
