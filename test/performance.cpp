@@ -4,46 +4,48 @@
 
 #include <gtest/gtest.h>
 
-namespace dingo
-{
+namespace dingo {
 #if !defined(_DEBUG)
-    BOOST_AUTO_TEST_CASE(TestResolvePerformance)
-    {
-        struct A {};
-        struct B { B(A&&) {} };
-        struct C { C(A&&, B&&) {} };
+BOOST_AUTO_TEST_CASE(TestResolvePerformance) {
+    struct A {};
+    struct B {
+        B(A&&) {}
+    };
+    struct C {
+        C(A&&, B&&) {}
+    };
 
-        performance_counter counter;
-        performance_counter counter2;
+    performance_counter counter;
+    performance_counter counter2;
 
-        container<> container;
-        container.register_binding< storage< dingo::container<>, unique, A > >();
-        container.register_binding< storage< dingo::container<>, unique, B > >();
-        container.register_binding< storage< dingo::container<>, unique, C > >();
+    container<> container;
+    container.register_binding<storage<dingo::container<>, unique, A>>();
+    container.register_binding<storage<dingo::container<>, unique, B>>();
+    container.register_binding<storage<dingo::container<>, unique, C>>();
 
-        const size_t N = 1000000;
-        for (size_t i = 0; i < N; ++i)
-        {
-            counter.start();
-            container.resolve< C >();
-            counter.stop();
-        }
-
-        /*
-        std::cout << N << " Resolve() took " << counter.get_elapsed_time() << std::endl;
-
-        // const size_t N = 10000000;
-        for (size_t i = 0; i < N; ++i)
-        {
-            counter2.start();
-            A a;
-            B b(A());
-            volatile C c(A(), B());
-            counter2.stop();
-        }
-
-        std::cout << N << " Fake() took " << counter2.GetElapsed() << std::endl;
-        */
+    const size_t N = 1000000;
+    for (size_t i = 0; i < N; ++i) {
+        counter.start();
+        container.resolve<C>();
+        counter.stop();
     }
-#endif
+
+    /*
+    std::cout << N << " Resolve() took " << counter.get_elapsed_time() <<
+    std::endl;
+
+    // const size_t N = 10000000;
+    for (size_t i = 0; i < N; ++i)
+    {
+        counter2.start();
+        A a;
+        B b(A());
+        volatile C c(A(), B());
+        counter2.stop();
+    }
+
+    std::cout << N << " Fake() took " << counter2.GetElapsed() << std::endl;
+    */
 }
+#endif
+} // namespace dingo

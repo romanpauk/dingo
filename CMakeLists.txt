@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.19)
 project(dingo)
 enable_testing()
 include(FetchContent)
+include(cmake/clang-format.cmake)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
@@ -97,4 +98,3 @@ if(DINGO_ENABLE_BENCHMARK)
     target_include_directories(dingo_benchmark PRIVATE benchmark)
     target_link_options(dingo_benchmark PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:LINKER:--demangle>)
 endif()
-
