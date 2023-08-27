@@ -7,6 +7,7 @@
 
 BENCHMARK_MAIN();
 
+namespace {
 volatile int ClassCounter = 0;
 template <size_t N> class Class {
   public:
@@ -86,3 +87,4 @@ BENCHMARK_TEMPLATE(resolve_container_shared, dingo::dynamic_container_traits)->U
 
 BENCHMARK_TEMPLATE(resolve_container_external, dingo::static_container_traits<>)->UseRealTime();
 BENCHMARK_TEMPLATE(resolve_container_external, dingo::dynamic_container_traits)->UseRealTime();
+} // namespace

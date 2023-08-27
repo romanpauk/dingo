@@ -12,10 +12,11 @@ if(CCACHE_FOUND)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache) 
 endif(CCACHE_FOUND)
 
-option(DINGO_ENABLE_TESTING "enable testing through googletest" ON)
-option(DINGO_ENABLE_BENCHMARK "enable benchmarking through googlebenchmark" ON)
+option(DINGO_TESTING_ENABLED "enable testing through googletest" ON)
+option(DINGO_BENCHMARK_ENABLED "enable benchmarking through googlebenchmark" ON)
+option(DINGO_BENCHMARK_FRUIT_ENABLED "enable fetching of google::fruit for benchmarks" OFF)
 
-if(DINGO_ENABLE_TESTING)
+if(DINGO_TESTING_ENABLED)
     FetchContent_Declare(googletest
         GIT_REPOSITORY https://github.com/google/googletest.git
         GIT_TAG main)
@@ -27,13 +28,22 @@ if(DINGO_ENABLE_TESTING)
     FetchContent_MakeAvailable(googletest)
 endif()
 
-if(DINGO_ENABLE_BENCHMARK)
-    FetchContent_Declare(benchmark
+if(DINGO_BENCHMARK_ENABLED)
+    FetchContent_Declare(googlebenchmark
         GIT_REPOSITORY https://github.com/google/benchmark.git
         GIT_TAG main) 
        
     set(BENCHMARK_ENABLE_TESTING off)
-    FetchContent_MakeAvailable(benchmark)
+    FetchContent_MakeAvailable(googlebenchmark)
+
+    if(DINGO_BENCHMARK_FRUIT_ENABLED)
+        set(FRUIT_USES_BOOST False)
+        FetchContent_Declare(googlefruit
+            GIT_REPOSITORY https://github.com/google/fruit.git
+            GIT_TAG master)
+
+        FetchContent_MakeAvailable(googlefruit)
+    endif()
 endif()
 
 add_library(dingo INTERFACE)
@@ -68,7 +78,7 @@ target_sources(dingo INTERFACE
     README.md
 )
     
-if(DINGO_ENABLE_TESTING)
+if(DINGO_TESTING_ENABLED)
     add_executable(dingo_test 
         test/annotated.cpp
         test/assert.h
@@ -86,9 +96,9 @@ if(DINGO_ENABLE_TESTING)
     target_link_libraries(dingo_test dingo gtest_main)
 endif()
 
-if(DINGO_ENABLE_BENCHMARK)
+if(DINGO_BENCHMARK_ENABLED)
     add_executable(dingo_benchmark
-        benchmark/main.cpp
+        benchmark/dingo.cpp
     )
 
     target_link_libraries(dingo_benchmark 
@@ -97,4 +107,9 @@ if(DINGO_ENABLE_BENCHMARK)
     )
     target_include_directories(dingo_benchmark PRIVATE benchmark)
     target_link_options(dingo_benchmark PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:LINKER:--demangle>)
+
+    if(DINGO_BENCHMARK_FRUIT_ENABLED)
+        target_sources(dingo_benchmark PRIVATE benchmark/fruit.cpp)
+        target_link_libraries(dingo_benchmark fruit)
+    endif()
 endif()
