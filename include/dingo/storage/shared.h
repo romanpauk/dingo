@@ -71,12 +71,14 @@ template <typename Type> struct storage_instance_dtor<Type, false> : storage_ins
     }
 };
 
-template <typename Type> struct storage_instance<Type, shared> : storage_instance_dtor<Type> {
+template <typename Type> class storage_instance<Type, shared> : public storage_instance_dtor<Type> {
+  public:
     static_assert(std::is_trivially_destructible_v<Type> ==
                   std::is_trivially_destructible_v<storage_instance_dtor<Type>>);
 };
 
-template <typename Type> struct storage_instance<std::unique_ptr<Type>, shared> {
+template <typename Type> class storage_instance<std::unique_ptr<Type>, shared> {
+  public:
     template <typename Context> void construct(Context& context) {
         assert(!instance_);
         instance_ = class_factory<Type>::template construct<std::unique_ptr<Type>, constructor_argument<Type, Context>>(
@@ -91,7 +93,8 @@ template <typename Type> struct storage_instance<std::unique_ptr<Type>, shared> 
     mutable std::unique_ptr<Type> instance_;
 };
 
-template <typename Type> struct storage_instance<std::shared_ptr<Type>, shared> {
+template <typename Type> class storage_instance<std::shared_ptr<Type>, shared> {
+  public:
     template <typename Context> void construct(Context& context) {
         assert(!instance_);
         instance_ = class_factory<Type>::template construct<std::shared_ptr<Type>, constructor_argument<Type, Context>>(
@@ -109,7 +112,8 @@ template <typename Type> struct storage_instance<std::shared_ptr<Type>, shared> 
 };
 
 template <typename Type>
-struct storage_instance<Type*, shared> : public storage_instance<std::unique_ptr<Type>, shared> {
+class storage_instance<Type*, shared> : public storage_instance<std::unique_ptr<Type>, shared> {
+  public:
     template <typename Context> void construct(Context& context) {
         storage_instance<std::unique_ptr<Type>, shared>::construct(context);
     }

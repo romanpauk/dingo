@@ -17,9 +17,7 @@ template <typename T> struct class_constructor<T*> {
 };
 
 template <typename T> struct class_constructor<T&> {
-    template <typename... Args> static T& invoke(Args&&... args) {
-        static_assert(true, "references cannot be constructed");
-    }
+    template <typename... Args> static T& invoke(Args&&...) { static_assert(true, "references cannot be constructed"); }
 };
 
 template <typename T> struct class_constructor<std::unique_ptr<T>> {

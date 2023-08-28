@@ -22,7 +22,7 @@ template <class T, class Allocator> struct collection_traits<std::vector<T, Allo
 
 template <class T, class Allocator> struct collection_traits<std::list<T, Allocator>> {
     static const bool is_collection = true;
-    static void reserve(std::list<T, Allocator>& v, size_t size) {}
+    static void reserve(std::list<T, Allocator>&, size_t) {}
     template <typename U> static void add(std::list<T, Allocator>& v, U&& value) {
         v.emplace_back(std::forward<U>(value));
     }
@@ -30,7 +30,7 @@ template <class T, class Allocator> struct collection_traits<std::list<T, Alloca
 
 template <class T, class Compare, class Allocator> struct collection_traits<std::set<T, Compare, Allocator>> {
     static const bool is_collection = true;
-    static void reserve(std::set<T, Compare, Allocator>& v, size_t size) {}
+    static void reserve(std::set<T, Compare, Allocator>&, size_t) {}
     template <typename U> static void add(std::set<T, Compare, Allocator>& v, U&& value) {
         v.emplace(std::forward<U>(value));
     }

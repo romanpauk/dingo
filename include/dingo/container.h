@@ -118,7 +118,7 @@ class container {
 
     template <typename T>
     std::enable_if_t<!collection_traits<decay_t<T>>::is_collection, T>
-    resolve_multiple(resolving_context<container_type>& context) {
+    resolve_multiple(resolving_context<container_type>&) {
         throw type_not_found_exception();
     }
 

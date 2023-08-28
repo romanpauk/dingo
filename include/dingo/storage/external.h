@@ -110,7 +110,7 @@ template <typename Type, typename Conversions> class storage<external, Type, voi
 
     template <typename T> storage(T&& instance) : instance_(std::forward<T>(instance)) {}
 
-    template <typename Context> auto resolve(Context& context) -> decltype(instance_.get()) { return instance_.get(); }
+    template <typename Context> auto resolve(Context&) -> decltype(instance_.get()) { return instance_.get(); }
     constexpr bool is_resolved() const { return true; }
 
     void reset() override {}

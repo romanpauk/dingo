@@ -12,7 +12,8 @@
 
 namespace dingo {
 // Required to support references
-template <typename T> struct class_instance_wrapper {
+template <typename T> class class_instance_wrapper {
+  public:
     template <typename... Args> class_instance_wrapper(Args&&... args) : instance_(std::forward<Args>(args)...) {}
 
     T& get() { return instance_; }
@@ -82,13 +83,9 @@ struct class_instance_resolver : public resettable_i {
             throw type_not_convertible_exception();
 
         class_recursion_guard<decay_t<typename Storage::type>> recursion_guard;
-        (recursion_guard);
 
         class_instance_reset<decay_t<typename Storage::type>> storage_reset(context, this);
-        (storage_reset);
-
         instance_.emplace(storage.resolve(context));
-
         return convert_type<RTTI>(Conversions{}, type, instance_->get_address());
     }
 
@@ -107,10 +104,7 @@ struct class_instance_resolver<RTTI, TypeInterface, Storage, true> : public rese
 
         if (!instance_) {
             class_recursion_guard<decay_t<typename Storage::type>> recursion_guard;
-            (recursion_guard);
-
             class_storage_reset<decay_t<typename Storage::type>> storage_reset(context, &storage);
-            (storage_reset);
 
             // TODO: not all types will need a rollback
             context.register_resettable(this);

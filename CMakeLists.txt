@@ -16,6 +16,22 @@ option(DINGO_TESTING_ENABLED "enable testing through googletest" ON)
 option(DINGO_BENCHMARK_ENABLED "enable benchmarking through googlebenchmark" ON)
 option(DINGO_BENCHMARK_FRUIT_ENABLED "enable fetching of google::fruit for benchmarks" OFF)
 
+# TODO: g++ -Wall -Wextra -Wpedantic -Q --help=warning | grep disabled
+set(DINGO_WARNINGS_GCC
+    -Wall 
+    -Wpedantic 
+    -Wextra 
+    -Wshadow
+    -Wno-unused-variable 
+    -Wno-gnu-zero-variadic-macro-arguments
+)
+
+set(DINGO_WARNINGS_MSVC
+    /W4
+    /wd4101 # unreferenced local variable
+    /wd4702 # unreachable code
+)
+
 if(DINGO_TESTING_ENABLED)
     FetchContent_Declare(googletest
         GIT_REPOSITORY https://github.com/google/googletest.git
@@ -94,6 +110,9 @@ if(DINGO_TESTING_ENABLED)
     )
     add_test(NAME dingo_test COMMAND dingo_test)
     target_link_libraries(dingo_test dingo gtest_main)
+    
+    target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:${DINGO_WARNINGS_GCC}>)
+    target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:${DINGO_WARNINGS_MSVC}>)
 endif()
 
 if(DINGO_BENCHMARK_ENABLED)
@@ -107,6 +126,9 @@ if(DINGO_BENCHMARK_ENABLED)
     )
     target_include_directories(dingo_benchmark PRIVATE benchmark)
     target_link_options(dingo_benchmark PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:LINKER:--demangle>)
+
+    target_compile_options(dingo_benchmark PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:${DINGO_WARNINGS_GCC}>)
+    target_compile_options(dingo_benchmark PRIVATE $<$<CXX_COMPILER_ID:MSVC>:${DINGO_WARNINGS_MSVC}>)
 
     if(DINGO_BENCHMARK_FRUIT_ENABLED)
         target_sources(dingo_benchmark PRIVATE benchmark/fruit.cpp)

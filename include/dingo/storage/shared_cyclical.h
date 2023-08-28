@@ -39,7 +39,7 @@ template <typename Type> class storage_instance<Type, shared_cyclical> {
         reset();
     }
 
-    template <typename Context> Type* resolve(Context& context) {
+    template <typename Context> Type* resolve(Context&) {
         assert(!resolved_);
         resolved_ = true;
         return get();
@@ -88,7 +88,7 @@ template <typename T> class storage_instance_deleter {
 
 template <typename Type> class storage_instance<std::shared_ptr<Type>, shared_cyclical> {
   public:
-    template <typename Context> std::shared_ptr<Type> resolve(Context& context) {
+    template <typename Context> std::shared_ptr<Type> resolve(Context&) {
         assert(!instance_);
         instance_.reset(reinterpret_cast<Type*>(new char[sizeof(Type)]), storage_instance_deleter<Type>());
         return instance_;

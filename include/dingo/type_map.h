@@ -46,7 +46,7 @@ static_type_map_node_data<Tag, Value> static_type_map_node<Tag, Key, Value>::dat
 template <typename RTTI, typename Tag, typename Value, typename Allocator> struct static_type_map {
     template <typename Key> using node_type = static_type_map_node<Tag, Key, Value>;
 
-    static_type_map(Allocator allocator) : nodes_(), size_() {}
+    static_type_map(Allocator&) : nodes_(), size_() {}
 
     ~static_type_map() {
         auto node = nodes_;
