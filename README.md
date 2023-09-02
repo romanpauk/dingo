@@ -27,7 +27,7 @@ C c = container.resolve< C >();
 ### Features
 
 #### Non-intrusive Class Registration
-Required dependencies of registered types are detected automatically from a constructor signatures. See [dingo/class_factory.h](include/dingo/class_factory.h).
+Required dependencies of registered types are detected automatically from a constructor signatures. See [dingo/class_factory.h](include/dingo/class_factory.h). The instances are constructed using list-initialization as follows: types with user-defined constructor(s) need single constructor to be present, types without user-defined constructors are constructed using widest aggregate initialization possible.
 
 The container tries to preserve usual type semantics of types it manages, without imposing requirements on managed types. It tries to be as transparent as possible to the managed type, meaning moves are used where they would be normally used, std::make_shared is used to create std::shared_ptr instances and so on. Registered type can be automatically converted to types that are 'reachable' from the base type using usual conversions - dereferencing, taking an address, downcasting and referencing downcasted types is allowed based on managed type lifetime.
 
@@ -36,7 +36,7 @@ The container tries to preserve usual type semantics of types it manages, withou
 The policies state how the container performs the creation of an instance and how it manages its lifetime.
 
 ##### External
-The container refers to an already existing instance. It can eventually take its ownership for smart pointer types. See [dingo/storage/external.h](include/dingo/storage/external.h) for allowed conversions for accessing external instances.
+The container refers to an already existing instance. It can eventually take the ownership by moving the instance inside external storage. See [dingo/storage/external.h](include/dingo/storage/external.h) for allowed conversions for accessing external instances.
 
 ```c++
 struct A {} a;
@@ -96,7 +96,7 @@ Container can be used from multiple modules, specifically it can be filled in on
 #### Exception-safe
 When exception occurs in user-provided code, the state of the container is not changed. Implemented using roll-back.
 
-#### Flexible
+#### Extensible
 Template class specializations are used to tweak the behavior and functionality for different storage types, instance creation or passing instances through type-erasure boundary. Standard RTTI is optional and emulation can be used. Single-module-single-container use-case is optimized with static type maps.
 
 #### Usable as Service Locator
@@ -113,6 +113,18 @@ IA& instance = container.resolve< IA& >();
 
 #### Support for Annotated Types
 It is possible to register different implementations with the same interface, disambiguating the registration with an user-provided tag. See [annotated.cpp](test/annotated.cpp).
+
+#### Support for Constructing Unmanaged Types
+It is possible to let a container construct an unknown type using registered dependencies to construct it.
+
+```c++
+struct A {};
+struct B { A& a; };
+
+container<> container;
+container.register_binding< storage< shared, A > >();
+B b = container.construct< B >();
+```
 
 #### Unit Tests
 The functionality is covered with tests written using google test. See available [test coverage](test).

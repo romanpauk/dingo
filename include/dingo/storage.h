@@ -1,5 +1,7 @@
 #pragma once
 
+#include <dingo/config.h>
+
 namespace dingo {
 template <typename Storage, typename Type, typename U> struct conversions;
 template <typename StorageTag, typename Type, typename Container = void,

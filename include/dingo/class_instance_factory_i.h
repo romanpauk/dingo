@@ -1,5 +1,7 @@
 #pragma once
 
+#include <dingo/config.h>
+
 namespace dingo {
 template <typename> class resolving_context;
 template <typename> class class_instance_i;

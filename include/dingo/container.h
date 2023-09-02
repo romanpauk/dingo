@@ -1,5 +1,7 @@
 #pragma once
 
+#include <dingo/config.h>
+
 #include <dingo/annotated.h>
 #include <dingo/class_instance_factory.h>
 #include <dingo/class_instance_traits.h>
@@ -8,6 +10,7 @@
 #include <dingo/exceptions.h>
 #include <dingo/resolving_context.h>
 #include <dingo/rtti.h>
+#include <dingo/storage/unique.h>
 #include <dingo/type_map.h>
 
 #include <map>
@@ -84,6 +87,13 @@ class container {
         return resolve<T, true>(context);
     }
 
+    template <typename T> T construct() {
+        // TODO: nothrow constructuble
+        resolving_context<container_type> context(*this);
+        return class_factory<decay_t<T>>::template construct<
+            T, constructor_argument<decay_t<T>, resolving_context<container_type>>>(context);
+    }
+
   private:
     template <typename TypeInterface, typename TypeStorage, typename Factory>
     void register_type_factory(Factory&& factory) {
@@ -107,7 +117,7 @@ class container {
         using Type = decay_t<T>;
 
         auto factories = type_factories_.template at<Type>();
-        if (factories->size() == 1) {
+        if (factories && factories->size() == 1) {
             auto& factory = factories->front();
             // TODO: no longer class instance
             return class_instance_traits<rtti_type, typename annotated_traits<T>::type>::resolve(*factory, context);

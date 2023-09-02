@@ -1,5 +1,7 @@
 #pragma once
 
+#include <dingo/config.h>
+
 #include <dingo/class_factory.h>
 #include <dingo/constructible_i.h>
 #include <dingo/decay.h>

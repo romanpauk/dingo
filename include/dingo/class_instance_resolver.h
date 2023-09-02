@@ -1,5 +1,7 @@
 #pragma once
 
+#include <dingo/config.h>
+
 #include <dingo/decay.h>
 #include <dingo/exceptions.h>
 #include <dingo/resettable_i.h>

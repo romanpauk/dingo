@@ -1,5 +1,7 @@
 #pragma once
 
+#include <dingo/config.h>
+
 #include <dingo/annotated.h>
 
 #include <memory>

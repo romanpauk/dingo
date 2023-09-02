@@ -1,5 +1,7 @@
 #pragma once
 
+#include <dingo/config.h>
+
 #include <dingo/exceptions.h>
 #include <dingo/rebind_type.h>
 #include <dingo/type_list.h>

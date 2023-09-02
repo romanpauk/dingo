@@ -77,6 +77,19 @@ template <typename ContainerTraits> static void resolve_container_external(bench
     state.SetBytesProcessed(state.iterations());
 }
 
+template <typename ContainerTraits> static void construct_baseline(benchmark::State& state) {
+    using container_type = dingo::container<ContainerTraits>;
+    container_type container;
+
+    int counter = 0;
+    for (auto _ : state) {
+        auto&& cls = container.template construct<Class<0>>();
+        counter += cls.GetCounter();
+    }
+    benchmark::DoNotOptimize(counter);
+    state.SetBytesProcessed(state.iterations());
+}
+
 BENCHMARK(resolve_baseline_unique);
 BENCHMARK_TEMPLATE(resolve_container_unique, dingo::static_container_traits<>)->UseRealTime();
 BENCHMARK_TEMPLATE(resolve_container_unique, dingo::dynamic_container_traits)->UseRealTime();
@@ -87,4 +100,8 @@ BENCHMARK_TEMPLATE(resolve_container_shared, dingo::dynamic_container_traits)->U
 
 BENCHMARK_TEMPLATE(resolve_container_external, dingo::static_container_traits<>)->UseRealTime();
 BENCHMARK_TEMPLATE(resolve_container_external, dingo::dynamic_container_traits)->UseRealTime();
+
+BENCHMARK_TEMPLATE(construct_baseline, dingo::static_container_traits<>)->UseRealTime();
+BENCHMARK_TEMPLATE(construct_baseline, dingo::dynamic_container_traits)->UseRealTime();
+
 } // namespace

@@ -20,7 +20,11 @@ TYPED_TEST(unique_test, value) {
         {
             container_type container;
             container.template register_binding<storage<unique, C>>();
+#if (DINGO_CLASS_FACTORY_CONSERVATIVE == 1)
             AssertTypeNotConvertible<C, type_list<C&, C*>>(container);
+#else
+            AssertTypeNotConvertible<C, type_list<C*>>(container);
+#endif
             {
                 AssertClass(container.template resolve<C&&>());
                 ASSERT_EQ(C::Constructor, 1);
@@ -60,7 +64,11 @@ TYPED_TEST(unique_test, value) {
         {
             container_type container;
             container.template register_binding<storage<unique, std::unique_ptr<C>>, C, IClass>();
+#if (DINGO_CLASS_FACTORY_CONSERVATIVE == 1)
             AssertTypeNotConvertible<C, type_list<C, C&, C&&, C*>>(container);
+#else
+            AssertTypeNotConvertible<C, type_list<C&, C&&, C*>>(container);
+#endif
             {
                 AssertClass(*container.template resolve<std::unique_ptr<C>>());
                 ASSERT_EQ(C::Constructor, 1);
@@ -105,8 +113,11 @@ TYPED_TEST(unique_test, pointer) {
         {
             container_type container;
             container.template register_binding<storage<unique, C*>>();
+#if (DINGO_CLASS_FACTORY_CONSERVATIVE)
             AssertTypeNotConvertible<C, type_list<C, C&, C&&>>(container);
-
+#else
+            AssertTypeNotConvertible<C, type_list<C&, C&&>>(container);
+#endif
             auto c = container.template resolve<C*>();
             AssertClass(*c);
             ASSERT_EQ(C::Constructor, 1);

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <dingo/config.h>
+
 #include <dingo/class_instance_factory_i.h>
 #include <dingo/class_instance_resolver.h>
 #include <dingo/rebind_type.h>

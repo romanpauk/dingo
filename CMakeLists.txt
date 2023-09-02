@@ -18,7 +18,7 @@ option(DINGO_BENCHMARK_FRUIT_ENABLED "enable fetching of google::fruit for bench
 
 # TODO: g++ -Wall -Wextra -Wpedantic -Q --help=warning | grep disabled
 set(DINGO_WARNINGS_GCC
-    -Wall 
+    -Wall
     -Wpedantic 
     -Wextra 
     -Wshadow
@@ -74,6 +74,7 @@ target_sources(dingo INTERFACE
     include/dingo/class_instance_resolver.h
     include/dingo/class_instance_traits.h
     include/dingo/collection_traits.h
+    include/dingo/config.h
     include/dingo/constructible_i.h
     include/dingo/container.h
     include/dingo/decay.h
@@ -100,6 +101,7 @@ if(DINGO_TESTING_ENABLED)
         test/assert.h
         test/class.h
         test/constructor.cpp
+        test/construct.cpp
         test/containers.h
         test/cyclical.cpp
         test/dingo.cpp

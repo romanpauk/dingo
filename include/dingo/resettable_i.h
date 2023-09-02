@@ -1,5 +1,7 @@
 #pragma once
 
+#include <dingo/config.h>
+
 namespace dingo {
 class resettable_i {
   public:

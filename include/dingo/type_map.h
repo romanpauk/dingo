@@ -1,3 +1,7 @@
+#pragma once
+
+#include <dingo/config.h>
+
 #include <map>
 #include <optional>
 // #include <unordered_map>
