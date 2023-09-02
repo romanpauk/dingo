@@ -40,11 +40,15 @@ constexpr bool is_aggregate_constructible_v = is_aggregate_constructible<T, Args
 //      Compiles nice and fast, yet does not allow for initializing unmanaged default-initializable
 //      structs from the container.
 // 2) non-conservative mode - wide - will try T{argN, argN - 1, ... arg1}, T{argN - 1, ... arg1}, ... T{}
-//      Compiles not as fast, and ignores default initialization
+//      Upon finding constructor, it will try T{}, T{arg1}... etc using narrow factory.
+//      The constructor is unambiguous when narrow and wide arities determined by respective factories
+//      are equal.
+//      TODO: this is stupid, we can use narrow and simply not terminate the search and just go up:
+//          If we find more than one ctor, we are done, otherwise if we found one, we are done, otherwise
+//          widest aggregate initializer will be used.
 //
 //  Args... is growing through recursion until a specialization with is_list_constructible
 //  equals true is hit or a limit is reached.
-//
 template <typename T, size_t N = DINGO_CLASS_FACTORY_ARGS, typename = void, typename... Args>
 struct class_factory_narrow : class_factory_narrow<T, N, void, class_factory_argument<T>, Args...> {};
 
@@ -77,31 +81,31 @@ struct is_constructible<T, Arg>
 
 template <typename T, typename... Args> constexpr bool is_constructible_v = is_constructible<T, Args...>::value;
 
-template <typename T, size_t N, bool Constructible, typename... Args> struct class_factory_wide_impl;
+template <typename T, bool Assert, size_t N, bool Constructible, typename... Args> struct class_factory_wide_impl;
 
 // Generates N arguments of type class_factory_argument<T>, going 1, 2, 3... N.
-template <typename T, size_t N = DINGO_CLASS_FACTORY_ARGS, typename = void, typename... Args>
-struct class_factory_wide : class_factory_wide<T, N, void, class_factory_argument<T>, Args...> {};
+template <typename T, bool Assert = true, size_t N = DINGO_CLASS_FACTORY_ARGS, typename = void, typename... Args>
+struct class_factory_wide : class_factory_wide<T, Assert, N, void, class_factory_argument<T>, Args...> {};
 
 // Upon reaching N, generates N attempts to instantiate, going N, N-1, N-2... 0 arguments.
 // This assures that container will select the construction method with the most arguments as
 // it will be the first seen in the hierarchy (this is needed to fill default-constructible
 // aggregate types with instances from container).
-template <typename T, size_t N, typename... Args>
-struct class_factory_wide<T, N, typename std::enable_if_t<sizeof...(Args) == N>, Args...>
-    : class_factory_wide_impl<T, N, is_constructible_v<T, Args...>, std::tuple<Args...>> {};
+template <typename T, bool Assert, size_t N, typename... Args>
+struct class_factory_wide<T, Assert, N, typename std::enable_if_t<sizeof...(Args) == N>, Args...>
+    : class_factory_wide_impl<T, Assert, N, is_constructible_v<T, Args...>, std::tuple<Args...>> {};
 
 // Construction was found. Bail out (by not inheriting anymore).
-template <typename T, size_t N, typename... Args> struct class_factory_wide_impl<T, N, true, std::tuple<Args...>> {
+template <typename T, bool Assert, size_t N, typename... Args>
+struct class_factory_wide_impl<T, Assert, N, true, std::tuple<Args...>> {
     static constexpr size_t arity = sizeof...(Args);
 
     // Only constructors are checked for ambiguity (as a single unambiguous ctor is required).
     // Aggregate initialization is always ambiguous so a widest initialization is selected.
     static constexpr size_t arity_narrow =
         std::is_constructible_v<T, Args...> ? class_factory_narrow<T, N>::arity : arity;
-
-    // TODO: more descriptive error?
-    static_assert(arity == arity_narrow, "ambiguous construction");
+    static constexpr bool valid = arity == arity_narrow;
+    static_assert(!Assert || valid, "ambiguous construction");
 
     template <typename Type, typename Arg, typename Context> static Type construct(Context& ctx) {
         return class_constructor<Type>::invoke(((void)sizeof(Args), Arg(ctx))...);
@@ -113,21 +117,19 @@ template <typename T, size_t N, typename... Args> struct class_factory_wide_impl
 };
 
 // Construction was not found. Generate next level of inheritance with one less argument.
-template <typename T, size_t N, typename Head, typename... Tail>
-struct class_factory_wide_impl<T, N, false, std::tuple<Head, Tail...>>
-    : class_factory_wide_impl<T, N, is_constructible_v<T, Tail...>, std::tuple<Tail...>> {};
+template <typename T, bool Assert, size_t N, typename Head, typename... Tail>
+struct class_factory_wide_impl<T, Assert, N, false, std::tuple<Head, Tail...>>
+    : class_factory_wide_impl<T, Assert, N, is_constructible_v<T, Tail...>, std::tuple<Tail...>> {};
 
 // Construction was not found, and no more arguments can be removed.
-template <typename T, size_t N> struct class_factory_wide_impl<T, N, false, std::tuple<>> {
-    static_assert(true, "constructor was not detected");
-};
+template <typename T, bool Assert, size_t N> struct class_factory_wide_impl<T, Assert, N, false, std::tuple<>> {};
 
 #if (DINGO_CLASS_FACTORY_CONSERVATIVE == 1)
-template <typename T, size_t N = DINGO_CLASS_FACTORY_ARGS, typename... Args>
-using class_factory = class_factory_narrow<T, N, Args...>;
+template <typename T, typename... Args>
+using class_factory = class_factory_narrow<T, DINGO_CLASS_FACTORY_ARGS, Args...>;
 #else
-template <typename T, size_t N = DINGO_CLASS_FACTORY_ARGS, typename... Args>
-using class_factory = class_factory_wide<T, N, Args...>;
+template <typename T, typename... Args>
+using class_factory = class_factory_wide<T, true, DINGO_CLASS_FACTORY_ARGS, Args...>;
 #endif
 
 } // namespace dingo

@@ -3,7 +3,9 @@ Dependency Injection Container for C++, with DI, next-gen and an 'o' in a name.
 
 ## Introduction
 Dingo is a header-only, dependency injection library that preforms recursive instantiation of registered types. 
-It has no dependencies except for the C++ standard library.
+It has no dependencies except for the C++ standard library. 
+
+Tests are using [google/googletest](https://github.com/google/googletest), benchmarks are using [google/benchmark](https://github.com/google/benchmark).
 
 ### Quick Example
 
@@ -33,7 +35,7 @@ The container tries to preserve usual type semantics of types it manages, withou
 
 #### Customizable Instance Lifetime Policies
 
-The policies state how the container performs the creation of an instance and how it manages its lifetime.
+The policies state how the container mangages an instance creation and lifetime.
 
 ##### External
 The container refers to an already existing instance. It can eventually take the ownership by moving the instance inside external storage. See [dingo/storage/external.h](include/dingo/storage/external.h) for allowed conversions for accessing external instances.

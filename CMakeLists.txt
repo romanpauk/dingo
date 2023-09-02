@@ -93,6 +93,7 @@ target_sources(dingo INTERFACE
     include/dingo/type_map.h
     include/dingo/type_traits.h
     README.md
+    LICENSE
 )
     
 if(DINGO_TESTING_ENABLED)
@@ -100,6 +101,7 @@ if(DINGO_TESTING_ENABLED)
         test/annotated.cpp
         test/assert.h
         test/class.h
+        test/class_factory.cpp
         test/constructor.cpp
         test/construct.cpp
         test/containers.h

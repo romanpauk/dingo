@@ -2,6 +2,7 @@
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
+
 #include <gtest/gtest.h>
 
 #include "assert.h"
