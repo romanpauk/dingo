@@ -71,39 +71,43 @@ template <typename Type> class storage_instance<Type, shared_cyclical> {
     bool constructed_ = false;
 };
 
-template <typename T> class storage_instance_deleter {
-  public:
-    storage_instance_deleter() : constructed_(new std::atomic<bool>(false)) {}
-
-    void set_constructed() { constructed_->store(true); }
-
-    void operator()(T* ptr) {
-        if (constructed_->load())
-            delete ptr;
-        else
-            delete[] reinterpret_cast<char*>(ptr);
-    }
-
-  private:
-    std::shared_ptr<std::atomic<bool>> constructed_;
-};
-
 template <typename Type> class storage_instance<std::shared_ptr<Type>, shared_cyclical> {
+    struct alignas(alignof(Type)) buffer {
+        uint8_t data[sizeof(Type)];
+    };
+
+    class deleter {
+      public:
+        void set_constructed() { constructed_ = true; }
+        bool is_constructed() const { return constructed_; }
+
+        void operator()(Type* ptr) {
+            if constexpr (!std::is_trivially_destructible_v<Type>) {
+                if (constructed_)
+                    ptr->~Type();
+            }
+
+            delete reinterpret_cast<buffer*>(ptr);
+        }
+
+      private:
+        bool constructed_ = false;
+    };
+
   public:
     template <typename Context> std::shared_ptr<Type> resolve(Context&) {
         assert(!instance_);
-        instance_.reset(reinterpret_cast<Type*>(new char[sizeof(Type)]), storage_instance_deleter<Type>());
+        instance_.reset(reinterpret_cast<Type*>(new buffer), deleter());
         return instance_;
     }
 
     std::shared_ptr<Type> get() { return instance_; }
 
     template <typename Context> void construct(Context& context) {
-        assert(!constructed_);
+        assert(instance_);
         class_factory<decay_t<Type>>::template construct<Type*, constructor_argument<Type, Context>>(instance_.get(),
                                                                                                      context);
-        std::get_deleter<storage_instance_deleter<Type>>(instance_)->set_constructed();
-        constructed_ = true;
+        std::get_deleter<deleter>(instance_)->set_constructed();
     }
 
     bool empty() const { return !instance_; }
@@ -112,7 +116,6 @@ template <typename Type> class storage_instance<std::shared_ptr<Type>, shared_cy
 
   private:
     std::shared_ptr<Type> instance_;
-    bool constructed_ = false;
 };
 
 template <typename Type, typename Conversions, typename Container>
