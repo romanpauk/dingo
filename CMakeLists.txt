@@ -105,11 +105,11 @@ if(DINGO_TESTING_ENABLED)
         test/constructor.cpp
         test/construct.cpp
         test/containers.h
-        test/cyclical.cpp
         test/dingo.cpp
         test/external.cpp
         test/multibindings.cpp
         test/shared.cpp
+        test/shared_cyclical.cpp
         test/unique.cpp
     )
     add_test(NAME dingo_test COMMAND dingo_test)

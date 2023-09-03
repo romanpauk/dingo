@@ -34,12 +34,12 @@ template <typename Type, typename U> struct conversions<shared_cyclical, std::sh
     using pointer_types = type_list<U*, std::shared_ptr<U>*>;
 };
 
-template <typename Type> class storage_instance<Type, shared_cyclical> {
+template <typename Type, bool IsTriviallyDestructible = std::is_trivially_destructible_v<Type>>
+class shared_storage_instance_impl;
+
+template <typename Type> class shared_storage_instance_impl<Type, false> {
   public:
-    ~storage_instance() {
-        // TODO: should not have dtor for trivially-destructible Type
-        reset();
-    }
+    ~shared_storage_instance_impl() { reset(); }
 
     template <typename Context> Type* resolve(Context&) {
         assert(!resolved_);
@@ -70,6 +70,32 @@ template <typename Type> class storage_instance<Type, shared_cyclical> {
     bool resolved_ = false;
     bool constructed_ = false;
 };
+
+template <typename Type> class shared_storage_instance_impl<Type, true> {
+  public:
+    template <typename Context> Type* resolve(Context&) {
+        assert(!resolved_);
+        resolved_ = true;
+        return get();
+    }
+
+    Type* get() { return reinterpret_cast<Type*>(&instance_); }
+
+    template <typename Context> void construct(Context& context) {
+        class_factory<decay_t<Type>>::template construct<Type*, constructor_argument<Type, Context>>(&instance_,
+                                                                                                     context);
+    }
+
+    bool empty() const { return !resolved_; }
+
+    void reset() { resolved_ = false; }
+
+  private:
+    std::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
+    bool resolved_ = false;
+};
+
+template <typename Type> class storage_instance<Type, shared_cyclical> : public shared_storage_instance_impl<Type> {};
 
 template <typename Type> class storage_instance<std::shared_ptr<Type>, shared_cyclical> {
     struct alignas(alignof(Type)) buffer {

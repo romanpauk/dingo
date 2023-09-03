@@ -11,10 +11,10 @@
 #include "containers.h"
 
 namespace dingo {
-template <typename T> struct cyclical_test : public testing::Test {};
-TYPED_TEST_SUITE(cyclical_test, container_types);
+template <typename T> struct shared_cyclical_test : public testing::Test {};
+TYPED_TEST_SUITE(shared_cyclical_test, container_types);
 
-TYPED_TEST(cyclical_test, recursion_exception) {
+TYPED_TEST(shared_cyclical_test, recursion_exception) {
     using container_type = TypeParam;
 
     struct B;
@@ -33,7 +33,7 @@ TYPED_TEST(cyclical_test, recursion_exception) {
     ASSERT_THROW(container.template resolve<B>(), type_recursion_exception);
 }
 
-TYPED_TEST(cyclical_test, shared_cyclical_value) {
+TYPED_TEST(shared_cyclical_test, value) {
     using container_type = TypeParam;
 
     struct B;
@@ -66,7 +66,7 @@ TYPED_TEST(cyclical_test, shared_cyclical_value) {
     AssertClass(c);
 }
 
-TYPED_TEST(cyclical_test, shared_cyclical_shared_ptr) {
+TYPED_TEST(shared_cyclical_test, shared_ptr) {
     using container_type = TypeParam;
 
     struct B;
@@ -109,4 +109,25 @@ TYPED_TEST(cyclical_test, shared_cyclical_shared_ptr) {
     AssertClass(b.ia_);
     AssertClass(*b.iaptr_);
 }
+
+TYPED_TEST(shared_cyclical_test, trivially_destructible) {
+    using container_type = TypeParam;
+
+    struct B;
+    struct A {
+        B& b;
+    };
+    struct B {
+        A& a;
+    };
+
+    container_type container;
+    container.template register_binding<storage<shared_cyclical, A, container_type>>();
+    container.template register_binding<storage<shared_cyclical, std::shared_ptr<B>, container_type>>();
+    auto& a = container.template resolve<A&>();
+    auto& b = container.template resolve<B&>();
+    ASSERT_EQ(&a, &b.a);
+    ASSERT_EQ(&b, &a.b);
+}
+
 } // namespace dingo
