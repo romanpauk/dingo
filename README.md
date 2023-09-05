@@ -92,6 +92,8 @@ container.register_binding< storage< shared, B > >();
 A& a = container.resolve< A& >();
 ```
 
+This storage type disallows registering virtual base classes as it is not always possible to calculate the cast from Derived to Base without constructing the type first, and with cyclical storage, it is not always possible to construct it first.
+
 #### Runtime-based Usage
 Container can be used from multiple modules, specifically it can be filled in one module and used in other modules. This is a requirement for larger projects with not so clean dependencies. Compared to the compile-time DI solutions, errors are propagated in runtime as exceptions.
 

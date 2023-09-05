@@ -11,6 +11,7 @@
 #include <dingo/resolving_context.h>
 #include <dingo/rtti.h>
 #include <dingo/storage/unique.h>
+#include <dingo/storage/shared_cyclical.h>
 #include <dingo/type_map.h>
 
 #include <map>
@@ -97,7 +98,7 @@ class container {
   private:
     template <typename TypeInterface, typename TypeStorage, typename Factory>
     void register_type_factory(Factory&& factory) {
-        check_interface_requirements<typename annotated_traits<TypeInterface>::type, typename TypeStorage::type>();
+        check_interface_requirements<TypeStorage, typename annotated_traits<TypeInterface>::type, typename TypeStorage::type>();
         auto pb = type_factories_.template insert<TypeInterface>(
             typename ContainerTraits::template type_factory_map_type<
                 std::unique_ptr<class_instance_factory_i<container_type>>, allocator_type>(allocator_));
@@ -159,9 +160,12 @@ class container {
         throw type_not_found_exception();
     }
 
-    template <class TypeInterface, class Type> void check_interface_requirements() {
+    template <class Storage, class TypeInterface, class Type> void check_interface_requirements() {
         static_assert(!std::is_reference_v<TypeInterface>);
         static_assert(std::is_convertible_v<decay_t<Type>*, decay_t<TypeInterface>*>);
+        if constexpr (!std::is_same_v<decay_t<Type>, decay_t<TypeInterface>>) {
+            static_assert(storage_interface_requirements_v<Storage, decay_t<Type>, decay_t<TypeInterface>>, "storage requirements not met");
+        }
     }
 
     allocator_type allocator_;

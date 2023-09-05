@@ -44,13 +44,13 @@ TYPED_TEST(shared_cyclical_test, value) {
     };
 
     struct B : Class<shared_cyclical_value, __COUNTER__> {
-        B(A& a, IClass& ia) : a_(a), ia_(ia) {}
+        B(A& a, IClass1& ia) : a_(a), ia_(ia) {}
         A& a_;
-        IClass& ia_;
+        IClass1& ia_;
     };
 
     container_type container;
-    container.template register_binding<storage<shared_cyclical, A, container_type>, A, IClass>();
+    container.template register_binding<storage<shared_cyclical, A, container_type>, A, IClass1>();
     container.template register_binding<storage<shared_cyclical, B, container_type>>();
 
     auto& a = container.template resolve<A&>();
@@ -62,7 +62,7 @@ TYPED_TEST(shared_cyclical_test, value) {
     AssertClass(b.a_);
     AssertClass(b.ia_);
 
-    auto& c = container.template resolve<IClass&>();
+    auto& c = container.template resolve<IClass1&>();
     AssertClass(c);
 }
 
@@ -76,26 +76,18 @@ TYPED_TEST(shared_cyclical_test, shared_ptr) {
         B& b_;
         IClass1& ib_;
         std::shared_ptr<IClass1>& ibptr_;
-
-        // Conversion to IClass& ib_; crashes during constructor as the object
-        // is not healthy during construction.
-        // TODO: could this be detected in runtime?
     };
 
     struct B : Class<shared_cyclical_shared_ptr, __COUNTER__> {
-        B(A& a, IClass& ia, std::shared_ptr<IClass>& iaptr) : a_(a), ia_(ia), iaptr_(iaptr) {}
+        B(A& a, IClass2& ia, std::shared_ptr<IClass2>& iaptr) : a_(a), ia_(ia), iaptr_(iaptr) {}
         A& a_;
-        IClass& ia_;
-        std::shared_ptr<IClass>& iaptr_;
+        IClass2& ia_;
+        std::shared_ptr<IClass2>& iaptr_;
     };
 
     container_type container;
-    container.template register_binding<storage<shared_cyclical, std::shared_ptr<A>, container_type>, A, IClass>();
+    container.template register_binding<storage<shared_cyclical, std::shared_ptr<A>, container_type>, A, IClass2>();
     container.template register_binding<storage<shared_cyclical, std::shared_ptr<B>, container_type>, B, IClass1>();
-
-    // TODO: container.resolve< IClass& >();
-    // Virtual base has some issues, the type needs to be constructed for
-    // casting to work.
 
     auto& a = container.template resolve<A&>();
     AssertClass(a);
@@ -128,6 +120,15 @@ TYPED_TEST(shared_cyclical_test, trivially_destructible) {
     auto& b = container.template resolve<B&>();
     ASSERT_EQ(&a, &b.a);
     ASSERT_EQ(&b, &a.b);
+}
+
+TEST(shared_cyclical_test, virtual_base) {
+    struct A {};
+    struct B : A {};
+    static_assert(!is_virtual_base_of_v<A, B>);
+
+    struct C : virtual A {};
+    static_assert(is_virtual_base_of_v<A, C>);
 }
 
 } // namespace dingo
