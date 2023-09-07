@@ -3,6 +3,7 @@ project(dingo)
 enable_testing()
 include(FetchContent)
 include(cmake/clang-format.cmake)
+include(cmake/sanitizers.cmake)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
@@ -15,6 +16,8 @@ endif(CCACHE_FOUND)
 option(DINGO_TESTING_ENABLED "enable testing through googletest" ON)
 option(DINGO_BENCHMARK_ENABLED "enable benchmarking through googlebenchmark" ON)
 option(DINGO_BENCHMARK_FRUIT_ENABLED "enable fetching of google::fruit for benchmarks" OFF)
+
+sanitizers_init(DINGO)
 
 # TODO: g++ -Wall -Wextra -Wpedantic -Q --help=warning | grep disabled
 set(DINGO_WARNINGS_GCC
@@ -117,6 +120,8 @@ if(DINGO_TESTING_ENABLED)
     
     target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:${DINGO_WARNINGS_GCC}>)
     target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:${DINGO_WARNINGS_MSVC}>)
+
+    target_sanitize(DINGO dingo_test)
 endif()
 
 if(DINGO_BENCHMARK_ENABLED)
