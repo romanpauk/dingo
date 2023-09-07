@@ -1,5 +1,7 @@
 # Dingo
-Dependency Injection Container for C++, with DI, next-gen and an 'o' in a name.
+Dependency Injection Container for C++, with DI, next-gen and an 'o' in a name.  
+  
+![Build](https://github.com/romanpauk/dingo/actions/workflows/build.yaml/badge.svg?branch=master)
 
 ## Introduction
 Dingo is a header-only, dependency injection library that preforms recursive instantiation of registered types. 
