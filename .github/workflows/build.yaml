@@ -1,0 +1,75 @@
+name: Build
+on: 
+  schedule:
+    - cron: "0 0 * * *" # Daily
+  push:
+jobs:
+  build-unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Debug, Release]
+        os: [ubuntu-latest]
+        compiler:
+          - { CC: gcc-10, CXX: g++-10 }
+          - { CC: gcc-11, CXX: g++-11 }
+          - { CC: gcc-12, CXX: g++-12 }
+          - { CC: clang-12, CXX: clang++-12 }
+          - { CC: clang-13, CXX: clang++-13 }
+          - { CC: clang-14, CXX: clang++-14 }
+        std: [17]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: CCache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ matrix.os}}-${{ matrix.config }}-${{ matrix.CXX }}
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Configure
+        env:
+            CXX: ${{ matrix.compiler.CXX }}
+            CC: ${{ matrix.compiler.CC }}
+        run: |
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+      - name: Build
+        run: |
+            cmake --build build -j 2
+      - name: Test
+        run: |
+            cd build && ./dingo_test
+      - name: Benchmark
+        if: ${{ matrix.config == 'Release' }}
+        run: |
+            cd build && ./dingo_benchmark
+
+  build-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Debug, Release]
+        os: [windows-latest]
+        vs-version: ['[17.7,)']
+        std: [17]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: MSBuild
+        uses: microsoft/setup-msbuild@v1.1
+        with:
+          vs-version: ${{ matrix.vs_version }}
+          msbuild-architecture: x64
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Configure
+        run: |
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+      - name: Build
+        run: |
+            cmake --build build --config ${{ matrix.config }} -j 2
+      - name: Test
+        run: |
+            build/${{ matrix.config }}/dingo_test
+      - name: Benchmark
+        if: ${{ matrix.config == 'Release' }}
+        run: |
+            build/${{ matrix.config }}/dingo_benchmark

@@ -4,8 +4,10 @@ enable_testing()
 include(FetchContent)
 include(cmake/clang-format.cmake)
 include(cmake/sanitizers.cmake)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+option(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_program(CCACHE_FOUND ccache)
 if(CCACHE_FOUND)
@@ -95,8 +97,6 @@ target_sources(dingo INTERFACE
     include/dingo/type_list.h
     include/dingo/type_map.h
     include/dingo/type_traits.h
-    README.md
-    LICENSE
 )
     
 if(DINGO_TESTING_ENABLED)
