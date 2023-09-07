@@ -5,7 +5,7 @@ include(FetchContent)
 include(cmake/clang-format.cmake)
 include(cmake/sanitizers.cmake)
 
-option(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 17 CACHE STRING "c++ standard")
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
