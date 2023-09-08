@@ -2,7 +2,7 @@
 Dependency Injection Container for C++, with DI, next-gen and an 'o' in a name. Header only.
 
 Tested with:
-- C++17, C++20, C++23 standards
+- C++17, C++20, C++23
 - GCC 9-12
 - Clang 11-15
 - Visual Studio 2022 17.7
