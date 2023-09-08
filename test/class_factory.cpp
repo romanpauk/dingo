@@ -20,8 +20,12 @@ TEST(class_factory_test, default_constructor_delete) {
     struct A {
         A() = delete;
     };
+#if DINGO_CXX_STANDARD <= DINGO_CXX17
     A a{};
     static_assert(test_class_factory<A>::arity == 0 && test_class_factory<A>::valid == true);
+#else
+    static_assert(test_class_factory<A>::valid == false);
+#endif
 }
 
 TEST(class_factory_test, constructor_ambiguous) {
@@ -29,7 +33,7 @@ TEST(class_factory_test, constructor_ambiguous) {
         A() {}
         A(const int) {}
     };
-    static_assert(test_class_factory<A>::valid == false);
+    static_assert(test_class_factory<A>::arity == 1);
 }
 
 TEST(class_factory_test, aggregate) {
@@ -47,14 +51,14 @@ TEST(class_factory_test, aggregate) {
     static_assert(test_class_factory<A1>::arity == 1 && test_class_factory<A1>::valid == true);
 }
 
-// This we can't construct :(
-TEST(class_factory_test, aggregate2) {
+// This case is skipped in constructability detection
+// as copy constructor needs to be skipped.
+TEST(class_factory_test, unconstructible) {
     struct A {
         A& a;
     };
 
-    // TODO:
-    // static_assert(class_factory< A >::valid == false);
+    static_assert(class_factory<A>::valid == false);
 }
 
 } // namespace dingo

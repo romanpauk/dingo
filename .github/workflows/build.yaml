@@ -13,20 +13,38 @@ jobs:
       matrix:
         config: [Debug, Release]
         os: [ubuntu-latest]
-        compiler:
-          - { CC: gcc-10, CXX: g++-10 }
-          - { CC: gcc-11, CXX: g++-11 }
-          - { CC: gcc-12, CXX: g++-12 }
-          - { CC: clang-12, CXX: clang++-12 }
-          - { CC: clang-13, CXX: clang++-13 }
-          - { CC: clang-14, CXX: clang++-14 }
-        std: [17]
+        compiler: [
+          { CC: gcc-9, CXX: g++-9, STD: 17 },
+          { CC: gcc-9, CXX: g++-9, STD: 20 },
+          { CC: gcc-10, CXX: g++-10, STD: 17 },
+          { CC: gcc-10, CXX: g++-10, STD: 20 },
+          { CC: gcc-11, CXX: g++-11, STD: 17 },
+          { CC: gcc-11, CXX: g++-11, STD: 20 },
+          { CC: gcc-11, CXX: g++-11, STD: 23 },
+          { CC: gcc-12, CXX: g++-12, STD: 17 },
+          { CC: gcc-12, CXX: g++-12, STD: 20 },
+          { CC: gcc-12, CXX: g++-12, STD: 23 },
+          { CC: clang-11, CXX: clang++-11, STD: 17 },
+          { CC: clang-11, CXX: clang++-11, STD: 20 },
+          { CC: clang-12, CXX: clang++-12, STD: 17 },
+          { CC: clang-12, CXX: clang++-12, STD: 20 },
+          { CC: clang-12, CXX: clang++-12, STD: 23 },
+          { CC: clang-13, CXX: clang++-13, STD: 17 },
+          { CC: clang-13, CXX: clang++-13, STD: 20 },
+          { CC: clang-13, CXX: clang++-13, STD: 23 },
+          { CC: clang-14, CXX: clang++-14, STD: 17 },
+          { CC: clang-14, CXX: clang++-14, STD: 20 },
+          { CC: clang-14, CXX: clang++-14, STD: 23 },
+          { CC: clang-15, CXX: clang++-15, STD: 17 },
+          { CC: clang-15, CXX: clang++-15, STD: 20 },
+          { CC: clang-15, CXX: clang++-15, STD: 23 } 
+        ]
     runs-on: ${{ matrix.os }}
     steps:
       - name: CCache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: ${{ matrix.os}}-${{ matrix.config }}-${{ matrix.CXX }}
+          key: ${{ matrix.os}}-${{ matrix.config }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
       - name: Checkout
         uses: actions/checkout@v3
       - name: Configure
@@ -34,13 +52,17 @@ jobs:
             CXX: ${{ matrix.compiler.CXX }}
             CC: ${{ matrix.compiler.CC }}
         run: |
-            cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+            which ${{ matrix.compiler.CC }} || sudo apt install ${{ matrix.compiler.CC }} || true
+            which ${{ matrix.compiler.CXX }} || sudo apt install ${{ matrix.compiler.CXX }} || true
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.compiler.STD }}
       - name: Build
         run: |
             cmake --build build -j 2
       - name: Test
+        env:
+          ASAN_OPTIONS: use_sigaltstack=false
         run: |
-            cd build && ./dingo_test
+            cd build && ctest --verbose
       - name: Benchmark
         if: ${{ matrix.config == 'Release' }}
         run: |
@@ -53,7 +75,7 @@ jobs:
         config: [Debug, Release]
         os: [windows-latest]
         vs-version: ['[17.7,)']
-        std: [17]
+        std: [17, 20, 23]
     runs-on: ${{ matrix.os }}
     steps:
       - name: MSBuild

@@ -1,11 +1,16 @@
 # Dingo
-Dependency Injection Container for C++, with DI, next-gen and an 'o' in a name.  
-  
-![Build](https://github.com/romanpauk/dingo/actions/workflows/build.yaml/badge.svg?branch=master)
+Dependency Injection Container for C++, with DI, next-gen and an 'o' in a name. Header only.
+
+Tested with:
+- C++17, C++20, C++23 standards
+- GCC 9-12
+- Clang 11-15
+- Visual Studio 2022 17.7
+
+[![Build](https://github.com/romanpauk/dingo/actions/workflows/build.yaml/badge.svg?branch=master)](https://github.com/romanpauk/dingo/actions?query=branch%3Amaster++)
 
 ## Introduction
-Dingo is a header-only, dependency injection library that preforms recursive instantiation of registered types. 
-It has no dependencies except for the C++ standard library. 
+Dingo is a dependency injection library that preforms recursive instantiation of registered types. It has no dependencies except for the C++ standard library. 
 
 Tests are using [google/googletest](https://github.com/google/googletest), benchmarks are using [google/benchmark](https://github.com/google/benchmark).
 
@@ -31,7 +36,7 @@ C c = container.resolve< C >();
 ### Features
 
 #### Non-intrusive Class Registration
-Required dependencies of registered types are detected automatically from a constructor signatures. See [dingo/class_factory.h](include/dingo/class_factory.h). The instances are constructed using list-initialization as follows: types with user-defined constructor(s) need single constructor to be present, types without user-defined constructors are constructed using widest aggregate initialization possible.
+Required dependencies of registered types are detected automatically from a constructor signatures. See [dingo/class_factory.h](include/dingo/class_factory.h). The instances are constructed using list-initialization passing as many arguments as possible.
 
 The container tries to preserve usual type semantics of types it manages, without imposing requirements on managed types. It tries to be as transparent as possible to the managed type, meaning moves are used where they would be normally used, std::make_shared is used to create std::shared_ptr instances and so on. Registered type can be automatically converted to types that are 'reachable' from the base type using usual conversions - dereferencing, taking an address, downcasting and referencing downcasted types is allowed based on managed type lifetime.
 

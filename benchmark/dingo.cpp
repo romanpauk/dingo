@@ -8,7 +8,7 @@
 BENCHMARK_MAIN();
 
 namespace {
-volatile int ClassCounter = 0;
+int ClassCounter = 0;
 template <size_t N> class Class {
   public:
     Class() { ClassCounter++; }

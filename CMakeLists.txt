@@ -21,6 +21,12 @@ option(DINGO_BENCHMARK_FRUIT_ENABLED "enable fetching of google::fruit for bench
 
 sanitizers_init(DINGO)
 
+if (CMAKE_CXX_STANDARD MATCHES "17|20|23")
+    add_compile_definitions(DINGO_CXX_STANDARD=${CMAKE_CXX_STANDARD})
+else()
+    message(FATAL_ERROR "unsupported c++ standard version: ${CMAKE_CXX_STANDARD}")
+endif()
+
 # TODO: g++ -Wall -Wextra -Wpedantic -Q --help=warning | grep disabled
 set(DINGO_WARNINGS_GCC
     -Wall

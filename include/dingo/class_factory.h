@@ -99,13 +99,7 @@ struct class_factory_wide<T, Assert, N, typename std::enable_if_t<sizeof...(Args
 template <typename T, bool Assert, size_t N, typename... Args>
 struct class_factory_wide_impl<T, Assert, N, true, std::tuple<Args...>> {
     static constexpr size_t arity = sizeof...(Args);
-
-    // Only constructors are checked for ambiguity (as a single unambiguous ctor is required).
-    // Aggregate initialization is always ambiguous so a widest initialization is selected.
-    static constexpr size_t arity_narrow =
-        std::is_constructible_v<T, Args...> ? class_factory_narrow<T, N>::arity : arity;
-    static constexpr bool valid = arity == arity_narrow;
-    static_assert(!Assert || valid, "ambiguous construction");
+    static constexpr bool valid = true;
 
     template <typename Type, typename Arg, typename Context> static Type construct(Context& ctx) {
         return class_constructor<Type>::invoke(((void)sizeof(Args), Arg(ctx))...);
@@ -119,10 +113,15 @@ struct class_factory_wide_impl<T, Assert, N, true, std::tuple<Args...>> {
 // Construction was not found. Generate next level of inheritance with one less argument.
 template <typename T, bool Assert, size_t N, typename Head, typename... Tail>
 struct class_factory_wide_impl<T, Assert, N, false, std::tuple<Head, Tail...>>
-    : class_factory_wide_impl<T, Assert, N, is_constructible_v<T, Tail...>, std::tuple<Tail...>> {};
+    : class_factory_wide_impl<T, Assert, N, is_constructible_v<T, Tail...>, std::tuple<Tail...>> {
+    static constexpr bool valid =
+        class_factory_wide_impl<T, Assert, N, is_constructible_v<T, Tail...>, std::tuple<Tail...>>::valid;
+};
 
 // Construction was not found, and no more arguments can be removed.
-template <typename T, bool Assert, size_t N> struct class_factory_wide_impl<T, Assert, N, false, std::tuple<>> {};
+template <typename T, bool Assert, size_t N> struct class_factory_wide_impl<T, Assert, N, false, std::tuple<>> {
+    static constexpr bool valid = false;
+};
 
 #if (DINGO_CLASS_FACTORY_CONSERVATIVE == 1)
 template <typename T, typename... Args>
