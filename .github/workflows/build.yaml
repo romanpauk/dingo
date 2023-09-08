@@ -41,12 +41,12 @@ jobs:
         ]
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
       - name: CCache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: ${{ matrix.os}}-${{ matrix.config }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
-      - name: Checkout
-        uses: actions/checkout@v3
+          key: ${{ matrix.os }}-${{ matrix.config }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
       - name: Configure
         env:
             CXX: ${{ matrix.compiler.CXX }}
