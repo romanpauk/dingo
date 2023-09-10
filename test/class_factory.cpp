@@ -108,4 +108,55 @@ TYPED_TEST(class_factory_test, ambiguous_construct) {
     }
 }
 
+#if defined(__GNUC__)
+// TODO:
+// Investigate https://gcc.gnu.org/bugzilla/show_bug.cgi?id=83258
+struct A {
+    static A createInt(int v) { return A(v); }
+    static A createFloat(float v) { return A(v); }
+
+    int index;
+
+  private:
+    A(int) { index = 0; };
+    A(float) { index = 1; };
+};
+#endif
+
+TYPED_TEST(class_factory_test, function_construct) {
+#if !defined(__GNUC__)
+    struct A {
+        static A createInt(int v) { return A(v); }
+        static A createFloat(float v) { return A(v); }
+
+        int index;
+
+      private:
+        A(int) { index = 0; };
+        A(float) { index = 1; };
+    };
+#endif
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_binding<storage<unique, int>>();
+    container.template register_binding<storage<unique, float>>();
+
+    {
+        auto a = container.template construct<A, function_decl<decltype(&A::createInt), &A::createInt>>();
+        ASSERT_EQ(a.index, 0);
+    }
+
+#if !defined(__GNUC__) || __GNUC__ >= 12
+    {
+        auto a = container.template construct<A, function_decl<decltype(A::createFloat), A::createFloat>>();
+        ASSERT_EQ(a.index, 1);
+    }
+
+    {
+        auto a = container.template construct<A, function<&A::createFloat>>();
+        ASSERT_EQ(a.index, 1);
+    }
+#endif
+}
+
 } // namespace dingo

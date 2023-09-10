@@ -36,19 +36,27 @@ C c = container.resolve< C >();
 ### Features
 
 #### Non-intrusive Class Registration
-Required dependencies of registered types are detected automatically from a constructor signatures. See [dingo/class_factory.h](include/dingo/class_factory.h). Instances are constructed using a list-initialization with the highest arity detected, or by user-specified constructor.
+Required dependencies of registered types can be detected automatically from a list initialization with a highest number of arguments. It is also possbile to manually specify a constructor or a factory method that should be used to construct the type during a type registration. See [dingo/class_factory.h](include/dingo/class_factory.h) for details.
 
 ```c++
 struct A { 
-    A(int) {} 
-    A(double) {}
+    A(int);
+    A(double);
+};
+
+struct B: protected A {
+    static B factory();
 };
 
 container<> container;
 container.register_binding< storage< external, double > >(1.1);
 container.register_binding< storage< unique, A, constructor< A, double > > >();
+container.register_binding< storage< unique, B, function< &B::factory > > >();
+
 // Constructed using A(double)
 auto a = container.resolve< A >();
+// Constructed by calling B::factory();
+auto b = container.resolve< B >();
 ``` 
 
 The container tries to preserve usual type semantics of types it manages, without imposing requirements on managed types. It tries to be as transparent as possible to the managed type, meaning moves are used where they would be normally used, std::make_shared is used to create std::shared_ptr instances and so on. Registered type can be automatically converted to types that are 'reachable' from the base type using usual conversions - dereferencing, taking an address, downcasting and referencing downcasted types is allowed based on managed type lifetime.
