@@ -41,10 +41,9 @@ template <typename Type, typename U> struct conversions<shared, std::unique_ptr<
 template <typename Type> struct storage_instance_base {
     Type* get() const { return reinterpret_cast<Type*>(&instance_); }
 
-    template <typename Context> void construct(Context& context) {
+    template <typename Factory, typename Context> void construct(Context& context) {
         assert(!initialized_);
-        class_factory<decay_t<Type>>::template construct<Type*, constructor_argument<Type, Context>>(&instance_,
-                                                                                                     context);
+        Factory::template construct<Type*>(&instance_, context);
         initialized_ = true;
     }
 
@@ -73,18 +72,17 @@ template <typename Type> struct storage_instance_dtor<Type, false> : storage_ins
     }
 };
 
-template <typename Type> class storage_instance<Type, shared> : public storage_instance_dtor<Type> {
+template <typename Type> class storage_instance<shared, Type> : public storage_instance_dtor<Type> {
   public:
     static_assert(std::is_trivially_destructible_v<Type> ==
                   std::is_trivially_destructible_v<storage_instance_dtor<Type>>);
 };
 
-template <typename Type> class storage_instance<std::unique_ptr<Type>, shared> {
+template <typename Type> class storage_instance<shared, std::unique_ptr<Type>> {
   public:
-    template <typename Context> void construct(Context& context) {
+    template <typename Factory, typename Context> void construct(Context& context) {
         assert(!instance_);
-        instance_ = class_factory<Type>::template construct<std::unique_ptr<Type>, constructor_argument<Type, Context>>(
-            context);
+        instance_ = Factory::template construct<std::unique_ptr<Type>>(context);
     }
 
     std::unique_ptr<Type>& get() const { return instance_; }
@@ -95,12 +93,11 @@ template <typename Type> class storage_instance<std::unique_ptr<Type>, shared> {
     mutable std::unique_ptr<Type> instance_;
 };
 
-template <typename Type> class storage_instance<std::shared_ptr<Type>, shared> {
+template <typename Type> class storage_instance<shared, std::shared_ptr<Type>> {
   public:
-    template <typename Context> void construct(Context& context) {
+    template <typename Factory, typename Context> void construct(Context& context) {
         assert(!instance_);
-        instance_ = class_factory<Type>::template construct<std::shared_ptr<Type>, constructor_argument<Type, Context>>(
-            context);
+        instance_ = Factory::template construct<std::shared_ptr<Type>>(context);
     }
 
     // TODO: this can't be reference so we can construct shared_ptr<Base> from
@@ -114,20 +111,21 @@ template <typename Type> class storage_instance<std::shared_ptr<Type>, shared> {
 };
 
 template <typename Type>
-class storage_instance<Type*, shared> : public storage_instance<std::unique_ptr<Type>, shared> {
+class storage_instance<shared, Type*> : public storage_instance<shared, std::unique_ptr<Type>> {
   public:
-    template <typename Context> void construct(Context& context) {
-        storage_instance<std::unique_ptr<Type>, shared>::construct(context);
+    template <typename Factory, typename Context> void construct(Context& context) {
+        storage_instance<shared, std::unique_ptr<Type>>::template construct<Factory>(context);
     }
 
-    Type* get() const { return storage_instance<std::unique_ptr<Type>, shared>::get().get(); }
+    Type* get() const { return storage_instance<shared, std::unique_ptr<Type>>::get().get(); }
 };
 
-template <typename Type, typename Conversions> class storage<shared, Type, void, Conversions> : public resettable_i {
+template <typename Type, typename Factory, typename Conversions>
+class storage<shared, Type, Factory, void, Conversions> : public resettable_i {
     // TODO
     // static_assert(std::is_trivially_destructible_v< Type > ==
     // std::is_trivially_destructible_v< storage_instance< Type, shared > >);
-    storage_instance<Type, shared> instance_;
+    storage_instance<shared, Type> instance_;
 
   public:
     static constexpr bool is_caching = true;
@@ -137,7 +135,7 @@ template <typename Type, typename Conversions> class storage<shared, Type, void,
 
     template <typename Context> auto resolve(Context& context) -> decltype(instance_.get()) {
         if (instance_.empty())
-            instance_.construct(context);
+            instance_.template construct<storage_factory_t<Factory, Type, Context>>(context);
         return instance_.get();
     }
 

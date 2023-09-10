@@ -42,7 +42,8 @@ template <typename Type, typename U> struct conversions<unique, std::unique_ptr<
     using pointer_types = type_list<>;
 };
 
-template <typename Type, typename Conversions> class storage<unique, Type, void, Conversions> {
+template <typename Type, typename Factory, typename Conversions>
+class storage<unique, Type, Factory, void, Conversions> {
   public:
     static constexpr bool is_caching = false;
 
@@ -50,8 +51,7 @@ template <typename Type, typename Conversions> class storage<unique, Type, void,
     using type = Type;
 
     template <typename Context> Type resolve(Context& context) {
-        return class_factory<decay_t<Type>>::template construct<Type, constructor_argument<decay_t<Type>, Context>>(
-            context);
+        return storage_factory_t<Factory, Type, Context>::template construct<Type>(context);
     }
 };
 } // namespace dingo

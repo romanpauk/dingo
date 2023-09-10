@@ -11,7 +11,7 @@ namespace dingo {
 struct external {};
 
 template <typename Type, typename U> struct conversions<external, Type, U> {
-    using value_types = type_list<>;
+    using value_types = type_list<U>;
     using lvalue_reference_types = type_list<U&>;
     using rvalue_reference_types = type_list<>;
     using pointer_types = type_list<U*>;
@@ -41,7 +41,7 @@ template <typename Type, typename U> struct conversions<external, std::unique_pt
 template <typename Type, typename U>
 struct conversions<external, std::unique_ptr<Type>&, U> : public conversions<external, std::unique_ptr<Type>, U> {};
 
-template <typename Type> class storage_instance<Type, external> {
+template <typename Type> class storage_instance<external, Type> {
   public:
     template <typename T> storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
 
@@ -51,7 +51,7 @@ template <typename Type> class storage_instance<Type, external> {
     Type instance_;
 };
 
-template <typename Type> class storage_instance<Type&, external> {
+template <typename Type> class storage_instance<external, Type&> {
   public:
     storage_instance(Type& instance) : instance_(instance) {}
 
@@ -61,7 +61,7 @@ template <typename Type> class storage_instance<Type&, external> {
     Type& instance_;
 };
 
-template <typename Type> class storage_instance<Type*, external> {
+template <typename Type> class storage_instance<external, Type*> {
   public:
     storage_instance(Type* instance) : instance_(instance) {}
 
@@ -71,7 +71,7 @@ template <typename Type> class storage_instance<Type*, external> {
     Type* instance_;
 };
 
-template <typename Type> class storage_instance<std::shared_ptr<Type>, external> {
+template <typename Type> class storage_instance<external, std::shared_ptr<Type>> {
   public:
     template <typename T> storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
 
@@ -81,7 +81,7 @@ template <typename Type> class storage_instance<std::shared_ptr<Type>, external>
     std::shared_ptr<Type> instance_;
 };
 
-template <typename Type> class storage_instance<std::shared_ptr<Type>&, external> {
+template <typename Type> class storage_instance<external, std::shared_ptr<Type>&> {
   public:
     storage_instance(std::shared_ptr<Type>& instance) : instance_(instance) {}
 
@@ -91,7 +91,7 @@ template <typename Type> class storage_instance<std::shared_ptr<Type>&, external
     std::shared_ptr<Type>& instance_;
 };
 
-template <typename Type> class storage_instance<std::unique_ptr<Type>, external> {
+template <typename Type> class storage_instance<external, std::unique_ptr<Type>> {
   public:
     template <typename T> storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
 
@@ -101,8 +101,9 @@ template <typename Type> class storage_instance<std::unique_ptr<Type>, external>
     std::unique_ptr<Type> instance_;
 };
 
-template <typename Type, typename Conversions> class storage<external, Type, void, Conversions> : public resettable_i {
-    storage_instance<Type, external> instance_;
+template <typename Type, typename Conversions>
+class storage<external, Type, void, void, Conversions> : public resettable_i {
+    storage_instance<external, Type> instance_;
 
   public:
     static constexpr bool is_caching = false;

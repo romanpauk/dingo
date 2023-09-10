@@ -43,8 +43,6 @@ class container {
 
     container(Allocator allocator = Allocator()) : allocator_(allocator), type_factories_(allocator) {}
 
-    allocator_type& get_allocator() { return allocator_; }
-
     template <typename TypeStorage, typename TypeInterface = decay_t<typename TypeStorage::type>, typename... Args>
     void register_binding(Args&&... args) {
         register_type_factory<TypeInterface, TypeStorage>(
@@ -88,11 +86,10 @@ class container {
         return resolve<T, true>(context);
     }
 
-    template <typename T> T construct() {
+    template <typename T, typename Factory = void> T construct() {
         // TODO: nothrow constructuble
         resolving_context<container_type> context(*this);
-        return class_factory<decay_t<T>>::template construct<
-            T, constructor_argument<decay_t<T>, resolving_context<container_type>>>(context);
+        return storage_factory_t<Factory, T, resolving_context<container_type>>::template construct<T>(context);
     }
 
   private:

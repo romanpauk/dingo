@@ -5,7 +5,7 @@ Tested with:
 - C++17, C++20, C++23
 - GCC 9-12
 - Clang 11-15
-- Visual Studio 2022 17.7
+- Visual Studio 2019, 2022
 
 [![Build](https://github.com/romanpauk/dingo/actions/workflows/build.yaml/badge.svg?branch=master)](https://github.com/romanpauk/dingo/actions?query=branch%3Amaster++)
 
@@ -36,7 +36,20 @@ C c = container.resolve< C >();
 ### Features
 
 #### Non-intrusive Class Registration
-Required dependencies of registered types are detected automatically from a constructor signatures. See [dingo/class_factory.h](include/dingo/class_factory.h). The instances are constructed using list-initialization passing as many arguments as possible.
+Required dependencies of registered types are detected automatically from a constructor signatures. See [dingo/class_factory.h](include/dingo/class_factory.h). Instances are constructed using a list-initialization with the highest arity detected, or by user-specified constructor.
+
+```c++
+struct A { 
+    A(int) {} 
+    A(double) {}
+};
+
+container<> container;
+container.register_binding< storage< external, double > >(1.1);
+container.register_binding< storage< unique, A, constructor< A, double > > >();
+// Constructed using A(double)
+auto a = container.resolve< A >();
+``` 
 
 The container tries to preserve usual type semantics of types it manages, without imposing requirements on managed types. It tries to be as transparent as possible to the managed type, meaning moves are used where they would be normally used, std::make_shared is used to create std::shared_ptr instances and so on. Registered type can be automatically converted to types that are 'reachable' from the base type using usual conversions - dereferencing, taking an address, downcasting and referencing downcasted types is allowed based on managed type lifetime.
 
@@ -58,7 +71,7 @@ A& a = container.resolve< A& >();
 The container creates unique instance for each resolution. See [dingo/storage/unique.h](include/dingo/storage/unique.h) for allowed conversions for accessing unique instances.
 
 ```c++
-struct A {} a;
+struct A {};
 container<> container;
 container.register_binding< storage< unique, A > >();
 auto a = container.resolve< A >();
@@ -68,7 +81,7 @@ auto a = container.resolve< A >();
 The container caches the instance for subsequent resolutions. See [dingo/storage/shared.h](include/dingo/storage/shared.h) for allowed conversions for accessing shared instances.
 
 ```c++
-struct A {} a;
+struct A {};
 container<> container;
 container.register_binding< storage< shared, A > >();
 assert(container.resolve< A* >() == container.resolve< A* >());

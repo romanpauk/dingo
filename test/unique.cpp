@@ -132,4 +132,28 @@ TYPED_TEST(unique_test, pointer) {
         ASSERT_EQ(C::Destructor, C::GetTotalInstances());
     }
 }
+
+TYPED_TEST(unique_test, ambiguous_resolve) {
+    struct A {
+        A(int) : index(0) {}
+        A(float) : index(1) {}
+        A(int, float) : index(2) {}
+        A(float, int) : index(3) {}
+
+        int index;
+    };
+
+    using container_type = TypeParam;
+
+    using container_type = TypeParam;
+    container_type container;
+
+    container.template register_binding<storage<unique, A, constructor<A, float, int>>>();
+    container.template register_binding<storage<unique, float>>();
+    container.template register_binding<storage<unique, int>>();
+
+    auto a = container.template construct<A, constructor<A, float, int>>();
+    ASSERT_EQ(a.index, 3);
+}
+
 } // namespace dingo

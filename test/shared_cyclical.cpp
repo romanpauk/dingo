@@ -50,8 +50,8 @@ TYPED_TEST(shared_cyclical_test, value) {
     };
 
     container_type container;
-    container.template register_binding<storage<shared_cyclical, A, container_type>, A, IClass1>();
-    container.template register_binding<storage<shared_cyclical, B, container_type>>();
+    container.template register_binding<storage<shared_cyclical, A, void, container_type>, A, IClass1>();
+    container.template register_binding<storage<shared_cyclical, B, void, container_type>>();
 
     auto& a = container.template resolve<A&>();
     AssertClass(a);
@@ -86,8 +86,10 @@ TYPED_TEST(shared_cyclical_test, shared_ptr) {
     };
 
     container_type container;
-    container.template register_binding<storage<shared_cyclical, std::shared_ptr<A>, container_type>, A, IClass2>();
-    container.template register_binding<storage<shared_cyclical, std::shared_ptr<B>, container_type>, B, IClass1>();
+    container
+        .template register_binding<storage<shared_cyclical, std::shared_ptr<A>, void, container_type>, A, IClass2>();
+    container
+        .template register_binding<storage<shared_cyclical, std::shared_ptr<B>, void, container_type>, B, IClass1>();
 
     auto& a = container.template resolve<A&>();
     AssertClass(a);
@@ -114,8 +116,8 @@ TYPED_TEST(shared_cyclical_test, trivially_destructible) {
     };
 
     container_type container;
-    container.template register_binding<storage<shared_cyclical, A, container_type>>();
-    container.template register_binding<storage<shared_cyclical, std::shared_ptr<B>, container_type>>();
+    container.template register_binding<storage<shared_cyclical, A, void, container_type>>();
+    container.template register_binding<storage<shared_cyclical, std::shared_ptr<B>, void, container_type>>();
     auto& a = container.template resolve<A&>();
     auto& b = container.template resolve<B&>();
     ASSERT_EQ(&a, &b.a);
@@ -129,6 +131,64 @@ TEST(shared_cyclical_test, virtual_base) {
 
     struct C : virtual A {};
     static_assert(is_virtual_base_of_v<A, C>);
+}
+
+TYPED_TEST(shared_cyclical_test, ambiguous_resolve) {
+    struct B;
+    struct A {
+        A(B& v, int, float) : b(v), index(0) {}
+        A(B& v, float, int) : b(v), index(1) {}
+
+        B& b;
+        int index;
+    };
+
+    struct B {
+        B(A& v, int, float) : a(v), index(0) {}
+        B(A& v, float, int) : a(v), index(1) {}
+
+        A& a;
+        int index;
+    };
+    using container_type = TypeParam;
+
+    {
+        container_type container;
+
+        container
+            .template register_binding<storage<shared_cyclical, A, constructor<A, B&, float, int>, container_type>>();
+        container
+            .template register_binding<storage<shared_cyclical, B, constructor<B, A&, float, int>, container_type>>();
+        container.template register_binding<storage<unique, float>>();
+        container.template register_binding<storage<unique, int>>();
+
+        auto& a = container.template resolve<A&>();
+        ASSERT_EQ(a.index, 1);
+        ASSERT_EQ(a.b.index, 1);
+
+        auto& b = container.template resolve<B&>();
+        ASSERT_EQ(b.index, 1);
+        ASSERT_EQ(b.a.index, 1);
+    }
+
+    {
+        container_type container;
+
+        container
+            .template register_binding<storage<shared_cyclical, A, constructor<A, B&, int, float>, container_type>>();
+        container
+            .template register_binding<storage<shared_cyclical, B, constructor<B, A&, int, float>, container_type>>();
+        container.template register_binding<storage<unique, float>>();
+        container.template register_binding<storage<unique, int>>();
+
+        auto& a = container.template resolve<A&>();
+        ASSERT_EQ(a.index, 0);
+        ASSERT_EQ(a.b.index, 0);
+
+        auto& b = container.template resolve<B&>();
+        ASSERT_EQ(b.index, 0);
+        ASSERT_EQ(b.a.index, 0);
+    }
 }
 
 } // namespace dingo

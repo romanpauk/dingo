@@ -73,8 +73,7 @@ jobs:
       fail-fast: false
       matrix:
         config: [Debug, Release]
-        os: [windows-latest]
-        vs-version: ['[17.7,)']
+        os: [windows-2019, windows-2022]
         std: [17, 20, 23]
     runs-on: ${{ matrix.os }}
     steps:

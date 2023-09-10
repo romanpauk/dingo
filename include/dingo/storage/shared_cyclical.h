@@ -64,11 +64,11 @@ struct storage_interface_requirements<storage<shared_cyclical, Type, Conversions
     : std::bool_constant<!is_virtual_base_of_v<Base, Derived>> {};
 
 template <typename Type, bool IsTriviallyDestructible = std::is_trivially_destructible_v<Type>>
-class shared_storage_instance_impl;
+class storage_instance_shared_impl;
 
-template <typename Type> class shared_storage_instance_impl<Type, false> {
+template <typename Type> class storage_instance_shared_impl<Type, false> {
   public:
-    ~shared_storage_instance_impl() { reset(); }
+    ~storage_instance_shared_impl() { reset(); }
 
     template <typename Context> Type* resolve(Context&) {
         assert(!resolved_);
@@ -78,9 +78,8 @@ template <typename Type> class shared_storage_instance_impl<Type, false> {
 
     Type* get() { return reinterpret_cast<Type*>(&instance_); }
 
-    template <typename Context> void construct(Context& context) {
-        class_factory<decay_t<Type>>::template construct<Type*, constructor_argument<Type, Context>>(&instance_,
-                                                                                                     context);
+    template <typename Factory, typename Context> void construct(Context& context) {
+        Factory::template construct<Type*>(&instance_, context);
         constructed_ = true;
     }
 
@@ -100,7 +99,7 @@ template <typename Type> class shared_storage_instance_impl<Type, false> {
     bool constructed_ = false;
 };
 
-template <typename Type> class shared_storage_instance_impl<Type, true> {
+template <typename Type> class storage_instance_shared_impl<Type, true> {
   public:
     template <typename Context> Type* resolve(Context&) {
         assert(!resolved_);
@@ -110,9 +109,8 @@ template <typename Type> class shared_storage_instance_impl<Type, true> {
 
     Type* get() { return reinterpret_cast<Type*>(&instance_); }
 
-    template <typename Context> void construct(Context& context) {
-        class_factory<decay_t<Type>>::template construct<Type*, constructor_argument<Type, Context>>(&instance_,
-                                                                                                     context);
+    template <typename Factory, typename Context> void construct(Context& context) {
+        Factory::template construct<Type*>(&instance_, context);
     }
 
     bool empty() const { return !resolved_; }
@@ -124,9 +122,9 @@ template <typename Type> class shared_storage_instance_impl<Type, true> {
     bool resolved_ = false;
 };
 
-template <typename Type> class storage_instance<Type, shared_cyclical> : public shared_storage_instance_impl<Type> {};
+template <typename Type> class storage_instance<shared_cyclical, Type> : public storage_instance_shared_impl<Type> {};
 
-template <typename Type> class storage_instance<std::shared_ptr<Type>, shared_cyclical> {
+template <typename Type> class storage_instance<shared_cyclical, std::shared_ptr<Type>> {
     struct alignas(alignof(Type)) buffer {
         uint8_t data[sizeof(Type)];
     };
@@ -158,10 +156,9 @@ template <typename Type> class storage_instance<std::shared_ptr<Type>, shared_cy
 
     std::shared_ptr<Type> get() { return instance_; }
 
-    template <typename Context> void construct(Context& context) {
+    template <typename Factory, typename Context> void construct(Context& context) {
         assert(instance_);
-        class_factory<decay_t<Type>>::template construct<Type*, constructor_argument<Type, Context>>(instance_.get(),
-                                                                                                     context);
+        Factory::template construct<Type*>(instance_.get(), context);
         std::get_deleter<deleter>(instance_)->set_constructed();
     }
 
@@ -173,11 +170,12 @@ template <typename Type> class storage_instance<std::shared_ptr<Type>, shared_cy
     std::shared_ptr<Type> instance_;
 };
 
-template <typename Type, typename Conversions, typename Container>
-class storage<shared_cyclical, Type, Container, Conversions> : public resettable_i, public constructible_i<Container> {
+template <typename Type, typename Factory, typename Conversions, typename Container>
+class storage<shared_cyclical, Type, Factory, Container, Conversions> : public resettable_i,
+                                                                        public constructible_i<Container> {
     static_assert(!std::is_same_v<Container, void>, "concrete container type required");
 
-    storage_instance<Type, shared_cyclical> instance_;
+    storage_instance<shared_cyclical, Type> instance_;
 
   public:
     static constexpr bool is_caching = true;
@@ -199,7 +197,7 @@ class storage<shared_cyclical, Type, Container, Conversions> : public resettable
 
     void construct(resolving_context<Container>& context, int phase) override {
         if (phase == 0)
-            instance_.construct(context);
+            instance_.template construct<storage_factory_t<Factory, Type, resolving_context<Container>>>(context);
     }
 };
 } // namespace dingo
