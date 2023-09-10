@@ -49,13 +49,6 @@ TYPED_TEST(construct_test, aggregate1) {
     container.template construct<B>();
 }
 
-// TODO: some of the tests here end up differently initializing the instances,
-// as with conservative mode, the construction will be done using the smallest number
-// of arguments possible. This leads to funny case A.a == 2 in conservative mode
-// due to default initialization and A.a == 0 in non-conservative mode, as there
-// it will get initialized through int(). This ambiguity should really be resolved,
-// somehow...
-
 TYPED_TEST(construct_test, aggregate2) {
     using container_type = TypeParam;
     struct A {
@@ -80,19 +73,11 @@ TYPED_TEST(construct_test, aggregate2) {
     auto c = container.template construct<C>();
     auto d = container.template construct<D>();
 
-#if (DINGO_CLASS_FACTORY_CONSERVATIVE == 1)
-    // For conservative factory, A{} initialization is selected
-    const int val = 1;
-#else
-    // For non-conservative factory, A{int} initialization is selected
-    const int val = 2;
-#endif
-
-    ASSERT_EQ(b.a0.a, val);
-    ASSERT_EQ(c.a0.a, val);
-    ASSERT_EQ(c.a1.a, val);
-    ASSERT_EQ(d.a, val);
-    ASSERT_EQ(d.b, val);
+    ASSERT_EQ(b.a0.a, 2);
+    ASSERT_EQ(c.a0.a, 2);
+    ASSERT_EQ(c.a1.a, 2);
+    ASSERT_EQ(d.a, 2);
+    ASSERT_EQ(d.b, 2);
 }
 
 #if 0

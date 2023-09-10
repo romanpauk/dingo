@@ -12,11 +12,7 @@ struct unique {};
 
 template <typename Type, typename U> struct conversions<unique, Type, U> {
     using value_types = type_list<U>;
-#if (DINGO_CLASS_FACTORY_CONSERVATIVE == 1)
-    using lvalue_reference_types = type_list<>;
-#else
     using lvalue_reference_types = type_list<U&>;
-#endif
     using rvalue_reference_types = type_list<U&&>;
     using pointer_types = type_list<>;
 };
