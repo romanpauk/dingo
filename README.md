@@ -19,18 +19,18 @@ Tests are using [google/googletest](https://github.com/google/googletest), bench
 ```c++
 // Classes to be managed by the container. Note that there is not special code required for the type to become managed.
 struct A { A() {} };
-struct B { B(A&, std::shared_ptr< A >) {} };
-struct C { C(B*, std::unique_ptr< B >&, A&) {} };
+struct B { B(A&, std::shared_ptr<A>) {} };
+struct C { C(B*, std::unique_ptr<B>&, A&) {} };
 
 // Registration into container with different lifetime policies
 container<> container;
-container.register_binding< storage< shared, std::shared_ptr< A > > >();
-container.register_binding< storage< shared, std::unique_ptr< B > > >();
-container.register_binding< storage< unique, C > >();
+container.register_binding<storage<shared, std::shared_ptr<A>>>();
+container.register_binding<storage<shared, std::unique_ptr<B>>>();
+container.register_binding<storage<unique, C>>();
 
 // Resolving the type C through container will instantiate A, B, and call C's constructor
 // with required types.
-C c = container.resolve< C >();
+C c = container.resolve<C>();
 ``` 
 
 ### Features
@@ -49,14 +49,14 @@ struct B: protected A {
 };
 
 container<> container;
-container.register_binding< storage< external, double > >(1.1);
-container.register_binding< storage< unique, A, constructor< A, double > > >();
-container.register_binding< storage< unique, B, function< &B::factory > > >();
+container.register_binding<storage<external, double>>(1.1);
+container.register_binding<storage<unique, A, constructor<A, double>>>();
+container.register_binding<storage<unique, B, function<&B::factory>>>();
 
 // Constructed using A(double)
-auto a = container.resolve< A >();
+auto a = container.resolve<A>();
 // Constructed by calling B::factory();
-auto b = container.resolve< B >();
+auto b = container.resolve<B>();
 ``` 
 
 The container tries to preserve usual type semantics of types it manages, without imposing requirements on managed types. It tries to be as transparent as possible to the managed type, meaning moves are used where they would be normally used, std::make_shared is used to create std::shared_ptr instances and so on. Registered type can be automatically converted to types that are 'reachable' from the base type using usual conversions - dereferencing, taking an address, downcasting and referencing downcasted types is allowed based on managed type lifetime.
@@ -71,8 +71,8 @@ The container refers to an already existing instance. It can eventually take the
 ```c++
 struct A {} a;
 container<> container;
-container.register_binding< storage< external, A* > >(&a);
-A& a = container.resolve< A& >();
+container.register_binding<storage<external, A*>>(&a);
+A& a = container.resolve<A&>();
 ```
 
 ##### Unique
@@ -81,8 +81,8 @@ The container creates unique instance for each resolution. See [dingo/storage/un
 ```c++
 struct A {};
 container<> container;
-container.register_binding< storage< unique, A > >();
-auto a = container.resolve< A >();
+container.register_binding<storage<unique, A>>();
+auto a = container.resolve<A>();
 ```
 
 ##### Shared
@@ -91,8 +91,8 @@ The container caches the instance for subsequent resolutions. See [dingo/storage
 ```c++
 struct A {};
 container<> container;
-container.register_binding< storage< shared, A > >();
-assert(container.resolve< A* >() == container.resolve< A* >());
+container.register_binding<storage<shared, A>>();
+assert(container.resolve<A*>() == container.resolve<A*>());
 ```
 
 ##### Shared-cyclical
@@ -111,13 +111,13 @@ struct B {
 };
 
 container<> container;
-container.register_binding< storage< shared, std::shared_ptr<A> > >();
-container.register_binding< storage< shared, B > >();
+container.register_binding<storage<shared, std::shared_ptr<A>>>();
+container.register_binding<storage<shared, B>>();
 
 // Returns instance of A that has correctly set b_ member to an instance of B,
 // and instance of B has correctly set a_ member to an instance of A. Note that
 // allowed conversions are supported with cycles, too.
-A& a = container.resolve< A& >();
+A& a = container.resolve<A&>();
 ```
 
 This storage type disallows registering virtual base classes as it is not always possible to calculate the cast from Derived to Base without constructing the type first, and with cyclical storage, it is not always possible to construct it first.
@@ -139,8 +139,8 @@ struct IA {};
 struct A: IA {};
 
 container<> container;
-container.register_binding< storage< shared, A >, IA >();
-IA& instance = container.resolve< IA& >();
+container.register_binding<storage<shared, A>, IA>();
+IA& instance = container.resolve<IA&>();
 ``` 
 
 #### Support for Annotated Types
@@ -154,8 +154,8 @@ struct A {};
 struct B { A& a; };
 
 container<> container;
-container.register_binding< storage< shared, A > >();
-B b = container.construct< B >();
+container.register_binding<storage<shared, A>>();
+B b = container.construct<B>();
 ```
 
 #### Unit Tests
