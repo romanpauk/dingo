@@ -1,13 +1,13 @@
 #pragma once
 
-#include <dingo/class_factory.h>
 #include <dingo/config.h>
 #include <dingo/decay.h>
+#include <dingo/factory/constructor.h>
 
 namespace dingo {
 template <typename Storage, typename Type, typename U> struct conversions;
-template <typename StorageTag, typename Type, typename Factory = class_factory<decay_t<Type>>,
-          typename Container = void, typename Conversions = conversions<StorageTag, Type, runtime_type>>
+template <typename StorageTag, typename Type, typename Factory = constructor<decay_t<Type>>, typename Container = void,
+          typename Conversions = conversions<StorageTag, Type, runtime_type>>
 class storage;
 
 template <typename StorageTag, typename Type, typename Factory> class storage_instance;

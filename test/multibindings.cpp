@@ -34,7 +34,7 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_cyclical_value) {
     typedef Class<multiple_interfaces_shared_cyclical_value, __COUNTER__> C;
 
     container_type container;
-    container.template register_binding<storage<shared_cyclical, C, class_factory<C>, container_type>,
+    container.template register_binding<storage<shared_cyclical, C, constructor<C>, container_type>,
                                         /*IClass, */ IClass1, IClass2>();
 
     // TODO: virtual base issues
@@ -67,7 +67,7 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_cyclical_shared_ptr) {
     typedef Class<multiple_interfaces_shared_cyclical_shared_ptr, __COUNTER__> C;
 
     container_type container;
-    container.template register_binding<storage<shared_cyclical, std::shared_ptr<C>, class_factory<C>, container_type>,
+    container.template register_binding<storage<shared_cyclical, std::shared_ptr<C>, constructor<C>, container_type>,
                                         IClass1, IClass2>();
 
     // TODO: virtual base issues with cyclical_shared

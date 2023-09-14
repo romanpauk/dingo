@@ -78,18 +78,20 @@ target_include_directories(dingo INTERFACE include)
 
 target_sources(dingo INTERFACE
     include/dingo/annotated.h
-    include/dingo/class_constructor.h
-    include/dingo/class_factory.h
     include/dingo/class_instance_factory.h
     include/dingo/class_instance_factory_i.h
     include/dingo/class_instance_resolver.h
     include/dingo/class_instance_traits.h
+    include/dingo/class_traits.h
     include/dingo/collection_traits.h
     include/dingo/config.h
     include/dingo/constructible_i.h
     include/dingo/container.h
     include/dingo/decay.h
     include/dingo/exceptions.h
+    include/dingo/factory/callable.h
+    include/dingo/factory/constructor.h
+    include/dingo/factory/function.h
     include/dingo/rebind_type.h
     include/dingo/resettable_i.h
     include/dingo/resolving_context.h

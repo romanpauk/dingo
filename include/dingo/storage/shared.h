@@ -2,8 +2,8 @@
 
 #include <dingo/config.h>
 
-#include <dingo/class_factory.h>
 #include <dingo/decay.h>
+#include <dingo/factory/constructor.h>
 #include <dingo/storage.h>
 #include <dingo/type_list.h>
 

@@ -17,64 +17,132 @@ Tests are using [google/googletest](https://github.com/google/googletest), bench
 ### Quick Example
 
 ```c++
-// Classes to be managed by the container. Note that there is not special code required 
+// Class types to be managed by the container. Note that there is not special code required 
 // for the type to be used by the container and conversions are applied automatically based
-// on instance scope.
+// on an registered type scope.
 struct A { A() {} };
 struct B { B(A&, std::shared_ptr<A>) {} };
 struct C { C(B*, std::unique_ptr<B>&, A&) {} };
 
-// Registration into container with different instance scopes
 container<> container;
+
+// Register type A with a shared scope, stored as std::shared_ptr<A>
 container.register_binding<storage<shared, std::shared_ptr<A>>>();
+
+// Register type B with a shared scope, stored as std::unique_ptr<B>
 container.register_binding<storage<shared, std::unique_ptr<B>>>();
+
+// Register type C with an unique scope, stored as plain C
 container.register_binding<storage<unique, C>>();
 
-// Resolving the type C through container will instantiate A, B, and call C's constructor
-// with required arguments.
+// Resolving the type C will instantiate required dependencies
+// (types A and B) and inject the instances based on their scopes into C.
+// As C is in unique scope, each resolve<C> will return new C instance.
+// As A and B are in shared scope, each C will get the same A's and B's.
 C c = container.resolve<C>();
+
+struct D {
+    A& a;
+    B* b;
+};
+
+// Create an unmanaged type using dependencies from container
+D d = container.construct<D>();
+
 ``` 
 
 ### Features
 
 #### Non-intrusive Class Registration
-Required dependencies of registered types can be detected automatically from a list initialization with a highest number of arguments. It is also possbile to manually specify a constructor, static method or lambda function that should be used to construct the type during resolution. See [dingo/class_factory.h](include/dingo/class_factory.h) for details.
+Managed types do not need to adhere to any special protocol. Constructor auto-detection is attempted, but it is possible to provide a custom factory to use for type construction.
+During the type registration, user can customize the following: instance creation, stored instance type and a lifetime of the stored instance.
+
+#### Instance Storage
+Type instances are stored in a form that is specified during a registration. Usual semantics of the stored type is respected (example: if a type is stored as std::shared_ptr, it will be created using std::make_shared).
+Stored type, together with type's scope, determines what conversions can be applied to an instance during resolution of other instance's dependencies. Allowed conversions are different for each scope,
+as not all conversions can be performed safely or without unwanted side-effects. Conversions that could be applied are dereferencing, taking an address, downcasting and referencing downcasted types.
+
+#### Factories
+Factories parametrize how a type is instantiated. Factory type is deduced and does not have to be specified during a type registration. Factories can generally be stateles or stateful.
+
+##### Automatically-deducing Constructor Factory
+Constructor to create a type instance is detemined automatically by attempting a list initialization, going from a pre-configured number of arguments down to zero. In a case the constructor is not determined, compile assert occurs.
+This factory type is a default one so it does not have to be specified.
 
 ```c++
 container<> container;
 container.register_binding<storage<external, double>>(1.1);
 
-struct A { 
+struct A {
+    A(double, double);
+};
+
+// Detect constructor with highest arity
+container.register_binding<storage<unique, A /*, constructor<A>*/>();
+```
+
+See [dingo/factory/constructor.h](include/dingo/factory/constructor.h) for details.
+
+##### Concrete Constructor Factory
+In a case an automatic deduction fails due to an ambiguity, it is possbile to override the constructor by specifying an constructor overload that will be used.
+
+```c++
+container<> container;
+container.register_binding<storage<external, double>>(1.1);
+
+struct A {
     A(int);
     A(double);
 };
 
-// Register A that will be instantiated by calling A(double)
+// Register A that will be instantiated by calling A(double). 
+// This case needs to be manually disambiguated otherwise compile assert happens.
 container.register_binding<storage<unique, A, constructor<A(double)>>>();
+```
 
-struct B {
-    static B factory();
+See [dingo/factory/constructor.h](include/dingo/factory/constructor.h) for details.
+
+##### Static Function Factory
+Static function factory allows a static function to be used for an instance creation.
+
+```c++
+container<> container;
+container.register_binding<storage<external, double>>(1.1);
+
+struct A {
+    static A factory();
 };
 
-// Register B that will be instantiated by calling B::factory()
-container.register_binding<storage<unique, B, function<&B::factory>>>();
+// Register A that will be instantiated by calling A::factory()
+container.register_binding<storage<unique, A, function<&A::factory>>>();
+```
 
-struct C {
-    C(double);
+See [dingo/factory/function.h](include/dingo/factory/function.h) for details.
+
+##### Generic Stateful Factory
+Using a stateful factory, any functor can be used to construct a type.
+
+```c++
+container<> container;
+container.register_binding<storage<external, double>>(1.1);
+
+struct A {
+    A(double);
 };
 
-// Register C that will be instantiated by calling provided lambda function
-container.register_binding<storage<unique, C>(callable([](double val){ return C(val * 2); }));
+// Register A that will be instantiated by calling provided lambda function
+container.register_binding<storage<unique, A>(callable([](double val){ return A(val * 2); }));
 ``` 
 
-The container tries to preserve usual type semantics of types it manages, without imposing any requirements on managed types. It tries to be as transparent as possible to the managed type, meaning moves are used where they would be normally used, std::make_shared is used to create std::shared_ptr instances and so on. Registered type can be automatically converted to types that are 'reachable' from the base type using usual conversions - dereferencing, taking an address, downcasting and referencing downcasted types is allowed based on managed type lifetime.
+See [dingo/factory/callable.h](include/dingo/factory/callable.h) for details.
 
 #### Scopes
 
-Scopes are policies stating how the container mangages an instance creation and lifetime.
+Scopes parametrize stored instances' lifetime. Based on a stored type, each scope defines a list of allowed conversions that are applied to the stored type during resolutiuon to satisfy dependencies of other types. Acyclical and cyclical dependency graphs are supported.
 
 ##### External
-The container refers to an already existing instance. It can eventually take the ownership by moving the instance inside external storage. See [dingo/storage/external.h](include/dingo/storage/external.h) for allowed conversions for accessing external instances.
+An already existing instance is referred. The scope can eventually take the ownership by moving the instance inside into the scope storage.
+See [dingo/storage/external.h](include/dingo/storage/external.h) for allowed conversions for accessing external instances.
 
 ```c++
 struct A {} a;
@@ -84,7 +152,8 @@ A& a = container.resolve<A&>();
 ```
 
 ##### Unique
-The container creates unique instance for each resolution. See [dingo/storage/unique.h](include/dingo/storage/unique.h) for allowed conversions for accessing unique instances.
+An unique instance is created for each resolution. In a case dependencies form a cycle, an exception is thrown.
+See [dingo/storage/unique.h](include/dingo/storage/unique.h) for allowed conversions for accessing unique instances.
 
 ```c++
 struct A {};
@@ -94,17 +163,20 @@ auto a = container.resolve<A>();
 ```
 
 ##### Shared
-The container caches the instance for subsequent resolutions. See [dingo/storage/shared.h](include/dingo/storage/shared.h) for allowed conversions for accessing shared instances.
+The instance is cached for a subsequent resolutions. In a case dependencies form a cycle, an exception is thrown.
+See [dingo/storage/shared.h](include/dingo/storage/shared.h) for allowed conversions for accessing shared instances.
 
 ```c++
 struct A {};
 container<> container;
 container.register_binding<storage<shared, A>>();
-assert(container.resolve<A*>() == container.resolve<A*>());
+assert(container.resolve<A*>() == &container.resolve<A&>());
 ```
 
-##### Shared-cyclical
-The container caches the instance and allows to inject instances into object graphs with cycles. This is implemented using two-phase construction. The limitation is that the types can't have virtual bases and are unusable during constructors. It is quite a hack but not all code bases have clean, acyclical dependencies. See [dingo/storage/shared_cyclical.h](include/dingo/storage/shared_cyclical.h) for allowed conversions for accessing shared cycle-aware instances.
+##### Shared with Support for Cycles
+The instance is cached for a subsequent resolutions and allows to create object graphs with cycles. This is implemented using two-phase construction and thus has some limitations: injected types from cyclical storage can't be used safely in constructors, 
+and as some conversions require a type to be fully constructed, those are disallowed additionally (injecting an instance through it's virtual base class). It is quite a hack, but not all the codebases have a clean, acyclical dependencies.
+See [dingo/storage/shared_cyclical.h](include/dingo/storage/shared_cyclical.h) for allowed conversions for accessing shared cycle-aware instances.
 
 ```c++
 struct A;
@@ -120,15 +192,13 @@ struct B {
 
 container<> container;
 container.register_binding<storage<shared_cyclical, std::shared_ptr<A>>>();
-container.register_binding<storage<shared_cyclical, B>>();
+container.register_binding<storage<shared_cyclical, std::shared_ptr<B>>>();
 
 // Returns instance of A that has correctly set b_ member to an instance of B,
 // and instance of B has correctly set a_ member to an instance of A. Note that
 // allowed conversions are supported with cycles, too.
 A& a = container.resolve<A&>();
 ```
-
-This storage type disallows registering virtual base classes as it is not always possible to calculate the cast from Derived to Base without constructing the type first, and with cyclical storage, it is not always possible to construct it first.
 
 #### Runtime-based Usage
 Container can be used from multiple modules, specifically it can be filled in one module and used in other modules. This is a requirement for larger projects with not so clean dependencies. Compared to the compile-time DI solutions, errors are propagated in runtime as exceptions.

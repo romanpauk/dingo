@@ -1,5 +1,7 @@
-#include <dingo/class_factory.h>
 #include <dingo/container.h>
+#include <dingo/factory/callable.h>
+#include <dingo/factory/constructor.h>
+#include <dingo/factory/function.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
@@ -12,7 +14,7 @@ namespace dingo {
 template <typename T> struct class_factory_test : public testing::Test {};
 TYPED_TEST_SUITE(class_factory_test, container_types);
 
-template <typename T> using test_class_factory = class_factory<T, /*Assert=*/false>;
+template <typename T> using test_class_factory = detail::constructor_detection<T, /*Assert=*/false>;
 
 TEST(class_factory_test, default_constructor) {
     struct A {
@@ -227,7 +229,7 @@ TYPED_TEST(class_factory_test, callable_resolve_shared_cyclical) {
     using container_type = TypeParam;
     container_type container;
     container.template register_binding<storage<external, int>>(4);
-    container.template register_binding<storage<shared_cyclical, B, class_factory<B>, container_type>>(
+    container.template register_binding<storage<shared_cyclical, B, constructor<B>, container_type>>(
         callable([&](int v) { return B{v * v}; }));
     auto b = container.template resolve<B&>();
     ASSERT_EQ(b.v, 16);

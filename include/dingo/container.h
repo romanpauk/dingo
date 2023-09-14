@@ -117,7 +117,7 @@ class container {
         return resolve<T, true>(context);
     }
 
-    template <typename T, typename Factory = class_factory<decay_t<T>>> T construct(Factory factory = Factory()) {
+    template <typename T, typename Factory = constructor<decay_t<T>>> T construct(Factory factory = Factory()) {
         // TODO: nothrow constructuble
         resolving_context<container_type> context(*this);
         return factory.template construct<T>(context);

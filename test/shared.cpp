@@ -1,4 +1,5 @@
 #include <dingo/container.h>
+#include <dingo/factory/constructor.h>
 #include <dingo/storage/shared.h>
 
 #include <gtest/gtest.h>

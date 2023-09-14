@@ -1,4 +1,4 @@
-#include <dingo/class_constructor.h>
+#include <dingo/class_traits.h>
 
 #include <gtest/gtest.h>
 
@@ -9,11 +9,11 @@ TEST(constructor, basic) {
         B(std::shared_ptr<A>) {}
     };
 
-    class_constructor<A>::invoke();
-    class_constructor<B>::invoke(nullptr);
-    delete class_constructor<B*>::invoke(nullptr);
-    class_constructor<std::unique_ptr<B>>::invoke(nullptr);
-    class_constructor<std::shared_ptr<B>>::invoke(nullptr);
-    class_constructor<std::optional<B>>::invoke(nullptr);
+    class_traits<A>::construct();
+    class_traits<B>::construct(nullptr);
+    delete class_traits<B*>::construct(nullptr);
+    class_traits<std::unique_ptr<B>>::construct(nullptr);
+    class_traits<std::shared_ptr<B>>::construct(nullptr);
+    class_traits<std::optional<B>>::construct(nullptr);
 }
 } // namespace dingo
