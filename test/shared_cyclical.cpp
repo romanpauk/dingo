@@ -50,8 +50,8 @@ TYPED_TEST(shared_cyclical_test, value) {
     };
 
     container_type container;
-    container.template register_binding<storage<shared_cyclical, A, void, container_type>, A, IClass1>();
-    container.template register_binding<storage<shared_cyclical, B, void, container_type>>();
+    container.template register_binding<storage<shared_cyclical, A, class_factory<A>, container_type>, A, IClass1>();
+    container.template register_binding<storage<shared_cyclical, B, class_factory<B>, container_type>>();
 
     auto& a = container.template resolve<A&>();
     AssertClass(a);
@@ -86,10 +86,10 @@ TYPED_TEST(shared_cyclical_test, shared_ptr) {
     };
 
     container_type container;
-    container
-        .template register_binding<storage<shared_cyclical, std::shared_ptr<A>, void, container_type>, A, IClass2>();
-    container
-        .template register_binding<storage<shared_cyclical, std::shared_ptr<B>, void, container_type>, B, IClass1>();
+    container.template register_binding<storage<shared_cyclical, std::shared_ptr<A>, class_factory<A>, container_type>,
+                                        A, IClass2>();
+    container.template register_binding<storage<shared_cyclical, std::shared_ptr<B>, class_factory<B>, container_type>,
+                                        B, IClass1>();
 
     auto& a = container.template resolve<A&>();
     AssertClass(a);
@@ -116,8 +116,9 @@ TYPED_TEST(shared_cyclical_test, trivially_destructible) {
     };
 
     container_type container;
-    container.template register_binding<storage<shared_cyclical, A, void, container_type>>();
-    container.template register_binding<storage<shared_cyclical, std::shared_ptr<B>, void, container_type>>();
+    container.template register_binding<storage<shared_cyclical, A, class_factory<A>, container_type>>();
+    container
+        .template register_binding<storage<shared_cyclical, std::shared_ptr<B>, class_factory<B>, container_type>>();
     auto& a = container.template resolve<A&>();
     auto& b = container.template resolve<B&>();
     ASSERT_EQ(&a, &b.a);

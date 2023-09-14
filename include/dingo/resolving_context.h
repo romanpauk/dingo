@@ -86,27 +86,4 @@ template <typename Container> class resolving_context {
     size_t resolve_counter_;
 };
 
-template <typename DisabledType, typename Context> class constructor_argument {
-  public:
-    constructor_argument(Context& context) : context_(context) {}
-
-    template <typename T, typename = std::enable_if_t<!std::is_same_v<DisabledType, std::decay_t<T>>>> operator T*() {
-        return context_.template resolve<T*>();
-    }
-    template <typename T, typename = std::enable_if_t<!std::is_same_v<DisabledType, std::decay_t<T>>>> operator T&() {
-        return context_.template resolve<T&>();
-    }
-    template <typename T, typename = std::enable_if_t<!std::is_same_v<DisabledType, std::decay_t<T>>>> operator T&&() {
-        return context_.template resolve<T&&>();
-    }
-
-    template <typename T, typename Tag, typename = std::enable_if_t<!std::is_same_v<DisabledType, std::decay_t<T>>>>
-    operator annotated<T, Tag>() {
-        return context_.template resolve<annotated<T, Tag>>();
-    }
-
-  private:
-    Context& context_;
-};
-
 } // namespace dingo

@@ -41,7 +41,7 @@ template <typename Type, typename U> struct conversions<external, std::unique_pt
 template <typename Type, typename U>
 struct conversions<external, std::unique_ptr<Type>&, U> : public conversions<external, std::unique_ptr<Type>, U> {};
 
-template <typename Type> class storage_instance<external, Type> {
+template <typename Type> class storage_instance<external, Type, void> {
   public:
     template <typename T> storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
 
@@ -51,7 +51,7 @@ template <typename Type> class storage_instance<external, Type> {
     Type instance_;
 };
 
-template <typename Type> class storage_instance<external, Type&> {
+template <typename Type> class storage_instance<external, Type&, void> {
   public:
     storage_instance(Type& instance) : instance_(instance) {}
 
@@ -61,7 +61,7 @@ template <typename Type> class storage_instance<external, Type&> {
     Type& instance_;
 };
 
-template <typename Type> class storage_instance<external, Type*> {
+template <typename Type> class storage_instance<external, Type*, void> {
   public:
     storage_instance(Type* instance) : instance_(instance) {}
 
@@ -71,7 +71,7 @@ template <typename Type> class storage_instance<external, Type*> {
     Type* instance_;
 };
 
-template <typename Type> class storage_instance<external, std::shared_ptr<Type>> {
+template <typename Type> class storage_instance<external, std::shared_ptr<Type>, void> {
   public:
     template <typename T> storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
 
@@ -81,7 +81,7 @@ template <typename Type> class storage_instance<external, std::shared_ptr<Type>>
     std::shared_ptr<Type> instance_;
 };
 
-template <typename Type> class storage_instance<external, std::shared_ptr<Type>&> {
+template <typename Type> class storage_instance<external, std::shared_ptr<Type>&, void> {
   public:
     storage_instance(std::shared_ptr<Type>& instance) : instance_(instance) {}
 
@@ -91,7 +91,7 @@ template <typename Type> class storage_instance<external, std::shared_ptr<Type>&
     std::shared_ptr<Type>& instance_;
 };
 
-template <typename Type> class storage_instance<external, std::unique_ptr<Type>> {
+template <typename Type> class storage_instance<external, std::unique_ptr<Type>, void> {
   public:
     template <typename T> storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
 
@@ -101,9 +101,9 @@ template <typename Type> class storage_instance<external, std::unique_ptr<Type>>
     std::unique_ptr<Type> instance_;
 };
 
-template <typename Type, typename Conversions>
-class storage<external, Type, void, void, Conversions> : public resettable_i {
-    storage_instance<external, Type> instance_;
+template <typename Type, typename Factory, typename Conversions>
+class storage<external, Type, Factory, void, Conversions> : public resettable_i {
+    storage_instance<external, Type, void> instance_;
 
   public:
     static constexpr bool is_caching = false;

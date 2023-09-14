@@ -133,4 +133,38 @@ TYPED_TEST(external_test, unique_ptr_move) {
         container.template resolve<std::unique_ptr<C>&>();
     }
 }
+
+TYPED_TEST(external_test, constructor_ambiguous) {
+    using container_type = TypeParam;
+    container_type container;
+
+    struct A {
+        A(int) {}
+        A(double) {}
+        static A& instance() {
+            static A a(1);
+            return a;
+        }
+    };
+
+    container.template register_binding<storage<external, A>>(A::instance());
+}
+
+TYPED_TEST(external_test, constructor_private) {
+    using container_type = TypeParam;
+    container_type container;
+
+    struct A {
+        static A& instance() {
+            static A a;
+            return a;
+        }
+
+      private:
+        A() {}
+    };
+
+    container.template register_binding<storage<external, A>>(A::instance());
+}
+
 } // namespace dingo

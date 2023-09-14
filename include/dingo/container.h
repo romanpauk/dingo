@@ -43,18 +43,49 @@ class container {
 
     container(Allocator allocator = Allocator()) : allocator_(allocator), type_factories_(allocator) {}
 
-    template <typename TypeStorage, typename TypeInterface = decay_t<typename TypeStorage::type>, typename... Args>
-    void register_binding(Args&&... args) {
+    // TODO: idea for future policy-based nterface:
+    // register_binding<scope<unique>, type<B>, interfaces<A, B, C>>([]{...});
+    // It should be possible to write those in any order and to omit any of the policies, if they are deductible from
+    // the factory.
+
+    template <typename TypeStorage, typename TypeInterface = decay_t<typename TypeStorage::type>>
+    void register_binding() {
+        register_type_factory<TypeInterface, TypeStorage>(
+            std::make_unique<class_instance_factory<container_type, typename annotated_traits<TypeInterface>::type,
+                                                    typename TypeStorage::type, TypeStorage>>());
+    }
+
+    template <typename Storage, typename TypeInterface = decay_t<typename Storage::type>, typename Factory>
+    void register_binding(Factory&& factory) {
+        // TODO: The whole Storage should be deduced from Factory & Factory return type, if it is not
+        // specified.
+        using TypeStorage = typename storage_traits<Storage>::template rebind_factory_t<std::decay_t<Factory>>;
+
         register_type_factory<TypeInterface, TypeStorage>(
             std::make_unique<class_instance_factory<container_type, typename annotated_traits<TypeInterface>::type,
                                                     typename TypeStorage::type, TypeStorage>>(
-                std::forward<Args>(args)...));
+                std::forward<Factory>(factory)));
     }
 
-    template <typename TypeStorage, typename... TypeInterfaces, typename... Args,
+    template <typename TypeStorage, typename... TypeInterfaces,
               typename = std::enable_if_t<(sizeof...(TypeInterfaces) > 1)>>
-    void register_binding(Args&&... args) {
-        auto storage = std::make_shared<TypeStorage>(std::forward<Args>(args)...);
+    void register_binding() {
+        auto storage = std::make_shared<TypeStorage>();
+        for_each(type_list<TypeInterfaces...>{}, [&](auto element) {
+            using TypeInterface = typename decltype(element)::type;
+            register_type_factory<TypeInterface, TypeStorage>(
+                std::make_unique<class_instance_factory<container_type, typename annotated_traits<TypeInterface>::type,
+                                                        typename TypeStorage::type, std::shared_ptr<TypeStorage>>>(
+                    storage));
+        });
+    }
+
+    template <typename Storage, typename... TypeInterfaces, typename Factory,
+              typename = std::enable_if_t<(sizeof...(TypeInterfaces) > 1)>>
+    void register_binding(Factory&& factory) {
+        using TypeStorage = typename storage_traits<Storage>::template rebind_factory_t<std::decay_t<Factory>>;
+
+        auto storage = std::make_shared<TypeStorage>(std::forward<Factory>(factory));
         for_each(type_list<TypeInterfaces...>{}, [&](auto element) {
             using TypeInterface = typename decltype(element)::type;
             register_type_factory<TypeInterface, TypeStorage>(
@@ -86,10 +117,10 @@ class container {
         return resolve<T, true>(context);
     }
 
-    template <typename T, typename Factory = void> T construct() {
+    template <typename T, typename Factory = class_factory<decay_t<T>>> T construct(Factory factory = Factory()) {
         // TODO: nothrow constructuble
         resolving_context<container_type> context(*this);
-        return storage_factory_t<Factory, T, resolving_context<container_type>>::template construct<T>(context);
+        return factory.template construct<T>(context);
     }
 
   private:

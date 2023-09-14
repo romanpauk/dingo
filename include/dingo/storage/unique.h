@@ -39,15 +39,15 @@ template <typename Type, typename U> struct conversions<unique, std::unique_ptr<
 };
 
 template <typename Type, typename Factory, typename Conversions>
-class storage<unique, Type, Factory, void, Conversions> {
+class storage<unique, Type, Factory, void, Conversions> : Factory {
   public:
+    template <typename... Args> storage(Args&&... args) : Factory(std::forward<Args>(args)...) {}
+
     static constexpr bool is_caching = false;
 
     using conversions = Conversions;
     using type = Type;
 
-    template <typename Context> Type resolve(Context& context) {
-        return storage_factory_t<Factory, Type, Context>::template construct<Type>(context);
-    }
+    template <typename Context> Type resolve(Context& context) { return Factory::template construct<Type>(context); }
 };
 } // namespace dingo

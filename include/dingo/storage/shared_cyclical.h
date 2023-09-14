@@ -55,7 +55,7 @@ template <typename Base, typename Derived> struct is_virtual_base_of {
 };
 
 template <typename Base, typename Derived>
-constexpr bool is_virtual_base_of_v = is_virtual_base_of<Base, Derived>::value;
+static constexpr bool is_virtual_base_of_v = is_virtual_base_of<Base, Derived>::value;
 
 // Disallow virtual bases as interfaces as in cyclical storage, we can't properly
 // calculate the cast when the object is not constructed
@@ -63,11 +63,13 @@ template <typename Type, typename Conversions, typename Container, typename Deri
 struct storage_interface_requirements<storage<shared_cyclical, Type, Conversions, Container>, Derived, Base>
     : std::bool_constant<!is_virtual_base_of_v<Base, Derived>> {};
 
-template <typename Type, bool IsTriviallyDestructible = std::is_trivially_destructible_v<Type>>
+template <typename Type, typename Factory, bool IsTriviallyDestructible = std::is_trivially_destructible_v<Type>>
 class storage_instance_shared_impl;
 
-template <typename Type> class storage_instance_shared_impl<Type, false> {
+template <typename Type, typename Factory> class storage_instance_shared_impl<Type, Factory, false> : Factory {
   public:
+    template <typename... Args> storage_instance_shared_impl(Args&&... args) : Factory(std::forward<Args>(args)...) {}
+
     ~storage_instance_shared_impl() { reset(); }
 
     template <typename Context> Type* resolve(Context&) {
@@ -78,7 +80,7 @@ template <typename Type> class storage_instance_shared_impl<Type, false> {
 
     Type* get() { return reinterpret_cast<Type*>(&instance_); }
 
-    template <typename Factory, typename Context> void construct(Context& context) {
+    template <typename Context> void construct(Context& context) {
         Factory::template construct<Type*>(&instance_, context);
         constructed_ = true;
     }
@@ -99,8 +101,10 @@ template <typename Type> class storage_instance_shared_impl<Type, false> {
     bool constructed_ = false;
 };
 
-template <typename Type> class storage_instance_shared_impl<Type, true> {
+template <typename Type, typename Factory> class storage_instance_shared_impl<Type, Factory, true> : Factory {
   public:
+    template <typename... Args> storage_instance_shared_impl(Args&&... args) : Factory(std::forward<Args>(args)...) {}
+
     template <typename Context> Type* resolve(Context&) {
         assert(!resolved_);
         resolved_ = true;
@@ -109,7 +113,7 @@ template <typename Type> class storage_instance_shared_impl<Type, true> {
 
     Type* get() { return reinterpret_cast<Type*>(&instance_); }
 
-    template <typename Factory, typename Context> void construct(Context& context) {
+    template <typename Context> void construct(Context& context) {
         Factory::template construct<Type*>(&instance_, context);
     }
 
@@ -122,9 +126,15 @@ template <typename Type> class storage_instance_shared_impl<Type, true> {
     bool resolved_ = false;
 };
 
-template <typename Type> class storage_instance<shared_cyclical, Type> : public storage_instance_shared_impl<Type> {};
+template <typename Type, typename Factory>
+class storage_instance<shared_cyclical, Type, Factory> : public storage_instance_shared_impl<Type, Factory> {
+  public:
+    template <typename... Args>
+    storage_instance(Args&&... args) : storage_instance_shared_impl<Type, Factory>(std::forward<Args>(args)...) {}
+};
 
-template <typename Type> class storage_instance<shared_cyclical, std::shared_ptr<Type>> {
+template <typename Type, typename Factory>
+class storage_instance<shared_cyclical, std::shared_ptr<Type>, Factory> : Factory {
     struct alignas(alignof(Type)) buffer {
         uint8_t data[sizeof(Type)];
     };
@@ -148,6 +158,8 @@ template <typename Type> class storage_instance<shared_cyclical, std::shared_ptr
     };
 
   public:
+    template <typename... Args> storage_instance(Args&&... args) : Factory(std::forward<Args>(args)...) {}
+
     template <typename Context> std::shared_ptr<Type> resolve(Context&) {
         assert(!instance_);
         instance_.reset(reinterpret_cast<Type*>(new buffer), deleter());
@@ -156,7 +168,7 @@ template <typename Type> class storage_instance<shared_cyclical, std::shared_ptr
 
     std::shared_ptr<Type> get() { return instance_; }
 
-    template <typename Factory, typename Context> void construct(Context& context) {
+    template <typename Context> void construct(Context& context) {
         assert(instance_);
         Factory::template construct<Type*>(instance_.get(), context);
         std::get_deleter<deleter>(instance_)->set_constructed();
@@ -175,9 +187,11 @@ class storage<shared_cyclical, Type, Factory, Container, Conversions> : public r
                                                                         public constructible_i<Container> {
     static_assert(!std::is_same_v<Container, void>, "concrete container type required");
 
-    storage_instance<shared_cyclical, Type> instance_;
+    storage_instance<shared_cyclical, Type, Factory> instance_;
 
   public:
+    template <typename... Args> storage(Args&&... args) : instance_(std::forward<Args>(args)...) {}
+
     static constexpr bool is_caching = true;
 
     using conversions = Conversions;
@@ -197,7 +211,7 @@ class storage<shared_cyclical, Type, Factory, Container, Conversions> : public r
 
     void construct(resolving_context<Container>& context, int phase) override {
         if (phase == 0)
-            instance_.template construct<storage_factory_t<Factory, Type, resolving_context<Container>>>(context);
+            instance_.construct(context);
     }
 };
 } // namespace dingo

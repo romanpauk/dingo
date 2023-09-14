@@ -1,6 +1,7 @@
 #include <dingo/class_factory.h>
 #include <dingo/container.h>
 #include <dingo/storage/external.h>
+#include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 
 #include <gtest/gtest.h>
@@ -11,7 +12,7 @@ namespace dingo {
 template <typename T> struct class_factory_test : public testing::Test {};
 TYPED_TEST_SUITE(class_factory_test, container_types);
 
-template <typename T> using test_class_factory = class_factory<T, void, /*Assert=*/false>;
+template <typename T> using test_class_factory = class_factory<T, /*Assert=*/false>;
 
 TEST(class_factory_test, default_constructor) {
     struct A {
@@ -65,6 +66,15 @@ TEST(class_factory_test, unconstructible) {
     static_assert(test_class_factory<A>::valid == false);
 }
 
+TEST(class_factory_test, constructor) {
+    struct A {
+        A(int, float);
+    };
+
+    static_assert(constructor<A, int, float>::valid && constructor<A(int, float)>::valid);
+    static_assert(constructor<A, int, float>::arity && constructor<A(int, float)>::arity);
+}
+
 TYPED_TEST(class_factory_test, ambiguous_construct) {
     struct A {
         A(int) : index(0) {}
@@ -85,7 +95,7 @@ TYPED_TEST(class_factory_test, ambiguous_construct) {
 
     {
         static_assert(constructor<A, int>::arity == 1 && constructor<A, int>::valid == true);
-        auto a = container.template construct<A, constructor<A, int>>();
+        auto a = container.template construct<A, constructor<A(int)>>();
         ASSERT_EQ(a.index, 0);
     }
 
@@ -104,6 +114,10 @@ TYPED_TEST(class_factory_test, ambiguous_construct) {
     {
         static_assert(constructor<A, int, float>::arity == 2 && constructor<A, float, int>::valid == true);
         auto a = container.template construct<A, constructor<A, float, int>>();
+        ASSERT_EQ(a.index, 3);
+    }
+    {
+        auto a = container.template construct<A>(constructor<A, float, int>());
         ASSERT_EQ(a.index, 3);
     }
 }
@@ -145,10 +159,18 @@ TYPED_TEST(class_factory_test, function_construct) {
         auto a = container.template construct<A, function_decl<decltype(&A::createInt), &A::createInt>>();
         ASSERT_EQ(a.index, 0);
     }
+    {
+        auto a = container.template construct<A>(function_decl<decltype(&A::createInt), &A::createInt>());
+        ASSERT_EQ(a.index, 0);
+    }
 
 #if !defined(__GNUC__) || __GNUC__ >= 12
     {
         auto a = container.template construct<A, function_decl<decltype(A::createFloat), A::createFloat>>();
+        ASSERT_EQ(a.index, 1);
+    }
+    {
+        auto a = container.template construct<A>(function_decl<decltype(A::createFloat), A::createFloat>());
         ASSERT_EQ(a.index, 1);
     }
 
@@ -156,7 +178,59 @@ TYPED_TEST(class_factory_test, function_construct) {
         auto a = container.template construct<A, function<&A::createFloat>>();
         ASSERT_EQ(a.index, 1);
     }
+    {
+        auto a = container.template construct<A>(function<&A::createFloat>());
+        ASSERT_EQ(a.index, 1);
+    }
 #endif
+}
+
+TYPED_TEST(class_factory_test, callable_construct) {
+    struct B {
+        int v;
+    };
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_binding<storage<external, int>>(4);
+    auto b = container.template construct<B>(callable([&](int v) { return B{v * v}; }));
+    ASSERT_EQ(b.v, 16);
+}
+
+TYPED_TEST(class_factory_test, callable_resolve_unique) {
+    struct B {
+        int v;
+    };
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_binding<storage<external, int>>(4);
+    container.template register_binding<storage<unique, B>>(callable([&](int v) { return B{v * v}; }));
+    auto b = container.template resolve<B>();
+    ASSERT_EQ(b.v, 16);
+}
+
+TYPED_TEST(class_factory_test, callable_resolve_shared) {
+    struct B {
+        int v;
+    };
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_binding<storage<external, int>>(4);
+    container.template register_binding<storage<shared, B>>(callable([&](int v) { return B{v * v}; }));
+    auto b = container.template resolve<B>();
+    ASSERT_EQ(b.v, 16);
+}
+
+TYPED_TEST(class_factory_test, callable_resolve_shared_cyclical) {
+    struct B {
+        int v;
+    };
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_binding<storage<external, int>>(4);
+    container.template register_binding<storage<shared_cyclical, B, class_factory<B>, container_type>>(
+        callable([&](int v) { return B{v * v}; }));
+    auto b = container.template resolve<B&>();
+    ASSERT_EQ(b.v, 16);
 }
 
 } // namespace dingo
