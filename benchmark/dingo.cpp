@@ -26,9 +26,10 @@ static void resolve_baseline_unique(benchmark::State& state) {
 }
 
 template <typename ContainerTraits> static void resolve_container_unique(benchmark::State& state) {
-    using container_type = dingo::container<ContainerTraits>;
+    using namespace dingo;
+    using container_type = container<ContainerTraits>;
     container_type container;
-    container.template register_binding<dingo::storage<dingo::unique, Class<0>>>();
+    container.template register_type<scope<unique>, storage<Class<0>>>();
 
     int counter = 0;
     for (auto _ : state) {
@@ -49,9 +50,10 @@ static void resolve_baseline_shared(benchmark::State& state) {
 }
 
 template <typename ContainerTraits> static void resolve_container_shared(benchmark::State& state) {
-    using container_type = dingo::container<ContainerTraits>;
+    using namespace dingo;
+    using container_type = container<ContainerTraits>;
     container_type container;
-    container.template register_binding<dingo::storage<dingo::shared, Class<0>>>();
+    container.template register_type<scope<shared>, storage<Class<0>>>();
 
     int counter = 0;
     for (auto _ : state) {
@@ -63,10 +65,11 @@ template <typename ContainerTraits> static void resolve_container_shared(benchma
 }
 
 template <typename ContainerTraits> static void resolve_container_external(benchmark::State& state) {
+    using namespace dingo;
     using container_type = dingo::container<ContainerTraits>;
     container_type container;
     Class<0> c;
-    container.template register_binding<dingo::storage<dingo::external, Class<0>>>(c);
+    container.template register_type<scope<external>, storage<Class<0>>>(c);
 
     int counter = 0;
     for (auto _ : state) {

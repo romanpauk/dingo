@@ -20,7 +20,8 @@ TYPED_TEST(unique_test, value) {
 
         {
             container_type container;
-            container.template register_binding<storage<unique, C>>();
+            // container.template register_binding<storage<unique, C>>();
+            container.template register_type<scope<unique>, storage<C>>();
             AssertTypeNotConvertible<C, type_list<C*>>(container);
             {
                 AssertClass(container.template resolve<C&&>());
@@ -40,7 +41,7 @@ TYPED_TEST(unique_test, value) {
 
         {
             container_type container;
-            container.template register_binding<storage<unique, C>>();
+            container.template register_type<scope<unique>, storage<C>>();
 
             {
                 AssertClass(container.template resolve<C>());
@@ -60,7 +61,7 @@ TYPED_TEST(unique_test, value) {
 
         {
             container_type container;
-            container.template register_binding<storage<unique, std::unique_ptr<C>>, C, IClass>();
+            container.template register_type<scope<unique>, storage<std::unique_ptr<C>>, interface<C, IClass>>();
             AssertTypeNotConvertible<C, type_list<C&, C&&, C*>>(container);
             {
                 AssertClass(*container.template resolve<std::unique_ptr<C>>());
@@ -105,7 +106,7 @@ TYPED_TEST(unique_test, pointer) {
 
         {
             container_type container;
-            container.template register_binding<storage<unique, C*>>();
+            container.template register_type<scope<unique>, storage<C*>>();
             auto c = container.template resolve<C*>();
             AssertClass(*c);
             ASSERT_EQ(C::Constructor, 1);
@@ -136,9 +137,9 @@ TYPED_TEST(unique_test, ambiguous_resolve) {
     using container_type = TypeParam;
     container_type container;
 
-    container.template register_binding<storage<unique, A, constructor<A, float, int>>>();
-    container.template register_binding<storage<unique, float>>();
-    container.template register_binding<storage<unique, int>>();
+    container.template register_type<scope<unique>, storage<A>, factory<constructor<A(float, int)>>>();
+    container.template register_type<scope<unique>, storage<float>>();
+    container.template register_type<scope<unique>, storage<int>>();
 
     auto a = container.template construct<A, constructor<A, float, int>>();
     ASSERT_EQ(a.index, 3);

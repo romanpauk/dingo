@@ -10,6 +10,9 @@ template <typename T> struct type_list_iterator {
     using type = T;
 };
 
+template <typename... Types> struct type_list_size : std::integral_constant<size_t, sizeof...(Types)> {};
+template <typename... Types> static constexpr size_t type_list_size_v = type_list_size<Types...>::value;
+
 template <typename RTTI, typename Function> bool for_type(type_list<>, const typename RTTI::type_index&, Function&&) {
     return false;
 }

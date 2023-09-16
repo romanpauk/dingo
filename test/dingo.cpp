@@ -23,9 +23,9 @@ TYPED_TEST(dingo_test, unique_hierarchy) {
     };
 
     container_type container;
-    container.template register_binding<storage<unique, std::shared_ptr<S>>>();
-    container.template register_binding<storage<unique, std::unique_ptr<U>>>();
-    container.template register_binding<storage<shared, B>>();
+    container.template register_type<scope<unique>, storage<std::shared_ptr<S>>>();
+    container.template register_type<scope<unique>, storage<std::unique_ptr<U>>>();
+    container.template register_type<scope<unique>, storage<B>>();
 
     container.template resolve<B&>();
 }
@@ -42,9 +42,9 @@ TYPED_TEST(dingo_test, resolve_rollback) {
     };
 
     container_type container;
-    container.template register_binding<storage<shared, A>>();
-    container.template register_binding<storage<shared, B>>();
-    container.template register_binding<storage<shared, C>>();
+    container.template register_type<scope<shared>, storage<A>>();
+    container.template register_type<scope<shared>, storage<B>>();
+    container.template register_type<scope<shared>, storage<C>>();
 
     ASSERT_THROW(container.template resolve<C&>(), Ex);
     ASSERT_EQ(A::Constructor, 1);
@@ -70,13 +70,16 @@ TYPED_TEST(dingo_test, type_already_registered) {
 
     container_type container;
     {
-        container.template register_binding<storage<shared, A>>();
-        auto reg = [&] { container.template register_binding<storage<shared, A>>(); };
+        container.template register_type<scope<shared>, storage<A>>();
+        auto reg = [&] { container.template register_type<scope<shared>, storage<A>>(); };
         ASSERT_THROW(reg(), dingo::type_already_registered_exception);
     }
     {
-        container.template register_binding<storage<shared, A>, IClass>();
-        auto reg = [&] { container.template register_binding<storage<shared, A>, IClass>(); };
+        container.template register_type<scope<shared>, storage<A>, interface<IClass>>();
+        auto reg = [&] {
+            container.template register_type<scope<shared>, storage<A>, interface<IClass>>();
+            ;
+        };
         ASSERT_THROW(reg(), dingo::type_already_registered_exception);
     }
 }

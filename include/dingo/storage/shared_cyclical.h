@@ -13,27 +13,6 @@
 namespace dingo {
 struct shared_cyclical {};
 
-template <typename Type, typename U> struct conversions<shared_cyclical, Type, U> {
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<U&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*>;
-};
-
-template <typename Type, typename U> struct conversions<shared_cyclical, Type*, U> {
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<U&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*>;
-};
-
-template <typename Type, typename U> struct conversions<shared_cyclical, std::shared_ptr<Type>, U> {
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<U&, std::shared_ptr<U>&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, std::shared_ptr<U>*>;
-};
-
 template <typename Base, typename Derived> struct is_virtual_base_of {
 #if defined(__GNUG__)
 #pragma GCC diagnostic push
@@ -57,10 +36,32 @@ template <typename Base, typename Derived> struct is_virtual_base_of {
 template <typename Base, typename Derived>
 static constexpr bool is_virtual_base_of_v = is_virtual_base_of<Base, Derived>::value;
 
+namespace detail {
+template <typename Type, typename U> struct conversions<shared_cyclical, Type, U> {
+    using value_types = type_list<>;
+    using lvalue_reference_types = type_list<U&>;
+    using rvalue_reference_types = type_list<>;
+    using pointer_types = type_list<U*>;
+};
+
+template <typename Type, typename U> struct conversions<shared_cyclical, Type*, U> {
+    using value_types = type_list<>;
+    using lvalue_reference_types = type_list<U&>;
+    using rvalue_reference_types = type_list<>;
+    using pointer_types = type_list<U*>;
+};
+
+template <typename Type, typename U> struct conversions<shared_cyclical, std::shared_ptr<Type>, U> {
+    using value_types = type_list<>;
+    using lvalue_reference_types = type_list<U&, std::shared_ptr<U>&>;
+    using rvalue_reference_types = type_list<>;
+    using pointer_types = type_list<U*, std::shared_ptr<U>*>;
+};
+
 // Disallow virtual bases as interfaces as in cyclical storage, we can't properly
 // calculate the cast when the object is not constructed
-template <typename Type, typename Conversions, typename Container, typename Derived, typename Base>
-struct storage_interface_requirements<storage<shared_cyclical, Type, Conversions, Container>, Derived, Base>
+template <typename Type, typename Factory, typename Container, typename Conversions, typename Derived, typename Base>
+struct storage_interface_requirements<storage<shared_cyclical, Type, Factory, Container, Conversions>, Derived, Base>
     : std::bool_constant<!is_virtual_base_of_v<Base, Derived>> {};
 
 template <typename Type, typename Factory, bool IsTriviallyDestructible = std::is_trivially_destructible_v<Type>>
@@ -182,7 +183,7 @@ class storage_instance<shared_cyclical, std::shared_ptr<Type>, Factory> : Factor
     std::shared_ptr<Type> instance_;
 };
 
-template <typename Type, typename Factory, typename Conversions, typename Container>
+template <typename Type, typename Factory, typename Container, typename Conversions>
 class storage<shared_cyclical, Type, Factory, Container, Conversions> : public resettable_i,
                                                                         public constructible_i<Container> {
     static_assert(!std::is_same_v<Container, void>, "concrete container type required");
@@ -214,4 +215,5 @@ class storage<shared_cyclical, Type, Factory, Container, Conversions> : public r
             instance_.construct(context);
     }
 };
+} // namespace detail
 } // namespace dingo

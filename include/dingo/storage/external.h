@@ -10,6 +10,7 @@
 namespace dingo {
 struct external {};
 
+namespace detail {
 template <typename Type, typename U> struct conversions<external, Type, U> {
     using value_types = type_list<U>;
     using lvalue_reference_types = type_list<U&>;
@@ -101,8 +102,8 @@ template <typename Type> class storage_instance<external, std::unique_ptr<Type>,
     std::unique_ptr<Type> instance_;
 };
 
-template <typename Type, typename Factory, typename Conversions>
-class storage<external, Type, Factory, void, Conversions> : public resettable_i {
+template <typename Type, typename Factory, typename Container, typename Conversions>
+class storage<external, Type, Factory, Container, Conversions> : public resettable_i {
     storage_instance<external, Type, void> instance_;
 
   public:
@@ -118,4 +119,5 @@ class storage<external, Type, Factory, void, Conversions> : public resettable_i 
 
     void reset() override {}
 };
+} // namespace detail
 } // namespace dingo

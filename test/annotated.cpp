@@ -1,5 +1,7 @@
 #include <dingo/annotated.h>
 #include <dingo/container.h>
+#include <dingo/factory/callable.h>
+#include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/type_list.h>
 
@@ -15,28 +17,23 @@ TYPED_TEST_SUITE(annotated_test, container_types);
 
 template <size_t N> struct tag {};
 
-/*
 TYPED_TEST(annotated_test, value) {
     using container_type = TypeParam;
 
     struct A {
-        A(annotated< int, tag< 1 > > value1, annotated< int, tag< 2 > > value10)
-{}
+        A(annotated<int, tag<1>>, annotated<int, tag<2>>) {}
     };
 
-    // TODO: support constant / lambda factory
     container_type container;
-    container.template register_binding< storage< container_type, unique,
-annotated< int, tag< 1 > > > >(1); container.template register_binding< storage<
-container_type, unique, annotated< int, tag< 2 > > > >([]{ return 10; });
-    container.template register_binding< storage< container_type, unique, A >
->();
+    container.template register_type<scope<external>, storage<int>, interface<annotated<int, tag<1>>>>(1);
+    container.template register_type<scope<unique>, storage<int>, interface<annotated<int, tag<2>>>>(
+        callable([] { return 10; }));
+    container.template register_type<scope<unique>, storage<A>>();
 
-    container.template resolve< annotated< int, tag< 1 > > >();
-    container.template resolve< annotated< int, tag< 2 > > >();
-    container.template resolve< A >();
+    container.template resolve<annotated<int, tag<1>>>();
+    container.template resolve<annotated<int, tag<2>>>();
+    container.template resolve<A>();
 }
-*/
 
 TYPED_TEST(annotated_test, interface) {
     using container_type = TypeParam;
@@ -63,9 +60,9 @@ TYPED_TEST(annotated_test, interface) {
 
     container_type container;
 
-    container.template register_binding<storage<shared, A>, annotated<I, tag<1>>>();
-    container.template register_binding<storage<shared, std::shared_ptr<B>>, annotated<I, tag<2>>>();
-    container.template register_binding<storage<shared, std::shared_ptr<C>>, C, annotated<I, tag<3>>>();
+    container.template register_type<scope<shared>, storage<A>, interface<annotated<I, tag<1>>>>();
+    container.template register_type<scope<shared>, storage<std::shared_ptr<B>>, interface<annotated<I, tag<2>>>>();
+    container.template register_type<scope<shared>, storage<std::shared_ptr<C>>, interface<C, annotated<I, tag<3>>>>();
 
     I& aref = container.template resolve<annotated<I&, tag<1>>>();
     ASSERT_TRUE(dynamic_cast<A*>(&aref));

@@ -10,6 +10,7 @@
 namespace dingo {
 struct unique {};
 
+namespace detail {
 template <typename Type, typename U> struct conversions<unique, Type, U> {
     using value_types = type_list<U>;
     using lvalue_reference_types = type_list<U&>;
@@ -38,8 +39,8 @@ template <typename Type, typename U> struct conversions<unique, std::unique_ptr<
     using pointer_types = type_list<>;
 };
 
-template <typename Type, typename Factory, typename Conversions>
-class storage<unique, Type, Factory, void, Conversions> : Factory {
+template <typename Type, typename Factory, typename Container, typename Conversions>
+class storage<unique, Type, Factory, Container, Conversions> : Factory {
   public:
     template <typename... Args> storage(Args&&... args) : Factory(std::forward<Args>(args)...) {}
 
@@ -50,4 +51,5 @@ class storage<unique, Type, Factory, void, Conversions> : Factory {
 
     template <typename Context> Type resolve(Context& context) { return Factory::template construct<Type>(context); }
 };
+} // namespace detail
 } // namespace dingo

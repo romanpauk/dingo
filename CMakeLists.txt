@@ -104,6 +104,7 @@ target_sources(dingo INTERFACE
     include/dingo/type_conversion.h
     include/dingo/type_list.h
     include/dingo/type_map.h
+    include/dingo/type_registration.h
     include/dingo/type_traits.h
 )
     
@@ -121,6 +122,7 @@ if(DINGO_TESTING_ENABLED)
         test/multibindings.cpp
         test/shared.cpp
         test/shared_cyclical.cpp
+        test/type_registration.cpp
         test/unique.cpp
     )
     add_test(NAME dingo_test COMMAND dingo_test)

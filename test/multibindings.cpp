@@ -20,7 +20,7 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_value) {
     typedef Class<multiple_interfaces_shared_value, __COUNTER__> C;
 
     container_type container;
-    container.template register_binding<storage<shared, C>, IClass, IClass1, IClass2>();
+    container.template register_type<scope<shared>, storage<C>, interface<IClass, IClass1, IClass2>>();
 
     ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve<IClass&>()));
     ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve<IClass1&>()));
@@ -34,11 +34,8 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_cyclical_value) {
     typedef Class<multiple_interfaces_shared_cyclical_value, __COUNTER__> C;
 
     container_type container;
-    container.template register_binding<storage<shared_cyclical, C, constructor<C>, container_type>,
-                                        /*IClass, */ IClass1, IClass2>();
+    container.template register_type<scope<shared_cyclical>, storage<C>, interface<IClass1, IClass2>>();
 
-    // TODO: virtual base issues
-    // BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
     ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve<IClass1&>()));
     ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<IClass2*>()));
 }
@@ -50,7 +47,7 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_shared_ptr) {
     typedef Class<multiple_interfaces_shared_shared_ptr, __COUNTER__> C;
 
     container_type container;
-    container.template register_binding<storage<shared, std::shared_ptr<C>>, IClass, IClass1, IClass2>();
+    container.template register_type<scope<shared>, storage<std::shared_ptr<C>>, interface<IClass, IClass1, IClass2>>();
 
     ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve<IClass&>()));
     ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::shared_ptr<IClass>&>().get()));
@@ -67,8 +64,8 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_cyclical_shared_ptr) {
     typedef Class<multiple_interfaces_shared_cyclical_shared_ptr, __COUNTER__> C;
 
     container_type container;
-    container.template register_binding<storage<shared_cyclical, std::shared_ptr<C>, constructor<C>, container_type>,
-                                        IClass1, IClass2>();
+    container
+        .template register_type<scope<shared_cyclical>, storage<std::shared_ptr<C>>, interface<IClass1, IClass2>>();
 
     // TODO: virtual base issues with cyclical_shared
     // BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
@@ -101,7 +98,7 @@ TYPED_TEST(multibindings_test, multiple_interfaces_unique_shared_ptr) {
     typedef Class<multiple_interfaces_unique_shared_ptr, __COUNTER__> C;
 
     container_type container;
-    container.template register_binding<storage<unique, std::shared_ptr<C>>, IClass, IClass1, IClass2>();
+    container.template register_type<scope<unique>, storage<std::shared_ptr<C>>, interface<IClass, IClass1, IClass2>>();
 
     ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::shared_ptr<IClass>>().get()));
     ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::shared_ptr<IClass1>>().get()));
@@ -115,7 +112,7 @@ TYPED_TEST(multibindings_test, multiple_interfaces_unique_unique_ptr) {
     typedef Class<multiple_interfaces_unique_unique_ptr, __COUNTER__> C;
 
     container_type container;
-    container.template register_binding<storage<unique, std::unique_ptr<C>>, IClass, IClass1, IClass2>();
+    container.template register_type<scope<unique>, storage<std::unique_ptr<C>>, interface<IClass, IClass1, IClass2>>();
 
     ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::unique_ptr<IClass>>().get()));
     ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::unique_ptr<IClass1>>().get()));
@@ -143,9 +140,9 @@ TYPED_TEST(multibindings_test, multiple_interfaces_unique_unique_ptr) {
         };
 
         container_type container;
-        container.template register_binding< storage< dingo::container<>, shared, A >, A, I >();
-        container.template register_binding< storage< dingo::container<>, shared, B >, B, I >();
-        container.template register_binding< storage< dingo::container<>, shared, C > >();
+        container.template register_type< scope<shared>, storage<A>, interface<A, I>>();
+        container.template register_type< scope<shared>, storage<B>, interface<B, I>>();
+        container.template register_type< scope<shared>, storage<C>>();
 
         {
             auto vector = container.template resolve< std::vector< I* > >();

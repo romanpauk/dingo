@@ -10,6 +10,7 @@
 namespace dingo {
 struct shared {};
 
+namespace detail {
 template <typename Type, typename U> struct conversions<shared, Type, U> {
     using value_types = type_list<U>;
     using lvalue_reference_types = type_list<U&>;
@@ -142,8 +143,8 @@ class storage_instance<shared, Type*, Factory> : public storage_instance<shared,
     Type* get() const { return storage_instance<shared, std::unique_ptr<Type>, Factory>::get().get(); }
 };
 
-template <typename Type, typename Factory, typename Conversions>
-class storage<shared, Type, Factory, void, Conversions> : public resettable_i {
+template <typename Type, typename Factory, typename Container, typename Conversions>
+class storage<shared, Type, Factory, Container, Conversions> : public resettable_i {
     // TODO
     // static_assert(std::is_trivially_destructible_v< Type > ==
     // std::is_trivially_destructible_v< storage_instance< Type, shared > >);
@@ -166,4 +167,5 @@ class storage<shared, Type, Factory, void, Conversions> : public resettable_i {
     bool is_resolved() const { return !instance_.empty(); }
     void reset() override { instance_.reset(); }
 };
+} // namespace detail
 } // namespace dingo

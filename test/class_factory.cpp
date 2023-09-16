@@ -92,8 +92,8 @@ TYPED_TEST(class_factory_test, ambiguous_construct) {
 
     using container_type = TypeParam;
     container_type container;
-    container.template register_binding<storage<unique, int>>();
-    container.template register_binding<storage<unique, float>>();
+    container.template register_type<scope<unique>, storage<int>>();
+    container.template register_type<scope<unique>, storage<float>>();
 
     {
         static_assert(constructor<A, int>::arity == 1 && constructor<A, int>::valid == true);
@@ -154,8 +154,8 @@ TYPED_TEST(class_factory_test, function_construct) {
 #endif
     using container_type = TypeParam;
     container_type container;
-    container.template register_binding<storage<unique, int>>();
-    container.template register_binding<storage<unique, float>>();
+    container.template register_type<scope<unique>, storage<int>>();
+    container.template register_type<scope<unique>, storage<float>>();
 
     {
         auto a = container.template construct<A, function_decl<decltype(&A::createInt), &A::createInt>>();
@@ -193,7 +193,7 @@ TYPED_TEST(class_factory_test, callable_construct) {
     };
     using container_type = TypeParam;
     container_type container;
-    container.template register_binding<storage<external, int>>(4);
+    container.template register_type<scope<external>, storage<int>>(4);
     auto b = container.template construct<B>(callable([&](int v) { return B{v * v}; }));
     ASSERT_EQ(b.v, 16);
 }
@@ -204,8 +204,8 @@ TYPED_TEST(class_factory_test, callable_resolve_unique) {
     };
     using container_type = TypeParam;
     container_type container;
-    container.template register_binding<storage<external, int>>(4);
-    container.template register_binding<storage<unique, B>>(callable([&](int v) { return B{v * v}; }));
+    container.template register_type<scope<external>, storage<int>>(4);
+    container.template register_type<scope<unique>, storage<B>>(callable([&](int v) { return B{v * v}; }));
     auto b = container.template resolve<B>();
     ASSERT_EQ(b.v, 16);
 }
@@ -216,8 +216,8 @@ TYPED_TEST(class_factory_test, callable_resolve_shared) {
     };
     using container_type = TypeParam;
     container_type container;
-    container.template register_binding<storage<external, int>>(4);
-    container.template register_binding<storage<shared, B>>(callable([&](int v) { return B{v * v}; }));
+    container.template register_type<scope<external>, storage<int>>(4);
+    container.template register_type<scope<shared>, storage<B>>(callable([&](int v) { return B{v * v}; }));
     auto b = container.template resolve<B>();
     ASSERT_EQ(b.v, 16);
 }
@@ -228,9 +228,8 @@ TYPED_TEST(class_factory_test, callable_resolve_shared_cyclical) {
     };
     using container_type = TypeParam;
     container_type container;
-    container.template register_binding<storage<external, int>>(4);
-    container.template register_binding<storage<shared_cyclical, B, constructor<B>, container_type>>(
-        callable([&](int v) { return B{v * v}; }));
+    container.template register_type<scope<external>, storage<int>>(4);
+    container.template register_type<scope<shared_cyclical>, storage<B>>(callable([&](int v) { return B{v * v}; }));
     auto b = container.template resolve<B&>();
     ASSERT_EQ(b.v, 16);
 }

@@ -13,6 +13,7 @@
 #include <dingo/storage/shared_cyclical.h>
 #include <dingo/storage/unique.h>
 #include <dingo/type_map.h>
+#include <dingo/type_registration.h>
 
 #include <map>
 #include <optional>
@@ -43,56 +44,58 @@ class container {
 
     container(Allocator allocator = Allocator()) : allocator_(allocator), type_factories_(allocator) {}
 
-    // TODO: idea for future policy-based nterface:
-    // register_binding<scope<unique>, type<B>, interfaces<A, B, C>>([]{...});
-    // It should be possible to write those in any order and to omit any of the policies, if they are deductible from
-    // the factory.
+    template <typename... TypeArgs> void register_type() {
+        using registration = type_registration<TypeArgs...>;
+        using storage_type =
+            detail::storage<typename registration::scope_type::type, typename registration::storage_type::type,
+                            typename registration::factory_type::type, container_type,
+                            typename registration::conversions_type::type>;
 
-    template <typename TypeStorage, typename TypeInterface = decay_t<typename TypeStorage::type>>
-    void register_binding() {
-        register_type_factory<TypeInterface, TypeStorage>(
-            std::make_unique<class_instance_factory<container_type, typename annotated_traits<TypeInterface>::type,
-                                                    typename TypeStorage::type, TypeStorage>>());
+        // TODO: remove tuple usage... or remove type_list usage
+        if constexpr (std::tuple_size_v<typename registration::interface_type::type_tuple> == 1) {
+            using interface_type = std::tuple_element_t<0, typename registration::interface_type::type_tuple>;
+
+            register_type_factory<interface_type, storage_type>(
+                std::make_unique<class_instance_factory<container_type, typename annotated_traits<interface_type>::type,
+                                                        typename storage_type::type, storage_type>>());
+        } else {
+            auto storage = std::make_shared<storage_type>();
+            for_each(typename registration::interface_type::type{}, [&](auto element) {
+                using interface_type = typename decltype(element)::type;
+                register_type_factory<interface_type, storage_type>(
+                    std::make_unique<
+                        class_instance_factory<container_type, typename annotated_traits<interface_type>::type,
+                                               typename storage_type::type, std::shared_ptr<storage_type>>>(storage));
+            });
+        }
     }
 
-    template <typename Storage, typename TypeInterface = decay_t<typename Storage::type>, typename Factory>
-    void register_binding(Factory&& factory) {
-        // TODO: The whole Storage should be deduced from Factory & Factory return type, if it is not
-        // specified.
-        using TypeStorage = typename storage_traits<Storage>::template rebind_factory_t<std::decay_t<Factory>>;
+    template <typename... TypeArgs, typename Arg> void register_type(Arg&& arg) {
+        using registration = type_registration<TypeArgs..., factory<Arg>>;
 
-        register_type_factory<TypeInterface, TypeStorage>(
-            std::make_unique<class_instance_factory<container_type, typename annotated_traits<TypeInterface>::type,
-                                                    typename TypeStorage::type, TypeStorage>>(
-                std::forward<Factory>(factory)));
-    }
+        using storage_type =
+            detail::storage<typename registration::scope_type::type, typename registration::storage_type::type,
+                            typename registration::factory_type::type, container_type,
+                            typename registration::conversions_type::type>;
 
-    template <typename TypeStorage, typename... TypeInterfaces,
-              typename = std::enable_if_t<(sizeof...(TypeInterfaces) > 1)>>
-    void register_binding() {
-        auto storage = std::make_shared<TypeStorage>();
-        for_each(type_list<TypeInterfaces...>{}, [&](auto element) {
-            using TypeInterface = typename decltype(element)::type;
-            register_type_factory<TypeInterface, TypeStorage>(
-                std::make_unique<class_instance_factory<container_type, typename annotated_traits<TypeInterface>::type,
-                                                        typename TypeStorage::type, std::shared_ptr<TypeStorage>>>(
-                    storage));
-        });
-    }
+        // TODO: remove tuple usage... or remove type_list usage
+        if constexpr (std::tuple_size_v<typename registration::interface_type::type_tuple> == 1) {
+            using interface_type = std::tuple_element_t<0, typename registration::interface_type::type_tuple>;
 
-    template <typename Storage, typename... TypeInterfaces, typename Factory,
-              typename = std::enable_if_t<(sizeof...(TypeInterfaces) > 1)>>
-    void register_binding(Factory&& factory) {
-        using TypeStorage = typename storage_traits<Storage>::template rebind_factory_t<std::decay_t<Factory>>;
-
-        auto storage = std::make_shared<TypeStorage>(std::forward<Factory>(factory));
-        for_each(type_list<TypeInterfaces...>{}, [&](auto element) {
-            using TypeInterface = typename decltype(element)::type;
-            register_type_factory<TypeInterface, TypeStorage>(
-                std::make_unique<class_instance_factory<container_type, typename annotated_traits<TypeInterface>::type,
-                                                        typename TypeStorage::type, std::shared_ptr<TypeStorage>>>(
-                    storage));
-        });
+            register_type_factory<interface_type, storage_type>(
+                std::make_unique<class_instance_factory<container_type, typename annotated_traits<interface_type>::type,
+                                                        typename storage_type::type, storage_type>>(
+                    std::forward<Arg>(arg)));
+        } else {
+            auto storage = std::make_shared<storage_type>(std::forward<Arg>(arg));
+            for_each(typename registration::interface_type::type{}, [&](auto element) {
+                using interface_type = typename decltype(element)::type;
+                register_type_factory<interface_type, storage_type>(
+                    std::make_unique<
+                        class_instance_factory<container_type, typename annotated_traits<interface_type>::type,
+                                               typename storage_type::type, std::shared_ptr<storage_type>>>(storage));
+            });
+        }
     }
 
     template <typename T, typename R = typename annotated_traits<
@@ -193,7 +196,7 @@ class container {
         static_assert(!std::is_reference_v<TypeInterface>);
         static_assert(std::is_convertible_v<decay_t<Type>*, decay_t<TypeInterface>*>);
         if constexpr (!std::is_same_v<decay_t<Type>, decay_t<TypeInterface>>) {
-            static_assert(storage_interface_requirements_v<Storage, decay_t<Type>, decay_t<TypeInterface>>,
+            static_assert(detail::storage_interface_requirements_v<Storage, decay_t<Type>, decay_t<TypeInterface>>,
                           "storage requirements not met");
         }
     }

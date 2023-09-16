@@ -27,8 +27,8 @@ TYPED_TEST(shared_cyclical_test, recursion_exception) {
     };
 
     container_type container;
-    container.template register_binding<storage<shared, std::shared_ptr<A>>>();
-    container.template register_binding<storage<shared, B>>();
+    container.template register_type<scope<shared>, storage<std::shared_ptr<A>>>();
+    container.template register_type<scope<shared>, storage<B>>();
 
     ASSERT_THROW(container.template resolve<A>(), type_recursion_exception);
     ASSERT_THROW(container.template resolve<B>(), type_recursion_exception);
@@ -51,8 +51,8 @@ TYPED_TEST(shared_cyclical_test, value) {
     };
 
     container_type container;
-    container.template register_binding<storage<shared_cyclical, A, constructor<A>, container_type>, A, IClass1>();
-    container.template register_binding<storage<shared_cyclical, B, constructor<B>, container_type>>();
+    container.template register_type<scope<shared_cyclical>, storage<A>, interface<A, IClass1>>();
+    container.template register_type<scope<shared_cyclical>, storage<B>>();
 
     auto& a = container.template resolve<A&>();
     AssertClass(a);
@@ -87,10 +87,8 @@ TYPED_TEST(shared_cyclical_test, shared_ptr) {
     };
 
     container_type container;
-    container.template register_binding<storage<shared_cyclical, std::shared_ptr<A>, constructor<A>, container_type>, A,
-                                        IClass2>();
-    container.template register_binding<storage<shared_cyclical, std::shared_ptr<B>, constructor<B>, container_type>, B,
-                                        IClass1>();
+    container.template register_type<scope<shared_cyclical>, storage<std::shared_ptr<A>>, interface<A, IClass2>>();
+    container.template register_type<scope<shared_cyclical>, storage<std::shared_ptr<B>>, interface<B, IClass1>>();
 
     auto& a = container.template resolve<A&>();
     AssertClass(a);
@@ -117,8 +115,8 @@ TYPED_TEST(shared_cyclical_test, trivially_destructible) {
     };
 
     container_type container;
-    container.template register_binding<storage<shared_cyclical, A, constructor<A>, container_type>>();
-    container.template register_binding<storage<shared_cyclical, std::shared_ptr<B>, constructor<B>, container_type>>();
+    container.template register_type<scope<shared_cyclical>, storage<A>>();
+    container.template register_type<scope<shared_cyclical>, storage<std::shared_ptr<B>>>();
     auto& a = container.template resolve<A&>();
     auto& b = container.template resolve<B&>();
     ASSERT_EQ(&a, &b.a);
@@ -156,12 +154,10 @@ TYPED_TEST(shared_cyclical_test, ambiguous_resolve) {
     {
         container_type container;
 
-        container
-            .template register_binding<storage<shared_cyclical, A, constructor<A, B&, float, int>, container_type>>();
-        container
-            .template register_binding<storage<shared_cyclical, B, constructor<B, A&, float, int>, container_type>>();
-        container.template register_binding<storage<unique, float>>();
-        container.template register_binding<storage<unique, int>>();
+        container.template register_type<scope<shared_cyclical>, storage<A>, factory<constructor<A(B&, float, int)>>>();
+        container.template register_type<scope<shared_cyclical>, storage<B>, factory<constructor<B(A&, float, int)>>>();
+        container.template register_type<scope<unique>, storage<float>>();
+        container.template register_type<scope<unique>, storage<int>>();
 
         auto& a = container.template resolve<A&>();
         ASSERT_EQ(a.index, 1);
@@ -175,12 +171,10 @@ TYPED_TEST(shared_cyclical_test, ambiguous_resolve) {
     {
         container_type container;
 
-        container
-            .template register_binding<storage<shared_cyclical, A, constructor<A, B&, int, float>, container_type>>();
-        container
-            .template register_binding<storage<shared_cyclical, B, constructor<B, A&, int, float>, container_type>>();
-        container.template register_binding<storage<unique, float>>();
-        container.template register_binding<storage<unique, int>>();
+        container.template register_type<scope<shared_cyclical>, storage<A>, factory<constructor<A(B&, int, float)>>>();
+        container.template register_type<scope<shared_cyclical>, storage<B>, factory<constructor<B(A&, int, float)>>>();
+        container.template register_type<scope<unique>, storage<float>>();
+        container.template register_type<scope<unique>, storage<int>>();
 
         auto& a = container.template resolve<A&>();
         ASSERT_EQ(a.index, 0);

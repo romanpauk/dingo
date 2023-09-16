@@ -44,8 +44,8 @@ TYPED_TEST(construct_test, aggregate1) {
         B(A&&) {}
     };
     container_type container;
-    container.template register_binding<storage<unique, A>>();
-    container.template register_binding<storage<unique, int>>();
+    container.template register_type<scope<unique>, storage<A>>();
+    container.template register_type<scope<unique>, storage<int>>();
     container.template construct<B>();
 }
 
@@ -67,8 +67,8 @@ TYPED_TEST(construct_test, aggregate2) {
     };
 
     container_type container;
-    container.template register_binding<storage<external, int>>(2);
-    container.template register_binding<storage<shared, A>>();
+    container.template register_type<scope<external>, storage<int>>(2);
+    container.template register_type<scope<unique>, storage<A>>();
     auto b = container.template construct<B>();
     auto c = container.template construct<C>();
     auto d = container.template construct<D>();
