@@ -73,7 +73,7 @@ container.register_type<
     interface<A>                    // resolvable as type A
 >();
 
-// As some policies allow for deduction, the above can be simplified as follows:
+// As some policies can be deduced from the others, the above can be simplified to:
 container.register_type<
     scope<unqiue>, 
     storage<std::unqiue_ptr<A>>
