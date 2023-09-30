@@ -18,27 +18,28 @@ template <class DisabledType> struct constructor_argument {
     operator T&&();
 };
 
-template <typename DisabledType, typename Context> class constructor_argument_impl {
+template <typename DisabledType, typename Context, typename Container> class constructor_argument_impl {
   public:
-    constructor_argument_impl(Context& context) : context_(context) {}
+    constructor_argument_impl(Context& context, Container& container) : context_(context), container_(container) {}
 
     template <typename T, typename = std::enable_if_t<!std::is_same_v<DisabledType, std::decay_t<T>>>> operator T*() {
-        return context_.template resolve<T*>();
+        return context_.template resolve<T*>(container_);
     }
     template <typename T, typename = std::enable_if_t<!std::is_same_v<DisabledType, std::decay_t<T>>>> operator T&() {
-        return context_.template resolve<T&>();
+        return context_.template resolve<T&>(container_);
     }
     template <typename T, typename = std::enable_if_t<!std::is_same_v<DisabledType, std::decay_t<T>>>> operator T&&() {
-        return context_.template resolve<T&&>();
+        return context_.template resolve<T&&>(container_);
     }
 
     template <typename T, typename Tag, typename = std::enable_if_t<!std::is_same_v<DisabledType, std::decay_t<T>>>>
     operator annotated<T, Tag>() {
-        return context_.template resolve<annotated<T, Tag>>();
+        return context_.template resolve<annotated<T, Tag>>(container_);
     }
 
   private:
     Context& context_;
+    Container& container_;
 };
 template <typename T, typename = void, typename... Args> struct is_list_constructible_impl : std::false_type {};
 
@@ -81,12 +82,16 @@ struct constructor_detection_impl<T, Assert, N, true, std::tuple<Args...>> {
     static constexpr size_t arity = sizeof...(Args);
     static constexpr bool valid = true;
 
-    template <typename Type, typename Context> static Type construct(Context& ctx) {
-        return class_traits<Type>::construct(((void)sizeof(Args), constructor_argument_impl<T, Context>(ctx))...);
+    template <typename Type, typename Context, typename Container>
+    static Type construct(Context& ctx, Container& container) {
+        return class_traits<Type>::construct(
+            ((void)sizeof(Args), constructor_argument_impl<T, Context, Container>(ctx, container))...);
     }
 
-    template <typename Type, typename Context> static void construct(void* ptr, Context& ctx) {
-        class_traits<Type>::construct(ptr, ((void)sizeof(Args), constructor_argument_impl<T, Context>(ctx))...);
+    template <typename Type, typename Context, typename Container>
+    static void construct(void* ptr, Context& ctx, Container& container) {
+        class_traits<Type>::construct(
+            ptr, ((void)sizeof(Args), constructor_argument_impl<T, Context, Container>(ctx, container))...);
     }
 };
 
@@ -106,12 +111,14 @@ template <typename T, typename... Args> struct constructor<T(Args...)> {
     static constexpr size_t arity = sizeof...(Args);
     static constexpr bool valid = std::is_constructible_v<T, Args...>;
 
-    template <typename Type, typename Context> static Type construct(Context& ctx) {
-        return class_traits<Type>::construct(ctx.template resolve<Args>()...);
+    template <typename Type, typename Context, typename Container>
+    static Type construct(Context& ctx, Container& container) {
+        return class_traits<Type>::construct(ctx.template resolve<Args>(container)...);
     }
 
-    template <typename Type, typename Context> static void construct(void* ptr, Context& ctx) {
-        class_traits<Type>::construct(ptr, ctx.template resolve<Args>()...);
+    template <typename Type, typename Context, typename Container>
+    static void construct(void* ptr, Context& ctx, Container& container) {
+        class_traits<Type>::construct(ptr, ctx.template resolve<Args>(container)...);
     }
 };
 

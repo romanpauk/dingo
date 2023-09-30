@@ -11,6 +11,18 @@ Tested with:
 
 [![Build](https://github.com/romanpauk/dingo/actions/workflows/build.yaml/badge.svg?branch=master)](https://github.com/romanpauk/dingo/actions?query=branch%3Amaster++)
 
+Features Overview:
+
+- [Non-intrusive Class Registration](#non-intrusive-class-registration)
+- [Customizable Scopes](#scopes)
+- [Customizable Factories](#factories)
+- [Service Locator Pattern](#service-locator)
+- [Runtime-based Resolution](#runtime-based-resolution)
+- [Customizable RTTI](#customizable-rtti)
+- [Container Nesting](#container-nesting)
+- [Static and Dynamic Type Maps](#static-and-dynamic-type-maps)
+- [Annotated Types](#annotated-types)
+
 ## Introduction
 
 Dingo is a dependency injection library that preforms recursive instantiation of registered types. It has no dependencies except for the C++ standard library.  
@@ -175,7 +187,6 @@ Scopes parametrize stored instances' lifetime. Based on a stored type, each scop
 ##### External Scope
 
 An already existing instance is referred. The scope can eventually take the ownership by moving the instance inside into the scope storage.
-See [dingo/storage/external.h](include/dingo/storage/external.h) for allowed conversions for accessing external instances.
 
 ```c++
 struct A {} a;
@@ -183,6 +194,8 @@ container<> container;
 container.register_type<scope<external>, storage<A*>>(&a);
 A& a = container.resolve<A&>();
 ```
+
+See [dingo/storage/external.h](include/dingo/storage/external.h) for allowed conversions for accessing external instances.
 
 ##### Unique Scope
 
@@ -211,7 +224,6 @@ assert(container.resolve<A*>() == &container.resolve<A&>());
 ##### Shared-cyclical Scope
 
 The instance is cached for a subsequent resolutions and allows to create object graphs with cycles. This is implemented using two-phase construction and thus has some limitations: injected types from a cyclical storage can't be used safely in constructors, and as some conversions require a type to be fully constructed, those are disallowed additionally (injecting an instance through it's virtual base class). The functionality is quite a hack, but not all code bases have a clean, a-cyclical dependencies, so it could be handy.
-See [dingo/storage/shared_cyclical.h](include/dingo/storage/shared_cyclical.h) for allowed conversions for accessing shared cycle-aware instances.
 
 ```c++
 struct A;
@@ -235,7 +247,9 @@ container.register_type<scope<shared_cyclical>, storage<std::shared_ptr<B>>>();
 A& a = container.resolve<A&>();
 ```
 
-#### Runtime-based Usage
+See [dingo/storage/shared_cyclical.h](include/dingo/storage/shared_cyclical.h) for allowed conversions for accessing shared cycle-aware instances.
+
+#### Runtime-based Resolution
 
 Container can be used from multiple modules, specifically it can be filled in one module and used in other modules. This is a requirement for larger projects with not so clean dependencies. Compared to the compile-time DI solutions, errors are propagated in runtime as exceptions.
 
@@ -247,7 +261,7 @@ When exception occurs in user-provided code, the state of the container is not c
 
 Template class specializations are used to tweak the behavior and functionality for different storage types, instance creation or passing instances through type-erasure boundary. Standard RTTI is optional and an emulation can be used. Single-module-single-container use-case is optimized with static type maps.
 
-#### Usable as Service Locator
+#### Service Locator
 
 It is possible to register a binding to the type under a key that is a base class of the type. As an upcast is compiled at the time of a registration, multiple inheritance is correctly supported. One instance can be resolved through multiple interfaces.
 
@@ -260,11 +274,11 @@ container.register_type<scope<shared>, storage<A>, interface<A, IA>>();
 IA& instance = container.resolve<IA&>();
 ```
 
-#### Support for Annotated Types
+#### Annotated Types
 
 It is possible to register different implementations with the same interface, disambiguating the registration with an user-provided tag. See [test/annotated.cpp](test/annotated.cpp).
 
-#### Support for Constructing Un-managed Types
+#### Constructing Unmanaged Types
 
 It is possible to let a container construct an unknown type using registered dependencies to construct it.
 
@@ -282,6 +296,29 @@ For non-RTTI enabled builds, it is possible to parametrize the container with cu
 
 #### Static and Dynamic Type Maps
 Dynamic type maps are implementing mapping from a type (key) to an instance (value), using std::type_index to represent the key. Static type maps are using template specializations to represent the key without relying on other data structure. This can be used in the case when a limited amount of container instances, denoted by a typed tags, exist, and when the final application is linked in such way that there is just a single counter in the whole application that is used to assign the custom type id.
+
+### Container Nesting
+Containers can form a parent-child hierarchy and resolution will traverse the container chain from child to last parent. Calling register_type() returns an implicitly created child container for the type being registered, allowing a per-type configuration to override a global configuration in the container. Nesting is supported for both dynamic and static type maps based containers.
+
+```c++
+struct A { int value; };
+struct B { int value; };
+
+container<> container;
+container.register_type<scope<external>, storage<int>>(1);
+container.register_type<scope<unique>, storage<A>>();
+// Resolving A will use int(1) as provided by the container.
+
+container.register_type<scope<unique>, storage<B>>() // Override int() for B
+    .register_type<scope<external>, storage<int>>(2);
+// Resolving B will use int(2) as provided by the B's container.
+
+container<> nested(&container);
+nested.register_type<scope<unique>, storage<B>>();
+// Resolving B using nested container will use int(1) as provided by the parent container.
+```
+
+See [test/nesting.cpp](test/nesting.cpp) for details.
 
 #### Unit Tests
 

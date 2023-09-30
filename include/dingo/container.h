@@ -21,52 +21,92 @@
 
 namespace dingo {
 struct dynamic_container_traits {
+    template <typename> using rebind_t = dynamic_container_traits;
+
+    using tag_type = void;
     using rtti_type = dynamic_rtti;
     template <typename Value, typename Allocator>
     using type_factory_map_type = dynamic_type_map<rtti_type, Value, Allocator>;
 };
 
 template <typename Tag = void> struct static_container_traits {
+    template <typename TagT> using rebind_t = static_container_traits<TagT>;
+
+    using tag_type = Tag;
     using rtti_type = static_rtti;
     template <typename Value, typename Allocator>
     using type_factory_map_type = static_type_map<rtti_type, Tag, Value, Allocator>;
 };
 
+template <typename Traits>
+static constexpr bool is_tagged_container_v =
+    !std::is_same_v<typename Traits::template rebind_t<type_list<typename Traits::tag_type, void>>, Traits>;
+
 // TODO wrt. multibindinds, is this like map/multimap?
-template <typename ContainerTraits = dynamic_container_traits, typename Allocator = std::allocator<char>>
+template <typename ContainerTraits = dynamic_container_traits, typename Allocator = std::allocator<char>,
+          typename ParentContainer = void>
 class container {
+    friend class resolving_context;
+
+    template <typename ContainerTraitsT, typename AllocatorT, typename ParentContainerT>
+    using rebind_t = container<ContainerTraitsT, AllocatorT, ParentContainerT>;
+    using container_type = container<ContainerTraits, Allocator, ParentContainer>;
+    using parent_container_type =
+        std::conditional_t<std::is_same_v<void, ParentContainer>, container_type, ParentContainer>;
+
   public:
+    using container_traits_type = ContainerTraits;
     using allocator_type = Allocator;
-    using container_type = container<ContainerTraits, Allocator>;
     using rtti_type = typename ContainerTraits::rtti_type;
 
-    friend class resolving_context<container_type>;
+    template <typename Tag>
+    using child_container_type = container<
+        typename container_traits_type::template rebind_t<type_list<typename container_traits_type::tag_type, Tag>>,
+        Allocator, container_type>;
 
+    // TODO: the allocator is probably very unfinished...
     container(Allocator allocator = Allocator()) : allocator_(allocator), type_factories_(allocator) {}
+    container(parent_container_type* parent, Allocator allocator = Allocator())
+        : parent_(parent), allocator_(allocator), type_factories_(allocator) {
 
-    template <typename... TypeArgs> void register_type() {
+        static_assert(!is_tagged_container_v<container_traits_type> ||
+                          !std::is_same_v<typename container_traits_type::tag_type,
+                                          typename parent_container_type::container_traits_type::tag_type>,
+                      "static typemap based containers require parent and child container tags to be different");
+    }
+
+    template <typename... TypeArgs> auto& register_type() {
         using registration = type_registration<TypeArgs...>;
         using storage_type =
             detail::storage<typename registration::scope_type::type, typename registration::storage_type::type,
-                            typename registration::factory_type::type, container_type,
-                            typename registration::conversions_type::type>;
+                            typename registration::factory_type::type, typename registration::conversions_type::type>;
+
+        using class_instance_container_type = typename container_type::template rebind_t<
+            typename ContainerTraits::template rebind_t<
+                type_list<typename ContainerTraits::tag_type, typename registration::interface_type>>,
+            Allocator, container_type>;
+
+        using class_instance_data_type = class_instance_data<class_instance_container_type, storage_type>;
 
         // TODO: remove tuple usage... or remove type_list usage
         if constexpr (std::tuple_size_v<typename registration::interface_type::type_tuple> == 1) {
             using interface_type = std::tuple_element_t<0, typename registration::interface_type::type_tuple>;
-
-            register_type_factory<interface_type, storage_type>(
+            auto factory =
                 std::make_unique<class_instance_factory<container_type, typename annotated_traits<interface_type>::type,
-                                                        typename storage_type::type, storage_type>>());
+                                                        storage_type, class_instance_data_type>>(this);
+            auto& container = factory->get_container();
+            register_type_factory<interface_type, storage_type>(std::move(factory));
+            return container;
         } else {
-            auto storage = std::make_shared<storage_type>();
+            auto data = std::make_shared<class_instance_data_type>(this);
             for_each(typename registration::interface_type::type{}, [&](auto element) {
                 using interface_type = typename decltype(element)::type;
                 register_type_factory<interface_type, storage_type>(
                     std::make_unique<
                         class_instance_factory<container_type, typename annotated_traits<interface_type>::type,
-                                               typename storage_type::type, std::shared_ptr<storage_type>>>(storage));
+                                               storage_type, std::shared_ptr<class_instance_data_type>>>(data));
             });
+            return data->container;
         }
     }
 
@@ -75,8 +115,14 @@ class container {
 
         using storage_type =
             detail::storage<typename registration::scope_type::type, typename registration::storage_type::type,
-                            typename registration::factory_type::type, container_type,
-                            typename registration::conversions_type::type>;
+                            typename registration::factory_type::type, typename registration::conversions_type::type>;
+
+        using class_instance_container_type = typename container_type::template rebind_t<
+            typename ContainerTraits::template rebind_t<
+                type_list<typename ContainerTraits::tag_type, typename registration::interface_type>>,
+            Allocator, container_type>;
+
+        using class_instance_data_type = class_instance_data<class_instance_container_type, storage_type>;
 
         // TODO: remove tuple usage... or remove type_list usage
         if constexpr (std::tuple_size_v<typename registration::interface_type::type_tuple> == 1) {
@@ -84,16 +130,16 @@ class container {
 
             register_type_factory<interface_type, storage_type>(
                 std::make_unique<class_instance_factory<container_type, typename annotated_traits<interface_type>::type,
-                                                        typename storage_type::type, storage_type>>(
-                    std::forward<Arg>(arg)));
+                                                        storage_type, class_instance_data_type>>(
+                    this, std::forward<Arg>(arg)));
         } else {
-            auto storage = std::make_shared<storage_type>(std::forward<Arg>(arg));
+            auto data = std::make_shared<class_instance_data_type>(this, std::forward<Arg>(arg));
             for_each(typename registration::interface_type::type{}, [&](auto element) {
                 using interface_type = typename decltype(element)::type;
                 register_type_factory<interface_type, storage_type>(
                     std::make_unique<
                         class_instance_factory<container_type, typename annotated_traits<interface_type>::type,
-                                               typename storage_type::type, std::shared_ptr<storage_type>>>(storage));
+                                               storage_type, std::shared_ptr<class_instance_data_type>>>(data));
             });
         }
     }
@@ -116,17 +162,17 @@ class container {
         // So what if we create home for that temporary and in-place construct
         // the unique object there? This is now in resolver_.
 
-        resolving_context<container_type> context(*this);
+        resolving_context context;
         return resolve<T, true>(context);
     }
 
     template <typename T, typename Factory = constructor<decay_t<T>>> T construct(Factory factory = Factory()) {
         // TODO: nothrow constructuble
-        resolving_context<container_type> context(*this);
-        return factory.template construct<T>(context);
+        resolving_context context;
+        return factory.template construct<T>(context, *this);
     }
 
-  private:
+    // private:
     template <typename TypeInterface, typename TypeStorage, typename Factory>
     void register_type_factory(Factory&& factory) {
         check_interface_requirements<TypeStorage, typename annotated_traits<TypeInterface>::type,
@@ -146,28 +192,36 @@ class container {
               typename R = std::conditional_t<
                   RemoveRvalueReferences,
                   std::conditional_t<std::is_rvalue_reference_v<T>, std::remove_reference_t<T>, T>, T>>
-    R resolve(resolving_context<container_type>& context) {
+    R resolve(resolving_context& context) {
         using Type = decay_t<T>;
 
         auto factories = type_factories_.template at<Type>();
-        if (factories && factories->size() == 1) {
-            auto& factory = factories->front();
-            // TODO: no longer class instance
-            return class_instance_traits<rtti_type, typename annotated_traits<T>::type>::resolve(*factory, context);
+        if (factories) {
+            if (factories->size() == 1) {
+                auto& factory = factories->front();
+                // TODO: no longer class instance
+                return class_instance_traits<rtti_type, typename annotated_traits<T>::type>::resolve(*factory, context);
+            } else {
+                return resolve_multiple<T>(context);
+            }
+        } else if constexpr (!std::is_same_v<void*, decltype(parent_)>) {
+            if (parent_)
+                return parent_->template resolve<T, RemoveRvalueReferences>(context);
         }
 
-        return resolve_multiple<T>(context);
-    }
-
-    template <typename T>
-    std::enable_if_t<!collection_traits<decay_t<T>>::is_collection, T>
-    resolve_multiple(resolving_context<container_type>&) {
         throw type_not_found_exception();
     }
 
     template <typename T>
+    std::enable_if_t<!collection_traits<decay_t<T>>::is_collection, T> resolve_multiple(resolving_context&) {
+        throw type_not_found_exception();
+    }
+
+#if 0
+    // TODO
+    template <typename T>
     std::enable_if_t<collection_traits<decay_t<T>>::is_collection, T>
-    resolve_multiple(resolving_context<container_type>& context) {
+    resolve_multiple(resolving_context& context) {
         using Type = decay_t<T>;
         using ValueType = decay_t<typename Type::value_type>;
 
@@ -191,6 +245,7 @@ class container {
 
         throw type_not_found_exception();
     }
+#endif
 
     template <class Storage, class TypeInterface, class Type> void check_interface_requirements() {
         static_assert(!std::is_reference_v<TypeInterface>);
@@ -201,6 +256,7 @@ class container {
         }
     }
 
+    parent_container_type* parent_ = nullptr;
     allocator_type allocator_;
 
     typename ContainerTraits::template type_factory_map_type<

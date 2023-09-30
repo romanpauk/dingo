@@ -102,8 +102,8 @@ template <typename Type> class storage_instance<external, std::unique_ptr<Type>,
     std::unique_ptr<Type> instance_;
 };
 
-template <typename Type, typename Factory, typename Container, typename Conversions>
-class storage<external, Type, Factory, Container, Conversions> : public resettable_i {
+template <typename Type, typename Factory, typename Conversions>
+class storage<external, Type, Factory, Conversions> : public resettable_i {
     storage_instance<external, Type, void> instance_;
 
   public:
@@ -114,7 +114,9 @@ class storage<external, Type, Factory, Container, Conversions> : public resettab
 
     template <typename T> storage(T&& instance) : instance_(std::forward<T>(instance)) {}
 
-    template <typename Context> auto resolve(Context&) -> decltype(instance_.get()) { return instance_.get(); }
+    template <typename Context, typename Container> auto resolve(Context&, Container&) -> decltype(instance_.get()) {
+        return instance_.get();
+    }
     constexpr bool is_resolved() const { return true; }
 
     void reset() override {}

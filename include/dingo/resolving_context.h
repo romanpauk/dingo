@@ -13,25 +13,20 @@
 #include <list>
 
 namespace dingo {
-template <typename Container> class resolving_context {
+
+class resolving_context {
     static constexpr size_t size = 32; // TODO
 
   public:
-    resolving_context(Container& container)
-        : container_(container), class_instances_size_(), resettables_size_(), constructibles_size_(),
-          resolve_counter_() {}
+    resolving_context() : resolve_counter_(), class_instances_size_(), resettables_size_(), constructibles_size_() {}
 
     ~resolving_context() {
         if (resolve_counter_ == 0) {
             if (constructibles_size_) {
-                // Do the two phase construction required for cyclical
-                // dependencies
-                for (int state = 0; state < 2; state++) {
-                    // Note that invocation of construct(_, 0) can grow
-                    // constructibles_.
-                    for (size_t i = 0; i < constructibles_size_; ++i)
-                        constructibles_[i]->construct(*this, state);
-                }
+                // Note that invocation of construct(_, 0) can grow
+                // constructibles_.
+                for (size_t i = 0; i < constructibles_size_; ++i)
+                    constructibles_[i]->construct();
             }
         } else {
             // Rollback changes in container
@@ -44,7 +39,11 @@ template <typename Container> class resolving_context {
             class_instances_[i]->reset();
     }
 
-    template <typename T> T resolve() { return this->container_.template resolve<T, false>(*this); }
+    // TODO: this method seems useless but it is friend of a container and that allows
+    // factories to not have to be known upfront.
+    template <typename T, typename Container> T resolve(Container& container) {
+        return container.template resolve<T, false>(*this);
+    }
 
     void register_class_instance(resettable_i* ptr) {
         check_size(class_instances_size_);
@@ -56,7 +55,7 @@ template <typename Container> class resolving_context {
         resettables_[resettables_size_++] = ptr;
     }
 
-    void register_constructible(constructible_i<Container>* ptr) {
+    void register_constructible(constructible_i* ptr) {
         check_size(constructibles_size_);
         constructibles_[constructibles_size_++] = ptr;
     }
@@ -72,18 +71,17 @@ template <typename Container> class resolving_context {
             throw type_overflow_exception();
     }
 
-    Container& container_;
-
     // TODO: this is fast, but non-generic, needs more work
-    std::array<resettable_i*, size> class_instances_;
-    std::array<resettable_i*, size> resettables_;
-    std::array<constructible_i<Container>*, size> constructibles_;
+    size_t resolve_counter_;
 
     size_t class_instances_size_;
-    size_t resettables_size_;
-    size_t constructibles_size_;
+    std::array<resettable_i*, size> class_instances_;
 
-    size_t resolve_counter_;
+    size_t resettables_size_;
+    std::array<resettable_i*, size> resettables_;
+
+    size_t constructibles_size_;
+    std::array<constructible_i*, size> constructibles_;
 };
 
 } // namespace dingo

@@ -60,8 +60,8 @@ template <typename Type, typename U> struct conversions<shared_cyclical, std::sh
 
 // Disallow virtual bases as interfaces as in cyclical storage, we can't properly
 // calculate the cast when the object is not constructed
-template <typename Type, typename Factory, typename Container, typename Conversions, typename Derived, typename Base>
-struct storage_interface_requirements<storage<shared_cyclical, Type, Factory, Container, Conversions>, Derived, Base>
+template <typename Type, typename Factory, typename Conversions, typename Derived, typename Base>
+struct storage_interface_requirements<storage<shared_cyclical, Type, Factory, Conversions>, Derived, Base>
     : std::bool_constant<!is_virtual_base_of_v<Base, Derived>> {};
 
 template <typename Type, typename Factory, bool IsTriviallyDestructible = std::is_trivially_destructible_v<Type>>
@@ -81,8 +81,8 @@ template <typename Type, typename Factory> class storage_instance_shared_impl<Ty
 
     Type* get() { return reinterpret_cast<Type*>(&instance_); }
 
-    template <typename Context> void construct(Context& context) {
-        Factory::template construct<Type*>(&instance_, context);
+    template <typename Context, typename Container> void construct(Context& context, Container& container) {
+        Factory::template construct<Type*>(&instance_, context, container);
         constructed_ = true;
     }
 
@@ -114,8 +114,8 @@ template <typename Type, typename Factory> class storage_instance_shared_impl<Ty
 
     Type* get() { return reinterpret_cast<Type*>(&instance_); }
 
-    template <typename Context> void construct(Context& context) {
-        Factory::template construct<Type*>(&instance_, context);
+    template <typename Context, typename Container> void construct(Context& context, Container& container) {
+        Factory::template construct<Type*>(&instance_, context, container);
     }
 
     bool empty() const { return !resolved_; }
@@ -169,9 +169,9 @@ class storage_instance<shared_cyclical, std::shared_ptr<Type>, Factory> : Factor
 
     std::shared_ptr<Type> get() { return instance_; }
 
-    template <typename Context> void construct(Context& context) {
+    template <typename Context, typename Container> void construct(Context& context, Container& container) {
         assert(instance_);
-        Factory::template construct<Type*>(instance_.get(), context);
+        Factory::template construct<Type*>(instance_.get(), context, container);
         std::get_deleter<deleter>(instance_)->set_constructed();
     }
 
@@ -183,12 +183,25 @@ class storage_instance<shared_cyclical, std::shared_ptr<Type>, Factory> : Factor
     std::shared_ptr<Type> instance_;
 };
 
-template <typename Type, typename Factory, typename Container, typename Conversions>
-class storage<shared_cyclical, Type, Factory, Container, Conversions> : public resettable_i,
-                                                                        public constructible_i<Container> {
-    static_assert(!std::is_same_v<Container, void>, "concrete container type required");
+template <typename Instance, typename Context, typename Container>
+struct shared_cyclical_constructible : constructible_i {
+    shared_cyclical_constructible(Instance& instance, Context& context, Container& container)
+        : instance_(instance), context_(context), container_(container) {}
 
+    void construct() override { instance_.construct(context_, container_); }
+
+  private:
+    Instance& instance_;
+    Context& context_;
+    Container& container_;
+};
+
+template <typename Type, typename Factory, typename Conversions>
+class storage<shared_cyclical, Type, Factory, Conversions> : public resettable_i {
     storage_instance<shared_cyclical, Type, Factory> instance_;
+
+    // TODO: get rid of heap
+    std::unique_ptr<constructible_i> constructible_;
 
   public:
     template <typename... Args> storage(Args&&... args) : instance_(std::forward<Args>(args)...) {}
@@ -198,9 +211,12 @@ class storage<shared_cyclical, Type, Factory, Container, Conversions> : public r
     using conversions = Conversions;
     using type = Type;
 
-    template <typename Context> auto resolve(Context& context) -> decltype(instance_.get()) {
+    template <typename Context, typename Container>
+    auto resolve(Context& context, Container& container) -> decltype(instance_.get()) {
         if (instance_.empty()) {
-            context.register_constructible(this);
+            constructible_.reset(new shared_cyclical_constructible<decltype(instance_), Context, Container>(
+                instance_, context, container));
+            context.register_constructible(constructible_.get());
             return instance_.resolve(context);
         }
         return instance_.get();
@@ -208,11 +224,9 @@ class storage<shared_cyclical, Type, Factory, Container, Conversions> : public r
 
     bool is_resolved() const { return !instance_.empty(); }
 
-    void reset() override { instance_.reset(); }
-
-    void construct(resolving_context<Container>& context, int phase) override {
-        if (phase == 0)
-            instance_.construct(context);
+    void reset() override {
+        instance_.reset();
+        constructible_.reset();
     }
 };
 } // namespace detail

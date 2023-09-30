@@ -79,15 +79,15 @@ template <typename RTTI, typename TypeInterface, typename Storage, bool IsCachin
 struct class_instance_resolver : public resettable_i {
     void reset() override { instance_.reset(); }
 
-    template <typename Conversions, typename Context>
-    void* resolve(Context& context, Storage& storage, const typename RTTI::type_index& type) {
+    template <typename Conversions, typename Context, typename Container>
+    void* resolve(Context& context, Container& container, Storage& storage, const typename RTTI::type_index& type) {
         if (!find_type<RTTI>(Conversions{}, type))
             throw type_not_convertible_exception();
 
         class_recursion_guard<decay_t<typename Storage::type>> recursion_guard;
 
         class_instance_reset<decay_t<typename Storage::type>> storage_reset(context, this);
-        instance_.emplace(storage.resolve(context));
+        instance_.emplace(storage.resolve(context, container));
         return convert_type<RTTI>(Conversions{}, type, instance_->get_address());
     }
 
@@ -99,8 +99,8 @@ template <typename RTTI, typename TypeInterface, typename Storage>
 struct class_instance_resolver<RTTI, TypeInterface, Storage, true> : public resettable_i {
     void reset() override { instance_.reset(); }
 
-    template <typename Conversions, typename Context>
-    void* resolve(Context& context, Storage& storage, const typename RTTI::type_index& type) {
+    template <typename Conversions, typename Context, typename Container>
+    void* resolve(Context& context, Container& container, Storage& storage, const typename RTTI::type_index& type) {
         if (!find_type<RTTI>(Conversions{}, type))
             throw type_not_convertible_exception();
 
@@ -111,7 +111,7 @@ struct class_instance_resolver<RTTI, TypeInterface, Storage, true> : public rese
             // TODO: not all types will need a rollback
             context.register_resettable(this);
             context.increment();
-            instance_.emplace(storage.resolve(context));
+            instance_.emplace(storage.resolve(context, container));
             context.decrement();
         }
 

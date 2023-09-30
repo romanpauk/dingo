@@ -7,7 +7,7 @@
 namespace dingo {
 namespace detail {
 template <typename StorageTag, typename Type, typename U> struct conversions;
-template <typename StorageTag, typename Type, typename Factory, typename Container, typename Conversions> class storage;
+template <typename StorageTag, typename Type, typename Factory, typename Conversions> class storage;
 
 template <typename StorageTag, typename Type, typename Factory> class storage_instance;
 

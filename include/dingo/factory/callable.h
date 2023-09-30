@@ -8,13 +8,14 @@ namespace dingo {
 template <typename T> struct callable {
     callable(T fn) : fn_(fn) {}
 
-    template <typename Type, typename Context> Type construct(Context& ctx) {
-        return detail::function_impl<decltype(&T::operator())>::construct(fn_, ctx);
+    template <typename Type, typename Context, typename Container> Type construct(Context& ctx, Container& container) {
+        return detail::function_impl<decltype(&T::operator())>::construct(fn_, ctx, container);
     }
 
-    template <typename Type, typename Context> void construct(void* ptr, Context& ctx) {
+    template <typename Type, typename Context, typename Container>
+    void construct(void* ptr, Context& ctx, Container& container) {
         // TODO
-        new (ptr) decay_t<Type>(detail::function_impl<decltype(&T::operator())>::construct(fn_, ctx));
+        new (ptr) decay_t<Type>(detail::function_impl<decltype(&T::operator())>::construct(fn_, ctx, container));
     }
 
   private:

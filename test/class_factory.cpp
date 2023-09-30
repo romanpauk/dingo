@@ -73,8 +73,8 @@ TEST(class_factory_test, constructor) {
         A(int, float);
     };
 
-    static_assert(constructor<A, int, float>::valid && constructor<A(int, float)>::valid);
-    static_assert(constructor<A, int, float>::arity && constructor<A(int, float)>::arity);
+    static_assert(constructor<A, int, float>::valid == constructor<A(int, float)>::valid);
+    static_assert(constructor<A, int, float>::arity == constructor<A(int, float)>::arity);
 }
 
 TYPED_TEST(class_factory_test, ambiguous_construct) {

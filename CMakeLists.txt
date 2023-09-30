@@ -120,6 +120,7 @@ if(DINGO_TESTING_ENABLED)
         test/dingo.cpp
         test/external.cpp
         test/multibindings.cpp
+        test/nesting.cpp
         test/shared.cpp
         test/shared_cyclical.cpp
         test/type_registration.cpp

@@ -44,9 +44,9 @@ template <typename Type, typename Factory> struct storage_instance_base : Factor
 
     Type* get() const { return reinterpret_cast<Type*>(&instance_); }
 
-    template <typename Context> void construct(Context& context) {
+    template <typename Context, typename Container> void construct(Context& context, Container& container) {
         assert(!initialized_);
-        Factory::template construct<Type*>(&instance_, context);
+        Factory::template construct<Type*>(&instance_, context, container);
         initialized_ = true;
     }
 
@@ -97,9 +97,9 @@ template <typename Type, typename Factory> class storage_instance<shared, std::u
   public:
     template <typename... Args> storage_instance(Args&&... args) : Factory(std::forward<Args>(args)...) {}
 
-    template <typename Context> void construct(Context& context) {
+    template <typename Context, typename Container> void construct(Context& context, Container& container) {
         assert(!instance_);
-        instance_ = Factory::template construct<std::unique_ptr<Type>>(context);
+        instance_ = Factory::template construct<std::unique_ptr<Type>>(context, container);
     }
 
     std::unique_ptr<Type>& get() const { return instance_; }
@@ -114,9 +114,9 @@ template <typename Type, typename Factory> class storage_instance<shared, std::s
   public:
     template <typename... Args> storage_instance(Args&&... args) : Factory(std::forward<Args>(args)...) {}
 
-    template <typename Context> void construct(Context& context) {
+    template <typename Context, typename Container> void construct(Context& context, Container& container) {
         assert(!instance_);
-        instance_ = Factory::template construct<std::shared_ptr<Type>>(context);
+        instance_ = Factory::template construct<std::shared_ptr<Type>>(context, container);
     }
 
     // TODO: this can't be reference so we can construct shared_ptr<Base> from
@@ -136,15 +136,15 @@ class storage_instance<shared, Type*, Factory> : public storage_instance<shared,
     storage_instance(Args&&... args)
         : storage_instance<shared, std::unique_ptr<Type>, Factory>(std::forward<Args>(args)...) {}
 
-    template <typename Context> void construct(Context& context) {
-        storage_instance<shared, std::unique_ptr<Type>, Factory>::construct(context);
+    template <typename Context, typename Container> void construct(Context& context, Container& container) {
+        storage_instance<shared, std::unique_ptr<Type>, Factory>::construct(context, container);
     }
 
     Type* get() const { return storage_instance<shared, std::unique_ptr<Type>, Factory>::get().get(); }
 };
 
-template <typename Type, typename Factory, typename Container, typename Conversions>
-class storage<shared, Type, Factory, Container, Conversions> : public resettable_i {
+template <typename Type, typename Factory, typename Conversions>
+class storage<shared, Type, Factory, Conversions> : public resettable_i {
     // TODO
     // static_assert(std::is_trivially_destructible_v< Type > ==
     // std::is_trivially_destructible_v< storage_instance< Type, shared > >);
@@ -158,9 +158,10 @@ class storage<shared, Type, Factory, Container, Conversions> : public resettable
     using conversions = Conversions;
     using type = Type;
 
-    template <typename Context> auto resolve(Context& context) -> decltype(instance_.get()) {
+    template <typename Context, typename Container>
+    auto resolve(Context& context, Container& container) -> decltype(instance_.get()) {
         if (instance_.empty())
-            instance_.construct(context);
+            instance_.construct(context, container);
         return instance_.get();
     }
 
