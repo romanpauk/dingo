@@ -18,6 +18,7 @@ endif(CCACHE_FOUND)
 option(DINGO_TESTING_ENABLED "enable testing through googletest" ON)
 option(DINGO_BENCHMARK_ENABLED "enable benchmarking through googlebenchmark" ON)
 option(DINGO_BENCHMARK_FRUIT_ENABLED "enable fetching of google::fruit for benchmarks" OFF)
+option(DINGO_EXAMPLES_ENABLED "enable building of dingo examples" ON)
 
 sanitizers_init(DINGO)
 
@@ -154,4 +155,8 @@ if(DINGO_BENCHMARK_ENABLED)
         target_sources(dingo_benchmark PRIVATE benchmark/fruit.cpp)
         target_link_libraries(dingo_benchmark fruit)
     endif()
+endif()
+
+if(DINGO_EXAMPLES_ENABLED)
+    add_subdirectory(examples)
 endif()
