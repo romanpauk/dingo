@@ -18,11 +18,16 @@ template <typename Type, typename U> struct conversions<external, Type, U> {
     using pointer_types = type_list<U*>;
 };
 
-template <typename Type, typename U> struct conversions<external, Type&, U> : public conversions<external, Type, U> {};
+template <typename Type, typename U>
+struct conversions<external, Type&, U> : public conversions<external, Type, U> {
+};
 
-template <typename Type, typename U> struct conversions<external, Type*, U> : public conversions<external, Type, U> {};
+template <typename Type, typename U>
+struct conversions<external, Type*, U> : public conversions<external, Type, U> {
+};
 
-template <typename Type, typename U> struct conversions<external, std::shared_ptr<Type>, U> {
+template <typename Type, typename U>
+struct conversions<external, std::shared_ptr<Type>, U> {
     using value_types = type_list<std::shared_ptr<U>>;
     using lvalue_reference_types = type_list<U&, std::shared_ptr<U>&>;
     using rvalue_reference_types = type_list<>;
@@ -30,9 +35,11 @@ template <typename Type, typename U> struct conversions<external, std::shared_pt
 };
 
 template <typename Type, typename U>
-struct conversions<external, std::shared_ptr<Type>&, U> : public conversions<external, std::shared_ptr<Type>, U> {};
+struct conversions<external, std::shared_ptr<Type>&, U>
+    : public conversions<external, std::shared_ptr<Type>, U> {};
 
-template <typename Type, typename U> struct conversions<external, std::unique_ptr<Type>, U> {
+template <typename Type, typename U>
+struct conversions<external, std::unique_ptr<Type>, U> {
     using value_types = type_list<>;
     using pointer_types = type_list<U*, std::unique_ptr<U>*>;
     using lvalue_reference_types = type_list<U&, std::unique_ptr<U>&>;
@@ -40,11 +47,13 @@ template <typename Type, typename U> struct conversions<external, std::unique_pt
 };
 
 template <typename Type, typename U>
-struct conversions<external, std::unique_ptr<Type>&, U> : public conversions<external, std::unique_ptr<Type>, U> {};
+struct conversions<external, std::unique_ptr<Type>&, U>
+    : public conversions<external, std::unique_ptr<Type>, U> {};
 
 template <typename Type> class storage_instance<external, Type, void> {
   public:
-    template <typename T> storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
+    template <typename T>
+    storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
 
     Type& get() { return instance_; }
 
@@ -72,9 +81,11 @@ template <typename Type> class storage_instance<external, Type*, void> {
     Type* instance_;
 };
 
-template <typename Type> class storage_instance<external, std::shared_ptr<Type>, void> {
+template <typename Type>
+class storage_instance<external, std::shared_ptr<Type>, void> {
   public:
-    template <typename T> storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
+    template <typename T>
+    storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
 
     std::shared_ptr<Type> get() { return instance_; }
 
@@ -82,7 +93,8 @@ template <typename Type> class storage_instance<external, std::shared_ptr<Type>,
     std::shared_ptr<Type> instance_;
 };
 
-template <typename Type> class storage_instance<external, std::shared_ptr<Type>&, void> {
+template <typename Type>
+class storage_instance<external, std::shared_ptr<Type>&, void> {
   public:
     storage_instance(std::shared_ptr<Type>& instance) : instance_(instance) {}
 
@@ -92,9 +104,11 @@ template <typename Type> class storage_instance<external, std::shared_ptr<Type>&
     std::shared_ptr<Type>& instance_;
 };
 
-template <typename Type> class storage_instance<external, std::unique_ptr<Type>, void> {
+template <typename Type>
+class storage_instance<external, std::unique_ptr<Type>, void> {
   public:
-    template <typename T> storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
+    template <typename T>
+    storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
 
     std::unique_ptr<Type>& get() { return instance_; }
 
@@ -112,9 +126,11 @@ class storage<external, Type, Factory, Conversions> : public resettable_i {
     using conversions = Conversions;
     using type = Type;
 
-    template <typename T> storage(T&& instance) : instance_(std::forward<T>(instance)) {}
+    template <typename T>
+    storage(T&& instance) : instance_(std::forward<T>(instance)) {}
 
-    template <typename Context, typename Container> auto resolve(Context&, Container&) -> decltype(instance_.get()) {
+    template <typename Context, typename Container>
+    auto resolve(Context&, Container&) -> decltype(instance_.get()) {
         return instance_.get();
     }
     constexpr bool is_resolved() const { return true; }

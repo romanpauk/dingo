@@ -14,13 +14,15 @@ namespace dingo {
 template <typename T> struct class_factory_test : public testing::Test {};
 TYPED_TEST_SUITE(class_factory_test, container_types);
 
-template <typename T> using test_class_factory = detail::constructor_detection<T, /*Assert=*/false>;
+template <typename T>
+using test_class_factory = detail::constructor_detection<T, /*Assert=*/false>;
 
 TEST(class_factory_test, default_constructor) {
     struct A {
         A() = default;
     };
-    static_assert(test_class_factory<A>::arity == 0 && test_class_factory<A>::valid == true);
+    static_assert(test_class_factory<A>::arity == 0 &&
+                  test_class_factory<A>::valid == true);
 }
 
 TEST(class_factory_test, default_constructor_delete) {
@@ -29,7 +31,8 @@ TEST(class_factory_test, default_constructor_delete) {
     };
 #if DINGO_CXX_STANDARD <= DINGO_CXX17
     A a{};
-    static_assert(test_class_factory<A>::arity == 0 && test_class_factory<A>::valid == true);
+    static_assert(test_class_factory<A>::arity == 0 &&
+                  test_class_factory<A>::valid == true);
 #else
     static_assert(test_class_factory<A>::valid == false);
 #endif
@@ -48,14 +51,16 @@ TEST(class_factory_test, aggregate) {
         int a;
         int b;
     };
-    static_assert(test_class_factory<A>::arity == 2 && test_class_factory<A>::valid == true);
+    static_assert(test_class_factory<A>::arity == 2 &&
+                  test_class_factory<A>::valid == true);
 
     struct A1 {
         A1(int) {}
         int a;
         int b;
     };
-    static_assert(test_class_factory<A1>::arity == 1 && test_class_factory<A1>::valid == true);
+    static_assert(test_class_factory<A1>::arity == 1 &&
+                  test_class_factory<A1>::valid == true);
 }
 
 // This case is skipped in constructability detection
@@ -73,8 +78,10 @@ TEST(class_factory_test, constructor) {
         A(int, float);
     };
 
-    static_assert(constructor<A, int, float>::valid == constructor<A(int, float)>::valid);
-    static_assert(constructor<A, int, float>::arity == constructor<A(int, float)>::arity);
+    static_assert(constructor<A, int, float>::valid ==
+                  constructor<A(int, float)>::valid);
+    static_assert(constructor<A, int, float>::arity ==
+                  constructor<A(int, float)>::arity);
 }
 
 TYPED_TEST(class_factory_test, ambiguous_construct) {
@@ -96,25 +103,29 @@ TYPED_TEST(class_factory_test, ambiguous_construct) {
     container.template register_type<scope<unique>, storage<float>>();
 
     {
-        static_assert(constructor<A, int>::arity == 1 && constructor<A, int>::valid == true);
+        static_assert(constructor<A, int>::arity == 1 &&
+                      constructor<A, int>::valid == true);
         auto a = container.template construct<A, constructor<A(int)>>();
         ASSERT_EQ(a.index, 0);
     }
 
     {
-        static_assert(constructor<A, float>::arity == 1 && constructor<A, float>::valid == true);
+        static_assert(constructor<A, float>::arity == 1 &&
+                      constructor<A, float>::valid == true);
         auto a = container.template construct<A, constructor<A, float>>();
         ASSERT_EQ(a.index, 1);
     }
 
     {
-        static_assert(constructor<A, int, float>::arity == 2 && constructor<A, int, float>::valid == true);
+        static_assert(constructor<A, int, float>::arity == 2 &&
+                      constructor<A, int, float>::valid == true);
         auto a = container.template construct<A, constructor<A, int, float>>();
         ASSERT_EQ(a.index, 2);
     }
 
     {
-        static_assert(constructor<A, int, float>::arity == 2 && constructor<A, float, int>::valid == true);
+        static_assert(constructor<A, int, float>::arity == 2 &&
+                      constructor<A, float, int>::valid == true);
         auto a = container.template construct<A, constructor<A, float, int>>();
         ASSERT_EQ(a.index, 3);
     }
@@ -158,21 +169,25 @@ TYPED_TEST(class_factory_test, function_construct) {
     container.template register_type<scope<unique>, storage<float>>();
 
     {
-        auto a = container.template construct<A, function_decl<decltype(&A::createInt), &A::createInt>>();
+        auto a = container.template construct<
+            A, function_decl<decltype(&A::createInt), &A::createInt>>();
         ASSERT_EQ(a.index, 0);
     }
     {
-        auto a = container.template construct<A>(function_decl<decltype(&A::createInt), &A::createInt>());
+        auto a = container.template construct<A>(
+            function_decl<decltype(&A::createInt), &A::createInt>());
         ASSERT_EQ(a.index, 0);
     }
 
 #if !defined(__GNUC__) || __GNUC__ >= 12
     {
-        auto a = container.template construct<A, function_decl<decltype(A::createFloat), A::createFloat>>();
+        auto a = container.template construct<
+            A, function_decl<decltype(A::createFloat), A::createFloat>>();
         ASSERT_EQ(a.index, 1);
     }
     {
-        auto a = container.template construct<A>(function_decl<decltype(A::createFloat), A::createFloat>());
+        auto a = container.template construct<A>(
+            function_decl<decltype(A::createFloat), A::createFloat>());
         ASSERT_EQ(a.index, 1);
     }
 
@@ -194,7 +209,8 @@ TYPED_TEST(class_factory_test, callable_construct) {
     using container_type = TypeParam;
     container_type container;
     container.template register_type<scope<external>, storage<int>>(4);
-    auto b = container.template construct<B>(callable([&](int v) { return B{v * v}; }));
+    auto b = container.template construct<B>(
+        callable([&](int v) { return B{v * v}; }));
     ASSERT_EQ(b.v, 16);
 }
 
@@ -205,7 +221,8 @@ TYPED_TEST(class_factory_test, callable_resolve_unique) {
     using container_type = TypeParam;
     container_type container;
     container.template register_type<scope<external>, storage<int>>(4);
-    container.template register_type<scope<unique>, storage<B>>(callable([&](int v) { return B{v * v}; }));
+    container.template register_type<scope<unique>, storage<B>>(
+        callable([&](int v) { return B{v * v}; }));
     auto b = container.template resolve<B>();
     ASSERT_EQ(b.v, 16);
 }
@@ -217,7 +234,8 @@ TYPED_TEST(class_factory_test, callable_resolve_shared) {
     using container_type = TypeParam;
     container_type container;
     container.template register_type<scope<external>, storage<int>>(4);
-    container.template register_type<scope<shared>, storage<B>>(callable([&](int v) { return B{v * v}; }));
+    container.template register_type<scope<shared>, storage<B>>(
+        callable([&](int v) { return B{v * v}; }));
     auto b = container.template resolve<B>();
     ASSERT_EQ(b.v, 16);
 }
@@ -229,7 +247,8 @@ TYPED_TEST(class_factory_test, callable_resolve_shared_cyclical) {
     using container_type = TypeParam;
     container_type container;
     container.template register_type<scope<external>, storage<int>>(4);
-    container.template register_type<scope<shared_cyclical>, storage<B>>(callable([&](int v) { return B{v * v}; }));
+    container.template register_type<scope<shared_cyclical>, storage<B>>(
+        callable([&](int v) { return B{v * v}; }));
     auto b = container.template resolve<B&>();
     ASSERT_EQ(b.v, 16);
 }

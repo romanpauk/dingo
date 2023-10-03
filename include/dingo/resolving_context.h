@@ -18,7 +18,9 @@ class resolving_context {
     static constexpr size_t size = 32; // TODO
 
   public:
-    resolving_context() : resolve_counter_(), class_instances_size_(), resettables_size_(), constructibles_size_() {}
+    resolving_context()
+        : resolve_counter_(), class_instances_size_(), resettables_size_(),
+          constructibles_size_() {}
 
     ~resolving_context() {
         if (resolve_counter_ == 0) {
@@ -39,8 +41,8 @@ class resolving_context {
             class_instances_[i]->reset();
     }
 
-    // TODO: this method seems useless but it is friend of a container and that allows
-    // factories to not have to be known upfront.
+    // TODO: this method seems useless but it is friend of a container and that
+    // allows factories to not have to be known upfront.
     template <typename T, typename Container> T resolve(Container& container) {
         return container.template resolve<T, false>(*this);
     }

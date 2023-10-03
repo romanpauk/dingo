@@ -25,7 +25,8 @@ static void resolve_baseline_unique(benchmark::State& state) {
     state.SetBytesProcessed(state.iterations());
 }
 
-template <typename ContainerTraits> static void resolve_container_unique(benchmark::State& state) {
+template <typename ContainerTraits>
+static void resolve_container_unique(benchmark::State& state) {
     using namespace dingo;
     using container_type = container<ContainerTraits>;
     container_type container;
@@ -49,7 +50,8 @@ static void resolve_baseline_shared(benchmark::State& state) {
     state.SetBytesProcessed(state.iterations());
 }
 
-template <typename ContainerTraits> static void resolve_container_shared(benchmark::State& state) {
+template <typename ContainerTraits>
+static void resolve_container_shared(benchmark::State& state) {
     using namespace dingo;
     using container_type = container<ContainerTraits>;
     container_type container;
@@ -64,7 +66,8 @@ template <typename ContainerTraits> static void resolve_container_shared(benchma
     state.SetBytesProcessed(state.iterations());
 }
 
-template <typename ContainerTraits> static void resolve_container_external(benchmark::State& state) {
+template <typename ContainerTraits>
+static void resolve_container_external(benchmark::State& state) {
     using namespace dingo;
     using container_type = dingo::container<ContainerTraits>;
     container_type container;
@@ -80,7 +83,8 @@ template <typename ContainerTraits> static void resolve_container_external(bench
     state.SetBytesProcessed(state.iterations());
 }
 
-template <typename ContainerTraits> static void construct_baseline(benchmark::State& state) {
+template <typename ContainerTraits>
+static void construct_baseline(benchmark::State& state) {
     using container_type = dingo::container<ContainerTraits>;
     container_type container;
 
@@ -94,17 +98,25 @@ template <typename ContainerTraits> static void construct_baseline(benchmark::St
 }
 
 BENCHMARK(resolve_baseline_unique);
-BENCHMARK_TEMPLATE(resolve_container_unique, dingo::static_container_traits<>)->UseRealTime();
-BENCHMARK_TEMPLATE(resolve_container_unique, dingo::dynamic_container_traits)->UseRealTime();
+BENCHMARK_TEMPLATE(resolve_container_unique, dingo::static_container_traits<>)
+    ->UseRealTime();
+BENCHMARK_TEMPLATE(resolve_container_unique, dingo::dynamic_container_traits)
+    ->UseRealTime();
 
 BENCHMARK(resolve_baseline_shared);
-BENCHMARK_TEMPLATE(resolve_container_shared, dingo::static_container_traits<>)->UseRealTime();
-BENCHMARK_TEMPLATE(resolve_container_shared, dingo::dynamic_container_traits)->UseRealTime();
+BENCHMARK_TEMPLATE(resolve_container_shared, dingo::static_container_traits<>)
+    ->UseRealTime();
+BENCHMARK_TEMPLATE(resolve_container_shared, dingo::dynamic_container_traits)
+    ->UseRealTime();
 
-BENCHMARK_TEMPLATE(resolve_container_external, dingo::static_container_traits<>)->UseRealTime();
-BENCHMARK_TEMPLATE(resolve_container_external, dingo::dynamic_container_traits)->UseRealTime();
+BENCHMARK_TEMPLATE(resolve_container_external, dingo::static_container_traits<>)
+    ->UseRealTime();
+BENCHMARK_TEMPLATE(resolve_container_external, dingo::dynamic_container_traits)
+    ->UseRealTime();
 
-BENCHMARK_TEMPLATE(construct_baseline, dingo::static_container_traits<>)->UseRealTime();
-BENCHMARK_TEMPLATE(construct_baseline, dingo::dynamic_container_traits)->UseRealTime();
+BENCHMARK_TEMPLATE(construct_baseline, dingo::static_container_traits<>)
+    ->UseRealTime();
+BENCHMARK_TEMPLATE(construct_baseline, dingo::dynamic_container_traits)
+    ->UseRealTime();
 
 } // namespace

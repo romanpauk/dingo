@@ -55,6 +55,9 @@ jobs:
             which ${{ matrix.compiler.CC }} || sudo apt install ${{ matrix.compiler.CC }} || true
             which ${{ matrix.compiler.CXX }} || sudo apt install ${{ matrix.compiler.CXX }} || true
             cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.compiler.STD }}
+      - name: Check Formatting
+        run: |
+            cmake --build build -t md-verify
       - name: Build
         run: |
             cmake --build build -j 2
@@ -87,6 +90,9 @@ jobs:
       - name: Configure
         run: |
             cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+      - name: Check Formatting
+        run: |
+            cmake --build build -t md-verify
       - name: Build
         run: |
             cmake --build build --config ${{ matrix.config }} -j 2

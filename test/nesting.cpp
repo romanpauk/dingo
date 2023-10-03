@@ -28,8 +28,8 @@ TYPED_TEST(nesting_test, type) {
     container.template register_type<scope<external>, storage<int>>(42);
     container.template register_type<scope<unique>, storage<A>>();
 
-    container.template register_type<scope<unique>, storage<B>>().template register_type<scope<external>, storage<int>>(
-        4);
+    container.template register_type<scope<unique>, storage<B>>()
+        .template register_type<scope<external>, storage<int>>(4);
 
     auto&& a = container.template resolve<A>();
     ASSERT_EQ(a.value, 42);
@@ -37,7 +37,8 @@ TYPED_TEST(nesting_test, type) {
     ASSERT_EQ(b.value, 4);
 
     // Override B
-    typename container_type::template child_container_type<void> container2(&container);
+    typename container_type::template child_container_type<void> container2(
+        &container);
     container2.template register_type<scope<unique>, storage<B>>();
     auto&& b2 = container2.template resolve<B>();
     ASSERT_EQ(b2.value, 42);
@@ -60,7 +61,8 @@ TYPED_TEST(nesting_test, child_container) {
     container.template register_type<scope<unique>, storage<A>>();
 
     // Static containers require different container types
-    typename container_type::template child_container_type<void> container2(&container);
+    typename container_type::template child_container_type<void> container2(
+        &container);
     container2.template register_type<scope<unique>, storage<B>>();
     container2.template register_type<scope<external>, storage<int>>(4);
 

@@ -59,7 +59,8 @@ container.register_type<scope<unique>, storage<C>>();
 // Resolving the struct C will recursively instantiate required dependencies
 // (structs A and B) and inject the instances based on their scopes into C.
 // As C is in unique scope, each resolve<C> will return new C instance.
-// As A and B are in shared scope, each C will get the same instances injected.
+// As A and B are in shared scope, each C will get the same instances
+// injected.
 C c = container.resolve<C>();
 
 struct D {
@@ -85,12 +86,14 @@ Example code included from [examples/non_intrusive.cpp](examples/non_intrusive.c
 ```c++
 container<> container;
 // Registration of a struct A
-container.register_type<scope<unique>,               // using unique scope
-                        factory<constructor<A>>,     // using constructor-detecting factory
+container.register_type<scope<unique>,           // using unique scope
+                        factory<constructor<A>>, // using constructor-detecting
+                                                 // factory
                         storage<std::unique_ptr<A>>, // stored as unique_ptr<A>
                         interface<A>                 // resolvable as A
                         >();
-// As some policies can be deduced from the others, the above registration simplified
+// As some policies can be deduced from the others, the above
+// registration simplified
 container.register_type<scope<unique>, storage<std::unique_ptr<A>>>();
 
 ```
@@ -117,15 +120,17 @@ This factory type is a default one so it does not have to be specified.
 Example code included from [examples/factory_constructor.cpp](examples/factory_constructor.cpp):
 ```c++
 struct A {
-    A(int);              // Definition is not required as constructor is not called
+    A(int); // Definition is not required as constructor is not called
     A(double, double) {} // Definition is required as constructor is called
 };
 
 container<> container;
 container.register_type<scope<external>, storage<double>>(1.1);
 
-// Constructor with a highest arity will be used (factory<> is deduced automatically)
-container.register_type<scope<unique>, storage<A> /*, factory<constructor<A>> */>();
+// Constructor with a highest arity will be used (factory<> is deduced
+// automatically)
+container
+    .register_type<scope<unique>, storage<A> /*, factory<constructor<A>> */>();
 
 ```
 <!-- } -->
@@ -147,9 +152,11 @@ struct A {
 container<> container;
 container.register_type<scope<external>, storage<double>>(1.1);
 
-// Register class A that will be constructed using manually selected A(double)
-// constructor. Manually disambiguation is required to avoid compile time assertion
-container.register_type<scope<unique>, storage<A>, factory<constructor<A(double)>>>();
+// Register class A that will be constructed using manually selected
+// A(double) constructor. Manually disambiguation is required to avoid
+// compile time assertion
+container.register_type<scope<unique>, storage<A>,
+                        factory<constructor<A(double)>>>();
 
 ```
 <!-- } -->
@@ -174,7 +181,8 @@ struct A {
 
 container<> container;
 // Register A that will be instantiated by calling A::factory()
-container.register_type<scope<unique>, storage<A>, factory<function<&A::factory>>>();
+container
+    .register_type<scope<unique>, storage<A>, factory<function<&A::factory>>>();
 
 ```
 <!-- } -->
@@ -195,9 +203,11 @@ struct A {
 container<> container;
 // Register double that will be passed to lambda function below
 container.register_type<scope<external>, storage<int>>(2);
-// Register A that will be instantiated by calling provided lambda function with arguments resolved using the
-// container.
-container.register_type<scope<unique>, storage<A>>(callable([](int value) { return A{value * 2}; }));
+// Register A that will be instantiated by calling provided lambda function
+// with arguments resolved using the container.
+container.register_type<scope<unique>, storage<A>>(callable([](int value) {
+    return A{value * 2};
+}));
 assert(container.resolve<A>().value == 4);
 
 ```
@@ -298,9 +308,9 @@ container.register_type<scope<shared_cyclical>, storage<std::shared_ptr<A>>>();
 // Register struct B with cyclical scope
 container.register_type<scope<shared_cyclical>, storage<std::shared_ptr<B>>>();
 
-// Returns instance of A that has correctly set b_ member to an instance of B,
-// and instance of B has correctly set a_ member to an instance of A. Conversions
-// are supported with cycles, too.
+// Returns instance of A that has correctly set b_ member to an instance of
+// B, and instance of B has correctly set a_ member to an instance of A.
+// Conversions are supported with cycles, too.
 A& a = container.resolve<A&>();
 B& b = container.resolve<B&>();
 // Check that the instances are constructed as promised
@@ -404,15 +414,18 @@ base_container.register_type<scope<unique>, storage<A>>();
 // Resolving A will use A{1} to construct A
 assert(base_container.resolve<A>().value == 1);
 
-base_container.register_type<scope<unique>, storage<B>>().register_type<scope<external>, storage<int>>(
-    2); // Override value of int for struct B
+base_container.register_type<scope<unique>, storage<B>>()
+    .register_type<scope<external>, storage<int>>(
+        2); // Override value of int for struct B
 // Resolving B will use B{2} to construct B
 assert(base_container.resolve<B>().value == 2);
 
-// Create a nested container, overriding B (effectively removing override in base_container)
+// Create a nested container, overriding B (effectively removing override in
+// base_container)
 container<> nested_container(&base_container);
 nested_container.register_type<scope<unique>, storage<B>>();
-// Resolving B using nested container will use B{1} as provided by the parent container to construct B
+// Resolving B using nested container will use B{1} as provided by the
+// parent container to construct B
 assert(nested_container.resolve<B>().value == 1);
 
 ```

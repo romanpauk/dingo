@@ -25,8 +25,10 @@ TYPED_TEST(annotated_test, value) {
     };
 
     container_type container;
-    container.template register_type<scope<external>, storage<int>, interface<annotated<int, tag<1>>>>(1);
-    container.template register_type<scope<unique>, storage<int>, interface<annotated<int, tag<2>>>>(
+    container.template register_type<scope<external>, storage<int>,
+                                     interface<annotated<int, tag<1>>>>(1);
+    container.template register_type<scope<unique>, storage<int>,
+                                     interface<annotated<int, tag<2>>>>(
         callable([] { return 10; }));
     container.template register_type<scope<unique>, storage<A>>();
 
@@ -46,7 +48,8 @@ TYPED_TEST(annotated_test, interface) {
     struct B : I {};
 
     struct C : I {
-        C(annotated<I&, tag<1>> ref, annotated<I*, tag<1>> ptr, annotated<std::shared_ptr<I>, tag<2>> sharedptr)
+        C(annotated<I&, tag<1>> ref, annotated<I*, tag<1>> ptr,
+          annotated<std::shared_ptr<I>, tag<2>> sharedptr)
             : ref_(ref), ptr_(ptr), sharedptr_(sharedptr) {
             EXPECT_TRUE(dynamic_cast<A*>(&ref_));
             EXPECT_TRUE(dynamic_cast<A*>(ptr_));
@@ -60,9 +63,12 @@ TYPED_TEST(annotated_test, interface) {
 
     container_type container;
 
-    container.template register_type<scope<shared>, storage<A>, interface<annotated<I, tag<1>>>>();
-    container.template register_type<scope<shared>, storage<std::shared_ptr<B>>, interface<annotated<I, tag<2>>>>();
-    container.template register_type<scope<shared>, storage<std::shared_ptr<C>>, interface<C, annotated<I, tag<3>>>>();
+    container.template register_type<scope<shared>, storage<A>,
+                                     interface<annotated<I, tag<1>>>>();
+    container.template register_type<scope<shared>, storage<std::shared_ptr<B>>,
+                                     interface<annotated<I, tag<2>>>>();
+    container.template register_type<scope<shared>, storage<std::shared_ptr<C>>,
+                                     interface<C, annotated<I, tag<3>>>>();
 
     I& aref = container.template resolve<annotated<I&, tag<1>>>();
     ASSERT_TRUE(dynamic_cast<A*>(&aref));
@@ -70,7 +76,8 @@ TYPED_TEST(annotated_test, interface) {
     I* bptr = container.template resolve<annotated<I*, tag<2>>>();
     ASSERT_TRUE(dynamic_cast<B*>(bptr));
 
-    std::shared_ptr<I> bsharedptr = container.template resolve<annotated<std::shared_ptr<I>, tag<2>>>();
+    std::shared_ptr<I> bsharedptr =
+        container.template resolve<annotated<std::shared_ptr<I>, tag<2>>>();
     ASSERT_TRUE(dynamic_cast<B*>(bsharedptr.get()));
 
     ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve<C&>()));

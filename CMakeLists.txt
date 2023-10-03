@@ -3,6 +3,7 @@ project(dingo)
 enable_testing()
 include(FetchContent)
 include(cmake/clang-format.cmake)
+include(cmake/md.cmake)
 include(cmake/sanitizers.cmake)
 
 set(CMAKE_CXX_STANDARD 17 CACHE STRING "c++ standard")

@@ -10,7 +10,9 @@ template <size_t N> class Class {
     int GetCounter() { return ClassCounter; }
 };
 
-fruit::Component<Class<0>> getUniqueComponent() { return fruit::createComponent(); }
+fruit::Component<Class<0>> getUniqueComponent() {
+    return fruit::createComponent();
+}
 
 static void resolve_fruit_unique(benchmark::State& state) {
     fruit::Injector<Class<0>> injector(getUniqueComponent);

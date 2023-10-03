@@ -18,19 +18,36 @@ TEST(dsl, test_get_type) {
 }
 
 TEST(dsl, test_type_registration_basic) {
-    using registration = type_registration<storage<int>, interface<double, float>, factory<int>, scope<int>>;
+    using registration =
+        type_registration<storage<int>, interface<double, float>, factory<int>,
+                          scope<int>>;
 
-    static_assert(std::is_same_v<typename registration::storage_type, storage<int>>);
-    static_assert(std::is_same_v<typename registration::interface_type, interface<double, float>>);
-    static_assert(std::is_same_v<typename registration::factory_type, factory<int>>);
-    static_assert(std::is_same_v<typename registration::scope_type, scope<int>>);
+    static_assert(
+        std::is_same_v<typename registration::storage_type, storage<int>>);
+    static_assert(std::is_same_v<typename registration::interface_type,
+                                 interface<double, float>>);
+    static_assert(
+        std::is_same_v<typename registration::factory_type, factory<int>>);
+    static_assert(
+        std::is_same_v<typename registration::scope_type, scope<int>>);
 }
 
 TEST(dsl, test_type_registration_deduction) {
-    static_assert(std::is_same_v<typename type_registration<scope<int>, factory<int>>::storage_type, storage<int>>);
-    static_assert(std::is_same_v<typename type_registration<scope<int>, factory<int>>::interface_type, interface<int>>);
-
-    static_assert(std::is_same_v<typename type_registration<scope<int>, storage<int>>::interface_type, interface<int>>);
     static_assert(
-        std::is_same_v<typename type_registration<scope<int>, storage<int>>::factory_type, factory<constructor<int>>>);
+        std::is_same_v<
+            typename type_registration<scope<int>, factory<int>>::storage_type,
+            storage<int>>);
+    static_assert(
+        std::is_same_v<typename type_registration<scope<int>,
+                                                  factory<int>>::interface_type,
+                       interface<int>>);
+
+    static_assert(
+        std::is_same_v<typename type_registration<scope<int>,
+                                                  storage<int>>::interface_type,
+                       interface<int>>);
+    static_assert(
+        std::is_same_v<
+            typename type_registration<scope<int>, storage<int>>::factory_type,
+            factory<constructor<int>>>);
 }

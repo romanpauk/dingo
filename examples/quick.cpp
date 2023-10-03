@@ -32,7 +32,8 @@ int main() {
     // Resolving the struct C will recursively instantiate required dependencies
     // (structs A and B) and inject the instances based on their scopes into C.
     // As C is in unique scope, each resolve<C> will return new C instance.
-    // As A and B are in shared scope, each C will get the same instances injected.
+    // As A and B are in shared scope, each C will get the same instances
+    // injected.
     C c = container.resolve<C>();
 
     struct D {

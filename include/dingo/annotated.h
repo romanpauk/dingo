@@ -42,15 +42,18 @@ template <typename T, typename Tag> struct annotated_traits<annotated<T, Tag>> {
     using type = T;
 };
 
-template <typename T, typename Tag> struct annotated_traits<annotated<T, Tag>&> {
+template <typename T, typename Tag>
+struct annotated_traits<annotated<T, Tag>&> {
     using type = T&;
 };
 
-template <typename T, typename Tag> struct annotated_traits<annotated<T, Tag>&&> {
+template <typename T, typename Tag>
+struct annotated_traits<annotated<T, Tag>&&> {
     using type = T&&;
 };
 
-template <typename T, typename Tag> struct annotated_traits<annotated<T, Tag>*> {
+template <typename T, typename Tag>
+struct annotated_traits<annotated<T, Tag>*> {
     using type = T*;
 };
 

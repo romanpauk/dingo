@@ -27,13 +27,15 @@ int main() {
     container<> container;
 
     // Register struct A with cyclical scope
-    container.register_type<scope<shared_cyclical>, storage<std::shared_ptr<A>>>();
+    container
+        .register_type<scope<shared_cyclical>, storage<std::shared_ptr<A>>>();
     // Register struct B with cyclical scope
-    container.register_type<scope<shared_cyclical>, storage<std::shared_ptr<B>>>();
+    container
+        .register_type<scope<shared_cyclical>, storage<std::shared_ptr<B>>>();
 
-    // Returns instance of A that has correctly set b_ member to an instance of B,
-    // and instance of B has correctly set a_ member to an instance of A. Conversions
-    // are supported with cycles, too.
+    // Returns instance of A that has correctly set b_ member to an instance of
+    // B, and instance of B has correctly set a_ member to an instance of A.
+    // Conversions are supported with cycles, too.
     A& a = container.resolve<A&>();
     B& b = container.resolve<B&>();
     // Check that the instances are constructed as promised

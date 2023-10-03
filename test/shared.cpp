@@ -19,12 +19,14 @@ TYPED_TEST(shared_test, value) {
     typedef Class<shared_value, __COUNTER__> C;
     {
         container_type container;
-        container.template register_type<scope<shared>, storage<C>, interface<C, IClass>>();
+        container.template register_type<scope<shared>, storage<C>,
+                                         interface<C, IClass>>();
 
         AssertClass(*container.template resolve<C*>());
         AssertClass(container.template resolve<C&>());
 
-        AssertTypeNotConvertible<C, type_list<std::shared_ptr<C>, std::unique_ptr<C>>>(container);
+        AssertTypeNotConvertible<
+            C, type_list<std::shared_ptr<C>, std::unique_ptr<C>>>(container);
 
         ASSERT_EQ(C::Constructor, 1);
         ASSERT_EQ(C::Destructor, 0);
@@ -43,12 +45,14 @@ TYPED_TEST(shared_test, ptr) {
 
     {
         container_type container;
-        container.template register_type<scope<shared>, storage<C*>, interface<C, IClass>>();
+        container.template register_type<scope<shared>, storage<C*>,
+                                         interface<C, IClass>>();
 
         AssertClass(*container.template resolve<C*>());
         AssertClass(container.template resolve<C&>());
 
-        AssertTypeNotConvertible<C, type_list<std::shared_ptr<C>, std::unique_ptr<C>>>(container);
+        AssertTypeNotConvertible<
+            C, type_list<std::shared_ptr<C>, std::unique_ptr<C>>>(container);
 
         ASSERT_EQ(C::Constructor, 1);
         ASSERT_EQ(C::Destructor, 0);
@@ -67,7 +71,8 @@ TYPED_TEST(shared_test, shared_ptr) {
 
     {
         container_type container;
-        container.template register_type<scope<shared>, storage<std::shared_ptr<C>>, interface<C, IClass>>();
+        container.template register_type<
+            scope<shared>, storage<std::shared_ptr<C>>, interface<C, IClass>>();
 
         AssertClass(*container.template resolve<C*>());
         AssertClass(container.template resolve<C&>());
@@ -94,7 +99,8 @@ TYPED_TEST(shared_test, unique_ptr) {
 
     {
         container_type container;
-        container.template register_type<scope<shared>, storage<std::unique_ptr<C>>>();
+        container.template register_type<scope<shared>,
+                                         storage<std::unique_ptr<C>>>();
 
         AssertClass(*container.template resolve<C*>());
         AssertClass(container.template resolve<C&>());
@@ -122,8 +128,9 @@ TYPED_TEST(shared_test, hierarchy) {
     };
 
     struct B : Class<shared_hierarchy, __COUNTER__> {
-        B(S s1, S& s2, S* s3, std::shared_ptr<S>* s4, std::shared_ptr<S>& s5, std::shared_ptr<S> s6, U u1, U& u2, U* u3,
-          std::unique_ptr<U>* u4, std::unique_ptr<U>& u5) {
+        B(S s1, S& s2, S* s3, std::shared_ptr<S>* s4, std::shared_ptr<S>& s5,
+          std::shared_ptr<S> s6, U u1, U& u2, U* u3, std::unique_ptr<U>* u4,
+          std::unique_ptr<U>& u5) {
             AssertClass(s1);
             AssertClass(s2);
             AssertClass(*s3);
@@ -140,8 +147,10 @@ TYPED_TEST(shared_test, hierarchy) {
     };
 
     container_type container;
-    container.template register_type<scope<shared>, storage<std::shared_ptr<S>>>();
-    container.template register_type<scope<shared>, storage<std::unique_ptr<U>>>();
+    container
+        .template register_type<scope<shared>, storage<std::shared_ptr<S>>>();
+    container
+        .template register_type<scope<shared>, storage<std::unique_ptr<U>>>();
     container.template register_type<scope<shared>, storage<B>>();
 
     container.template resolve<B&>();
@@ -162,7 +171,8 @@ TYPED_TEST(shared_test, ambiguous_resolve) {
     using container_type = TypeParam;
     container_type container;
 
-    container.template register_type<scope<shared>, storage<A>, factory<constructor<A, float, int>>>();
+    container.template register_type<scope<shared>, storage<A>,
+                                     factory<constructor<A, float, int>>>();
     container.template register_type<scope<shared>, storage<float>>();
     container.template register_type<scope<shared>, storage<int>>();
 

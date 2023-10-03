@@ -29,14 +29,20 @@ template <typename TestFn, size_t Counter> struct Class : IClass1, IClass2 {
     static size_t MoveConstructor;
     static size_t Destructor;
 
-    static size_t GetTotalInstances() { return Constructor + CopyConstructor + MoveConstructor; }
+    static size_t GetTotalInstances() {
+        return Constructor + CopyConstructor + MoveConstructor;
+    }
 
   private:
     std::string name_;
 };
 
-template <typename TestFn, size_t Counter> size_t Class<TestFn, Counter>::Constructor;
-template <typename TestFn, size_t Counter> size_t Class<TestFn, Counter>::CopyConstructor;
-template <typename TestFn, size_t Counter> size_t Class<TestFn, Counter>::MoveConstructor;
-template <typename TestFn, size_t Counter> size_t Class<TestFn, Counter>::Destructor;
+template <typename TestFn, size_t Counter>
+size_t Class<TestFn, Counter>::Constructor;
+template <typename TestFn, size_t Counter>
+size_t Class<TestFn, Counter>::CopyConstructor;
+template <typename TestFn, size_t Counter>
+size_t Class<TestFn, Counter>::MoveConstructor;
+template <typename TestFn, size_t Counter>
+size_t Class<TestFn, Counter>::Destructor;
 } // namespace dingo

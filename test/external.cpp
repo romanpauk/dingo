@@ -20,7 +20,8 @@ TYPED_TEST(external_test, value) {
 
     {
         container_type container;
-        container.template register_type<scope<external>, storage<C>, interface<C, IClass>>(std::move(c));
+        container.template register_type<scope<external>, storage<C>,
+                                         interface<C, IClass>>(std::move(c));
 
         AssertClass(*container.template resolve<C*>());
         AssertClass(container.template resolve<C&>());
@@ -37,7 +38,8 @@ TYPED_TEST(external_test, ref) {
 
     {
         container_type container;
-        container.template register_type<scope<external>, storage<C&>, interface<C, IClass>>(c);
+        container.template register_type<scope<external>, storage<C&>,
+                                         interface<C, IClass>>(c);
 
         ASSERT_EQ(container.template resolve<C*>(), &c);
         AssertClass(*container.template resolve<C*>());
@@ -55,7 +57,8 @@ TYPED_TEST(external_test, ptr) {
 
     {
         container_type container;
-        container.template register_type<scope<external>, storage<C*>, interface<C, IClass>>(&c);
+        container.template register_type<scope<external>, storage<C*>,
+                                         interface<C, IClass>>(&c);
 
         ASSERT_EQ(container.template resolve<C*>(), &c);
         AssertClass(*container.template resolve<C*>());
@@ -73,7 +76,9 @@ TYPED_TEST(external_test, shared_ptr) {
 
     {
         container_type container;
-        container.template register_type<scope<external>, storage<std::shared_ptr<C>>, interface<C, IClass>>(c);
+        container.template register_type<
+            scope<external>, storage<std::shared_ptr<C>>, interface<C, IClass>>(
+            c);
         AssertClass(container.template resolve<C&>());
         AssertClass(*container.template resolve<C*>());
         AssertClass(*container.template resolve<std::shared_ptr<C>>());
@@ -92,7 +97,9 @@ TYPED_TEST(external_test, shared_ptr_ref) {
 
     {
         container_type container;
-        container.template register_type<scope<external>, storage<std::shared_ptr<C>&>, interface<C, IClass>>(c);
+        container.template register_type<scope<external>,
+                                         storage<std::shared_ptr<C>&>,
+                                         interface<C, IClass>>(c);
         container.template resolve<C&>();
         container.template resolve<C*>();
         container.template resolve<std::shared_ptr<C>>();
@@ -111,7 +118,8 @@ TYPED_TEST(external_test, unique_ptr_ref) {
 
     {
         container_type container;
-        container.template register_type<scope<external>, storage<std::unique_ptr<C>&>>(c);
+        container.template register_type<scope<external>,
+                                         storage<std::unique_ptr<C>&>>(c);
         container.template resolve<C&>();
         container.template resolve<C*>();
         container.template resolve<std::unique_ptr<C>&>();
@@ -127,7 +135,9 @@ TYPED_TEST(external_test, unique_ptr_move) {
 
     {
         container_type container;
-        container.template register_type<scope<external>, storage<std::unique_ptr<C>>>(std::move(c));
+        container.template register_type<scope<external>,
+                                         storage<std::unique_ptr<C>>>(
+            std::move(c));
         container.template resolve<C&>();
         container.template resolve<C*>();
         container.template resolve<std::unique_ptr<C>&>();
@@ -147,7 +157,8 @@ TYPED_TEST(external_test, constructor_ambiguous) {
         }
     };
 
-    container.template register_type<scope<external>, storage<A>>(A::instance());
+    container.template register_type<scope<external>, storage<A>>(
+        A::instance());
 }
 
 TYPED_TEST(external_test, constructor_private) {
@@ -164,7 +175,8 @@ TYPED_TEST(external_test, constructor_private) {
         A() {}
     };
 
-    container.template register_type<scope<external>, storage<A>>(A::instance());
+    container.template register_type<scope<external>, storage<A>>(
+        A::instance());
 }
 
 } // namespace dingo

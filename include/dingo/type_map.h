@@ -8,11 +8,13 @@
 #include <memory>
 
 namespace dingo {
-template <typename RTTI, typename Value, typename Allocator> struct dynamic_type_map {
+template <typename RTTI, typename Value, typename Allocator>
+struct dynamic_type_map {
     dynamic_type_map(Allocator allocator) : values_(allocator) {}
 
     template <typename Key> std::pair<Value&, bool> insert(Value&& value) {
-        auto pb = values_.emplace(RTTI::template get_type_index<Key>(), std::forward<Value>(value));
+        auto pb = values_.emplace(RTTI::template get_type_index<Key>(),
+                                  std::forward<Value>(value));
         return {pb.first->second, pb.second};
     }
 
@@ -26,10 +28,13 @@ template <typename RTTI, typename Value, typename Allocator> struct dynamic_type
     Value& front() { return values_.begin()->second; }
 
   private:
-    using map_allocator_type = typename std::allocator_traits<Allocator>::template rebind_alloc<
-        std::pair<const typename RTTI::type_index, Value>>;
+    using map_allocator_type =
+        typename std::allocator_traits<Allocator>::template rebind_alloc<
+            std::pair<const typename RTTI::type_index, Value>>;
 
-    std::map<typename RTTI::type_index, Value, std::less<typename RTTI::type_index>, map_allocator_type> values_;
+    std::map<typename RTTI::type_index, Value,
+             std::less<typename RTTI::type_index>, map_allocator_type>
+        values_;
     // std::unordered_map< typename RTTI::type_index, Value, typename
     // RTTI::type_index::hasher, std::equal_to< typename RTTI::type_index >,
     // map_allocator_type > values_;
@@ -40,15 +45,19 @@ template <typename Tag, typename Value> struct static_type_map_node_data {
     static_type_map_node_data<Tag, Value>* next = nullptr;
 };
 
-template <typename Tag, typename Key, typename Value> struct static_type_map_node {
+template <typename Tag, typename Key, typename Value>
+struct static_type_map_node {
     static static_type_map_node_data<Tag, Value> data;
 };
 
 template <typename Tag, typename Key, typename Value>
-static_type_map_node_data<Tag, Value> static_type_map_node<Tag, Key, Value>::data;
+static_type_map_node_data<Tag, Value>
+    static_type_map_node<Tag, Key, Value>::data;
 
-template <typename RTTI, typename Tag, typename Value, typename Allocator> struct static_type_map {
-    template <typename Key> using node_type = static_type_map_node<Tag, Key, Value>;
+template <typename RTTI, typename Tag, typename Value, typename Allocator>
+struct static_type_map {
+    template <typename Key>
+    using node_type = static_type_map_node<Tag, Key, Value>;
 
     static_type_map(Allocator&) : nodes_(), size_() {}
 

@@ -14,8 +14,10 @@ int main() {
     container<> container;
     container.register_type<scope<external>, storage<double>>(1.1);
 
-    // Register class A that will be constructed using manually selected A(double)
-    // constructor. Manually disambiguation is required to avoid compile time assertion
-    container.register_type<scope<unique>, storage<A>, factory<constructor<A(double)>>>();
+    // Register class A that will be constructed using manually selected
+    // A(double) constructor. Manually disambiguation is required to avoid
+    // compile time assertion
+    container.register_type<scope<unique>, storage<A>,
+                            factory<constructor<A(double)>>>();
     ////
 }

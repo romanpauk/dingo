@@ -61,7 +61,9 @@ TYPED_TEST(unique_test, value) {
 
         {
             container_type container;
-            container.template register_type<scope<unique>, storage<std::unique_ptr<C>>, interface<C, IClass>>();
+            container.template register_type<scope<unique>,
+                                             storage<std::unique_ptr<C>>,
+                                             interface<C, IClass>>();
             AssertTypeNotConvertible<C, type_list<C&, C&&, C*>>(container);
             {
                 AssertClass(*container.template resolve<std::unique_ptr<C>>());
@@ -137,7 +139,8 @@ TYPED_TEST(unique_test, ambiguous_resolve) {
     using container_type = TypeParam;
     container_type container;
 
-    container.template register_type<scope<unique>, storage<A>, factory<constructor<A(float, int)>>>();
+    container.template register_type<scope<unique>, storage<A>,
+                                     factory<constructor<A(float, int)>>>();
     container.template register_type<scope<unique>, storage<float>>();
     container.template register_type<scope<unique>, storage<int>>();
 

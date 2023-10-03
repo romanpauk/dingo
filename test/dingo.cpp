@@ -23,8 +23,10 @@ TYPED_TEST(dingo_test, unique_hierarchy) {
     };
 
     container_type container;
-    container.template register_type<scope<unique>, storage<std::shared_ptr<S>>>();
-    container.template register_type<scope<unique>, storage<std::unique_ptr<U>>>();
+    container
+        .template register_type<scope<unique>, storage<std::shared_ptr<S>>>();
+    container
+        .template register_type<scope<unique>, storage<std::unique_ptr<U>>>();
     container.template register_type<scope<unique>, storage<B>>();
 
     container.template resolve<B&>();
@@ -71,13 +73,17 @@ TYPED_TEST(dingo_test, type_already_registered) {
     container_type container;
     {
         container.template register_type<scope<shared>, storage<A>>();
-        auto reg = [&] { container.template register_type<scope<shared>, storage<A>>(); };
+        auto reg = [&] {
+            container.template register_type<scope<shared>, storage<A>>();
+        };
         ASSERT_THROW(reg(), dingo::type_already_registered_exception);
     }
     {
-        container.template register_type<scope<shared>, storage<A>, interface<IClass>>();
+        container.template register_type<scope<shared>, storage<A>,
+                                         interface<IClass>>();
         auto reg = [&] {
-            container.template register_type<scope<shared>, storage<A>, interface<IClass>>();
+            container.template register_type<scope<shared>, storage<A>,
+                                             interface<IClass>>();
             ;
         };
         ASSERT_THROW(reg(), dingo::type_already_registered_exception);

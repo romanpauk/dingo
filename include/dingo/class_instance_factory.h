@@ -43,19 +43,24 @@ template <typename T> struct class_instance_data_traits<std::shared_ptr<T>> {
     static T& get(std::shared_ptr<T>& storage) { return *storage; }
 };
 
-template <typename Container, typename TypeInterface, typename Storage, typename Data>
+template <typename Container, typename TypeInterface, typename Storage,
+          typename Data>
 class class_instance_factory : public class_instance_factory_i<Container> {
     using data_traits = class_instance_data_traits<Data>;
     Data data_;
 
     using storage_traits = class_instance_storage_traits<Storage>;
-    using ResolveType =
-        decltype(data_traits::get(data_).storage.resolve(std::declval<resolving_context&>, std::declval<Container&>()));
+    using ResolveType = decltype(data_traits::get(data_).storage.resolve(
+        std::declval<resolving_context&>, std::declval<Container&>()));
     using InterfaceType = rebind_type_t<ResolveType, TypeInterface>;
-    class_instance_resolver<typename Container::rtti_type, InterfaceType, Storage> resolver_;
+    class_instance_resolver<typename Container::rtti_type, InterfaceType,
+                            Storage>
+        resolver_;
 
   public:
-    template <typename... Args> class_instance_factory(Args&&... args) : data_(std::forward<Args>(args)...) {}
+    template <typename... Args>
+    class_instance_factory(Args&&... args)
+        : data_(std::forward<Args>(args)...) {}
 
     auto& get_container() { return data_traits::get(data_).container; }
 
@@ -68,26 +73,40 @@ class class_instance_factory : public class_instance_factory_i<Container> {
     //      Could that use pointer to context, so in resolver we check if
     //      context is needed and if so, continue with pointer to the stack?
 
-    void* get_value(resolving_context& context, const typename Container::rtti_type::type_index& type) override {
-        return resolver_.template resolve<typename storage_traits::conversions::value_types>(
-            context, data_traits::get(data_).container, data_traits::get(data_).storage, type);
+    void*
+    get_value(resolving_context& context,
+              const typename Container::rtti_type::type_index& type) override {
+        return resolver_.template resolve<
+            typename storage_traits::conversions::value_types>(
+            context, data_traits::get(data_).container,
+            data_traits::get(data_).storage, type);
     }
 
-    void* get_lvalue_reference(resolving_context& context,
-                               const typename Container::rtti_type::type_index& type) override {
-        return resolver_.template resolve<typename storage_traits::conversions::lvalue_reference_types>(
-            context, data_traits::get(data_).container, data_traits::get(data_).storage, type);
+    void* get_lvalue_reference(
+        resolving_context& context,
+        const typename Container::rtti_type::type_index& type) override {
+        return resolver_.template resolve<
+            typename storage_traits::conversions::lvalue_reference_types>(
+            context, data_traits::get(data_).container,
+            data_traits::get(data_).storage, type);
     }
 
-    void* get_rvalue_reference(resolving_context& context,
-                               const typename Container::rtti_type::type_index& type) override {
-        return resolver_.template resolve<typename storage_traits::conversions::rvalue_reference_types>(
-            context, data_traits::get(data_).container, data_traits::get(data_).storage, type);
+    void* get_rvalue_reference(
+        resolving_context& context,
+        const typename Container::rtti_type::type_index& type) override {
+        return resolver_.template resolve<
+            typename storage_traits::conversions::rvalue_reference_types>(
+            context, data_traits::get(data_).container,
+            data_traits::get(data_).storage, type);
     }
 
-    void* get_pointer(resolving_context& context, const typename Container::rtti_type::type_index& type) override {
-        return resolver_.template resolve<typename storage_traits::conversions::pointer_types>(
-            context, data_traits::get(data_).container, data_traits::get(data_).storage, type);
+    void* get_pointer(
+        resolving_context& context,
+        const typename Container::rtti_type::type_index& type) override {
+        return resolver_.template resolve<
+            typename storage_traits::conversions::pointer_types>(
+            context, data_traits::get(data_).container,
+            data_traits::get(data_).storage, type);
     }
 };
 } // namespace dingo

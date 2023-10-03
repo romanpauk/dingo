@@ -20,7 +20,8 @@ template <typename T, typename... Args> struct function_impl<T(Args...)> {
     }
 };
 
-template <typename R, typename T, typename... Args> struct function_impl<R (T::*)(Args...) const> {
+template <typename R, typename T, typename... Args>
+struct function_impl<R (T::*)(Args...) const> {
     template <typename Fn, typename Context, typename Container>
     static R construct(Fn fn, Context& ctx, Container& container) {
         return fn(ctx.template resolve<Args>(container)...);

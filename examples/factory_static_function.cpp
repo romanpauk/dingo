@@ -18,6 +18,7 @@ int main() {
     ////
     container<> container;
     // Register A that will be instantiated by calling A::factory()
-    container.register_type<scope<unique>, storage<A>, factory<function<&A::factory>>>();
+    container.register_type<scope<unique>, storage<A>,
+                            factory<function<&A::factory>>>();
     ////
 }

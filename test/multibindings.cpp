@@ -20,7 +20,8 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_value) {
     typedef Class<multiple_interfaces_shared_value, __COUNTER__> C;
 
     container_type container;
-    container.template register_type<scope<shared>, storage<C>, interface<IClass, IClass1, IClass2>>();
+    container.template register_type<scope<shared>, storage<C>,
+                                     interface<IClass, IClass1, IClass2>>();
 
     ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve<IClass&>()));
     ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve<IClass1&>()));
@@ -34,7 +35,8 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_cyclical_value) {
     typedef Class<multiple_interfaces_shared_cyclical_value, __COUNTER__> C;
 
     container_type container;
-    container.template register_type<scope<shared_cyclical>, storage<C>, interface<IClass1, IClass2>>();
+    container.template register_type<scope<shared_cyclical>, storage<C>,
+                                     interface<IClass1, IClass2>>();
 
     ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve<IClass1&>()));
     ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<IClass2*>()));
@@ -47,34 +49,42 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_shared_ptr) {
     typedef Class<multiple_interfaces_shared_shared_ptr, __COUNTER__> C;
 
     container_type container;
-    container.template register_type<scope<shared>, storage<std::shared_ptr<C>>, interface<IClass, IClass1, IClass2>>();
+    container.template register_type<scope<shared>, storage<std::shared_ptr<C>>,
+                                     interface<IClass, IClass1, IClass2>>();
 
     ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve<IClass&>()));
-    ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::shared_ptr<IClass>&>().get()));
+    ASSERT_TRUE(dynamic_cast<C*>(
+        container.template resolve<std::shared_ptr<IClass>&>().get()));
     ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve<IClass1&>()));
-    ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::shared_ptr<IClass1>&>().get()));
+    ASSERT_TRUE(dynamic_cast<C*>(
+        container.template resolve<std::shared_ptr<IClass1>&>().get()));
     ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve<IClass2&>()));
-    ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::shared_ptr<IClass2>*>()->get()));
+    ASSERT_TRUE(dynamic_cast<C*>(
+        container.template resolve<std::shared_ptr<IClass2>*>()->get()));
 }
 
 TYPED_TEST(multibindings_test, multiple_interfaces_shared_cyclical_shared_ptr) {
     using container_type = TypeParam;
 
     struct multiple_interfaces_shared_cyclical_shared_ptr {};
-    typedef Class<multiple_interfaces_shared_cyclical_shared_ptr, __COUNTER__> C;
+    typedef Class<multiple_interfaces_shared_cyclical_shared_ptr, __COUNTER__>
+        C;
 
     container_type container;
-    container
-        .template register_type<scope<shared_cyclical>, storage<std::shared_ptr<C>>, interface<IClass1, IClass2>>();
+    container.template register_type<scope<shared_cyclical>,
+                                     storage<std::shared_ptr<C>>,
+                                     interface<IClass1, IClass2>>();
 
     // TODO: virtual base issues with cyclical_shared
     // BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
     // BOOST_TEST(dynamic_cast<C*>(container.resolve< std::shared_ptr< IClass >&
     // >().get()));
     ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve<IClass1&>()));
-    ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::shared_ptr<IClass1>&>().get()));
+    ASSERT_TRUE(dynamic_cast<C*>(
+        container.template resolve<std::shared_ptr<IClass1>&>().get()));
     ASSERT_TRUE(dynamic_cast<C*>(&container.template resolve<IClass2&>()));
-    ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::shared_ptr<IClass2>*>()->get()));
+    ASSERT_TRUE(dynamic_cast<C*>(
+        container.template resolve<std::shared_ptr<IClass2>*>()->get()));
 }
 
 /*
@@ -98,11 +108,15 @@ TYPED_TEST(multibindings_test, multiple_interfaces_unique_shared_ptr) {
     typedef Class<multiple_interfaces_unique_shared_ptr, __COUNTER__> C;
 
     container_type container;
-    container.template register_type<scope<unique>, storage<std::shared_ptr<C>>, interface<IClass, IClass1, IClass2>>();
+    container.template register_type<scope<unique>, storage<std::shared_ptr<C>>,
+                                     interface<IClass, IClass1, IClass2>>();
 
-    ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::shared_ptr<IClass>>().get()));
-    ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::shared_ptr<IClass1>>().get()));
-    ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::shared_ptr<IClass2>>().get()));
+    ASSERT_TRUE(dynamic_cast<C*>(
+        container.template resolve<std::shared_ptr<IClass>>().get()));
+    ASSERT_TRUE(dynamic_cast<C*>(
+        container.template resolve<std::shared_ptr<IClass1>>().get()));
+    ASSERT_TRUE(dynamic_cast<C*>(
+        container.template resolve<std::shared_ptr<IClass2>>().get()));
 }
 
 TYPED_TEST(multibindings_test, multiple_interfaces_unique_unique_ptr) {
@@ -112,11 +126,15 @@ TYPED_TEST(multibindings_test, multiple_interfaces_unique_unique_ptr) {
     typedef Class<multiple_interfaces_unique_unique_ptr, __COUNTER__> C;
 
     container_type container;
-    container.template register_type<scope<unique>, storage<std::unique_ptr<C>>, interface<IClass, IClass1, IClass2>>();
+    container.template register_type<scope<unique>, storage<std::unique_ptr<C>>,
+                                     interface<IClass, IClass1, IClass2>>();
 
-    ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::unique_ptr<IClass>>().get()));
-    ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::unique_ptr<IClass1>>().get()));
-    ASSERT_TRUE(dynamic_cast<C*>(container.template resolve<std::unique_ptr<IClass2>>().get()));
+    ASSERT_TRUE(dynamic_cast<C*>(
+        container.template resolve<std::unique_ptr<IClass>>().get()));
+    ASSERT_TRUE(dynamic_cast<C*>(
+        container.template resolve<std::unique_ptr<IClass1>>().get()));
+    ASSERT_TRUE(dynamic_cast<C*>(
+        container.template resolve<std::unique_ptr<IClass2>>().get()));
 }
 
 // TODO: this is not correctly implemented, it leaks memory, also it does not

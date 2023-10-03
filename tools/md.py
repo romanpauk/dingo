@@ -1,5 +1,7 @@
+import argparse
 import re
 import subprocess
+import sys
 
 def include(file, scope=None):
     lines = []
@@ -14,7 +16,7 @@ def include(file, scope=None):
                 elif in_scope:
                     lines.append(line)
 
-    p = subprocess.run("clang-format", stdout=subprocess.PIPE, input=str("".join(lines)).encode("ascii"))
+    p = subprocess.run(["clang-format"], stdout=subprocess.PIPE, input=str("".join(lines)).encode("ascii"))
     lines = [line + "\n" for line in p.stdout.decode().split("\n")]
 
     result = []
@@ -54,11 +56,25 @@ def process(lines):
 
 
 if __name__ == "__main__":
-    file = "README.md"
-    with open(file, "r") as f:
-        content = f.readlines()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("filenames", help="file(s) to process", nargs='+')
+    parser.add_argument("--mode", choices=["verify", "update"], default="verify", help="'update' the file or 'verify' that it is updated")
+    args = parser.parse_args()
     
-    result = process(content)
-    if result != content:
-        with open(file, "w") as f:
-            f.write("".join(result))
+    for file in args.filenames:
+        with open(file, "r") as f:
+            content = f.readlines()
+    
+        result = process(content)
+        if result != content:
+            if args.mode == "update":
+                with open(file, "w") as f:
+                    f.write("".join(result))
+                print("{} updated".format(file))
+            elif args.mode == "verify":
+                print("{} requires update, run md.py in update mode".format(file))
+                sys.exit(1)
+        else:
+            print("{} is up-to-date".format(file))
+
+    sys.exit(0)
