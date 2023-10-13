@@ -27,6 +27,8 @@ template <typename T> struct class_instance_storage_traits<std::shared_ptr<T>> {
 
 template <typename Container, typename Storage> struct class_instance_data {
   public:
+    using container_type = Container;
+
     template <typename ParentContainer, typename... Args>
     class_instance_data(ParentContainer* parent, Args&&... args)
         : storage(std::forward<Args>(args)...),
@@ -37,22 +39,32 @@ template <typename Container, typename Storage> struct class_instance_data {
 };
 
 template <typename T> struct class_instance_data_traits {
+    using container_type = typename T::container_type;
     static T& get(T& storage) { return storage; }
 };
 
 template <typename T> struct class_instance_data_traits<std::shared_ptr<T>> {
+    using container_type = typename T::container_type;
     static T& get(std::shared_ptr<T>& storage) { return *storage; }
 };
 
+// TODO: the container here is just for RTTI, but it is needed to get the
+// inner container type and that is very hard. Perhaps pass RTTI and inner
+// container directly?
 template <typename Container, typename TypeInterface, typename Storage,
           typename Data>
 class class_instance_factory : public class_instance_factory_i<Container> {
+  public:
     using data_traits = class_instance_data_traits<Data>;
+
+  private:
     Data data_;
 
     using storage_traits = class_instance_storage_traits<Storage>;
+    // TODO: move this to Data.
     using ResolveType = decltype(data_traits::get(data_).storage.resolve(
-        std::declval<resolving_context&>, std::declval<Container&>()));
+        std::declval<resolving_context&>,
+        std::declval<decltype(data_traits::get(data_).container)&>));
     using InterfaceType = rebind_type_t<ResolveType, TypeInterface>;
     class_instance_resolver<typename Container::rtti_type, InterfaceType,
                             Storage>
@@ -64,15 +76,6 @@ class class_instance_factory : public class_instance_factory_i<Container> {
         : data_(std::forward<Args>(args)...) {}
 
     auto& get_container() { return data_traits::get(data_).container; }
-
-    // TODO: we will need two pairs of calls - context-aware and context-less
-    // First, resolution will be attempted without context.
-    //      Sufficient for trivial types or already resolved types (or types
-    //      composed from those...), simply anything, that does not throw during
-    //      construction.
-    // Second, resolution will continue with context
-    //      Could that use pointer to context, so in resolver we check if
-    //      context is needed and if so, continue with pointer to the stack?
 
     void*
     get_value(resolving_context& context,
