@@ -111,7 +111,8 @@ target_sources(dingo INTERFACE
 )
     
 if(DINGO_TESTING_ENABLED)
-    add_executable(dingo_test 
+    add_executable(dingo_test
+        test/allocator.cpp
         test/annotated.cpp
         test/assert.h
         test/class.h

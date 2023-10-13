@@ -29,7 +29,8 @@ template <typename Container, typename Storage> struct class_instance_data {
   public:
     template <typename ParentContainer, typename... Args>
     class_instance_data(ParentContainer* parent, Args&&... args)
-        : storage(std::forward<Args>(args)...), container(parent) {}
+        : storage(std::forward<Args>(args)...),
+          container(parent, parent->get_allocator()) {}
 
     Storage storage;
     Container container;

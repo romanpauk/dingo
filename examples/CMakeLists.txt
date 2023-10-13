@@ -5,6 +5,7 @@ function(add_example source)
     add_test(NAME dingo_example_${name} COMMAND dingo_example_${name})
 endfunction()
 
+add_example(allocator.cpp)
 add_example(construct.cpp)
 add_example(factory_callable.cpp)
 add_example(factory_constructor.cpp)

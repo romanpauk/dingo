@@ -18,6 +18,8 @@ def include(file, scope=None):
 
     p = subprocess.run(["clang-format"], stdout=subprocess.PIPE, input=str("".join(lines)).encode("ascii"))
     lines = [line + "\n" for line in p.stdout.decode().split("\n")]
+    if lines[-1].strip() == "":
+        lines.pop()
 
     result = []
     result.append("Example code included from [{0}]({0}):\n".format(file))

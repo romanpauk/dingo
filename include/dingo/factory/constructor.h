@@ -53,60 +53,74 @@ class constructor_argument_impl {
     Context& context_;
     Container& container_;
 };
+
 template <typename T, typename = void, typename... Args>
-struct is_list_constructible_impl : std::false_type {};
+struct list_initialization_impl : std::false_type {};
 
 template <typename T, typename... Args>
-struct is_list_constructible_impl<
+struct list_initialization_impl<
     T, std::void_t<decltype(T{std::declval<Args>()...})>, Args...>
     : std::true_type {};
 
 template <typename T, typename... Args>
-using is_list_constructible = is_list_constructible_impl<T, void, Args...>;
-
-template <typename T, typename... Args>
-static constexpr bool is_list_constructible_v =
-    is_list_constructible<T, Args...>::value;
-
-template <typename T, typename... Args>
-struct is_constructible : is_list_constructible<T, Args...> {};
+struct list_initialization : list_initialization_impl<T, void, Args...> {};
 
 // Filters out T(T&).
 // TODO: It should be possible to write all into single class
 template <typename T, typename Arg>
-struct is_constructible<T, Arg>
-    : std::conjunction<is_list_constructible<T, Arg>,
+struct list_initialization<T, Arg>
+    : std::conjunction<list_initialization_impl<T, void, Arg>,
                        std::negation<std::is_same<std::decay_t<Arg>, T>>> {};
 
-template <typename T, typename... Args>
-static constexpr bool is_constructible_v = is_constructible<T, Args...>::value;
+template <typename T, typename = void, typename... Args>
+struct direct_initialization_impl : std::false_type {};
 
-template <typename T, bool Assert, size_t N, bool Constructible,
-          typename... Args>
+template <typename T, typename... Args>
+struct direct_initialization_impl<
+    T, std::void_t<decltype(T(std::declval<Args>()...))>, Args...>
+    : std::true_type {};
+
+template <typename T, typename... Args>
+struct direct_initialization : direct_initialization_impl<T, void, Args...> {};
+
+// Filters out T(T&).
+// TODO: It should be possible to write all into single class
+template <typename T, typename Arg>
+struct direct_initialization<T, Arg>
+    : std::conjunction<direct_initialization_impl<T, void, Arg>,
+                       std::negation<std::is_same<std::decay_t<Arg>, T>>> {};
+
+template <typename T, template <typename...> typename IsConstructible,
+          bool Assert, size_t N, bool Constructible, typename... Args>
 struct constructor_detection_impl;
 
 // Generates N arguments of type class_factory_argument<T>, going 1, 2, 3... N.
-template <typename T, bool Assert = true,
-          size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS, typename = void,
-          typename... Args>
+template <typename T, template <typename...> typename IsConstructible,
+          bool Assert = true, size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS,
+          typename = void, typename... Args>
 struct constructor_detection
-    : constructor_detection<T, Assert, N, void, constructor_argument<T>,
-                            Args...> {};
+    : constructor_detection<T, IsConstructible, Assert, N, void,
+                            constructor_argument<T>, Args...> {};
 
 // Upon reaching N, generates N attempts to instantiate, going N, N-1, N-2... 0
 // arguments. This assures that container will select the construction method
 // with the most arguments as it will be the first seen in the hierarchy (this
 // is needed to fill default-constructible aggregate types with instances from
 // container).
-template <typename T, bool Assert, size_t N, typename... Args>
-struct constructor_detection<
-    T, Assert, N, typename std::enable_if_t<sizeof...(Args) == N>, Args...>
-    : constructor_detection_impl<T, Assert, N, is_constructible_v<T, Args...>,
+template <typename T, template <typename...> typename IsConstructible,
+          bool Assert, size_t N, typename... Args>
+struct constructor_detection<T, IsConstructible, Assert, N,
+                             typename std::enable_if_t<sizeof...(Args) == N>,
+                             Args...>
+    : constructor_detection_impl<T, IsConstructible, Assert, N,
+                                 IsConstructible<T, Args...>::value,
                                  std::tuple<Args...>> {};
 
 // Construction was found. Bail out (by not inheriting anymore).
-template <typename T, bool Assert, size_t N, typename... Args>
-struct constructor_detection_impl<T, Assert, N, true, std::tuple<Args...>> {
+template <typename T, template <typename...> typename IsConstructible,
+          bool Assert, size_t N, typename... Args>
+struct constructor_detection_impl<T, IsConstructible, Assert, N, true,
+                                  std::tuple<Args...>> {
     static constexpr size_t arity = sizeof...(Args);
     static constexpr bool valid = true;
 
@@ -129,15 +143,19 @@ struct constructor_detection_impl<T, Assert, N, true, std::tuple<Args...>> {
 
 // Construction was not found. Generate next level of inheritance with one less
 // argument.
-template <typename T, bool Assert, size_t N, typename Head, typename... Tail>
-struct constructor_detection_impl<T, Assert, N, false,
+template <typename T, template <typename...> typename IsConstructible,
+          bool Assert, size_t N, typename Head, typename... Tail>
+struct constructor_detection_impl<T, IsConstructible, Assert, N, false,
                                   std::tuple<Head, Tail...>>
-    : constructor_detection_impl<T, Assert, N, is_constructible_v<T, Tail...>,
+    : constructor_detection_impl<T, IsConstructible, Assert, N,
+                                 IsConstructible<T, Tail...>::value,
                                  std::tuple<Tail...>> {};
 
 // Construction was not found, and no more arguments can be removed.
-template <typename T, bool Assert, size_t N>
-struct constructor_detection_impl<T, Assert, N, false, std::tuple<>> {
+template <typename T, template <typename...> typename IsConstructible,
+          bool Assert, size_t N>
+struct constructor_detection_impl<T, IsConstructible, Assert, N, false,
+                                  std::tuple<>> {
     static constexpr bool valid = false;
     static_assert(!Assert || valid,
                   "class T construction not detected or ambiguous");
@@ -165,6 +183,7 @@ template <typename T, typename... Args>
 struct constructor<T, Args...> : constructor<T(Args...)> {};
 
 template <typename T>
-struct constructor<T> : detail::constructor_detection<T> {};
+struct constructor<T>
+    : detail::constructor_detection<T, detail::list_initialization> {};
 
 } // namespace dingo

@@ -22,6 +22,7 @@ Features Overview:
 - [Container Nesting](#container-nesting)
 - [Static and Dynamic Type Maps](#static-and-dynamic-type-maps)
 - [Annotated Types](#annotated-types)
+- [Customizable Allocation](#customizable-allocation)
 
 ## Introduction
 
@@ -70,7 +71,6 @@ struct D {
 
 // Construct an un-managed struct using dependencies from the container
 D d = container.construct<D>();
-
 ```
 <!-- } -->
 
@@ -95,7 +95,6 @@ container.register_type<scope<unique>,           // using unique scope
 // As some policies can be deduced from the others, the above
 // registration simplified
 container.register_type<scope<unique>, storage<std::unique_ptr<A>>>();
-
 ```
 <!-- } -->
 
@@ -131,7 +130,6 @@ container.register_type<scope<external>, storage<double>>(1.1);
 // automatically)
 container
     .register_type<scope<unique>, storage<A> /*, factory<constructor<A>> */>();
-
 ```
 <!-- } -->
 
@@ -157,7 +155,6 @@ container.register_type<scope<external>, storage<double>>(1.1);
 // compile time assertion
 container.register_type<scope<unique>, storage<A>,
                         factory<constructor<A(double)>>>();
-
 ```
 <!-- } -->
 
@@ -183,7 +180,6 @@ container<> container;
 // Register A that will be instantiated by calling A::factory()
 container
     .register_type<scope<unique>, storage<A>, factory<function<&A::factory>>>();
-
 ```
 <!-- } -->
 
@@ -209,7 +205,6 @@ container.register_type<scope<unique>, storage<A>>(callable([](int value) {
     return A{value * 2};
 }));
 assert(container.resolve<A>().value == 4);
-
 ```
 <!-- } -->
 
@@ -234,7 +229,6 @@ container<> container;
 container.register_type<scope<external>, storage<A*>>(&instance);
 // Resolution will return an existing instance of A casted to required type.
 assert(&container.resolve<A&>() == container.resolve<A*>());
-
 ```
 <!-- } -->
 
@@ -254,7 +248,6 @@ container<> container;
 container.register_type<scope<unique>, storage<A>>();
 // Resolution will get a unique instance of A
 container.resolve<A>();
-
 ```
 <!-- } -->
 
@@ -272,7 +265,6 @@ container<> container;
 container.register_type<scope<shared>, storage<A>>();
 // Resolution will always return the same A instance
 assert(container.resolve<A*>() == &container.resolve<A&>());
-
 ```
 <!-- } -->
 
@@ -318,7 +310,6 @@ assert(&a.b_ == &b);
 assert(&a.b_ == a.bptr_.get());
 assert(&b.a_ == &a);
 assert(&b.a_ == b.aptr_.get());
-
 ```
 <!-- } -->
 
@@ -338,7 +329,7 @@ Template class specializations are used to tweak the behavior and functionality 
 
 #### Service Locator
 
-It is possible to register a binding to the type under a key that is a base class of the type. As an upcast is compiled at the time of a registration, multiple inheritance is correctly supported. One instance can be resolved through multiple interfaces.
+It is possible to register a binding to the type under a key that is a base class of the type. As an upcast is compiled at the time of a registration so multiple inheritance is correctly supported even without using dynamic_cast operator. One instance can be resolved through multiple interfaces.
 
 <!-- { include("examples/service_locator.cpp", scope="////") -->
 Example code included from [examples/service_locator.cpp](examples/service_locator.cpp):
@@ -357,7 +348,6 @@ container.register_type<scope<shared>, storage<A>, interface<IA>>();
 // Resolve instance A through interface IA
 IA& instance = container.resolve<IA&>();
 assert(dynamic_cast<A*>(&instance));
-
 ```
 <!-- } -->
 
@@ -385,15 +375,15 @@ container<> container;
 container.register_type<scope<shared>, storage<A>>();
 // Construct instance of B, injecting shared instance of A
 B b = container.construct<B>();
-
 ```
 <!-- } -->
 
 #### Customizable RTTI
-For non-RTTI enabled builds, it is possible to parametrize the container with custom RTTI implementation.
+For non-RTTI enabled builds, it is possible to parametrize the container with custom RTTI implementation. No library functionality depends on dynamic_cast conversion.
+Two RTTI providers are available: dynamic one based on typeid operator and static one, based on template specializations.
 
 #### Static and Dynamic Type Maps
-Dynamic type maps are implementing mapping from a type (key) to an instance (value), using std::type_index to represent the key. Static type maps are using template specializations to represent the key without relying on other data structure. This can be used in the case when a limited amount of container instances, denoted by a typed tags, exist, and when the final application is linked in such way that there is just a single counter in the whole application that is used to assign the custom type id.
+Dynamic type maps are implementing mapping from a type (key) to an instance (value), using provided RTTI implementation to represent the key. Static type maps are using template specializations to represent the key without relying on other data structure, providing O(1) access. This can be used in the case when a limited amount of container instances, denoted by a typed tags, exist.
 
 ### Container Nesting
 Containers can form a parent-child hierarchy and resolution will traverse the container chain from child to last parent. Calling register_type() returns an implicitly created child container for the type being registered, allowing a per-type configuration to override a global configuration in the container. Nesting is supported for both dynamic and static type maps based containers.
@@ -427,11 +417,24 @@ nested_container.register_type<scope<unique>, storage<B>>();
 // Resolving B using nested container will use B{1} as provided by the
 // parent container to construct B
 assert(nested_container.resolve<B>().value == 1);
-
 ```
 <!-- } -->
 
 See [test/nesting.cpp](test/nesting.cpp) for details.
+
+### Customizable Allocation
+To customize memory management, container constructor can take an optional user supplied allocator that is used to allocate all memory required for container operations.
+Note that resolved instances do not use this allocator as the container does not have to own instances it constructs.
+
+<!-- { include("examples/allocator.cpp", scope="////") -->
+Example code included from [examples/allocator.cpp](examples/allocator.cpp):
+```c++
+// Define a container with user-provided allocator type
+std::allocator<char> alloc;
+container<dingo::dynamic_container_traits, std::allocator<char>>
+    container(alloc);
+```
+<!-- } -->
 
 #### Unit Tests
 

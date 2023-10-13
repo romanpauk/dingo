@@ -162,7 +162,6 @@ class storage_instance<shared_cyclical, std::shared_ptr<Type>, Factory>
     class deleter {
       public:
         void set_constructed() { constructed_ = true; }
-        bool is_constructed() const { return constructed_; }
 
         void operator()(Type* ptr) {
             if constexpr (!std::is_trivially_destructible_v<Type>) {
@@ -206,25 +205,23 @@ class storage_instance<shared_cyclical, std::shared_ptr<Type>, Factory>
 
 template <typename Instance, typename Context, typename Container>
 struct shared_cyclical_constructible : constructible_i {
-    shared_cyclical_constructible(Instance& instance, Context& context,
-                                  Container& container)
+    shared_cyclical_constructible(Instance* instance, Context* context,
+                                  Container* container)
         : instance_(instance), context_(context), container_(container) {}
 
-    void construct() override { instance_.construct(context_, container_); }
+    void construct() override { instance_->construct(*context_, *container_); }
 
   private:
-    Instance& instance_;
-    Context& context_;
-    Container& container_;
+    Instance* instance_;
+    Context* context_;
+    Container* container_;
 };
 
 template <typename Type, typename Factory, typename Conversions>
 class storage<shared_cyclical, Type, Factory, Conversions>
     : public resettable_i {
     storage_instance<shared_cyclical, Type, Factory> instance_;
-
-    // TODO: get rid of heap
-    std::unique_ptr<constructible_i> constructible_;
+    std::aligned_storage_t<sizeof(void*) * 4> constructible_;
 
   public:
     template <typename... Args>
@@ -239,11 +236,15 @@ class storage<shared_cyclical, Type, Factory, Conversions>
     auto resolve(Context& context, Container& container)
         -> decltype(instance_.get()) {
         if (instance_.empty()) {
-            constructible_.reset(
-                new shared_cyclical_constructible<decltype(instance_), Context,
-                                                  Container>(instance_, context,
-                                                             container));
-            context.register_constructible(constructible_.get());
+            using constructible_type =
+                shared_cyclical_constructible<decltype(instance_), Context,
+                                              Container>;
+            static_assert(std::is_trivially_destructible_v<constructible_type>);
+            static_assert(sizeof(constructible_) <= sizeof(constructible_type));
+            new (reinterpret_cast<constructible_type*>(&constructible_))
+                constructible_type(&instance_, &context, &container);
+            context.register_constructible(
+                reinterpret_cast<constructible_type*>(&constructible_));
             return instance_.resolve(context);
         }
         return instance_.get();
@@ -251,10 +252,7 @@ class storage<shared_cyclical, Type, Factory, Conversions>
 
     bool is_resolved() const { return !instance_.empty(); }
 
-    void reset() override {
-        instance_.reset();
-        constructible_.reset();
-    }
+    void reset() override { instance_.reset(); }
 };
 } // namespace detail
 } // namespace dingo

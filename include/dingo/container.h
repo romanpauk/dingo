@@ -15,6 +15,7 @@
 #include <dingo/type_map.h>
 #include <dingo/type_registration.h>
 
+#include <functional>
 #include <map>
 #include <optional>
 #include <typeindex>
@@ -45,11 +46,18 @@ static constexpr bool is_tagged_container_v =
                         type_list<typename Traits::tag_type, void>>,
                     Traits>;
 
+template <typename Allocator> struct allocator_base : public Allocator {
+    template <typename AllocatorT>
+    allocator_base(AllocatorT&& allocator)
+        : Allocator(std::forward<Allocator>(allocator)) {}
+    Allocator& get_allocator() { return *this; }
+};
+
 // TODO wrt. multibindinds, is this like map/multimap?
 template <typename ContainerTraits = dynamic_container_traits,
           typename Allocator = std::allocator<char>,
           typename ParentContainer = void>
-class container {
+class container : public allocator_base<Allocator> {
     friend class resolving_context;
 
     template <typename ContainerTraitsT, typename AllocatorT,
@@ -60,6 +68,10 @@ class container {
     using parent_container_type =
         std::conditional_t<std::is_same_v<void, ParentContainer>,
                            container_type, ParentContainer>;
+
+    using class_instance_factory_ptr = std::unique_ptr<
+        class_instance_factory_i<container_type>,
+        std::function<void(class_instance_factory_i<container_type>*)>>;
 
   public:
     using container_traits_type = ContainerTraits;
@@ -72,11 +84,13 @@ class container {
                       type_list<typename container_traits_type::tag_type, Tag>>,
                   Allocator, container_type>;
 
-    // TODO: the allocator is probably very unfinished...
-    container(Allocator allocator = Allocator())
-        : allocator_(allocator), type_factories_(allocator) {}
-    container(parent_container_type* parent, Allocator allocator = Allocator())
-        : parent_(parent), allocator_(allocator), type_factories_(allocator) {
+    container(allocator_type allocator = allocator_type())
+        : allocator_base<allocator_type>(allocator),
+          type_factories_(get_allocator()) {}
+    container(parent_container_type* parent,
+              allocator_type allocator = allocator_type())
+        : allocator_base<allocator_type>(allocator), parent_(parent),
+          type_factories_(get_allocator()) {
 
         static_assert(
             !is_tagged_container_v<container_traits_type> ||
@@ -100,36 +114,53 @@ class container {
                 typename ContainerTraits::template rebind_t<
                     type_list<typename ContainerTraits::tag_type,
                               typename registration::interface_type>>,
-                Allocator, container_type>;
+                allocator_type, container_type>;
 
         using class_instance_data_type =
             class_instance_data<class_instance_container_type, storage_type>;
 
         // TODO: remove tuple usage... or remove type_list usage
+        // TODO: for static containers, data and allocated factory can be static
         if constexpr (std::tuple_size_v<
                           typename registration::interface_type::type_tuple> ==
                       1) {
             using interface_type = std::tuple_element_t<
                 0, typename registration::interface_type::type_tuple>;
-            auto factory = std::make_unique<class_instance_factory<
+
+            using class_instance_factory_type = class_instance_factory<
                 container_type, typename annotated_traits<interface_type>::type,
-                storage_type, class_instance_data_type>>(this);
-            auto& container = factory->get_container();
+                storage_type, class_instance_data_type>;
+
+            auto factory =
+                allocate_unique<class_instance_factory_i<container_type>,
+                                class_instance_factory_type>(this);
+            auto& factory_container =
+                ((class_instance_factory_type*)factory.get())
+                    ->get_container(); // TODO
             register_type_factory<interface_type, storage_type>(
                 std::move(factory));
-            return container;
+            return factory_container;
         } else {
-            auto data = std::make_shared<class_instance_data_type>(this);
+            auto data = std::allocate_shared<
+                class_instance_data_type,
+                typename std::allocator_traits<Allocator>::
+                    template rebind_alloc<class_instance_data_type>>(
+                get_allocator(), this);
             for_each(
                 typename registration::interface_type::type{},
                 [&](auto element) {
                     using interface_type = typename decltype(element)::type;
+
+                    using class_instance_factory_type = class_instance_factory<
+                        container_type,
+                        typename annotated_traits<interface_type>::type,
+                        storage_type,
+                        std::shared_ptr<class_instance_data_type>>;
+
                     register_type_factory<interface_type, storage_type>(
-                        std::make_unique<class_instance_factory<
-                            container_type,
-                            typename annotated_traits<interface_type>::type,
-                            storage_type,
-                            std::shared_ptr<class_instance_data_type>>>(data));
+                        allocate_unique<
+                            class_instance_factory_i<container_type>,
+                            class_instance_factory_type>(data));
                 });
             return data->container;
         }
@@ -150,37 +181,47 @@ class container {
                 typename ContainerTraits::template rebind_t<
                     type_list<typename ContainerTraits::tag_type,
                               typename registration::interface_type>>,
-                Allocator, container_type>;
+                allocator_type, container_type>;
 
         using class_instance_data_type =
             class_instance_data<class_instance_container_type, storage_type>;
 
-        // TODO: remove tuple usage... or remove type_list usage
         if constexpr (std::tuple_size_v<
                           typename registration::interface_type::type_tuple> ==
                       1) {
             using interface_type = std::tuple_element_t<
                 0, typename registration::interface_type::type_tuple>;
 
+            using class_instance_factory_type = class_instance_factory<
+                container_type, typename annotated_traits<interface_type>::type,
+                storage_type, class_instance_data_type>;
+
             register_type_factory<interface_type, storage_type>(
-                std::make_unique<class_instance_factory<
-                    container_type,
-                    typename annotated_traits<interface_type>::type,
-                    storage_type, class_instance_data_type>>(
+                allocate_unique<class_instance_factory_i<container_type>,
+                                class_instance_factory_type>(
                     this, std::forward<Arg>(arg)));
         } else {
-            auto data = std::make_shared<class_instance_data_type>(
-                this, std::forward<Arg>(arg));
+            auto data = std::allocate_shared<
+                class_instance_data_type,
+                typename std::allocator_traits<Allocator>::
+                    template rebind_alloc<class_instance_data_type>>(
+                get_allocator(), this, std::forward<Arg>(arg));
+
             for_each(
                 typename registration::interface_type::type{},
                 [&](auto element) {
                     using interface_type = typename decltype(element)::type;
+
+                    using class_instance_factory_type = class_instance_factory<
+                        container_type,
+                        typename annotated_traits<interface_type>::type,
+                        storage_type,
+                        std::shared_ptr<class_instance_data_type>>;
+
                     register_type_factory<interface_type, storage_type>(
-                        std::make_unique<class_instance_factory<
-                            container_type,
-                            typename annotated_traits<interface_type>::type,
-                            storage_type,
-                            std::shared_ptr<class_instance_data_type>>>(data));
+                        allocate_unique<
+                            class_instance_factory_i<container_type>,
+                            class_instance_factory_type>(data));
                 });
         }
     }
@@ -224,8 +265,7 @@ class container {
             typename TypeStorage::type>();
         auto pb = type_factories_.template insert<TypeInterface>(
             typename ContainerTraits::template type_factory_map_type<
-                std::unique_ptr<class_instance_factory_i<container_type>>,
-                allocator_type>(allocator_));
+                class_instance_factory_ptr, allocator_type>(get_allocator()));
 
         if (!pb.first
                  .template insert<
@@ -245,7 +285,7 @@ class container {
     R resolve(resolving_context& context) {
         using Type = decay_t<T>;
 
-        auto factories = type_factories_.template at<Type>();
+        auto factories = type_factories_.template get<Type>();
         if (factories) {
             if (factories->size() == 1) {
                 auto& factory = factories->front();
@@ -314,13 +354,42 @@ class container {
         }
     }
 
+    template <typename T, typename U, typename... Args>
+    std::unique_ptr<T, std::function<void(T*)>>
+    allocate_unique(Args&&... args) {
+        using allocator_t = typename std::allocator_traits<
+            allocator_type>::template rebind_alloc<U>;
+        allocator_t allocator(get_allocator());
+        U* instance =
+            std::allocator_traits<allocator_t>::allocate(allocator, 1);
+        std::allocator_traits<allocator_t>::construct(
+            allocator, instance, std::forward<Args>(args)...);
+
+        // TODO: std::function<> can allocate... this is small so it does not,
+        // but how to write the code so it even can't allocate? Using
+        // std::allocate_shared?
+        return {instance, [this, instance](T* p) mutable {
+                    // Assume the pointed-to instance does not change (need to
+                    // avoid dynamic_cast).
+                    (void)p;
+                    assert(instance == p);
+                    allocator_t allocator(get_allocator());
+                    std::allocator_traits<allocator_t>::destroy(allocator,
+                                                                instance);
+                    std::allocator_traits<allocator_t>::deallocate(allocator,
+                                                                   instance, 1);
+                }};
+    }
+
+    allocator_type& get_allocator() {
+        return allocator_base<allocator_type>::get_allocator();
+    }
+
     parent_container_type* parent_ = nullptr;
-    allocator_type allocator_;
 
     typename ContainerTraits::template type_factory_map_type<
         typename ContainerTraits::template type_factory_map_type<
-            std::unique_ptr<class_instance_factory_i<container_type>>,
-            allocator_type>,
+            class_instance_factory_ptr, allocator_type>,
         allocator_type>
         type_factories_;
 };

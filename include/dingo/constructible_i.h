@@ -6,7 +6,8 @@ namespace dingo {
 
 class constructible_i {
   public:
-    virtual ~constructible_i() = default;
+    // Note: derived class has to be trivially destructible
+    // virtual ~constructible_i() = default;
     virtual void construct() = 0;
 };
 

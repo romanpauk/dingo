@@ -15,7 +15,9 @@ template <typename T> struct class_factory_test : public testing::Test {};
 TYPED_TEST_SUITE(class_factory_test, container_types);
 
 template <typename T>
-using test_class_factory = detail::constructor_detection<T, /*Assert=*/false>;
+using test_class_factory =
+    detail::constructor_detection<T, detail::list_initialization,
+                                  /*Assert=*/false>;
 
 TEST(class_factory_test, default_constructor) {
     struct A {
