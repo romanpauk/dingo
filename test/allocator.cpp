@@ -8,7 +8,7 @@ namespace dingo {
 
 // Taken from
 // https://howardhinnant.github.io/allocator_boilerplate.html
-template <typename T> class allocator_stats {
+template <typename T> class test_allocator_stats {
   protected:
     static size_t allocated;
 
@@ -16,14 +16,14 @@ template <typename T> class allocator_stats {
     static size_t get_allocated() { return allocated; }
 };
 
-template <typename T> size_t allocator_stats<T>::allocated;
+template <typename T> size_t test_allocator_stats<T>::allocated;
 
-template <typename T> class allocator : public allocator_stats<void> {
+template <typename T> class test_allocator : public test_allocator_stats<void> {
   public:
     using value_type = T;
 
-    allocator() noexcept {}
-    template <typename U> allocator(const allocator<U>&) noexcept {}
+    test_allocator() noexcept {}
+    template <typename U> test_allocator(const test_allocator<U>&) noexcept {}
 
     value_type* allocate(std::size_t n) {
         this->allocated += n * sizeof(value_type);
@@ -37,17 +37,18 @@ template <typename T> class allocator : public allocator_stats<void> {
 };
 
 template <typename T, typename U>
-bool operator==(const allocator<T>&, const allocator<U>&) noexcept {
+bool operator==(const test_allocator<T>&, const test_allocator<U>&) noexcept {
     return true;
 }
 template <typename T, typename U>
-bool operator!=(const allocator<T>& x, const allocator<U>& y) noexcept {
+bool operator!=(const test_allocator<T>& x,
+                const test_allocator<U>& y) noexcept {
     return !(x == y);
 }
 
 using container_types = ::testing::Types<
-    dingo::container<dingo::static_container_traits<>, allocator<char>>,
-    dingo::container<dingo::dynamic_container_traits, allocator<char>>>;
+    dingo::container<dingo::static_container_traits<>, test_allocator<char>>,
+    dingo::container<dingo::dynamic_container_traits, test_allocator<char>>>;
 
 template <typename T> struct allocator_test : public testing::Test {};
 TYPED_TEST_SUITE(allocator_test, container_types);
@@ -91,7 +92,7 @@ TYPED_TEST(allocator_test, construct) {
 TYPED_TEST(allocator_test, user_allocator_unique) {
     using container_type = TypeParam;
 
-    allocator<char> alloc;
+    test_allocator<char> alloc;
 
     // For dynamic containers, std::map allocates in an empty state
     ASSERT_EQ(alloc.get_allocated(), 0);
@@ -107,7 +108,7 @@ TYPED_TEST(allocator_test, user_allocator_unique) {
 TYPED_TEST(allocator_test, user_allocator_shared) {
     using container_type = TypeParam;
 
-    allocator<char> alloc;
+    test_allocator<char> alloc;
 
     // For dynamic containers, std::map allocates in an empty state
     ASSERT_EQ(alloc.get_allocated(), 0);

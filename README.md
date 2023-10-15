@@ -20,7 +20,7 @@ Features Overview:
 - [Runtime-based Resolution](#runtime-based-resolution)
 - [Customizable RTTI](#customizable-rtti)
 - [Container Nesting](#container-nesting)
-- [Static and Dynamic Type Maps](#static-and-dynamic-type-maps)
+- [Static and Dynamic Containers](#static-and-dynamic-containers)
 - [Annotated Types](#annotated-types)
 - [Customizable Allocation](#customizable-allocation)
 
@@ -382,8 +382,17 @@ B b = container.construct<B>();
 For non-RTTI enabled builds, it is possible to parametrize the container with custom RTTI implementation. No library functionality depends on dynamic_cast conversion.
 Two RTTI providers are available: dynamic one based on typeid operator and static one, based on template specializations.
 
-#### Static and Dynamic Type Maps
-Dynamic type maps are implementing mapping from a type (key) to an instance (value), using provided RTTI implementation to represent the key. Static type maps are using template specializations to represent the key without relying on other data structure, providing O(1) access. This can be used in the case when a limited amount of container instances, denoted by a typed tags, exist.
+#### Static and Dynamic Containers
+Static and dynamic container are just differently parametrized containers using container traits.
+
+Container type can be parametrized with a custom memory allocator, RTTI provider and type map implementation. Dynamic containers use standard allocator,
+operator typeid() and type map implemented using standard map. Static containers use template specializations to implement required features, as all types
+that are ever present are always different types, allowing static member variables to be used to store and retrieve required data quickly.
+
+While dynamic containers can be created completely freely, with static containers it is a user's responsibility to use type tag to distinguish the containers. The benefit of static
+containers is a performance gain. The drawback is slightly harder and limited use.
+
+Note that "static" in this context does not mean "compile-time", both container parametrizations are fully runtime-based.
 
 ### Container Nesting
 Containers can form a parent-child hierarchy and resolution will traverse the container chain from child to last parent. Calling register_type() returns an implicitly created child container for the type being registered, allowing a per-type configuration to override a global configuration in the container. Nesting is supported for both dynamic and static type maps based containers.

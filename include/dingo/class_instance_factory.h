@@ -62,12 +62,11 @@ class class_instance_factory : public class_instance_factory_i<Container> {
 
     using storage_traits = class_instance_storage_traits<Storage>;
     // TODO: move this to Data.
-    using ResolveType = decltype(data_traits::get(data_).storage.resolve(
+    using resolve_type = decltype(data_traits::get(data_).storage.resolve(
         std::declval<resolving_context&>,
         std::declval<decltype(data_traits::get(data_).container)&>));
-    using InterfaceType = rebind_type_t<ResolveType, TypeInterface>;
-    class_instance_resolver<typename Container::rtti_type, InterfaceType,
-                            Storage>
+    class_instance_resolver<typename Container::rtti_type,
+                            rebind_type_t<resolve_type, TypeInterface>, Storage>
         resolver_;
 
   public:
@@ -112,5 +111,37 @@ class class_instance_factory : public class_instance_factory_i<Container> {
             context, data_traits::get(data_).container,
             data_traits::get(data_).storage, type);
     }
+
+    void destroy() override {
+        auto allocator = allocator_traits::rebind<class_instance_factory>(
+            get_container().get_allocator());
+        allocator_traits::destroy(allocator, this);
+        allocator_traits::deallocate(allocator, this, 1);
+    }
 };
+
+// This is much faster than unique_ptr + deleter
+template <typename T> struct class_instance_factory_ptr {
+    class_instance_factory_ptr(T* ptr) : ptr_(ptr) {}
+
+    class_instance_factory_ptr(class_instance_factory_ptr<T>&& other) {
+        std::swap(ptr_, other.ptr_);
+    }
+
+    ~class_instance_factory_ptr() {
+        if (ptr_)
+            ptr_->destroy();
+    }
+
+    T& operator*() {
+        assert(ptr_);
+        return *ptr_;
+    }
+
+    T* get() { return ptr_; }
+
+  private:
+    T* ptr_ = nullptr;
+};
+
 } // namespace dingo

@@ -21,5 +21,7 @@ template <typename Container> class class_instance_factory_i {
     virtual void*
     get_pointer(resolving_context&,
                 const typename Container::rtti_type::type_index&) = 0;
+
+    virtual void destroy() = 0;
 };
 } // namespace dingo
