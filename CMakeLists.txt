@@ -83,8 +83,8 @@ target_sources(dingo INTERFACE
     include/dingo/annotated.h
     include/dingo/class_instance_factory.h
     include/dingo/class_instance_factory_i.h
+    include/dingo/class_instance_factory_traits.h
     include/dingo/class_instance_resolver.h
-    include/dingo/class_instance_traits.h
     include/dingo/class_traits.h
     include/dingo/collection_traits.h
     include/dingo/config.h

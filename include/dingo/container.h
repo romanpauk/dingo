@@ -5,7 +5,7 @@
 #include <dingo/allocator.h>
 #include <dingo/annotated.h>
 #include <dingo/class_instance_factory.h>
-#include <dingo/class_instance_traits.h>
+#include <dingo/class_instance_factory_traits.h>
 #include <dingo/collection_traits.h>
 #include <dingo/decay.h>
 #include <dingo/exceptions.h>
@@ -324,8 +324,7 @@ class container : public allocator_base<Allocator> {
         if (factories) {
             if (factories->size() == 1) {
                 auto& factory = factories->front();
-                // TODO: no longer class instance
-                return class_instance_traits<
+                return class_instance_factory_traits<
                     rtti_type,
                     typename annotated_traits<T>::type>::resolve(*factory,
                                                                  context);
@@ -367,7 +366,7 @@ class container : public allocator_base<Allocator> {
             for (auto it = range.first; it != range.second; ++it) {
                 collection_traits<Type>::add(
                     *results,
-                    class_instance_traits<rtti_type, typename Type::value_type>::resolve(*it->second, context));
+                    class_instance_factory_traits<rtti_type, typename Type::value_type>::resolve(*it->second, context));
             }
 
             return *results;

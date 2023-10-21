@@ -4,7 +4,7 @@
 
 using namespace dingo;
 
-TEST(dsl, test_get_type) {
+TEST(type_registration_test, get_type) {
     struct A {};
     using list = type_list<storage<A>, factory<A>, interface<A, A>>;
     using storage_type = detail::get_type_t<storage<void>, list>;
@@ -17,7 +17,7 @@ TEST(dsl, test_get_type) {
     static_assert(std::is_same_v<interface_type, interface<A, A>>);
 }
 
-TEST(dsl, test_type_registration_basic) {
+TEST(type_registration_test, registration_basic) {
     using registration =
         type_registration<storage<int>, interface<double, float>, factory<int>,
                           scope<int>>;
@@ -32,7 +32,7 @@ TEST(dsl, test_type_registration_basic) {
         std::is_same_v<typename registration::scope_type, scope<int>>);
 }
 
-TEST(dsl, test_type_registration_deduction) {
+TEST(type_registration_test, registration_deduction) {
     static_assert(
         std::is_same_v<
             typename type_registration<scope<int>, factory<int>>::storage_type,
