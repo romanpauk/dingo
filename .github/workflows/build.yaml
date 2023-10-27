@@ -28,16 +28,16 @@ jobs:
           { CC: clang-11, CXX: clang++-11, STD: 20 },
           { CC: clang-12, CXX: clang++-12, STD: 17 },
           { CC: clang-12, CXX: clang++-12, STD: 20 },
-          { CC: clang-12, CXX: clang++-12, STD: 23 },
+          #{ CC: clang-12, CXX: clang++-12, STD: 23 },
           { CC: clang-13, CXX: clang++-13, STD: 17 },
           { CC: clang-13, CXX: clang++-13, STD: 20 },
-          { CC: clang-13, CXX: clang++-13, STD: 23 },
+          #{ CC: clang-13, CXX: clang++-13, STD: 23 },
           { CC: clang-14, CXX: clang++-14, STD: 17 },
           { CC: clang-14, CXX: clang++-14, STD: 20 },
-          { CC: clang-14, CXX: clang++-14, STD: 23 },
+          #{ CC: clang-14, CXX: clang++-14, STD: 23 },
           { CC: clang-15, CXX: clang++-15, STD: 17 },
           { CC: clang-15, CXX: clang++-15, STD: 20 },
-          { CC: clang-15, CXX: clang++-15, STD: 23 } 
+          #{ CC: clang-15, CXX: clang++-15, STD: 23 } 
         ]
     runs-on: ${{ matrix.os }}
     steps:

@@ -60,7 +60,7 @@ endif()
 if(DINGO_BENCHMARK_ENABLED)
     FetchContent_Declare(googlebenchmark
         GIT_REPOSITORY https://github.com/google/benchmark.git
-        GIT_TAG main) 
+        GIT_TAG v1.8.3) 
        
     set(BENCHMARK_ENABLE_TESTING off)
     FetchContent_MakeAvailable(googlebenchmark)
@@ -69,7 +69,7 @@ if(DINGO_BENCHMARK_ENABLED)
         set(FRUIT_USES_BOOST False)
         FetchContent_Declare(googlefruit
             GIT_REPOSITORY https://github.com/google/fruit.git
-            GIT_TAG master)
+            GIT_TAG v3.7.1)
 
         FetchContent_MakeAvailable(googlefruit)
     endif()
