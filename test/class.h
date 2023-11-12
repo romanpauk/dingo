@@ -6,6 +6,7 @@ namespace dingo {
 struct IClass {
     virtual ~IClass() {}
     virtual const std::string& GetName() const = 0;
+    virtual size_t tag() const = 0;
 };
 
 struct IClass1 : virtual IClass {
@@ -22,7 +23,8 @@ template <typename TestFn, size_t Counter> struct Class : IClass1, IClass2 {
     Class(const Class& cls) : name_(cls.name_) { ++CopyConstructor; }
     Class(Class&& cls) : name_(std::move(cls.name_)) { ++MoveConstructor; }
 
-    const std::string& GetName() const { return name_; }
+    const std::string& GetName() const override { return name_; }
+    size_t tag() const override { return Counter; }
 
     static size_t Constructor;
     static size_t CopyConstructor;

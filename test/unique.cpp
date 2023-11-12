@@ -20,7 +20,6 @@ TYPED_TEST(unique_test, value) {
 
         {
             container_type container;
-            // container.template register_binding<storage<unique, C>>();
             container.template register_type<scope<unique>, storage<C>>();
             AssertTypeNotConvertible<C, type_list<C*>>(container);
             {
@@ -78,6 +77,17 @@ TYPED_TEST(unique_test, value) {
         ASSERT_EQ(C::Destructor, C::GetTotalInstances());
     }
 }
+
+// TODO: does not compile
+#if 0
+TYPED_TEST(unique_test, value_interface) {
+    using container_type = TypeParam;
+    struct unique_value {};
+    typedef Class<unique_value, __COUNTER__> C;
+    container_type container;
+    container.template register_type<scope<unique>, storage<C>, interface<IClass>>();
+}
+#endif
 
 TYPED_TEST(unique_test, pointer) {
     using container_type = TypeParam;

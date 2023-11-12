@@ -15,6 +15,7 @@ struct static_container_with_dynamic_rtti_traits {
     using type_factory_map_type =
         dingo::static_type_map<rtti_type, Tag, Value, Allocator>;
     using allocator_type = dingo::static_allocator<char, Tag>;
+    using index_definition_type = std::tuple<>;
 };
 
 struct dynamic_container_with_static_rtti_traits {
@@ -27,6 +28,7 @@ struct dynamic_container_with_static_rtti_traits {
     using type_factory_map_type =
         dingo::dynamic_type_map<rtti_type, Value, Allocator>;
     using allocator_type = std::allocator<char>;
+    using index_definition_type = std::tuple<>;
 };
 
 using container_types = ::testing::Types<

@@ -5,6 +5,14 @@
 #include <memory>
 
 namespace dingo {
+template <typename T, typename = void>
+struct has_value_type : std::false_type {};
+template <typename T>
+struct has_value_type<T, typename std::void_t<typename T::value_type>>
+    : std::true_type {};
+template <typename T>
+static constexpr bool has_value_type_v = has_value_type<T>::value;
+
 template <typename T> struct type_traits {
     static const bool is_smart_ptr = false;
     static void* get_address(T& value) { return &value; }

@@ -95,6 +95,10 @@ target_sources(dingo INTERFACE
     include/dingo/factory/callable.h
     include/dingo/factory/constructor.h
     include/dingo/factory/function.h
+    include/dingo/index/array.h
+    include/dingo/index/map.h
+    include/dingo/index/unordered_map.h
+    include/dingo/index.h
     include/dingo/rebind_type.h
     include/dingo/resettable_i.h
     include/dingo/resolving_context.h
@@ -123,6 +127,7 @@ if(DINGO_TESTING_ENABLED)
         test/containers.h
         test/dingo.cpp
         test/external.cpp
+        test/index.cpp
         test/multibindings.cpp
         test/nesting.cpp
         test/shared.cpp
@@ -134,7 +139,7 @@ if(DINGO_TESTING_ENABLED)
     target_link_libraries(dingo_test dingo gtest_main)
     
     target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:${DINGO_WARNINGS_GCC}>)
-    target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:${DINGO_WARNINGS_MSVC}>)
+    target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:${DINGO_WARNINGS_MSVC} /bigobj>)
 
     target_sanitize(DINGO dingo_test)
 endif()
@@ -142,6 +147,7 @@ endif()
 if(DINGO_BENCHMARK_ENABLED)
     add_executable(dingo_benchmark
         benchmark/dingo.cpp
+        benchmark/index.cpp
     )
 
     target_link_libraries(dingo_benchmark 

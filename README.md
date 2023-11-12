@@ -21,6 +21,8 @@ Features Overview:
 - [Customizable RTTI](#customizable-rtti)
 - [Container Nesting](#container-nesting)
 - [Static and Dynamic Containers](#static-and-dynamic-containers)
+- [Multibindings](#multibindings)
+- [Named Resolution](#named-resolution)
 - [Annotated Types](#annotated-types)
 - [Customizable Allocation](#customizable-allocation)
 
@@ -351,6 +353,72 @@ assert(dynamic_cast<A*>(&instance));
 ```
 <!-- } -->
 
+#### Multibindings
+
+Multibindings allow to resolve a collection of types that are resolvable using the same interface. The collection can participate in a resolution of other types. Lambda function can be used to transform the resolved types.
+
+<!-- { include("examples/multibindings.cpp", scope="////") -->
+Example code included from [examples/multibindings.cpp](examples/multibindings.cpp):
+```c++
+struct IProcessor {
+    virtual ~IProcessor() {}
+};
+
+template <size_t N> struct Processor : IProcessor {};
+
+struct container_traits : static_container_traits<void> {
+    using index_definition_type =
+        std::tuple<std::tuple<int, index_type::array<10>>>;
+};
+
+container<container_traits> container;
+// Register multi-bindings collection
+container.template register_type_collection<
+    scope<shared>, storage<std::vector<IProcessor*>>>();
+
+// Register types under the same interface
+container.template register_type<scope<shared>, storage<Processor<0>>,
+                                 interface<IProcessor>>();
+container.template register_type<scope<shared>, storage<Processor<1>>,
+                                 interface<IProcessor>>();
+
+// Resolve the collection
+container.template resolve<std::vector<IProcessor*>>();
+```
+<!-- } -->
+
+#### Named Resolution
+
+Traits used during container construction can specify one or more indexes allowing each type to be indexed under additional user-specified key to the type interface. The index data structure can be overridden using template specialization, with the library providing specializations for std::map, std::unordered_map and std::array.
+
+<!-- { include("examples/index.cpp", scope="////") -->
+Example code included from [examples/index.cpp](examples/index.cpp):
+```c++
+struct IAnimal {
+    virtual ~IAnimal() {}
+};
+
+struct Dog : IAnimal {};
+struct Cat : IAnimal {};
+
+// Declare traits with std::string based index
+struct container_traits : dynamic_container_traits {
+    using index_definition_type =
+        std::tuple<std::tuple<std::string, index_type::unordered_map>>;
+};
+
+container<container_traits> container;
+container.template register_indexed_type<
+    scope<shared>, storage<Dog>, interface<IAnimal>>(std::string("dog"));
+
+container.template register_indexed_type<
+    scope<shared>, storage<Cat>, interface<IAnimal>>(std::string("cat"));
+
+// Resolve an instance of a dog
+auto dog = container.template resolve<IAnimal>(std::string("dog"));
+```
+<!-- } -->
+
 #### Annotated Types
 
 It is possible to register different implementations with the same interface, disambiguating the registration with an user-provided tag. See [test/annotated.cpp](test/annotated.cpp).
@@ -394,7 +462,7 @@ containers is a performance gain. The drawback is slightly harder and limited us
 
 Note that "static" in this context does not mean "compile-time", both container parametrizations are fully runtime-based.
 
-### Container Nesting
+#### Container Nesting
 Containers can form a parent-child hierarchy and resolution will traverse the container chain from child to last parent. Calling register_type() returns an implicitly created child container for the type being registered, allowing a per-type configuration to override a global configuration in the container. Nesting is supported for both dynamic and static type maps based containers.
 
 <!-- { include("examples/nesting.cpp", scope="////") -->
@@ -431,7 +499,7 @@ assert(nested_container.resolve<B>().value == 1);
 
 See [test/nesting.cpp](test/nesting.cpp) for details.
 
-### Customizable Allocation
+#### Customizable Allocation
 To customize memory management, container constructor can take an optional user supplied allocator that is used to allocate all memory required for container operations.
 Note that resolved instances do not use this allocator as the container does not have to own instances it constructs.
 

@@ -18,6 +18,10 @@ struct dynamic_type_map {
         return {pb.first->second, pb.second};
     }
 
+    template <typename Key> bool erase() {
+        return values_.erase(RTTI::template get_type_index<Key>());
+    }
+
     template <typename Key> Value* get() {
         auto it = values_.find(RTTI::template get_type_index<Key>());
         return it != values_.end() ? &it->second : nullptr;
@@ -30,13 +34,16 @@ struct dynamic_type_map {
         return values_.begin()->second;
     }
 
+    auto begin() { return values_.begin(); }
+    auto end() { return values_.end(); }
+
   private:
-    using map_allocator_type =
+    using allocator_type =
         typename std::allocator_traits<Allocator>::template rebind_alloc<
             std::pair<const typename RTTI::type_index, Value>>;
 
     std::map<typename RTTI::type_index, Value,
-             std::less<typename RTTI::type_index>, map_allocator_type>
+             std::less<typename RTTI::type_index>, allocator_type>
         values_;
     // std::unordered_map< typename RTTI::type_index, Value, typename
     // RTTI::type_index::hasher, std::equal_to< typename RTTI::type_index >,
@@ -64,6 +71,7 @@ template <typename RTTI, typename Tag, typename Value, typename Allocator>
 struct static_type_map {
     template <typename Key>
     using node_factory = static_type_map_node_factory<Tag, Key, Value>;
+    using node_type = static_type_map_node<Tag, Value>;
 
     static_type_map(Allocator&) : nodes_(), size_() {}
 
@@ -97,6 +105,17 @@ struct static_type_map {
         return {*node.value, false};
     }
 
+    template <typename Key> bool erase() {
+        auto& node = node_factory<Key>::node;
+        if (!node.value)
+            return false;
+        node.value.reset();
+#if !defined(NDEBUG)
+        node.owner = nullptr;
+#endif
+        return true;
+    }
+
     template <typename Key> Value* get() {
         auto& node = node_factory<Key>::node;
         assert(node.value ? node.owner == this : node.owner == nullptr);
@@ -110,8 +129,43 @@ struct static_type_map {
         return *nodes_->value;
     }
 
+    struct iterator {
+        iterator(node_type* node) : node_(node) {}
+
+        iterator& operator++() {
+            assert(node_);
+            node_ = node_->next;
+            return *this;
+        }
+
+        iterator operator++(int) {
+            assert(node_);
+            auto n = node_;
+            node_ = node_->next;
+            return n;
+        }
+
+        bool operator==(iterator other) const { return node_ == other.node_; }
+        bool operator!=(iterator other) const { return node_ != other.node_; }
+
+        std::pair<void*, Value&> operator*() {
+            assert(node_);
+            return {nullptr, *node_->value};
+        }
+
+      private:
+        node_type* node_;
+    };
+
+    iterator begin() {
+        assert(nodes_);
+        return nodes_;
+    }
+
+    iterator end() { return nullptr; }
+
   private:
-    static_type_map_node<Tag, Value>* nodes_;
+    node_type* nodes_;
     size_t size_;
 };
 } // namespace dingo

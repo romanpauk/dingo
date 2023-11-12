@@ -13,6 +13,8 @@ struct type_ambiguous_exception : exception {};
 struct type_recursion_exception : exception {};
 struct type_not_constructed_exception : exception {};
 struct type_already_registered_exception : exception {};
+struct type_index_already_registered_exception : exception {};
+struct type_index_out_of_range_exception : exception {};
 struct type_overflow_exception : exception {};
 
 struct virtual_pointer_exception : exception {};
