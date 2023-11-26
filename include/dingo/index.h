@@ -48,7 +48,6 @@ struct index_tag<Arg, std::tuple<Args...>>
     : index_tag_impl<Arg, 0, std::tuple<Args...>> {};
 #endif
 
-// TODO: index_collection crudely assumes the Value is pointer
 template <typename Key, typename Value, typename Allocator, typename Tag>
 struct index_collection;
 
@@ -81,7 +80,8 @@ template <typename Factory, typename Allocator, typename... Args> struct index {
 
         index_ptr() = default;
         index_ptr(const index_ptr<T>&) = delete;
-        index_ptr(index_ptr<T>&& other) : allocator_base<Allocator>(other) {
+        index_ptr(index_ptr<T>&& other)
+            : allocator_base<Allocator>(std::move(other)) {
             std::swap(index_, other.index_);
         }
 

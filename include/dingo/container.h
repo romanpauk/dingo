@@ -13,6 +13,7 @@
 #include <dingo/index.h>
 #include <dingo/resolving_context.h>
 #include <dingo/rtti.h>
+#include <dingo/static_allocator.h>
 #include <dingo/storage/shared_cyclical.h>
 #include <dingo/storage/unique.h>
 #include <dingo/type_map.h>
@@ -25,42 +26,6 @@
 #include <variant>
 
 namespace dingo {
-
-template <typename T, typename Tag> class static_allocator {
-  public:
-    using value_type = T;
-
-    static_allocator() noexcept {}
-    template <typename U>
-    static_allocator(const static_allocator<U, Tag>&) noexcept {}
-
-    value_type* allocate(std::size_t n) {
-        (void)n;
-        assert(n == 1);
-        if (used_)
-            return nullptr;
-        used_ = true;
-        return reinterpret_cast<value_type*>(&storage_);
-    }
-
-    void deallocate(value_type* p, std::size_t n) noexcept {
-        (void)p;
-        (void)n;
-        assert(used_);
-        assert(n == 1);
-        assert(p == reinterpret_cast<value_type*>(&storage_));
-        used_ = false;
-    }
-
-  private:
-    static std::aligned_storage_t<sizeof(T), alignof(T)> storage_;
-    static bool used_;
-};
-
-template <typename T, typename Tag> bool static_allocator<T, Tag>::used_;
-template <typename T, typename Tag>
-std::aligned_storage_t<sizeof(T), alignof(T)>
-    static_allocator<T, Tag>::storage_;
 
 struct dynamic_container_traits {
     template <typename> using rebind_t = dynamic_container_traits;
@@ -393,14 +358,15 @@ class container : public allocator_base<Allocator> {
                 if (factory) {
                     return class_instance_factory_traits<
                         rtti_type,
-                        typename annotated_traits<T>::type>::resolve(*factory,
+                        typename annotated_traits<T>::type>::resolve(**factory,
                                                                      context);
                 }
             }
         } else if constexpr (!std::is_same_v<void*, decltype(parent_)>) {
-            if (parent_)
+            if (parent_) {
                 return parent_->template resolve<T, RemoveRvalueReferences>(
-                    context);
+                    context, std::forward<IdType>(id));
+            }
         }
 
         throw type_not_found_exception();

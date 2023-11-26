@@ -3,6 +3,7 @@
 #include <dingo/config.h>
 
 #include <dingo/index.h>
+#include <dingo/static_allocator.h>
 
 #include <map>
 
@@ -13,17 +14,18 @@ struct map {};
 
 template <typename Key, typename Value, typename Allocator>
 struct index_collection<Key, Value, Allocator, index_type::map> {
+    static_assert(!is_static_allocator_v<Allocator>);
+
     index_collection(Allocator& allocator) : map_(allocator) {}
 
-    bool emplace(Key&& key, Value& value) {
-        auto pb =
-            map_.emplace(std::forward<Key>(key), std::forward<Value>(value));
+    bool emplace(Key&& key, Value value) {
+        auto pb = map_.emplace(std::move(key), value);
         return pb.second;
     }
 
-    Value find(Key& key) const {
+    Value* find(const Key& key) {
         auto it = map_.find(key);
-        return it != map_.end() ? it->second : nullptr;
+        return it != map_.end() ? &it->second : nullptr;
     }
 
   private:

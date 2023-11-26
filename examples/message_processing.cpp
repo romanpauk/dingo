@@ -18,7 +18,7 @@ struct MessageWrapper {
         messages_ = std::forward<T>(message);
     }
 
-    int id() const { return messages_.index(); }
+    size_t id() const { return messages_.index(); }
     const MessageA& GetA() const { return std::get<MessageA>(messages_); }
     const MessageB& GetB() const { return std::get<MessageB>(messages_); }
 
@@ -47,11 +47,11 @@ struct ProcessorB : IProcessor {
 int main() {
     using namespace dingo;
 
-    // Define traits type with a single index using int as a key,
+    // Define traits type with a single index using size_t as a key,
     // backed by a std::array of size 10
     struct container_traits : static_container_traits<void> {
         using index_definition_type =
-            std::tuple<std::tuple<int, index_type::array<10>>>;
+            std::tuple<std::tuple<size_t, index_type::array<10>>>;
     };
 
     container<container_traits> container;
@@ -59,10 +59,10 @@ int main() {
     // Register processors into the container, indexed by the type they process
     container.register_indexed_type<scope<shared>,
                                     storage<std::shared_ptr<ProcessorA>>,
-                                    interface<IProcessor>>(1);
+                                    interface<IProcessor>>(size_t(1));
     container.register_indexed_type<scope<unique>,
                                     storage<std::shared_ptr<ProcessorB>>,
-                                    interface<IProcessor>>(2);
+                                    interface<IProcessor>>(size_t(2));
 
     // Register repositories used by the processors
     container.register_type<scope<shared>, storage<RepositoryA>>();

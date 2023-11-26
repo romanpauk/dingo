@@ -17,7 +17,7 @@ struct MessageWrapper {
         messages_ = std::forward<T>(message);
     }
 
-    int id() const { return (int)messages_.index(); }
+    size_t id() const { return messages_.index(); }
     const Message& GetMessage() const { return std::get<Message>(messages_); }
 
   private:
@@ -45,25 +45,11 @@ static void index_value_shared(benchmark::State& state) {
     using namespace dingo;
     Container container;
     container.template register_indexed_type<
-        scope<shared>, storage<Processor<>>, interface<IProcessor>>(1);
-
-    // TODO: can't register the same type multiple times, as storagae type is
-    // used as a key
-    container.template register_indexed_type<
-        scope<shared>, storage<Processor<int>>, interface<IProcessor>>(2);
-    container.template register_indexed_type<
-        scope<shared>, storage<Processor<float>>, interface<IProcessor>>(3);
-    container.template register_indexed_type<
-        scope<shared>, storage<Processor<double>>, interface<IProcessor>>(4);
-    container.template register_indexed_type<
-        scope<shared>, storage<Processor<int, int>>, interface<IProcessor>>(5);
-    container.template register_indexed_type<scope<shared>,
-                                             storage<Processor<int, int, int>>,
-                                             interface<IProcessor>>(6);
+        scope<shared>, storage<Processor<>>, interface<IProcessor>>(size_t(1));
 
     MessageWrapper msg(Message{1});
     for (auto _ : state) {
-        container.template resolve<IProcessor*>(1)->process(msg);
+        container.template resolve<IProcessor*>(size_t(1))->process(msg);
     }
 
     state.SetBytesProcessed(state.iterations());
@@ -75,30 +61,14 @@ static void index_ptr_unique(benchmark::State& state) {
     Container container;
     container.template register_indexed_type<
         scope<unique>, storage<std::shared_ptr<Processor<>>>,
-        interface<IProcessor>>(1);
+        interface<IProcessor>>(size_t(1));
 
-    // TODO: can't register the same type multiple times, as storagae type is
-    // used as a key
-    container.template register_indexed_type<
-        scope<unique>, storage<std::shared_ptr<Processor<int>>>,
-        interface<IProcessor>>(2);
-    container.template register_indexed_type<
-        scope<unique>, storage<std::shared_ptr<Processor<float>>>,
-        interface<IProcessor>>(3);
-    container.template register_indexed_type<
-        scope<unique>, storage<std::shared_ptr<Processor<double>>>,
-        interface<IProcessor>>(4);
-    container.template register_indexed_type<
-        scope<unique>, storage<std::shared_ptr<Processor<int, int>>>,
-        interface<IProcessor>>(5);
-    container.template register_indexed_type<
-        scope<unique>, storage<std::shared_ptr<Processor<int, int, int>>>,
-        interface<IProcessor>>(6);
-
+    // TODO: can't register the same type multiple times under different index,
+    // as storage type is used as a key
     MessageWrapper msg(Message{1});
     for (auto _ : state) {
-        container.template resolve<std::shared_ptr<IProcessor>>(1)->process(
-            msg);
+        container.template resolve<std::shared_ptr<IProcessor>>(size_t(1))
+            ->process(msg);
     }
 
     state.SetBytesProcessed(state.iterations());
@@ -110,30 +80,12 @@ static void index_ptr_shared(benchmark::State& state) {
     Container container;
     container.template register_indexed_type<
         scope<shared>, storage<std::shared_ptr<Processor<>>>,
-        interface<IProcessor>>(1);
-
-    // TODO: can't register the same type multiple times, as storage type is
-    // used as a key
-    container.template register_indexed_type<
-        scope<shared>, storage<std::shared_ptr<Processor<int>>>,
-        interface<IProcessor>>(2);
-    container.template register_indexed_type<
-        scope<shared>, storage<std::shared_ptr<Processor<float>>>,
-        interface<IProcessor>>(3);
-    container.template register_indexed_type<
-        scope<shared>, storage<std::shared_ptr<Processor<double>>>,
-        interface<IProcessor>>(4);
-    container.template register_indexed_type<
-        scope<shared>, storage<std::shared_ptr<Processor<int, int>>>,
-        interface<IProcessor>>(5);
-    container.template register_indexed_type<
-        scope<shared>, storage<std::shared_ptr<Processor<int, int, int>>>,
-        interface<IProcessor>>(6);
+        interface<IProcessor>>(size_t(1));
 
     MessageWrapper msg(Message{1});
     for (auto _ : state) {
-        container.template resolve<std::shared_ptr<IProcessor>&>(1)->process(
-            msg);
+        container.template resolve<std::shared_ptr<IProcessor>&>(size_t(1))
+            ->process(msg);
     }
 
     state.SetBytesProcessed(state.iterations());
@@ -141,7 +93,7 @@ static void index_ptr_shared(benchmark::State& state) {
 
 template <typename IndexType>
 struct static_container_traits : dingo::static_container_traits<void> {
-    using index_definition_type = std::tuple<std::tuple<int, IndexType>>;
+    using index_definition_type = std::tuple<std::tuple<size_t, IndexType>>;
 };
 
 BENCHMARK_TEMPLATE(
@@ -155,7 +107,7 @@ BENCHMARK_TEMPLATE(
 
 template <typename IndexType>
 struct dynamic_container_traits : dingo::dynamic_container_traits {
-    using index_definition_type = std::tuple<std::tuple<int, IndexType>>;
+    using index_definition_type = std::tuple<std::tuple<size_t, IndexType>>;
 };
 
 BENCHMARK_TEMPLATE(

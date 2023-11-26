@@ -13,10 +13,13 @@ template <size_t N> struct array {};
 
 template <typename Key, typename Value, typename Allocator, size_t N>
 struct index_collection<Key, Value, Allocator, index_type::array<N>> {
+    static_assert(std::is_integral_v<Key> && std::is_unsigned_v<Key>);
+
     index_collection(Allocator&) {}
 
-    bool emplace(Key&& key, Value& value) {
-        check_key_in_range(key);
+    bool emplace(Key key, Value value) {
+        if (key >= array_.size())
+            throw type_index_out_of_range_exception();
         if (!array_[key]) {
             array_[key] = value;
             return true;
@@ -24,18 +27,13 @@ struct index_collection<Key, Value, Allocator, index_type::array<N>> {
         return false;
     }
 
-    Value find(Key& key) const {
-        check_key_in_range(key);
-        auto& value = array_[key];
-        return value;
+    Value* find(Key key) {
+        if (key < array_.size() && array_[key])
+            return &array_[key];
+        return nullptr;
     }
 
   private:
-    void check_key_in_range(const Key& key) const {
-        if (key >= array_.size())
-            throw type_index_out_of_range_exception();
-    }
-
     std::array<Value, N> array_{};
 };
 

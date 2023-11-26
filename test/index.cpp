@@ -83,6 +83,10 @@ TYPED_TEST(index_test, register_indexed_type_unique) {
     container.template register_indexed_type<
         scope<unique>, storage<std::shared_ptr<Class<tag, 1>>>,
         interface<IClass>>(value<index_type>(1));
+    ASSERT_THROW((container.template register_indexed_type<
+                     scope<unique>, storage<std::shared_ptr<Class<tag, 1>>>,
+                     interface<IClass>>(value<index_type>(1))),
+                 type_already_registered_exception);
 
     ASSERT_EQ(
         container
@@ -94,6 +98,9 @@ TYPED_TEST(index_test, register_indexed_type_unique) {
             .template resolve<std::shared_ptr<IClass>>(value<index_type>(1))
             ->tag(),
         1);
+    ASSERT_THROW(container.template resolve<std::shared_ptr<IClass>>(
+                     value<index_type>(-1)),
+                 type_not_found_exception);
 }
 
 TYPED_TEST(index_test, register_indexed_type_shared) {
@@ -108,11 +115,17 @@ TYPED_TEST(index_test, register_indexed_type_shared) {
     container.template register_indexed_type<
         scope<shared>, storage<std::shared_ptr<Class<tag, 1>>>,
         interface<IClass>>(value<index_type>(1));
+    ASSERT_THROW((container.template register_indexed_type<
+                     scope<shared>, storage<std::shared_ptr<Class<tag, 1>>>,
+                     interface<IClass>>(value<index_type>(1))),
+                 type_already_registered_exception);
 
     ASSERT_EQ(container.template resolve<IClass&>(value<index_type>(0)).tag(),
               0);
     ASSERT_EQ(container.template resolve<IClass&>(value<index_type>(1)).tag(),
               1);
+    ASSERT_THROW(container.template resolve<IClass&>(value<index_type>(-1)),
+                 type_not_found_exception);
 }
 
 } // namespace dingo
