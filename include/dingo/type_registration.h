@@ -1,3 +1,10 @@
+//
+// This file is part of dingo project <https://github.com/romanpauk/dingo>
+//
+// See LICENSE for license and copyright information
+// SPDX-License-Identifier: MIT
+//
+
 // #include <dingo/config.h>
 
 #include <dingo/factory/constructor.h>

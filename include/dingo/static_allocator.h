@@ -1,3 +1,10 @@
+//
+// This file is part of dingo project <https://github.com/romanpauk/dingo>
+//
+// See LICENSE for license and copyright information
+// SPDX-License-Identifier: MIT
+//
+
 #pragma once
 
 #include <dingo/config.h>
@@ -43,12 +50,14 @@ std::aligned_storage_t<sizeof(T), alignof(T)>
     static_allocator<T, Tag>::storage_;
 
 template <typename Allocator>
-struct is_static_allocator: std::bool_constant< false > {};
+struct is_static_allocator : std::bool_constant<false> {};
 
 template <typename T, typename Tag>
-struct is_static_allocator<static_allocator<T, Tag>>: std::bool_constant< true > {};
+struct is_static_allocator<static_allocator<T, Tag>>
+    : std::bool_constant<true> {};
 
-template< typename Allocator > static constexpr bool is_static_allocator_v =
+template <typename Allocator>
+static constexpr bool is_static_allocator_v =
     is_static_allocator<Allocator>::value;
 
-}
+} // namespace dingo
