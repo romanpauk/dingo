@@ -20,4 +20,15 @@ void AssertTypeNotConvertible(Container& container) {
 template <class T> void AssertClass(T&& cls) {
     ASSERT_EQ(cls.GetName(), "Class");
 }
+
+template <class T> void AssertClass(T* cls) { AssertClass(*cls); }
+
+template <class T> void AssertClass(std::unique_ptr<T>&& cls) {
+    AssertClass(*cls);
+}
+
+template <class T> void AssertClass(std::shared_ptr<T>&& cls) {
+    AssertClass(*cls);
+}
+
 } // namespace dingo

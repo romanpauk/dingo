@@ -34,10 +34,15 @@
 
 namespace dingo {
 
+struct none_t {};
+template <typename T> struct is_none : std::bool_constant<false> {};
+template <> struct is_none<none_t> : std::bool_constant<true> {};
+template <typename T> static constexpr auto is_none_v = is_none<T>::value;
+
 struct dynamic_container_traits {
     template <typename> using rebind_t = dynamic_container_traits;
 
-    using tag_type = void;
+    using tag_type = none_t;
     using rtti_type = dynamic_rtti;
     template <typename Value, typename Allocator>
     using type_factory_map_type = dynamic_type_map<rtti_type, Value, Allocator>;
@@ -57,18 +62,14 @@ template <typename Tag = void> struct static_container_traits {
     using index_definition_type = std::tuple<>;
 };
 
+// TODO: could this use is_none_v?
 template <typename Traits>
 static constexpr bool is_tagged_container_v =
     !std::is_same_v<typename Traits::template rebind_t<
                         type_list<typename Traits::tag_type, void>>,
                     Traits>;
 
-struct none_t {};
-template <typename T> struct is_none : std::bool_constant<false> {};
-template <> struct is_none<none_t> : std::bool_constant<true> {};
-template <typename T> static constexpr auto is_none_v = is_none<T>::value;
-
-// TODO wrt. multibindinds, is this like map/multimap?
+// TODO wrt. multi-bindings, is this like map/multimap?
 template <typename ContainerTraits = dynamic_container_traits,
           typename Allocator = typename ContainerTraits::allocator_type,
           typename ParentContainer = void>
@@ -235,6 +236,7 @@ class container : public allocator_base<Allocator> {
                             typename registration::storage_type::type,
                             typename registration::factory_type::type,
                             typename registration::conversions_type::type>;
+
         using class_instance_container_type =
             typename container_type::template rebind_t<
                 typename ContainerTraits::template rebind_t<

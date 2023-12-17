@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
+#include <dingo/arena_allocator.h>
 #include <dingo/container.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
@@ -13,63 +14,6 @@
 #include <benchmark/benchmark.h>
 
 BENCHMARK_MAIN();
-
-struct arena {
-    arena(char* buffer, size_t size)
-        : buffer_(buffer), end_(buffer_ + size), current_(buffer_) {}
-
-    template <typename T> T* allocate(size_t n) {
-        auto ptr = (char*)((uintptr_t)(current_ + alignof(T)) & ~alignof(T));
-        if (ptr + n * sizeof(T) < end_) {
-            current_ = ptr + n * sizeof(T);
-            return reinterpret_cast<T*>(ptr);
-        }
-
-        throw std::bad_alloc();
-    }
-
-    template <typename T> void deallocate(T*, size_t) {}
-
-  private:
-    char* buffer_;
-    char* end_;
-    char* current_;
-};
-
-template <typename T> class arena_allocator {
-    template <typename U> friend class arena_allocator;
-
-  public:
-    using value_type = T;
-
-    arena_allocator(arena* arena) noexcept : arena_(arena) {}
-
-    template <typename U>
-    arena_allocator(const arena_allocator<U>& other) noexcept
-        : arena_(other.arena_) {}
-
-    value_type* allocate(std::size_t n) {
-        return reinterpret_cast<value_type*>(arena_->allocate<value_type>(n));
-    }
-
-    void deallocate(value_type* p, std::size_t n) noexcept {
-        arena_->deallocate(p, n);
-    }
-
-  private:
-    arena* arena_;
-};
-
-template <typename T, typename U>
-bool operator==(const arena_allocator<T>& lhs,
-                const arena_allocator<U>& rhs) noexcept {
-    return lhs.arena_ == rhs.arena_;
-}
-template <typename T, typename U>
-bool operator!=(const arena_allocator<T>& lhs,
-                const arena_allocator<U>& rhs) noexcept {
-    return !(lhs == rhs);
-}
 
 namespace {
 int ClassCounter = 0;
@@ -195,10 +139,9 @@ static void register_type_10(benchmark::State& state) {
 template <typename Container>
 static void register_type_arena(benchmark::State& state) {
     using namespace dingo;
-    std::unique_ptr<char[]> buffer(new char[1024]);
+    arena<1024> arena;
     for (auto _ : state) {
-        arena arena(buffer.get(), 1024);
-        arena_allocator<char> allocator(&arena);
+        arena_allocator<char> allocator(arena);
         Container container(allocator);
         container.template register_type<scope<unique>, storage<Class<0>>>();
     }
@@ -209,10 +152,9 @@ static void register_type_arena(benchmark::State& state) {
 template <typename Container>
 static void register_type_arena_10(benchmark::State& state) {
     using namespace dingo;
-    std::unique_ptr<char[]> buffer(new char[1 << 20]);
     for (auto _ : state) {
-        arena arena(buffer.get(), 1 << 20);
-        arena_allocator<char> allocator(&arena);
+        arena<8192> arena;
+        arena_allocator<char> allocator(arena);
         Container container(allocator);
         container.template register_type<scope<unique>, storage<Class<0>>>();
         container.template register_type<scope<unique>, storage<Class<1>>>();
@@ -257,9 +199,9 @@ BENCHMARK_TEMPLATE(register_type,
 BENCHMARK_TEMPLATE(register_type,
                    dingo::container<dingo::dynamic_container_traits>)
     ->UseRealTime();
-BENCHMARK_TEMPLATE(
-    register_type_arena,
-    dingo::container<dingo::dynamic_container_traits, arena_allocator<char>>)
+BENCHMARK_TEMPLATE(register_type_arena,
+                   dingo::container<dingo::dynamic_container_traits,
+                                    dingo::arena_allocator<char>>)
     ->UseRealTime();
 
 BENCHMARK_TEMPLATE(register_type_10,
@@ -269,9 +211,9 @@ BENCHMARK_TEMPLATE(register_type_10,
                    dingo::container<dingo::dynamic_container_traits>)
     ->UseRealTime();
 
-BENCHMARK_TEMPLATE(
-    register_type_arena_10,
-    dingo::container<dingo::dynamic_container_traits, arena_allocator<char>>)
+BENCHMARK_TEMPLATE(register_type_arena_10,
+                   dingo::container<dingo::dynamic_container_traits,
+                                    dingo::arena_allocator<char>>)
     ->UseRealTime();
 
 } // namespace

@@ -33,6 +33,7 @@ TYPED_TEST(external_test, value) {
         AssertClass(*container.template resolve<C*>());
         AssertClass(container.template resolve<C&>());
         AssertClass(container.template resolve<IClass&>());
+        AssertClass(container.template resolve<IClass*>());
     }
 }
 
@@ -52,6 +53,7 @@ TYPED_TEST(external_test, ref) {
         AssertClass(*container.template resolve<C*>());
         AssertClass(container.template resolve<C&>());
         AssertClass(container.template resolve<IClass&>());
+        AssertClass(container.template resolve<IClass*>());
     }
 }
 
@@ -71,6 +73,7 @@ TYPED_TEST(external_test, ptr) {
         AssertClass(*container.template resolve<C*>());
         AssertClass(container.template resolve<C&>());
         AssertClass(container.template resolve<IClass&>());
+        AssertClass(container.template resolve<IClass*>());
     }
 }
 
@@ -91,6 +94,7 @@ TYPED_TEST(external_test, shared_ptr) {
         AssertClass(*container.template resolve<std::shared_ptr<C>>());
         AssertClass(*container.template resolve<std::shared_ptr<C>&>());
         AssertClass(container.template resolve<IClass&>());
+        AssertClass(container.template resolve<IClass*>());
         AssertClass(*container.template resolve<std::shared_ptr<IClass>>());
     }
 }
@@ -111,8 +115,8 @@ TYPED_TEST(external_test, shared_ptr_ref) {
         container.template resolve<C*>();
         container.template resolve<std::shared_ptr<C>>();
         container.template resolve<std::shared_ptr<C>&>();
-
-        // container.resolve< IClass& >();
+        container.template resolve<std::shared_ptr<IClass>>();
+        container.template resolve<IClass&>();
     }
 }
 
@@ -126,10 +130,13 @@ TYPED_TEST(external_test, unique_ptr_ref) {
     {
         container_type container;
         container.template register_type<scope<external>,
-                                         storage<std::unique_ptr<C>&>>(c);
+                                         storage<std::unique_ptr<C>&>
+                                         // interface<C, IClass> // TODO
+                                         >(c);
         container.template resolve<C&>();
         container.template resolve<C*>();
         container.template resolve<std::unique_ptr<C>&>();
+        // container.template resolve<IClass&>();
     }
 }
 
@@ -142,12 +149,14 @@ TYPED_TEST(external_test, unique_ptr_move) {
 
     {
         container_type container;
-        container.template register_type<scope<external>,
-                                         storage<std::unique_ptr<C>>>(
-            std::move(c));
+        container
+            .template register_type<scope<external>, storage<std::unique_ptr<C>>
+                                    // , interface<C, IClass> // TODO
+                                    >(std::move(c));
         container.template resolve<C&>();
         container.template resolve<C*>();
         container.template resolve<std::unique_ptr<C>&>();
+        // container.template resolve<IClass&>();
     }
 }
 

@@ -85,18 +85,7 @@ TYPED_TEST(unique_test, value) {
     }
 }
 
-// TODO: does not compile
-#if 0
-TYPED_TEST(unique_test, value_interface) {
-    using container_type = TypeParam;
-    struct unique_value {};
-    typedef Class<unique_value, __COUNTER__> C;
-    container_type container;
-    container.template register_type<scope<unique>, storage<C>, interface<IClass>>();
-}
-#endif
-
-TYPED_TEST(unique_test, pointer) {
+TYPED_TEST(unique_test, ptr) {
     using container_type = TypeParam;
 
     struct unique_pointer {};
@@ -141,17 +130,51 @@ TYPED_TEST(unique_test, pointer) {
     }
 }
 
+TYPED_TEST(unique_test, ptr_interface) {
+    using container_type = TypeParam;
+
+    struct unique_ptr {};
+    typedef Class<unique_ptr, __COUNTER__> C;
+
+    container_type container;
+
+    container.template register_type<scope<unique>, storage<C*>,
+                                     interface<IClass, IClass2>>();
+
+    AssertClass(std::unique_ptr<IClass>(container.template resolve<IClass*>()));
+    AssertClass(
+        std::unique_ptr<IClass2>(container.template resolve<IClass2*>()));
+
+    AssertClass(container.template resolve<std::unique_ptr<IClass>>());
+    AssertClass(container.template resolve<std::shared_ptr<IClass>>());
+}
+
+TYPED_TEST(unique_test, unique_ptr_interface) {
+    using container_type = TypeParam;
+
+    struct unique_ptr {};
+    typedef Class<unique_ptr, __COUNTER__> C;
+
+    container_type container;
+
+    container.template register_type<scope<unique>, storage<std::unique_ptr<C>>,
+                                     interface<IClass, IClass2>>();
+
+    AssertClass(container.template resolve<std::unique_ptr<IClass>>());
+    AssertClass(container.template resolve<std::unique_ptr<IClass2>>());
+    AssertClass(container.template resolve<std::shared_ptr<IClass>>());
+}
+
 TYPED_TEST(unique_test, ambiguous_resolve) {
     struct A {
-        A(int) : index(0) {}
-        A(float) : index(1) {}
-        A(int, float) : index(2) {}
-        A(float, int) : index(3) {}
+        A() : index(0) {}
+        A(int) : index(1) {}
+        A(float) : index(2) {}
+        A(int, float) : index(3) {}
+        A(float, int) : index(4) {}
 
         int index;
     };
-
-    using container_type = TypeParam;
 
     using container_type = TypeParam;
     container_type container;
@@ -161,8 +184,18 @@ TYPED_TEST(unique_test, ambiguous_resolve) {
     container.template register_type<scope<unique>, storage<float>>();
     container.template register_type<scope<unique>, storage<int>>();
 
-    auto a = container.template construct<A, constructor<A, float, int>>();
-    ASSERT_EQ(a.index, 3);
+    ASSERT_EQ((container.template construct<A, constructor<A>>().index), 0);
+    ASSERT_EQ((container.template construct<A, constructor<A()>>().index), 0);
+    ASSERT_EQ((container.template construct<A, constructor<A(int)>>().index),
+              1);
+    ASSERT_EQ((container.template construct<A, constructor<A(float)>>().index),
+              2);
+    ASSERT_EQ(
+        (container.template construct<A, constructor<A, int, float>>().index),
+        3);
+    ASSERT_EQ(
+        (container.template construct<A, constructor<A, float, int>>().index),
+        4);
 }
 
 } // namespace dingo

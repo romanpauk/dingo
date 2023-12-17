@@ -216,7 +216,10 @@ struct shared_cyclical_constructible : constructible_i {
                                   Container* container)
         : instance_(instance), context_(context), container_(container) {}
 
-    void construct() override { instance_->construct(*context_, *container_); }
+    void construct() override {
+        if constexpr (!std::is_same_v<void, Instance>)
+            instance_->construct(*context_, *container_);
+    }
 
   private:
     Instance* instance_;
@@ -228,7 +231,10 @@ template <typename Type, typename Factory, typename Conversions>
 class storage<shared_cyclical, Type, Factory, Conversions>
     : public resettable_i {
     storage_instance<shared_cyclical, Type, Factory> instance_;
-    std::aligned_storage_t<sizeof(void*) * 4> constructible_;
+
+    std::aligned_storage_t<sizeof(
+        shared_cyclical_constructible<void, void, void>)>
+        constructible_;
 
   public:
     template <typename... Args>

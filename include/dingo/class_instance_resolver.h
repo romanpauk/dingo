@@ -40,6 +40,17 @@ template <typename T> class class_instance_wrapper {
     T instance_;
 };
 
+/*
+template <typename T, typename InterfaceT > class class_instance_wrapper_traits
+{ using type = InterfaceT*;
+};
+
+template <typename T, typename InterfaceT > class class_instance_wrapper_traits<
+std::shared_ptr<T>, std::shared_ptr<InterfaceT>> { using type =
+std::shared_ptr<InterfaceT>;
+};
+*/
+
 template <typename T> struct class_recursion_guard_base {
     static bool visited_;
 };
@@ -103,8 +114,10 @@ struct class_instance_resolver : public resettable_i {
 
         class_instance_reset<decay_t<typename Storage::type>> storage_reset(
             context, this);
+
+        // TODO: allocate the converted instance from resolver, not context
         instance_.emplace(storage.resolve(context, container));
-        return convert_type<RTTI>(Conversions{}, type,
+        return convert_type<RTTI>(context, Conversions{}, type,
                                   instance_->get_address());
     }
 
@@ -136,7 +149,7 @@ struct class_instance_resolver<RTTI, TypeInterface, Storage, true>
             context.decrement();
         }
 
-        return convert_type<RTTI>(Conversions{}, type,
+        return convert_type<RTTI>(context, Conversions{}, type,
                                   instance_->get_address());
     }
 

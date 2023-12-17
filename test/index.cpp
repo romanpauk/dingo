@@ -58,12 +58,10 @@ template <typename Container> struct get_index_type {
 template <typename Container>
 using get_index_type_t = typename get_index_type<Container>::type;
 
-template <typename T> static T value(size_t);
-template <> int value<int>(size_t i) { return (int)i; }
-template <> size_t value<size_t>(size_t i) { return i; }
-template <> std::string value<std::string>(size_t i) {
-    return std::to_string(i);
-}
+template <typename T> static T value(int);
+template <> int value<int>(int i) { return i; }
+template <> size_t value<size_t>(int i) { return i; }
+template <> std::string value<std::string>(int i) { return std::to_string(i); }
 
 TYPED_TEST(index_test, index_tag) {
     using indexes =
