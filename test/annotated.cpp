@@ -17,9 +17,10 @@
 #include "assert.h"
 #include "class.h"
 #include "containers.h"
+#include "test.h"
 
 namespace dingo {
-template <typename T> struct annotated_test : public testing::Test {};
+template <typename T> struct annotated_test : public test<T> {};
 TYPED_TEST_SUITE(annotated_test, container_types);
 
 template <size_t N> struct tag {};

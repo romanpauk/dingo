@@ -13,16 +13,15 @@
 #include "assert.h"
 #include "class.h"
 #include "containers.h"
+#include "test.h"
 
 namespace dingo {
-template <typename T> struct external_test : public testing::Test {};
+template <typename T> struct external_test : public test<T> {};
 TYPED_TEST_SUITE(external_test, container_types);
 
 TYPED_TEST(external_test, value) {
     using container_type = TypeParam;
-
-    struct external_value {};
-    typedef Class<external_value, __COUNTER__> C;
+    struct C : Class<> {};
     C c;
 
     {
@@ -39,9 +38,7 @@ TYPED_TEST(external_test, value) {
 
 TYPED_TEST(external_test, ref) {
     using container_type = TypeParam;
-
-    struct external_ref {};
-    typedef Class<external_ref, __COUNTER__> C;
+    struct C : Class<> {};
     C c;
 
     {
@@ -59,9 +56,7 @@ TYPED_TEST(external_test, ref) {
 
 TYPED_TEST(external_test, ptr) {
     using container_type = TypeParam;
-
-    struct external_ptr {};
-    typedef Class<external_ptr, __COUNTER__> C;
+    struct C : Class<> {};
     C c;
 
     {
@@ -79,9 +74,7 @@ TYPED_TEST(external_test, ptr) {
 
 TYPED_TEST(external_test, shared_ptr) {
     using container_type = TypeParam;
-
-    struct external_shared_ptr_lvalue {};
-    typedef Class<external_shared_ptr_lvalue, __COUNTER__> C;
+    struct C : Class<> {};
     auto c = std::make_shared<C>();
 
     {
@@ -101,9 +94,7 @@ TYPED_TEST(external_test, shared_ptr) {
 
 TYPED_TEST(external_test, shared_ptr_ref) {
     using container_type = TypeParam;
-
-    struct external_shared_ptr_rvalue {};
-    typedef Class<external_shared_ptr_rvalue, __COUNTER__> C;
+    struct C : Class<> {};
     auto c = std::make_shared<C>();
 
     {
@@ -122,9 +113,7 @@ TYPED_TEST(external_test, shared_ptr_ref) {
 
 TYPED_TEST(external_test, unique_ptr_ref) {
     using container_type = TypeParam;
-
-    struct external_unique_ptr_lvalue {};
-    typedef Class<external_unique_ptr_lvalue, __COUNTER__> C;
+    struct C : Class<> {};
     auto c = std::make_unique<C>();
 
     {
@@ -142,9 +131,7 @@ TYPED_TEST(external_test, unique_ptr_ref) {
 
 TYPED_TEST(external_test, unique_ptr_move) {
     using container_type = TypeParam;
-
-    struct external_unique_ptr_rvalue {};
-    typedef Class<external_unique_ptr_rvalue, __COUNTER__> C;
+    struct C : Class<> {};
     auto c = std::make_unique<C>();
 
     {

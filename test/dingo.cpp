@@ -15,9 +15,18 @@
 #include "assert.h"
 #include "class.h"
 #include "containers.h"
+#include "test.h"
 
 namespace dingo {
-template <typename T> struct dingo_test : public testing::Test {};
+template <typename T> struct dingo_test : public test<T> {
+    virtual void SetUp() {
+        Class<0>::ClearStats();
+        Class<1>::ClearStats();
+    }
+
+    virtual void TearDown() {}
+};
+
 TYPED_TEST_SUITE(dingo_test, container_types);
 
 TYPED_TEST(dingo_test, unique_hierarchy) {
@@ -42,9 +51,8 @@ TYPED_TEST(dingo_test, unique_hierarchy) {
 TYPED_TEST(dingo_test, resolve_rollback) {
     using container_type = TypeParam;
 
-    struct resolve_rollback {};
-    typedef Class<resolve_rollback, __COUNTER__> A;
-    typedef Class<resolve_rollback, __COUNTER__> B;
+    struct A : Class<0> {};
+    struct B : Class<1> {};
     struct Ex {};
     struct C {
         C(A&, B&) { throw Ex(); }
@@ -74,8 +82,7 @@ TYPED_TEST(dingo_test, resolve_rollback) {
 TYPED_TEST(dingo_test, type_already_registered) {
     using container_type = TypeParam;
 
-    struct type_already_registered {};
-    typedef Class<type_already_registered, __COUNTER__> A;
+    struct A : Class<> {};
 
     container_type container;
     {

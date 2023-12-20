@@ -17,6 +17,7 @@
 #include "assert.h"
 #include "class.h"
 #include "containers.h"
+#include "test.h"
 
 namespace dingo {
 template <typename IndexKey, typename IndexType>
@@ -46,7 +47,7 @@ using container_types = ::testing::Types<
     dingo::container<
         dingo::dynamic_container_with_index<size_t, index_type::array<32>>>>;
 
-template <typename T> struct index_test : public testing::Test {};
+template <typename T> struct index_test : public test<T> {};
 TYPED_TEST_SUITE(index_test, container_types);
 
 // TODO: could this be useful in the container<>?
@@ -81,27 +82,30 @@ TYPED_TEST(index_test, register_indexed_type_unique) {
     container_type container;
     using index_type = get_index_type_t<container_type>;
 
-    struct tag {};
+    struct A : Class<0> {};
+    struct B : Class<1> {};
+
     container.template register_indexed_type<
-        scope<unique>, storage<std::shared_ptr<Class<tag, 0>>>,
-        interface<IClass>>(value<index_type>(0));
+        scope<unique>, storage<std::shared_ptr<A>>, interface<IClass>>(
+        value<index_type>(0));
     container.template register_indexed_type<
-        scope<unique>, storage<std::shared_ptr<Class<tag, 1>>>,
-        interface<IClass>>(value<index_type>(1));
-    ASSERT_THROW((container.template register_indexed_type<
-                     scope<unique>, storage<std::shared_ptr<Class<tag, 1>>>,
-                     interface<IClass>>(value<index_type>(1))),
-                 type_already_registered_exception);
+        scope<unique>, storage<std::shared_ptr<B>>, interface<IClass>>(
+        value<index_type>(1));
+    ASSERT_THROW(
+        (container.template register_indexed_type<
+            scope<unique>, storage<std::shared_ptr<B>>, interface<IClass>>(
+            value<index_type>(1))),
+        type_already_registered_exception);
 
     ASSERT_EQ(
         container
             .template resolve<std::shared_ptr<IClass>>(value<index_type>(0))
-            ->tag(),
+            ->GetTag(),
         0);
     ASSERT_EQ(
         container
             .template resolve<std::shared_ptr<IClass>>(value<index_type>(1))
-            ->tag(),
+            ->GetTag(),
         1);
     ASSERT_THROW(container.template resolve<std::shared_ptr<IClass>>(
                      value<index_type>(-1)),
@@ -113,22 +117,27 @@ TYPED_TEST(index_test, register_indexed_type_shared) {
     container_type container;
     using index_type = get_index_type_t<container_type>;
 
-    struct tag {};
-    container.template register_indexed_type<
-        scope<shared>, storage<std::shared_ptr<Class<tag, 0>>>,
-        interface<IClass>>(value<index_type>(0));
-    container.template register_indexed_type<
-        scope<shared>, storage<std::shared_ptr<Class<tag, 1>>>,
-        interface<IClass>>(value<index_type>(1));
-    ASSERT_THROW((container.template register_indexed_type<
-                     scope<shared>, storage<std::shared_ptr<Class<tag, 1>>>,
-                     interface<IClass>>(value<index_type>(1))),
-                 type_already_registered_exception);
+    struct A;
+    struct A : Class<0> {};
+    struct B;
+    struct B : Class<1> {};
 
-    ASSERT_EQ(container.template resolve<IClass&>(value<index_type>(0)).tag(),
-              0);
-    ASSERT_EQ(container.template resolve<IClass&>(value<index_type>(1)).tag(),
-              1);
+    container.template register_indexed_type<
+        scope<shared>, storage<std::shared_ptr<A>>, interface<IClass>>(
+        value<index_type>(0));
+    container.template register_indexed_type<
+        scope<shared>, storage<std::shared_ptr<B>>, interface<IClass>>(
+        value<index_type>(1));
+    ASSERT_THROW(
+        (container.template register_indexed_type<
+            scope<shared>, storage<std::shared_ptr<B>>, interface<IClass>>(
+            value<index_type>(1))),
+        type_already_registered_exception);
+
+    ASSERT_EQ(
+        container.template resolve<IClass&>(value<index_type>(0)).GetTag(), 0);
+    ASSERT_EQ(
+        container.template resolve<IClass&>(value<index_type>(1)).GetTag(), 1);
     ASSERT_THROW(container.template resolve<IClass&>(value<index_type>(-1)),
                  type_not_found_exception);
 }

@@ -15,10 +15,25 @@
 #include "assert.h"
 #include "class.h"
 #include "containers.h"
+#include "test.h"
 
 namespace dingo {
-template <typename T> struct construct_test : public testing::Test {};
+template <typename T> struct construct_test : public test<T> {};
 TYPED_TEST_SUITE(construct_test, container_types);
+
+TEST(construct_test, class_traits) {
+    struct A {};
+    struct B {
+        B(std::shared_ptr<A>) {}
+    };
+
+    class_traits<A>::construct();
+    class_traits<B>::construct(nullptr);
+    delete class_traits<B*>::construct(nullptr);
+    class_traits<std::unique_ptr<B>>::construct(nullptr);
+    class_traits<std::shared_ptr<B>>::construct(nullptr);
+    class_traits<std::optional<B>>::construct(nullptr);
+}
 
 TYPED_TEST(construct_test, plain) {
     using container_type = TypeParam;

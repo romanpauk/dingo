@@ -17,9 +17,10 @@
 #include "assert.h"
 #include "class.h"
 #include "containers.h"
+#include "test.h"
 
 namespace dingo {
-template <typename T> struct shared_cyclical_test : public testing::Test {};
+template <typename T> struct shared_cyclical_test : public test<T> {};
 TYPED_TEST_SUITE(shared_cyclical_test, container_types);
 
 TYPED_TEST(shared_cyclical_test, recursion_exception) {
@@ -46,13 +47,12 @@ TYPED_TEST(shared_cyclical_test, value) {
     using container_type = TypeParam;
 
     struct B;
-    struct shared_cyclical_value {};
-    struct A : Class<shared_cyclical_value, __COUNTER__> {
+    struct A : Class<> {
         A(B& b) : b_(b) {}
         B& b_;
     };
 
-    struct B : Class<shared_cyclical_value, __COUNTER__> {
+    struct B : Class<> {
         B(A& a, IClass1& ia) : a_(a), ia_(ia) {}
         A& a_;
         IClass1& ia_;
@@ -80,8 +80,7 @@ TYPED_TEST(shared_cyclical_test, shared_ptr) {
     using container_type = TypeParam;
 
     struct B;
-    struct shared_cyclical_shared_ptr {};
-    struct A : Class<shared_cyclical_shared_ptr, __COUNTER__> {
+    struct A : Class<> {
         A(B& b, IClass1& ib, std::shared_ptr<IClass1>& ibptr)
             : b_(b), ib_(ib), ibptr_(ibptr) {}
         B& b_;
@@ -89,7 +88,7 @@ TYPED_TEST(shared_cyclical_test, shared_ptr) {
         std::shared_ptr<IClass1>& ibptr_;
     };
 
-    struct B : Class<shared_cyclical_shared_ptr, __COUNTER__> {
+    struct B : Class<> {
         B(A& a, IClass2& ia, std::shared_ptr<IClass2>& iaptr)
             : a_(a), ia_(ia), iaptr_(iaptr) {}
         A& a_;

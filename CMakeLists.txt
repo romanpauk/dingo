@@ -123,7 +123,6 @@ if(DINGO_TESTING_ENABLED)
         test/assert.h
         test/class.h
         test/class_factory.cpp
-        test/constructor.cpp
         test/construct.cpp
         test/containers.h
         test/dingo.cpp

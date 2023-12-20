@@ -10,10 +10,11 @@
 #include <string>
 
 namespace dingo {
+// A non-trivial testing hierarchy
 struct IClass {
     virtual ~IClass() {}
     virtual const std::string& GetName() const = 0;
-    virtual size_t tag() const = 0;
+    virtual size_t GetTag() const = 0;
 };
 
 struct IClass1 : virtual IClass {
@@ -24,14 +25,11 @@ struct IClass2 : virtual IClass {
     virtual ~IClass2() {}
 };
 
-template <typename TestFn, size_t Counter> struct Class : IClass1, IClass2 {
-    Class() : name_("Class") { ++Constructor; }
-    ~Class() { ++Destructor; }
-    Class(const Class& cls) : name_(cls.name_) { ++CopyConstructor; }
-    Class(Class&& cls) : name_(std::move(cls.name_)) { ++MoveConstructor; }
-
-    const std::string& GetName() const override { return name_; }
-    size_t tag() const override { return Counter; }
+template <typename T> struct ClassStats {
+    ClassStats() { ++Constructor; }
+    ~ClassStats() { ++Destructor; }
+    ClassStats(const ClassStats&) { ++CopyConstructor; }
+    ClassStats(ClassStats&&) { ++MoveConstructor; }
 
     static size_t Constructor;
     static size_t CopyConstructor;
@@ -42,16 +40,29 @@ template <typename TestFn, size_t Counter> struct Class : IClass1, IClass2 {
         return Constructor + CopyConstructor + MoveConstructor;
     }
 
+    static void ClearStats() {
+        Constructor = CopyConstructor = MoveConstructor = Destructor = 0;
+    }
+};
+
+template <typename T> size_t ClassStats<T>::Constructor;
+template <typename T> size_t ClassStats<T>::CopyConstructor;
+template <typename T> size_t ClassStats<T>::MoveConstructor;
+template <typename T> size_t ClassStats<T>::Destructor;
+
+template <size_t Tag = 0>
+struct Class : IClass1, IClass2, ClassStats<Class<Tag>> {
+    Class() : name_("Class") {}
+    ~Class() {}
+    Class(const Class& cls) : ClassStats<Class<Tag>>(cls), name_(cls.name_) {}
+    Class(Class&& cls)
+        : ClassStats<Class<Tag>>(std::move(cls)), name_(std::move(cls.name_)) {}
+
+    const std::string& GetName() const override { return name_; }
+    size_t GetTag() const override { return Tag; }
+
   private:
     std::string name_;
 };
 
-template <typename TestFn, size_t Counter>
-size_t Class<TestFn, Counter>::Constructor;
-template <typename TestFn, size_t Counter>
-size_t Class<TestFn, Counter>::CopyConstructor;
-template <typename TestFn, size_t Counter>
-size_t Class<TestFn, Counter>::MoveConstructor;
-template <typename TestFn, size_t Counter>
-size_t Class<TestFn, Counter>::Destructor;
 } // namespace dingo

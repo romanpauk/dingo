@@ -14,16 +14,16 @@
 #include "assert.h"
 #include "class.h"
 #include "containers.h"
+#include "test.h"
 
 namespace dingo {
-template <typename T> struct shared_test : public testing::Test {};
+template <typename T> struct shared_test : public test<T> {};
 TYPED_TEST_SUITE(shared_test, container_types);
 
 TYPED_TEST(shared_test, value) {
     using container_type = TypeParam;
+    struct C : Class<> {};
 
-    struct shared_value {};
-    typedef Class<shared_value, __COUNTER__> C;
     {
         container_type container;
         container.template register_type<scope<shared>, storage<C>,
@@ -46,9 +46,8 @@ TYPED_TEST(shared_test, value) {
 
 TYPED_TEST(shared_test, value_interface) {
     using container_type = TypeParam;
+    struct C : Class<> {};
 
-    struct shared_value {};
-    typedef Class<shared_value, __COUNTER__> C;
     container_type container;
     container
         .template register_type<scope<shared>, storage<C>, interface<IClass>>();
@@ -59,9 +58,7 @@ TYPED_TEST(shared_test, value_interface) {
 
 TYPED_TEST(shared_test, ptr) {
     using container_type = TypeParam;
-
-    struct shared_ptr {};
-    typedef Class<shared_ptr, __COUNTER__> C;
+    struct C : Class<> {};
 
     {
         container_type container;
@@ -85,9 +82,8 @@ TYPED_TEST(shared_test, ptr) {
 
 TYPED_TEST(shared_test, ptr_interface) {
     using container_type = TypeParam;
+    struct C : Class<> {};
 
-    struct shared_value {};
-    typedef Class<shared_value, __COUNTER__> C;
     container_type container;
     container.template register_type<scope<shared>, storage<C*>,
                                      interface<IClass>>();
@@ -98,9 +94,7 @@ TYPED_TEST(shared_test, ptr_interface) {
 
 TYPED_TEST(shared_test, shared_ptr) {
     using container_type = TypeParam;
-
-    struct shared_shared_ptr {};
-    typedef Class<shared_shared_ptr, __COUNTER__> C;
+    struct C : Class<> {};
 
     {
         container_type container;
@@ -127,8 +121,7 @@ TYPED_TEST(shared_test, shared_ptr) {
 TYPED_TEST(shared_test, shared_ptr_interface) {
     using container_type = TypeParam;
 
-    struct shared_value {};
-    typedef Class<shared_value, __COUNTER__> C;
+    struct C : Class<> {};
     container_type container;
     container.template register_type<scope<shared>, storage<std::shared_ptr<C>>,
                                      interface<C, IClass>>();
@@ -139,9 +132,7 @@ TYPED_TEST(shared_test, shared_ptr_interface) {
 
 TYPED_TEST(shared_test, unique_ptr) {
     using container_type = TypeParam;
-
-    struct shared_unique_ptr {};
-    typedef Class<shared_unique_ptr, __COUNTER__> C;
+    struct C : Class<> {};
 
     {
         container_type container;
@@ -165,34 +156,28 @@ TYPED_TEST(shared_test, unique_ptr) {
 }
 
 #if 0
+// TODO: if IClass is single interface and has virtual dtor, the storage could
+// be defined with the interface type. Doable, but rather big change for this
+// only case if implemented.
 TYPED_TEST(shared_test, unique_ptr_interface) {
     using container_type = TypeParam;
-
-    struct shared_unique_ptr {};
-    typedef Class<shared_unique_ptr, __COUNTER__> C;
-
-    {
-        container_type container;
-
-        // TODO: if IClass is single interface and has virtual dtor, the storage could
-        // be defined with the interface type.
-
-        container.template register_type<scope<shared>,
-                                         storage<std::unique_ptr<C>>, interface<IClass>>();
-
+    struct C: Class<> {};
+    
+    container_type container;
+    container.template register_type<scope<shared>,
+                                        storage<std::unique_ptr<C>>, interface<IClass>>();
 }
 #endif
 
 TYPED_TEST(shared_test, hierarchy) {
     using container_type = TypeParam;
 
-    struct shared_hierarchy {};
-    struct S : Class<shared_hierarchy, __COUNTER__> {};
-    struct U : Class<shared_hierarchy, __COUNTER__> {
+    struct S : Class<> {};
+    struct U : Class<> {
         U(S& s1) { AssertClass(s1); }
     };
 
-    struct B : Class<shared_hierarchy, __COUNTER__> {
+    struct B : Class<> {
         B(S s1, S& s2, S* s3, std::shared_ptr<S>* s4, std::shared_ptr<S>& s5,
           std::shared_ptr<S> s6, U u1, U& u2, U* u3, std::unique_ptr<U>* u4,
           std::unique_ptr<U>& u5) {
