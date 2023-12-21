@@ -47,12 +47,12 @@ TYPED_TEST(shared_cyclical_test, value) {
     using container_type = TypeParam;
 
     struct B;
-    struct A : Class<> {
+    struct A : Class {
         A(B& b) : b_(b) {}
         B& b_;
     };
 
-    struct B : Class<> {
+    struct B : Class {
         B(A& a, IClass1& ia) : a_(a), ia_(ia) {}
         A& a_;
         IClass1& ia_;
@@ -80,7 +80,7 @@ TYPED_TEST(shared_cyclical_test, shared_ptr) {
     using container_type = TypeParam;
 
     struct B;
-    struct A : Class<> {
+    struct A : Class {
         A(B& b, IClass1& ib, std::shared_ptr<IClass1>& ibptr)
             : b_(b), ib_(ib), ibptr_(ibptr) {}
         B& b_;
@@ -88,7 +88,7 @@ TYPED_TEST(shared_cyclical_test, shared_ptr) {
         std::shared_ptr<IClass1>& ibptr_;
     };
 
-    struct B : Class<> {
+    struct B : Class {
         B(A& a, IClass2& ia, std::shared_ptr<IClass2>& iaptr)
             : a_(a), ia_(ia), iaptr_(iaptr) {}
         A& a_;

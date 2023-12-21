@@ -18,15 +18,7 @@
 #include "test.h"
 
 namespace dingo {
-template <typename T> struct dingo_test : public test<T> {
-    virtual void SetUp() {
-        Class<0>::ClearStats();
-        Class<1>::ClearStats();
-    }
-
-    virtual void TearDown() {}
-};
-
+template <typename T> struct dingo_test : public test<T> {};
 TYPED_TEST_SUITE(dingo_test, container_types);
 
 TYPED_TEST(dingo_test, unique_hierarchy) {
@@ -51,8 +43,8 @@ TYPED_TEST(dingo_test, unique_hierarchy) {
 TYPED_TEST(dingo_test, resolve_rollback) {
     using container_type = TypeParam;
 
-    struct A : Class<0> {};
-    struct B : Class<1> {};
+    struct A : ClassTag<0> {};
+    struct B : ClassTag<1> {};
     struct Ex {};
     struct C {
         C(A&, B&) { throw Ex(); }
@@ -82,21 +74,19 @@ TYPED_TEST(dingo_test, resolve_rollback) {
 TYPED_TEST(dingo_test, type_already_registered) {
     using container_type = TypeParam;
 
-    struct A : Class<> {};
-
     container_type container;
     {
-        container.template register_type<scope<shared>, storage<A>>();
+        container.template register_type<scope<shared>, storage<Class>>();
         auto reg = [&] {
-            container.template register_type<scope<shared>, storage<A>>();
+            container.template register_type<scope<shared>, storage<Class>>();
         };
         ASSERT_THROW(reg(), dingo::type_already_registered_exception);
     }
     {
-        container.template register_type<scope<shared>, storage<A>,
+        container.template register_type<scope<shared>, storage<Class>,
                                          interface<IClass>>();
         auto reg = [&] {
-            container.template register_type<scope<shared>, storage<A>,
+            container.template register_type<scope<shared>, storage<Class>,
                                              interface<IClass>>();
             ;
         };

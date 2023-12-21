@@ -50,13 +50,15 @@ template <typename T> size_t ClassStats<T>::CopyConstructor;
 template <typename T> size_t ClassStats<T>::MoveConstructor;
 template <typename T> size_t ClassStats<T>::Destructor;
 
-template <size_t Tag = 0>
-struct Class : IClass1, IClass2, ClassStats<Class<Tag>> {
-    Class() : name_("Class") {}
-    ~Class() {}
-    Class(const Class& cls) : ClassStats<Class<Tag>>(cls), name_(cls.name_) {}
-    Class(Class&& cls)
-        : ClassStats<Class<Tag>>(std::move(cls)), name_(std::move(cls.name_)) {}
+template <size_t Tag>
+struct ClassTag : IClass1, IClass2, ClassStats<ClassTag<Tag>> {
+    ClassTag() : name_("Class") {}
+    ~ClassTag() {}
+    ClassTag(const ClassTag& cls)
+        : ClassStats<ClassTag<Tag>>(cls), name_(cls.name_) {}
+    ClassTag(ClassTag&& cls)
+        : ClassStats<ClassTag<Tag>>(std::move(cls)),
+          name_(std::move(cls.name_)) {}
 
     const std::string& GetName() const override { return name_; }
     size_t GetTag() const override { return Tag; }
@@ -64,5 +66,7 @@ struct Class : IClass1, IClass2, ClassStats<Class<Tag>> {
   private:
     std::string name_;
 };
+
+struct Class : ClassTag<0> {};
 
 } // namespace dingo

@@ -22,73 +22,68 @@ TYPED_TEST_SUITE(unique_test, container_types);
 
 TYPED_TEST(unique_test, value_resolve_rvalue) {
     using container_type = TypeParam;
-    struct C : Class<> {};
-
     {
         container_type container;
-        container.template register_type<scope<unique>, storage<C>>();
-        AssertTypeNotConvertible<C, type_list<C*>>(container);
+        container.template register_type<scope<unique>, storage<Class>>();
+        AssertTypeNotConvertible<Class, type_list<Class*>>(container);
         {
-            AssertClass(container.template resolve<C&&>());
-            ASSERT_EQ(C::Constructor, 1);
-            ASSERT_EQ(C::MoveConstructor, 2); // TODO
-            ASSERT_EQ(C::CopyConstructor, 0);
+            AssertClass(container.template resolve<Class&&>());
+            ASSERT_EQ(Class::Constructor, 1);
+            ASSERT_EQ(Class::MoveConstructor, 2); // TODO
+            ASSERT_EQ(Class::CopyConstructor, 0);
         }
 
-        ASSERT_EQ(C::Destructor, C::GetTotalInstances());
+        ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
     }
 
-    ASSERT_EQ(C::Destructor, C::GetTotalInstances());
+    ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
 }
 
 TYPED_TEST(unique_test, value_resolve_value) {
     using container_type = TypeParam;
-    struct C : Class<> {};
 
     {
         container_type container;
-        container.template register_type<scope<unique>, storage<C>>();
+        container.template register_type<scope<unique>, storage<Class>>();
 
         {
-            AssertClass(container.template resolve<C>());
-            ASSERT_EQ(C::Constructor, 1);
-            ASSERT_EQ(C::MoveConstructor, 1); // TODO
-            ASSERT_EQ(C::CopyConstructor, 1);
+            AssertClass(container.template resolve<Class>());
+            ASSERT_EQ(Class::Constructor, 1);
+            ASSERT_EQ(Class::MoveConstructor, 1); // TODO
+            ASSERT_EQ(Class::CopyConstructor, 1);
         }
 
-        ASSERT_EQ(C::Destructor, C::GetTotalInstances());
+        ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
     }
 
-    ASSERT_EQ(C::Destructor, C::GetTotalInstances());
+    ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
 }
 
 TYPED_TEST(unique_test, ptr) {
     using container_type = TypeParam;
-    struct C : Class<> {};
 
     {
         container_type container;
-        container.template register_type<scope<unique>, storage<C*>>();
-        auto c = container.template resolve<C*>();
+        container.template register_type<scope<unique>, storage<Class*>>();
+        auto c = container.template resolve<Class*>();
         AssertClass(*c);
-        ASSERT_EQ(C::Constructor, 1);
-        ASSERT_EQ(C::CopyConstructor, 0);
-        ASSERT_EQ(C::MoveConstructor, 0);
-        ASSERT_EQ(C::Destructor, 0);
+        ASSERT_EQ(Class::Constructor, 1);
+        ASSERT_EQ(Class::CopyConstructor, 0);
+        ASSERT_EQ(Class::MoveConstructor, 0);
+        ASSERT_EQ(Class::Destructor, 0);
 
         delete c;
-        ASSERT_EQ(C::Destructor, C::GetTotalInstances());
+        ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
     }
 
-    ASSERT_EQ(C::Destructor, C::GetTotalInstances());
+    ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
 }
 
 TYPED_TEST(unique_test, ptr_interface) {
     using container_type = TypeParam;
-    struct C : Class<> {};
 
     container_type container;
-    container.template register_type<scope<unique>, storage<C*>,
+    container.template register_type<scope<unique>, storage<Class*>,
                                      interface<IClass, IClass2>>();
 
     AssertClass(std::unique_ptr<IClass>(container.template resolve<IClass*>()));
@@ -101,33 +96,34 @@ TYPED_TEST(unique_test, ptr_interface) {
 
 TYPED_TEST(unique_test, unique_ptr) {
     using container_type = TypeParam;
-    struct C : Class<> {};
 
     {
         container_type container;
-        container.template register_type<
-            scope<unique>, storage<std::unique_ptr<C>>, interface<C, IClass>>();
-        AssertTypeNotConvertible<C, type_list<C&, C&&, C*>>(container);
+        container.template register_type<scope<unique>,
+                                         storage<std::unique_ptr<Class>>,
+                                         interface<Class, IClass>>();
+        AssertTypeNotConvertible<Class, type_list<Class&, Class&&, Class*>>(
+            container);
         {
-            AssertClass(*container.template resolve<std::unique_ptr<C>>());
-            ASSERT_EQ(C::Constructor, 1);
-            ASSERT_EQ(C::MoveConstructor, 0);
-            ASSERT_EQ(C::CopyConstructor, 0);
+            AssertClass(*container.template resolve<std::unique_ptr<Class>>());
+            ASSERT_EQ(Class::Constructor, 1);
+            ASSERT_EQ(Class::MoveConstructor, 0);
+            ASSERT_EQ(Class::CopyConstructor, 0);
         }
 
-        ASSERT_EQ(C::Destructor, C::GetTotalInstances());
+        ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
     }
 
-    ASSERT_EQ(C::Destructor, C::GetTotalInstances());
+    ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
 }
 
 TYPED_TEST(unique_test, unique_ptr_interface) {
     using container_type = TypeParam;
-    struct C : Class<> {};
 
     container_type container;
-    container.template register_type<scope<unique>, storage<std::unique_ptr<C>>,
-                                     interface<IClass, IClass2>>();
+    container
+        .template register_type<scope<unique>, storage<std::unique_ptr<Class>>,
+                                interface<IClass, IClass2>>();
 
     AssertClass(container.template resolve<std::unique_ptr<IClass>>());
     AssertClass(container.template resolve<std::unique_ptr<IClass2>>());

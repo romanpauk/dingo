@@ -132,6 +132,7 @@ if(DINGO_TESTING_ENABLED)
         test/nesting.cpp
         test/shared.cpp
         test/shared_cyclical.cpp
+        test/test.h
         test/type_registration.cpp
         test/unique.cpp
     )
