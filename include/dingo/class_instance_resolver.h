@@ -9,6 +9,7 @@
 
 #include <dingo/config.h>
 
+#include <dingo/class_instance_temporary.h>
 #include <dingo/decay.h>
 #include <dingo/exceptions.h>
 #include <dingo/resettable_i.h>
@@ -17,39 +18,10 @@
 #include <dingo/type_traits.h>
 
 #include <cstdlib>
+#include <map>
 #include <optional>
 
 namespace dingo {
-// Required to support references
-template <typename T> class class_instance_wrapper {
-  public:
-    template <typename... Args>
-    class_instance_wrapper(Args&&... args)
-        : instance_(std::forward<Args>(args)...) {}
-
-    T& get() { return instance_; }
-
-    auto get_address() {
-        if constexpr (std::is_pointer_v<T>)
-            return instance_;
-        else
-            return std::addressof(instance_);
-    }
-
-  private:
-    T instance_;
-};
-
-/*
-template <typename T, typename InterfaceT > class class_instance_wrapper_traits
-{ using type = InterfaceT*;
-};
-
-template <typename T, typename InterfaceT > class class_instance_wrapper_traits<
-std::shared_ptr<T>, std::shared_ptr<InterfaceT>> { using type =
-std::shared_ptr<InterfaceT>;
-};
-*/
 
 template <typename T> struct class_recursion_guard_base {
     static bool visited_;
@@ -71,18 +43,6 @@ struct class_recursion_guard : class_recursion_guard_base<T> {
 template <typename T> struct class_recursion_guard<T, false> {};
 
 template <typename T, bool Enabled = !std::is_trivially_destructible_v<T>>
-struct class_instance_reset {
-    template <typename Context, typename Instance>
-    class_instance_reset(Context& context, Instance* instance) {
-        context.register_class_instance(instance);
-    }
-};
-
-template <typename T> struct class_instance_reset<T, false> {
-    template <typename Context> class_instance_reset(Context&, void*) {}
-};
-
-template <typename T, bool Enabled = !std::is_trivially_destructible_v<T>>
 struct class_storage_reset {
     template <typename Context, typename Storage>
     class_storage_reset(Context& context, Storage* storage) {
@@ -100,10 +60,11 @@ template <typename T> struct class_storage_reset<T, false> {
 // cause recursion), has throwing constructor etc. Rollback support has a price.
 
 template <typename RTTI, typename TypeInterface, typename Storage,
-          bool IsCaching = Storage::is_caching>
-struct class_instance_resolver : public resettable_i {
-    void reset() override { instance_.reset(); }
+          typename StorageTag = typename Storage::tag_type>
+struct class_instance_resolver;
 
+template <typename RTTI, typename TypeInterface, typename Storage>
+struct class_instance_resolver<RTTI, TypeInterface, Storage, unique> {
     template <typename Conversions, typename Context, typename Container>
     void* resolve(Context& context, Container& container, Storage& storage,
                   const typename RTTI::type_index& type) {
@@ -112,23 +73,34 @@ struct class_instance_resolver : public resettable_i {
 
         class_recursion_guard<decay_t<typename Storage::type>> recursion_guard;
 
-        class_instance_reset<decay_t<typename Storage::type>> storage_reset(
-            context, this);
-
-        // TODO: allocate the converted instance from resolver, not context
-        instance_.emplace(storage.resolve(context, container));
-        return convert_type<RTTI>(context, Conversions{}, type,
-                                  instance_->get_address());
+        // TODO: this should avoid the move. Provide memory to construct into
+        // to the factory.
+        auto&& instance =
+            context.template construct<typename Storage::stored_type>(
+                storage.resolve(context, container));
+        auto* address = type_traits<
+            std::remove_reference_t<decltype(instance)>>::get_address(instance);
+        return convert_type<RTTI, decay_t<TypeInterface>*,
+                            typename Storage::tag_type>(context, Conversions{},
+                                                        type, address);
     }
-
-  private:
-    std::optional<class_instance_wrapper<TypeInterface>> instance_;
 };
 
 template <typename RTTI, typename TypeInterface, typename Storage>
-struct class_instance_resolver<RTTI, TypeInterface, Storage, true>
-    : public resettable_i {
-    void reset() override { instance_.reset(); }
+struct class_instance_resolver<RTTI, TypeInterface, Storage, shared>
+    : class_instance_temporary<
+          RTTI, rebind_type_t<typename Storage::conversions::conversion_types,
+                              decay_t<TypeInterface>>>,
+      resettable_i {
+
+    using class_instance_temporary_type = class_instance_temporary<
+        RTTI, rebind_type_t<typename Storage::conversions::conversion_types,
+                            decay_t<TypeInterface>>>;
+
+    void reset() override {
+        initialized_ = false;
+        temporary().reset();
+    }
 
     template <typename Conversions, typename Context, typename Container>
     void* resolve(Context& context, Container& container, Storage& storage,
@@ -136,24 +108,71 @@ struct class_instance_resolver<RTTI, TypeInterface, Storage, true>
         if (!find_type<RTTI>(Conversions{}, type))
             throw type_not_convertible_exception();
 
-        if (!instance_) {
+        if (!initialized_) {
             class_recursion_guard<decay_t<typename Storage::type>>
                 recursion_guard;
-            class_storage_reset<decay_t<typename Storage::type>> storage_reset(
-                context, &storage);
+            class_storage_reset<decay_t<typename Storage::stored_type>>
+                storage_reset(context, &storage);
 
             // TODO: not all types will need a rollback
             context.register_resettable(this);
             context.increment();
-            instance_.emplace(storage.resolve(context, container));
+            storage.resolve(context, container);
+            initialized_ = true;
             context.decrement();
         }
 
-        return convert_type<RTTI>(context, Conversions{}, type,
-                                  instance_->get_address());
+        auto&& instance = storage.resolve(context, container);
+        auto* address = type_traits<
+            std::remove_reference_t<decltype(instance)>>::get_address(instance);
+        return convert_type<RTTI, decay_t<TypeInterface>*,
+                            typename Storage::tag_type>(
+            temporary(), Conversions{}, type, address);
     }
 
   private:
-    std::optional<class_instance_wrapper<TypeInterface>> instance_;
+    auto& temporary() {
+        return static_cast<class_instance_temporary_type&>(*this);
+    }
+
+    bool initialized_ = false;
 };
+
+template <typename RTTI, typename TypeInterface, typename Storage>
+struct class_instance_resolver<RTTI, TypeInterface, Storage, shared_cyclical>
+    : class_instance_resolver<RTTI, TypeInterface, Storage, shared> {};
+
+template <typename RTTI, typename TypeInterface, typename Storage>
+struct class_instance_resolver<RTTI, TypeInterface, Storage, external>
+    : class_instance_temporary<
+          RTTI, rebind_type_t<typename Storage::conversions::conversion_types,
+                              decay_t<TypeInterface>>>,
+      resettable_i {
+
+    using class_instance_temporary_type = class_instance_temporary<
+        RTTI, rebind_type_t<typename Storage::conversions::conversion_types,
+                            decay_t<TypeInterface>>>;
+
+    void reset() override { temporary().reset(); }
+
+    template <typename Conversions, typename Context, typename Container>
+    void* resolve(Context& context, Container& container, Storage& storage,
+                  const typename RTTI::type_index& type) {
+        if (!find_type<RTTI>(Conversions{}, type))
+            throw type_not_convertible_exception();
+
+        auto&& instance = storage.resolve(context, container);
+        auto* address = type_traits<
+            std::remove_reference_t<decltype(instance)>>::get_address(instance);
+        return convert_type<RTTI, decay_t<TypeInterface>*,
+                            typename Storage::tag_type>(
+            temporary(), Conversions{}, type, address);
+    }
+
+  private:
+    auto& temporary() {
+        return static_cast<class_instance_temporary_type&>(*this);
+    }
+};
+
 } // namespace dingo

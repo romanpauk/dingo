@@ -23,121 +23,197 @@ TYPED_TEST(external_test, value) {
     using container_type = TypeParam;
     Class c;
 
-    {
-        container_type container;
-        container.template register_type<scope<external>, storage<Class>,
-                                         interface<Class, IClass>>(
-            std::move(c));
+    container_type container;
+    container.template register_type<scope<external>, storage<Class>,
+                                     interface<Class, IClass>>(std::move(c));
 
-        AssertClass(*container.template resolve<Class*>());
-        AssertClass(container.template resolve<Class&>());
-        AssertClass(container.template resolve<IClass&>());
-        AssertClass(container.template resolve<IClass*>());
-    }
+    AssertClass(*container.template resolve<Class*>());
+    AssertClass(container.template resolve<Class&>());
+    AssertClass(container.template resolve<IClass&>());
+    AssertClass(container.template resolve<IClass*>());
+    ASSERT_THROW(container.template resolve<std::optional<Class>>(),
+                 type_not_convertible_exception);
 }
 
 TYPED_TEST(external_test, ref) {
     using container_type = TypeParam;
     Class c;
 
-    {
-        container_type container;
-        container.template register_type<scope<external>, storage<Class&>,
-                                         interface<Class, IClass>>(c);
+    container_type container;
+    container.template register_type<scope<external>, storage<Class&>,
+                                     interface<Class, IClass>>(c);
 
-        ASSERT_EQ(container.template resolve<Class*>(), &c);
-        AssertClass(*container.template resolve<Class*>());
-        AssertClass(container.template resolve<Class&>());
-        AssertClass(container.template resolve<IClass&>());
-        AssertClass(container.template resolve<IClass*>());
-    }
+    ASSERT_EQ(container.template resolve<Class*>(), &c);
+    AssertClass(*container.template resolve<Class*>());
+    AssertClass(container.template resolve<Class&>());
+    AssertClass(container.template resolve<IClass&>());
+    AssertClass(container.template resolve<IClass*>());
 }
 
 TYPED_TEST(external_test, ptr) {
     using container_type = TypeParam;
     Class c;
 
-    {
-        container_type container;
-        container.template register_type<scope<external>, storage<Class*>,
-                                         interface<Class, IClass>>(&c);
+    container_type container;
+    container.template register_type<scope<external>, storage<Class*>,
+                                     interface<Class, IClass>>(&c);
 
-        ASSERT_EQ(container.template resolve<Class*>(), &c);
-        AssertClass(*container.template resolve<Class*>());
-        AssertClass(container.template resolve<Class&>());
-        AssertClass(container.template resolve<IClass&>());
-        AssertClass(container.template resolve<IClass*>());
-    }
+    ASSERT_EQ(container.template resolve<Class*>(), &c);
+    AssertClass(*container.template resolve<Class*>());
+    AssertClass(container.template resolve<Class&>());
+    AssertClass(container.template resolve<IClass&>());
+    AssertClass(container.template resolve<IClass*>());
+
+    ASSERT_THROW(container.template resolve<std::unique_ptr<Class>>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<std::unique_ptr<IClass>>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<std::shared_ptr<Class>>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<std::shared_ptr<IClass>>(),
+                 type_not_convertible_exception);
+}
+
+// TODO: this excercises resolving code without creating temporaries,
+// yet there is no way how to test it
+TYPED_TEST(external_test, shared_ptr_interface) {
+    using container_type = TypeParam;
+    auto c = std::make_shared<Class>();
+
+    container_type container;
+    container.template register_type<
+        scope<external>, storage<std::shared_ptr<Class>>, interface<IClass>>(c);
+    AssertClass(container.template resolve<IClass&>());
+    AssertClass(container.template resolve<IClass*>());
+    AssertClass(*container.template resolve<std::shared_ptr<IClass>>());
 }
 
 TYPED_TEST(external_test, shared_ptr) {
     using container_type = TypeParam;
     auto c = std::make_shared<Class>();
 
-    {
-        container_type container;
-        container.template register_type<scope<external>,
-                                         storage<std::shared_ptr<Class>>,
-                                         interface<Class, IClass>>(c);
-        AssertClass(container.template resolve<Class&>());
-        AssertClass(*container.template resolve<Class*>());
-        AssertClass(*container.template resolve<std::shared_ptr<Class>>());
-        AssertClass(*container.template resolve<std::shared_ptr<Class>&>());
-        AssertClass(container.template resolve<IClass&>());
-        AssertClass(container.template resolve<IClass*>());
-        AssertClass(*container.template resolve<std::shared_ptr<IClass>>());
-    }
+    container_type container;
+    container.template register_type<scope<external>,
+                                     storage<std::shared_ptr<Class>>,
+                                     interface<Class, IClass>>(c);
+    AssertClass(container.template resolve<Class&>());
+    AssertClass(*container.template resolve<Class*>());
+    AssertClass(*container.template resolve<std::shared_ptr<Class>>());
+    AssertClass(*container.template resolve<std::shared_ptr<Class>&>());
+    AssertClass(container.template resolve<IClass&>());
+    AssertClass(container.template resolve<IClass*>());
+    AssertClass(*container.template resolve<std::shared_ptr<IClass>>());
 }
 
 TYPED_TEST(external_test, shared_ptr_ref) {
     using container_type = TypeParam;
     auto c = std::make_shared<Class>();
 
-    {
-        container_type container;
-        container.template register_type<scope<external>,
-                                         storage<std::shared_ptr<Class>&>,
-                                         interface<Class, IClass>>(c);
-        container.template resolve<Class&>();
-        container.template resolve<Class*>();
-        container.template resolve<std::shared_ptr<Class>>();
-        container.template resolve<std::shared_ptr<Class>&>();
-        container.template resolve<std::shared_ptr<IClass>>();
-        container.template resolve<IClass&>();
-    }
+    container_type container;
+    container.template register_type<scope<external>,
+                                     storage<std::shared_ptr<Class>&>,
+                                     interface<Class, IClass>>(c);
+    AssertClass(container.template resolve<Class&>());
+    AssertClass(container.template resolve<Class*>());
+    AssertClass(container.template resolve<std::shared_ptr<Class>>());
+    AssertClass(*container.template resolve<std::shared_ptr<Class>&>());
+    AssertClass(container.template resolve<std::shared_ptr<IClass>>());
+    AssertClass(container.template resolve<IClass&>());
 }
 
 TYPED_TEST(external_test, unique_ptr_ref) {
     using container_type = TypeParam;
     auto c = std::make_unique<Class>();
 
-    {
-        container_type container;
-        container.template register_type<scope<external>,
-                                         storage<std::unique_ptr<Class>&>
-                                         // interface<C, IClass> // TODO
-                                         >(c);
-        container.template resolve<Class&>();
-        container.template resolve<Class*>();
-        container.template resolve<std::unique_ptr<Class>&>();
-        // container.template resolve<IClass&>();
-    }
+    container_type container;
+    container.template register_type<scope<external>,
+                                     storage<std::unique_ptr<Class>&>,
+                                     interface<Class, IClass>>(c);
+    AssertClass(container.template resolve<Class&>());
+    AssertClass(container.template resolve<Class*>());
+    AssertClass(*container.template resolve<std::unique_ptr<Class>&>());
+    AssertClass(container.template resolve<IClass&>());
+
+    ASSERT_THROW(container.template resolve<std::unique_ptr<IClass>&>(),
+                 type_not_convertible_exception);
 }
 
 TYPED_TEST(external_test, unique_ptr_move) {
     using container_type = TypeParam;
     auto c = std::make_unique<Class>();
 
+    container_type container;
+    container.template register_type<scope<external>,
+                                     storage<std::unique_ptr<Class>>,
+                                     interface<Class, IClass>>(std::move(c));
+    AssertClass(container.template resolve<Class&>());
+    AssertClass(container.template resolve<Class*>());
+    AssertClass(*container.template resolve<std::unique_ptr<Class>&>());
+    AssertClass(container.template resolve<IClass&>());
+
+    ASSERT_THROW(container.template resolve<std::unique_ptr<IClass>&>(),
+                 type_not_convertible_exception);
+}
+
+// TODO: this excercises resolving code without creating temporaries,
+// yet there is no way how to test it
+TYPED_TEST(external_test, unique_ptr_interface_move) {
+    using container_type = TypeParam;
+    auto c = std::make_unique<Class>();
+
+    container_type container;
+    container.template register_type<
+        scope<external>, storage<std::unique_ptr<Class>>, interface<IClass>>(
+        std::move(c));
+    AssertClass(*container.template resolve<std::unique_ptr<IClass>&>());
+    AssertClass(container.template resolve<IClass&>());
+}
+
+TYPED_TEST(external_test, optional_ref) {
+    using container_type = TypeParam;
+    auto c = std::make_optional<Class>();
+
+    container_type container;
+    container
+        .template register_type<scope<external>, storage<std::optional<Class>&>,
+                                interface<Class, IClass>>(c);
+    AssertClass(*container.template resolve<std::optional<Class>&>());
+    AssertClass(container.template resolve<Class&>());
+    AssertClass(container.template resolve<IClass&>());
+}
+
+TYPED_TEST(external_test, shared_multiple) {
+    using container_type = TypeParam;
+    struct C {
+        C(std::shared_ptr<IClass1>& c1, std::shared_ptr<IClass1>& c11,
+          std::shared_ptr<IClass2>& c2, std::shared_ptr<IClass2>& c22) {
+            AssertClass(*c1);
+            AssertClass(*c11);
+            assert(&c1 == &c11);
+            AssertClass(*c2);
+            AssertClass(*c22);
+            assert(&c2 == &c22);
+        }
+    };
+
+    container_type container;
+    container.template register_type<scope<external>,
+                                     storage<std::shared_ptr<Class>>,
+                                     interface<IClass1, IClass2>>(
+        std::make_shared<Class>());
+    auto c = container.template construct<C>();
+
     {
-        container_type container;
-        container.template register_type<scope<external>,
-                                         storage<std::unique_ptr<Class>>
-                                         // , interface<C, IClass> // TODO
-                                         >(std::move(c));
-        container.template resolve<Class&>();
-        container.template resolve<Class*>();
-        container.template resolve<std::unique_ptr<Class>&>();
-        // container.template resolve<IClass&>();
+        auto& c1 = container.template resolve<std::shared_ptr<IClass1>&>();
+        AssertClass(*c1);
+        auto& c2 = container.template resolve<std::shared_ptr<IClass2>&>();
+        AssertClass(*c2);
+        auto& c11 = container.template resolve<std::shared_ptr<IClass1>&>();
+        AssertClass(*c11);
+        auto& c22 = container.template resolve<std::shared_ptr<IClass2>&>();
+        AssertClass(*c22);
+        ASSERT_EQ(&c1, &c11);
+        ASSERT_EQ(&c2, &c22);
     }
 }
 

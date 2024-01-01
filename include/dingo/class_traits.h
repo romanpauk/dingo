@@ -59,7 +59,7 @@ template <typename T> struct class_traits<std::optional<T>> {
     }
 
     template <typename... Args>
-    static std::optional<T>& constructE(std::optional<T>& ptr, Args&&... args) {
+    static std::optional<T>& construct(std::optional<T>& ptr, Args&&... args) {
         ptr.emplace(std::forward<Args>(args)...);
         return ptr;
     }

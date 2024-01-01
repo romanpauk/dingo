@@ -117,6 +117,37 @@ TYPED_TEST(shared_cyclical_test, shared_ptr) {
     AssertClass(*b.iaptr_);
 }
 
+// TODO: this excercises resolving code without creating temporaries,
+// yet there is no way how to test it
+TYPED_TEST(shared_cyclical_test, shared_ptr_interface) {
+    using container_type = TypeParam;
+
+    struct B;
+    struct A : Class {
+        A(IClass1& ib) : ib_(ib) {}
+        IClass1& ib_;
+    };
+
+    struct B : Class {
+        B(A& ia) : ia_(ia) {}
+        A& ia_;
+    };
+
+    container_type container;
+    container.template register_type<
+        scope<shared_cyclical>, storage<std::shared_ptr<A>>, interface<A>>();
+    container.template register_type<scope<shared_cyclical>,
+                                     storage<std::shared_ptr<B>>,
+                                     interface<IClass1>>();
+
+    auto& a = container.template resolve<A&>();
+    AssertClass(a);
+    AssertClass(a.ib_);
+
+    auto& b = container.template resolve<IClass1&>();
+    AssertClass(b);
+}
+
 TYPED_TEST(shared_cyclical_test, trivially_destructible) {
     using container_type = TypeParam;
 

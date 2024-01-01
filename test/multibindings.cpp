@@ -55,13 +55,11 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_shared_ptr) {
 
     ASSERT_TRUE(dynamic_cast<Class*>(&container.template resolve<IClass&>()));
     ASSERT_TRUE(dynamic_cast<Class*>(
-        container.template resolve<std::shared_ptr<IClass>&>().get()));
+        container.template resolve<std::shared_ptr<IClass>>().get()));
     ASSERT_TRUE(dynamic_cast<Class*>(&container.template resolve<IClass1&>()));
     ASSERT_TRUE(dynamic_cast<Class*>(
-        container.template resolve<std::shared_ptr<IClass1>&>().get()));
+        container.template resolve<std::shared_ptr<IClass1>>().get()));
     ASSERT_TRUE(dynamic_cast<Class*>(&container.template resolve<IClass2&>()));
-    ASSERT_TRUE(dynamic_cast<Class*>(
-        container.template resolve<std::shared_ptr<IClass2>*>()->get()));
 }
 
 TYPED_TEST(multibindings_test, multiple_interfaces_shared_cyclical_shared_ptr) {
@@ -78,26 +76,22 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_cyclical_shared_ptr) {
     // >().get()));
     ASSERT_TRUE(dynamic_cast<Class*>(&container.template resolve<IClass1&>()));
     ASSERT_TRUE(dynamic_cast<Class*>(
-        container.template resolve<std::shared_ptr<IClass1>&>().get()));
+        container.template resolve<std::shared_ptr<IClass1>>().get()));
     ASSERT_TRUE(dynamic_cast<Class*>(&container.template resolve<IClass2&>()));
-    ASSERT_TRUE(dynamic_cast<Class*>(
-        container.template resolve<std::shared_ptr<IClass2>*>()->get()));
 }
 
-/*
-// TODO: does not compile
 TYPED_TEST(multibindings_test, multiple_interfaces_shared_unique_ptr) {
     using container_type = TypeParam;
-    struct C: Class<> {};
-
-    struct multiple_interfaces_shared_unique_ptr {};
-    typedef Class< multiple_interfaces_shared_unique_ptr, __COUNTER__ > C;
 
     container_type container;
-    container.template register_binding< storage< container_type, shared,
-std::unique_ptr< C > >, IClass, IClass1, IClass2 >();
+    container
+        .template register_type<scope<shared>, storage<std::unique_ptr<Class>>,
+                                interface<IClass, IClass1, IClass2>>();
+
+    ASSERT_TRUE(dynamic_cast<Class*>(container.template resolve<IClass*>()));
+    ASSERT_TRUE(dynamic_cast<Class*>(container.template resolve<IClass1*>()));
+    ASSERT_TRUE(dynamic_cast<Class*>(container.template resolve<IClass2*>()));
 }
-*/
 
 TYPED_TEST(multibindings_test, multiple_interfaces_unique_shared_ptr) {
     using container_type = TypeParam;
@@ -130,54 +124,6 @@ TYPED_TEST(multibindings_test, multiple_interfaces_unique_unique_ptr) {
     ASSERT_TRUE(dynamic_cast<Class*>(
         container.template resolve<std::unique_ptr<IClass2>>().get()));
 }
-
-// TODO: this is not correctly implemented, it leaks memory, also it does not
-// compile now
-#if 0
-    TYPED_TEST(multibindings_test, resolve_multiple)
-    {
-        using container_type = TypeParam;
-
-        struct I {};
-        struct A : I {};
-        struct B : I {};
-        struct C
-        {
-            C(std::vector< I* > v, std::list< I* > l, std::set< I* > s) : v_(v), l_(l), s_(s) {}
-
-            std::vector< I* > v_;
-            std::list< I* > l_;
-            std::set< I* > s_;
-        };
-
-        container_type container;
-        container.template register_type< scope<shared>, storage<A>, interface<A, I>>();
-        container.template register_type< scope<shared>, storage<B>, interface<B, I>>();
-        container.template register_type< scope<shared>, storage<C>>();
-
-        {
-            auto vector = container.template resolve< std::vector< I* > >();
-            ASSERT_EQ(vector.size(), 2);
-
-            auto list = container.template resolve< std::list< I* > >();
-            ASSERT_EQ(list.size(), 2);
-
-            auto set = container.template resolve< std::set< I* > >();
-            ASSERT_EQ(set.size(), 2);
-        }
-
-        {
-            ASSERT_THROW(container.template resolve< std::vector< std::shared_ptr< I > > >(), type_not_convertible_exception);
-        }
-
-        {
-            auto& c = container.template resolve< C& >();
-            ASSERT_EQ(c.v_.size(), 2);
-            ASSERT_EQ(c.l_.size(), 2);
-            ASSERT_EQ(c.s_.size(), 2);
-        }
-    }
-#endif
 
 TYPED_TEST(multibindings_test, register_type_collection_shared_value) {
     using container_type = TypeParam;
@@ -213,7 +159,6 @@ TYPED_TEST(multibindings_test, register_type_collection_shared_ptr) {
     ASSERT_EQ(classes.size(), 2);
 }
 
-// TODO: this compiled (and crashed) with IClass* inside unique_ptr
 TYPED_TEST(multibindings_test, register_type_collection_unique_ptr) {
     using container_type = TypeParam;
 
@@ -230,6 +175,10 @@ TYPED_TEST(multibindings_test, register_type_collection_unique_ptr) {
     std::vector<std::unique_ptr<IClass>> classes =
         container.template resolve<std::vector<std::unique_ptr<IClass>>>();
     ASSERT_EQ(classes.size(), 2);
+
+    // TODO:
+    // ASSERT_THROW(container.template resolve<std::unique_ptr<IClass*>>(),
+    // type_not_convertible_exception);
 }
 
 TYPED_TEST(multibindings_test, register_type_collection_mapping_shared_ptr) {

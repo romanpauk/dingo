@@ -117,7 +117,7 @@ TYPED_TEST(shared_test, shared_ptr) {
     { ASSERT_EQ(Class::Destructor, Class::GetTotalInstances()); }
 }
 
-TYPED_TEST(shared_test, shared_ptr_interface) {
+TYPED_TEST(shared_test, shared_ptr_multiple_interface) {
     using container_type = TypeParam;
 
     container_type container;
@@ -125,8 +125,22 @@ TYPED_TEST(shared_test, shared_ptr_interface) {
         .template register_type<scope<shared>, storage<std::shared_ptr<Class>>,
                                 interface<Class, IClass>>();
 
+    AssertClass(*container.template resolve<std::shared_ptr<Class>&>());
     AssertClass(container.template resolve<std::shared_ptr<IClass>>());
-    AssertClass(container.template resolve<std::shared_ptr<Class>>());
+    AssertClass(*container.template resolve<std::shared_ptr<IClass>&>());
+}
+
+// TODO: this excercises resolving code without creating temporaries,
+// yet there is no way how to test it
+TYPED_TEST(shared_test, shared_ptr_single_interface) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<
+        scope<shared>, storage<std::shared_ptr<Class>>, interface<IClass>>();
+
+    AssertClass(container.template resolve<std::shared_ptr<IClass>>());
+    AssertClass(*container.template resolve<std::shared_ptr<IClass>&>());
 }
 
 TYPED_TEST(shared_test, unique_ptr) {
@@ -154,18 +168,83 @@ TYPED_TEST(shared_test, unique_ptr) {
     { ASSERT_EQ(Class::Destructor, Class::GetTotalInstances()); }
 }
 
-#if 0
-// TODO: if IClass is single interface and has virtual dtor, the storage could
-// be defined with the interface type. Doable, but rather big change for this
-// only case if implemented.
 TYPED_TEST(shared_test, unique_ptr_interface) {
     using container_type = TypeParam;
-    
+
     container_type container;
-    container.template register_type<scope<shared>,
-                                        storage<std::unique_ptr<Class>>, interface<IClass>>();
+    container.template register_type<
+        scope<shared>, storage<std::unique_ptr<Class>>, interface<IClass>>();
+    AssertClass(container.template resolve<IClass*>());
+    AssertClass(container.template resolve<IClass&>());
+    AssertClass(*container.template resolve<std::unique_ptr<IClass>&>());
 }
-#endif
+
+TYPED_TEST(shared_test, optional) {
+    using container_type = TypeParam;
+
+    {
+        container_type container;
+        container.template register_type<scope<shared>,
+                                         storage<std::optional<Class>>,
+                                         interface<Class, IClass>>();
+
+        AssertClass(*container.template resolve<std::optional<Class>&>());
+        AssertClass(**container.template resolve<std::optional<Class>*>());
+        AssertClass(container.template resolve<Class*>());
+        AssertClass(container.template resolve<Class&>());
+
+        ASSERT_EQ(Class::Constructor, 1);
+        ASSERT_EQ(Class::MoveConstructor, 1);
+        ASSERT_EQ(Class::Destructor, 1);
+        ASSERT_EQ(Class::CopyConstructor, 0);
+    }
+
+    { ASSERT_EQ(Class::Destructor, Class::GetTotalInstances()); }
+}
+
+TYPED_TEST(shared_test, optional_interface) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<
+        scope<shared>, storage<std::optional<Class>>, interface<IClass>>();
+    AssertClass(container.template resolve<IClass*>());
+    AssertClass(container.template resolve<IClass&>());
+}
+
+TYPED_TEST(shared_test, shared_multiple) {
+    using container_type = TypeParam;
+    struct C {
+        C(std::shared_ptr<IClass1>& c1, std::shared_ptr<IClass1>& c11,
+          std::shared_ptr<IClass2>& c2, std::shared_ptr<IClass2>& c22) {
+            AssertClass(*c1);
+            AssertClass(*c11);
+            assert(&c1 == &c11);
+            AssertClass(*c2);
+            AssertClass(*c22);
+            assert(&c2 == &c22);
+        }
+    };
+
+    container_type container;
+    container
+        .template register_type<scope<shared>, storage<std::shared_ptr<Class>>,
+                                interface<IClass1, IClass2>>();
+    container.template construct<C>();
+
+    {
+        auto& c1 = container.template resolve<std::shared_ptr<IClass1>&>();
+        AssertClass(*c1);
+        auto& c2 = container.template resolve<std::shared_ptr<IClass2>&>();
+        AssertClass(*c2);
+        auto& c11 = container.template resolve<std::shared_ptr<IClass1>&>();
+        AssertClass(*c11);
+        auto& c22 = container.template resolve<std::shared_ptr<IClass2>&>();
+        AssertClass(*c22);
+        ASSERT_EQ(&c1, &c11);
+        ASSERT_EQ(&c2, &c22);
+    }
+}
 
 TYPED_TEST(shared_test, hierarchy) {
     using container_type = TypeParam;

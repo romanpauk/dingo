@@ -12,6 +12,7 @@
 #include <dingo/annotated.h>
 
 #include <memory>
+#include <optional>
 #include <type_traits>
 
 namespace dingo {
@@ -25,6 +26,8 @@ template <class T, class Deleter>
 struct decay<std::unique_ptr<T, Deleter>> : std::decay<T> {};
 
 template <class T> struct decay<std::shared_ptr<T>> : std::decay<T> {};
+
+template <class T> struct decay<std::optional<T>> : std::decay<T> {};
 
 template <class T, class Tag>
 struct decay<annotated<T, Tag>>

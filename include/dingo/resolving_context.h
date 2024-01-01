@@ -15,6 +15,7 @@
 #include <dingo/exceptions.h>
 #include <dingo/resettable_i.h>
 
+#include <algorithm>
 #include <array>
 #include <deque>
 #include <forward_list>
@@ -27,7 +28,7 @@ class resolving_context {
 
   public:
     resolving_context()
-        : resolve_counter_(), class_instances_size_(), resettables_size_(),
+        : resolve_counter_(), temporaries_size_(), resettables_size_(),
           constructibles_size_(), arena_allocator_(arena_) {}
 
     ~resolving_context() {
@@ -45,8 +46,8 @@ class resolving_context {
         }
 
         // Destroy temporary instances
-        for (size_t i = 0; i < class_instances_size_; ++i)
-            class_instances_[i]->reset();
+        for (size_t i = 0; i < temporaries_size_; ++i)
+            temporaries_[i]->reset();
     }
 
     // TODO: this method seems useless but it is friend of a container and that
@@ -55,9 +56,13 @@ class resolving_context {
         return container.template resolve<T, false>(*this);
     }
 
-    void register_class_instance(resettable_i* ptr) {
-        check_size(class_instances_size_);
-        class_instances_[class_instances_size_++] = ptr;
+    void register_temporary(resettable_i* ptr) {
+        // TODO: we are not registering temporaries, but resolvers
+        // assert(std::find(temporaries_.begin(),
+        //                 temporaries_.begin() + temporaries_size_,
+        //                 ptr) == temporaries_.begin() + temporaries_size_);
+        check_size(temporaries_size_);
+        temporaries_[temporaries_size_++] = ptr;
     }
 
     void register_resettable(resettable_i* ptr) {
@@ -75,33 +80,51 @@ class resolving_context {
     void increment() { ++resolve_counter_; }
     void decrement() { --resolve_counter_; }
 
-    template <typename T> struct arena_instance : resettable_i {
+    template <typename T> struct temporary : resettable_i {
         template <typename... Args>
-        arena_instance(arena_allocator<arena_instance<T>>& allocator,
-                       Args&&... args)
-            : allocator_(allocator), instance_(std::forward<Args>(args)...) {}
-
-        void reset() override {
-            arena_allocator<arena_instance<T>> allocator = allocator_;
-            allocator_traits::destroy(allocator, this);
-            allocator_traits::deallocate(allocator, this, 1);
-        }
-
+        temporary(Args&&... args) : instance_(std::forward<Args>(args)...) {}
+        void reset() override { instance_.~T(); }
         T* get() { return &instance_; }
 
       private:
-        arena_allocator<arena_instance<T>> allocator_;
         T instance_;
     };
 
-    template <typename T, typename... Args> T* construct(Args&&... args) {
-        auto allocator =
-            allocator_traits::rebind<arena_instance<T>>(arena_allocator_);
-        auto ptr = allocator_traits::allocate(allocator, 1);
-        allocator_traits::construct(allocator, ptr, allocator,
-                                    std::forward<Args>(args)...);
-        register_class_instance(ptr);
-        return ptr->get();
+    template <typename T, typename... Args> T& construct(Args&&... args) {
+        if constexpr (std::is_trivially_destructible_v<T>) {
+            auto allocator = allocator_traits::rebind<T>(arena_allocator_);
+            auto instance = allocator_traits::allocate(allocator, 1);
+            allocator_traits::construct(allocator, instance,
+                                        std::forward<Args>(args)...);
+            return *instance;
+        } else {
+            auto allocator =
+                allocator_traits::rebind<temporary<T>>(arena_allocator_);
+            auto instance = allocator_traits::allocate(allocator, 1);
+            allocator_traits::construct(allocator, instance,
+                                        std::forward<Args>(args)...);
+            register_temporary(instance);
+            return *instance->get();
+        }
+    }
+
+    template <typename T, typename... Args>
+    T& construct(resolving_context&, Args&&... args) {
+        if constexpr (std::is_trivially_destructible_v<T>) {
+            auto allocator = allocator_traits::rebind<T>(arena_allocator_);
+            auto instance = allocator_traits::allocate(allocator, 1);
+            allocator_traits::construct(allocator, instance,
+                                        std::forward<Args>(args)...);
+            return *instance;
+        } else {
+            auto allocator =
+                allocator_traits::rebind<temporary<T>>(arena_allocator_);
+            auto instance = allocator_traits::allocate(allocator, 1);
+            allocator_traits::construct(allocator, instance,
+                                        std::forward<Args>(args)...);
+            register_temporary(instance);
+            return *instance->get();
+        }
     }
 
   private:
@@ -113,8 +136,8 @@ class resolving_context {
     // TODO: this is fast, but non-generic, needs more work
     size_t resolve_counter_;
 
-    size_t class_instances_size_;
-    std::array<resettable_i*, size> class_instances_;
+    size_t temporaries_size_;
+    std::array<resettable_i*, size> temporaries_;
 
     size_t resettables_size_;
     std::array<resettable_i*, size> resettables_;
@@ -122,9 +145,9 @@ class resolving_context {
     size_t constructibles_size_;
     std::array<constructible_i*, size> constructibles_;
 
-    // TODO: this is a hack for storage<unique> conversions
-    arena<128> arena_;
-    arena_allocator<char> arena_allocator_;
+    // TODO: how big should this be?
+    arena<512> arena_;
+    arena_allocator<void, 512> arena_allocator_;
 };
 
 } // namespace dingo

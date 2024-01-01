@@ -53,6 +53,7 @@ TYPED_TEST(unique_test, value_resolve_value) {
             ASSERT_EQ(Class::CopyConstructor, 1);
         }
 
+        { AssertClass(*container.template resolve<std::optional<Class>>()); }
         ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
     }
 
@@ -117,7 +118,7 @@ TYPED_TEST(unique_test, unique_ptr) {
     ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
 }
 
-TYPED_TEST(unique_test, unique_ptr_interface) {
+TYPED_TEST(unique_test, unique_ptr_multiple_interface) {
     using container_type = TypeParam;
 
     container_type container;
@@ -128,6 +129,65 @@ TYPED_TEST(unique_test, unique_ptr_interface) {
     AssertClass(container.template resolve<std::unique_ptr<IClass>>());
     AssertClass(container.template resolve<std::unique_ptr<IClass2>>());
     AssertClass(container.template resolve<std::shared_ptr<IClass>>());
+}
+
+// TODO: this excercises resolving code without creating temporaries,
+// yet there is no way how to test it
+TYPED_TEST(unique_test, unique_ptr_single_interface) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<
+        scope<unique>, storage<std::unique_ptr<Class>>, interface<IClass>>();
+
+    AssertClass(container.template resolve<std::unique_ptr<IClass>>());
+}
+
+TYPED_TEST(unique_test, optional) {
+    using container_type = TypeParam;
+
+    {
+        container_type container;
+        container.template register_type<
+            scope<unique>, storage<std::optional<Class>>, interface<Class>>();
+        AssertTypeNotConvertible<Class, type_list<Class&, Class&&, Class*>>(
+            container);
+        {
+            AssertClass(*container.template resolve<std::optional<Class>>());
+            ASSERT_EQ(Class::Constructor, 1);
+            ASSERT_EQ(Class::MoveConstructor, 1);
+            ASSERT_EQ(Class::CopyConstructor, 1); // TODO
+        }
+
+        ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
+    }
+
+    ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
+}
+
+// TODO: shared_ptr needs to be passed as &&
+// TODO: creates multiple conversions. The temporaries should be tied to
+//  something smaller than top-level context (perhaps per-argument in
+//  constructor_detection_impl::construct?) as it is not possible to overwrite
+//  the conversion, all arguments need to exist at the same time
+TYPED_TEST(unique_test, unique_multiple) {
+    using container_type = TypeParam;
+    struct C {
+        C(std::unique_ptr<IClass1>&& c1, std::unique_ptr<IClass1>&& c11,
+          std::unique_ptr<IClass2>&& c2, std::unique_ptr<IClass2>&& c22) {
+            AssertClass(*c1);
+            AssertClass(*c11);
+            assert(&c1 != &c11);
+            AssertClass(*c2);
+            AssertClass(*c22);
+            assert(&c2 != &c22);
+        }
+    };
+
+    container_type container;
+    container.template register_type<scope<unique>, storage<Class*>,
+                                     interface<IClass1, IClass2>>();
+    container.template construct<C>();
 }
 
 TYPED_TEST(unique_test, ambiguous_resolve) {

@@ -17,10 +17,21 @@ BENCHMARK_MAIN();
 
 namespace {
 int ClassCounter = 0;
-template <size_t N> class Class {
+
+template <size_t N> struct Class {
   public:
     Class() { ClassCounter++; }
     int GetCounter() { return ClassCounter; }
+};
+
+struct IClass {
+    virtual ~IClass() {}
+    virtual int GetCounter() = 0;
+};
+
+struct VClass : IClass {
+    VClass() { ClassCounter++; }
+    int GetCounter() override { return ClassCounter; }
 };
 
 static void resolve_baseline_unique(benchmark::State& state) {
@@ -69,6 +80,40 @@ static void resolve_container_shared(benchmark::State& state) {
     for (auto _ : state) {
         auto& cls = container.template resolve<Class<0>&>();
         counter += cls.GetCounter();
+    }
+    benchmark::DoNotOptimize(counter);
+    state.SetBytesProcessed(state.iterations());
+}
+
+template <typename ContainerTraits>
+static void resolve_container_shared_ptr(benchmark::State& state) {
+    using namespace dingo;
+    using container_type = container<ContainerTraits>;
+    container_type container;
+    container.template register_type<scope<shared>,
+                                     storage<std::shared_ptr<VClass>>>();
+
+    int counter = 0;
+    for (auto _ : state) {
+        auto& cls = container.template resolve<std::shared_ptr<VClass>&>();
+        counter += cls->GetCounter();
+    }
+    benchmark::DoNotOptimize(counter);
+    state.SetBytesProcessed(state.iterations());
+}
+
+template <typename ContainerTraits>
+static void resolve_container_shared_ptr_conversion(benchmark::State& state) {
+    using namespace dingo;
+    using container_type = container<ContainerTraits>;
+    container_type container;
+    container.template register_type<
+        scope<shared>, storage<std::shared_ptr<VClass>>, interface<IClass>>();
+
+    int counter = 0;
+    for (auto _ : state) {
+        auto& cls = container.template resolve<std::shared_ptr<IClass>&>();
+        counter += cls->GetCounter();
     }
     benchmark::DoNotOptimize(counter);
     state.SetBytesProcessed(state.iterations());
@@ -141,7 +186,7 @@ static void register_type_arena(benchmark::State& state) {
     using namespace dingo;
     arena<1024> arena;
     for (auto _ : state) {
-        arena_allocator<char> allocator(arena);
+        arena_allocator<char, 1024> allocator(arena);
         Container container(allocator);
         container.template register_type<scope<unique>, storage<Class<0>>>();
     }
@@ -154,7 +199,7 @@ static void register_type_arena_10(benchmark::State& state) {
     using namespace dingo;
     for (auto _ : state) {
         arena<8192> arena;
-        arena_allocator<char> allocator(arena);
+        arena_allocator<char, 8192> allocator(arena);
         Container container(allocator);
         container.template register_type<scope<unique>, storage<Class<0>>>();
         container.template register_type<scope<unique>, storage<Class<1>>>();
@@ -183,6 +228,20 @@ BENCHMARK_TEMPLATE(resolve_container_shared, dingo::static_container_traits<>)
 BENCHMARK_TEMPLATE(resolve_container_shared, dingo::dynamic_container_traits)
     ->UseRealTime();
 
+BENCHMARK_TEMPLATE(resolve_container_shared_ptr,
+                   dingo::static_container_traits<>)
+    ->UseRealTime();
+BENCHMARK_TEMPLATE(resolve_container_shared_ptr,
+                   dingo::dynamic_container_traits)
+    ->UseRealTime();
+
+BENCHMARK_TEMPLATE(resolve_container_shared_ptr_conversion,
+                   dingo::static_container_traits<>)
+    ->UseRealTime();
+BENCHMARK_TEMPLATE(resolve_container_shared_ptr_conversion,
+                   dingo::dynamic_container_traits)
+    ->UseRealTime();
+
 BENCHMARK_TEMPLATE(resolve_container_external, dingo::static_container_traits<>)
     ->UseRealTime();
 BENCHMARK_TEMPLATE(resolve_container_external, dingo::dynamic_container_traits)
@@ -199,9 +258,10 @@ BENCHMARK_TEMPLATE(register_type,
 BENCHMARK_TEMPLATE(register_type,
                    dingo::container<dingo::dynamic_container_traits>)
     ->UseRealTime();
+
 BENCHMARK_TEMPLATE(register_type_arena,
                    dingo::container<dingo::dynamic_container_traits,
-                                    dingo::arena_allocator<char>>)
+                                    dingo::arena_allocator<char, 1024>>)
     ->UseRealTime();
 
 BENCHMARK_TEMPLATE(register_type_10,
@@ -213,7 +273,6 @@ BENCHMARK_TEMPLATE(register_type_10,
 
 BENCHMARK_TEMPLATE(register_type_arena_10,
                    dingo::container<dingo::dynamic_container_traits,
-                                    dingo::arena_allocator<char>>)
+                                    dingo::arena_allocator<char, 8192>>)
     ->UseRealTime();
-
 } // namespace

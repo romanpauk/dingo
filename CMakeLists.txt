@@ -3,6 +3,9 @@ project(dingo)
 enable_testing()
 include(FetchContent)
 include(cmake/clang-format.cmake)
+if(WIN32)
+    include(cmake/group-sources.cmake)
+endif()
 include(cmake/md.cmake)
 include(cmake/sanitizers.cmake)
 
@@ -86,6 +89,7 @@ target_sources(dingo INTERFACE
     include/dingo/class_instance_factory_i.h
     include/dingo/class_instance_factory_traits.h
     include/dingo/class_instance_resolver.h
+    include/dingo/class_instance_temporary.h
     include/dingo/class_traits.h
     include/dingo/collection_traits.h
     include/dingo/config.h
@@ -169,4 +173,10 @@ endif()
 
 if(DINGO_EXAMPLES_ENABLED)
     add_subdirectory(examples)
+endif()
+
+if(WIN32)
+    group_sources(include)
+    group_sources(test)
+    group_sources(benchmark)
 endif()

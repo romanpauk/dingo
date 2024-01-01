@@ -41,10 +41,11 @@ TYPED_TEST(construct_test, plain) {
     container.template construct<int>();
     container.template construct<std::unique_ptr<int>>();
     container.template construct<std::shared_ptr<int>>();
-    // container.template construct<std::optional<int>>(); // TODO
+    container.template construct<std::optional<int>>();
 }
 
 #if 0
+// TODO: can ambiguous construction be detected?
 TYPED_TEST(construct_test, ambiguous) {
     using container_type = TypeParam;
     struct A {
@@ -102,8 +103,6 @@ TYPED_TEST(construct_test, aggregate2) {
     ASSERT_EQ(d.b, 2);
 }
 
-#if 0
-/*
 TYPED_TEST(construct_test, resolve) {
     using container_type = TypeParam;
     struct A {};
@@ -115,16 +114,16 @@ TYPED_TEST(construct_test, resolve) {
     };
 
     container_type container;
-    container.template register_binding<storage<unique, A>>();
-    container.template register_binding<storage<shared, std::shared_ptr<B>>>();
+    container.template register_type<scope<unique>, storage<A>>();
+    container
+        .template register_type<scope<shared>, storage<std::shared_ptr<B>>>();
 
     container.template construct<B>();
     container.template construct<std::unique_ptr<B>>();
     container.template construct<std::shared_ptr<B>>();
-    //container.template construct<std::optional<B>>(); // TODO
+    container.template construct<std::optional<B>>();
 
     container.template construct<C>();
 }
-*/
-#endif
+
 } // namespace dingo

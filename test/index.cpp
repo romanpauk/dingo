@@ -76,20 +76,19 @@ TYPED_TEST(index_test, index_tag) {
         std::is_same_v<typename index_tag<size_t, indexes>::type, char>);
 }
 
-// TODO: does not work with unique_ptr<>
 TYPED_TEST(index_test, register_indexed_type_unique) {
     using container_type = TypeParam;
     container_type container;
     using index_type = get_index_type_t<container_type>;
 
     container.template register_indexed_type<
-        scope<unique>, storage<std::shared_ptr<ClassTag<0>>>,
+        scope<unique>, storage<std::unique_ptr<ClassTag<0>>>,
         interface<IClass>>(value<index_type>(0));
     container.template register_indexed_type<
-        scope<unique>, storage<std::shared_ptr<ClassTag<1>>>,
+        scope<unique>, storage<std::unique_ptr<ClassTag<1>>>,
         interface<IClass>>(value<index_type>(1));
     ASSERT_THROW((container.template register_indexed_type<
-                     scope<unique>, storage<std::shared_ptr<ClassTag<1>>>,
+                     scope<unique>, storage<std::unique_ptr<ClassTag<1>>>,
                      interface<IClass>>(value<index_type>(1))),
                  type_already_registered_exception);
 

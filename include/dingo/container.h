@@ -231,9 +231,43 @@ class container : public allocator_base<Allocator> {
             std::conditional_t<!is_none_v<std::decay_t<Arg>>,
                                type_registration<TypeArgs..., factory<Arg>>,
                                type_registration<TypeArgs...>>;
+        //
+        // An optimization and a feature: if storage type can be only queried by
+        // single interface and the interface allows for proper deletion through
+        // virtual destructor, store the type as the interface so temporaries
+        // don't need to be created and because of that, the stored element
+        // could be referenced in most usages as it will no longer be a
+        // temporary object. The code below does the rewrite of storage type
+        // into stored type.
+        //
+        // TODO: this is generic concept:
+        //  The type user will request will be converted as soon as possible.
+        //  The code below does
+        //      it on storage level, if there is only one interface.
+        //  If there are multiple interfaces, part of the conversion could be
+        //  done on resolver level.
+        //      That would again allow to avoid of some of the conversion code.
+        //      TBD.
+        //  And last, what could not be done on resolver level would be done in
+        //  runtime.
+        //
+        using interface_type_0 = std::tuple_element_t<
+            0, typename registration::interface_type::type_tuple>;
+        using stored_type = rebind_type_t<
+            typename registration::storage_type::type,
+            std::conditional_t<
+                std::tuple_size_v<
+                    typename registration::interface_type::type_tuple> == 1 &&
+                    std::has_virtual_destructor_v<interface_type_0> &&
+                    type_traits<typename registration::storage_type::type>::
+                        is_pointer_type,
+                interface_type_0,
+                decay_t<typename registration::storage_type::type>>>;
+
         using storage_type =
             detail::storage<typename registration::scope_type::type,
                             typename registration::storage_type::type,
+                            stored_type,
                             typename registration::factory_type::type,
                             typename registration::conversions_type::type>;
 

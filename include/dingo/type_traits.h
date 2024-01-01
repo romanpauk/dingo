@@ -21,22 +21,31 @@ template <typename T>
 static constexpr bool has_value_type_v = has_value_type<T>::value;
 
 template <typename T> struct type_traits {
-    static const bool is_smart_ptr = false;
-    static void* get_address(T& value) { return &value; }
+    static constexpr bool is_pointer_type = false;
+    static T* get_address(T& value) { return &value; }
+};
+
+template <typename T> struct type_traits<T&> {
+    static constexpr bool is_pointer_type = false;
+    static T* get_address(T& value) { return &value; }
 };
 
 template <typename T> struct type_traits<T*> {
-    static const bool is_smart_ptr = false;
-    static void* get_address(T* value) { return value; }
+    static constexpr bool is_pointer_type = true;
+    static T* get_address(T* value) { return value; }
 };
 
 template <typename T> struct type_traits<std::unique_ptr<T>> {
-    static const bool is_smart_ptr = true;
-    static void* get_address(std::unique_ptr<T>& ptr) { return ptr.get(); }
+    static constexpr bool is_pointer_type = true;
+    static std::unique_ptr<T>* get_address(std::unique_ptr<T>& ptr) {
+        return &ptr;
+    }
 };
 
 template <class T> struct type_traits<std::shared_ptr<T>> {
-    static const bool is_smart_ptr = true;
-    static void* get_address(std::shared_ptr<T>& ptr) { return ptr.get(); }
+    static constexpr bool is_pointer_type = true;
+    static std::shared_ptr<T>* get_address(std::shared_ptr<T>& ptr) {
+        return &ptr;
+    }
 };
 } // namespace dingo
