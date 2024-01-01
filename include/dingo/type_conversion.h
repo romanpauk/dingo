@@ -93,8 +93,7 @@ struct type_conversion<std::unique_ptr<Target>*, Source*, StorageTag> {
     template <typename Context>
     static std::unique_ptr<Target>* apply(Context& context, Source* source) {
         if constexpr (std::is_same_v<StorageTag, unique>)
-            return &context.template construct<std::unique_ptr<Target>>(context,
-                                                                        source);
+            return &context.template construct<std::unique_ptr<Target>>(source);
         else
             throw type_not_convertible_exception();
     }

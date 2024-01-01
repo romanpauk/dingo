@@ -17,28 +17,33 @@ namespace dingo {
 
 template <std::size_t N> class arena {
   public:
-    arena() : current_(buffer_.data()) {}
+    arena() : current_(begin()) {}
     static constexpr size_t size() { return N; }
 
-    template <typename T> T* allocate(size_t n) {
-        unsigned char* ptr =
-            (unsigned char*)(uintptr_t(current_ + alignof(T) - 1) &
-                             ~(alignof(T) - 1));
-        std::size_t size = n * sizeof(T);
-        if (ptr + size < buffer_.data() + buffer_.size()) {
-            current_ = ptr + size;
-            return reinterpret_cast<T*>(ptr);
+    template <size_t Alignment> void* allocate(size_t bytes) {
+        uintptr_t ptr = (current_ + Alignment - 1) & ~(Alignment - 1);
+        if (ptr + bytes < end()) {
+            current_ = ptr + bytes;
+            return reinterpret_cast<void*>(ptr);
         } else {
             return nullptr;
         }
     }
 
-    bool deallocate(unsigned char* ptr) const {
-        return ptr >= buffer_.data() && ptr < buffer_.data() + buffer_.size();
+    bool deallocate(void* ptr) const {
+        return reinterpret_cast<uintptr_t>(ptr) >= begin() &&
+               reinterpret_cast<uintptr_t>(ptr) < end();
     }
 
-    std::array<unsigned char, N> buffer_;
-    unsigned char* current_ = 0;
+  private:
+    uintptr_t begin() const { return reinterpret_cast<uintptr_t>(&buffer_); }
+    uintptr_t end() const {
+        return reinterpret_cast<uintptr_t>(reinterpret_cast<uint8_t*>(begin()) +
+                                           size());
+    }
+
+    std::aligned_storage_t<N> buffer_;
+    uintptr_t current_ = 0;
 };
 
 template <typename T, size_t N, typename Allocator = std::allocator<T>>
@@ -63,15 +68,10 @@ class arena_allocator : public Allocator {
     arena_allocator(const arena_allocator<U, N, AllocatorU>& alloc) noexcept
         : Allocator(alloc), arena_(alloc.arena_) {}
 
-    // arena_allocator<T, Allocator>&
-    // operator=(const arena_allocator<T, Allocator>& other) {
-    //     arena_ = other.arena_;
-    //     return *this;
-    // }
-
     value_type* allocate(std::size_t n) {
-        if (auto* p = arena_->template allocate<value_type>(n)) {
-            return p;
+        if (auto* p = arena_->template allocate<alignof(value_type)>(
+                n * sizeof(value_type))) {
+            return reinterpret_cast<value_type*>(p);
         } else {
             assert(false);
             return Allocator::allocate(n);
@@ -79,7 +79,7 @@ class arena_allocator : public Allocator {
     }
 
     void deallocate(value_type* p, std::size_t n) noexcept {
-        if (!arena_->deallocate(reinterpret_cast<unsigned char*>(p)))
+        if (!arena_->deallocate(p))
             Allocator::deallocate(p, n);
     }
 

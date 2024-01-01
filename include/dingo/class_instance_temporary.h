@@ -43,8 +43,6 @@ template <typename... Args>
 struct class_instance_temporary_storage<type_list<Args...>> {
     using type = std::aligned_union_t<0, void*, temporary<Args>...>;
     static constexpr std::size_t size = sizeof(type);
-    static constexpr std::size_t alignment =
-        alignof(type); // type::alignment_value;
 };
 
 template <typename RTTI, typename ConversionTypes>

@@ -57,10 +57,6 @@ class resolving_context {
     }
 
     void register_temporary(resettable_i* ptr) {
-        // TODO: we are not registering temporaries, but resolvers
-        // assert(std::find(temporaries_.begin(),
-        //                 temporaries_.begin() + temporaries_size_,
-        //                 ptr) == temporaries_.begin() + temporaries_size_);
         check_size(temporaries_size_);
         temporaries_[temporaries_size_++] = ptr;
     }
@@ -91,25 +87,6 @@ class resolving_context {
     };
 
     template <typename T, typename... Args> T& construct(Args&&... args) {
-        if constexpr (std::is_trivially_destructible_v<T>) {
-            auto allocator = allocator_traits::rebind<T>(arena_allocator_);
-            auto instance = allocator_traits::allocate(allocator, 1);
-            allocator_traits::construct(allocator, instance,
-                                        std::forward<Args>(args)...);
-            return *instance;
-        } else {
-            auto allocator =
-                allocator_traits::rebind<temporary<T>>(arena_allocator_);
-            auto instance = allocator_traits::allocate(allocator, 1);
-            allocator_traits::construct(allocator, instance,
-                                        std::forward<Args>(args)...);
-            register_temporary(instance);
-            return *instance->get();
-        }
-    }
-
-    template <typename T, typename... Args>
-    T& construct(resolving_context&, Args&&... args) {
         if constexpr (std::is_trivially_destructible_v<T>) {
             auto allocator = allocator_traits::rebind<T>(arena_allocator_);
             auto instance = allocator_traits::allocate(allocator, 1);

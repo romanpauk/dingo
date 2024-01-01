@@ -201,7 +201,7 @@ TYPED_TEST(external_test, shared_multiple) {
                                      storage<std::shared_ptr<Class>>,
                                      interface<IClass1, IClass2>>(
         std::make_shared<Class>());
-    auto c = container.template construct<C>();
+    container.template construct<C>();
 
     {
         auto& c1 = container.template resolve<std::shared_ptr<IClass1>&>();

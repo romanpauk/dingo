@@ -65,7 +65,7 @@ template <typename Factory, typename Allocator, typename... Args> struct index {
     template <typename T> struct index_ptr : allocator_base<Allocator> {
         // TODO: this pattern is already in class_factory_instance_ptr,
         // try to merge those
-        index_ptr(Allocator& allocator) : allocator_base<Allocator>(allocator) {
+        index_ptr(Allocator& al) : allocator_base<Allocator>(al) {
             auto alloc = allocator_traits::rebind<T>(this->get_allocator());
             try {
                 index_ = allocator_traits::allocate(alloc, 1);
