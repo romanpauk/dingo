@@ -52,8 +52,12 @@ TYPED_TEST(unique_test, value_resolve_value) {
             ASSERT_EQ(Class::MoveConstructor, 1); // TODO
             ASSERT_EQ(Class::CopyConstructor, 1);
         }
-
-        { AssertClass(*container.template resolve<std::optional<Class>>()); }
+        AssertClass(container.template resolve<const Class>());
+        AssertClass(*container.template resolve<std::optional<Class>>());
+        AssertClass(*container.template resolve<const std::optional<Class>>());
+        AssertClass(*container.template resolve<std::optional<const Class>>());
+        AssertClass(
+            *container.template resolve<const std::optional<const Class>>());
         ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
     }
 
@@ -72,8 +76,12 @@ TYPED_TEST(unique_test, ptr) {
         ASSERT_EQ(Class::CopyConstructor, 0);
         ASSERT_EQ(Class::MoveConstructor, 0);
         ASSERT_EQ(Class::Destructor, 0);
-
         delete c;
+
+        auto c2 = container.template resolve<const Class*>();
+        AssertClass(*c2);
+        delete c2;
+
         ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
     }
 
@@ -92,7 +100,15 @@ TYPED_TEST(unique_test, ptr_interface) {
         std::unique_ptr<IClass2>(container.template resolve<IClass2*>()));
 
     AssertClass(container.template resolve<std::unique_ptr<IClass>>());
+    AssertClass(container.template resolve<std::unique_ptr<IClass>&&>());
+    AssertClass(container.template resolve<std::unique_ptr<const IClass>&&>());
+    AssertClass(*container.template resolve<std::unique_ptr<const IClass>>());
     AssertClass(container.template resolve<std::shared_ptr<IClass>>());
+    AssertClass(container.template resolve<std::shared_ptr<IClass>&&>());
+    AssertClass(container.template resolve<std::shared_ptr<const IClass>>());
+    AssertClass(*container.template resolve<const std::shared_ptr<IClass>>());
+    AssertClass(
+        *container.template resolve<const std::shared_ptr<const IClass>>());
 }
 
 TYPED_TEST(unique_test, unique_ptr) {
@@ -110,6 +126,8 @@ TYPED_TEST(unique_test, unique_ptr) {
             ASSERT_EQ(Class::Constructor, 1);
             ASSERT_EQ(Class::MoveConstructor, 0);
             ASSERT_EQ(Class::CopyConstructor, 0);
+            AssertClass(
+                *container.template resolve<std::unique_ptr<const Class>>());
         }
 
         ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
@@ -157,6 +175,14 @@ TYPED_TEST(unique_test, optional) {
             ASSERT_EQ(Class::Constructor, 1);
             ASSERT_EQ(Class::MoveConstructor, 1);
             ASSERT_EQ(Class::CopyConstructor, 1); // TODO
+
+            AssertClass(
+                *container.template resolve<const std::optional<Class>>());
+            AssertClass(
+                *container.template resolve<std::optional<const Class>>());
+            AssertClass(
+                *container
+                     .template resolve<const std::optional<const Class>>());
         }
 
         ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());

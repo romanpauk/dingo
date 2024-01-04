@@ -24,13 +24,23 @@ template <class T, class U> struct rebind_type {
 template <typename T, typename U>
 using rebind_type_t = typename rebind_type<T, U>::type;
 
+template <class T, class U> struct rebind_type<const T, U> {
+    using type = typename rebind_type<T, U>::type;
+};
+
 template <class T, class U> struct rebind_type<T&, U> {
     using type = typename rebind_type<T, U>::type&;
 };
+
 template <class T, class U> struct rebind_type<T&&, U> {
     using type = typename rebind_type<T, U>::type&&;
 };
+
 template <class T, class U> struct rebind_type<T*, U> {
+    using type = typename rebind_type<T, U>::type*;
+};
+
+template <class T, class U> struct rebind_type<const T*, U> {
     using type = typename rebind_type<T, U>::type*;
 };
 

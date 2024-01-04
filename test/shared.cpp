@@ -29,7 +29,9 @@ TYPED_TEST(shared_test, value) {
                                          interface<Class, IClass>>();
 
         AssertClass(*container.template resolve<Class*>());
+        AssertClass(*container.template resolve<const Class*>());
         AssertClass(container.template resolve<Class&>());
+        AssertClass(container.template resolve<const Class&>());
 
         AssertTypeNotConvertible<
             Class, type_list<std::shared_ptr<Class>, std::unique_ptr<Class>>>(
@@ -52,7 +54,9 @@ TYPED_TEST(shared_test, value_interface) {
                                      interface<IClass>>();
 
     AssertClass(container.template resolve<IClass&>());
+    AssertClass(container.template resolve<const IClass&>());
     AssertClass(container.template resolve<IClass*>());
+    AssertClass(container.template resolve<const IClass*>());
 }
 
 TYPED_TEST(shared_test, ptr) {
@@ -64,7 +68,9 @@ TYPED_TEST(shared_test, ptr) {
                                          interface<Class, IClass>>();
 
         AssertClass(*container.template resolve<Class*>());
+        AssertClass(*container.template resolve<const Class*>());
         AssertClass(container.template resolve<Class&>());
+        AssertClass(container.template resolve<const Class&>());
 
         AssertTypeNotConvertible<
             Class, type_list<std::shared_ptr<Class>, std::unique_ptr<Class>>>(
@@ -87,7 +93,9 @@ TYPED_TEST(shared_test, ptr_interface) {
                                      interface<IClass>>();
 
     AssertClass(container.template resolve<IClass&>());
+    AssertClass(container.template resolve<const IClass&>());
     AssertClass(container.template resolve<IClass*>());
+    AssertClass(container.template resolve<const IClass*>());
 }
 
 TYPED_TEST(shared_test, shared_ptr) {
@@ -100,10 +108,23 @@ TYPED_TEST(shared_test, shared_ptr) {
                                          interface<Class, IClass>>();
 
         AssertClass(*container.template resolve<Class*>());
+        AssertClass(*container.template resolve<const Class*>());
         AssertClass(container.template resolve<Class&>());
+        AssertClass(container.template resolve<const Class&>());
         AssertClass(*container.template resolve<std::shared_ptr<Class>>());
+        AssertClass(
+            *container.template resolve<std::shared_ptr<const Class>>());
         AssertClass(*container.template resolve<std::shared_ptr<Class>&>());
+        AssertClass(
+            *container.template resolve<const std::shared_ptr<Class>&>());
+        AssertClass(
+            *container.template resolve<const std::shared_ptr<const Class>&>());
         AssertClass(**container.template resolve<std::shared_ptr<Class>*>());
+        AssertClass(
+            **container.template resolve<const std::shared_ptr<Class>*>());
+        AssertClass(
+            **container
+                  .template resolve<const std::shared_ptr<const Class>*>());
 
         AssertTypeNotConvertible<Class, type_list<std::unique_ptr<Class>>>(
             container);
@@ -152,9 +173,19 @@ TYPED_TEST(shared_test, unique_ptr) {
             scope<shared>, storage<std::unique_ptr<Class>>, interface<Class>>();
 
         AssertClass(*container.template resolve<Class*>());
-        AssertClass(container.template resolve<Class&>());
+        AssertClass(*container.template resolve<const Class*>());
+        AssertClass(container.template resolve<const Class&>());
         AssertClass(*container.template resolve<std::unique_ptr<Class>&>());
+        AssertClass(
+            *container.template resolve<const std::unique_ptr<Class>&>());
+        AssertClass(
+            *container.template resolve<const std::unique_ptr<const Class>&>());
         AssertClass(**container.template resolve<std::unique_ptr<Class>*>());
+        AssertClass(
+            **container.template resolve<const std::unique_ptr<Class>*>());
+        AssertClass(
+            **container
+                  .template resolve<const std::unique_ptr<const Class>*>());
 
         AssertTypeNotConvertible<Class, type_list<std::unique_ptr<Class>>>(
             container);
@@ -188,10 +219,15 @@ TYPED_TEST(shared_test, optional) {
                                          storage<std::optional<Class>>,
                                          interface<Class, IClass>>();
 
-        AssertClass(*container.template resolve<std::optional<Class>&>());
-        AssertClass(**container.template resolve<std::optional<Class>*>());
         AssertClass(container.template resolve<Class*>());
+        AssertClass(container.template resolve<const Class*>());
         AssertClass(container.template resolve<Class&>());
+        AssertClass(container.template resolve<const Class&>());
+        AssertClass(*container.template resolve<std::optional<Class>&>());
+        AssertClass(*container.template resolve<const std::optional<Class>&>());
+        AssertClass(**container.template resolve<std::optional<Class>*>());
+        AssertClass(
+            **container.template resolve<const std::optional<Class>*>());
 
         ASSERT_EQ(Class::Constructor, 1);
         ASSERT_EQ(Class::MoveConstructor, 1);
@@ -257,6 +293,44 @@ TYPED_TEST(shared_test, hierarchy) {
     struct B : Class {
         B(S s1, S& s2, S* s3, std::shared_ptr<S>* s4, std::shared_ptr<S>& s5,
           std::shared_ptr<S> s6, U u1, U& u2, U* u3, std::unique_ptr<U>* u4,
+          std::unique_ptr<U>& u5) {
+            AssertClass(s1);
+            AssertClass(s2);
+            AssertClass(*s3);
+            AssertClass(**s4);
+            AssertClass(*s5);
+            AssertClass(*s6);
+
+            AssertClass(u1);
+            AssertClass(u2);
+            AssertClass(*u3);
+            AssertClass(**u4);
+            AssertClass(*u5);
+        }
+    };
+
+    container_type container;
+    container
+        .template register_type<scope<shared>, storage<std::shared_ptr<S>>>();
+    container
+        .template register_type<scope<shared>, storage<std::unique_ptr<U>>>();
+    container.template register_type<scope<shared>, storage<B>>();
+
+    container.template resolve<B&>();
+}
+
+TYPED_TEST(shared_test, const_hierarchy) {
+    using container_type = TypeParam;
+
+    struct S : Class {};
+    struct U : Class {
+        U(S& s1) { AssertClass(s1); }
+    };
+
+    struct B : Class {
+        B(const S s1, const S& s2, const S* s3, const std::shared_ptr<S>* s4,
+          const std::shared_ptr<S>& s5, const std::shared_ptr<S> s6, const U u1,
+          const U& u2, const U* u3, const std::unique_ptr<U>* u4,
           std::unique_ptr<U>& u5) {
             AssertClass(s1);
             AssertClass(s2);

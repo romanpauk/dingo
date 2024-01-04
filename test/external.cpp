@@ -28,9 +28,13 @@ TYPED_TEST(external_test, value) {
                                      interface<Class, IClass>>(std::move(c));
 
     AssertClass(*container.template resolve<Class*>());
+    AssertClass(*container.template resolve<const Class*>());
     AssertClass(container.template resolve<Class&>());
+    AssertClass(container.template resolve<const Class&>());
     AssertClass(container.template resolve<IClass&>());
+    AssertClass(container.template resolve<const IClass&>());
     AssertClass(container.template resolve<IClass*>());
+    AssertClass(container.template resolve<const IClass*>());
     ASSERT_THROW(container.template resolve<std::optional<Class>>(),
                  type_not_convertible_exception);
 }
@@ -45,9 +49,13 @@ TYPED_TEST(external_test, ref) {
 
     ASSERT_EQ(container.template resolve<Class*>(), &c);
     AssertClass(*container.template resolve<Class*>());
+    AssertClass(*container.template resolve<const Class*>());
     AssertClass(container.template resolve<Class&>());
+    AssertClass(container.template resolve<const Class&>());
     AssertClass(container.template resolve<IClass&>());
+    AssertClass(container.template resolve<const IClass&>());
     AssertClass(container.template resolve<IClass*>());
+    AssertClass(container.template resolve<const IClass*>());
 }
 
 TYPED_TEST(external_test, ptr) {
@@ -60,9 +68,13 @@ TYPED_TEST(external_test, ptr) {
 
     ASSERT_EQ(container.template resolve<Class*>(), &c);
     AssertClass(*container.template resolve<Class*>());
+    AssertClass(*container.template resolve<const Class*>());
     AssertClass(container.template resolve<Class&>());
+    AssertClass(container.template resolve<const Class&>());
     AssertClass(container.template resolve<IClass&>());
+    AssertClass(container.template resolve<const IClass&>());
     AssertClass(container.template resolve<IClass*>());
+    AssertClass(container.template resolve<const IClass*>());
 
     ASSERT_THROW(container.template resolve<std::unique_ptr<Class>>(),
                  type_not_convertible_exception);
@@ -97,12 +109,30 @@ TYPED_TEST(external_test, shared_ptr) {
                                      storage<std::shared_ptr<Class>>,
                                      interface<Class, IClass>>(c);
     AssertClass(container.template resolve<Class&>());
+    AssertClass(container.template resolve<const Class&>());
     AssertClass(*container.template resolve<Class*>());
+    AssertClass(*container.template resolve<const Class*>());
     AssertClass(*container.template resolve<std::shared_ptr<Class>>());
+    AssertClass(**container.template resolve<std::shared_ptr<Class>*>());
+    AssertClass(*container.template resolve<std::shared_ptr<const Class>>());
+    AssertClass(*container.template resolve<const std::shared_ptr<Class>>());
+    AssertClass(**container.template resolve<const std::shared_ptr<Class>*>());
+    AssertClass(
+        *container.template resolve<const std::shared_ptr<const Class>>());
     AssertClass(*container.template resolve<std::shared_ptr<Class>&>());
+    AssertClass(*container.template resolve<std::shared_ptr<const Class>&>());
+    AssertClass(*container.template resolve<const std::shared_ptr<Class>&>());
+    AssertClass(
+        *container.template resolve<const std::shared_ptr<const Class>&>());
     AssertClass(container.template resolve<IClass&>());
+    AssertClass(container.template resolve<const IClass&>());
     AssertClass(container.template resolve<IClass*>());
+    AssertClass(container.template resolve<const IClass*>());
     AssertClass(*container.template resolve<std::shared_ptr<IClass>>());
+    AssertClass(*container.template resolve<const std::shared_ptr<IClass>>());
+    AssertClass(*container.template resolve<std::shared_ptr<const IClass>>());
+    AssertClass(
+        *container.template resolve<const std::shared_ptr<const IClass>>());
 }
 
 TYPED_TEST(external_test, shared_ptr_ref) {
@@ -114,11 +144,21 @@ TYPED_TEST(external_test, shared_ptr_ref) {
                                      storage<std::shared_ptr<Class>&>,
                                      interface<Class, IClass>>(c);
     AssertClass(container.template resolve<Class&>());
+    AssertClass(container.template resolve<const Class&>());
     AssertClass(container.template resolve<Class*>());
+    AssertClass(container.template resolve<const Class*>());
     AssertClass(container.template resolve<std::shared_ptr<Class>>());
+    AssertClass(container.template resolve<std::shared_ptr<const Class>>());
+    AssertClass(*container.template resolve<const std::shared_ptr<Class>>());
     AssertClass(*container.template resolve<std::shared_ptr<Class>&>());
+    AssertClass(*container.template resolve<const std::shared_ptr<Class>&>());
     AssertClass(container.template resolve<std::shared_ptr<IClass>>());
+    AssertClass(*container.template resolve<const std::shared_ptr<IClass>>());
+    AssertClass(container.template resolve<std::shared_ptr<const IClass>>());
     AssertClass(container.template resolve<IClass&>());
+    AssertClass(container.template resolve<const IClass&>());
+    AssertClass(container.template resolve<IClass*>());
+    AssertClass(container.template resolve<const IClass*>());
 }
 
 TYPED_TEST(external_test, unique_ptr_ref) {
@@ -130,9 +170,15 @@ TYPED_TEST(external_test, unique_ptr_ref) {
                                      storage<std::unique_ptr<Class>&>,
                                      interface<Class, IClass>>(c);
     AssertClass(container.template resolve<Class&>());
+    AssertClass(container.template resolve<const Class&>());
     AssertClass(container.template resolve<Class*>());
+    AssertClass(container.template resolve<const Class*>());
     AssertClass(*container.template resolve<std::unique_ptr<Class>&>());
+    AssertClass(*container.template resolve<const std::unique_ptr<Class>&>());
     AssertClass(container.template resolve<IClass&>());
+    AssertClass(container.template resolve<const IClass&>());
+    AssertClass(container.template resolve<IClass*>());
+    AssertClass(container.template resolve<const IClass*>());
 
     ASSERT_THROW(container.template resolve<std::unique_ptr<IClass>&>(),
                  type_not_convertible_exception);
@@ -147,9 +193,15 @@ TYPED_TEST(external_test, unique_ptr_move) {
                                      storage<std::unique_ptr<Class>>,
                                      interface<Class, IClass>>(std::move(c));
     AssertClass(container.template resolve<Class&>());
+    AssertClass(container.template resolve<const Class&>());
     AssertClass(container.template resolve<Class*>());
+    AssertClass(container.template resolve<const Class*>());
     AssertClass(*container.template resolve<std::unique_ptr<Class>&>());
+    AssertClass(*container.template resolve<const std::unique_ptr<Class>&>());
     AssertClass(container.template resolve<IClass&>());
+    AssertClass(container.template resolve<const IClass&>());
+    AssertClass(container.template resolve<IClass*>());
+    AssertClass(container.template resolve<const IClass*>());
 
     ASSERT_THROW(container.template resolve<std::unique_ptr<IClass>&>(),
                  type_not_convertible_exception);
@@ -177,6 +229,19 @@ TYPED_TEST(external_test, optional_ref) {
     container
         .template register_type<scope<external>, storage<std::optional<Class>&>,
                                 interface<Class, IClass>>(c);
+    AssertClass(*container.template resolve<std::optional<Class>&>());
+    AssertClass(container.template resolve<Class&>());
+    AssertClass(container.template resolve<IClass&>());
+}
+
+TYPED_TEST(external_test, optional_move) {
+    using container_type = TypeParam;
+    auto c = std::make_optional<Class>();
+
+    container_type container;
+    container
+        .template register_type<scope<external>, storage<std::optional<Class>>,
+                                interface<Class, IClass>>(std::move(c));
     AssertClass(*container.template resolve<std::optional<Class>&>());
     AssertClass(container.template resolve<Class&>());
     AssertClass(container.template resolve<IClass&>());

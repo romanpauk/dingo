@@ -382,7 +382,7 @@ class container : public allocator_base<Allocator> {
                   T>>
     R resolve(resolving_context& context, IdType&& id = IdType()) {
         using Type = decay_t<T>;
-
+        static_assert(!std::is_const_v<Type>);
         auto data = type_factories_.template get<Type>();
         if (data) {
             if constexpr (is_none_v<std::decay_t<IdType>>) {

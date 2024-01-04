@@ -16,18 +16,22 @@
 #include <type_traits>
 
 namespace dingo {
-// TODO: this has misleadnig name
+// TODO: this has misleading name
 template <class T> struct decay : std::decay<T> {};
+
+template <class T> struct decay<const T> : decay<T> {};
 template <class T> struct decay<T*> : decay<T> {};
+template <class T> struct decay<const T*> : decay<T> {};
 template <class T> struct decay<T&> : decay<T> {};
+template <class T> struct decay<const T&> : decay<T> {};
 template <class T> struct decay<T&&> : decay<T> {};
 
 template <class T, class Deleter>
-struct decay<std::unique_ptr<T, Deleter>> : std::decay<T> {};
+struct decay<std::unique_ptr<T, Deleter>> : decay<T> {};
 
-template <class T> struct decay<std::shared_ptr<T>> : std::decay<T> {};
+template <class T> struct decay<std::shared_ptr<T>> : decay<T> {};
 
-template <class T> struct decay<std::optional<T>> : std::decay<T> {};
+template <class T> struct decay<std::optional<T>> : decay<T> {};
 
 template <class T, class Tag>
 struct decay<annotated<T, Tag>>
