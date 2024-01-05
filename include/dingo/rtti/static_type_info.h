@@ -11,13 +11,11 @@
 
 namespace dingo {
 class static_type_info {
-    template <typename T> struct static_type_index {
-        static constexpr size_t tag = 0;
+    template <typename T> struct type_index_tag {
+        static constexpr size_t tag{};
     };
 
   public:
-    // A faster variant of std::type_index that can be obtained without calling
-    // typeid().
     class type_index {
       public:
         constexpr type_index(size_t value) : value_(value) {}
@@ -31,8 +29,15 @@ class static_type_info {
         }
 
         struct hasher {
-            size_t operator()(const type_index& index) const {
-                return std::hash<size_t>()(index.value_);
+            constexpr size_t operator()(const type_index& index) const {
+                size_t h = index.value_;
+                // MurmurHash3Mixer
+                h ^= h >> 33;
+                h *= 0xff51afd7ed558ccdL;
+                h ^= h >> 33;
+                h *= 0xc4ceb9fe1a85ec53L;
+                h ^= h >> 33;
+                return h;
             }
         };
 
@@ -41,7 +46,7 @@ class static_type_info {
     };
 
     template <typename T> static constexpr type_index get_type_index() {
-        return reinterpret_cast<size_t>(&static_type_index<T>::tag);
+        return reinterpret_cast<size_t>(&type_index_tag<T>::tag);
     }
 };
 } // namespace dingo
