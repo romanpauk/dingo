@@ -19,7 +19,8 @@
 #include <dingo/factory/callable.h>
 #include <dingo/index.h>
 #include <dingo/resolving_context.h>
-#include <dingo/rtti.h>
+#include <dingo/rtti/static_type_info.h>
+#include <dingo/rtti/typeid_type_info.h>
 #include <dingo/static_allocator.h>
 #include <dingo/storage/shared_cyclical.h>
 #include <dingo/storage/unique.h>
@@ -43,7 +44,7 @@ struct dynamic_container_traits {
     template <typename> using rebind_t = dynamic_container_traits;
 
     using tag_type = none_t;
-    using rtti_type = dynamic_rtti;
+    using rtti_type = typeid_type_info;
     template <typename Value, typename Allocator>
     using type_factory_map_type = dynamic_type_map<rtti_type, Value, Allocator>;
     using allocator_type = std::allocator<char>;
@@ -54,7 +55,7 @@ template <typename Tag = void> struct static_container_traits {
     template <typename TagT> using rebind_t = static_container_traits<TagT>;
 
     using tag_type = Tag;
-    using rtti_type = static_rtti;
+    using rtti_type = static_type_info;
     template <typename Value, typename Allocator>
     using type_factory_map_type =
         static_type_map<rtti_type, Tag, Value, Allocator>;

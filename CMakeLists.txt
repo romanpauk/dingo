@@ -107,7 +107,8 @@ target_sources(dingo INTERFACE
     include/dingo/rebind_type.h
     include/dingo/resettable_i.h
     include/dingo/resolving_context.h
-    include/dingo/rtti.h
+    include/dingo/rtti/static_type_info.h
+    include/dingo/rtti/typeid_type_info.h
     include/dingo/storage.h
     include/dingo/storage/external.h
     include/dingo/storage/shared.h
