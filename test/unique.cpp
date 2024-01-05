@@ -25,15 +25,15 @@ TYPED_TEST(unique_test, value_resolve_rvalue) {
     {
         container_type container;
         container.template register_type<scope<unique>, storage<Class>>();
-        AssertTypeNotConvertible<Class, type_list<Class*>>(container);
         {
             AssertClass(container.template resolve<Class&&>());
             ASSERT_EQ(Class::Constructor, 1);
             ASSERT_EQ(Class::MoveConstructor, 2); // TODO
             ASSERT_EQ(Class::CopyConstructor, 0);
         }
-
         ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
+
+        AssertTypeNotConvertible<Class, type_list<Class*>>(container);
     }
 
     ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
@@ -119,8 +119,6 @@ TYPED_TEST(unique_test, unique_ptr) {
         container.template register_type<scope<unique>,
                                          storage<std::unique_ptr<Class>>,
                                          interface<Class, IClass>>();
-        AssertTypeNotConvertible<Class, type_list<Class&, Class&&, Class*>>(
-            container);
         {
             AssertClass(*container.template resolve<std::unique_ptr<Class>>());
             ASSERT_EQ(Class::Constructor, 1);
@@ -131,6 +129,9 @@ TYPED_TEST(unique_test, unique_ptr) {
         }
 
         ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
+
+        AssertTypeNotConvertible<Class, type_list<Class&, Class&&, Class*>>(
+            container);
     }
 
     ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
@@ -168,8 +169,6 @@ TYPED_TEST(unique_test, optional) {
         container_type container;
         container.template register_type<
             scope<unique>, storage<std::optional<Class>>, interface<Class>>();
-        AssertTypeNotConvertible<Class, type_list<Class&, Class&&, Class*>>(
-            container);
         {
             AssertClass(*container.template resolve<std::optional<Class>>());
             ASSERT_EQ(Class::Constructor, 1);
@@ -186,6 +185,9 @@ TYPED_TEST(unique_test, optional) {
         }
 
         ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
+
+        AssertTypeNotConvertible<Class, type_list<Class&, Class&&, Class*>>(
+            container);
     }
 
     ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());

@@ -156,7 +156,6 @@ template <typename RTTI, typename Target, typename StorageTag, typename Context,
           typename Source>
 void* convert_type(Context&, type_list<>, const typename RTTI::type_index&,
                    Source&&) {
-    assert(false);
     throw type_not_convertible_exception();
 }
 

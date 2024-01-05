@@ -68,9 +68,8 @@ struct class_instance_resolver<RTTI, TypeInterface, Storage, unique> {
     template <typename Conversions, typename Context, typename Container>
     void* resolve(Context& context, Container& container, Storage& storage,
                   const typename RTTI::type_index& type) {
-        if (!find_type<RTTI>(Conversions{}, type))
-            throw type_not_convertible_exception();
-
+        // TODO: convert_type should request the resolution only if
+        // there is a successful conversion found.
         class_recursion_guard<decay_t<typename Storage::type>> recursion_guard;
 
         // TODO: this should avoid the move. Provide memory to construct into
@@ -105,9 +104,6 @@ struct class_instance_resolver<RTTI, TypeInterface, Storage, shared>
     template <typename Conversions, typename Context, typename Container>
     void* resolve(Context& context, Container& container, Storage& storage,
                   const typename RTTI::type_index& type) {
-        if (!find_type<RTTI>(Conversions{}, type))
-            throw type_not_convertible_exception();
-
         if (!initialized_) {
             class_recursion_guard<decay_t<typename Storage::type>>
                 recursion_guard;
@@ -158,9 +154,6 @@ struct class_instance_resolver<RTTI, TypeInterface, Storage, external>
     template <typename Conversions, typename Context, typename Container>
     void* resolve(Context& context, Container& container, Storage& storage,
                   const typename RTTI::type_index& type) {
-        if (!find_type<RTTI>(Conversions{}, type))
-            throw type_not_convertible_exception();
-
         auto&& instance = storage.resolve(context, container);
         auto* address = type_traits<
             std::remove_reference_t<decltype(instance)>>::get_address(instance);
