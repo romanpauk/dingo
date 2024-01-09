@@ -20,6 +20,11 @@ template <typename T> struct class_traits {
     template <typename... Args> static T construct(Args&&... args) {
         return T{std::forward<Args>(args)...};
     }
+
+    template <typename... Args>
+    static void construct(void* ptr, Args&&... args) {
+        new (ptr) T{std::forward<Args>(args)...};
+    }
 };
 
 template <typename T> struct class_traits<T*> {
@@ -27,8 +32,9 @@ template <typename T> struct class_traits<T*> {
         return new T{std::forward<Args>(args)...};
     }
 
-    template <typename... Args> static T* construct(void* ptr, Args&&... args) {
-        return new (ptr) T{std::forward<Args>(args)...};
+    template <typename... Args>
+    static void construct(void* ptr, Args&&... args) {
+        new (ptr) T{std::forward<Args>(args)...};
     }
 };
 
@@ -43,12 +49,22 @@ template <typename T> struct class_traits<std::unique_ptr<T>> {
     static std::unique_ptr<T> construct(Args&&... args) {
         return std::make_unique<T>(std::forward<Args>(args)...);
     }
+
+    template <typename... Args>
+    static void construct(void* ptr, Args&&... args) {
+        new (ptr) std::unique_ptr<T>{new T{std::forward<Args>(args)...}};
+    }
 };
 
 template <typename T> struct class_traits<std::shared_ptr<T>> {
     template <typename... Args>
     static std::shared_ptr<T> construct(Args&&... args) {
         return std::make_shared<T>(std::forward<Args>(args)...);
+    }
+
+    template <typename... Args>
+    static void construct(void* ptr, Args&&... args) {
+        new (ptr) std::shared_ptr<T>{new T{std::forward<Args>(args)...}};
     }
 };
 
@@ -62,6 +78,11 @@ template <typename T> struct class_traits<std::optional<T>> {
     static std::optional<T>& construct(std::optional<T>& ptr, Args&&... args) {
         ptr.emplace(std::forward<Args>(args)...);
         return ptr;
+    }
+
+    template <typename... Args>
+    static void construct(void* ptr, Args&&... args) {
+        new (ptr) std::optional<T>{std::in_place, std::forward<Args>(args)...};
     }
 };
 

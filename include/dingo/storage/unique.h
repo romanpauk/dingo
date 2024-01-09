@@ -81,6 +81,11 @@ class storage<unique, Type, StoredType, Factory, Conversions> : Factory {
     Type resolve(Context& context, Container& container) {
         return Factory::template construct<Type>(context, container);
     }
+
+    template <typename Context, typename Container>
+    void resolve(void* ptr, Context& context, Container& container) {
+        Factory::template construct<Type>(ptr, context, container);
+    }
 };
 } // namespace detail
 } // namespace dingo

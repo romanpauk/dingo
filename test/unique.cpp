@@ -28,7 +28,7 @@ TYPED_TEST(unique_test, value_resolve_rvalue) {
         {
             AssertClass(container.template resolve<Class&&>());
             ASSERT_EQ(Class::Constructor, 1);
-            ASSERT_EQ(Class::MoveConstructor, 2); // TODO
+            ASSERT_EQ(Class::MoveConstructor, 1);
             ASSERT_EQ(Class::CopyConstructor, 0);
         }
         ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
@@ -49,7 +49,7 @@ TYPED_TEST(unique_test, value_resolve_value) {
         {
             AssertClass(container.template resolve<Class>());
             ASSERT_EQ(Class::Constructor, 1);
-            ASSERT_EQ(Class::MoveConstructor, 1); // TODO
+            ASSERT_EQ(Class::MoveConstructor, 0);
             ASSERT_EQ(Class::CopyConstructor, 1);
         }
         AssertClass(container.template resolve<const Class>());
@@ -172,7 +172,7 @@ TYPED_TEST(unique_test, optional) {
         {
             AssertClass(*container.template resolve<std::optional<Class>>());
             ASSERT_EQ(Class::Constructor, 1);
-            ASSERT_EQ(Class::MoveConstructor, 1);
+            ASSERT_EQ(Class::MoveConstructor, 0);
             ASSERT_EQ(Class::CopyConstructor, 1); // TODO
 
             AssertClass(

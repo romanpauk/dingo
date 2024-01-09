@@ -20,7 +20,7 @@
 #include <cstdlib>
 #include <map>
 #include <optional>
-
+#include <stdio.h>
 namespace dingo {
 
 template <typename T> struct class_recursion_guard_base {
@@ -72,16 +72,42 @@ struct class_instance_resolver<RTTI, TypeInterface, Storage, unique> {
         // there is a successful conversion found.
         class_recursion_guard<decay_t<typename Storage::type>> recursion_guard;
 
-        // TODO: this should avoid the move. Provide memory to construct into
-        // to the factory.
-        auto&& instance =
-            context.template construct<typename Storage::stored_type>(
-                storage.resolve(context, container));
-        auto* address = type_traits<
-            std::remove_reference_t<decltype(instance)>>::get_address(instance);
-        return convert_type<RTTI, decay_t<TypeInterface>*,
-                            typename Storage::tag_type>(context, Conversions{},
-                                                        type, address);
+#if 1
+        if constexpr (!std::is_pointer_v<typename Storage::type> ||
+                      !std::is_same_v<typename Storage::type,
+                                      typename Storage::stored_type>) {
+            // This code avoids the move by doing in-place construction.
+            // It does not work for pointers and if the storage types are not
+            // equal, the move is required to do the conversion (eg. in the
+            // second block, type of instance is stored_type, not type).
+            auto* instance =
+                context.template allocate<typename Storage::type>();
+            storage.resolve(instance, context, container);
+            if constexpr (!std::is_trivially_destructible_v<
+                              typename Storage::stored_type>) {
+                context.register_destructor(instance);
+            }
+            auto* address =
+                type_traits<std::remove_reference_t<decltype(*instance)>>::
+                    get_address(*instance);
+            return convert_type<RTTI, decay_t<TypeInterface>*,
+                                typename Storage::tag_type>(
+                context, Conversions{}, type, address);
+        } else
+#endif
+        {
+            // This code moves into instance. Note that type of instance
+            // can be casted.
+            auto&& instance =
+                context.template construct<typename Storage::stored_type>(
+                    storage.resolve(context, container));
+            auto* address =
+                type_traits<std::remove_reference_t<decltype(instance)>>::
+                    get_address(instance);
+            return convert_type<RTTI, decay_t<TypeInterface>*,
+                                typename Storage::tag_type>(
+                context, Conversions{}, type, address);
+        }
     }
 };
 

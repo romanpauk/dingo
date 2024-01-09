@@ -24,14 +24,17 @@
 namespace dingo {
 
 class resolving_context {
-    static constexpr size_t size = 32; // TODO
+    static constexpr size_t size = DINGO_CONTEXT_SIZE;
 
   public:
     resolving_context()
-        : resolve_counter_(), temporaries_size_(), resettables_size_(),
-          constructibles_size_(), arena_allocator_(arena_) {}
+        : resolve_counter_(), resettables_size_(), constructibles_size_(),
+          destructors_size_(), arena_allocator_(arena_) {}
 
     ~resolving_context() {
+        // TODO: rethink exception support as this is expensive
+        // TODO: constructibles_ are used only when there is cyclical storage.
+        // Use trait?
         if (resolve_counter_ == 0) {
             if (constructibles_size_) {
                 // Note that invocation of construct(_, 0) can grow
@@ -45,20 +48,14 @@ class resolving_context {
                 resettables_[i]->reset();
         }
 
-        // Destroy temporary instances
-        for (size_t i = 0; i < temporaries_size_; ++i)
-            temporaries_[i]->reset();
+        for (size_t i = 0; i < destructors_size_; ++i)
+            destructors_[i].dtor(destructors_[i].instance);
     }
 
     // TODO: this method seems useless but it is friend of a container and that
     // allows factories to not have to be known upfront.
     template <typename T, typename Container> T resolve(Container& container) {
         return container.template resolve<T, false>(*this);
-    }
-
-    void register_temporary(resettable_i* ptr) {
-        check_size(temporaries_size_);
-        temporaries_[temporaries_size_++] = ptr;
     }
 
     void register_resettable(resettable_i* ptr) {
@@ -76,51 +73,51 @@ class resolving_context {
     void increment() { ++resolve_counter_; }
     void decrement() { --resolve_counter_; }
 
-    template <typename T> struct temporary : resettable_i {
-        template <typename... Args>
-        temporary(Args&&... args) : instance_(std::forward<Args>(args)...) {}
-        void reset() override { instance_.~T(); }
-        T* get() { return &instance_; }
-
-      private:
-        T instance_;
-    };
-
     template <typename T, typename... Args> T& construct(Args&&... args) {
-        if constexpr (std::is_trivially_destructible_v<T>) {
-            auto allocator = allocator_traits::rebind<T>(arena_allocator_);
-            auto instance = allocator_traits::allocate(allocator, 1);
-            allocator_traits::construct(allocator, instance,
-                                        std::forward<Args>(args)...);
-            return *instance;
-        } else {
-            auto allocator =
-                allocator_traits::rebind<temporary<T>>(arena_allocator_);
-            auto instance = allocator_traits::allocate(allocator, 1);
-            allocator_traits::construct(allocator, instance,
-                                        std::forward<Args>(args)...);
-            register_temporary(instance);
-            return *instance->get();
-        }
+        auto allocator = allocator_traits::rebind<T>(arena_allocator_);
+        auto instance = allocator_traits::allocate(allocator, 1);
+        allocator_traits::construct(allocator, instance,
+                                    std::forward<Args>(args)...);
+        if constexpr (!std::is_trivially_destructible_v<T>)
+            register_destructor(instance);
+        return *instance;
+    }
+
+    template <typename T> T* allocate() {
+        auto allocator = allocator_traits::rebind<T>(arena_allocator_);
+        return allocator_traits::allocate(allocator, 1);
+    }
+
+    template <typename T> void register_destructor(T* instance) {
+        static_assert(!std::is_trivially_destructible_v<T>);
+        check_size(destructors_size_);
+        destructors_[destructors_size_++] = {instance, &destructor<T>};
     }
 
   private:
+    template <typename T> static void destructor(void* ptr) {
+        reinterpret_cast<T*>(ptr)->~T();
+    }
+
     void check_size(size_t count) {
         if (size == count)
             throw type_overflow_exception();
     }
 
     // TODO: this is fast, but non-generic, needs more work
-    size_t resolve_counter_;
+    uint16_t resolve_counter_;
+    uint16_t resettables_size_;
+    uint16_t constructibles_size_;
+    uint16_t destructors_size_;
 
-    size_t temporaries_size_;
-    std::array<resettable_i*, size> temporaries_;
+    struct destructible {
+        void* instance;
+        void (*dtor)(void*);
+    };
 
-    size_t resettables_size_;
     std::array<resettable_i*, size> resettables_;
-
-    size_t constructibles_size_;
     std::array<constructible_i*, size> constructibles_;
+    std::array<destructible, size> destructors_;
 
     // TODO: how big should this be?
     arena<512> arena_;

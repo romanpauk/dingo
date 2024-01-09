@@ -45,7 +45,7 @@ static void resolve_baseline_unique(benchmark::State& state) {
 }
 
 template <typename ContainerTraits>
-static void resolve_container_unique(benchmark::State& state) {
+static void resolve_container_unique_int(benchmark::State& state) {
     using namespace dingo;
     using container_type = container<ContainerTraits>;
     container_type container;
@@ -54,7 +54,24 @@ static void resolve_container_unique(benchmark::State& state) {
     int counter = 0;
     for (auto _ : state) {
         auto cls = container.template resolve<Class<0>>();
-        counter += cls.GetCounter();
+        counter = cls.GetCounter();
+    }
+    benchmark::DoNotOptimize(counter);
+    state.SetBytesProcessed(state.iterations());
+}
+
+template <typename ContainerTraits>
+static void resolve_container_unique_string(benchmark::State& state) {
+    using namespace dingo;
+    using container_type = container<ContainerTraits>;
+    container_type container;
+    container.template register_type<scope<unique>, storage<std::string>,
+                                     factory<constructor<std::string()>>>();
+
+    int counter = 0;
+    for (auto _ : state) {
+        auto cls = container.template resolve<std::string>();
+        counter = cls.empty();
     }
     benchmark::DoNotOptimize(counter);
     state.SetBytesProcessed(state.iterations());
@@ -217,9 +234,17 @@ static void register_type_arena_10(benchmark::State& state) {
 }
 
 BENCHMARK(resolve_baseline_unique);
-BENCHMARK_TEMPLATE(resolve_container_unique, dingo::static_container_traits<>)
+BENCHMARK_TEMPLATE(resolve_container_unique_int,
+                   dingo::static_container_traits<>)
     ->UseRealTime();
-BENCHMARK_TEMPLATE(resolve_container_unique, dingo::dynamic_container_traits)
+BENCHMARK_TEMPLATE(resolve_container_unique_int,
+                   dingo::dynamic_container_traits)
+    ->UseRealTime();
+BENCHMARK_TEMPLATE(resolve_container_unique_string,
+                   dingo::static_container_traits<>)
+    ->UseRealTime();
+BENCHMARK_TEMPLATE(resolve_container_unique_string,
+                   dingo::dynamic_container_traits)
     ->UseRealTime();
 
 BENCHMARK(resolve_baseline_shared);

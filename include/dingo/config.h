@@ -11,6 +11,10 @@
 #define DINGO_CONSTRUCTOR_DETECTION_ARGS 32
 #endif
 
+#if !defined(DINGO_CONTEXT_SIZE)
+#define DINGO_CONTEXT_SIZE 32
+#endif
+
 #define DINGO_CXX17 17
 #define DINGO_CXX20 20
 #define DINGO_CXX23 23
