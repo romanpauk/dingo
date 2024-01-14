@@ -18,30 +18,10 @@
 
 namespace dingo {
 
-template <typename T,
-          bool IsTriviallyDestructible = std::is_trivially_destructible_v<T>>
-struct temporary;
-
-template <typename T> struct temporary<T, false> : resettable_i {
-    template <typename... Args>
-    temporary(Args&&... args) : instance_(std::forward<Args>(args)...) {}
-    void reset() override { instance_.~T(); }
-    T* get() { return &instance_; }
-
-  private:
-    T instance_;
-};
-
-template <typename T> struct temporary<T, true> {
-  private:
-    // This exists only for size calculation
-    std::aligned_storage_t<sizeof(T)> instance_;
-};
-
 template <typename> struct class_instance_temporary_storage {};
 template <typename... Args>
 struct class_instance_temporary_storage<type_list<Args...>> {
-    using type = std::aligned_union_t<0, void*, temporary<Args>...>;
+    using type = std::aligned_union_t<0, void*, Args...>;
     static constexpr std::size_t size = sizeof(type);
 };
 
@@ -59,44 +39,37 @@ struct class_instance_temporary {
             return *reinterpret_cast<T*>(ptr_);
         }
 
-        static_assert(sizeof(temporary<T>) <= sizeof(storage_));
-        assert(!resettable_);
-
-        if constexpr (std::is_trivially_destructible_v<T>) {
-            auto* instance = reinterpret_cast<T*>(&storage_);
-            new (instance) T(std::forward<Args>(args)...);
-            ptr_ = &instance;
+        static_assert(sizeof(T) <= sizeof(storage_));
+        assert(!ptr_);
+        auto* instance = reinterpret_cast<T*>(&storage_);
+        new (instance) T(std::forward<Args>(args)...);
+        ptr_ = instance;
 #if !defined(NDEBUG)
-            type_ = RTTI::template get_type_index<T*>();
+        type_ = RTTI::template get_type_index<T*>();
 #endif
-            return instance;
-        } else {
-
-            auto* instance = reinterpret_cast<temporary<T>*>(&storage_);
-            new (instance) temporary<T>(std::forward<Args>(args)...);
-            ptr_ = instance->get();
-            resettable_ = instance;
-#if !defined(NDEBUG)
-            type_ = RTTI::template get_type_index<T*>();
-#endif
-            return *instance->get();
-        }
+        if constexpr (!std::is_trivially_destructible_v<T>)
+            destructor_ = &destructor<T>;
+        return *instance;
     }
 
     void reset() {
-        if (resettable_) {
-            resettable_->reset();
-            resettable_ = nullptr;
+        if (destructor_) {
+            (*destructor_)(ptr_);
+            destructor_ = nullptr;
         }
         ptr_ = nullptr;
     }
 
   private:
+    template <typename T> static void destructor(void* ptr) {
+        reinterpret_cast<T*>(ptr)->~T();
+    }
+
     std::aligned_storage_t<
         class_instance_temporary_storage<ConversionTypes>::size>
         storage_;
-    void* ptr_ = 0;
-    resettable_i* resettable_ = 0;
+    void* ptr_ = nullptr;
+    void (*destructor_)(void*) = nullptr;
 #if !defined(NDEBUG)
     typename RTTI::type_index type_;
 #endif
