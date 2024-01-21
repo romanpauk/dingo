@@ -12,6 +12,7 @@
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
+#include <dingo/type_list.h>
 
 #include <gtest/gtest.h>
 
@@ -261,6 +262,18 @@ TYPED_TEST(class_factory_test, callable_resolve_shared_cyclical) {
         callable([&](int v) { return B{v * v}; }));
     auto b = container.template resolve<B&>();
     ASSERT_EQ(b.v, 16);
+}
+
+TEST(class_factory_test, tuple_replace) {
+    static_assert(std::is_same_v<
+                  tuple_replace<std::tuple<int, int, int>, 0, double>::type,
+                  std::tuple<double, int, int>>);
+    static_assert(std::is_same_v<
+                  tuple_replace<std::tuple<int, int, int>, 1, double>::type,
+                  std::tuple<int, double, int>>);
+    static_assert(std::is_same_v<
+                  tuple_replace<std::tuple<int, int, int>, 2, double>::type,
+                  std::tuple<int, int, double>>);
 }
 
 } // namespace dingo

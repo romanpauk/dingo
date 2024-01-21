@@ -148,6 +148,30 @@ TYPED_TEST(shared_cyclical_test, shared_ptr_interface) {
     AssertClass(b);
 }
 
+TYPED_TEST(shared_cyclical_test, exception) {
+    using container_type = TypeParam;
+
+    struct Ex {};
+    struct B;
+    struct A : Class {
+        A(B&) { throw Ex(); }
+    };
+
+    struct B : Class {
+        B(A&) {}
+    };
+
+    container_type container;
+    container.template register_type<scope<shared_cyclical>,
+                                     storage<std::shared_ptr<A>>>();
+    container.template register_type<scope<shared_cyclical>,
+                                     storage<std::shared_ptr<B>>>();
+
+    ASSERT_THROW(container.template resolve<A&>(), Ex);
+    ASSERT_THROW(container.template resolve<B&>(), Ex);
+    ASSERT_THROW(container.template resolve<A&>(), Ex);
+}
+
 TYPED_TEST(shared_cyclical_test, trivially_destructible) {
     using container_type = TypeParam;
 

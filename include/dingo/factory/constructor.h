@@ -12,12 +12,21 @@
 #include <dingo/annotated.h>
 #include <dingo/class_traits.h>
 #include <dingo/decay.h>
+#include <dingo/type_list.h>
 
 namespace dingo {
 template <typename...> struct constructor;
 
 namespace detail {
-template <class DisabledType> struct constructor_argument {
+struct reference {};
+struct const_reference {};
+
+template <class DisabledType, typename Tag> struct constructor_argument;
+
+template <class DisabledType>
+struct constructor_argument<DisabledType, reference> {
+    using tag_type = reference;
+
     template <typename T, typename = typename std::enable_if_t<!std::is_same_v<
                               DisabledType, typename std::decay_t<T>>>>
     operator T&();
@@ -27,8 +36,21 @@ template <class DisabledType> struct constructor_argument {
     operator T&&();
 };
 
+template <class DisabledType>
+struct constructor_argument<DisabledType, const_reference> {
+    using tag_type = reference;
+
+    template <typename T, typename = typename std::enable_if_t<!std::is_same_v<
+                              DisabledType, typename std::decay_t<T>>>>
+    operator const T&();
+};
+
+template <typename DisabledType, typename Context, typename Container,
+          typename Tag>
+class constructor_argument_impl;
+
 template <typename DisabledType, typename Context, typename Container>
-class constructor_argument_impl {
+class constructor_argument_impl<DisabledType, Context, Container, reference> {
   public:
     constructor_argument_impl(Context& context, Container& container)
         : context_(context), container_(container) {}
@@ -38,11 +60,19 @@ class constructor_argument_impl {
     operator T*() {
         return context_.template resolve<T*>(container_);
     }
+
     template <typename T, typename = std::enable_if_t<
                               !std::is_same_v<DisabledType, std::decay_t<T>>>>
     operator T&() {
         return context_.template resolve<T&>(container_);
     }
+
+    template <typename T, typename = std::enable_if_t<
+                              !std::is_same_v<DisabledType, std::decay_t<T>>>>
+    operator const T&() {
+        return context_.template resolve<const T&>(container_);
+    }
+
     template <typename T, typename = std::enable_if_t<
                               !std::is_same_v<DisabledType, std::decay_t<T>>>>
     operator T&&() {
@@ -72,6 +102,10 @@ struct list_initialization_impl<
 template <typename T, typename... Args>
 struct list_initialization : list_initialization_impl<T, void, Args...> {};
 
+template <typename T, typename... Args>
+struct list_initialization<T, std::tuple<Args...>>
+    : list_initialization<T, Args...> {};
+
 // Filters out T(T&).
 // TODO: It should be possible to write all into single class
 template <typename T, typename Arg>
@@ -90,12 +124,40 @@ struct direct_initialization_impl<
 template <typename T, typename... Args>
 struct direct_initialization : direct_initialization_impl<T, void, Args...> {};
 
+template <typename T, typename... Args>
+struct direct_initialization<T, std::tuple<Args...>>
+    : direct_initialization<T, Args...> {};
+
 // Filters out T(T&).
 // TODO: It should be possible to write all into single class
 template <typename T, typename Arg>
 struct direct_initialization<T, Arg>
     : std::conjunction<direct_initialization_impl<T, void, Arg>,
                        std::negation<std::is_same<std::decay_t<Arg>, T>>> {};
+
+template <typename T, template <typename...> typename IsConstructible,
+          typename Tuple, typename Value, size_t I = 0,
+          bool = std::tuple_size_v<Tuple> == I>
+struct constructor_arguments_rewrite
+    : std::conditional_t<
+          // If T is constructible using modified args,
+          IsConstructible<T,
+                          typename tuple_replace<Tuple, I, Value>::type>::value,
+          // Continue with modified args
+          constructor_arguments_rewrite<
+              T, IsConstructible, typename tuple_replace<Tuple, I, Value>::type,
+              Value, I + 1>,
+          // Else continue with unmodified args
+          constructor_arguments_rewrite<T, IsConstructible, Tuple, Value,
+                                        I + 1>> {};
+
+template <typename T, template <typename...> typename IsConstructible,
+          typename Tuple, typename Value, size_t I>
+struct constructor_arguments_rewrite<T, IsConstructible, Tuple, Value, I,
+                                     true> {
+    // This is the final modified tuple that can be constructed
+    using type = Tuple;
+};
 
 template <typename T, template <typename...> typename IsConstructible,
           bool Assert, size_t N, bool Constructible, typename... Args>
@@ -107,7 +169,7 @@ template <typename T, template <typename...> typename IsConstructible,
           typename = void, typename... Args>
 struct constructor_detection
     : constructor_detection<T, IsConstructible, Assert, N, void,
-                            constructor_argument<T>, Args...> {};
+                            constructor_argument<T, reference>, Args...> {};
 
 // Upon reaching N, generates N attempts to instantiate, going N, N-1, N-2... 0
 // arguments. This assures that container will select the construction method
@@ -123,11 +185,9 @@ struct constructor_detection<T, IsConstructible, Assert, N,
                                  IsConstructible<T, Args...>::value,
                                  std::tuple<Args...>> {};
 
-// Construction was found. Bail out (by not inheriting anymore).
-template <typename T, template <typename...> typename IsConstructible,
-          bool Assert, size_t N, typename... Args>
-struct constructor_detection_impl<T, IsConstructible, Assert, N, true,
-                                  std::tuple<Args...>> {
+template <typename T, typename... Args> struct constructor_factory_methods;
+template <typename T, typename... Args>
+struct constructor_factory_methods<T, std::tuple<Args...>> {
     static constexpr size_t arity = sizeof...(Args);
     static constexpr bool valid = true;
 
@@ -135,18 +195,44 @@ struct constructor_detection_impl<T, IsConstructible, Assert, N, true,
     static Type construct(Context& ctx, Container& container) {
         return class_traits<Type>::construct(
             ((void)sizeof(Args),
-             constructor_argument_impl<T, Context, Container>(ctx,
-                                                              container))...);
+             constructor_argument_impl<T, Context, Container,
+                                       typename Args::tag_type>(ctx,
+                                                                container))...);
     }
 
     template <typename Type, typename Context, typename Container>
     static void construct(void* ptr, Context& ctx, Container& container) {
         class_traits<Type>::construct(
             ptr, ((void)sizeof(Args),
-                  constructor_argument_impl<T, Context, Container>(
+                  constructor_argument_impl<T, Context, Container,
+                                            typename Args::tag_type>(
                       ctx, container))...);
     }
 };
+
+//
+// Construction was found. Bail out (by not inheriting detection anymore).
+// Try to rewrite detected T&/T&& into T (if that still constructs). Construct
+// construct() factories with final rewritten constructor args.
+// TODO: try to rewrite detected T&/T&& into const T&, as:
+//  1) T& and T&& would be deduced correctly, so they will be passed directly.
+//  2) T and const T& would be both deduced as const T&. They will require
+//  context in destructor in resolve<>.
+// TODO: add a DINGO_INJECT() macro to be able to get 100% correct injection if
+// required.
+//
+
+template <typename T, template <typename...> typename IsConstructible,
+          bool Assert, size_t N, typename... Args>
+struct constructor_detection_impl<T, IsConstructible, Assert, N, true,
+                                  std::tuple<Args...>>
+    : constructor_factory_methods<
+          T,
+          // TODO: rewrite is now disabled
+          // typename constructor_arguments_rewrite<
+          //     T, IsConstructible, std::tuple<Args...>,
+          //     constructor_argument<T, reference>>::type
+          std::tuple<Args...>> {};
 
 // Construction was not found. Generate next level of inheritance with one less
 // argument.

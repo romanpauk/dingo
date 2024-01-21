@@ -9,6 +9,7 @@
 
 #include <dingo/config.h>
 
+#include <dingo/any.h>
 #include <dingo/class_instance_factory_i.h>
 #include <dingo/class_instance_resolver.h>
 #include <dingo/rebind_type.h>
@@ -55,6 +56,27 @@ template <typename T> struct class_instance_data_traits<std::shared_ptr<T>> {
     static T& get(std::shared_ptr<T>& storage) { return *storage; }
 };
 
+template <typename RTTI, typename Factory, typename Context>
+void* resolve_type_conversion(Factory&, Context&, type_list<>,
+                              const typename RTTI::type_index&) {
+    throw type_not_convertible_exception();
+}
+
+// TODO: instead of StorageTag, rvalue reference can be used to determine
+// move-ability
+template <typename RTTI, typename Factory, typename Context, typename Head,
+          typename... Tail>
+void* resolve_type_conversion(Factory& factory, Context& context,
+                              type_list<Head, Tail...>,
+                              const typename RTTI::type_index& type) {
+    if (RTTI::template get_type_index<Head>() == type) {
+        return factory.template resolve_type_conversion<Head>(context);
+    } else {
+        return resolve_type_conversion<RTTI>(factory, context,
+                                             type_list<Tail...>{}, type);
+    }
+}
+
 // TODO: the container here is just for RTTI, but it is needed to get the
 // inner container type and that is very hard. Perhaps pass RTTI and inner
 // container directly?
@@ -86,37 +108,52 @@ class class_instance_factory : public class_instance_factory_i<Container> {
     void*
     get_value(resolving_context& context,
               const typename Container::rtti_type::type_index& type) override {
-        return resolver_.template resolve<
-            typename storage_traits::conversions::value_types>(
-            context, data_traits::get(data_).container,
-            data_traits::get(data_).storage, type);
+        return ::dingo::resolve_type_conversion<typename Container::rtti_type>(
+            *this, context, typename storage_traits::conversions::value_types{},
+            type);
     }
 
     void* get_lvalue_reference(
         resolving_context& context,
         const typename Container::rtti_type::type_index& type) override {
-        return resolver_.template resolve<
-            typename storage_traits::conversions::lvalue_reference_types>(
-            context, data_traits::get(data_).container,
-            data_traits::get(data_).storage, type);
+        return ::dingo::resolve_type_conversion<typename Container::rtti_type>(
+            *this, context,
+            typename storage_traits::conversions::lvalue_reference_types{},
+            type);
     }
 
     void* get_rvalue_reference(
         resolving_context& context,
         const typename Container::rtti_type::type_index& type) override {
-        return resolver_.template resolve<
-            typename storage_traits::conversions::rvalue_reference_types>(
-            context, data_traits::get(data_).container,
-            data_traits::get(data_).storage, type);
+        return ::dingo::resolve_type_conversion<typename Container::rtti_type>(
+            *this, context,
+            typename storage_traits::conversions::rvalue_reference_types{},
+            type);
     }
 
     void* get_pointer(
         resolving_context& context,
         const typename Container::rtti_type::type_index& type) override {
-        return resolver_.template resolve<
-            typename storage_traits::conversions::pointer_types>(
-            context, data_traits::get(data_).container,
-            data_traits::get(data_).storage, type);
+        return ::dingo::resolve_type_conversion<typename Container::rtti_type>(
+            *this, context,
+            typename storage_traits::conversions::pointer_types{}, type);
+    }
+
+    template <typename T, typename Context>
+    void* resolve_type_conversion(Context& context) {
+        using Target =
+            std::remove_reference_t<rebind_type_t<T, decay_t<TypeInterface>>>;
+        using Source = decltype(resolve(context));
+
+        auto&& instance =
+            type_conversion<typename Storage::tag_type, Target, Source>::apply(
+                *this, context, resolver_.get_temporary_context(context));
+        return get_any(context, std::forward<decltype(instance)>(instance));
+    }
+
+    template <typename Context> decltype(auto) resolve(Context& context) {
+        return resolver_.resolve(context, data_traits::get(data_).container,
+                                 data_traits::get(data_).storage);
     }
 
     void destroy() override {
@@ -124,6 +161,25 @@ class class_instance_factory : public class_instance_factory_i<Container> {
             get_container().get_allocator());
         allocator_traits::destroy(allocator, this);
         allocator_traits::deallocate(allocator, this, 1);
+    }
+
+    template <typename Context, typename T>
+    void* get_any(Context& context, T&& instance) {
+        // TODO: this is needed for performance, tricky part is where to
+        // determine what is ownership, as there can be get_value/external or
+        // get_lvalue/unique.
+
+        if constexpr (std::is_reference_v<T>) {
+            return &instance;
+        } else if constexpr (std::is_pointer_v<T>) {
+            return instance;
+        } else {
+            // TODO: there should be a way how to construct into any for unique
+            // storage
+            any& p = context.template construct<any_impl<T>>(
+                std::forward<T>(instance));
+            return any::serialize(p);
+        }
     }
 };
 

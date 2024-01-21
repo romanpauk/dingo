@@ -232,6 +232,7 @@ class container : public allocator_base<Allocator> {
             std::conditional_t<!is_none_v<std::decay_t<Arg>>,
                                type_registration<TypeArgs..., factory<Arg>>,
                                type_registration<TypeArgs...>>;
+        (void)arg;
         //
         // An optimization and a feature: if storage type can be only queried by
         // single interface and the interface allows for proper deletion through

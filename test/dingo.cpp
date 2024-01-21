@@ -37,7 +37,7 @@ TYPED_TEST(dingo_test, unique_hierarchy) {
         .template register_type<scope<unique>, storage<std::unique_ptr<U>>>();
     container.template register_type<scope<unique>, storage<B>>();
 
-    container.template resolve<B&>();
+    container.template resolve<B>();
 }
 
 TYPED_TEST(dingo_test, resolve_rollback) {
@@ -57,18 +57,18 @@ TYPED_TEST(dingo_test, resolve_rollback) {
 
     ASSERT_THROW(container.template resolve<C&>(), Ex);
     ASSERT_EQ(A::Constructor, 1);
-    ASSERT_EQ(A::Destructor, 1);
+    ASSERT_EQ(A::Destructor, 0);
     ASSERT_EQ(B::Constructor, 1);
-    ASSERT_EQ(B::Destructor, 1);
+    ASSERT_EQ(B::Destructor, 0);
 
     container.template resolve<A&>();
-    ASSERT_EQ(A::Constructor, 2);
-    ASSERT_EQ(A::Destructor, 1);
+    ASSERT_EQ(A::Constructor, 1);
+    ASSERT_EQ(A::Destructor, 0);
     ASSERT_THROW(container.template resolve<C>(), Ex);
-    ASSERT_EQ(A::Constructor, 2);
-    ASSERT_EQ(A::Destructor, 1);
-    ASSERT_EQ(B::Constructor, 2);
-    ASSERT_EQ(B::Destructor, 2);
+    ASSERT_EQ(A::Constructor, 1);
+    ASSERT_EQ(A::Destructor, 0);
+    ASSERT_EQ(B::Constructor, 1);
+    ASSERT_EQ(B::Destructor, 0);
 }
 
 TYPED_TEST(dingo_test, type_already_registered) {

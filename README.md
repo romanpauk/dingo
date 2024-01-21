@@ -321,9 +321,9 @@ See [dingo/storage/shared_cyclical.h](include/dingo/storage/shared_cyclical.h) f
 
 Container can be used from multiple modules, specifically it can be filled in one module and used in other modules. This is a requirement for larger projects with not so clean dependencies. Compared to the compile-time DI solutions, errors are propagated in runtime as exceptions.
 
-#### Exception-safe
+#### Exception Safety Guarantee
 
-When exception occurs in user-provided code, the state of the container is not changed. Implemented using roll-back.
+When an exception occurs in a user-provided code during instance resolution, the state of a container is valid with all successfully resolved instances intact. Note that as a resolution is a recursive process, the container state can be modified due to successful resolutions being made before reaching a resolution that will fail.
 
 #### Extensible
 

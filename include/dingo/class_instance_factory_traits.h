@@ -24,20 +24,21 @@ template <typename RTTI, typename T> struct class_instance_factory_traits {
         // destruction by move does not matter. But at this place we have no
         // clue if the storage is unique or not.
         // TODO: test shared storage with non-copyable type requested as value
+
         if constexpr (has_value_type_v<T>) {
             if constexpr (std::is_copy_constructible_v<
                               typename T::value_type>) {
-                return *static_cast<T*>(factory.get_value(
+                return *any::deserialize<T*>(factory.get_value(
                     context, RTTI::template get_type_index<
                                  rebind_type_t<T, runtime_type>>()));
             }
         } else if constexpr (std::is_copy_constructible_v<T>) {
-            return *static_cast<T*>(factory.get_value(
+            return *any::deserialize<T*>(factory.get_value(
                 context, RTTI::template get_type_index<
                              rebind_type_t<T, runtime_type>>()));
         }
 
-        return std::move(*static_cast<T*>(factory.get_value(
+        return std::move(*any::deserialize<T*>(factory.get_value(
             context,
             RTTI::template get_type_index<rebind_type_t<T, runtime_type>>())));
     }
@@ -47,7 +48,18 @@ template <typename RTTI, typename T>
 struct class_instance_factory_traits<RTTI, T&> {
     template <typename Factory, typename Context>
     static T& resolve(Factory& factory, Context& context) {
-        return *static_cast<T*>(factory.get_lvalue_reference(
+        // TODO: any is created
+        return *any::deserialize<T*>(factory.get_lvalue_reference(
+            context,
+            RTTI::template get_type_index<rebind_type_t<T&, runtime_type>>()));
+    }
+};
+
+template <typename RTTI, typename T>
+struct class_instance_factory_traits<RTTI, const T&> {
+    template <typename Factory, typename Context>
+    static T& resolve(Factory& factory, Context& context) {
+        return *any::deserialize<T*>(factory.get_lvalue_reference(
             context,
             RTTI::template get_type_index<rebind_type_t<T&, runtime_type>>()));
     }
@@ -57,7 +69,7 @@ template <typename RTTI, typename T>
 struct class_instance_factory_traits<RTTI, T&&> {
     template <typename Factory, typename Context>
     static T&& resolve(Factory& factory, Context& context) {
-        return std::move(*static_cast<T*>(factory.get_rvalue_reference(
+        return std::move(*any::deserialize<T*>(factory.get_rvalue_reference(
             context, RTTI::template get_type_index<
                          rebind_type_t<T&&, runtime_type>>())));
     }
@@ -67,7 +79,8 @@ template <typename RTTI, typename T>
 struct class_instance_factory_traits<RTTI, T*> {
     template <typename Factory, typename Context>
     static T* resolve(Factory& factory, Context& context) {
-        return static_cast<T*>(factory.get_pointer(
+        // TODO: any is created
+        return any::deserialize<T*>(factory.get_pointer(
             context,
             RTTI::template get_type_index<rebind_type_t<T*, runtime_type>>()));
     }

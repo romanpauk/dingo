@@ -9,7 +9,6 @@
 
 #include <dingo/config.h>
 
-#include <dingo/constructible_i.h>
 #include <dingo/decay.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/storage.h>
@@ -213,32 +212,22 @@ class storage_instance<shared_cyclical, std::shared_ptr<Type>,
     std::shared_ptr<StoredType> instance_;
 };
 
-template <typename Instance, typename Context, typename Container>
-struct shared_cyclical_constructible : constructible_i {
-    shared_cyclical_constructible(Instance* instance, Context* context,
-                                  Container* container)
-        : instance_(instance), context_(context), container_(container) {}
-
-    void construct() override {
-        if constexpr (!std::is_same_v<void, Instance>)
-            instance_->construct(*context_, *container_);
-    }
-
-  private:
-    Instance* instance_;
-    Context* context_;
-    Container* container_;
-};
-
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
 class storage<shared_cyclical, Type, StoredType, Factory, Conversions>
     : public resettable_i {
     storage_instance<shared_cyclical, Type, StoredType, Factory> instance_;
 
-    std::aligned_storage_t<sizeof(
-        shared_cyclical_constructible<void, void, void>)>
-        constructible_;
+    template <typename T> struct rollback {
+        rollback(T* instance) : instance_(instance) {}
+        ~rollback() {
+            if (std::uncaught_exceptions())
+                instance_->reset();
+        }
+
+      private:
+        T* instance_;
+    };
 
   public:
     template <typename... Args>
@@ -255,16 +244,12 @@ class storage<shared_cyclical, Type, StoredType, Factory, Conversions>
     auto resolve(Context& context, Container& container)
         -> decltype(instance_.get()) {
         if (instance_.empty()) {
-            using constructible_type =
-                shared_cyclical_constructible<decltype(instance_), Context,
-                                              Container>;
-            static_assert(std::is_trivially_destructible_v<constructible_type>);
-            static_assert(sizeof(constructible_) <= sizeof(constructible_type));
-            new (reinterpret_cast<constructible_type*>(&constructible_))
-                constructible_type(&instance_, &context, &container);
-            context.register_constructible(
-                reinterpret_cast<constructible_type*>(&constructible_));
-            return instance_.resolve(context);
+            context.template construct<rollback<decltype(instance_)>>(
+                &instance_);
+
+            auto&& instance = instance_.resolve(context);
+            instance_.construct(context, container);
+            return instance;
         }
         return instance_.get();
     }

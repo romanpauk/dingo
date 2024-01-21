@@ -46,4 +46,24 @@ void for_each(type_list<Head, Tail...>, Function&& fn) {
     fn(type_list_iterator<Head>());
     for_each(type_list<Tail...>{}, std::forward<Function>(fn));
 }
+
+template <typename Tuple, size_t I, typename Arg, typename Index>
+struct tuple_replace_impl;
+
+template <typename Tuple, size_t I, typename Arg, size_t... Is>
+struct tuple_replace_impl<Tuple, I, Arg, std::index_sequence<Is...>> {
+    static_assert(I < sizeof...(Is));
+    using type = std::tuple<
+        std::conditional_t<Is == I, Arg, std::tuple_element_t<Is, Tuple>>...>;
+};
+
+template <typename Tuple, size_t I, typename Arg> struct tuple_replace;
+
+template <size_t I, typename Arg, typename... Args>
+struct tuple_replace<std::tuple<Args...>, I, Arg> {
+    using type =
+        typename tuple_replace_impl<std::tuple<Args...>, I, Arg,
+                                    std::index_sequence_for<Args...>>::type;
+};
+
 } // namespace dingo
