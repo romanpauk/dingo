@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
+#include <dingo/constructor.h>
 #include <dingo/container.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
@@ -274,6 +275,20 @@ TEST(class_factory_test, tuple_replace) {
     static_assert(std::is_same_v<
                   tuple_replace<std::tuple<int, int, int>, 2, double>::type,
                   std::tuple<int, int, double>>);
+}
+
+TYPED_TEST(class_factory_test, constructor_type) {
+    struct B {
+        B(int) : index(0) {}
+        DINGO_CONSTRUCTOR(B(int, int)) : index(1) {}
+        B(int, int, int) : index(2) {}
+        int index = 0;
+    };
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_type<scope<unique>, storage<int>>();
+    container.template register_type<scope<unique>, storage<B>>();
+    ASSERT_EQ(container.template resolve<B>().index, 1);
 }
 
 } // namespace dingo

@@ -93,6 +93,7 @@ target_sources(dingo INTERFACE
     include/dingo/class_traits.h
     include/dingo/collection_traits.h
     include/dingo/config.h
+    include/dingo/constructor.h
     include/dingo/container.h
     include/dingo/decay.h
     include/dingo/exceptions.h

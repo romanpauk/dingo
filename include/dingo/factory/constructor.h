@@ -253,6 +253,32 @@ struct constructor_detection_impl<T, IsConstructible, Assert, N, false,
     static_assert(!Assert || valid,
                   "class T construction not detected or ambiguous");
 };
+
+template <typename T, typename = void>
+struct has_constructor_typedef_type : std::false_type {};
+
+template <typename T>
+struct has_constructor_typedef_type<
+    T, typename std::void_t<typename T::dingo_constructor_type>>
+    : std::true_type {};
+
+template <typename T>
+static constexpr bool has_constructor_typedef_type_v =
+    has_constructor_typedef_type<T>::value;
+
+template <typename T, bool = has_constructor_typedef_type_v<T>>
+struct constructor_typedef_impl;
+
+template <typename T>
+struct constructor_typedef_impl<T, true> : T::dingo_constructor_type {};
+
+template <typename T>
+struct constructor_typedef_impl<T, false>
+    : constructor_detection<T, detail::list_initialization> {};
+
+template <typename T>
+struct constructor_typedef : constructor_typedef_impl<T> {};
+
 } // namespace detail
 
 template <typename T, typename... Args> struct constructor<T(Args...)> {
@@ -275,8 +301,6 @@ template <typename T, typename... Args> struct constructor<T(Args...)> {
 template <typename T, typename... Args>
 struct constructor<T, Args...> : constructor<T(Args...)> {};
 
-template <typename T>
-struct constructor<T>
-    : detail::constructor_detection<T, detail::list_initialization> {};
+template <typename T> struct constructor<T> : detail::constructor_typedef<T> {};
 
 } // namespace dingo
