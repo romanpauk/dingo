@@ -28,17 +28,17 @@ template <typename RTTI, typename T> struct class_instance_factory_traits {
         if constexpr (has_value_type_v<T>) {
             if constexpr (std::is_copy_constructible_v<
                               typename T::value_type>) {
-                return *any::deserialize<T*>(factory.get_value(
+                return *static_cast<T*>(factory.get_value(
                     context, RTTI::template get_type_index<
                                  rebind_type_t<T, runtime_type>>()));
             }
         } else if constexpr (std::is_copy_constructible_v<T>) {
-            return *any::deserialize<T*>(factory.get_value(
+            return *static_cast<T*>(factory.get_value(
                 context, RTTI::template get_type_index<
                              rebind_type_t<T, runtime_type>>()));
         }
 
-        return std::move(*any::deserialize<T*>(factory.get_value(
+        return std::move(*static_cast<T*>(factory.get_value(
             context,
             RTTI::template get_type_index<rebind_type_t<T, runtime_type>>())));
     }
@@ -48,8 +48,7 @@ template <typename RTTI, typename T>
 struct class_instance_factory_traits<RTTI, T&> {
     template <typename Factory, typename Context>
     static T& resolve(Factory& factory, Context& context) {
-        // TODO: any is created
-        return *any::deserialize<T*>(factory.get_lvalue_reference(
+        return *static_cast<T*>(factory.get_lvalue_reference(
             context,
             RTTI::template get_type_index<rebind_type_t<T&, runtime_type>>()));
     }
@@ -59,7 +58,7 @@ template <typename RTTI, typename T>
 struct class_instance_factory_traits<RTTI, const T&> {
     template <typename Factory, typename Context>
     static T& resolve(Factory& factory, Context& context) {
-        return *any::deserialize<T*>(factory.get_lvalue_reference(
+        return *static_cast<T*>(factory.get_lvalue_reference(
             context,
             RTTI::template get_type_index<rebind_type_t<T&, runtime_type>>()));
     }
@@ -69,7 +68,7 @@ template <typename RTTI, typename T>
 struct class_instance_factory_traits<RTTI, T&&> {
     template <typename Factory, typename Context>
     static T&& resolve(Factory& factory, Context& context) {
-        return std::move(*any::deserialize<T*>(factory.get_rvalue_reference(
+        return std::move(*static_cast<T*>(factory.get_rvalue_reference(
             context, RTTI::template get_type_index<
                          rebind_type_t<T&&, runtime_type>>())));
     }
@@ -79,8 +78,7 @@ template <typename RTTI, typename T>
 struct class_instance_factory_traits<RTTI, T*> {
     template <typename Factory, typename Context>
     static T* resolve(Factory& factory, Context& context) {
-        // TODO: any is created
-        return any::deserialize<T*>(factory.get_pointer(
+        return static_cast<T*>(factory.get_pointer(
             context,
             RTTI::template get_type_index<rebind_type_t<T*, runtime_type>>()));
     }

@@ -84,7 +84,6 @@ target_include_directories(dingo INTERFACE include)
 target_sources(dingo INTERFACE
     include/dingo/allocator.h
     include/dingo/annotated.h
-    include/dingo/any.h
     include/dingo/arena_allocator.h
     include/dingo/class_instance_factory.h
     include/dingo/class_instance_factory_i.h

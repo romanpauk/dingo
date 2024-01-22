@@ -9,7 +9,6 @@
 
 #include <dingo/config.h>
 
-#include <dingo/any.h>
 #include <dingo/class_instance_factory_i.h>
 #include <dingo/class_instance_resolver.h>
 #include <dingo/rebind_type.h>
@@ -148,7 +147,7 @@ class class_instance_factory : public class_instance_factory_i<Container> {
         auto&& instance =
             type_conversion<typename Storage::tag_type, Target, Source>::apply(
                 *this, context, resolver_.get_temporary_context(context));
-        return get_any(context, std::forward<decltype(instance)>(instance));
+        return get_address(context, std::forward<decltype(instance)>(instance));
     }
 
     template <typename Context> decltype(auto) resolve(Context& context) {
@@ -164,21 +163,15 @@ class class_instance_factory : public class_instance_factory_i<Container> {
     }
 
     template <typename Context, typename T>
-    void* get_any(Context& context, T&& instance) {
-        // TODO: this is needed for performance, tricky part is where to
-        // determine what is ownership, as there can be get_value/external or
-        // get_lvalue/unique.
-
+    void* get_address(Context& context, T&& instance) {
         if constexpr (std::is_reference_v<T>) {
             return &instance;
         } else if constexpr (std::is_pointer_v<T>) {
             return instance;
         } else {
-            // TODO: there should be a way how to construct into any for unique
-            // storage
-            any& p = context.template construct<any_impl<T>>(
-                std::forward<T>(instance));
-            return any::serialize(p);
+            // TODO: there should be a way how to construct into memory for
+            // unique storage
+            return &context.template construct<T>(std::forward<T>(instance));
         }
     }
 };
