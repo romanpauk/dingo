@@ -17,7 +17,7 @@ namespace dingo {
 
 template <std::size_t N> class arena {
   public:
-    arena() : current_(begin()) {}
+    arena() : current_(begin()), end_(begin() + size()) {}
     static constexpr size_t size() { return N; }
 
     template <size_t Alignment> void* allocate(size_t bytes) {
@@ -36,14 +36,12 @@ template <std::size_t N> class arena {
     }
 
   private:
-    uintptr_t begin() const { return reinterpret_cast<uintptr_t>(&buffer_); }
-    uintptr_t end() const {
-        return reinterpret_cast<uintptr_t>(reinterpret_cast<uint8_t*>(begin()) +
-                                           size());
-    }
+    uintptr_t begin() const { return reinterpret_cast<uintptr_t>(buffer_); }
+    uintptr_t end() const { return end_; };
 
-    std::aligned_storage_t<N> buffer_;
-    uintptr_t current_ = 0;
+    uintptr_t current_;
+    uintptr_t end_;
+    uint8_t buffer_[N];
 };
 
 template <typename T, size_t N, typename Allocator = std::allocator<T>>

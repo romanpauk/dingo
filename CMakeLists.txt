@@ -152,6 +152,7 @@ endif()
 
 if(DINGO_BENCHMARK_ENABLED)
     add_executable(dingo_benchmark
+        benchmark/basic.cpp
         benchmark/dingo.cpp
         benchmark/index.cpp
     )

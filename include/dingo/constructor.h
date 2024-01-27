@@ -13,7 +13,8 @@ namespace dingo {
 
 template <typename...> struct constructor;
 #define DINGO_CONSTRUCTOR(...)                                                 \
-    using dingo_constructor_type = ::dingo::constructor<__VA_ARGS__>;          \
+    using dingo_constructor_type [[maybe_unused]] =                            \
+        ::dingo::constructor<__VA_ARGS__>;                                     \
     __VA_ARGS__
 
 } // namespace dingo

@@ -46,7 +46,7 @@ struct dynamic_container_traits {
     using tag_type = none_t;
     using rtti_type = typeid_type_info;
     template <typename Value, typename Allocator>
-    using type_factory_map_type = dynamic_type_map<rtti_type, Value, Allocator>;
+    using type_map_type = dynamic_type_map<Value, rtti_type, Allocator>;
     using allocator_type = std::allocator<char>;
     using index_definition_type = std::tuple<>;
 };
@@ -57,8 +57,7 @@ template <typename Tag = void> struct static_container_traits {
     using tag_type = Tag;
     using rtti_type = static_type_info;
     template <typename Value, typename Allocator>
-    using type_factory_map_type =
-        static_type_map<rtti_type, Tag, Value, Allocator>;
+    using type_map_type = static_type_map<Value, Tag, Allocator>;
     using allocator_type = static_allocator<char, Tag>;
     using index_definition_type = std::tuple<>;
 };
@@ -457,15 +456,15 @@ class container : public allocator_base<Allocator> {
         type_factory_data(allocator_type& allocator)
             : index_type(allocator), factories(allocator) {}
 
-        typename ContainerTraits::template type_factory_map_type<
+        typename ContainerTraits::template type_map_type<
             class_instance_factory_ptr<
                 class_instance_factory_i<container_type>>,
             allocator_type>
             factories;
     };
 
-    typename ContainerTraits::template type_factory_map_type<type_factory_data,
-                                                             allocator_type>
+    typename ContainerTraits::template type_map_type<type_factory_data,
+                                                     allocator_type>
         type_factories_;
 };
 } // namespace dingo

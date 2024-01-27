@@ -28,8 +28,7 @@ struct dynamic_container_with_index {
     using tag_type = void;
     using rtti_type = dingo::static_type_info;
     template <typename Value, typename Allocator>
-    using type_factory_map_type =
-        dingo::dynamic_type_map<rtti_type, Value, Allocator>;
+    using type_map_type = dingo::dynamic_type_map<Value, rtti_type, Allocator>;
     using allocator_type = std::allocator<char>;
     using index_definition_type = std::tuple<std::tuple<IndexKey, IndexType>>;
 };

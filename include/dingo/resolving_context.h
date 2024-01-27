@@ -93,8 +93,8 @@ class resolving_context {
     std::array<destructible, size> destructors_;
 
     // TODO: how big should this be?
-    arena<512> arena_;
-    arena_allocator<void, 512> arena_allocator_;
+    arena<32 * size> arena_;
+    arena_allocator<void, 32 * size> arena_allocator_;
 };
 
 } // namespace dingo

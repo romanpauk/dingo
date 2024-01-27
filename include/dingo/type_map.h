@@ -15,7 +15,7 @@
 #include <memory>
 
 namespace dingo {
-template <typename RTTI, typename Value, typename Allocator>
+template <typename Value, typename RTTI, typename Allocator>
 struct dynamic_type_map {
     dynamic_type_map(Allocator& allocator) : values_(allocator) {}
 
@@ -57,29 +57,31 @@ struct dynamic_type_map {
     // map_allocator_type > values_;
 };
 
-template <typename Tag, typename Value> struct static_type_map_node {
+template <typename Value, typename Tag> struct static_type_map_node {
     std::optional<Value> value;
-    static_type_map_node<Tag, Value>* next = nullptr;
+    static_type_map_node<Value, Tag>* next = nullptr;
 #if !defined(NDEBUG)
     const void* owner;
 #endif
 };
 
-template <typename Tag, typename Key, typename Value>
+template <typename Key, typename Value, typename Tag>
 struct static_type_map_node_factory {
-    static static_type_map_node<Tag, Value> node;
+    static static_type_map_node<Value, Tag> node;
 };
 
-template <typename Tag, typename Key, typename Value>
-static_type_map_node<Tag, Value>
-    static_type_map_node_factory<Tag, Key, Value>::node;
+template <typename Key, typename Value, typename Tag>
+static_type_map_node<Value, Tag>
+    static_type_map_node_factory<Key, Value, Tag>::node;
 
-template <typename RTTI, typename Tag, typename Value, typename Allocator>
+template <typename Value, typename Tag,
+          typename Allocator = std::allocator<void>>
 struct static_type_map {
     template <typename Key>
-    using node_factory = static_type_map_node_factory<Tag, Key, Value>;
-    using node_type = static_type_map_node<Tag, Value>;
+    using node_factory = static_type_map_node_factory<Key, Value, Tag>;
+    using node_type = static_type_map_node<Value, Tag>;
 
+    static_type_map() : nodes_(), size_() {}
     static_type_map(Allocator&) : nodes_(), size_() {}
 
     ~static_type_map() {
@@ -98,14 +100,13 @@ struct static_type_map {
         auto& node = node_factory<Key>::node;
         if (!node.value) {
             assert(node.owner == nullptr);
+            node.value.emplace(std::forward<Value>(value));
+            node.next = nodes_;
+            nodes_ = &node;
+            ++size_;
 #if !defined(NDEBUG)
             node.owner = this;
 #endif
-            node.value.emplace(std::forward<Value>(value));
-            if (nodes_)
-                node.next = nodes_;
-            nodes_ = &node;
-            ++size_;
             return {*node.value, true};
         }
         assert(node.owner == this);
@@ -164,10 +165,7 @@ struct static_type_map {
         node_type* node_;
     };
 
-    iterator begin() {
-        assert(nodes_);
-        return nodes_;
-    }
+    iterator begin() { return nodes_; }
 
     iterator end() { return nullptr; }
 
