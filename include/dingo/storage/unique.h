@@ -70,7 +70,7 @@ class storage<unique, Type, StoredType, Factory, Conversions> : Factory {
     template <typename... Args>
     storage(Args&&... args) : Factory(std::forward<Args>(args)...) {}
 
-    static constexpr bool is_caching = false;
+    static constexpr bool cacheable = false;
 
     using conversions = Conversions;
     using type = Type;

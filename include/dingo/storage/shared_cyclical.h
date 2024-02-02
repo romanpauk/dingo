@@ -233,7 +233,8 @@ class storage<shared_cyclical, Type, StoredType, Factory, Conversions>
     template <typename... Args>
     storage(Args&&... args) : instance_(std::forward<Args>(args)...) {}
 
-    static constexpr bool is_caching = true;
+    // TODO: there is a problem with cache rollback for cyclical storage
+    static constexpr bool cacheable = false;
 
     using conversions = Conversions;
     using type = Type;

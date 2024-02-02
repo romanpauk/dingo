@@ -164,7 +164,7 @@ class storage<external, Type, StoredType, Factory, Conversions>
     storage_instance<external, Type, StoredType, void> instance_;
 
   public:
-    static constexpr bool is_caching = true;
+    static constexpr bool cacheable = true;
 
     using conversions = Conversions;
     using type = Type;

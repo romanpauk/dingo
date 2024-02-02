@@ -114,6 +114,7 @@ target_sources(dingo INTERFACE
     include/dingo/storage/shared.h
     include/dingo/storage/shared_cyclical.h
     include/dingo/storage/unique.h
+    include/dingo/type_cache.h
     include/dingo/type_conversion.h
     include/dingo/type_list.h
     include/dingo/type_map.h

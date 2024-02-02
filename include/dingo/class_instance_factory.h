@@ -84,6 +84,7 @@ template <typename Container, typename TypeInterface, typename Storage,
 class class_instance_factory : public class_instance_factory_i<Container> {
   public:
     using data_traits = class_instance_data_traits<Data>;
+    using storage_type = Storage;
 
   private:
     Data data_;
@@ -195,6 +196,8 @@ template <typename T> struct class_instance_factory_ptr {
     }
 
     T* get() { return ptr_; }
+    T* operator->() { return ptr_; }
+    operator bool() const { return ptr_ != nullptr; }
 
   private:
     T* ptr_ = nullptr;

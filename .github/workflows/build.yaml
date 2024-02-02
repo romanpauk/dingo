@@ -42,7 +42,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: CCache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
@@ -81,12 +81,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: MSBuild
-        uses: microsoft/setup-msbuild@v1.1
+        uses: microsoft/setup-msbuild@v1.3
         with:
           vs-version: ${{ matrix.vs_version }}
           msbuild-architecture: x64
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Configure
         run: |
             cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}

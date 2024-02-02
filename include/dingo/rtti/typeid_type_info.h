@@ -31,12 +31,17 @@ class typeid_type_info {
             }
         };
 
+        template <typename T> static type_index get() {
+            return std::type_index(typeid(wrapper<T>));
+        }
+
       private:
+        template <typename T> struct wrapper {};
         std::type_index value_;
     };
 
     template <typename T> static type_index get_type_index() {
-        return std::type_index(typeid(T));
+        return type_index::get<T>();
     }
 };
 

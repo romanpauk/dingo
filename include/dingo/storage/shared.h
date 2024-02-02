@@ -233,7 +233,7 @@ class storage<shared, Type, StoredType, Factory, Conversions>
     template <typename... Args>
     storage(Args&&... args) : instance_(std::forward<Args>(args)...) {}
 
-    static constexpr bool is_caching = true;
+    static constexpr bool cacheable = true;
 
     using conversions = Conversions;
     using type = Type;

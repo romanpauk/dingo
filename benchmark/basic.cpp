@@ -243,10 +243,10 @@ template <typename T> void basic_shared_resolve4(benchmark::State& state) {
     state.SetBytesProcessed(state.iterations());
 }
 
-template <typename T>
+template <typename Container, typename T>
 static void container_unique_resolve(benchmark::State& state) {
     using namespace dingo;
-    using container_type = container<dingo::static_container_traits<>>;
+    using container_type = Container;
     container_type container;
     container.template register_type<scope<unique>, storage<T>,
                                      factory<constructor<T()>>>();
@@ -259,10 +259,10 @@ static void container_unique_resolve(benchmark::State& state) {
     state.SetBytesProcessed(state.iterations());
 }
 
-template <typename T>
+template <typename Container, typename T>
 static void container_shared_resolve(benchmark::State& state) {
     using namespace dingo;
-    using container_type = container<dingo::static_container_traits<>>;
+    using container_type = Container;
     container_type container;
     container.template register_type<scope<shared>, storage<T>,
                                      factory<constructor<T()>>>();
@@ -296,8 +296,35 @@ BENCHMARK_TEMPLATE(basic_shared_resolve3, std::string)->UseRealTime();
 BENCHMARK_TEMPLATE(basic_shared_resolve4, int)->UseRealTime();
 BENCHMARK_TEMPLATE(basic_shared_resolve4, std::string)->UseRealTime();
 
-BENCHMARK_TEMPLATE(container_unique_resolve, int)->UseRealTime();
-BENCHMARK_TEMPLATE(container_unique_resolve, std::string)->UseRealTime();
+template <bool Cache, typename Tag = void>
+struct container_traits : dingo::static_container_traits<Tag> {
+    static constexpr bool cache_enabled = Cache;
+    template <typename TagT> using rebind_t = container_traits<Cache, TagT>;
+    using tag_type = Tag;
+};
 
-BENCHMARK_TEMPLATE(container_shared_resolve, int)->UseRealTime();
-BENCHMARK_TEMPLATE(container_shared_resolve, std::string)->UseRealTime();
+BENCHMARK_TEMPLATE(container_unique_resolve,
+                   dingo::container<container_traits<true>>, int)
+    ->UseRealTime();
+BENCHMARK_TEMPLATE(container_unique_resolve,
+                   dingo::container<container_traits<false>>, int)
+    ->UseRealTime();
+BENCHMARK_TEMPLATE(container_unique_resolve,
+                   dingo::container<container_traits<true>>, std::string)
+    ->UseRealTime();
+BENCHMARK_TEMPLATE(container_unique_resolve,
+                   dingo::container<container_traits<false>>, std::string)
+    ->UseRealTime();
+
+BENCHMARK_TEMPLATE(container_shared_resolve,
+                   dingo::container<container_traits<true>>, int)
+    ->UseRealTime();
+BENCHMARK_TEMPLATE(container_shared_resolve,
+                   dingo::container<container_traits<false>>, int)
+    ->UseRealTime();
+BENCHMARK_TEMPLATE(container_shared_resolve,
+                   dingo::container<container_traits<true>>, std::string)
+    ->UseRealTime();
+BENCHMARK_TEMPLATE(container_shared_resolve,
+                   dingo::container<container_traits<false>>, std::string)
+    ->UseRealTime();

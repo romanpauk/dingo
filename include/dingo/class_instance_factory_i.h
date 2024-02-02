@@ -30,5 +30,7 @@ template <typename Container> class class_instance_factory_i {
                 const typename Container::rtti_type::type_index&) = 0;
 
     virtual void destroy() = 0;
+
+    bool cacheable = false; // TODO
 };
 } // namespace dingo

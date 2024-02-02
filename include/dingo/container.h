@@ -24,6 +24,7 @@
 #include <dingo/static_allocator.h>
 #include <dingo/storage/shared_cyclical.h>
 #include <dingo/storage/unique.h>
+#include <dingo/type_cache.h>
 #include <dingo/type_map.h>
 #include <dingo/type_registration.h>
 
@@ -47,8 +48,11 @@ struct dynamic_container_traits {
     using rtti_type = typeid_type_info;
     template <typename Value, typename Allocator>
     using type_map_type = dynamic_type_map<Value, rtti_type, Allocator>;
+    template <typename Value, typename Allocator>
+    using type_cache_type = dynamic_type_cache<Value, rtti_type, Allocator>;
     using allocator_type = std::allocator<char>;
     using index_definition_type = std::tuple<>;
+    static constexpr bool cache_enabled = false;
 };
 
 template <typename Tag = void> struct static_container_traits {
@@ -58,8 +62,11 @@ template <typename Tag = void> struct static_container_traits {
     using rtti_type = static_type_info;
     template <typename Value, typename Allocator>
     using type_map_type = static_type_map<Value, Tag, Allocator>;
+    template <typename Value, typename Allocator>
+    using type_cache_type = static_type_cache<void*, Tag, Allocator>;
     using allocator_type = static_allocator<char, Tag>;
     using index_definition_type = std::tuple<>;
+    static constexpr bool cache_enabled = true;
 };
 
 // TODO: could this use is_none_v?
@@ -88,6 +95,8 @@ class container : public allocator_base<Allocator> {
         std::conditional_t<std::is_same_v<void, ParentContainer>,
                            container_type, ParentContainer>;
 
+    static constexpr bool cache_enabled = ContainerTraits::cache_enabled;
+
   public:
     using container_traits_type = ContainerTraits;
     using allocator_type = Allocator;
@@ -103,16 +112,16 @@ class container : public allocator_base<Allocator> {
 
     container()
         : allocator_base<allocator_type>(allocator_type()),
-          type_factories_(get_allocator()) {}
+          type_factories_(get_allocator()), type_cache_(get_allocator()) {}
 
     container(allocator_type alloc)
         : allocator_base<allocator_type>(alloc),
-          type_factories_(get_allocator()) {}
+          type_factories_(get_allocator()), type_cache_(get_allocator()) {}
 
     container(parent_container_type* parent,
               allocator_type alloc = allocator_type())
         : allocator_base<allocator_type>(alloc), parent_(parent),
-          type_factories_(get_allocator()) {
+          type_factories_(get_allocator()), type_cache_(get_allocator()) {
 
         static_assert(
             !is_tagged_container_v<container_traits_type> ||
@@ -172,19 +181,37 @@ class container : public allocator_base<Allocator> {
                   std::conditional_t<std::is_rvalue_reference_v<T>,
                                      std::remove_reference_t<T>, T>>::type>
     R resolve(IdType&& id = IdType()) {
-        // TODO: it is the destructor that is slowing the resolving
-        // std::aligned_storage_t< sizeof(resolving_context< container_type >) >
-        // storage; new (&storage) resolving_context< container_type >(*this);
-        // auto& context = *reinterpret_cast< resolving_context< container_type
-        // >*
-        // >(&storage);
+        // TODO: a crude way to check cache before context gets placed on the
+        // stack
+        if constexpr (cache_enabled) {
+            if constexpr (is_none_v<std::decay_t<IdType>>) {
+                void* cache = type_cache_.template get<T>();
+                if (cache) {
+                    return class_instance_factory_traits<
+                        rtti_type,
+                        typename annotated_traits<T>::type>::convert(cache);
+                }
+            } else {
+                auto data = type_factories_.template get<decay_t<T>>();
+                if (data) {
+                    auto indexed =
+                        data->template get_index<IdType>(get_allocator())
+                            .find(id);
 
-        // TODO: context needs to be placed here, but initialized on the fly
-        // later if needed. The only use of it is for cleanup during exception
-        // and for cyclical types.
+                    if (indexed) {
+                        if (indexed->cache) {
+                            return class_instance_factory_traits<
+                                rtti_type, typename annotated_traits<T>::type>::
+                                convert(indexed->cache);
+                        }
+                    }
+                }
+            }
+        }
 
+        // TODO: this destructor is really slowing things down
         resolving_context context;
-        return resolve<T, true>(context, std::forward<IdType>(id));
+        return resolve<T, true, false>(context, std::forward<IdType>(id));
     }
 
     template <typename T, typename Factory = constructor<decay_t<T>>>
@@ -217,9 +244,8 @@ class container : public allocator_base<Allocator> {
         collection_traits<T>::reserve(results, data->factories.size());
         for (auto&& p : data->factories) {
             fn(results,
-               class_instance_factory_traits<
-                   rtti_type, typename collection_traits<T>::resolve_type>::
-                   resolve(*p.second, context));
+               resolve_collection_type<typename collection_traits<T>::resolve_type>(
+                   *p.second, context));
         }
         return results;
     }
@@ -239,18 +265,7 @@ class container : public allocator_base<Allocator> {
         // don't need to be created and because of that, the stored element
         // could be referenced in most usages as it will no longer be a
         // temporary object. The code below does the rewrite of storage type
-        // into stored type.
-        //
-        // TODO: this is generic concept:
-        //  The type user will request will be converted as soon as possible.
-        //  The code below does
-        //      it on storage level, if there is only one interface.
-        //  If there are multiple interfaces, part of the conversion could be
-        //  done on resolver level.
-        //      That would again allow to avoid of some of the conversion code.
-        //      TBD.
-        //  And last, what could not be done on resolver level would be done in
-        //  runtime.
+        // into stored type. 
         //
         using interface_type_0 = std::tuple_element_t<
             0, typename registration::interface_type::type_tuple>;
@@ -345,12 +360,14 @@ class container : public allocator_base<Allocator> {
     void register_type_factory(Factory&& factory, IdType&& id) {
         // static_allocator returns null in the case an allocation (eg. the
         // factory can be null) There is no need to throw here as the insertion
-        // will not be done later.
+        // will not be done later. This is TODO.
 
         check_interface_requirements<
             TypeStorage, typename annotated_traits<TypeInterface>::type,
             typename TypeStorage::type>();
 
+        // TODO: this very crudely assumes types have different storages
+        // for indexed types.
         auto factory_ptr = factory.get();
         auto pb =
             type_factories_.template insert<TypeInterface>(get_allocator());
@@ -365,7 +382,8 @@ class container : public allocator_base<Allocator> {
 
         if constexpr (!is_none_v<std::decay_t<IdType>>) {
             if (!data.template get_index<IdType>(get_allocator())
-                     .emplace(std::forward<IdType>(id), factory_ptr)) {
+                     .emplace(std::forward<IdType>(id),
+                              index_data{factory_ptr, nullptr})) {
                 bool erased = data.factories.template erase<
                     type_list<TypeInterface, typename TypeStorage::type>>();
                 assert(erased);
@@ -375,7 +393,8 @@ class container : public allocator_base<Allocator> {
         }
     }
 
-    template <typename T, bool RemoveRvalueReferences, typename IdType = none_t,
+    template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
+              typename IdType = none_t,
               typename R = std::conditional_t<
                   RemoveRvalueReferences,
                   std::conditional_t<std::is_rvalue_reference_v<T>,
@@ -384,26 +403,41 @@ class container : public allocator_base<Allocator> {
     R resolve(resolving_context& context, IdType&& id = IdType()) {
         using Type = decay_t<T>;
         static_assert(!std::is_const_v<Type>);
+
+        if constexpr (cache_enabled && CheckCache) {
+            void* cache = type_cache_.template get<T>();
+            if (cache) {
+                return class_instance_factory_traits<
+                    rtti_type,
+                    typename annotated_traits<T>::type>::convert(cache);
+            }
+        }
+
         auto data = type_factories_.template get<Type>();
         if (data) {
             if constexpr (is_none_v<std::decay_t<IdType>>) {
                 if (data->factories.size() == 1) {
                     auto& factory = data->factories.front();
-                    return class_instance_factory_traits<
-                        rtti_type,
-                        typename annotated_traits<T>::type>::resolve(*factory,
-                                                                     context);
+                    return resolve<T, typename annotated_traits<T>::type>(
+                        *factory, context);
                 } else {
                     throw type_ambiguous_exception();
                 }
             } else {
-                auto factory =
+                auto indexed =
                     data->template get_index<IdType>(get_allocator()).find(id);
-                if (factory) {
-                    return class_instance_factory_traits<
-                        rtti_type,
-                        typename annotated_traits<T>::type>::resolve(**factory,
-                                                                     context);
+
+                if (indexed) {
+                    if constexpr (cache_enabled && CheckCache) {
+                        if (indexed->cache) {
+                            return class_instance_factory_traits<
+                                rtti_type, typename annotated_traits<T>::type>::
+                                convert(indexed->cache);
+                        }
+                    }
+
+                    return resolve<T, typename annotated_traits<T>::type>(
+                        *indexed->factory, context, *indexed);
                 }
             }
         } else if constexpr (!std::is_same_v<void*, decltype(parent_)>) {
@@ -414,6 +448,38 @@ class container : public allocator_base<Allocator> {
         }
 
         throw type_not_found_exception();
+    }
+
+    // TODO: two different resolve() calls due to different caches
+    template <typename CachedT, typename T, typename Factory, typename Context>
+    T resolve(Factory& factory, Context& context) {
+        void* ptr = class_instance_factory_traits<rtti_type, T>::resolve(
+            factory, context);
+        if constexpr (cache_enabled) {
+            if (factory.cacheable)
+                type_cache_.template insert<CachedT>(ptr);
+        }
+        return class_instance_factory_traits<rtti_type, T>::convert(ptr);
+    }
+
+    struct index_data;
+
+    template <typename CachedT, typename T, typename Factory, typename Context>
+    T resolve(Factory& factory, Context& context, index_data& data) {
+        void* ptr = class_instance_factory_traits<rtti_type, T>::resolve(
+            factory, context);
+        if constexpr (cache_enabled) {
+            if (factory.cacheable)
+                data.cache = ptr;
+        }
+        return class_instance_factory_traits<rtti_type, T>::convert(ptr);
+    }
+
+    template <typename T, typename Factory, typename Context>
+    T resolve_collection_type(Factory& factory, Context& context) {
+        void* ptr = class_instance_factory_traits<rtti_type, T>::resolve(
+            factory, context);
+        return class_instance_factory_traits<rtti_type, T>::convert(ptr);
     }
 
     template <class Storage, class TypeInterface, class Type>
@@ -443,14 +509,23 @@ class container : public allocator_base<Allocator> {
         allocator_traits::construct(alloc, instance,
                                     std::forward<Args>(args)...);
 
+        instance->cacheable = U::storage_type::cacheable;
+
         return {instance, &instance->get_container()};
     }
 
     parent_container_type* parent_ = nullptr;
 
+    struct index_data {
+        class_instance_factory_i<container_type>* factory;
+        void* cache;
+
+        operator bool() const { return factory != nullptr; }
+    };
+
     using index_type =
-        index<typename container_traits_type::index_definition_type,
-              class_instance_factory_i<container_type>*, allocator_type>;
+        index<typename container_traits_type::index_definition_type, index_data,
+              allocator_type>;
 
     struct type_factory_data : index_type {
         type_factory_data(allocator_type& allocator)
@@ -466,5 +541,9 @@ class container : public allocator_base<Allocator> {
     typename ContainerTraits::template type_map_type<type_factory_data,
                                                      allocator_type>
         type_factories_;
+
+    // Due to conversions, there is no 1:1 mapping between cached types and factories
+    typename ContainerTraits::template type_cache_type<void*, allocator_type>
+        type_cache_;
 };
 } // namespace dingo

@@ -457,6 +457,15 @@ containers is a performance gain. The drawback is slightly harder and limited us
 
 Note that "static" in this context does not mean "compile-time", both container parametrizations are fully runtime-based.
 
+##### Caching of Resolved Types with Shared Scope
+
+The container functions as a cache for already resolved types with shared scope, returning stable references to those types. The initial resolution needs to happen
+through some form of dynamic dispatch, as due to runtime nature of the container, some informations are not present on the caller side. But as soon as the type is resolved using factory
+through dynamic dispatch, the result is cached on the caller side, so subsequent resolution will retrieve it directly without having to use factory. For static containers,
+the cache is implemented using template specializations, so the lookup is as instant as it can be, lets just say it is much much faster than doing virtual function call.
+
+As this slightly degrades performance for types with unique scope because on the caller side, we do not know the scope type from T, the feature can be turned on/off using traits.
+
 #### Container Nesting
 Containers can form a parent-child hierarchy and resolution will traverse the container chain from child to last parent. Calling register_type() returns an implicitly created child container for the type being registered, allowing a per-type configuration to override a global configuration in the container. Nesting is supported for both dynamic and static type maps based containers.
 

@@ -96,11 +96,12 @@ struct static_type_map {
         }
     }
 
-    template <typename Key> std::pair<Value&, bool> insert(Value&& value) {
+    template <typename Key, typename... Args>
+    std::pair<Value&, bool> insert(Args&&... args) {
         auto& node = node_factory<Key>::node;
         if (!node.value) {
             assert(node.owner == nullptr);
-            node.value.emplace(std::forward<Value>(value));
+            node.value.emplace(std::forward<Args>(args)...);
             node.next = nodes_;
             nodes_ = &node;
             ++size_;

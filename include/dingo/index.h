@@ -59,7 +59,7 @@ template <typename Key, typename Value, typename Allocator, typename Tag>
 struct index_collection;
 
 // TODO: static_allocator does not work with this
-template <typename Factory, typename Allocator, typename... Args> struct index {
+template <typename Value, typename Allocator, typename... Args> struct index {
     index(Allocator&) {}
 
     template <typename T> struct index_ptr : allocator_base<Allocator> {
@@ -103,7 +103,7 @@ template <typename Factory, typename Allocator, typename... Args> struct index {
 
     template <typename Key> auto& get_index(Allocator& allocator) {
         using index_type = index_collection<
-            Key, Factory, Allocator,
+            Key, Value, Allocator,
             typename index_tag<Key, std::tuple<Args...>>::type>;
 
         if (indexes_.index() == 0) {
@@ -116,20 +116,18 @@ template <typename Factory, typename Allocator, typename... Args> struct index {
   private:
     std::variant<std::monostate,
                  index_ptr<index_collection<std::tuple_element_t<0, Args>,
-                                            Factory, Allocator,
+                                            Value, Allocator,
                                             std::tuple_element_t<1, Args>>>...>
         indexes_;
 };
 
-template <typename Factory, typename Allocator, typename... Args>
-struct index<std::tuple<Args...>, Factory, Allocator>
-    : index<Factory, Allocator, Args...> {
-    index(Allocator& allocator)
-        : index<Factory, Allocator, Args...>(allocator) {}
+template <typename Value, typename Allocator, typename... Args>
+struct index<std::tuple<Args...>, Value, Allocator>
+    : index<Value, Allocator, Args...> {
+    index(Allocator& allocator) : index<Value, Allocator, Args...>(allocator) {}
 };
 
-template <typename Factory, typename Allocator>
-struct index<Factory, Allocator> {
+template <typename Value, typename Allocator> struct index<Value, Allocator> {
     index(Allocator&){};
 };
 

@@ -29,8 +29,12 @@ struct dynamic_container_with_index {
     using rtti_type = dingo::static_type_info;
     template <typename Value, typename Allocator>
     using type_map_type = dingo::dynamic_type_map<Value, rtti_type, Allocator>;
+    template <typename Value, typename Allocator>
+    using type_cache_type =
+        dingo::dynamic_type_cache<Value, rtti_type, Allocator>;
     using allocator_type = std::allocator<char>;
     using index_definition_type = std::tuple<std::tuple<IndexKey, IndexType>>;
+    static constexpr bool cache_enabled = true;
 };
 
 using container_types = ::testing::Types<
