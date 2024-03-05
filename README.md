@@ -76,6 +76,20 @@ D d = container.construct<D>();
 ```
 <!-- } -->
 
+To use the library from CMake-based projects, FetchContent can be used. Target dingo
+is added as an INTERFACE library without any other dependencies.
+
+<!-- { include("test/fetchcontent/CMakeLists.txt", scope="####") -->
+Example code included from [test/fetchcontent/CMakeLists.txt](test/fetchcontent/CMakeLists.txt):
+```CMake
+include(FetchContent)
+FetchContent_Declare(dingo
+                     GIT_REPOSITORY https://github.com/romanpauk/dingo.git
+                     GIT_TAG        master)
+FetchContent_MakeAvailable(dingo)
+```
+<!-- } -->
+
 ### Features
 
 #### Non-intrusive Class Registration

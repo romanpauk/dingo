@@ -70,7 +70,11 @@ jobs:
         if: ${{ matrix.config == 'Release' }}
         run: |
             cd build && ./dingo_benchmark
-
+      #- name: FetchContent
+      #  run: |
+      #      cmake -S test/fetchcontent -B fetchcontent-build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.compiler.STD }}
+      #      cmake --build fetchcontent-build -j 2
+      
   build-windows:
     strategy:
       fail-fast: false
@@ -103,3 +107,8 @@ jobs:
         if: ${{ matrix.config == 'Release' }}
         run: |
             build/${{ matrix.config }}/dingo_benchmark
+      #- name: FetchContent
+      #  run: |
+      #      cmake -S test/fetchcontent -B fetchcontent-build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+      #      cmake --build fetchcontent-build -j 2
+      

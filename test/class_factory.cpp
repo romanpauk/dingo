@@ -41,7 +41,7 @@ TEST(class_factory_test, default_constructor_delete) {
     struct A {
         A() = delete;
     };
-#if DINGO_CXX_STANDARD <= DINGO_CXX17
+#if DINGO_CXX_STANDARD <= 17
     A a{};
     static_assert(test_class_factory<A>::arity == 0 &&
                   test_class_factory<A>::valid == true);

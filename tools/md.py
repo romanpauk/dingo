@@ -1,7 +1,18 @@
 import argparse
+import os
 import re
 import subprocess
 import sys
+
+def file_type(file):
+    if os.path.splitext(file)[1].lower() in ['.cpp', '.hpp', '.h']:
+        return 'c++'
+    
+    if os.path.split(file)[1] == 'CMakeLists.txt':
+        return 'CMake'
+
+    raise Exception('unsupported file type: {}'.format(file))
+
 
 def include(file, scope=None):
     lines = []
@@ -16,14 +27,15 @@ def include(file, scope=None):
                 elif in_scope:
                     lines.append(line)
 
-    p = subprocess.run(["clang-format"], stdout=subprocess.PIPE, input=str("".join(lines)).encode("ascii"))
-    lines = [line + "\n" for line in p.stdout.decode().split("\n")]
-    if lines[-1].strip() == "":
-        lines.pop()
+    if file_type(file) == 'c++':
+        p = subprocess.run(["clang-format"], stdout=subprocess.PIPE, input=str("".join(lines)).encode("ascii"))
+        lines = [line + "\n" for line in p.stdout.decode().split("\n")]
+        if lines[-1].strip() == "":
+            lines.pop()
 
     result = []
     result.append("Example code included from [{0}]({0}):\n".format(file))
-    result.append("```c++\n")
+    result.append("```{}\n".format(file_type(file)))
     result.extend(lines)
     result.append("```\n")
     
