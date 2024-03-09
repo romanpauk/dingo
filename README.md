@@ -31,6 +31,8 @@ Features Overview:
 
 Dingo is a dependency injection library that preforms recursive instantiation of
 registered types. It has no dependencies except for the C++ standard library.
+History of the project is summarized in
+[Motivation and History](docs/history.md).
 
 Tests are using [google/googletest](https://github.com/google/googletest),
 benchmarks are using [google/benchmark](https://github.com/google/benchmark).
