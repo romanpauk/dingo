@@ -1,4 +1,5 @@
 import argparse
+import mdformat
 import os
 import re
 import subprocess
@@ -69,6 +70,10 @@ def process(lines):
     return result
 
 
+def format(lines):
+    return mdformat.text(''.join(lines), options={ 'number': True, 'wrap': 80, })
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("filenames", help="file(s) to process", nargs='+')
@@ -79,11 +84,11 @@ if __name__ == "__main__":
         with open(file, "r") as f:
             content = f.readlines()
     
-        result = process(content)
-        if result != content:
+        result = format(process(content))
+        if result != ''.join(content):
             if args.mode == "update":
                 with open(file, "w") as f:
-                    f.write("".join(result))
+                    f.write(result)
                 print("{} updated".format(file))
             elif args.mode == "verify":
                 print("{} requires update, run md.py in update mode".format(file))

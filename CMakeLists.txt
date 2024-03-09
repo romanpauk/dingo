@@ -1,10 +1,6 @@
 cmake_minimum_required(VERSION 3.19)
 project(dingo)
 
-if (NOT CMAKE_CXX_STANDARD MATCHES "17|20|23")
-    message(FATAL_ERROR "unsupported c++ standard version: ${CMAKE_CXX_STANDARD}")
-endif()
-
 add_library(dingo INTERFACE)
 target_include_directories(dingo INTERFACE include)
 
@@ -62,6 +58,10 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     set(CMAKE_CXX_STANDARD 17 CACHE STRING "c++ standard")
     set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
     set(CMAKE_CXX_EXTENSIONS OFF)
+
+    if (NOT CMAKE_CXX_STANDARD MATCHES "17|20|23")
+        message(FATAL_ERROR "unsupported c++ standard version: ${CMAKE_CXX_STANDARD}")
+    endif()
 
     find_program(CCACHE_FOUND ccache)
     if(CCACHE_FOUND)
