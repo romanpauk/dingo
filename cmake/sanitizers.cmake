@@ -2,7 +2,7 @@ macro(sanitizers_init NS)
     string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_TYPE)
 
     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND BUILD_TYPE MATCHES "DEBUG")
-        option(${NS}_SANITIZER "enable sanitizers" OFF)
+        option(${NS}_SANITIZER "enable sanitizers" ON)
     else()
         option(${NS}_SANITIZER "enable sanitizers" OFF)
     endif()
