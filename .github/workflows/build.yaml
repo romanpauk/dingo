@@ -123,7 +123,7 @@ jobs:
         run: |
             build/${{ matrix.config }}/dingo_test
       - name: Benchmark
-        if: ${{ matrix.config == 'Release' }}
+        if: ${{ matrix.config == 'Release' && matrix.os == 'windows-2019' }}
         run: |
             build/${{ matrix.config }}/dingo_benchmark
       - name: FetchContent
