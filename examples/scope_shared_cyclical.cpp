@@ -22,9 +22,9 @@ struct A {
 
 // Declare struct B, note that its constructor is taking arguments of struct A
 struct B {
-    B(A& a, std::shared_ptr<A> aptr) : a_(a), aptr_(aptr) {}
+    B(A& a, A* aptr) : a_(a), aptr_(aptr) {}
     A& a_;
-    std::shared_ptr<A> aptr_;
+    A* aptr_;
 };
 
 ////
@@ -35,7 +35,7 @@ int main() {
 
     // Register struct A with cyclical scope
     container
-        .register_type<scope<shared_cyclical>, storage<std::shared_ptr<A>>>();
+        .register_type<scope<shared_cyclical>, storage<A>>();
     // Register struct B with cyclical scope
     container
         .register_type<scope<shared_cyclical>, storage<std::shared_ptr<B>>>();
@@ -49,6 +49,6 @@ int main() {
     assert(&a.b_ == &b);
     assert(&a.b_ == a.bptr_.get());
     assert(&b.a_ == &a);
-    assert(&b.a_ == b.aptr_.get());
+    assert(b.aptr_ == &a);
     ////
 }
