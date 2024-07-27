@@ -81,6 +81,9 @@ struct D {
 
 // Construct an un-managed struct using dependencies from the container
 D d = container.construct<D>();
+
+// Invoke callable
+D e = container.invoke([&](A& a, B* b) { return D{a, b}; });
 ```
 
 <!-- } -->
@@ -552,8 +555,8 @@ disambiguating the registration with an user-provided tag. See
 
 #### Constructing Unmanaged Types
 
-It is possible to let a container construct an unknown type using registered
-dependencies to construct it.
+Unregistered types can be constructed using registered dependencies with
+construct() member function.
 
 <!-- { include("examples/construct.cpp", scope="////") -->
 
@@ -573,6 +576,30 @@ container<> container;
 container.register_type<scope<shared>, storage<A>>();
 // Construct instance of B, injecting shared instance of A
 B b = container.construct<B>();
+```
+
+<!-- } -->
+
+#### Invoking Callables
+
+Callable objects can be called using invoke() member function with arguments
+provided by the container. Supported callable types are lambdas, std::function
+and function pointers.
+
+<!-- { include("examples/invoke.cpp", scope="////") -->
+
+Example code included from [examples/invoke.cpp](examples/invoke.cpp):
+
+```c++
+// struct B that will be constructed using container
+struct B {
+    A& a;
+    static B factory(A& a) { return B{a}; }
+};
+// Construct instance of B, injecting shared instance of A
+B b1 = container.invoke([&](A& a) { return B{a}; });
+B b2 = container.invoke(std::function<B(A&)>([](auto& a) { return B{a}; }));
+B b3 = container.invoke(B::factory);
 ```
 
 <!-- } -->

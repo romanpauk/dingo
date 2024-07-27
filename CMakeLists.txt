@@ -58,6 +58,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     set(CMAKE_CXX_STANDARD 17 CACHE STRING "c++ standard")
     set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
     set(CMAKE_CXX_EXTENSIONS OFF)
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
     if (NOT CMAKE_CXX_STANDARD MATCHES "17|20|23")
         message(FATAL_ERROR "unsupported c++ standard version: ${CMAKE_CXX_STANDARD}")
@@ -66,7 +67,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     find_program(CCACHE_FOUND ccache)
     if(CCACHE_FOUND)
         set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
-        set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache) 
+        set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
     endif(CCACHE_FOUND)
 
     option(DINGO_TESTING_ENABLED "enable testing through googletest" ON)
@@ -79,10 +80,10 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     # TODO: g++ -Wall -Wextra -Wpedantic -Q --help=warning | grep disabled
     set(DINGO_WARNINGS_GCC
         -Wall
-        -Wpedantic 
-        -Wextra 
+        -Wpedantic
+        -Wextra
         -Wshadow
-        -Wno-unused-variable 
+        -Wno-unused-variable
         -Wno-gnu-zero-variadic-macro-arguments
     )
 
@@ -107,8 +108,8 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     if(DINGO_BENCHMARK_ENABLED)
         FetchContent_Declare(googlebenchmark
             GIT_REPOSITORY https://github.com/google/benchmark.git
-            GIT_TAG v1.8.3) 
-        
+            GIT_TAG v1.8.3)
+
         set(BENCHMARK_ENABLE_TESTING off)
         FetchContent_MakeAvailable(googlebenchmark)
 
@@ -121,7 +122,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
             FetchContent_MakeAvailable(googlefruit)
         endif()
     endif()
-        
+
     if(DINGO_TESTING_ENABLED)
         add_executable(dingo_test
             test/allocator.cpp
@@ -134,6 +135,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
             test/dingo.cpp
             test/external.cpp
             test/index.cpp
+            test/invoke.cpp
             test/multibindings.cpp
             test/nesting.cpp
             test/shared.cpp
@@ -144,7 +146,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         )
         add_test(NAME dingo_test COMMAND dingo_test)
         target_link_libraries(dingo_test dingo gtest_main)
-        
+
         target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:${DINGO_WARNINGS_GCC}>)
         target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:${DINGO_WARNINGS_MSVC} /bigobj>)
 
@@ -158,7 +160,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
             benchmark/index.cpp
         )
 
-        target_link_libraries(dingo_benchmark 
+        target_link_libraries(dingo_benchmark
             dingo
             benchmark::benchmark
         )

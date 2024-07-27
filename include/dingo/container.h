@@ -17,6 +17,7 @@
 #include <dingo/decay.h>
 #include <dingo/exceptions.h>
 #include <dingo/factory/callable.h>
+#include <dingo/factory/invoke.h>
 #include <dingo/index.h>
 #include <dingo/resolving_context.h>
 #include <dingo/rtti/static_type_info.h>
@@ -250,6 +251,12 @@ class container : public allocator_base<Allocator> {
         return results;
     }
 
+    template< typename Callable > auto invoke(Callable&& callable) {
+        resolving_context context;
+        return ::dingo::invoke< std::remove_reference_t<Callable> >::construct(
+            context, *this, std::forward<Callable>(callable));
+    }
+
   private:
     template <typename... TypeArgs, typename Arg, typename IdType>
     auto& register_type_impl(Arg&& arg, IdType&& id) {
@@ -265,7 +272,7 @@ class container : public allocator_base<Allocator> {
         // don't need to be created and because of that, the stored element
         // could be referenced in most usages as it will no longer be a
         // temporary object. The code below does the rewrite of storage type
-        // into stored type. 
+        // into stored type.
         //
         using interface_type_0 = std::tuple_element_t<
             0, typename registration::interface_type::type_tuple>;

@@ -50,5 +50,8 @@ int main() {
 
     // Construct an un-managed struct using dependencies from the container
     D d = container.construct<D>();
+
+    // Invoke callable
+    D e = container.invoke([&](A& a, B* b) { return D{a, b}; });
     ////
 }
