@@ -88,8 +88,9 @@ D e = container.invoke([&](A& a, B* b) { return D{a, b}; });
 
 <!-- } -->
 
-To use the library from CMake-based projects, FetchContent can be used. Target
-dingo is added as an INTERFACE library without any other dependencies.
+To use the library from CMake-based projects, FetchContent or vcpkg can be used.
+Alias dingo::dingo is added as an INTERFACE library without any other
+dependencies.
 
 <!-- { include("test/fetchcontent/CMakeLists.txt", scope="####") -->
 
@@ -102,6 +103,7 @@ FetchContent_Declare(dingo
                      GIT_REPOSITORY https://github.com/romanpauk/dingo.git
                      GIT_TAG        master)
 FetchContent_MakeAvailable(dingo)
+target_link_libraries(dingo_fetchcontent_test PRIVATE dingo::dingo)
 ```
 
 <!-- } -->

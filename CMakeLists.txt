@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.19)
 project(dingo)
 
+option(DINGO_DEVELOPMENT_MODE "include additional targets for development" OFF)
+
 add_library(dingo INTERFACE)
+add_library(dingo::dingo ALIAS dingo)
 target_include_directories(dingo INTERFACE include)
 
 target_sources(dingo INTERFACE
@@ -45,7 +48,13 @@ target_sources(dingo INTERFACE
     include/dingo/type_traits.h
 )
 
-if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+install(
+    DIRECTORY ${CMAKE_SOURCE_DIR}/include/dingo
+    DESTINATION include
+    FILES_MATCHING PATTERN "*.h"
+)
+
+if(DINGO_DEVELOPMENT_MODE)
     enable_testing()
     include(FetchContent)
     include(cmake/clang-format.cmake)
@@ -145,7 +154,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
             test/unique.cpp
         )
         add_test(NAME dingo_test COMMAND dingo_test)
-        target_link_libraries(dingo_test dingo gtest_main)
+        target_link_libraries(dingo_test dingo::dingo gtest_main)
 
         target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:${DINGO_WARNINGS_GCC}>)
         target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:${DINGO_WARNINGS_MSVC} /bigobj>)
@@ -161,7 +170,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         )
 
         target_link_libraries(dingo_benchmark
-            dingo
+            dingo::dingo
             benchmark::benchmark
         )
         target_include_directories(dingo_benchmark PRIVATE benchmark)

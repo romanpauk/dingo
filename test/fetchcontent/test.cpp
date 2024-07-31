@@ -3,3 +3,4 @@
 int main() {
     dingo::container<> container;
 }
+
