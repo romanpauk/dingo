@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.24)
 project(dingo)
 
 option(DINGO_DEVELOPMENT_MODE "include additional targets for development" OFF)
@@ -68,6 +68,7 @@ if(DINGO_DEVELOPMENT_MODE)
     set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
     set(CMAKE_CXX_EXTENSIONS OFF)
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+    set(FETCHCONTENT_TRY_FIND_PACKAGE_MODE ALWAYS)
 
     if (NOT CMAKE_CXX_STANDARD MATCHES "17|20|23")
         message(FATAL_ERROR "unsupported c++ standard version: ${CMAKE_CXX_STANDARD}")
@@ -105,7 +106,9 @@ if(DINGO_DEVELOPMENT_MODE)
     if(DINGO_TESTING_ENABLED)
         FetchContent_Declare(googletest
             GIT_REPOSITORY https://github.com/google/googletest.git
-            GIT_TAG main)
+            GIT_TAG v1.15.2
+            FIND_PACKAGE_ARGS NAMES GTest
+        )
 
         if(MSVC)
             set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
