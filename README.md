@@ -108,6 +108,19 @@ target_link_libraries(dingo_fetchcontent_test PRIVATE dingo::dingo)
 
 <!-- } -->
 
+### Existing DI Libraries
+
+As creating a generic DI library is tricky, libraries end up different in many
+aspects (API, supported C++ constructs, compile-time/run-time, intrusiveness).
+Please take a look at few other libraries to find out which one suits the
+intended use-case the best:
+
+- [qlibs/di](https://github.com/qlibs/di)
+- [boost-ex/di](https://github.com/boost-ext/di)
+- [google/fruit](https://github.com/google/fruit)
+- [gracicot/kangaru](https://github.com/gracicot/kangaru)
+- [ybainier/Hypodermic](https://github.com/ybainier/Hypodermic)
+
 ### Features
 
 #### Non-intrusive Class Registration
