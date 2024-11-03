@@ -12,6 +12,7 @@
 #include <dingo/factory/function.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
+#include <dingo/storage/shared_cyclical.h>
 #include <dingo/storage/unique.h>
 #include <dingo/type_list.h>
 

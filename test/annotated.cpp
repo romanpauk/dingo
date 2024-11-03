@@ -10,6 +10,7 @@
 #include <dingo/factory/callable.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
+#include <dingo/storage/unique.h>
 #include <dingo/type_list.h>
 
 #include <gtest/gtest.h>

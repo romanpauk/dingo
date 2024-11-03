@@ -1,5 +1,6 @@
 #include <dingo/container.h>
 #include <dingo/storage/external.h>
+#include <dingo/storage/unique.h>
 //
 // This file is part of dingo project <https://github.com/romanpauk/dingo>
 //

@@ -7,6 +7,7 @@
 
 #include <dingo/container.h>
 #include <dingo/storage/external.h>
+#include <dingo/storage/shared.h>
 
 #include <gtest/gtest.h>
 
@@ -315,6 +316,37 @@ TYPED_TEST(external_test, constructor_private) {
 
     container.template register_type<scope<external>, storage<A>>(
         A::instance());
+}
+
+
+TYPED_TEST(external_test, vector)
+{
+    using container_type = TypeParam;
+
+    struct vector_class_ctor {
+        std::vector<int> data;
+        vector_class_ctor(std::vector<int> v): data(v) {}
+    };
+
+    struct vector_class_aggregate {
+        std::vector<int> data;
+    };
+
+    std::vector<int> vec = {1,2,3};
+
+    container_type container;
+    container.template register_type<dingo::scope<dingo::external>, dingo::storage<std::vector<int>>>(vec);
+    container.template register_type<dingo::scope<dingo::shared>, dingo::storage<vector_class_ctor>>();
+    container.template register_type<dingo::scope<dingo::shared>, dingo::storage<vector_class_aggregate>>();
+
+    {
+        auto& cls = container.template resolve<vector_class_ctor&>();
+        ASSERT_EQ(cls.data, vec);
+    }
+    {
+        auto& cls = container.template resolve<vector_class_aggregate&>();
+        ASSERT_EQ(cls.data, vec);
+    }
 }
 
 } // namespace dingo

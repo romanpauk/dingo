@@ -7,6 +7,7 @@
 
 #include <dingo/container.h>
 #include <dingo/storage/external.h>
+#include <dingo/storage/unique.h>
 
 ////
 struct A {

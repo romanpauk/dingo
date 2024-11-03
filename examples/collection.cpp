@@ -7,6 +7,7 @@
 
 #include <dingo/container.h>
 #include <dingo/storage/shared.h>
+#include <dingo/storage/unique.h>
 
 #include <map>
 #include <string>

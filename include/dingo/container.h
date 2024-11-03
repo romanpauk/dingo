@@ -23,8 +23,6 @@
 #include <dingo/rtti/static_type_info.h>
 #include <dingo/rtti/typeid_type_info.h>
 #include <dingo/static_allocator.h>
-#include <dingo/storage/shared_cyclical.h>
-#include <dingo/storage/unique.h>
 #include <dingo/type_cache.h>
 #include <dingo/type_map.h>
 #include <dingo/type_registration.h>
