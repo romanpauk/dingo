@@ -12,6 +12,7 @@
 #include <dingo/annotated.h>
 #include <dingo/arena_allocator.h>
 #include <dingo/exceptions.h>
+#include <dingo/factory/constructor.h>
 #include <dingo/resettable_i.h>
 
 #include <algorithm>
@@ -64,6 +65,16 @@ class resolving_context {
     template <typename T> T* allocate() {
         auto allocator = allocator_traits::rebind<T>(arena_allocator_);
         return allocator_traits::allocate(allocator, 1);
+    }
+
+    template <typename T, typename Container> T& construct_temporary(Container& container) {
+        auto allocator = allocator_traits::rebind<T>(arena_allocator_);
+        auto instance = allocator_traits::allocate(allocator, 1);
+        // TODO: instance should be typed, not void
+        constructor<T>().template construct<T>(instance, *this, container);
+        if constexpr (!std::is_trivially_destructible_v<T>)
+            register_destructor(instance);
+        return *instance;
     }
 
   private:

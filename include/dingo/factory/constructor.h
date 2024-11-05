@@ -33,6 +33,10 @@ struct constructor_argument<DisabledType, reference> {
 
     template <typename T, typename = typename std::enable_if_t<!std::is_same_v<
                               DisabledType, typename std::decay_t<T>>>>
+    operator T*();
+
+    template <typename T, typename = typename std::enable_if_t<!std::is_same_v<
+                              DisabledType, typename std::decay_t<T>>>>
     operator T&&();
 };
 
@@ -228,11 +232,13 @@ struct constructor_detection_impl<T, IsConstructible, Assert, N, true,
                                   std::tuple<Args...>>
     : constructor_factory_methods<
           T,
-          // TODO: rewrite is now disabled
-          // typename constructor_arguments_rewrite<
+          // TODO: rewrite is now disabled (note that it is post-rewrite
+          // after constructibility check).
+          //typename constructor_arguments_rewrite<
           //     T, IsConstructible, std::tuple<Args...>,
-          //     constructor_argument<T, reference>>::type
-          std::tuple<Args...>> {};
+          //     constructor_argument<T, value>>::type
+          std::tuple<Args...>
+          > {};
 
 // Construction was not found. Generate next level of inheritance with one less
 // argument.

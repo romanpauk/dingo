@@ -23,6 +23,7 @@
 #include <dingo/rtti/static_type_info.h>
 #include <dingo/rtti/typeid_type_info.h>
 #include <dingo/static_allocator.h>
+#include <dingo/storage/unique.h> // TODO
 #include <dingo/type_cache.h>
 #include <dingo/type_map.h>
 #include <dingo/type_registration.h>
@@ -449,6 +450,20 @@ class container : public allocator_base<Allocator> {
             if (parent_) {
                 return parent_->template resolve<T, RemoveRvalueReferences>(
                     context, std::forward<IdType>(id));
+            }
+        }
+
+        // If we are trying to construct T& and it is not wrapped in any way
+        if constexpr (std::is_lvalue_reference_v<T> && std::is_same_v< Type, std::decay_t<T> >) {
+            // And it is constructible
+            using type_constructor = detail::constructor_detection< Type, detail::list_initialization, false >;
+            if constexpr(type_constructor::valid) {
+                // TODO: this ends up with gcc 14 stuck in compilation
+                //register_type< scope<unique>, storage<Type> >();
+                //return resolve<T, RemoveRvalueReferences, CheckCache>(context);
+
+                // Construct temporary through context so it can be referenced
+                return context.template construct_temporary< Type >(*this);
             }
         }
 
