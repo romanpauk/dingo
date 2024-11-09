@@ -68,11 +68,12 @@ class resolving_context {
     }
 
     template <typename T, typename Container> T& construct_temporary(Container& container) {
-        auto allocator = allocator_traits::rebind<T>(arena_allocator_);
+        using Type = std::decay_t<T>;
+        auto allocator = allocator_traits::rebind<Type>(arena_allocator_);
         auto instance = allocator_traits::allocate(allocator, 1);
         // TODO: instance should be typed, not void
-        constructor<T>().template construct<T>(instance, *this, container);
-        if constexpr (!std::is_trivially_destructible_v<T>)
+        constructor<Type>().template construct<Type>(instance, *this, container);
+        if constexpr (!std::is_trivially_destructible_v<Type>)
             register_destructor(instance);
         return *instance;
     }

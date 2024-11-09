@@ -463,7 +463,7 @@ class container : public allocator_base<Allocator> {
                 //return resolve<T, RemoveRvalueReferences, CheckCache>(context);
 
                 // Construct temporary through context so it can be referenced
-                return context.template construct_temporary< Type >(*this);
+                return context.template construct_temporary< T >(*this);
             }
         }
 
