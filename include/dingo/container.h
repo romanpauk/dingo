@@ -214,7 +214,7 @@ class container : public allocator_base<Allocator> {
         return resolve<T, true, false>(context, std::forward<IdType>(id));
     }
 
-    template <typename T, typename Factory = constructor<decay_t<T>>>
+    template <typename T, typename Factory = constructor_detection<decay_t<T>>>
     T construct(Factory factory = Factory()) {
         // TODO: nothrow constructuble
         resolving_context context;
@@ -453,17 +453,18 @@ class container : public allocator_base<Allocator> {
             }
         }
 
-        // If we are trying to construct T& and it is not wrapped in any way
-        if constexpr (std::is_lvalue_reference_v<T> && std::is_same_v< Type, std::decay_t<T> >) {
+        // If we are trying to construct T and it is not wrapped in any way
+        if constexpr (std::is_same_v< Type, std::decay_t<T> >) {
             // And it is constructible
-            using type_constructor = detail::constructor_detection< Type, detail::list_initialization, false >;
+            using type_detection = detail::reference;
+            using type_constructor = detail::constructor_detection< Type, type_detection, detail::list_initialization, false >;
             if constexpr(type_constructor::valid) {
                 // TODO: this ends up with gcc 14 stuck in compilation
                 //register_type< scope<unique>, storage<Type> >();
                 //return resolve<T, RemoveRvalueReferences, CheckCache>(context);
 
                 // Construct temporary through context so it can be referenced
-                return context.template construct_temporary< Type >(*this);
+                return context.template construct_temporary< typename annotated_traits<T>::type, type_detection >(*this);
             }
         }
 

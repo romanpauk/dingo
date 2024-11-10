@@ -85,11 +85,11 @@ TYPED_TEST(allocator_test, construct) {
         container.template construct<
             std::vector<int>,
             detail::constructor_detection<std::vector<int>,
-                                          detail::direct_initialization>>();
+                                          detail::reference, detail::direct_initialization>>();
         container.template construct<
             std::vector<int>,
             detail::constructor_detection<std::vector<int>,
-                                          detail::list_initialization>>();
+                                          detail::reference, detail::list_initialization>>();
         container.template construct<
             std::vector<int>,
             constructor<std::vector<int>(std::allocator<int>)>>();

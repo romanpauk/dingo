@@ -182,10 +182,10 @@ a list initialization, going from a pre-configured number of arguments down to
 zero. In a case the constructor is not determined, compile assert occurs. This
 factory type is a default one so it does not have to be specified.
 
-<!-- { include("examples/factory_constructor.cpp", scope="////") -->
+<!-- { include("examples/factory_constructor_deduction.cpp", scope="////") -->
 
 Example code included from
-[examples/factory_constructor.cpp](examples/factory_constructor.cpp):
+[examples/factory_constructor_deduction.cpp](examples/factory_constructor_deduction.cpp):
 
 ```c++
 struct A {
@@ -198,14 +198,15 @@ container.register_type<scope<external>, storage<double>>(1.1);
 
 // Constructor with a highest arity will be used (factory<> is deduced
 // automatically)
-container
-    .register_type<scope<unique>, storage<A> /*, factory<constructor<A>> */>();
+container.register_type<scope<unique>,
+                        storage<A> /*, factory<constructor_deduction<A>> */>();
 ```
 
 <!-- } -->
 
-See [dingo/factory/constructor.h](include/dingo/factory/constructor.h) for
-details.
+See
+[dingo/factory/constructor_deduction.h](include/dingo/factory/constructor_deduction.h)
+for details.
 
 ##### Concrete Constructor Factory
 
@@ -213,10 +214,10 @@ In a case an automatic deduction fails due to an ambiguity, it is possible to
 override the constructor by specifying an constructor overload that will be
 used.
 
-<!-- { include("examples/factory_constructor_concrete.cpp", scope="////") -->
+<!-- { include("examples/factory_constructor.cpp", scope="////") -->
 
 Example code included from
-[examples/factory_constructor_concrete.cpp](examples/factory_constructor_concrete.cpp):
+[examples/factory_constructor.cpp](examples/factory_constructor.cpp):
 
 ```c++
 struct A {
@@ -244,10 +245,10 @@ details.
 Static function factory allows a static function to be used for an instance
 creation.
 
-<!-- { include("examples/factory_static_function.cpp", scope="////") -->
+<!-- { include("examples/factory_function.cpp", scope="////") -->
 
 Example code included from
-[examples/factory_static_function.cpp](examples/factory_static_function.cpp):
+[examples/factory_function.cpp](examples/factory_function.cpp):
 
 ```c++
 // Declare struct A that has an inaccessible constructor

@@ -88,7 +88,7 @@ template <typename... Args> struct type_registration {
     using factory_type = detail::get_type_t<
         factory<void>,
         type_list<Args...,
-                  factory<constructor<decay_t<typename detail::get_type_t<
+                  factory<constructor_detection<decay_t<typename detail::get_type_t<
                       storage<void>, type_list<Args...>>::type>>>>>;
     static_assert(!std::is_same_v<factory_type, factory<void>>,
                   "failed to deduce a factory type");
