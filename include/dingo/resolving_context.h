@@ -12,14 +12,9 @@
 #include <dingo/annotated.h>
 #include <dingo/arena_allocator.h>
 #include <dingo/exceptions.h>
-#include <dingo/factory/constructor.h>
-#include <dingo/resettable_i.h>
+#include <dingo/factory/constructor_detection.h>
 
-#include <algorithm>
 #include <array>
-#include <deque>
-#include <forward_list>
-#include <list>
 
 namespace dingo {
 
@@ -67,14 +62,18 @@ class resolving_context {
         return allocator_traits::allocate(allocator, 1);
     }
 
-    template <typename T, typename Container> T& construct_temporary(Container& container) {
-        auto allocator = allocator_traits::rebind<T>(arena_allocator_);
+    template <typename T, typename DetectionTag, typename Container> T construct_temporary(Container& container) {
+        using Type = decay_t<T>;
+        auto allocator = allocator_traits::rebind<Type>(arena_allocator_);
         auto instance = allocator_traits::allocate(allocator, 1);
-        // TODO: instance should be typed, not void
-        constructor<T>().template construct<T>(instance, *this, container);
-        if constexpr (!std::is_trivially_destructible_v<T>)
+        constructor_detection<Type, DetectionTag>().template construct<Type>(instance, *this, container);
+        if constexpr (!std::is_trivially_destructible_v<Type>)
             register_destructor(instance);
-        return *instance;
+        if constexpr (std::is_lvalue_reference_v<T>) {
+            return *instance;
+        } else {
+            return std::move(*instance);
+        }
     }
 
   private:
