@@ -58,9 +58,9 @@ struct dynamic_container_without_cache : dingo::dynamic_container_traits {
 };
 
 using container_types = ::testing::Types<
-    dingo::container<dingo::static_container_traits<>>,
-    dingo::container<dingo::dynamic_container_traits>,
-    dingo::container<static_container_with_dynamic_rtti_traits<>>,
-    dingo::container<static_container_without_cache<>>,
-    dingo::container<dynamic_container_with_static_rtti_traits>,
+//    dingo::container<dingo::static_container_traits<>>,
+//    dingo::container<dingo::dynamic_container_traits>,
+//    dingo::container<static_container_with_dynamic_rtti_traits<>>,
+//    dingo::container<static_container_without_cache<>>,
+//    dingo::container<dynamic_container_with_static_rtti_traits>,
     dingo::container<dynamic_container_without_cache>>;

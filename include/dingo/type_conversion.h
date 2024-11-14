@@ -58,6 +58,16 @@ struct type_conversion<unique, std::unique_ptr<Target>, Source*> {
 };
 
 template <typename Target, typename Source>
+struct type_conversion<unique, std::unique_ptr<Target>, Source> {
+    template <typename Factory, typename Context, typename Temporary>
+    static std::unique_ptr<Target> apply(Factory& factory, Context& context,
+                                         Temporary&) {
+        return std::unique_ptr<Target>(new Source{ factory.resolve(context) });
+    }
+};
+
+
+template <typename Target, typename Source>
 struct type_conversion<unique, std::unique_ptr<Target>,
                        std::unique_ptr<Source>> {
     template <typename Factory, typename Context, typename Temporary>

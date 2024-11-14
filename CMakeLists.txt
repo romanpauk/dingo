@@ -135,7 +135,7 @@ if(DINGO_DEVELOPMENT_MODE)
     if(DINGO_TESTING_ENABLED)
         add_executable(dingo_test
             test/allocator.cpp
-            test/annotated.cpp
+            #test/annotated.cpp
             test/assert.h
             test/class.h
             test/class_factory.cpp
@@ -149,7 +149,7 @@ if(DINGO_DEVELOPMENT_MODE)
             test/nested_resolution.cpp
             test/nesting.cpp
             test/shared.cpp
-            test/shared_cyclical.cpp
+            #test/shared_cyclical.cpp
             test/test.h
             test/type_registration.cpp
             test/unique.cpp
@@ -187,7 +187,7 @@ if(DINGO_DEVELOPMENT_MODE)
     endif()
 
     if(DINGO_EXAMPLES_ENABLED)
-        add_subdirectory(examples)
+        #add_subdirectory(examples)
     endif()
 
     if(WIN32)

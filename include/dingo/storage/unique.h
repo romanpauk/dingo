@@ -19,11 +19,11 @@ struct unique {};
 
 namespace detail {
 template <typename Type, typename U> struct conversions<unique, Type, U> {
-    using value_types = type_list<U, std::optional<U>>;
+    using value_types = type_list<U, std::optional<U>, std::unique_ptr<U>>;
     using lvalue_reference_types = type_list<U&>;
-    using rvalue_reference_types = type_list<U&&, std::optional<U>&&>;
+    using rvalue_reference_types = type_list<U&&, std::optional<U>&&, std::unique_ptr<U>>;
     using pointer_types = type_list<>;
-    using conversion_types = type_list<std::optional<U>>;
+    using conversion_types = type_list<std::optional<U>, std::unique_ptr<U>>;
 };
 
 template <typename Type, typename U> struct conversions<unique, Type*, U> {

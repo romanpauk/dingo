@@ -454,19 +454,21 @@ class container : public allocator_base<Allocator> {
         }
 
         // If we are trying to construct T and it is not wrapped in any way
-        if constexpr (std::is_same_v< Type, std::decay_t<T> >) {
+        //if constexpr (std::is_same_v< Type, std::decay_t<T> >) {
             // And it is constructible
             using type_detection = detail::reference;
             using type_constructor = detail::constructor_detection< Type, type_detection, detail::list_initialization, false >;
+            // TODO: this is needed for external.cpp
             if constexpr(type_constructor::valid) {
                 // TODO: this ends up with gcc 14 stuck in compilation
-                //register_type< scope<unique>, storage<Type> >();
-                //return resolve<T, RemoveRvalueReferences, CheckCache>(context);
+                // But it works so well... need to extract important pieces from there
+                register_type< scope<unique>, storage<Type> >();
+                return resolve<T, RemoveRvalueReferences, CheckCache>(context);
 
                 // Construct temporary through context so it can be referenced
-                return context.template construct_temporary< typename annotated_traits<T>::type, type_detection >(*this);
+                //return context.template construct_temporary< typename annotated_traits<T>::type, type_detection >(*this);
             }
-        }
+        //}
 
         throw type_not_found_exception();
     }
