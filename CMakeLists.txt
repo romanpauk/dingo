@@ -7,47 +7,6 @@ add_library(dingo INTERFACE)
 add_library(dingo::dingo ALIAS dingo)
 target_include_directories(dingo INTERFACE include)
 
-target_sources(dingo INTERFACE
-    include/dingo/allocator.h
-    include/dingo/annotated.h
-    include/dingo/arena_allocator.h
-    include/dingo/class_instance_factory.h
-    include/dingo/class_instance_factory_i.h
-    include/dingo/class_instance_factory_traits.h
-    include/dingo/class_instance_resolver.h
-    include/dingo/class_instance_temporary.h
-    include/dingo/class_traits.h
-    include/dingo/collection_traits.h
-    include/dingo/config.h
-    include/dingo/constructor.h
-    include/dingo/container.h
-    include/dingo/decay.h
-    include/dingo/exceptions.h
-    include/dingo/factory/callable.h
-    include/dingo/factory/constructor.h
-    include/dingo/factory/function.h
-    include/dingo/index/array.h
-    include/dingo/index/map.h
-    include/dingo/index/unordered_map.h
-    include/dingo/index.h
-    include/dingo/rebind_type.h
-    include/dingo/resettable_i.h
-    include/dingo/resolving_context.h
-    include/dingo/rtti/static_type_info.h
-    include/dingo/rtti/typeid_type_info.h
-    include/dingo/storage.h
-    include/dingo/storage/external.h
-    include/dingo/storage/shared.h
-    include/dingo/storage/shared_cyclical.h
-    include/dingo/storage/unique.h
-    include/dingo/type_cache.h
-    include/dingo/type_conversion.h
-    include/dingo/type_list.h
-    include/dingo/type_map.h
-    include/dingo/type_registration.h
-    include/dingo/type_traits.h
-)
-
 install(
     DIRECTORY ${CMAKE_SOURCE_DIR}/include/dingo
     DESTINATION include
@@ -100,6 +59,47 @@ if(DINGO_DEVELOPMENT_MODE)
         /W4
         /wd4101 # unreferenced local variable
         /wd4702 # unreachable code
+    )
+
+    target_sources(dingo INTERFACE
+        include/dingo/allocator.h
+        include/dingo/annotated.h
+        include/dingo/arena_allocator.h
+        include/dingo/class_instance_factory.h
+        include/dingo/class_instance_factory_i.h
+        include/dingo/class_instance_factory_traits.h
+        include/dingo/class_instance_resolver.h
+        include/dingo/class_instance_temporary.h
+        include/dingo/class_traits.h
+        include/dingo/collection_traits.h
+        include/dingo/config.h
+        include/dingo/constructor.h
+        include/dingo/container.h
+        include/dingo/decay.h
+        include/dingo/exceptions.h
+        include/dingo/factory/callable.h
+        include/dingo/factory/constructor.h
+        include/dingo/factory/function.h
+        include/dingo/index/array.h
+        include/dingo/index/map.h
+        include/dingo/index/unordered_map.h
+        include/dingo/index.h
+        include/dingo/rebind_type.h
+        include/dingo/resettable_i.h
+        include/dingo/resolving_context.h
+        include/dingo/rtti/static_type_info.h
+        include/dingo/rtti/typeid_type_info.h
+        include/dingo/storage.h
+        include/dingo/storage/external.h
+        include/dingo/storage/shared.h
+        include/dingo/storage/shared_cyclical.h
+        include/dingo/storage/unique.h
+        include/dingo/type_cache.h
+        include/dingo/type_conversion.h
+        include/dingo/type_list.h
+        include/dingo/type_map.h
+        include/dingo/type_registration.h
+        include/dingo/type_traits.h
     )
 
     if(DINGO_TESTING_ENABLED)
