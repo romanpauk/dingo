@@ -1,15 +1,32 @@
 cmake_minimum_required(VERSION 3.19)
 project(dingo)
 
+include(GNUInstallDirs)
+
 option(DINGO_DEVELOPMENT_MODE "include additional targets for development" OFF)
 
 add_library(dingo INTERFACE)
 add_library(dingo::dingo ALIAS dingo)
-target_include_directories(dingo INTERFACE include)
+target_include_directories(dingo INTERFACE
+    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+)
 
 install(
-    DIRECTORY ${CMAKE_SOURCE_DIR}/include/dingo
-    DESTINATION include
+    TARGETS ${PROJECT_NAME}
+    EXPORT ${PROJECT_NAME}Targets
+)
+
+install(
+    EXPORT ${PROJECT_NAME}Targets
+    NAMESPACE ${PROJECT_NAME}::
+    FILE ${PROJECT_NAME}Config.cmake
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/cmake/${PROJECT_NAME}"
+)
+
+install(
+    DIRECTORY "${PROJECT_SOURCE_DIR}/include/dingo"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     FILES_MATCHING PATTERN "*.h"
 )
 
