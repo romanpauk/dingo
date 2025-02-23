@@ -99,7 +99,11 @@ TEST(constructor_detection_test, unique_arg_rvalue_reference) {
     try {
         T instance((arg<T>()));
     } catch(const std::runtime_error& e) {
+    #if (defined(_MSC_VER) && DINGO_CXX_STANDARD == 17) || __GNUC__ == 12 || __GNUC__ == 13
+        ASSERT_STREQ(e.what(), "operator T&&()");
+    #else
         ASSERT_STREQ(e.what(), "operator T()");
+    #endif
     }
 }
 
@@ -139,7 +143,11 @@ TEST(constructor_detection_test, shared_arg_rvalue_reference) {
     try {
         T instance((arg<T>()));
     } catch(const std::runtime_error& e) {
+    #if (defined(_MSC_VER) && DINGO_CXX_STANDARD == 17) || __GNUC__ == 12 || __GNUC__ == 13
+        ASSERT_STREQ(e.what(), "operator T&&()");
+    #else
         ASSERT_STREQ(e.what(), "operator T()");
+    #endif
     }
 }
 
