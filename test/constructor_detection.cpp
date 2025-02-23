@@ -55,9 +55,12 @@ template< typename U > struct arg
     , arg_const_lvalue_reference<U>
     , arg_lvalue_reference<U>
 
-    // TODO: for some compilers, the presence of rvalue reference is needed to compile the code
-    // Not all compilers will call the operator T&&().
-    // , arg_rvalue_reference<U>
+    // TODO: for some compilers, a presence of rvalue reference is needed
+    // so the code is compiled without ambiguity. That does not mean the operator T&&()
+    // will actually be called.
+#if (defined(_MSC_VER) && DINGO_CXX_STANDARD == 17) || __GNUC__ == 12 || __GNUC__ == 13
+    , arg_rvalue_reference<U>
+#endif
 {};
 
 TEST(constructor_detection_test, unique_arg_value) {
