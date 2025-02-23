@@ -157,7 +157,127 @@ TYPED_TEST(nested_resolution_test, value_resolution) {
 }
 #endif
 
+struct unique_class {
+    unique_class(const unique_class&) = delete;
+    unique_class(unique_class&&) {}
+    unique_class(std::nullptr_t) {}
+};
+
+struct shared_class {
+    shared_class(const shared_class&) {}
+    shared_class(shared_class&&) {}
+    shared_class(std::nullptr_t) {}
+};
+
+template< typename U > struct arg_rvalue_reference {
+    template<typename T, typename = std::enable_if_t< !std::is_same_v< std::decay_t<T>, U > > >
+    operator T&&() const { throw std::runtime_error("operator T&&()"); }
+};
+
+template< typename U > struct arg_const_lvalue_reference {
+    template<typename T, typename = std::enable_if_t< !std::is_same_v< std::decay_t<T>, U > > >
+    operator const T&() const { throw std::runtime_error("operator const T&()"); }
+};
+
+template< typename U > struct arg_lvalue_reference {
+    template<typename T, typename = std::enable_if_t< !std::is_same_v< std::decay_t<T>, U > > >
+    operator T&() const { throw std::runtime_error("operator T&()"); }
+};
+
+template< typename U > struct arg_value {
+    template<typename T, typename = std::enable_if_t< !std::is_same_v< std::decay_t<T>, U > > >
+    operator T() { throw std::runtime_error("operator T()"); }
+};
+
+template< typename U > struct arg
+    : arg_value<U>
+    , arg_const_lvalue_reference<U>
+    , arg_lvalue_reference<U>
+    , arg_rvalue_reference<U>
+{};
+
+TYPED_TEST(nested_resolution_test, unique_arg_value) {
+    struct T { T(unique_class) {} };
+
+    try {
+        T instance((arg<T>()));
+    } catch(const std::runtime_error& e) {
+        ASSERT_STREQ(e.what(), "operator T()");
+    }
+}
+
+TYPED_TEST(nested_resolution_test, unique_arg_lvalue_reference) {
+    struct T { T(unique_class&) {} };
+
+    try {
+        T instance((arg<T>()));
+    } catch(const std::runtime_error& e) {
+        ASSERT_STREQ(e.what(), "operator T&()");
+    }
+}
+
+TYPED_TEST(nested_resolution_test, unique_arg_const_lvalue_reference) {
+    struct T { T(const unique_class&) {} };
+
+    try {
+        T instance((arg<T>()));
+    } catch(const std::runtime_error& e) {
+        ASSERT_STREQ(e.what(), "operator const T&()");
+    }
+}
+
+TYPED_TEST(nested_resolution_test, unique_arg_rvalue_reference) {
+    struct T { T(unique_class&&) {} };
+
+    try {
+        T instance((arg<T>()));
+    } catch(const std::runtime_error& e) {
+        ASSERT_STREQ(e.what(), "operator T&&()");
+    }
+}
+
+TYPED_TEST(nested_resolution_test, shared_arg_value) {
+    struct T { T(shared_class) {} };
+
+    try {
+        T instance((arg<T>()));
+    } catch(const std::runtime_error& e) {
+        ASSERT_STREQ(e.what(), "operator T()");
+    }
+}
+
+TYPED_TEST(nested_resolution_test, shared_arg_lvalue_reference) {
+    struct T { T(shared_class&) {} };
+
+    try {
+        T instance((arg<T>()));
+    } catch(const std::runtime_error& e) {
+        ASSERT_STREQ(e.what(), "operator T&()");
+    }
+}
+
+TYPED_TEST(nested_resolution_test, shared_arg_const_lvalue_reference) {
+    struct T { T(const shared_class&) {} };
+
+    try {
+        T instance((arg<T>()));
+    } catch(const std::runtime_error& e) {
+        ASSERT_STREQ(e.what(), "operator const T&()");
+    }
+}
+
+TYPED_TEST(nested_resolution_test, shared_arg_rvalue_reference) {
+    struct T { T(shared_class&&) {} };
+
+    try {
+        T instance((arg<T>()));
+    } catch(const std::runtime_error& e) {
+        ASSERT_STREQ(e.what(), "operator T&&()");
+    }
+}
+
 TYPED_TEST(nested_resolution_test, notes) {
+    //std::unique_ptr<int> p((arg()));
     //
     // class/operators          conversions             ownership
     // unique_ptr (non-copiable, move-constructible):
