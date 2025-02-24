@@ -16,6 +16,7 @@
 namespace dingo {
 template <typename T> struct constructor_detection_test : public testing::Test {};
 
+namespace detail {
 struct unique_class {
     unique_class(const unique_class&) = delete;
     unique_class(unique_class&&) {}
@@ -29,6 +30,10 @@ struct shared_class {
     shared_class(std::nullptr_t) {}
     shared_class(void*) {}
 };
+}
+
+using unique_class = std::unique_ptr<int>; //detail::unique_class;
+using shared_class = std::shared_ptr<int>; //detail::shared_class;
 
 template< typename U > struct arg_rvalue_reference {
     template<typename T, typename = std::enable_if_t< !std::is_same_v< std::decay_t<T>, U > > >
