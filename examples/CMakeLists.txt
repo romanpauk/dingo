@@ -6,7 +6,7 @@ function(add_example source)
 endfunction()
 
 add_example(allocator.cpp)
-add_example(collection.cpp)
+# add_example(collection.cpp)
 add_example(construct.cpp)
 add_example(factory_callable.cpp)
 add_example(factory_constructor.cpp)

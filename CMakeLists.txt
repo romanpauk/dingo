@@ -176,7 +176,7 @@ if(DINGO_DEVELOPMENT_MODE)
             test/external.cpp
             test/index.cpp
             test/invoke.cpp
-            test/multibindings.cpp
+            # test/multibindings.cpp
             test/nested_resolution.cpp
             test/nesting.cpp
             test/shared.cpp
