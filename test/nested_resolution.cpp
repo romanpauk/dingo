@@ -45,6 +45,7 @@ TYPED_TEST(nested_resolution_test, nested_types) {
             int value;
             Shared* shared_raw_ptr;
             std::shared_ptr<SharedPtr> shared_ptr;
+            std::unique_ptr<UniquePtr> unique_ptr;
             Unique unique;
             // TODO:
             // It is possible to construct Inner1 due to hack in constructor_argument,
@@ -93,13 +94,14 @@ TYPED_TEST(nested_resolution_test, nested_types) {
 
     static_assert(constructor_detection<Outer>::arity == 4);
     static_assert(constructor_detection<Unique>::arity == 1);
-    static_assert(constructor_detection<typename Outer::Inner1>::arity == 7);
+    static_assert(constructor_detection<typename Outer::Inner1>::arity == 8);
 
     auto assert_inner = [&](auto& in) {
         ASSERT_EQ(in.value, 11);
         ASSERT_EQ(in.unique.value, 11);
         ASSERT_EQ(in.shared_raw_ptr->value, 11);
         ASSERT_EQ(in.shared_ptr->value, 11);
+        ASSERT_EQ(in.unique_ptr->value, 11);
         ASSERT_EQ(in.external_value.value, 1);
         ASSERT_EQ(in.external_ref.value, 1);
         ASSERT_EQ(in.external_ptr->value, 1);

@@ -55,10 +55,16 @@ template< typename U > struct arg_value {
     operator T() { throw std::runtime_error("operator T()"); }
 };
 
+template< typename U > struct arg_pointer {
+    template<typename T, typename = std::enable_if_t< !std::is_same_v< std::decay_t<T>, U > > >
+    operator T*() { throw std::runtime_error("operator T*()"); }
+};
+
 template< typename U > struct arg
     : arg_value<U>
     , arg_const_lvalue_reference<U>
     , arg_lvalue_reference<U>
+    , arg_pointer<U>
 
     // TODO: for some compilers, a presence of rvalue reference is needed
     // so the code is compiled without ambiguity. That does not mean the operator T&&()
@@ -109,6 +115,16 @@ TEST(constructor_detection_test, unique_arg_rvalue_reference) {
     #else
         ASSERT_STREQ(e.what(), "operator T()");
     #endif
+    }
+}
+
+TEST(constructor_detection_test, unique_arg_pointer) {
+    struct T { T(unique_class*) {} };
+
+    try {
+        T instance((arg<T>()));
+    } catch(const std::runtime_error& e) {
+        ASSERT_STREQ(e.what(), "operator T*()");
     }
 }
 

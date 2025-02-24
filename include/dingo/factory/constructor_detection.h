@@ -20,6 +20,7 @@ namespace dingo {
 namespace detail {
 struct reference {};
 struct value {};
+struct automatic {};
 
 template <class DisabledType, typename Tag> struct constructor_argument;
 
@@ -46,6 +47,35 @@ struct constructor_argument<DisabledType, value> {
 
     template <typename T, typename = typename std::enable_if_t<!std::is_same_v<
                               DisabledType, typename std::decay_t<T>>>>
+    operator T();
+};
+
+template <class DisabledType>
+struct constructor_argument<DisabledType, automatic> {
+    using tag_type = automatic;
+
+    template <
+        typename T,
+        typename = typename std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>> >
+    >
+    operator T&&() const;
+
+    template <
+        typename T,
+        typename = typename std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>> >
+    >
+    operator const T&() const;
+
+    template <
+        typename T,
+        typename = typename std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>> >
+    >
+    operator T&() const;
+
+    template <
+        typename T,
+        typename = typename std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>> >
+    >
     operator T();
 };
 
@@ -110,6 +140,55 @@ class constructor_argument_impl<DisabledType, Context, Container, value> {
     template <typename T, typename Tag,
               typename = std::enable_if_t<
                   !std::is_same_v<DisabledType, std::decay_t<T>>>>
+    operator annotated<T, Tag>() {
+        return context_.template resolve<annotated<T, Tag>>(container_);
+    }
+
+  private:
+    Context& context_;
+    Container& container_;
+};
+
+template <typename DisabledType, typename Context, typename Container>
+class constructor_argument_impl<DisabledType, Context, Container, automatic> {
+  public:
+    constructor_argument_impl(Context& context, Container& container)
+        : context_(context), container_(container) {}
+
+    template <
+        typename T,
+        typename = typename std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>> >
+    >
+    operator T&&() const {
+        return context_.template resolve<T&&>(container_);
+    }
+
+    template <
+        typename T,
+        typename = typename std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>> >
+    >
+    operator const T&() const {
+        return context_.template resolve<const T&>(container_);
+    }
+
+    template <
+        typename T,
+        typename = typename std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>> >
+    >
+    operator T&() const {
+        return context_.template resolve<T&>(container_);
+    }
+
+    template <
+        typename T,
+        typename = typename std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>> >
+    >
+    operator T() {
+        return context_.template resolve<T>(container_);
+    }
+
+    template <typename T, typename Tag,
+              typename = std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>>> >
     operator annotated<T, Tag>() {
         return context_.template resolve<annotated<T, Tag>>(container_);
     }
@@ -254,7 +333,7 @@ struct constructor_detection_impl<T, IsConstructible, Assert, N, false,
 
 } // namespace detail
 
-template <typename T, typename DetectionType = detail::reference> struct constructor_detection
+template <typename T, typename DetectionType = detail::automatic> struct constructor_detection
     : std::conditional_t<
         has_constructor_typedef_v<T>,
         constructor_typedef<T>,
