@@ -170,6 +170,7 @@ if(DINGO_DEVELOPMENT_MODE)
             test/class.h
             test/class_factory.cpp
             test/construct.cpp
+            test/constructor_detection.cpp
             test/containers.h
             test/dingo.cpp
             test/external.cpp
