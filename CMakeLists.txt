@@ -1,8 +1,7 @@
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.21)
 project(dingo)
 
-include(GNUInstallDirs)
-
+option(DINGO_INSTALL "Generate the install target." ${PROJECT_IS_TOP_LEVEL})
 option(DINGO_DEVELOPMENT_MODE "include additional targets for development" OFF)
 
 add_library(dingo INTERFACE)
@@ -12,23 +11,27 @@ target_include_directories(dingo INTERFACE
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
 
-install(
-    TARGETS ${PROJECT_NAME}
-    EXPORT ${PROJECT_NAME}Targets
-)
-
-install(
-    EXPORT ${PROJECT_NAME}Targets
-    NAMESPACE ${PROJECT_NAME}::
-    FILE ${PROJECT_NAME}Config.cmake
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/cmake/${PROJECT_NAME}"
-)
-
-install(
-    DIRECTORY "${PROJECT_SOURCE_DIR}/include/dingo"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-    FILES_MATCHING PATTERN "*.h"
-)
+if(NOT CMAKE_SKIP_INSTALL_RULES AND DINGO_INSTALL)
+    include(GNUInstallDirs)
+    
+    install(
+        TARGETS ${PROJECT_NAME}
+        EXPORT ${PROJECT_NAME}Targets
+    )
+    
+    install(
+        EXPORT ${PROJECT_NAME}Targets
+        NAMESPACE ${PROJECT_NAME}::
+        FILE ${PROJECT_NAME}Config.cmake
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/cmake/${PROJECT_NAME}"
+    )
+    
+    install(
+        DIRECTORY "${PROJECT_SOURCE_DIR}/include/dingo"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+        FILES_MATCHING PATTERN "*.h"
+    )
+endif()
 
 if(DINGO_DEVELOPMENT_MODE)
     enable_testing()
