@@ -9,20 +9,23 @@
 
 #include <dingo/config.h>
 
+#include <dingo/aligned_storage.h>
 #include <dingo/annotated.h>
 #include <dingo/arena_allocator.h>
 #include <dingo/exceptions.h>
 #include <dingo/factory/constructor_detection.h>
 
-#include <array>
+#include <vector>
 
 namespace dingo {
 
 class resolving_context {
-    static constexpr size_t size = DINGO_CONTEXT_SIZE;
-
   public:
-    resolving_context() : destructors_size_(), arena_allocator_(arena_) {}
+    resolving_context()
+        : arena_(&arena_buffer_, DINGO_CONTEXT_ARENA_BUFFER_SIZE)
+        , arena_allocator_(arena_)
+        , destructibles_(arena_allocator_)
+    {}
 
     // TODO: motivation for latest changes was to get rid of this dtor
     // completely, as all types will be passed kind of directly. But as T is
@@ -32,13 +35,8 @@ class resolving_context {
     // resolve<> exits. Hence this class that unfortunatelly is quite
     // performance sensitive.
     ~resolving_context() {
-        if (destructors_size_) {
-            do {
-                --destructors_size_;
-                destructors_[destructors_size_].dtor(
-                    destructors_[destructors_size_].instance);
-            } while (destructors_size_ > 0);
-        }
+        for (auto it = destructibles_.rbegin(); it != destructibles_.rend(); ++it)
+            it->dtor(it->instance);
     }
 
     //    TODO: this method seems useless but it is friend of a container and
@@ -79,32 +77,25 @@ class resolving_context {
   private:
     template <typename T> void register_destructor(T* instance) {
         static_assert(!std::is_trivially_destructible_v<T>);
-        check_size(destructors_size_);
-        destructors_[destructors_size_++] = {instance, &destructor<T>};
+        destructibles_.push_back({instance, &destructor<T>});
     }
 
     template <typename T> static void destructor(void* ptr) {
         reinterpret_cast<T*>(ptr)->~T();
     }
 
-    void check_size(size_t count) {
-        if (size == count)
-            throw type_context_overflow_exception();
-    }
-
-    // TODO: this is fast, but non-generic, needs more work
-    size_t destructors_size_;
-
     struct destructible {
         void* instance;
         void (*dtor)(void*);
     };
 
-    std::array<destructible, size> destructors_;
+    aligned_storage_t<DINGO_CONTEXT_ARENA_BUFFER_SIZE, alignof(std::max_align_t)> arena_buffer_;
+    arena<> arena_;
+    arena_allocator<void> arena_allocator_;
 
-    // TODO: how big should this be?
-    arena<32 * size> arena_;
-    arena_allocator<void, 32 * size> arena_allocator_;
+    // Note to self: vector is much faster than deque. forward_list is also fast, but slower than vector.
+    std::vector<destructible, arena_allocator<destructible>> destructibles_;
+
 };
 
 } // namespace dingo
