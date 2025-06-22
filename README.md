@@ -72,7 +72,7 @@ container.register_type<scope<unique>, storage<C>>();
 // As C is in unique scope, each resolve<C> will return new C instance.
 // As A and B are in shared scope, each C will get the same instances
 // injected.
-C c = container.resolve<C>();
+/*C c =*/container.resolve<C>();
 
 struct D {
     A& a;
@@ -80,10 +80,10 @@ struct D {
 };
 
 // Construct an un-managed struct using dependencies from the container
-D d = container.construct<D>();
+/*D d =*/container.construct<D>();
 
 // Invoke callable
-D e = container.invoke([&](A& a, B* b) { return D{a, b}; });
+/*D e =*/container.invoke([&](A& a, B* b) { return D{a, b}; });
 ```
 
 <!-- } -->
@@ -317,9 +317,9 @@ Example code included from
 [examples/scope_external.cpp](examples/scope_external.cpp):
 
 ```c++
-struct A {
-} instance;
+struct A {};
 
+A instance;
 container<> container;
 // Register existing instance of A, stored as a pointer.
 container.register_type<scope<external>, storage<A*>>(&instance);
@@ -558,7 +558,7 @@ container.template register_indexed_type<
     scope<shared>, storage<Cat>, interface<IAnimal>>(std::string("cat"));
 
 // Resolve an instance of a dog
-auto dog = container.template resolve<IAnimal>(std::string("dog"));
+/*auto dog =*/container.template resolve<IAnimal>(std::string("dog"));
 ```
 
 <!-- } -->
@@ -591,7 +591,7 @@ container<> container;
 // Register struct A with shared scope
 container.register_type<scope<shared>, storage<A>>();
 // Construct instance of B, injecting shared instance of A
-B b = container.construct<B>();
+/*B b =*/container.construct<B>();
 ```
 
 <!-- } -->
@@ -613,9 +613,9 @@ struct B {
     static B factory(A& a) { return B{a}; }
 };
 // Construct instance of B, injecting shared instance of A
-B b1 = container.invoke([&](A& a) { return B{a}; });
-B b2 = container.invoke(std::function<B(A&)>([](auto& a) { return B{a}; }));
-B b3 = container.invoke(B::factory);
+/*B b1 =*/container.invoke([&](A& a) { return B{a}; });
+/*B b2 =*/container.invoke(std::function<B(A&)>([](auto& a) { return B{a}; }));
+/*B b3 =*/container.invoke(B::factory);
 ```
 
 <!-- } -->

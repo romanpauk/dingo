@@ -28,6 +28,8 @@ struct B {
 };
 
 ////
+#define MAYBE_UNUSED(x) (void)(x)
+
 int main() {
     using namespace dingo;
     ////
@@ -51,4 +53,7 @@ int main() {
     assert(&b.a_ == &a);
     assert(b.aptr_ == &a);
     ////
+
+    MAYBE_UNUSED(a);
+    MAYBE_UNUSED(b);
 }

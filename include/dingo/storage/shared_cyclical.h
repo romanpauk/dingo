@@ -12,6 +12,7 @@
 #include <dingo/decay.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/storage.h>
+#include <dingo/type_traits.h>
 
 #include <atomic>
 #include <memory>
@@ -117,7 +118,7 @@ class storage_instance_shared_impl<Type, Factory, false> : Factory {
     }
 
   private:
-    std::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
+    dingo::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
     bool resolved_ = false;
     bool constructed_ = false;
 };
@@ -147,7 +148,7 @@ class storage_instance_shared_impl<Type, Factory, true> : Factory {
     void reset() { resolved_ = false; }
 
   private:
-    std::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
+    dingo::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
     bool resolved_ = false;
 };
 

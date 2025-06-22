@@ -24,17 +24,17 @@ template <typename T, typename ProcessorT> struct Processor : ProcessorBase {
     virtual std::type_index type() override { return typeid(T); }
 
     void process(const void* transaction) override {
-        static_cast<ProcessorT*>(this)->process(
+        static_cast<ProcessorT*>(this)->process_impl(
             *reinterpret_cast<const T*>(transaction));
     }
 };
 
 struct StringProcessor : Processor<std::string, StringProcessor> {
-    void process(const std::string& value){};
+    void process_impl([[maybe_unused]] const std::string& value) {};
 };
 
 struct VectorIntProcessor : Processor<std::vector<int>, VectorIntProcessor> {
-    void process(const std::vector<int>& value){};
+    void process_impl([[maybe_unused]] const std::vector<int>& value) {};
 };
 
 struct Dispatcher {

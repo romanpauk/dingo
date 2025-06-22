@@ -15,6 +15,10 @@
 
 namespace dingo {
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
 // TODO: clean up the templates
 template <typename RTTI, typename T> struct class_instance_factory_traits {
     static T convert(void* ptr) {
@@ -42,6 +46,9 @@ template <typename RTTI, typename T> struct class_instance_factory_traits {
             RTTI::template get_type_index<rebind_type_t<T, runtime_type>>());
     }
 };
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 template <typename RTTI, typename T>
 struct class_instance_factory_traits<RTTI, T&> {

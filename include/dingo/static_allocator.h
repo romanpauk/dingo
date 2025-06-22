@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/config.h>
+#include <dingo/type_traits.h>
 
 #include <cassert>
 
@@ -40,13 +41,13 @@ template <typename T, typename Tag> class static_allocator {
     }
 
   private:
-    static std::aligned_storage_t<sizeof(T), alignof(T)> storage_;
+    static dingo::aligned_storage_t<sizeof(T), alignof(T)> storage_;
     static bool used_;
 };
 
 template <typename T, typename Tag> bool static_allocator<T, Tag>::used_;
 template <typename T, typename Tag>
-std::aligned_storage_t<sizeof(T), alignof(T)>
+dingo::aligned_storage_t<sizeof(T), alignof(T)>
     static_allocator<T, Tag>::storage_;
 
 template <typename Allocator>

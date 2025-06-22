@@ -41,7 +41,7 @@ int main() {
     // As C is in unique scope, each resolve<C> will return new C instance.
     // As A and B are in shared scope, each C will get the same instances
     // injected.
-    C c = container.resolve<C>();
+    /*C c =*/container.resolve<C>();
 
     struct D {
         A& a;
@@ -49,9 +49,9 @@ int main() {
     };
 
     // Construct an un-managed struct using dependencies from the container
-    D d = container.construct<D>();
+    /*D d =*/container.construct<D>();
 
     // Invoke callable
-    D e = container.invoke([&](A& a, B* b) { return D{a, b}; });
+    /*D e =*/container.invoke([&](A& a, B* b) { return D{a, b}; });
     ////
 }

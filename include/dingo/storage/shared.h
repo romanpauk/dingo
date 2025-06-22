@@ -13,6 +13,7 @@
 #include <dingo/factory/constructor.h>
 #include <dingo/storage.h>
 #include <dingo/type_list.h>
+#include <dingo/type_traits.h>
 
 namespace dingo {
 struct shared {};
@@ -69,17 +70,24 @@ struct storage_instance_base : Factory {
 
     Type* get() const { return reinterpret_cast<Type*>(&instance_); }
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
     template <typename Context, typename Container>
     void construct(Context& context, Container& container) {
         assert(!initialized_);
         Factory::template construct<Type*>(&instance_, context, container);
         initialized_ = true;
     }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
     bool empty() const { return !initialized_; }
 
   protected:
-    mutable std::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
+    mutable dingo::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
     bool initialized_ = false;
 };
 

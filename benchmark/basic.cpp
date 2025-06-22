@@ -12,6 +12,7 @@
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 #include <dingo/type_map.h>
+#include <dingo/type_traits.h>
 
 #include <memory>
 #include <optional>
@@ -33,7 +34,7 @@ template <typename T> struct basic_unique_factory : basic_factory {
     }
 
   private:
-    std::aligned_storage_t<sizeof(T)> storage_;
+    dingo::aligned_storage_t<sizeof(T), alignof(T)> storage_;
 };
 
 template <typename T> struct basic_shared_factory : basic_factory {
@@ -81,6 +82,10 @@ struct basic_unique_resolver {
         }
     }
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
     template <typename T> T resolve4() {
         void* tmp = cache_.get<T*>();
         if (tmp) {
@@ -97,6 +102,9 @@ struct basic_unique_resolver {
             return value;
         }
     }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
     template <typename Factory> static void* resolve_call_impl(void* factory) {
         return reinterpret_cast<Factory*>(factory)->resolve2();

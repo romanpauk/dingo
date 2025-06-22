@@ -13,19 +13,19 @@ target_include_directories(dingo INTERFACE
 
 if(NOT CMAKE_SKIP_INSTALL_RULES AND DINGO_INSTALL)
     include(GNUInstallDirs)
-    
+
     install(
         TARGETS ${PROJECT_NAME}
         EXPORT ${PROJECT_NAME}Targets
     )
-    
+
     install(
         EXPORT ${PROJECT_NAME}Targets
         NAMESPACE ${PROJECT_NAME}::
         FILE ${PROJECT_NAME}Config.cmake
         DESTINATION "${CMAKE_INSTALL_DATADIR}/cmake/${PROJECT_NAME}"
     )
-    
+
     install(
         DIRECTORY "${PROJECT_SOURCE_DIR}/include/dingo"
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
@@ -62,24 +62,9 @@ if(DINGO_DEVELOPMENT_MODE)
     option(DINGO_BENCHMARK_ENABLED "enable benchmarking through googlebenchmark" ON)
     option(DINGO_BENCHMARK_FRUIT_ENABLED "enable fetching of google::fruit for benchmarks" OFF)
     option(DINGO_EXAMPLES_ENABLED "enable building of dingo examples" ON)
+    option(DINGO_TREAT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors." OFF)
 
     sanitizers_init(DINGO)
-
-    # TODO: g++ -Wall -Wextra -Wpedantic -Q --help=warning | grep disabled
-    set(DINGO_WARNINGS_GCC
-        -Wall
-        -Wpedantic
-        -Wextra
-        -Wshadow
-        -Wno-unused-variable
-        -Wno-gnu-zero-variadic-macro-arguments
-    )
-
-    set(DINGO_WARNINGS_MSVC
-        /W4
-        /wd4101 # unreferenced local variable
-        /wd4702 # unreachable code
-    )
 
     set(DINGO_SOURCE_FILES
         allocator.h
@@ -97,16 +82,26 @@ if(DINGO_DEVELOPMENT_MODE)
         container.h
         decay.h
         exceptions.h
-        factory/callable.h
-        factory/constructor.h
-        factory/function.h
-        index/array.h
-        index/map.h
-        index/unordered_map.h
-        index.h
         rebind_type.h
         resettable_i.h
         resolving_context.h
+        static_allocator.h
+        type_cache.h
+        type_conversion.h
+        type_list.h
+        type_map.h
+        type_registration.h
+        type_traits.h
+        factory/callable.h
+        factory/constructor.h
+        factory/constructor_detection.h
+        factory/constructor_typedef.h
+        factory/function.h
+        factory/invoke.h
+        index.h
+        index/array.h
+        index/map.h
+        index/unordered_map.h
         rtti/static_type_info.h
         rtti/typeid_type_info.h
         storage.h
@@ -114,12 +109,6 @@ if(DINGO_DEVELOPMENT_MODE)
         storage/shared.h
         storage/shared_cyclical.h
         storage/unique.h
-        type_cache.h
-        type_conversion.h
-        type_list.h
-        type_map.h
-        type_registration.h
-        type_traits.h
     )
 
     set(DINGO_INTERFACE_SOURCES "")
@@ -165,6 +154,23 @@ if(DINGO_DEVELOPMENT_MODE)
         endif()
     endif()
 
+    if(MSVC)
+      add_compile_options(
+        /W4
+        $<$<BOOL:${DINGO_TREAT_WARNINGS_AS_ERRORS}>:/WX>
+    )
+    else()
+        # TODO: g++ -Wall -Wextra -Wpedantic -Q --help=warning | grep disabled
+        add_compile_options(
+            -Wall
+            -Wpedantic
+            -Wextra
+            -Wshadow
+            -Wno-gnu-zero-variadic-macro-arguments
+            $<$<BOOL:${DINGO_TREAT_WARNINGS_AS_ERRORS}>:-Werror>
+        )
+    endif()
+
     if(DINGO_TESTING_ENABLED)
         add_executable(dingo_test
             test/allocator.cpp
@@ -191,8 +197,7 @@ if(DINGO_DEVELOPMENT_MODE)
         add_test(NAME dingo_test COMMAND dingo_test)
         target_link_libraries(dingo_test dingo::dingo gtest_main)
 
-        target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:${DINGO_WARNINGS_GCC}>)
-        target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:${DINGO_WARNINGS_MSVC} /bigobj>)
+        target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
 
         target_sanitize(DINGO dingo_test)
     endif()
@@ -210,9 +215,6 @@ if(DINGO_DEVELOPMENT_MODE)
         )
         target_include_directories(dingo_benchmark PRIVATE benchmark)
         target_link_options(dingo_benchmark PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:LINKER:--demangle>)
-
-        target_compile_options(dingo_benchmark PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:${DINGO_WARNINGS_GCC}>)
-        target_compile_options(dingo_benchmark PRIVATE $<$<CXX_COMPILER_ID:MSVC>:${DINGO_WARNINGS_MSVC}>)
 
         if(DINGO_BENCHMARK_FRUIT_ENABLED)
             target_sources(dingo_benchmark PRIVATE benchmark/fruit.cpp)
