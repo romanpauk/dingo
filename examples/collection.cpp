@@ -30,11 +30,11 @@ template <typename T, typename ProcessorT> struct Processor : ProcessorBase {
 };
 
 struct StringProcessor : Processor<std::string, StringProcessor> {
-    void process(const std::string& value){};
+    void process([[maybe_unused]] const std::string& value) {};
 };
 
 struct VectorIntProcessor : Processor<std::vector<int>, VectorIntProcessor> {
-    void process(const std::vector<int>& value){};
+    void process([[maybe_unused]] const std::vector<int>& value) {};
 };
 
 struct Dispatcher {

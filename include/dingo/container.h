@@ -399,6 +399,10 @@ class container : public allocator_base<Allocator> {
         }
     }
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
     template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
               typename IdType = none_t,
               typename R = std::conditional_t<
@@ -470,6 +474,9 @@ class container : public allocator_base<Allocator> {
 
         throw type_not_found_exception();
     }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
     // TODO: two different resolve() calls due to different caches
     template <typename CachedT, typename T, typename Factory, typename Context>

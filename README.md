@@ -317,9 +317,9 @@ Example code included from
 [examples/scope_external.cpp](examples/scope_external.cpp):
 
 ```c++
-struct A {
-} instance;
+struct A {};
 
+A instance;
 container<> container;
 // Register existing instance of A, stored as a pointer.
 container.register_type<scope<external>, storage<A*>>(&instance);

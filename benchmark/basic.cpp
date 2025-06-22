@@ -81,6 +81,10 @@ struct basic_unique_resolver {
         }
     }
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
     template <typename T> T resolve4() {
         void* tmp = cache_.get<T*>();
         if (tmp) {
@@ -97,6 +101,9 @@ struct basic_unique_resolver {
             return value;
         }
     }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
     template <typename Factory> static void* resolve_call_impl(void* factory) {
         return reinterpret_cast<Factory*>(factory)->resolve2();
