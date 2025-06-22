@@ -66,6 +66,21 @@ if(DINGO_DEVELOPMENT_MODE)
 
     sanitizers_init(DINGO)
 
+    # TODO: g++ -Wall -Wextra -Wpedantic -Q --help=warning | grep disabled
+    set(DINGO_WARNINGS_GCC
+        -Wall
+        -Wpedantic
+        -Wextra
+        -Wshadow
+        -Wno-gnu-zero-variadic-macro-arguments
+        $<$<BOOL:${DINGO_TREAT_WARNINGS_AS_ERRORS}>:-Werror>
+    )
+
+    set(DINGO_WARNINGS_MSVC
+        /W4
+        $<$<BOOL:${DINGO_TREAT_WARNINGS_AS_ERRORS}>:/WX>
+    )
+
     set(DINGO_SOURCE_FILES
         aligned_storage.h
         allocator.h
@@ -124,6 +139,16 @@ if(DINGO_DEVELOPMENT_MODE)
     target_sources(dingo INTERFACE
         ${DINGO_INTERFACE_SOURCES}
     )
+    
+    if(MSVC)
+        target_compile_options(dingo INTERFACE
+            ${DINGO_WARNINGS_MSVC}
+        )
+    else()
+        target_compile_options(dingo INTERFACE
+            ${DINGO_WARNINGS_GCC}
+        )
+    endif()
 
     if(DINGO_TESTING_ENABLED)
         FetchContent_Declare(googletest
@@ -153,23 +178,6 @@ if(DINGO_DEVELOPMENT_MODE)
 
             FetchContent_MakeAvailable(googlefruit)
         endif()
-    endif()
-
-    if(MSVC)
-      add_compile_options(
-        /W4
-        $<$<BOOL:${DINGO_TREAT_WARNINGS_AS_ERRORS}>:/WX>
-    )
-    else()
-        # TODO: g++ -Wall -Wextra -Wpedantic -Q --help=warning | grep disabled
-        add_compile_options(
-            -Wall
-            -Wpedantic
-            -Wextra
-            -Wshadow
-            -Wno-gnu-zero-variadic-macro-arguments
-            $<$<BOOL:${DINGO_TREAT_WARNINGS_AS_ERRORS}>:-Werror>
-        )
     endif()
 
     if(DINGO_TESTING_ENABLED)
