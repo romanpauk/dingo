@@ -17,6 +17,8 @@ struct IA {
 struct A : IA {};
 
 ////
+#define MAYBE_UNUSED(x) (void)(x)
+
 int main() {
     using namespace dingo;
     ////
@@ -28,4 +30,6 @@ int main() {
     IA& instance = container.resolve<IA&>();
     assert(dynamic_cast<A*>(&instance));
     ////
+
+    MAYBE_UNUSED(instance);
 }

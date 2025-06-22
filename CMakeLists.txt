@@ -13,19 +13,19 @@ target_include_directories(dingo INTERFACE
 
 if(NOT CMAKE_SKIP_INSTALL_RULES AND DINGO_INSTALL)
     include(GNUInstallDirs)
-    
+
     install(
         TARGETS ${PROJECT_NAME}
         EXPORT ${PROJECT_NAME}Targets
     )
-    
+
     install(
         EXPORT ${PROJECT_NAME}Targets
         NAMESPACE ${PROJECT_NAME}::
         FILE ${PROJECT_NAME}Config.cmake
         DESTINATION "${CMAKE_INSTALL_DATADIR}/cmake/${PROJECT_NAME}"
     )
-    
+
     install(
         DIRECTORY "${PROJECT_SOURCE_DIR}/include/dingo"
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
@@ -62,6 +62,7 @@ if(DINGO_DEVELOPMENT_MODE)
     option(DINGO_BENCHMARK_ENABLED "enable benchmarking through googlebenchmark" ON)
     option(DINGO_BENCHMARK_FRUIT_ENABLED "enable fetching of google::fruit for benchmarks" OFF)
     option(DINGO_EXAMPLES_ENABLED "enable building of dingo examples" ON)
+    option(DINGO_TREAT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors." ON)
 
     sanitizers_init(DINGO)
 
@@ -71,23 +72,23 @@ if(DINGO_DEVELOPMENT_MODE)
         -Wpedantic
         -Wextra
         -Wshadow
-        -Wno-unused-variable
         -Wno-gnu-zero-variadic-macro-arguments
+        $<$<BOOL:${DINGO_TREAT_WARNINGS_AS_ERRORS}>:-Werror>
     )
 
     set(DINGO_WARNINGS_MSVC
         /W4
-        /wd4101 # unreferenced local variable
-        /wd4702 # unreachable code
+        $<$<BOOL:${DINGO_TREAT_WARNINGS_AS_ERRORS}>:/WX>
     )
 
     set(DINGO_SOURCE_FILES
+        aligned_storage.h
         allocator.h
         annotated.h
         arena_allocator.h
-        class_instance_factory.h
         class_instance_factory_i.h
         class_instance_factory_traits.h
+        class_instance_factory.h
         class_instance_resolver.h
         class_instance_temporary.h
         class_traits.h
@@ -98,21 +99,25 @@ if(DINGO_DEVELOPMENT_MODE)
         decay.h
         exceptions.h
         factory/callable.h
+        factory/constructor_detection.h
+        factory/constructor_typedef.h
         factory/constructor.h
         factory/function.h
+        factory/invoke.h
+        index.h
         index/array.h
         index/map.h
         index/unordered_map.h
-        index.h
         rebind_type.h
         resettable_i.h
         resolving_context.h
         rtti/static_type_info.h
         rtti/typeid_type_info.h
+        static_allocator.h
         storage.h
         storage/external.h
-        storage/shared.h
         storage/shared_cyclical.h
+        storage/shared.h
         storage/unique.h
         type_cache.h
         type_conversion.h
@@ -134,6 +139,16 @@ if(DINGO_DEVELOPMENT_MODE)
     target_sources(dingo INTERFACE
         ${DINGO_INTERFACE_SOURCES}
     )
+    
+    if(MSVC)
+        target_compile_options(dingo INTERFACE
+            ${DINGO_WARNINGS_MSVC}
+        )
+    else()
+        target_compile_options(dingo INTERFACE
+            ${DINGO_WARNINGS_GCC}
+        )
+    endif()
 
     if(DINGO_TESTING_ENABLED)
         FetchContent_Declare(googletest
@@ -191,8 +206,7 @@ if(DINGO_DEVELOPMENT_MODE)
         add_test(NAME dingo_test COMMAND dingo_test)
         target_link_libraries(dingo_test dingo::dingo gtest_main)
 
-        target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:${DINGO_WARNINGS_GCC}>)
-        target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:${DINGO_WARNINGS_MSVC} /bigobj>)
+        target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
 
         target_sanitize(DINGO dingo_test)
     endif()
@@ -210,9 +224,6 @@ if(DINGO_DEVELOPMENT_MODE)
         )
         target_include_directories(dingo_benchmark PRIVATE benchmark)
         target_link_options(dingo_benchmark PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:LINKER:--demangle>)
-
-        target_compile_options(dingo_benchmark PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:${DINGO_WARNINGS_GCC}>)
-        target_compile_options(dingo_benchmark PRIVATE $<$<CXX_COMPILER_ID:MSVC>:${DINGO_WARNINGS_MSVC}>)
 
         if(DINGO_BENCHMARK_FRUIT_ENABLED)
             target_sources(dingo_benchmark PRIVATE benchmark/fruit.cpp)

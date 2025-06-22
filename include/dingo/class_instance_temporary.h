@@ -9,6 +9,7 @@
 
 #include <dingo/config.h>
 
+#include <dingo/aligned_storage.h>
 #include <dingo/arena_allocator.h>
 #include <dingo/decay.h>
 #include <dingo/resettable_i.h>
@@ -21,8 +22,7 @@ namespace dingo {
 template <typename> struct class_instance_temporary_storage {};
 template <typename... Args>
 struct class_instance_temporary_storage<type_list<Args...>> {
-    using type = std::aligned_union_t<0, void*, Args...>;
-    static constexpr std::size_t size = sizeof(type);
+    using type = dingo::aligned_union_t<0, void*, Args...>;
 };
 
 template <typename RTTI, typename ConversionTypes>
@@ -65,9 +65,7 @@ struct class_instance_temporary {
         reinterpret_cast<T*>(ptr)->~T();
     }
 
-    std::aligned_storage_t<
-        class_instance_temporary_storage<ConversionTypes>::size>
-        storage_;
+    typename class_instance_temporary_storage<ConversionTypes>::type storage_;
     void* ptr_ = nullptr;
     void (*destructor_)(void*) = nullptr;
 #if !defined(NDEBUG)

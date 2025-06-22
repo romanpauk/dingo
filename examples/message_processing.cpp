@@ -85,7 +85,7 @@ int main() {
 
     // Invokes the processor for MessageB that is stateless
     {
-        MessageWrapper msg((MessageB{1.1}));
+        MessageWrapper msg((MessageB{1.1f}));
         container.template resolve<std::shared_ptr<IProcessor>>(msg.id())
             ->process(msg);
     }

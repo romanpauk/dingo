@@ -25,6 +25,6 @@ int main() {
     // Register struct A with shared scope
     container.register_type<scope<shared>, storage<A>>();
     // Construct instance of B, injecting shared instance of A
-    B b = container.construct<B>();
+    /*B b =*/container.construct<B>();
     ////
 }

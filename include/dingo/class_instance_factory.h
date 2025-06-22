@@ -139,6 +139,10 @@ class class_instance_factory : public class_instance_factory_i<Container> {
             typename storage_traits::conversions::pointer_types{}, type);
     }
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
     template <typename T, typename Context>
     void* resolve_type_conversion(Context& context) {
         using Target =
@@ -150,6 +154,9 @@ class class_instance_factory : public class_instance_factory_i<Container> {
                 *this, context, resolver_.get_temporary_context(context));
         return get_address(context, std::forward<decltype(instance)>(instance));
     }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
     template <typename Context> decltype(auto) resolve(Context& context) {
         return resolver_.resolve(context, data_traits::get(data_).container,

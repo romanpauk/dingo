@@ -43,7 +43,7 @@ TEST(class_factory_test, default_constructor_delete) {
         A() = delete;
     };
 #if DINGO_CXX_STANDARD <= 17
-    A a{};
+    [[maybe_unused]] A a{};
     static_assert(test_class_factory<A>::arity == 0 &&
                   test_class_factory<A>::valid == true);
 #else
