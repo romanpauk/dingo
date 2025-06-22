@@ -9,11 +9,11 @@
 
 #include <dingo/config.h>
 
+#include <dingo/aligned_storage.h>
 #include <dingo/arena_allocator.h>
 #include <dingo/decay.h>
 #include <dingo/resettable_i.h>
 #include <dingo/type_list.h>
-#include <dingo/type_traits.h>
 
 #include <variant>
 

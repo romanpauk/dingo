@@ -7,8 +7,8 @@
 
 #pragma once
 
+#include <dingo/aligned_storage.h>
 #include <dingo/config.h>
-#include <dingo/type_traits.h>
 
 #include <cassert>
 

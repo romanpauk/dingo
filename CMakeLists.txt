@@ -67,6 +67,7 @@ if(DINGO_DEVELOPMENT_MODE)
     sanitizers_init(DINGO)
 
     set(DINGO_SOURCE_FILES
+        aligned_storage.h
         allocator.h
         annotated.h
         arena_allocator.h

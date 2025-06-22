@@ -7,12 +7,12 @@
 
 #include <benchmark/benchmark.h>
 
+#include <dingo/aligned_storage.h>
 #include <dingo/container.h>
 #include <dingo/rtti/static_type_info.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 #include <dingo/type_map.h>
-#include <dingo/type_traits.h>
 
 #include <memory>
 #include <optional>
