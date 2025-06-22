@@ -178,9 +178,10 @@ static void register_type_10(benchmark::State& state) {
 template <typename Container>
 static void register_type_arena(benchmark::State& state) {
     using namespace dingo;
-    arena<1024> arena;
+    uint8_t buffer[1024];
     for (auto _ : state) {
-        arena_allocator<char, 1024> allocator(arena);
+        arena<> arena(buffer);
+        arena_allocator<char> allocator(arena);
         Container container(allocator);
         container.template register_type<scope<unique>, storage<Class<0>>>();
     }
@@ -191,9 +192,10 @@ static void register_type_arena(benchmark::State& state) {
 template <typename Container>
 static void register_type_arena_10(benchmark::State& state) {
     using namespace dingo;
+    uint8_t buffer[8192];
     for (auto _ : state) {
-        arena<8192> arena;
-        arena_allocator<char, 8192> allocator(arena);
+        arena<> arena(buffer);
+        arena_allocator<char> allocator(arena);
         Container container(allocator);
         container.template register_type<scope<unique>, storage<Class<0>>>();
         container.template register_type<scope<unique>, storage<Class<1>>>();
@@ -263,7 +265,7 @@ BENCHMARK_TEMPLATE(register_type,
 
 BENCHMARK_TEMPLATE(register_type_arena,
                    dingo::container<dingo::dynamic_container_traits,
-                                    dingo::arena_allocator<char, 1024>>)
+                                    dingo::arena_allocator<char>>)
     ->UseRealTime();
 
 BENCHMARK_TEMPLATE(register_type_10,
@@ -275,6 +277,6 @@ BENCHMARK_TEMPLATE(register_type_10,
 
 BENCHMARK_TEMPLATE(register_type_arena_10,
                    dingo::container<dingo::dynamic_container_traits,
-                                    dingo::arena_allocator<char, 8192>>)
+                                    dingo::arena_allocator<char>>)
     ->UseRealTime();
 } // namespace

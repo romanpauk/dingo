@@ -11,8 +11,8 @@
 #define DINGO_CONSTRUCTOR_DETECTION_ARGS 32
 #endif
 
-#if !defined(DINGO_CONTEXT_SIZE)
-#define DINGO_CONTEXT_SIZE 32
+#if !defined(DINGO_CONTEXT_ARENA_BUFFER_SIZE)
+#define DINGO_CONTEXT_ARENA_BUFFER_SIZE 512
 #endif
 
 #if __cplusplus > 202002L || (defined(_MSVC_LANG) && _MSVC_LANG > 202002L)
