@@ -9,8 +9,8 @@
 
 #include <dingo/config.h>
 
-#include <array>
 #include <cassert>
+#include <cstdint>
 #include <memory>
 
 namespace dingo {
@@ -22,7 +22,7 @@ template <std::size_t N> class arena {
 
     template <size_t Alignment> void* allocate(size_t bytes) {
         uintptr_t ptr = (current_ + Alignment - 1) & ~(Alignment - 1);
-        if (ptr + bytes < end()) {
+        if (ptr + bytes < this->end()) {
             current_ = ptr + bytes;
             return reinterpret_cast<void*>(ptr);
         } else {
@@ -31,8 +31,8 @@ template <std::size_t N> class arena {
     }
 
     bool deallocate(void* ptr) const {
-        return reinterpret_cast<uintptr_t>(ptr) >= begin() &&
-               reinterpret_cast<uintptr_t>(ptr) < end();
+        return reinterpret_cast<uintptr_t>(ptr) >= this->begin() &&
+               reinterpret_cast<uintptr_t>(ptr) < this->end();
     }
 
   private:
