@@ -17,6 +17,11 @@
 #include <memory>
 #include <optional>
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+
 namespace dingo {
 
 // TODO: logic here should not depend on knowledge of storage types,
@@ -243,3 +248,7 @@ struct type_conversion<StorageTag, std::optional<Target>*,
 };
 
 } // namespace dingo
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif

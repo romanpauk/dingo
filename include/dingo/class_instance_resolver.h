@@ -76,7 +76,8 @@ struct class_instance_resolver<RTTI, TypeInterface, Storage, unique> {
     //-> decltype(context.template construct<typename Storage::stored_type>(
     //    storage.resolve(context, container)))
     {
-        class_recursion_guard<decay_t<typename Storage::type>> recursion_guard;
+        [[maybe_unused]] class_recursion_guard<decay_t<typename Storage::type>>
+            recursion_guard;
         return storage.resolve(context, container);
     }
 
@@ -107,8 +108,8 @@ struct class_instance_resolver<RTTI, TypeInterface, Storage, shared>
     // -> decltype(storage.resolve(context, container))
     {
         if (!initialized_) {
-            class_recursion_guard<decay_t<typename Storage::type>>
-                recursion_guard;
+            [[maybe_unused]] class_recursion_guard<
+                decay_t<typename Storage::type>> recursion_guard;
 
             storage.resolve(context, container);
             initialized_ = true;
