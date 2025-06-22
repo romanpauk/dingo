@@ -62,7 +62,7 @@ if(DINGO_DEVELOPMENT_MODE)
     option(DINGO_BENCHMARK_ENABLED "enable benchmarking through googlebenchmark" ON)
     option(DINGO_BENCHMARK_FRUIT_ENABLED "enable fetching of google::fruit for benchmarks" OFF)
     option(DINGO_EXAMPLES_ENABLED "enable building of dingo examples" ON)
-    option(DINGO_TREAT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors." OFF)
+    option(DINGO_TREAT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors." ON)
 
     sanitizers_init(DINGO)
 
@@ -71,9 +71,9 @@ if(DINGO_DEVELOPMENT_MODE)
         allocator.h
         annotated.h
         arena_allocator.h
-        class_instance_factory.h
         class_instance_factory_i.h
         class_instance_factory_traits.h
+        class_instance_factory.h
         class_instance_resolver.h
         class_instance_temporary.h
         class_traits.h
@@ -83,33 +83,33 @@ if(DINGO_DEVELOPMENT_MODE)
         container.h
         decay.h
         exceptions.h
-        rebind_type.h
-        resettable_i.h
-        resolving_context.h
-        static_allocator.h
-        type_cache.h
-        type_conversion.h
-        type_list.h
-        type_map.h
-        type_registration.h
-        type_traits.h
         factory/callable.h
-        factory/constructor.h
         factory/constructor_detection.h
         factory/constructor_typedef.h
+        factory/constructor.h
         factory/function.h
         factory/invoke.h
         index.h
         index/array.h
         index/map.h
         index/unordered_map.h
+        rebind_type.h
+        resettable_i.h
+        resolving_context.h
         rtti/static_type_info.h
         rtti/typeid_type_info.h
+        static_allocator.h
         storage.h
         storage/external.h
-        storage/shared.h
         storage/shared_cyclical.h
+        storage/shared.h
         storage/unique.h
+        type_cache.h
+        type_conversion.h
+        type_list.h
+        type_map.h
+        type_registration.h
+        type_traits.h
     )
 
     set(DINGO_INTERFACE_SOURCES "")
