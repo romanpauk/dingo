@@ -51,7 +51,7 @@ using container_types = ::testing::Types<
         dingo::dynamic_container_with_index<size_t, index_type::array<32>>>>;
 
 template <typename T> struct index_test : public test<T> {};
-TYPED_TEST_SUITE(index_test, container_types);
+TYPED_TEST_SUITE(index_test, container_types, );
 
 // TODO: could this be useful in the container<>?
 template <typename Container> struct get_index_type {

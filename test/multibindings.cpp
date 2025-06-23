@@ -20,7 +20,7 @@
 
 namespace dingo {
 template <typename T> struct multibindings_test : public test<T> {};
-TYPED_TEST_SUITE(multibindings_test, container_types);
+TYPED_TEST_SUITE(multibindings_test, container_types, );
 
 TYPED_TEST(multibindings_test, multiple_interfaces_shared_value) {
     using container_type = TypeParam;

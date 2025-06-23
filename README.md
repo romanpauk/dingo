@@ -6,8 +6,8 @@ Header only.
 Tested with:
 
 - C++17, C++20, C++23
-- GCC 9-12
-- Clang 11-15
+- GCC 12-14
+- Clang 17-19
 - Visual Studio 2019, 2022
 
 [![Build](https://github.com/romanpauk/dingo/actions/workflows/build.yaml/badge.svg?branch=master)](https://github.com/romanpauk/dingo/actions?query=branch%3Amaster++)

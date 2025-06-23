@@ -21,7 +21,7 @@
 
 namespace dingo {
 template <typename T> struct shared_cyclical_test : public test<T> {};
-TYPED_TEST_SUITE(shared_cyclical_test, container_types);
+TYPED_TEST_SUITE(shared_cyclical_test, container_types, );
 
 TYPED_TEST(shared_cyclical_test, recursion_exception) {
     using container_type = TypeParam;

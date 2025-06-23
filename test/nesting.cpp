@@ -19,7 +19,7 @@
 namespace dingo {
 template <typename T> struct nesting_test : public testing::Test {};
 
-TYPED_TEST_SUITE(nesting_test, container_types);
+TYPED_TEST_SUITE(nesting_test, container_types, );
 
 TYPED_TEST(nesting_test, type) {
     using container_type = TypeParam;

@@ -19,7 +19,7 @@
 
 namespace dingo {
 template <typename T> struct dingo_test : public test<T> {};
-TYPED_TEST_SUITE(dingo_test, container_types);
+TYPED_TEST_SUITE(dingo_test, container_types, );
 
 TYPED_TEST(dingo_test, unique_hierarchy) {
     using container_type = TypeParam;

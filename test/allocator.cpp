@@ -58,7 +58,7 @@ using container_types = ::testing::Types<
     dingo::container<dingo::dynamic_container_traits, test_allocator<char>>>;
 
 template <typename T> struct allocator_test : public testing::Test {};
-TYPED_TEST_SUITE(allocator_test, container_types);
+TYPED_TEST_SUITE(allocator_test, container_types, );
 
 // TODO: not exactly allocator-related
 TYPED_TEST(allocator_test, construct) {

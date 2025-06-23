@@ -18,7 +18,7 @@
 
 namespace dingo {
 template <typename T> struct shared_test : public test<T> {};
-TYPED_TEST_SUITE(shared_test, container_types);
+TYPED_TEST_SUITE(shared_test, container_types, );
 
 TYPED_TEST(shared_test, value) {
     using container_type = TypeParam;
@@ -329,7 +329,7 @@ TYPED_TEST(shared_test, const_hierarchy) {
 
     struct B : Class {
         B(const S s1, const S& s2, const S* s3, const std::shared_ptr<S>* s4,
-          const std::shared_ptr<S>& s5, const std::shared_ptr<S> s6, 
+          const std::shared_ptr<S>& s5, const std::shared_ptr<S> s6,
           const U u1, const U& u2, const U* u3, const std::unique_ptr<U>* u4,
           std::unique_ptr<U>& u5) {
             AssertClass(s1);

@@ -23,7 +23,7 @@
 
 namespace dingo {
 template <typename T> struct class_factory_test : public test<T> {};
-TYPED_TEST_SUITE(class_factory_test, container_types);
+TYPED_TEST_SUITE(class_factory_test, container_types, );
 
 template <typename T>
 using test_class_factory =

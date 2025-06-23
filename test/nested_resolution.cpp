@@ -21,7 +21,7 @@
 namespace dingo {
 template <typename T> struct nested_resolution_test : public testing::Test {};
 
-TYPED_TEST_SUITE(nested_resolution_test, container_types);
+TYPED_TEST_SUITE(nested_resolution_test, container_types, );
 
 TYPED_TEST(nested_resolution_test, nested_types) {
     using container_type = TypeParam;
