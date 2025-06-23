@@ -1,8 +1,16 @@
-cmake_minimum_required(VERSION 3.21)
-project(dingo)
-
 option(DINGO_INSTALL "Generate the install target." ${PROJECT_IS_TOP_LEVEL})
-option(DINGO_DEVELOPMENT_MODE "include additional targets for development" OFF)
+option(DINGO_DEVELOPMENT_MODE "Include additional targets for development" OFF)
+option(DINGO_CCACHE "Use ccache" OFF)
+
+if (DINGO_DEVELOPMENT_MODE AND DINGO_CCACHE)
+    cmake_minimum_required(VERSION 3.25)
+    include(cmake/ccache.cmake)
+    enable_ccache()
+else()
+    cmake_minimum_required(VERSION 3.21)
+endif()
+
+project(dingo)
 
 add_library(dingo INTERFACE)
 add_library(dingo::dingo ALIAS dingo)
@@ -51,12 +59,6 @@ if(DINGO_DEVELOPMENT_MODE)
     if (NOT CMAKE_CXX_STANDARD MATCHES "17|20|23")
         message(FATAL_ERROR "unsupported c++ standard version: ${CMAKE_CXX_STANDARD}")
     endif()
-
-    find_program(CCACHE_FOUND ccache)
-    if(CCACHE_FOUND)
-        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
-        set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
-    endif(CCACHE_FOUND)
 
     option(DINGO_TESTING_ENABLED "enable testing through googletest" ON)
     option(DINGO_BENCHMARK_ENABLED "enable benchmarking through googlebenchmark" ON)
