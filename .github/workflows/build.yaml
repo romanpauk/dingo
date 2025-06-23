@@ -9,6 +9,9 @@ on:
   push:
     branches:
       - master
+env:
+  JOBS: 4
+
 jobs:
   build-unix:
     strategy:
@@ -60,7 +63,7 @@ jobs:
             cmake --build build -t md-verify
       - name: Build
         run: |
-            cmake --build build -j 2
+            cmake --build build -j ${{ env.JOBS }}
       - name: Test
         env:
           ASAN_OPTIONS: use_sigaltstack=false
@@ -73,7 +76,7 @@ jobs:
       - name: FetchContent
         run: |
             cmake -S test/fetchcontent -B fetchcontent-build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.compiler.STD }}
-            cmake --build fetchcontent-build -j 2
+            cmake --build fetchcontent-build -j ${{ env.JOBS }}
 
   build-windows:
     strategy:
@@ -100,7 +103,7 @@ jobs:
             cmake --build build -t md-verify
       - name: Build
         run: |
-            cmake --build build --config ${{ matrix.config }} -j 2
+            cmake --build build --config ${{ matrix.config }} -j ${{ env.JOBS }}
       - name: Test
         run: |
             build/${{ matrix.config }}/dingo_test
@@ -111,5 +114,5 @@ jobs:
       - name: FetchContent
         run: |
             cmake -S test/fetchcontent -B fetchcontent-build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
-            cmake --build fetchcontent-build -j 2
+            cmake --build fetchcontent-build -j ${{ env.JOBS }}
 
