@@ -18,7 +18,7 @@
 
 namespace dingo {
 template <typename T> struct external_test : public test<T> {};
-TYPED_TEST_SUITE(external_test, container_types);
+TYPED_TEST_SUITE(external_test, container_types, );
 
 TYPED_TEST(external_test, value) {
     using container_type = TypeParam;

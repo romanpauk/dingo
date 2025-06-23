@@ -19,7 +19,7 @@
 
 namespace dingo {
 template <typename T> struct construct_test : public test<T> {};
-TYPED_TEST_SUITE(construct_test, container_types);
+TYPED_TEST_SUITE(construct_test, container_types, );
 
 TEST(construct_test, class_traits) {
     struct A {};

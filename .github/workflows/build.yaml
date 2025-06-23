@@ -17,13 +17,6 @@ jobs:
         config: [Debug, Release]
         os: [ubuntu-24.04]
         compiler: [
-          #{ CC: gcc-9, CXX: g++-9, STD: 17 },
-          #{ CC: gcc-9, CXX: g++-9, STD: 20 },
-          #{ CC: gcc-10, CXX: g++-10, STD: 17 },
-          #{ CC: gcc-10, CXX: g++-10, STD: 20 },
-          #{ CC: gcc-11, CXX: g++-11, STD: 17 },
-          #{ CC: gcc-11, CXX: g++-11, STD: 20 },
-          #{ CC: gcc-11, CXX: g++-11, STD: 23 },
           { CC: gcc-12, CXX: g++-12, STD: 17 },
           { CC: gcc-12, CXX: g++-12, STD: 20 },
           { CC: gcc-12, CXX: g++-12, STD: 23 },
@@ -33,29 +26,15 @@ jobs:
           { CC: gcc-14, CXX: g++-14, STD: 17 },
           { CC: gcc-14, CXX: g++-14, STD: 20 },
           { CC: gcc-14, CXX: g++-14, STD: 23 },
-          #{ CC: clang-11, CXX: clang++-11, STD: 17 },
-          #{ CC: clang-11, CXX: clang++-11, STD: 20 },
-          #{ CC: clang-12, CXX: clang++-12, STD: 17 },
-          #{ CC: clang-12, CXX: clang++-12, STD: 20 },
-          #{ CC: clang-12, CXX: clang++-12, STD: 23 },
-          #{ CC: clang-13, CXX: clang++-13, STD: 17 },
-          #{ CC: clang-13, CXX: clang++-13, STD: 20 },
-          #{ CC: clang-13, CXX: clang++-13, STD: 23 },
-          #{ CC: clang-14, CXX: clang++-14, STD: 17 },
-          #{ CC: clang-14, CXX: clang++-14, STD: 20 },
-          #{ CC: clang-14, CXX: clang++-14, STD: 23 },
-          #{ CC: clang-15, CXX: clang++-15, STD: 17 },
-          #{ CC: clang-15, CXX: clang++-15, STD: 20 },
-          #{ CC: clang-15, CXX: clang++-15, STD: 23 },
-          { CC: clang-16, CXX: clang++-16, STD: 17 },
-          { CC: clang-16, CXX: clang++-16, STD: 20 },
-          #{ CC: clang-16, CXX: clang++-16, STD: 23 },
           { CC: clang-17, CXX: clang++-17, STD: 17 },
           { CC: clang-17, CXX: clang++-17, STD: 20 },
           #{ CC: clang-17, CXX: clang++-17, STD: 23 },
           { CC: clang-18, CXX: clang++-18, STD: 17 },
           { CC: clang-18, CXX: clang++-18, STD: 20 },
-          { CC: clang-18, CXX: clang++-18, STD: 23 }
+          { CC: clang-18, CXX: clang++-18, STD: 23 },
+          { CC: clang-19, CXX: clang++-19, STD: 17 },
+          { CC: clang-19, CXX: clang++-19, STD: 20 },
+          { CC: clang-19, CXX: clang++-19, STD: 23 }
         ]
     runs-on: ${{ matrix.os }}
     steps:

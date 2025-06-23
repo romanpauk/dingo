@@ -18,7 +18,7 @@
 
 namespace dingo {
 template <typename T> struct unique_test : public test<T> {};
-TYPED_TEST_SUITE(unique_test, container_types);
+TYPED_TEST_SUITE(unique_test, container_types, );
 
 TYPED_TEST(unique_test, value_resolve_rvalue) {
     using container_type = TypeParam;

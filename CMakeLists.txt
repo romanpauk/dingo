@@ -72,7 +72,6 @@ if(DINGO_DEVELOPMENT_MODE)
         -Wpedantic
         -Wextra
         -Wshadow
-        -Wno-gnu-zero-variadic-macro-arguments
         $<$<BOOL:${DINGO_TREAT_WARNINGS_AS_ERRORS}>:-Werror>
     )
 
@@ -139,7 +138,7 @@ if(DINGO_DEVELOPMENT_MODE)
     target_sources(dingo INTERFACE
         ${DINGO_INTERFACE_SOURCES}
     )
-    
+
     if(MSVC)
         target_compile_options(dingo INTERFACE
             ${DINGO_WARNINGS_MSVC}
@@ -153,7 +152,7 @@ if(DINGO_DEVELOPMENT_MODE)
     if(DINGO_TESTING_ENABLED)
         FetchContent_Declare(googletest
             GIT_REPOSITORY https://github.com/google/googletest.git
-            GIT_TAG main)
+            GIT_TAG v1.17.0)
 
         if(MSVC)
             set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)

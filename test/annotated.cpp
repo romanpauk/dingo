@@ -22,7 +22,7 @@
 
 namespace dingo {
 template <typename T> struct annotated_test : public test<T> {};
-TYPED_TEST_SUITE(annotated_test, container_types);
+TYPED_TEST_SUITE(annotated_test, container_types, );
 
 template <size_t N> struct tag {};
 

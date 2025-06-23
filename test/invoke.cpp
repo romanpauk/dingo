@@ -18,7 +18,7 @@
 namespace dingo {
 
 template <typename T> struct invoke_test : public test<T> {};
-TYPED_TEST_SUITE(invoke_test, container_types);
+TYPED_TEST_SUITE(invoke_test, container_types, );
 
 template< typename T = void > struct invoke_test_functions {
     static void call(int arg) { result = arg * 2; }
