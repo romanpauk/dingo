@@ -54,7 +54,7 @@ jobs:
         run: |
             which ${{ matrix.compiler.CC }} || sudo apt install ${{ matrix.compiler.CC }} || true
             which ${{ matrix.compiler.CXX }} || sudo apt install ${{ matrix.compiler.CXX }} || true
-            cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.compiler.STD }}
+            cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.compiler.STD }}
       - name: Check Formatting
         env:
           PIP_BREAK_SYSTEM_PACKAGES: 1
@@ -94,9 +94,13 @@ jobs:
           msbuild-architecture: x64
       - name: Checkout
         uses: actions/checkout@v4
+      - name: CCache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ matrix.os }}-${{ matrix.config }}-${{ matrix.std }}
       - name: Configure
         run: |
-            cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+            cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
       - name: Check Formatting
         run: |
             python3 -m pip install mdformat
