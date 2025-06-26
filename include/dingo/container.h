@@ -20,8 +20,8 @@
 #include <dingo/factory/invoke.h>
 #include <dingo/index.h>
 #include <dingo/resolving_context.h>
-#include <dingo/rtti/static_type_info.h>
-#include <dingo/rtti/typeid_type_info.h>
+#include <dingo/rtti/static_provider.h>
+#include <dingo/rtti/typeid_provider.h>
 #include <dingo/static_allocator.h>
 #include <dingo/storage/unique.h> // TODO
 #include <dingo/type_cache.h>
@@ -45,7 +45,7 @@ struct dynamic_container_traits {
     template <typename> using rebind_t = dynamic_container_traits;
 
     using tag_type = none_t;
-    using rtti_type = typeid_type_info;
+    using rtti_type = rtti<typeid_provider>;
     template <typename Value, typename Allocator>
     using type_map_type = dynamic_type_map<Value, rtti_type, Allocator>;
     template <typename Value, typename Allocator>
@@ -59,7 +59,7 @@ template <typename Tag = void> struct static_container_traits {
     template <typename TagT> using rebind_t = static_container_traits<TagT>;
 
     using tag_type = Tag;
-    using rtti_type = static_type_info;
+    using rtti_type = rtti<static_provider>;
     template <typename Value, typename Allocator>
     using type_map_type = static_type_map<Value, Tag, Allocator>;
     template <typename Value, typename Allocator>

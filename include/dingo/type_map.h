@@ -53,8 +53,8 @@ struct dynamic_type_map {
              std::less<typename RTTI::type_index>, allocator_type>
         values_;
     // std::unordered_map< typename RTTI::type_index, Value, typename
-    // RTTI::type_index::hasher, std::equal_to< typename RTTI::type_index >,
-    // map_allocator_type > values_;
+    //    std::hash< typename RTTI::type_index>, std::equal_to< typename RTTI::type_index >,
+    //    allocator_type > values2_;
 };
 
 template <typename Value, typename Tag> struct static_type_map_node {

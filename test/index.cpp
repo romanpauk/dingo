@@ -26,7 +26,7 @@ struct dynamic_container_with_index {
     using rebind_t = dynamic_container_with_static_rtti_traits;
 
     using tag_type = void;
-    using rtti_type = dingo::static_type_info;
+    using rtti_type = dingo::rtti<dingo::static_provider>;
     template <typename Value, typename Allocator>
     using type_map_type = dingo::dynamic_type_map<Value, rtti_type, Allocator>;
     template <typename Value, typename Allocator>

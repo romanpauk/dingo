@@ -8,13 +8,18 @@
 #pragma once
 
 #include <dingo/config.h>
+#include <dingo/rtti/rtti.h>
 
 #include <typeindex>
 
 namespace dingo {
-class typeid_type_info {
+
+template<> class rtti<typeid_provider> {
+    template <typename T> struct wrapper {};
+
   public:
     class type_index {
+        friend struct std::hash<type_index>;
       public:
         type_index(std::type_index value) : value_(value) {}
 
@@ -25,24 +30,21 @@ class typeid_type_info {
             return value_ == other.value_;
         }
 
-        struct hasher {
-            size_t operator()(const type_index& index) const {
-                return std::hash<std::type_index>()(index.value_);
-            }
-        };
-
-        template <typename T> static type_index get() {
-            return std::type_index(typeid(wrapper<T>));
-        }
-
-      private:
-        template <typename T> struct wrapper {};
+      private:       
         std::type_index value_;
     };
 
     template <typename T> static type_index get_type_index() {
-        return type_index::get<T>();
+        return std::type_index(typeid(wrapper<T>));
     }
 };
 
 } // namespace dingo
+
+namespace std {
+    template<> struct hash<typename dingo::rtti<dingo::typeid_provider>::type_index> {
+        size_t operator()(const typename dingo::rtti<dingo::typeid_provider>::type_index& value) const {
+            return hash<std::type_index>()(value.value_);
+        }
+    };
+}

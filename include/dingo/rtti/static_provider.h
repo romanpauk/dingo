@@ -9,14 +9,20 @@
 
 #include <dingo/config.h>
 
+#include <dingo/rtti/rtti.h>
+
 namespace dingo {
-class static_type_info {
+
+template<> class rtti<static_provider> {
     template <typename T> struct type_index_tag {
+        // TODO: This will not work across modules.
+        // Should probably detect it first, handle it next.
         static constexpr size_t tag{};
     };
 
   public:
     class type_index {
+        friend struct std::hash<type_index>;
       public:
         constexpr type_index(size_t value) : value_(value) {}
 
@@ -28,19 +34,6 @@ class static_type_info {
             return value_ == other.value_;
         }
 
-        struct hasher {
-            constexpr size_t operator()(const type_index& index) const {
-                size_t h = index.value_;
-                // MurmurHash3Mixer
-                h ^= h >> 33;
-                h *= 0xff51afd7ed558ccdL;
-                h ^= h >> 33;
-                h *= 0xc4ceb9fe1a85ec53L;
-                h ^= h >> 33;
-                return h;
-            }
-        };
-
       private:
         size_t value_;
     };
@@ -50,3 +43,11 @@ class static_type_info {
     }
 };
 } // namespace dingo
+
+namespace std {
+    template<> struct hash<typename dingo::rtti<dingo::static_provider>::type_index> {
+        size_t operator()(const typename dingo::rtti<dingo::static_provider>::type_index& value) const {
+            return hash<size_t>()(value.value_);
+        }
+    };
+}
