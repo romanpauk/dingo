@@ -172,14 +172,11 @@ TYPED_TEST(multibindings_test, register_type_collection_unique_ptr) {
                                      storage<std::unique_ptr<ClassTag<1>>>,
                                      interface<IClass>>();
 
-    // TODO: this no longer works due to construct_temporary
-    //std::vector<std::unique_ptr<IClass>> classes =
-    //    container.template resolve<std::vector<std::unique_ptr<IClass>>>();
-    //ASSERT_EQ(classes.size(), 2);
+    std::vector<std::unique_ptr<IClass>> classes =
+        container.template resolve<std::vector<std::unique_ptr<IClass>>>();
+    ASSERT_EQ(classes.size(), 2);
 
-    // TODO:
-    // ASSERT_THROW(container.template resolve<std::unique_ptr<IClass*>>(),
-    // type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<std::unique_ptr<IClass*>>(), type_ambiguous_exception);
 }
 
 TYPED_TEST(multibindings_test, register_type_collection_mapping_shared_ptr) {
