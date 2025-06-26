@@ -5,7 +5,7 @@ Header only.
 
 Tested with:
 
-- C++17, C++20, C++23
+- C++17, C++20, C++23, C++26
 - GCC 12-14
 - Clang 17-19
 - Visual Studio 2019, 2022

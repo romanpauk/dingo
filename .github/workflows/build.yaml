@@ -29,6 +29,7 @@ jobs:
           { CC: gcc-14, CXX: g++-14, STD: 17 },
           { CC: gcc-14, CXX: g++-14, STD: 20 },
           { CC: gcc-14, CXX: g++-14, STD: 23 },
+          { CC: gcc-14, CXX: g++-14, STD: 26 },
           { CC: clang-17, CXX: clang++-17, STD: 17 },
           { CC: clang-17, CXX: clang++-17, STD: 20 },
           #{ CC: clang-17, CXX: clang++-17, STD: 23 },
@@ -37,7 +38,8 @@ jobs:
           { CC: clang-18, CXX: clang++-18, STD: 23 },
           { CC: clang-19, CXX: clang++-19, STD: 17 },
           { CC: clang-19, CXX: clang++-19, STD: 20 },
-          { CC: clang-19, CXX: clang++-19, STD: 23 }
+          { CC: clang-19, CXX: clang++-19, STD: 23 },
+          { CC: clang-19, CXX: clang++-19, STD: 26 }
         ]
     runs-on: ${{ matrix.os }}
     steps:
