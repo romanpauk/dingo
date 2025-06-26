@@ -52,7 +52,7 @@ struct dynamic_container_traits {
     using type_cache_type = dynamic_type_cache<Value, rtti_type, Allocator>;
     using allocator_type = std::allocator<char>;
     using index_definition_type = std::tuple<>;
-    static constexpr bool cache_enabled = false;
+    static constexpr bool cache_enabled = true;
 };
 
 template <typename Tag = void> struct static_container_traits {
