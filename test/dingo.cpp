@@ -84,10 +84,10 @@ TYPED_TEST(dingo_test, type_already_registered) {
     }
     {
         container.template register_type<scope<shared>, storage<Class>,
-                                         interface<IClass>>();
+                                         interfaces<IClass>>();
         auto reg = [&] {
             container.template register_type<scope<shared>, storage<Class>,
-                                             interface<IClass>>();
+                                             interfaces<IClass>>();
             ;
         };
         ASSERT_THROW(reg(), dingo::type_already_registered_exception);

@@ -93,7 +93,7 @@ TYPED_TEST(unique_test, ptr_interface) {
 
     container_type container;
     container.template register_type<scope<unique>, storage<Class*>,
-                                     interface<IClass, IClass2>>();
+                                     interfaces<IClass, IClass2>>();
 
     AssertClass(std::unique_ptr<IClass>(container.template resolve<IClass*>()));
     AssertClass(
@@ -118,7 +118,7 @@ TYPED_TEST(unique_test, unique_ptr) {
         container_type container;
         container.template register_type<scope<unique>,
                                          storage<std::unique_ptr<Class>>,
-                                         interface<Class, IClass>>();
+                                         interfaces<Class, IClass>>();
         {
             AssertClass(*container.template resolve<std::unique_ptr<Class>>());
             ASSERT_EQ(Class::Constructor, 1);
@@ -143,7 +143,7 @@ TYPED_TEST(unique_test, unique_ptr_multiple_interface) {
     container_type container;
     container
         .template register_type<scope<unique>, storage<std::unique_ptr<Class>>,
-                                interface<IClass, IClass2>>();
+                                interfaces<IClass, IClass2>>();
 
     AssertClass(container.template resolve<std::unique_ptr<IClass>>());
     AssertClass(container.template resolve<std::unique_ptr<IClass2>>());
@@ -157,7 +157,7 @@ TYPED_TEST(unique_test, unique_ptr_single_interface) {
 
     container_type container;
     container.template register_type<
-        scope<unique>, storage<std::unique_ptr<Class>>, interface<IClass>>();
+        scope<unique>, storage<std::unique_ptr<Class>>, interfaces<IClass>>();
 
     AssertClass(container.template resolve<std::unique_ptr<IClass>>());
 }
@@ -168,7 +168,7 @@ TYPED_TEST(unique_test, optional) {
     {
         container_type container;
         container.template register_type<
-            scope<unique>, storage<std::optional<Class>>, interface<Class>>();
+            scope<unique>, storage<std::optional<Class>>, interfaces<Class>>();
         {
             AssertClass(*container.template resolve<std::optional<Class>>());
             ASSERT_EQ(Class::Constructor, 1);
@@ -214,7 +214,7 @@ TYPED_TEST(unique_test, unique_multiple) {
 
     container_type container;
     container.template register_type<scope<unique>, storage<Class*>,
-                                     interface<IClass1, IClass2>>();
+                                     interfaces<IClass1, IClass2>>();
     container.template construct<C>();
 }
 

@@ -60,7 +60,7 @@ TYPED_TEST(shared_cyclical_test, value) {
 
     container_type container;
     container.template register_type<scope<shared_cyclical>, storage<A>,
-                                     interface<A, IClass1>>();
+                                     interfaces<A, IClass1>>();
     container.template register_type<scope<shared_cyclical>, storage<B>>();
 
     auto& a = container.template resolve<A&>();
@@ -99,10 +99,10 @@ TYPED_TEST(shared_cyclical_test, shared_ptr) {
     container_type container;
     container.template register_type<scope<shared_cyclical>,
                                      storage<std::shared_ptr<A>>,
-                                     interface<A, IClass2>>();
+                                     interfaces<A, IClass2>>();
     container.template register_type<scope<shared_cyclical>,
                                      storage<std::shared_ptr<B>>,
-                                     interface<B, IClass1>>();
+                                     interfaces<B, IClass1>>();
 
     auto& a = container.template resolve<A&>();
     AssertClass(a);
@@ -135,10 +135,10 @@ TYPED_TEST(shared_cyclical_test, shared_ptr_interface) {
 
     container_type container;
     container.template register_type<
-        scope<shared_cyclical>, storage<std::shared_ptr<A>>, interface<A>>();
+        scope<shared_cyclical>, storage<std::shared_ptr<A>>, interfaces<A>>();
     container.template register_type<scope<shared_cyclical>,
                                      storage<std::shared_ptr<B>>,
-                                     interface<IClass1>>();
+                                     interfaces<IClass1>>();
 
     auto& a = container.template resolve<A&>();
     AssertClass(a);

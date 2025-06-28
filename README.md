@@ -146,7 +146,7 @@ container.register_type<scope<unique>,           // using unique scope
                         factory<constructor<A>>, // using constructor-detecting
                                                  // factory
                         storage<std::unique_ptr<A>>, // stored as unique_ptr<A>
-                        interface<A>                 // resolvable as A
+                        interfaces<A>                // resolvable as A
                         >();
 // As some policies can be deduced from the others, the above
 // registration simplified
@@ -481,7 +481,7 @@ struct A : IA {};
 container<> container;
 
 // Register struct A, resolvable as interface IA
-container.register_type<scope<shared>, storage<A>, interface<IA>>();
+container.register_type<scope<shared>, storage<A>, interfaces<IA>>();
 // Resolve instance A through interface IA
 IA& instance = container.resolve<IA&>();
 assert(dynamic_cast<A*>(&instance));
@@ -514,9 +514,9 @@ container.template register_type_collection<
 
 // Register types under the same interface
 container.template register_type<scope<shared>, storage<Processor<0>>,
-                                 interface<IProcessor>>();
+                                 interfaces<IProcessor>>();
 container.template register_type<scope<shared>, storage<Processor<1>>,
-                                 interface<IProcessor>>();
+                                 interfaces<IProcessor>>();
 
 // Resolve the collection
 container.template resolve<std::vector<IProcessor*>>();
@@ -552,10 +552,10 @@ struct container_traits : dynamic_container_traits {
 
 container<container_traits> container;
 container.template register_indexed_type<
-    scope<shared>, storage<Dog>, interface<IAnimal>>(std::string("dog"));
+    scope<shared>, storage<Dog>, interfaces<IAnimal>>(std::string("dog"));
 
 container.template register_indexed_type<
-    scope<shared>, storage<Cat>, interface<IAnimal>>(std::string("cat"));
+    scope<shared>, storage<Cat>, interfaces<IAnimal>>(std::string("cat"));
 
 // Resolve an instance of a dog
 /*auto dog =*/container.template resolve<IAnimal>(std::string("dog"));

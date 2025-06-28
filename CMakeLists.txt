@@ -212,6 +212,9 @@ if(DINGO_DEVELOPMENT_MODE)
 
         target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
 
+        # Force-include windows.h to each test to make sure library builds with windows.h included
+        target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
+
         target_sanitize(DINGO dingo_test)
     endif()
 

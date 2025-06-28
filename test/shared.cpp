@@ -26,7 +26,7 @@ TYPED_TEST(shared_test, value) {
     {
         container_type container;
         container.template register_type<scope<shared>, storage<Class>,
-                                         interface<Class, IClass>>();
+                                         interfaces<Class, IClass>>();
 
         AssertClass(*container.template resolve<Class*>());
         AssertClass(*container.template resolve<const Class*>());
@@ -51,7 +51,7 @@ TYPED_TEST(shared_test, value_interface) {
 
     container_type container;
     container.template register_type<scope<shared>, storage<Class>,
-                                     interface<IClass>>();
+                                     interfaces<IClass>>();
 
     AssertClass(container.template resolve<IClass&>());
     AssertClass(container.template resolve<const IClass&>());
@@ -65,7 +65,7 @@ TYPED_TEST(shared_test, ptr) {
     {
         container_type container;
         container.template register_type<scope<shared>, storage<Class*>,
-                                         interface<Class, IClass>>();
+                                         interfaces<Class, IClass>>();
 
         AssertClass(*container.template resolve<Class*>());
         AssertClass(*container.template resolve<const Class*>());
@@ -90,7 +90,7 @@ TYPED_TEST(shared_test, ptr_interface) {
 
     container_type container;
     container.template register_type<scope<shared>, storage<Class*>,
-                                     interface<IClass>>();
+                                     interfaces<IClass>>();
 
     AssertClass(container.template resolve<IClass&>());
     AssertClass(container.template resolve<const IClass&>());
@@ -105,7 +105,7 @@ TYPED_TEST(shared_test, shared_ptr) {
         container_type container;
         container.template register_type<scope<shared>,
                                          storage<std::shared_ptr<Class>>,
-                                         interface<Class, IClass>>();
+                                         interfaces<Class, IClass>>();
 
         AssertClass(*container.template resolve<Class*>());
         AssertClass(*container.template resolve<const Class*>());
@@ -144,7 +144,7 @@ TYPED_TEST(shared_test, shared_ptr_multiple_interface) {
     container_type container;
     container
         .template register_type<scope<shared>, storage<std::shared_ptr<Class>>,
-                                interface<Class, IClass>>();
+                                interfaces<Class, IClass>>();
 
     AssertClass(*container.template resolve<std::shared_ptr<Class>&>());
     AssertClass(container.template resolve<std::shared_ptr<IClass>>());
@@ -158,7 +158,7 @@ TYPED_TEST(shared_test, shared_ptr_single_interface) {
 
     container_type container;
     container.template register_type<
-        scope<shared>, storage<std::shared_ptr<Class>>, interface<IClass>>();
+        scope<shared>, storage<std::shared_ptr<Class>>, interfaces<IClass>>();
 
     AssertClass(container.template resolve<std::shared_ptr<IClass>>());
     AssertClass(*container.template resolve<std::shared_ptr<IClass>&>());
@@ -170,7 +170,7 @@ TYPED_TEST(shared_test, unique_ptr) {
     {
         container_type container;
         container.template register_type<
-            scope<shared>, storage<std::unique_ptr<Class>>, interface<Class>>();
+            scope<shared>, storage<std::unique_ptr<Class>>, interfaces<Class>>();
 
         AssertClass(*container.template resolve<Class*>());
         AssertClass(*container.template resolve<const Class*>());
@@ -204,7 +204,7 @@ TYPED_TEST(shared_test, unique_ptr_interface) {
 
     container_type container;
     container.template register_type<
-        scope<shared>, storage<std::unique_ptr<Class>>, interface<IClass>>();
+        scope<shared>, storage<std::unique_ptr<Class>>, interfaces<IClass>>();
     AssertClass(container.template resolve<IClass*>());
     AssertClass(container.template resolve<IClass&>());
     AssertClass(*container.template resolve<std::unique_ptr<IClass>&>());
@@ -217,7 +217,7 @@ TYPED_TEST(shared_test, optional) {
         container_type container;
         container.template register_type<scope<shared>,
                                          storage<std::optional<Class>>,
-                                         interface<Class, IClass>>();
+                                         interfaces<Class, IClass>>();
 
         AssertClass(container.template resolve<Class*>());
         AssertClass(container.template resolve<const Class*>());
@@ -243,7 +243,7 @@ TYPED_TEST(shared_test, optional_interface) {
 
     container_type container;
     container.template register_type<
-        scope<shared>, storage<std::optional<Class>>, interface<IClass>>();
+        scope<shared>, storage<std::optional<Class>>, interfaces<IClass>>();
     AssertClass(container.template resolve<IClass*>());
     AssertClass(container.template resolve<IClass&>());
 }
@@ -265,7 +265,7 @@ TYPED_TEST(shared_test, shared_multiple) {
     container_type container;
     container
         .template register_type<scope<shared>, storage<std::shared_ptr<Class>>,
-                                interface<IClass1, IClass2>>();
+                                interfaces<IClass1, IClass2>>();
     container.template construct<C>();
 
     {

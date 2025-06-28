@@ -25,7 +25,7 @@ int main() {
     container<> container;
 
     // Register struct A, resolvable as interface IA
-    container.register_type<scope<shared>, storage<A>, interface<IA>>();
+    container.register_type<scope<shared>, storage<A>, interfaces<IA>>();
     // Resolve instance A through interface IA
     IA& instance = container.resolve<IA&>();
     assert(dynamic_cast<A*>(&instance));

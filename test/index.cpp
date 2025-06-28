@@ -86,13 +86,13 @@ TYPED_TEST(index_test, register_indexed_type_unique) {
 
     container.template register_indexed_type<
         scope<unique>, storage<std::unique_ptr<ClassTag<0>>>,
-        interface<IClass>>(value<index_type>(0));
+        interfaces<IClass>>(value<index_type>(0));
     container.template register_indexed_type<
         scope<unique>, storage<std::unique_ptr<ClassTag<1>>>,
-        interface<IClass>>(value<index_type>(1));
+        interfaces<IClass>>(value<index_type>(1));
     ASSERT_THROW((container.template register_indexed_type<
                      scope<unique>, storage<std::unique_ptr<ClassTag<1>>>,
-                     interface<IClass>>(value<index_type>(1))),
+                     interfaces<IClass>>(value<index_type>(1))),
                  type_already_registered_exception);
 
     ASSERT_EQ(
@@ -117,13 +117,13 @@ TYPED_TEST(index_test, register_indexed_type_shared) {
 
     container.template register_indexed_type<
         scope<shared>, storage<std::shared_ptr<ClassTag<0>>>,
-        interface<IClass>>(value<index_type>(0));
+        interfaces<IClass>>(value<index_type>(0));
     container.template register_indexed_type<
         scope<shared>, storage<std::shared_ptr<ClassTag<1>>>,
-        interface<IClass>>(value<index_type>(1));
+        interfaces<IClass>>(value<index_type>(1));
     ASSERT_THROW((container.template register_indexed_type<
                      scope<shared>, storage<std::shared_ptr<ClassTag<1>>>,
-                     interface<IClass>>(value<index_type>(1))),
+                     interfaces<IClass>>(value<index_type>(1))),
                  type_already_registered_exception);
 
     ASSERT_EQ(

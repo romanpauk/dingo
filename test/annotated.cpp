@@ -35,9 +35,9 @@ TYPED_TEST(annotated_test, value) {
 
     container_type container;
     container.template register_type<scope<external>, storage<int>,
-                                     interface<annotated<int, tag<1>>>>(1);
+                                     interfaces<annotated<int, tag<1>>>>(1);
     container.template register_type<scope<unique>, storage<int>,
-                                     interface<annotated<int, tag<2>>>>(
+                                     interfaces<annotated<int, tag<2>>>>(
         callable([] { return 10; }));
     container.template register_type<scope<unique>, storage<A>>();
 
@@ -46,7 +46,7 @@ TYPED_TEST(annotated_test, value) {
     container.template resolve<A>();
 }
 
-TYPED_TEST(annotated_test, interface) {
+TYPED_TEST(annotated_test, interfaces) {
     using container_type = TypeParam;
 
     struct I {
@@ -73,11 +73,11 @@ TYPED_TEST(annotated_test, interface) {
     container_type container;
 
     container.template register_type<scope<shared>, storage<A>,
-                                     interface<annotated<I, tag<1>>>>();
+                                     interfaces<annotated<I, tag<1>>>>();
     container.template register_type<scope<shared>, storage<std::shared_ptr<B>>,
-                                     interface<annotated<I, tag<2>>>>();
+                                     interfaces<annotated<I, tag<2>>>>();
     container.template register_type<scope<shared>, storage<std::shared_ptr<C>>,
-                                     interface<C, annotated<I, tag<3>>>>();
+                                     interfaces<C, annotated<I, tag<3>>>>();
 
     I& aref = container.template resolve<annotated<I&, tag<1>>>();
     ASSERT_TRUE(dynamic_cast<A*>(&aref));

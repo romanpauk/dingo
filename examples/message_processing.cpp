@@ -67,10 +67,10 @@ int main() {
     // Register processors into the container, indexed by the type they process
     container.register_indexed_type<scope<shared>,
                                     storage<std::shared_ptr<ProcessorA>>,
-                                    interface<IProcessor>>(size_t(1));
+                                    interfaces<IProcessor>>(size_t(1));
     container.register_indexed_type<scope<unique>,
                                     storage<std::shared_ptr<ProcessorB>>,
-                                    interface<IProcessor>>(size_t(2));
+                                    interfaces<IProcessor>>(size_t(2));
 
     // Register repositories used by the processors
     container.register_type<scope<shared>, storage<RepositoryA>>();
