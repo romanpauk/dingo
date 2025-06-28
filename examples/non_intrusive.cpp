@@ -20,7 +20,7 @@ int main() {
             scope<unique>,               // using unique scope
             factory<constructor<A>>,     // using constructor-detecting factory
             storage<std::unique_ptr<A>>, // stored as unique_ptr<A>
-            interface<A>                 // resolvable as A
+            interfaces<A>                // resolvable as A
             >();
         ////
     }

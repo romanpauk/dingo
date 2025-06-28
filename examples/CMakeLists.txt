@@ -3,6 +3,9 @@ function(add_example source)
     add_executable(dingo_example_${name} ${source})
     target_link_libraries(dingo_example_${name} dingo)
     add_test(NAME dingo_example_${name} COMMAND dingo_example_${name})
+
+    # Force-include windows.h to each example to make sure it builds with windows.h included
+    target_compile_options(dingo_example_${name} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
 endfunction()
 
 add_example(allocator.cpp)

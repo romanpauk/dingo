@@ -52,7 +52,7 @@ static void index_value_shared(benchmark::State& state) {
     using namespace dingo;
     Container container;
     container.template register_indexed_type<
-        scope<shared>, storage<Processor<>>, interface<IProcessor>>(size_t(1));
+        scope<shared>, storage<Processor<>>, interfaces<IProcessor>>(size_t(1));
 
     MessageWrapper msg(Message{1});
     for (auto _ : state) {
@@ -68,7 +68,7 @@ static void index_ptr_unique(benchmark::State& state) {
     Container container;
     container.template register_indexed_type<
         scope<unique>, storage<std::shared_ptr<Processor<>>>,
-        interface<IProcessor>>(size_t(1));
+        interfaces<IProcessor>>(size_t(1));
 
     // TODO: can't register the same type multiple times under different index,
     // as storage type is used as a key
@@ -87,7 +87,7 @@ static void index_ptr_shared(benchmark::State& state) {
     Container container;
     container.template register_indexed_type<
         scope<shared>, storage<std::shared_ptr<Processor<>>>,
-        interface<IProcessor>>(size_t(1));
+        interfaces<IProcessor>>(size_t(1));
 
     MessageWrapper msg(Message{1});
     for (auto _ : state) {

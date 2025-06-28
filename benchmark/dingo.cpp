@@ -99,7 +99,7 @@ resolve_container_shared_ptr_conversion_storage(benchmark::State& state) {
     using container_type = container<ContainerTraits>;
     container_type container;
     container.template register_type<
-        scope<shared>, storage<std::shared_ptr<Class<>>>, interface<IClass>>();
+        scope<shared>, storage<std::shared_ptr<Class<>>>, interfaces<IClass>>();
 
     size_t count = 0;
     for (auto _ : state) {
@@ -118,7 +118,7 @@ resolve_container_shared_ptr_conversion_resolver(benchmark::State& state) {
     container_type container;
     container.template register_type<scope<shared>,
                                      storage<std::shared_ptr<Class<>>>,
-                                     interface<Class<>, IClass>>();
+                                     interfaces<Class<>, IClass>>();
     size_t count = 0;
     for (auto _ : state) {
         count +=

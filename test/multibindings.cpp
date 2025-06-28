@@ -27,7 +27,7 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_value) {
 
     container_type container;
     container.template register_type<scope<shared>, storage<Class>,
-                                     interface<IClass, IClass1, IClass2>>();
+                                     interfaces<IClass, IClass1, IClass2>>();
 
     ASSERT_TRUE(dynamic_cast<Class*>(&container.template resolve<IClass&>()));
     ASSERT_TRUE(dynamic_cast<Class*>(&container.template resolve<IClass1&>()));
@@ -39,7 +39,7 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_cyclical_value) {
 
     container_type container;
     container.template register_type<scope<shared_cyclical>, storage<Class>,
-                                     interface<IClass1, IClass2>>();
+                                     interfaces<IClass1, IClass2>>();
 
     ASSERT_TRUE(dynamic_cast<Class*>(&container.template resolve<IClass1&>()));
     ASSERT_TRUE(dynamic_cast<Class*>(container.template resolve<IClass2*>()));
@@ -51,7 +51,7 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_shared_ptr) {
     container_type container;
     container
         .template register_type<scope<shared>, storage<std::shared_ptr<Class>>,
-                                interface<IClass, IClass1, IClass2>>();
+                                interfaces<IClass, IClass1, IClass2>>();
 
     ASSERT_TRUE(dynamic_cast<Class*>(&container.template resolve<IClass&>()));
     ASSERT_TRUE(dynamic_cast<Class*>(
@@ -68,7 +68,7 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_cyclical_shared_ptr) {
     container_type container;
     container.template register_type<scope<shared_cyclical>,
                                      storage<std::shared_ptr<Class>>,
-                                     interface<IClass1, IClass2>>();
+                                     interfaces<IClass1, IClass2>>();
 
     // TODO: virtual base issues with cyclical_shared
     // BOOST_TEST(dynamic_cast<C*>(&container.resolve< IClass& >()));
@@ -86,7 +86,7 @@ TYPED_TEST(multibindings_test, multiple_interfaces_shared_unique_ptr) {
     container_type container;
     container
         .template register_type<scope<shared>, storage<std::unique_ptr<Class>>,
-                                interface<IClass, IClass1, IClass2>>();
+                                interfaces<IClass, IClass1, IClass2>>();
 
     ASSERT_TRUE(dynamic_cast<Class*>(container.template resolve<IClass*>()));
     ASSERT_TRUE(dynamic_cast<Class*>(container.template resolve<IClass1*>()));
@@ -99,7 +99,7 @@ TYPED_TEST(multibindings_test, multiple_interfaces_unique_shared_ptr) {
     container_type container;
     container
         .template register_type<scope<unique>, storage<std::shared_ptr<Class>>,
-                                interface<IClass, IClass1, IClass2>>();
+                                interfaces<IClass, IClass1, IClass2>>();
 
     ASSERT_TRUE(dynamic_cast<Class*>(
         container.template resolve<std::shared_ptr<IClass>>().get()));
@@ -115,7 +115,7 @@ TYPED_TEST(multibindings_test, multiple_interfaces_unique_unique_ptr) {
     container_type container;
     container
         .template register_type<scope<unique>, storage<std::unique_ptr<Class>>,
-                                interface<IClass, IClass1, IClass2>>();
+                                interfaces<IClass, IClass1, IClass2>>();
 
     ASSERT_TRUE(dynamic_cast<Class*>(
         container.template resolve<std::unique_ptr<IClass>>().get()));
@@ -133,9 +133,9 @@ TYPED_TEST(multibindings_test, register_type_collection_shared_value) {
         scope<unique>, storage<std::vector<IClass*>>>();
 
     container.template register_type<scope<shared>, storage<ClassTag<0>>,
-                                     interface<IClass>>();
+                                     interfaces<IClass>>();
     container.template register_type<scope<shared>, storage<ClassTag<1>>,
-                                     interface<IClass>>();
+                                     interfaces<IClass>>();
 
     auto classes = container.template resolve<std::vector<IClass*>>();
     ASSERT_EQ(classes.size(), 2);
@@ -149,10 +149,10 @@ TYPED_TEST(multibindings_test, register_type_collection_shared_ptr) {
     scope<unique>, storage<std::vector<std::shared_ptr<IClass>>>>();
     container.template register_type<scope<shared>,
                                      storage<std::shared_ptr<ClassTag<0>>>,
-                                     interface<IClass>>();
+                                     interfaces<IClass>>();
     container.template register_type<scope<shared>,
                                      storage<std::shared_ptr<ClassTag<1>>>,
-                                     interface<IClass>>();
+                                     interfaces<IClass>>();
 
     auto classes =
         container.template resolve<std::vector<std::shared_ptr<IClass>>>();
@@ -167,10 +167,10 @@ TYPED_TEST(multibindings_test, register_type_collection_unique_ptr) {
         scope<unique>, storage<std::vector<std::unique_ptr<IClass>>>>();
     container.template register_type<scope<unique>,
                                      storage<std::unique_ptr<ClassTag<0>>>,
-                                     interface<IClass>>();
+                                     interfaces<IClass>>();
     container.template register_type<scope<unique>,
                                      storage<std::unique_ptr<ClassTag<1>>>,
-                                     interface<IClass>>();
+                                     interfaces<IClass>>();
 
     std::vector<std::unique_ptr<IClass>> classes =
         container.template resolve<std::vector<std::unique_ptr<IClass>>>();
@@ -191,10 +191,10 @@ TYPED_TEST(multibindings_test, register_type_collection_mapping_shared_ptr) {
         });
     container.template register_type<scope<unique>,
                                      storage<std::shared_ptr<ClassTag<0>>>,
-                                     interface<IClass>>();
+                                     interfaces<IClass>>();
     container.template register_type<scope<unique>,
                                      storage<std::shared_ptr<ClassTag<1>>>,
-                                     interface<IClass>>();
+                                     interfaces<IClass>>();
 
     std::map<std::type_index, std::shared_ptr<IClass>> classes =
         container.template resolve<
@@ -214,10 +214,10 @@ TYPED_TEST(multibindings_test, register_type_collection_mapping_unique_ptr) {
         });
     container.template register_type<scope<unique>,
                                      storage<std::unique_ptr<ClassTag<0>>>,
-                                     interface<IClass>>();
+                                     interfaces<IClass>>();
     container.template register_type<scope<unique>,
                                      storage<std::unique_ptr<ClassTag<1>>>,
-                                     interface<IClass>>();
+                                     interfaces<IClass>>();
 
     std::map<std::type_index, std::unique_ptr<IClass>> classes =
         container.template resolve<

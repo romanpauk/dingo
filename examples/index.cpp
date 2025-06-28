@@ -31,11 +31,11 @@ int main() {
 
     container<container_traits> container;
     container.template register_indexed_type<scope<shared>, storage<Dog>,
-                                             interface<IAnimal>>(
+                                             interfaces<IAnimal>>(
         std::string("dog"));
 
     container.template register_indexed_type<scope<shared>, storage<Cat>,
-                                             interface<IAnimal>>(
+                                             interfaces<IAnimal>>(
         std::string("cat"));
 
     // Resolve an instance of a dog

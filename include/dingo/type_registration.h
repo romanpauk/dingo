@@ -23,18 +23,18 @@ template <typename T> struct scope {
     template <typename U> using rebind_t = scope<U>;
 };
 
-template <typename... Args> struct interface {
+template <typename... Args> struct interfaces {
     using type = type_list<Args...>;
     using type_tuple = std::tuple<Args...>;
 
-    template <typename U> using rebind_t = interface<U>;
+    template <typename U> using rebind_t = interfaces<U>;
 };
 
-template <typename... Args> struct interface<type_list<Args...>> {
+template <typename... Args> struct interfaces<type_list<Args...>> {
     using type = type_list<Args...>;
     using type_tuple = std::tuple<Args...>;
 
-    template <typename U> using rebind_t = interface<U>;
+    template <typename U> using rebind_t = interfaces<U>;
 };
 
 template <typename T> struct factory {
@@ -95,13 +95,13 @@ template <typename... Args> struct type_registration {
 
     // Interface can be deduced from Storage or Factory
     using interface_type = detail::get_type_t<
-        interface<void>,
+        interfaces<void>,
         type_list<Args...,
-                  interface<decay_t<typename detail::get_type_t<
+                  interfaces<decay_t<typename detail::get_type_t<
                       storage<void>, type_list<Args...>>::type>>,
-                  interface<decay_t<typename detail::get_type_t<
+                  interfaces<decay_t<typename detail::get_type_t<
                       factory<void>, type_list<Args...>>::type>>>>;
-    static_assert(!std::is_same_v<interface_type, interface<void>>,
+    static_assert(!std::is_same_v<interface_type, interfaces<void>>,
                   "failed to deduce an interface type");
 
     // Conversions are deduced from Storage and Scope

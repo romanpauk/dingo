@@ -57,10 +57,10 @@ int main() {
     container<> container;
     container
         .register_type<scope<unique>, storage<std::unique_ptr<StringProcessor>>,
-                       interface<ProcessorBase>>();
+                       interfaces<ProcessorBase>>();
     container.register_type<scope<unique>,
                             storage<std::unique_ptr<VectorIntProcessor>>,
-                            interface<ProcessorBase>>();
+                            interfaces<ProcessorBase>>();
     container.register_type_collection<
         scope<unique>,
         storage<std::map<std::type_index, std::unique_ptr<ProcessorBase>>>>(

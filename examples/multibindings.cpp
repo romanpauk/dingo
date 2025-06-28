@@ -27,9 +27,9 @@ int main() {
 
     // Register types under the same interface
     container.template register_type<scope<shared>, storage<Processor<0>>,
-                                     interface<IProcessor>>();
+                                     interfaces<IProcessor>>();
     container.template register_type<scope<shared>, storage<Processor<1>>,
-                                     interface<IProcessor>>();
+                                     interfaces<IProcessor>>();
 
     // Resolve the collection
     container.template resolve<std::vector<IProcessor*>>();
