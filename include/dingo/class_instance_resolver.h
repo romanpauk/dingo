@@ -13,6 +13,7 @@
 #include <dingo/decay.h>
 #include <dingo/exceptions.h>
 #include <dingo/resettable_i.h>
+#include <dingo/resolving_context.h>
 #include <dingo/type_conversion.h>
 #include <dingo/type_list.h>
 #include <dingo/type_traits.h>
@@ -111,7 +112,9 @@ struct class_instance_resolver<RTTI, TypeInterface, Storage, shared>
             [[maybe_unused]] class_recursion_guard<
                 decay_t<typename Storage::type>> recursion_guard;
 
+            context.push(&closure_);
             storage.resolve(context, container);
+            context.pop();
             initialized_ = true;
         }
 
@@ -128,6 +131,9 @@ struct class_instance_resolver<RTTI, TypeInterface, Storage, shared>
     }
 
     bool initialized_ = false;
+    // TODO: who/when destroys this?
+    // TODO: should be part of shared_ptr deleter
+    resolving_context::closure closure_;
 };
 
 template <typename RTTI, typename TypeInterface, typename Storage>
