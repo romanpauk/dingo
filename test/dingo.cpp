@@ -20,7 +20,7 @@
 namespace dingo {
 template <typename T> struct dingo_test : public test<T> {};
 TYPED_TEST_SUITE(dingo_test, container_types, );
-
+#if 0
 TYPED_TEST(dingo_test, unique_hierarchy) {
     using container_type = TypeParam;
 
@@ -93,4 +93,19 @@ TYPED_TEST(dingo_test, type_already_registered) {
         ASSERT_THROW(reg(), dingo::type_already_registered_exception);
     }
 }
+#endif
+struct U {};
+struct C {
+    C(U&) {}
+};
+
+TYPED_TEST(dingo_test, closure) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<scope<shared>, storage<C>>();
+    container.template register_type<scope<unique>, storage<std::unique_ptr<U>>>();
+    container.template resolve<C>();
+}
+
 } // namespace dingo

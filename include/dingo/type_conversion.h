@@ -91,6 +91,19 @@ struct type_conversion<unique, std::shared_ptr<Target>,
     }
 };
 
+// TODO: Target in template parameters / Target& in signature
+
+// TODO: If we are taking this conversion, it means closure has to be in effect.
+// Using closure makes unique instances effectively the same as shared instances,
+// although for shorter time...
+template <typename Target, typename Source>
+struct type_conversion<unique, Target,
+    std::unique_ptr<Source>> {
+    template <typename Factory, typename Context, typename Temporary>
+    static Target& apply(Factory& factory, Context& context,
+        Temporary&);
+};
+
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, Target, Source&> {
     template <typename Factory, typename Context, typename Temporary>

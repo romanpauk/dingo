@@ -47,7 +47,7 @@ struct conversions<unique, std::shared_ptr<Type>, U> {
 template <typename Type, typename U>
 struct conversions<unique, std::unique_ptr<Type>, U> {
     using value_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
-    using lvalue_reference_types = type_list<>;
+    using lvalue_reference_types = type_list<U&>;
     using rvalue_reference_types =
         type_list<std::unique_ptr<U>&&, std::shared_ptr<U>&&>;
     using pointer_types = type_list<>;
