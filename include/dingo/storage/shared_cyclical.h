@@ -165,10 +165,8 @@ class storage_instance<shared_cyclical, Type, StoredType, Factory>
 template <typename Type, typename StoredType, typename Factory>
 class storage_instance<shared_cyclical, std::shared_ptr<Type>,
                        std::shared_ptr<StoredType>, Factory> : Factory {
-    struct alignas(alignof(Type)) buffer {
-        uint8_t data[sizeof(Type)];
-    };
-
+    using storage_type = dingo::aligned_storage_t<sizeof(Type), alignof(Type)>;
+    
     class deleter {
       public:
         void set_constructed() { constructed_ = true; }
@@ -179,7 +177,7 @@ class storage_instance<shared_cyclical, std::shared_ptr<Type>,
                     ptr->~Type();
             }
 
-            delete reinterpret_cast<buffer*>(ptr);
+            delete reinterpret_cast<storage_type*>(ptr);
         }
 
       private:
@@ -192,7 +190,7 @@ class storage_instance<shared_cyclical, std::shared_ptr<Type>,
 
     template <typename Context> std::shared_ptr<StoredType>& resolve(Context&) {
         assert(!instance_);
-        instance_.reset(reinterpret_cast<Type*>(new buffer), deleter());
+        instance_.reset(reinterpret_cast<Type*>(new storage_type), deleter());
         return instance_;
     }
 
