@@ -155,4 +155,34 @@ TYPED_TEST(dingo_test, shared_unique_reference_exception) {
     ASSERT_EQ(unique_dtor, 2);
 }
 
+#if 1
+// TODO: consider allowing taking T& for unique_ptr<T> as we can take T& to unique instance anyways.
+// But there is more to this test, get_address() that creates an unique instance in context
+// is called after type_conversion, which needs an address to dereference.
+TYPED_TEST(dingo_test, shared_unique_interface) {
+    using container_type = TypeParam;
+
+    struct UniqueBase {
+        UniqueBase() {}
+        int value = 1;
+    };
+
+    struct Unique: UniqueBase {
+        Unique() {}
+    };
+
+    struct Shared {
+        Shared(UniqueBase* a): a_(*a) {}
+        UniqueBase& a_;
+    };
+
+    container_type container;
+    container.template register_type<scope<shared>, storage<Shared>>();
+    container.template register_type<scope<unique>, interfaces<UniqueBase>, storage<std::unique_ptr<Unique>>>();
+    
+    auto& c = container.template resolve<Shared&>();
+    ASSERT_EQ(c.a_.value, 1);
+}
+#endif
+
 } // namespace dingo
