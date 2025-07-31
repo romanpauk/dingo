@@ -89,11 +89,11 @@ if(DINGO_DEVELOPMENT_MODE)
         allocator.h
         annotated.h
         arena_allocator.h
+        class_instance_conversions.h
         class_instance_factory_i.h
         class_instance_factory_traits.h
         class_instance_factory.h
         class_instance_resolver.h
-        class_instance_temporary.h
         class_traits.h
         collection_traits.h
         config.h

@@ -300,8 +300,8 @@ class container : public allocator_base<Allocator> {
                               typename registration::interface_type>>,
                 allocator_type, container_type>;
 
-        using class_instance_data_type =
-            class_instance_data<class_instance_container_type, storage_type>;
+        using class_instance_factory_data_type =
+            class_instance_factory_data<class_instance_container_type, storage_type>;
 
         if constexpr (std::tuple_size_v<
                           typename registration::interface_type::type_tuple> ==
@@ -311,7 +311,7 @@ class container : public allocator_base<Allocator> {
 
             using class_instance_factory_type = class_instance_factory<
                 container_type, typename annotated_traits<interface_type>::type,
-                storage_type, class_instance_data_type>;
+                storage_type, class_instance_factory_data_type>;
 
             if constexpr (!is_none_v<std::decay_t<Arg>>) {
                 auto&& [factory, factory_container] =
@@ -328,15 +328,15 @@ class container : public allocator_base<Allocator> {
                 return *factory_container;
             }
         } else {
-            std::shared_ptr<class_instance_data_type> data;
+            std::shared_ptr<class_instance_factory_data_type> data;
             if constexpr (!is_none_v<std::decay_t<Arg>>) {
-                data = std::allocate_shared<class_instance_data_type>(
-                    allocator_traits::rebind<class_instance_data_type>(
+                data = std::allocate_shared<class_instance_factory_data_type>(
+                    allocator_traits::rebind<class_instance_factory_data_type>(
                         get_allocator()),
                     this, std::forward<Arg>(arg));
             } else {
-                data = std::allocate_shared<class_instance_data_type>(
-                    allocator_traits::rebind<class_instance_data_type>(
+                data = std::allocate_shared<class_instance_factory_data_type>(
+                    allocator_traits::rebind<class_instance_factory_data_type>(
                         get_allocator()),
                     this);
             }
@@ -350,7 +350,7 @@ class container : public allocator_base<Allocator> {
                         container_type,
                         typename annotated_traits<interface_type>::type,
                         storage_type,
-                        std::shared_ptr<class_instance_data_type>>;
+                        std::shared_ptr<class_instance_factory_data_type>>;
 
                     register_type_factory<interface_type, storage_type>(
                         allocate_factory<class_instance_factory_type>(data)
@@ -525,7 +525,7 @@ class container : public allocator_base<Allocator> {
     template <typename U, typename... Args>
     std::pair<
         class_instance_factory_ptr<class_instance_factory_i<container_type>>,
-        typename U::data_traits::container_type*>
+        typename U::container_type*>
     allocate_factory(Args&&... args) {
         auto alloc = allocator_traits::rebind<U>(get_allocator());
         U* instance = allocator_traits::allocate(alloc, 1);

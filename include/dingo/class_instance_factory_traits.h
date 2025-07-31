@@ -27,6 +27,8 @@ template <typename RTTI, typename T> struct class_instance_factory_traits {
         // destruction by move does not matter. But at this place we have no
         // clue if the storage is unique or not.
         // TODO: test shared storage with non-copyable type requested as value
+        // TODO: this should recursively extract value_type (originally a workaround
+        // for vector<unique_ptr> that is copy-constructible).
         if constexpr (has_value_type_v<T>) {
             if constexpr (std::is_copy_constructible_v<
                               typename T::value_type>) {
