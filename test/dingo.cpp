@@ -6,6 +6,7 @@
 //
 
 #include <dingo/container.h>
+#include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 #include <dingo/type_list.h>
@@ -93,4 +94,65 @@ TYPED_TEST(dingo_test, type_already_registered) {
         ASSERT_THROW(reg(), dingo::type_already_registered_exception);
     }
 }
+
+TYPED_TEST(dingo_test, shared_unique_reference) {
+    using container_type = TypeParam;
+
+    struct UniqueBase {
+        UniqueBase() {}
+        int value = 1;
+    };
+
+    struct Unique {
+        Unique(UniqueBase& base): base_(base) {}
+        UniqueBase& base_;
+    };
+
+    struct Shared {
+        Shared(Unique& a): a_(a) {}
+        Unique& a_;
+    };
+
+    container_type container;
+    container.template register_type<scope<shared>, storage<Shared>>();
+    container.template register_type<scope<unique>, storage<Unique>>();
+    container.template register_type<scope<unique>, storage<UniqueBase>>();
+
+    // TODO: We need to detect that we are returning dangling reference to unique instance
+    // For top-level container.resolve(), the reference is removed and copy is returned.
+    // For recursively instantiated types, the context type needs to be checked. If it is
+    // shared scope, all is fine.
+    auto& c = container.template resolve<Shared&>();
+    ASSERT_EQ(c.a_.base_.value, 1);
+}
+
+TYPED_TEST(dingo_test, shared_unique_reference_exception) {
+    struct Unique {
+        Unique(Unique&& other): dtor_(other.dtor_) {}
+        Unique(const Unique& other): dtor_(other.dtor_) {}
+        Unique(int& dtor): dtor_(dtor) {}
+        ~Unique() { ++dtor_; }
+        int& dtor_;
+    };
+
+    struct Shared {
+        Shared(Unique&) { throw std::runtime_error("Hello!"); }
+    };
+
+    using container_type = TypeParam;
+
+    using container_type = TypeParam;
+    container_type container;
+
+    int unique_dtor = 0;
+    container.template register_type<scope<external>, storage<int&>>(unique_dtor);
+    container.template register_type<scope<unique>, storage<Unique>>();
+    container.template register_type<scope<shared>, storage<Shared>>();
+
+    ASSERT_THROW(container.template resolve<Shared>(), std::runtime_error);
+    // Two Uniques should be destroyed as there is one move constructor
+    // TODO: pass counters
+    ASSERT_EQ(unique_dtor, 2);
+}
+
 } // namespace dingo

@@ -29,6 +29,8 @@ template< typename Allocator = std::allocator<uint8_t> > class arena
 
     static constexpr std::size_t MaxBlockSize = 1<<21;
 
+    // TODO: all the state here is quite big
+
     struct block {
         block* next;
         uintptr_t size:63;
@@ -150,15 +152,20 @@ public:
         return reinterpret_cast<void*>(ptr);
     }
 
+    // TODO: try without this
     void deallocate(void*, std::size_t size) {
         state_.allocated_ -= size;
         assert(state_.allocated_ >= 0);
         if (state_.allocated_ == 0) {
-            deallocate_blocks(nullptr);
-            state_.block_head_ = nullptr;
-            state_.block_size_ = block_size_;
-            push_block(block_initial_);
+            reset();
         }
+    }
+
+    void reset() {
+        deallocate_blocks(nullptr);
+        state_.block_head_ = nullptr;
+        state_.block_size_ = block_size_;
+        push_block(block_initial_);
     }
 };
 

@@ -33,31 +33,30 @@ struct unique;
 
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion {
-    template <typename Factory, typename Context, typename Temporary>
-    static void* apply(Factory& factory, Context& context, Temporary&);
+    template <typename Factory, typename Context>
+    static void* apply(Factory& factory, Context& context);
 };
 
 template <typename Target, typename Source>
 struct type_conversion<unique, Target, Source> {
-    template <typename Factory, typename Context, typename Temporary>
-    static Target apply(Factory& factory, Context& context, Temporary&) {
+    template <typename Factory, typename Context>
+    static Target apply(Factory& factory, Context& context) {
         return factory.resolve(context);
     }
 };
 
 template <typename Target, typename Source>
 struct type_conversion<unique, Target*, Source*> {
-    template <typename Factory, typename Context, typename Temporary>
-    static Target* apply(Factory& factory, Context& context, Temporary&) {
+    template <typename Factory, typename Context>
+    static Target* apply(Factory& factory, Context& context) {
         return factory.resolve(context);
     }
 };
 
 template <typename Target, typename Source>
 struct type_conversion<unique, std::unique_ptr<Target>, Source*> {
-    template <typename Factory, typename Context, typename Temporary>
-    static std::unique_ptr<Target> apply(Factory& factory, Context& context,
-                                         Temporary&) {
+    template <typename Factory, typename Context>
+    static std::unique_ptr<Target> apply(Factory& factory, Context& context) {
         return std::unique_ptr<Target>(factory.resolve(context));
     }
 };
@@ -65,18 +64,16 @@ struct type_conversion<unique, std::unique_ptr<Target>, Source*> {
 template <typename Target, typename Source>
 struct type_conversion<unique, std::unique_ptr<Target>,
                        std::unique_ptr<Source>> {
-    template <typename Factory, typename Context, typename Temporary>
-    static std::unique_ptr<Target> apply(Factory& factory, Context& context,
-                                         Temporary&) {
+    template <typename Factory, typename Context>
+    static std::unique_ptr<Target> apply(Factory& factory, Context& context) {
         return factory.resolve(context);
     }
 };
 
 template <typename Target, typename Source>
 struct type_conversion<unique, std::shared_ptr<Target>, Source*> {
-    template <typename Factory, typename Context, typename Temporary>
-    static std::shared_ptr<Target> apply(Factory& factory, Context& context,
-                                         Temporary&) {
+    template <typename Factory, typename Context>
+    static std::shared_ptr<Target> apply(Factory& factory, Context& context) {
         return std::shared_ptr<Target>(factory.resolve(context));
     }
 };
@@ -84,57 +81,56 @@ struct type_conversion<unique, std::shared_ptr<Target>, Source*> {
 template <typename Target, typename Source>
 struct type_conversion<unique, std::shared_ptr<Target>,
                        std::shared_ptr<Source>> {
-    template <typename Factory, typename Context, typename Temporary>
-    static std::shared_ptr<Target> apply(Factory& factory, Context& context,
-                                         Temporary&) {
+    template <typename Factory, typename Context>
+    static std::shared_ptr<Target> apply(Factory& factory, Context& context) {
         return factory.resolve(context);
     }
 };
 
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, Target, Source&> {
-    template <typename Factory, typename Context, typename Temporary>
-    static Target& apply(Factory& factory, Context& context, Temporary&) {
+    template <typename Factory, typename Context>
+    static Target& apply(Factory& factory, Context& context) {
         return factory.resolve(context);
     }
 };
 
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, Target*, Source&> {
-    template <typename Factory, typename Context, typename Temporary>
-    static Target* apply(Factory& factory, Context& context, Temporary&) {
+    template <typename Factory, typename Context>
+    static Target* apply(Factory& factory, Context& context) {
         return &factory.resolve(context);
     }
 };
 
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, Target*, Source*> {
-    template <typename Factory, typename Context, typename Temporary>
-    static Target* apply(Factory& factory, Context& context, Temporary&) {
+    template <typename Factory, typename Context>
+    static Target* apply(Factory& factory, Context& context) {
         return factory.resolve(context);
     }
 };
 
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, Target, Source*> {
-    template <typename Factory, typename Context, typename Temporary>
-    static Target& apply(Factory& factory, Context& context, Temporary&) {
+    template <typename Factory, typename Context>
+    static Target& apply(Factory& factory, Context& context) {
         return *factory.resolve(context);
     }
 };
 
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, Target*, std::shared_ptr<Source>&> {
-    template <typename Factory, typename Context, typename Temporary>
-    static Target* apply(Factory& factory, Context& context, Temporary&) {
+    template <typename Factory, typename Context>
+    static Target* apply(Factory& factory, Context& context) {
         return factory.resolve(context).get();
     }
 };
 
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, Target, std::shared_ptr<Source>&> {
-    template <typename Factory, typename Context, typename Temporary>
-    static Target& apply(Factory& factory, Context& context, Temporary&) {
+    template <typename Factory, typename Context>
+    static Target& apply(Factory& factory, Context& context) {
         return *factory.resolve(context);
     }
 };
@@ -142,35 +138,25 @@ struct type_conversion<StorageTag, Target, std::shared_ptr<Source>&> {
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, std::shared_ptr<Target>,
                        std::shared_ptr<Source>&> {
-    template <typename Factory, typename Context, typename Temporary>
-    static std::shared_ptr<Target>& apply(Factory& factory, Context& context,
-                                          Temporary& temporary) {
-        if constexpr (std::is_same_v<Target, Source>)
-            return factory.resolve(context);
-        else
-            return temporary.template construct<std::shared_ptr<Target>>(
-                factory.resolve(context));
+    template <typename Factory, typename Context>
+    static std::shared_ptr<Target>& apply(Factory& factory, Context& context) {
+        return factory.template resolve<std::shared_ptr<Target>>(context);
     }
 };
 
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, std::shared_ptr<Target>*,
                        std::shared_ptr<Source>&> {
-    template <typename Factory, typename Context, typename Temporary>
-    static std::shared_ptr<Target>* apply(Factory& factory, Context& context,
-                                          Temporary& temporary) {
-        if constexpr (std::is_same_v<Target, Source>)
-            return &factory.resolve(context);
-        else
-            return &temporary.template construct<std::shared_ptr<Target>>(
-                factory.resolve(context));
+    template <typename Factory, typename Context>
+    static std::shared_ptr<Target>* apply(Factory& factory, Context& context) {
+        return &factory.template resolve<std::shared_ptr<Target>>(context);
     }
 };
 
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, Target*, std::unique_ptr<Source>&> {
-    template <typename Factory, typename Context, typename Temporary>
-    static Target* apply(Factory& factory, Context& context, Temporary&) {
+    template <typename Factory, typename Context>
+    static Target* apply(Factory& factory, Context& context) {
         return factory.resolve(context).get();
     }
 };
@@ -178,9 +164,8 @@ struct type_conversion<StorageTag, Target*, std::unique_ptr<Source>&> {
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, std::unique_ptr<Target>*,
                        std::unique_ptr<Source>&> {
-    template <typename Factory, typename Context, typename Temporary>
-    static std::unique_ptr<Target>* apply(Factory& factory, Context& context,
-                                          Temporary&) {
+    template <typename Factory, typename Context>
+    static std::unique_ptr<Target>* apply(Factory& factory, Context& context) {
         if constexpr (std::is_same_v<Target, Source>)
             return &factory.resolve(context);
         throw type_not_convertible_exception();
@@ -189,8 +174,8 @@ struct type_conversion<StorageTag, std::unique_ptr<Target>*,
 
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, Target, std::unique_ptr<Source>&> {
-    template <typename Factory, typename Context, typename Temporary>
-    static Target& apply(Factory& factory, Context& context, Temporary&) {
+    template <typename Factory, typename Context>
+    static Target& apply(Factory& factory, Context& context) {
         return *factory.resolve(context);
     }
 };
@@ -198,9 +183,8 @@ struct type_conversion<StorageTag, Target, std::unique_ptr<Source>&> {
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, std::unique_ptr<Target>,
                        std::unique_ptr<Source>&> {
-    template <typename Factory, typename Context, typename Temporary>
-    static std::unique_ptr<Target>& apply(Factory& factory, Context& context,
-                                          Temporary&) {
+    template <typename Factory, typename Context>
+    static std::unique_ptr<Target>& apply(Factory& factory, Context& context) {
         if constexpr (std::is_same_v<Target, Source>)
             return factory.resolve(context);
         throw type_not_convertible_exception();
@@ -209,16 +193,16 @@ struct type_conversion<StorageTag, std::unique_ptr<Target>,
 
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, Target, std::optional<Source>&> {
-    template <typename Factory, typename Context, typename Temporary>
-    static Target& apply(Factory& factory, Context& context, Temporary&) {
+    template <typename Factory, typename Context>
+    static Target& apply(Factory& factory, Context& context) {
         return factory.resolve(context).value();
     }
 };
 
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, Target*, std::optional<Source>&> {
-    template <typename Factory, typename Context, typename Temporary>
-    static Target* apply(Factory& factory, Context& context, Temporary&) {
+    template <typename Factory, typename Context>
+    static Target* apply(Factory& factory, Context& context) {
         return &factory.resolve(context).value();
     }
 };
@@ -226,9 +210,8 @@ struct type_conversion<StorageTag, Target*, std::optional<Source>&> {
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, std::optional<Target>,
                        std::optional<Source>&> {
-    template <typename Factory, typename Context, typename Temporary>
-    static std::optional<Source>& apply(Factory& factory, Context& context,
-                                        Temporary&) {
+    template <typename Factory, typename Context>
+    static std::optional<Source>& apply(Factory& factory, Context& context) {
         if constexpr (std::is_same_v<Target, Source>)
             return factory.resolve(context);
         throw type_not_convertible_exception();
@@ -238,9 +221,8 @@ struct type_conversion<StorageTag, std::optional<Target>,
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, std::optional<Target>*,
                        std::optional<Source>&> {
-    template <typename Factory, typename Context, typename Temporary>
-    static std::optional<Target>* apply(Factory& factory, Context& context,
-                                        Temporary&) {
+    template <typename Factory, typename Context>
+    static std::optional<Target>* apply(Factory& factory, Context& context) {
         if constexpr (std::is_same_v<Target, Source>)
             return &factory.resolve(context);
         throw type_not_convertible_exception();
