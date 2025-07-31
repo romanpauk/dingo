@@ -7,12 +7,15 @@
 
 #pragma once
 
-#include <algorithm>
 #include <cstdint>
 
 namespace dingo {
 template <std::size_t Len, std::size_t Alignment> struct aligned_storage {
     struct type {
+        // TODO: force the storage type to be initialized to avoid warning
+        // https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p3074r2.html
+        type() {}
+    private:
         alignas(Alignment) std::uint8_t data[Len];
     };
 };
@@ -27,6 +30,4 @@ template <std::size_t MinLen, typename... Ts> struct aligned_union {
     using type = typename aligned_storage<length, alignment>::type;
 };
 
-template <std::size_t MinLen, typename... Ts>
-using aligned_union_t = typename aligned_union<MinLen, Ts...>::type;
 } // namespace dingo

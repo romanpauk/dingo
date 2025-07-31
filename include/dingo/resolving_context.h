@@ -24,7 +24,7 @@ class resolving_context {
   public:   
     struct closure {
         closure()
-            : arena_(&arena_buffer_, DINGO_CLOSURE_ARENA_BUFFER_SIZE)
+            : arena_(arena_buffer_)
             , destructibles_(arena_)
         {}
 
@@ -49,7 +49,7 @@ class resolving_context {
     };
 
     resolving_context()
-        : arena_(&arena_buffer_, DINGO_CONTEXT_ARENA_BUFFER_SIZE)
+        : arena_(arena_buffer_)
         , closures_(arena_)
     {
         push(&closure_);

@@ -114,6 +114,11 @@ public:
         static_assert(std::is_trivial_v<T>);
     }
 
+    template< typename T > arena(T& buffer, std::size_t block_size = sizeof(T))
+        : arena(reinterpret_cast<uint8_t*>(&buffer), sizeof(T), block_size) {
+        static_assert(std::is_trivially_destructible_v<T>);
+    }
+
     arena(void* buffer, std::size_t size)
         : arena(buffer, size, size)
     {}
