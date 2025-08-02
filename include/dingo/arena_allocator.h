@@ -44,7 +44,6 @@ template< typename Allocator = std::allocator<uint8_t> > class arena
         block* block_head_ = nullptr;
         intptr_t block_ptr_ = 0;
         intptr_t block_end_ = 0;
-        intptr_t allocated_ = 0;
         intptr_t block_size_ = 0;
     };
 
@@ -96,8 +95,12 @@ template< typename Allocator = std::allocator<uint8_t> > class arena
         while(head != end) {
             assert(head->owned || !head->next);
             auto next = head->next;
-            if (head->owned)
+            if (head->owned) {
                 deallocate_block(head);
+            } else {
+                assert(head->next == nullptr);
+                break;
+            }
             head = next;
         }
     }
@@ -153,18 +156,10 @@ public:
         intptr_t ptr = state_.block_ptr_ + padding;
         assert((ptr & (alignment - 1)) == 0);
         state_.block_ptr_ = ptr + size;
-        state_.allocated_ += size;
         return reinterpret_cast<void*>(ptr);
     }
 
-    // TODO: try without this
-    void deallocate(void*, std::size_t size) {
-        state_.allocated_ -= size;
-        assert(state_.allocated_ >= 0);
-        if (state_.allocated_ == 0) {
-            reset();
-        }
-    }
+    void deallocate(void*, std::size_t) {}
 
     void reset() {
         deallocate_blocks(nullptr);
