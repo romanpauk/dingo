@@ -12,22 +12,33 @@
 #include <utility>
 
 namespace dingo {
-template <typename T, typename Tag> struct annotated {
-    annotated(T&& value) : value_(std::move(value)) {}
+namespace detail {
+template <typename T, typename Tag, bool IsConstructible = std::is_constructible_v<T> > struct annotated_base;
 
-    operator T&() & { return value_; }
-    operator T&&() && { return std::move(value_); }
-
-  private:
+template <typename T, typename Tag> struct annotated_base<T, Tag, true> {
+    annotated_base(T&& value): value_(std::move(value)) {}
+    operator T&&() { return std::move(value_); }
+private:
     T value_;
 };
 
-template <typename T, typename Tag> struct annotated<T&, Tag> {
-    annotated(T& value) : value_(value) {}
+template <typename T, typename Tag> struct annotated_base<T&, Tag, false> {
+    annotated_base(T& value): value_(value) {}
     operator T&() { return value_; }
-
-  private:
+private:
     T& value_;
+};
+
+template <typename T, typename Tag> struct annotated_base<T, Tag, false>: annotated_base<T&, Tag, false> {};
+
+}
+
+template <typename T, typename Tag> struct annotated: detail::annotated_base<T, Tag> {
+    annotated(T&& value): detail::annotated_base<T, Tag>(std::move(value)) {}
+};
+
+template <typename T, typename Tag> struct annotated<T&, Tag>: detail::annotated_base<T&, Tag> {
+    annotated(T& value): detail::annotated_base<T&, Tag>(value) {}
 };
 
 struct none {};

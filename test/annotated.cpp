@@ -93,4 +93,47 @@ TYPED_TEST(annotated_test, interfaces) {
     I& cref = container.template resolve<annotated<I&, tag<3>>>();
     ASSERT_TRUE(dynamic_cast<C*>(&cref));
 }
+
+TYPED_TEST(annotated_test, abstract_interface) {
+    using container_type = TypeParam;
+
+    struct I {
+        virtual ~I() = default;
+        virtual int foo() = 0;
+    };
+
+    struct C : I {
+        ~C() {}
+        int foo() override { return 12; }
+    };
+
+    struct D {
+        D(
+            annotated<I&, tag<1>> ref
+            , annotated<I*, tag<1>> ptr
+            , annotated<std::shared_ptr<I>, tag<1>> shared_ptr
+        ): 
+            ref_(ref)
+            , ptr_(ptr)
+            , shared_ptr_(shared_ptr)
+        {}
+
+        I& ref_;
+        I* ptr_;
+        std::shared_ptr<I> shared_ptr_;
+    };
+
+    container_type container;
+
+    container.template register_type<scope<shared>, storage<std::shared_ptr<C>>,
+        interfaces<annotated<I, tag<1>>>>();
+
+    
+    D d = container.template construct<D>();
+    ASSERT_EQ(d.ptr_->foo(), 12);
+    ASSERT_EQ(d.shared_ptr_->foo(), 12);
+    ASSERT_EQ(d.ref_.foo(), 12);
+}
+
+
 } // namespace dingo
