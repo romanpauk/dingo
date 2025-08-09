@@ -112,15 +112,21 @@ TYPED_TEST(annotated_test, abstract_interface) {
             annotated<I&, tag<1>> ref
             , annotated<I*, tag<1>> ptr
             , annotated<std::shared_ptr<I>, tag<1>> shared_ptr
+            , annotated<std::shared_ptr<I>&, tag<1>> shared_ptr_ref
+            , annotated<std::unique_ptr<I>, tag<2>> unique_ptr
         ): 
             ref_(ref)
             , ptr_(ptr)
             , shared_ptr_(shared_ptr)
+            , shared_ptr_ref_(shared_ptr_ref)
+            , unique_ptr_(unique_ptr)
         {}
 
         I& ref_;
         I* ptr_;
         std::shared_ptr<I> shared_ptr_;
+        std::shared_ptr<I>& shared_ptr_ref_;
+        std::unique_ptr<I> unique_ptr_;
     };
 
     container_type container;
@@ -128,10 +134,15 @@ TYPED_TEST(annotated_test, abstract_interface) {
     container.template register_type<scope<shared>, storage<std::shared_ptr<C>>,
         interfaces<annotated<I, tag<1>>>>();
 
+    container.template register_type<scope<unique>, storage<std::unique_ptr<C>>,
+        interfaces<annotated<I, tag<2>>>>();
+
     
     D d = container.template construct<D>();
     ASSERT_EQ(d.ptr_->foo(), 12);
     ASSERT_EQ(d.shared_ptr_->foo(), 12);
+    ASSERT_EQ(d.shared_ptr_ref_->foo(), 12);
+    ASSERT_EQ(d.unique_ptr_->foo(), 12);
     ASSERT_EQ(d.ref_.foo(), 12);
 }
 
