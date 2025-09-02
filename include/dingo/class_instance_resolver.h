@@ -13,6 +13,20 @@
 #include <dingo/decay.h>
 #include <dingo/exceptions.h>
 #include <dingo/resolving_context.h>
+
+namespace dingo {
+template <typename Context, typename T>
+void* get_address(Context& context, T&& instance) {
+    if constexpr (std::is_reference_v<T>) {
+        return &instance;
+    } else if constexpr (std::is_pointer_v<T>) {
+        return instance;
+    } else {
+        return &context.template construct<T>(std::forward<T>(instance));
+    }
+}
+}
+
 #include <dingo/type_conversion.h>
 
 namespace dingo {
@@ -37,17 +51,6 @@ struct class_recursion_guard {
 template <typename T, bool DefaultConstructible> bool class_recursion_guard<T, DefaultConstructible>::visited_ = false;
 
 template <typename T> struct class_recursion_guard<T, true> {};
-
-template <typename Context, typename T>
-void* get_address(Context& context, T&& instance) {
-    if constexpr (std::is_reference_v<T>) {
-        return &instance;
-    } else if constexpr (std::is_pointer_v<T>) {
-        return instance;
-    } else {
-        return &context.template construct<T>(std::forward<T>(instance));
-    }
-}
 
 template <typename RTTI, typename Type, typename Storage,
           typename StorageTag = typename Storage::tag_type>

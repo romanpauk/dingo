@@ -71,6 +71,16 @@ struct type_conversion<unique, std::unique_ptr<Target>,
 };
 
 template <typename Target, typename Source>
+struct type_conversion<unique, Target*,
+    std::unique_ptr<Source>> {
+    template <typename Factory, typename Context>
+    static Target* apply(Factory& factory, Context& context) {
+        // TODO :)
+        return ((std::unique_ptr<Source>*)::dingo::get_address(context, factory.resolve(context)))->get();
+    }
+};
+
+template <typename Target, typename Source>
 struct type_conversion<unique, std::shared_ptr<Target>, Source*> {
     template <typename Factory, typename Context>
     static std::shared_ptr<Target> apply(Factory& factory, Context& context) {

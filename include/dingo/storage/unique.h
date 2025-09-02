@@ -50,7 +50,7 @@ struct conversions<unique, std::unique_ptr<Type>, U> {
     using lvalue_reference_types = type_list<>;
     using rvalue_reference_types =
         type_list<std::unique_ptr<U>&&, std::shared_ptr<U>&&>;
-    using pointer_types = type_list<>;
+    using pointer_types = type_list<U*>;
     using conversion_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
 };
 
