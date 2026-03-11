@@ -22,20 +22,21 @@ namespace detail {
 template <typename Type, typename U>
 struct conversions<unique, Type, U,
                    std::enable_if_t<is_plain_value_registration_v<Type, U>>> {
-    using value_types = type_list<U, std::optional<U>>;
+    using value_types =
+        type_list_cat_t<type_list<U>, unique_optional_result_types_t<Type, U>>;
     using lvalue_reference_types = type_list<U&>;
-    using rvalue_reference_types = type_list<U&&, std::optional<U>&&>;
+    using rvalue_reference_types = type_list_cat_t<
+        type_list<U&&>, unique_optional_rvalue_types_t<Type, U>>;
     using pointer_types = type_list<>;
-    using conversion_types = type_list<std::optional<U>>;
+    using conversion_types = unique_optional_result_types_t<Type, U>;
 };
 
 template <typename Type, typename U> struct conversions<unique, Type*, U> {
-    using value_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
+    using value_types = unique_result_value_types_t<Type*, U>;
     using lvalue_reference_types = type_list<>;
-    using rvalue_reference_types =
-        type_list<std::unique_ptr<U>&&, std::shared_ptr<U>&&>;
+    using rvalue_reference_types = unique_result_rvalue_types_t<Type*, U>;
     using pointer_types = type_list<U*>;
-    using conversion_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
+    using conversion_types = value_types;
 };
 
 template <typename Type, typename U>

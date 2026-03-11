@@ -10,6 +10,7 @@
 #include <dingo/config.h>
 
 #include <dingo/detail/storage_conversion_traits.h>
+#include <dingo/detail/wrapper_storage.h>
 #include <dingo/decay.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/storage.h>
@@ -66,15 +67,63 @@ struct conversions<external, Type&, U,
     : public conversions<external, Type, U> {};
 
 template <typename Type, typename StoredType>
-class storage_instance<external, Type, StoredType, void> {
+class external_storage_instance_value {
   public:
     template <typename T>
-    storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
+    external_storage_instance_value(T&& instance)
+        : instance_(std::forward<T>(instance)) {}
 
     Type& get() { return instance_; }
 
   private:
     Type instance_;
+};
+
+template <typename Type, typename StoredType>
+class external_storage_instance_wrapper
+    : public external_wrapper_storage_instance<Type, StoredType> {
+  public:
+    template <typename T>
+    external_storage_instance_wrapper(T&& instance)
+        : external_wrapper_storage_instance<Type, StoredType>(
+              std::forward<T>(instance)) {}
+};
+
+template <typename Type, typename StoredType, bool IsWrapper>
+class external_storage_instance_impl;
+
+template <typename Type, typename StoredType>
+class external_storage_instance_impl<Type, StoredType, false>
+    : public external_storage_instance_value<Type, StoredType> {
+    using instance_type = external_storage_instance_value<Type, StoredType>;
+
+  public:
+    template <typename T>
+    external_storage_instance_impl(T&& instance)
+        : instance_type(std::forward<T>(instance)) {}
+};
+
+template <typename Type, typename StoredType>
+class external_storage_instance_impl<Type, StoredType, true>
+    : public external_storage_instance_wrapper<Type, StoredType> {
+    using instance_type = external_storage_instance_wrapper<Type, StoredType>;
+
+  public:
+    template <typename T>
+    external_storage_instance_impl(T&& instance)
+        : instance_type(std::forward<T>(instance)) {}
+};
+
+template <typename Type, typename StoredType>
+class storage_instance<external, Type, StoredType, void>
+    : public external_storage_instance_impl<Type, StoredType,
+                                            is_wrapper_object_v<Type>> {
+    using instance_type = external_storage_instance_impl<
+        Type, StoredType, is_wrapper_object_v<Type>>;
+
+  public:
+    template <typename T>
+    storage_instance(T&& instance) : instance_type(std::forward<T>(instance)) {}
 };
 
 template <typename Type, typename StoredType>
@@ -97,56 +146,6 @@ class storage_instance<external, Type*, StoredType, void> {
 
   private:
     Type* instance_;
-};
-
-template <typename Type, typename StoredType>
-class storage_instance<external, std::shared_ptr<Type>,
-                       std::shared_ptr<StoredType>, void> {
-  public:
-    template <typename T>
-    storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
-
-    std::shared_ptr<StoredType>& get() { return instance_; }
-
-  private:
-    std::shared_ptr<StoredType> instance_;
-};
-
-template <typename Type, typename StoredType>
-class storage_instance<external, std::shared_ptr<Type>&, StoredType, void> {
-  public:
-    storage_instance(std::shared_ptr<Type>& instance) : instance_(instance) {}
-
-    std::shared_ptr<Type>& get() { return instance_; }
-
-  private:
-    std::shared_ptr<Type>& instance_;
-};
-
-// TODO: missing reference
-template <typename Type, typename StoredType>
-class storage_instance<external, std::unique_ptr<Type>,
-                       std::unique_ptr<StoredType>, void> {
-  public:
-    template <typename T>
-    storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
-
-    std::unique_ptr<StoredType>& get() { return instance_; }
-
-  private:
-    std::unique_ptr<StoredType> instance_;
-};
-
-template <typename Type, typename StoredType>
-class storage_instance<external, std::optional<Type>&, StoredType, void> {
-  public:
-    template <typename T>
-    storage_instance(T&& instance) : instance_(std::forward<T>(instance)) {}
-
-    std::optional<Type>& get() { return instance_; }
-
-  private:
-    std::optional<Type> instance_;
 };
 
 template <typename Type, typename StoredType, typename Factory,

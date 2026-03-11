@@ -19,6 +19,44 @@ namespace detail {
 template <typename StorageType, typename Interface>
 using storage_rebind_t = wrapper_rebind_t<StorageType, Interface>;
 
+template <typename StorageType, typename Interface, typename = void>
+struct unique_optional_result_types {
+    using type = type_list<>;
+};
+
+template <typename StorageType, typename Interface>
+struct unique_optional_result_types<
+    StorageType, Interface,
+    std::enable_if_t<
+        has_wrapper_optional_rebind_v<StorageType, Interface> &&
+        !std::is_same_v<wrapper_optional_rebind_t<StorageType, Interface>,
+                        storage_rebind_t<StorageType, Interface>>>> {
+    using type = type_list<wrapper_optional_rebind_t<StorageType, Interface>>;
+};
+
+template <typename StorageType, typename Interface>
+using unique_optional_result_types_t =
+    typename unique_optional_result_types<StorageType, Interface>::type;
+
+template <typename StorageType, typename Interface, typename = void>
+struct unique_optional_rvalue_types {
+    using type = type_list<>;
+};
+
+template <typename StorageType, typename Interface>
+struct unique_optional_rvalue_types<
+    StorageType, Interface,
+    std::enable_if_t<
+        has_wrapper_optional_rebind_v<StorageType, Interface> &&
+        !std::is_same_v<wrapper_optional_rebind_t<StorageType, Interface>,
+                        storage_rebind_t<StorageType, Interface>>>> {
+    using type = type_list<wrapper_optional_rebind_t<StorageType, Interface>&&>;
+};
+
+template <typename StorageType, typename Interface>
+using unique_optional_rvalue_types_t =
+    typename unique_optional_rvalue_types<StorageType, Interface>::type;
+
 template <typename StorageType, typename Interface>
 inline constexpr bool is_raw_pointer_registration_v =
     !std::is_reference_v<StorageType> &&
@@ -53,8 +91,11 @@ using unique_owned_result_t = std::conditional_t<
 template <typename StorageType, typename Interface>
 inline constexpr bool can_convert_unique_result_to_shared_v =
     has_wrapper_shared_rebind_v<StorageType, Interface> &&
-    std::is_constructible_v<wrapper_shared_rebind_t<StorageType, Interface>,
-                            unique_owned_result_t<StorageType, Interface>>;
+    (std::is_constructible_v<wrapper_shared_rebind_t<StorageType, Interface>,
+                             unique_owned_result_t<StorageType, Interface>> ||
+     can_adopt_released_wrapper_v<unique_owned_result_t<StorageType, Interface>,
+                                  wrapper_shared_rebind_t<StorageType,
+                                                          Interface>>);
 
 template <typename StorageType, typename Interface, typename = void>
 struct unique_shared_result_types {

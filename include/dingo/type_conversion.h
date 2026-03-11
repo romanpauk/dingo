@@ -71,9 +71,8 @@ struct type_conversion<unique, Target, Source> {
         if constexpr (detail::is_same_wrapper_family_v<Source, Target>) {
             if constexpr (std::is_constructible_v<target_base, Source>) {
                 return factory.resolve(context);
-            } else if constexpr (detail::has_wrapper_release_v<Source> &&
-                                 detail::has_wrapper_adopt_v<Target,
-                                                             target_element>) {
+            } else if constexpr (detail::can_adopt_released_wrapper_v<Source,
+                                                                      Target>) {
                 auto source = factory.resolve(context);
                 return wrapper_traits<target_base>::template adopt<
                     target_element>(
@@ -81,6 +80,11 @@ struct type_conversion<unique, Target, Source> {
             } else {
                 return factory.resolve(context);
             }
+        } else if constexpr (detail::can_adopt_released_wrapper_v<Source,
+                                                                  Target>) {
+            auto source = factory.resolve(context);
+            return wrapper_traits<target_base>::template adopt<target_element>(
+                wrapper_traits<source_base>::release(source));
         } else {
             return factory.resolve(context);
         }

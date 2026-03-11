@@ -23,6 +23,54 @@ namespace dingo {
 template <typename T> struct shared_cyclical_test : public test<T> {};
 TYPED_TEST_SUITE(shared_cyclical_test, container_types, );
 
+template <typename T> struct shared_box {
+    shared_box() = default;
+
+    template <typename U>
+    explicit shared_box(std::shared_ptr<U> value) : value_(std::move(value)) {}
+
+    template <typename U>
+    shared_box(const shared_box<U>& value) : value_(value.raw()) {}
+
+    T* get() const { return value_.get(); }
+    const std::shared_ptr<T>& raw() const { return value_; }
+
+  private:
+    std::shared_ptr<T> value_;
+};
+
+template <typename T> struct wrapper_traits<shared_box<T>> {
+    using element_type = T;
+
+    template <typename U> using rebind = shared_box<U>;
+    template <typename U> using owned_rebind = void;
+    template <typename U> using shared_rebind = shared_box<U>;
+    template <typename U> using optional_rebind = void;
+
+    static constexpr bool is_indirect = true;
+
+    static T* get_pointer(shared_box<T>& value) { return value.get(); }
+
+    template <typename U> static shared_box<U> adopt(U* value) {
+        return shared_box<U>(std::shared_ptr<U>(value));
+    }
+
+    template <typename U, typename V, typename Deleter>
+    static shared_box<U> adopt(V* value, Deleter deleter) {
+        return shared_box<U>(std::shared_ptr<U>(value, std::move(deleter)));
+    }
+
+    template <typename... Args>
+    static shared_box<T> construct(Args&&... args) {
+        return shared_box<T>(std::make_shared<T>(std::forward<Args>(args)...));
+    }
+
+    template <typename... Args>
+    static void construct_at(void* ptr, Args&&... args) {
+        new (ptr) shared_box<T>{construct(std::forward<Args>(args)...)};
+    }
+};
+
 TYPED_TEST(shared_cyclical_test, recursion_exception) {
     using container_type = TypeParam;
 
@@ -115,6 +163,60 @@ TYPED_TEST(shared_cyclical_test, shared_ptr) {
     AssertClass(b.a_);
     AssertClass(b.ia_);
     AssertClass(*b.iaptr_);
+}
+
+TYPED_TEST(shared_cyclical_test, shared_wrapper) {
+    using container_type = TypeParam;
+
+    struct B;
+    struct A : Class {
+        A(B& b, IClass1& ib, shared_box<IClass1>& ibptr)
+            : b_(b), ib_(ib), ibptr_(ibptr) {}
+        B& b_;
+        IClass1& ib_;
+        shared_box<IClass1>& ibptr_;
+    };
+
+    struct B : Class {
+        B(A& a, IClass2& ia, shared_box<IClass2>& iaptr)
+            : a_(a), ia_(ia), iaptr_(iaptr) {}
+        A& a_;
+        IClass2& ia_;
+        shared_box<IClass2>& iaptr_;
+    };
+
+    container_type container;
+    container.template register_type<scope<shared_cyclical>, storage<shared_box<A>>,
+                                     interfaces<A, IClass2>>();
+    container.template register_type<scope<shared_cyclical>, storage<shared_box<B>>,
+                                     interfaces<B, IClass1>>();
+
+    auto& a = container.template resolve<A&>();
+    AssertClass(a);
+    AssertClass(a.b_);
+    AssertClass(a.ib_);
+    AssertClass(*a.ibptr_.get());
+
+    auto shared_a = container.template resolve<shared_box<A>>();
+    AssertClass(*shared_a.get());
+
+    auto& b = container.template resolve<B&>();
+    AssertClass(b);
+    AssertClass(b.a_);
+    AssertClass(b.ia_);
+    AssertClass(*b.iaptr_.get());
+
+    auto shared_b = container.template resolve<shared_box<IClass1>>();
+    AssertClass(*shared_b.get());
+}
+
+TYPED_TEST(shared_cyclical_test, non_shared_owner_wrapper_registration) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<scope<shared_cyclical>,
+                                     storage<std::unique_ptr<Class>>,
+                                     interfaces<Class>>();
 }
 
 // TODO: this excercises resolving code without creating temporaries,

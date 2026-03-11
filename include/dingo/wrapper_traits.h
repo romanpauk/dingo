@@ -129,6 +129,11 @@ template <typename T> struct wrapper_traits<std::shared_ptr<T>> {
         return shared_rebind<U>(value);
     }
 
+    template <typename U, typename V, typename Deleter>
+    static shared_rebind<U> adopt(V* value, Deleter deleter) {
+        return shared_rebind<U>(value, std::move(deleter));
+    }
+
     template <typename... Args> static rebind<T> construct(Args&&... args) {
         if constexpr (std::is_constructible_v<T, Args...>) {
             return std::make_shared<T>(std::forward<Args>(args)...);
@@ -290,6 +295,21 @@ struct has_wrapper_adopt<
 template <typename T, typename U>
 inline constexpr bool has_wrapper_adopt_v = has_wrapper_adopt<T, U>::value;
 
+template <typename T, typename Target, typename Source, typename Deleter,
+          typename = void>
+struct has_wrapper_adopt_with_deleter : std::false_type {};
+
+template <typename T, typename Target, typename Source, typename Deleter>
+struct has_wrapper_adopt_with_deleter<
+    T, Target, Source, Deleter,
+    std::void_t<decltype(wrapper_traits<wrapper_base_t<T>>::template adopt<
+        Target>(std::declval<Source*>(), std::declval<Deleter>()))>>
+    : std::true_type {};
+
+template <typename T, typename Target, typename Source, typename Deleter>
+inline constexpr bool has_wrapper_adopt_with_deleter_v =
+    has_wrapper_adopt_with_deleter<T, Target, Source, Deleter>::value;
+
 template <typename T, typename = void>
 struct has_wrapper_release : std::false_type {};
 
@@ -301,6 +321,21 @@ struct has_wrapper_release<
 
 template <typename T>
 inline constexpr bool has_wrapper_release_v = has_wrapper_release<T>::value;
+
+template <typename Source, typename Target, typename = void>
+struct can_adopt_released_wrapper : std::false_type {};
+
+template <typename Source, typename Target>
+struct can_adopt_released_wrapper<
+    Source, Target,
+    std::void_t<decltype(wrapper_traits<wrapper_base_t<Target>>::template adopt<
+        wrapper_element_t<Target>>(
+        wrapper_traits<wrapper_base_t<Source>>::release(
+            std::declval<wrapper_base_t<Source>&>())))>> : std::true_type {};
+
+template <typename Source, typename Target>
+inline constexpr bool can_adopt_released_wrapper_v =
+    can_adopt_released_wrapper<Source, Target>::value;
 
 template <typename T, typename... Args>
 T construct_type(Args&&... args) {
