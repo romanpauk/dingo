@@ -9,10 +9,37 @@
 
 #include <dingo/config.h>
 
-#include <dingo/type_traits.h>
+#include <cstddef>
+#include <tuple>
+#include <type_traits>
+#include <utility>
 
 namespace dingo {
 template <typename... Types> struct type_list {};
+
+template <bool Condition, typename... Types>
+using type_list_if_t =
+    std::conditional_t<Condition, type_list<Types...>, type_list<>>;
+
+template <typename... Lists> struct type_list_cat;
+
+template <> struct type_list_cat<> {
+    using type = type_list<>;
+};
+
+template <typename... Types> struct type_list_cat<type_list<Types...>> {
+    using type = type_list<Types...>;
+};
+
+template <typename... Left, typename... Right, typename... Tail>
+struct type_list_cat<type_list<Left...>, type_list<Right...>, Tail...> {
+    using type =
+        typename type_list_cat<type_list<Left..., Right...>, Tail...>::type;
+};
+
+template <typename... Lists>
+using type_list_cat_t = typename type_list_cat<Lists...>::type;
+
 template <typename T> struct type_list_iterator {
     using type = T;
 };

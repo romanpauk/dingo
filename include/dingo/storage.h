@@ -8,12 +8,11 @@
 #pragma once
 
 #include <dingo/config.h>
-#include <dingo/decay.h>
-#include <dingo/factory/constructor.h>
 
 namespace dingo {
 namespace detail {
-template <typename StorageTag, typename Type, typename U> struct conversions;
+template <typename StorageTag, typename Type, typename U, typename = void>
+struct conversions;
 template <typename StorageTag, typename Type, typename StoredType,
           typename Factory, typename Conversions>
 class storage;

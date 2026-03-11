@@ -9,9 +9,9 @@
 
 #include <dingo/config.h>
 
-#include <dingo/class_traits.h>
 #include <dingo/decay.h>
 #include <dingo/factory/constructor_detection.h>
+#include <dingo/wrapper_traits.h>
 
 namespace dingo {
 
@@ -25,14 +25,14 @@ template <typename T, typename... Args> struct constructor<T(Args...)> {
 
     template <typename Type, typename Context, typename Container>
     static Type construct(Context& ctx, Container& container) {
-        return class_traits<Type>::construct(
+        return detail::construct_type<Type>(
             ctx.template resolve<Args>(container)...);
     }
 
     template <typename Type, typename Context, typename Container>
     static void construct(void* ptr, Context& ctx, Container& container) {
-        class_traits<Type>::construct(ptr,
-                                      ctx.template resolve<Args>(container)...);
+        detail::construct_type_at<Type>(ptr,
+                                        ctx.template resolve<Args>(container)...);
     }
 };
 

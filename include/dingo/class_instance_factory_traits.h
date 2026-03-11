@@ -8,12 +8,20 @@
 #pragma once
 
 #include <dingo/config.h>
-#include <dingo/type_traits.h>
+#include <type_traits>
 
 #include <memory>
 #include <vector>
 
 namespace dingo {
+
+template <typename T, typename = void>
+struct has_value_type : std::false_type {};
+template <typename T>
+struct has_value_type<T, std::void_t<typename T::value_type>>
+    : std::true_type {};
+template <typename T>
+inline constexpr bool has_value_type_v = has_value_type<T>::value;
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -45,7 +53,8 @@ template <typename RTTI, typename T> struct class_instance_factory_traits {
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_value(
             context,
-            RTTI::template get_type_index<rebind_type_t<T, runtime_type>>());
+            RTTI::template get_type_index<
+                rebind_type_t<std::remove_const_t<T>, runtime_type>>());
     }
 };
 #ifdef _MSC_VER

@@ -26,6 +26,7 @@
 #include <dingo/type_cache.h>
 #include <dingo/type_map.h>
 #include <dingo/type_registration.h>
+#include <dingo/wrapper_traits.h>
 
 #include <functional>
 #include <map>
@@ -280,8 +281,8 @@ class container : public allocator_base<Allocator> {
                 std::tuple_size_v<
                     typename registration::interface_type::type_tuple> == 1 &&
                     std::has_virtual_destructor_v<interface_type_0> &&
-                    type_traits<typename registration::storage_type::type>::
-                        is_pointer_type,
+                    wrapper_traits<detail::wrapper_base_t<
+                        typename registration::storage_type::type>>::is_indirect,
                 interface_type_0,
                 decay_t<typename registration::storage_type::type>>>;
 
