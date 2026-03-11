@@ -5,6 +5,8 @@
 // SPDX-License-Identifier: MIT
 //
 
+#pragma once
+
 // #include <dingo/config.h>
 
 #include <dingo/factory/constructor.h>

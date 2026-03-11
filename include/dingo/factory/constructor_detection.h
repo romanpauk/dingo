@@ -342,4 +342,3 @@ template <typename T, typename DetectionType = detail::automatic> struct constru
 {};
 
 } // namespace dingo
-
