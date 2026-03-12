@@ -96,6 +96,8 @@ if(DINGO_DEVELOPMENT_MODE)
         class_instance_resolver.h
         class_traits.h
         collection_traits.h
+        component.h
+        component_container.h
         config.h
         constructor.h
         container.h
@@ -194,6 +196,8 @@ if(DINGO_DEVELOPMENT_MODE)
             test/assert.h
             test/class.h
             test/class_factory.cpp
+            test/component.cpp
+            test/component_container.cpp
             test/construct.cpp
             test/constructor_detection.cpp
             test/containers.h

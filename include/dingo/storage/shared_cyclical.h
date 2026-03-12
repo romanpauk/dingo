@@ -103,7 +103,8 @@ class storage_instance_shared_impl<Type, Factory, false> : Factory {
 
     template <typename Context, typename Container>
     void construct(Context& context, Container& container) {
-        Factory::template construct<Type*>(&instance_, context, container);
+        detail::construct_factory<Type*>(
+            &instance_, context, container, static_cast<Factory&>(*this));
         constructed_ = true;
     }
 
@@ -140,7 +141,8 @@ class storage_instance_shared_impl<Type, Factory, true> : Factory {
 
     template <typename Context, typename Container>
     void construct(Context& context, Container& container) {
-        Factory::template construct<Type*>(&instance_, context, container);
+        detail::construct_factory<Type*>(
+            &instance_, context, container, static_cast<Factory&>(*this));
     }
 
     bool empty() const { return !resolved_; }
@@ -199,7 +201,8 @@ class storage_instance<shared_cyclical, std::shared_ptr<Type>,
     template <typename Context, typename Container>
     void construct(Context& context, Container& container) {
         assert(instance_);
-        Factory::template construct<Type*>(instance_.get(), context, container);
+        detail::construct_factory<Type*>(
+            instance_.get(), context, container, static_cast<Factory&>(*this));
         std::get_deleter<deleter>(instance_)->set_constructed();
     }
 

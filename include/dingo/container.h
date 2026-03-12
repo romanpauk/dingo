@@ -14,6 +14,8 @@
 #include <dingo/class_instance_factory.h>
 #include <dingo/class_instance_factory_traits.h>
 #include <dingo/collection_traits.h>
+#include <dingo/component.h>
+#include <dingo/component_container.h>
 #include <dingo/decay.h>
 #include <dingo/exceptions.h>
 #include <dingo/factory/callable.h>
