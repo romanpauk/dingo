@@ -85,10 +85,13 @@ private:
 
 template <typename RTTI, typename Type, typename Storage>
 struct class_instance_resolver<RTTI, Type, Storage, shared>
-    : class_instance_conversions< rebind_type_t< typename Storage::conversions::conversion_types, Type > >
+    : class_instance_conversions<
+          rebind_defined_type_list_t<typename Storage::conversions::conversion_types,
+                                     Type>>
 {
     using class_instance_conversions_type = class_instance_conversions<
-        rebind_type_t<typename Storage::conversions::conversion_types, Type>>;
+        rebind_defined_type_list_t<typename Storage::conversions::conversion_types,
+                                   Type>>;
 
     template <typename Context, typename Container>
     decltype(auto) resolve(Context& context, Container& container,
@@ -150,12 +153,13 @@ struct class_instance_resolver<RTTI, Type, Storage, shared_cyclical>
 
 template <typename RTTI, typename Type, typename Storage>
 struct class_instance_resolver<RTTI, Type, Storage, external>
-    : class_instance_conversions< rebind_type_t<typename Storage::conversions::conversion_types,
-                              Type>>
+    : class_instance_conversions<
+          rebind_defined_type_list_t<typename Storage::conversions::conversion_types,
+                                     Type>>
 {
     using class_instance_conversions_type = class_instance_conversions<
-        rebind_type_t<typename Storage::conversions::conversion_types,
-                            Type>>;
+        rebind_defined_type_list_t<typename Storage::conversions::conversion_types,
+                                   Type>>;
 
     template <typename Context, typename Container>
     decltype(auto) resolve(Context& context, Container& container,

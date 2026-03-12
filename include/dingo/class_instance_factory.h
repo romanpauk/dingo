@@ -87,35 +87,37 @@ class class_instance_factory : public class_instance_factory_i<Container> {
     void*
     get_value(resolving_context& context,
               const typename Container::rtti_type::type_index& type) override {
+        using value_types = canonical_rebind_defined_type_list_t<
+            typename Storage::conversions::value_types, Type>;
         return ::dingo::resolve_address<typename Container::rtti_type>(
-            *this, context, typename Storage::conversions::value_types{},
-            type);
+            *this, context, value_types{}, type);
     }
 
     void* get_lvalue_reference(
         resolving_context& context,
         const typename Container::rtti_type::type_index& type) override {
+        using lvalue_reference_types = canonical_rebind_defined_type_list_t<
+            typename Storage::conversions::lvalue_reference_types, Type>;
         return ::dingo::resolve_address<typename Container::rtti_type>(
-            *this, context,
-            typename Storage::conversions::lvalue_reference_types{},
-            type);
+            *this, context, lvalue_reference_types{}, type);
     }
 
     void* get_rvalue_reference(
         resolving_context& context,
         const typename Container::rtti_type::type_index& type) override {
+        using rvalue_reference_types = canonical_rebind_defined_type_list_t<
+            typename Storage::conversions::rvalue_reference_types, Type>;
         return ::dingo::resolve_address<typename Container::rtti_type>(
-            *this, context,
-            typename Storage::conversions::rvalue_reference_types{},
-            type);
+            *this, context, rvalue_reference_types{}, type);
     }
 
     void* get_pointer(
         resolving_context& context,
         const typename Container::rtti_type::type_index& type) override {
+        using pointer_types = canonical_rebind_defined_type_list_t<
+            typename Storage::conversions::pointer_types, Type>;
         return ::dingo::resolve_address<typename Container::rtti_type>(
-            *this, context,
-            typename Storage::conversions::pointer_types{}, type);
+            *this, context, pointer_types{}, type);
     }
 
 #ifdef _MSC_VER

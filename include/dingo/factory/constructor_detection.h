@@ -10,8 +10,8 @@
 #include <dingo/config.h>
 
 #include <dingo/annotated.h>
-#include <dingo/class_traits.h>
 #include <dingo/decay.h>
+#include <dingo/wrapper_traits.h>
 #include <dingo/factory/constructor_typedef.h>
 #include <dingo/type_list.h>
 
@@ -285,7 +285,7 @@ struct constructor_methods<T, std::tuple<Args...>> {
 
     template <typename Type, typename Context, typename Container>
     static Type construct(Context& ctx, Container& container) {
-        return class_traits<Type>::construct(
+        return detail::construct_type<Type>(
             ((void)sizeof(Args),
              constructor_argument_impl<T, Context, Container,
                                        typename Args::tag_type>(ctx,
@@ -294,7 +294,7 @@ struct constructor_methods<T, std::tuple<Args...>> {
 
     template <typename Type, typename Context, typename Container>
     static void construct(void* ptr, Context& ctx, Container& container) {
-        class_traits<Type>::construct(
+        detail::construct_type_at<Type>(
             ptr, ((void)sizeof(Args),
                   constructor_argument_impl<T, Context, Container,
                                             typename Args::tag_type>(

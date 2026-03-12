@@ -9,6 +9,7 @@
 
 #include <dingo/config.h>
 
+#include <dingo/detail/storage_conversion_traits.h>
 #include <dingo/decay.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/storage.h>
@@ -18,49 +19,34 @@ namespace dingo {
 struct unique {};
 
 namespace detail {
-template <typename Type, typename U> struct conversions<unique, Type, U> {
-    using value_types = type_list<U, std::optional<U>>;
+template <typename Type, typename U>
+struct conversions<unique, Type, U,
+                   std::enable_if_t<is_plain_value_registration_v<Type, U>>> {
+    using value_types =
+        type_list_cat_t<type_list<U>, unique_optional_result_types_t<Type, U>>;
     using lvalue_reference_types = type_list<U&>;
-    using rvalue_reference_types = type_list<U&&, std::optional<U>&&>;
+    using rvalue_reference_types = type_list_cat_t<
+        type_list<U&&>, unique_optional_rvalue_types_t<Type, U>>;
     using pointer_types = type_list<>;
-    using conversion_types = type_list<std::optional<U>>;
+    using conversion_types = unique_optional_result_types_t<Type, U>;
 };
 
 template <typename Type, typename U> struct conversions<unique, Type*, U> {
-    using value_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
+    using value_types = unique_result_value_types_t<Type*, U>;
     using lvalue_reference_types = type_list<>;
-    using rvalue_reference_types =
-        type_list<std::unique_ptr<U>&&, std::shared_ptr<U>&&>;
+    using rvalue_reference_types = unique_result_rvalue_types_t<Type*, U>;
     using pointer_types = type_list<U*>;
-    using conversion_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
+    using conversion_types = value_types;
 };
 
 template <typename Type, typename U>
-struct conversions<unique, std::shared_ptr<Type>, U> {
-    using value_types = type_list<std::shared_ptr<U>>;
+struct conversions<unique, Type, U,
+                   std::enable_if_t<is_wrapper_registration_v<Type, U>>> {
+    using value_types = unique_result_value_types_t<Type, U>;
     using lvalue_reference_types = type_list<>;
-    using rvalue_reference_types = type_list<std::shared_ptr<U>&&>;
+    using rvalue_reference_types = unique_result_rvalue_types_t<Type, U>;
     using pointer_types = type_list<>;
-    using conversion_types = type_list<std::shared_ptr<U>>;
-};
-
-template <typename Type, typename U>
-struct conversions<unique, std::unique_ptr<Type>, U> {
-    using value_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
-    using lvalue_reference_types = type_list<>;
-    using rvalue_reference_types =
-        type_list<std::unique_ptr<U>&&, std::shared_ptr<U>&&>;
-    using pointer_types = type_list<>;
-    using conversion_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
-};
-
-template <typename Type, typename U>
-struct conversions<unique, std::optional<Type>, U> {
-    using value_types = type_list<std::optional<U>>;
-    using lvalue_reference_types = type_list<>;
-    using rvalue_reference_types = type_list<std::optional<U>&&>;
-    using pointer_types = type_list<>;
-    using conversion_types = type_list<std::optional<U>>;
+    using conversion_types = value_types;
 };
 
 template <typename Type, typename StoredType, typename Factory,

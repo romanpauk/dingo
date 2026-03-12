@@ -10,6 +10,8 @@
 #include <dingo/config.h>
 
 #include <dingo/aligned_storage.h>
+#include <dingo/detail/storage_conversion_traits.h>
+#include <dingo/detail/wrapper_storage.h>
 #include <dingo/decay.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/storage.h>
@@ -19,7 +21,9 @@ namespace dingo {
 struct shared {};
 
 namespace detail {
-template <typename Type, typename U> struct conversions<shared, Type, U> {
+template <typename Type, typename U>
+struct conversions<shared, Type, U,
+                   std::enable_if_t<is_plain_value_registration_v<Type, U>>> {
     using value_types = type_list<U>;
     using lvalue_reference_types = type_list<U&>;
     using rvalue_reference_types = type_list<>;
@@ -36,30 +40,26 @@ template <typename Type, typename U> struct conversions<shared, Type*, U> {
 };
 
 template <typename Type, typename U>
-struct conversions<shared, std::shared_ptr<Type>, U> {
-    using value_types = type_list<U, std::shared_ptr<U>>;
-    using lvalue_reference_types = type_list<U&, std::shared_ptr<U>&>;
+struct conversions<shared, Type, U,
+                   std::enable_if_t<is_wrapper_registration_v<Type, U>>> {
+    using value_types = type_list_cat_t<
+        type_list_if_t<wrapper_traits<wrapper_base_t<Type>>::is_indirect, U>,
+        type_list_if_t<wrapper_traits<wrapper_base_t<Type>>::is_indirect &&
+                           has_copyable_wrapper_rebind_v<Type, U>,
+                       storage_rebind_t<Type, U>>>;
+    using lvalue_reference_types =
+        type_list_cat_t<type_list<U&>,
+                        type_list_if_t<has_wrapper_rebind_v<Type, U>,
+                                       storage_rebind_t<Type, U>&>>;
     using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, std::shared_ptr<U>*>;
-    using conversion_types = type_list<std::shared_ptr<U>>;
-};
-
-template <typename Type, typename U>
-struct conversions<shared, std::unique_ptr<Type>, U> {
-    using value_types = type_list<U>;
-    using lvalue_reference_types = type_list<U&, std::unique_ptr<U>&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, std::unique_ptr<U>*>;
-    using conversion_types = type_list<>;
-};
-
-template <typename Type, typename U>
-struct conversions<shared, std::optional<Type>, U> {
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<U&, std::optional<U>&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, std::optional<U>*>;
-    using conversion_types = type_list<>;
+    using pointer_types =
+        type_list_cat_t<type_list<U*>,
+                        type_list_if_t<has_wrapper_rebind_v<Type, U>,
+                                       storage_rebind_t<Type, U>*>>;
+    using conversion_types =
+        type_list_if_t<wrapper_traits<wrapper_base_t<Type>>::is_indirect &&
+                           has_copyable_wrapper_rebind_v<Type, U>,
+                       storage_rebind_t<Type, U>>;
 };
 
 template <typename Type, typename Factory>
@@ -123,11 +123,10 @@ struct storage_instance_dtor<Type, Factory, false>
 };
 
 template <typename Type, typename StoredType, typename Factory>
-class storage_instance<shared, Type, StoredType, Factory>
-    : public storage_instance_dtor<Type, Factory> {
+class shared_storage_instance_value : public storage_instance_dtor<Type, Factory> {
   public:
     template <typename... Args>
-    storage_instance(Args&&... args)
+    shared_storage_instance_value(Args&&... args)
         : storage_instance_dtor<Type, Factory>(std::forward<Args>(args)...) {}
 
     static_assert(
@@ -136,105 +135,76 @@ class storage_instance<shared, Type, StoredType, Factory>
 };
 
 template <typename Type, typename StoredType, typename Factory>
-class storage_instance<shared, std::unique_ptr<Type>,
-                       std::unique_ptr<StoredType>, Factory> : Factory {
+class shared_storage_instance_wrapper
+    : public shared_wrapper_storage_instance<Type, StoredType, Factory> {
   public:
     template <typename... Args>
-    storage_instance(Args&&... args) : Factory(std::forward<Args>(args)...) {}
+    shared_storage_instance_wrapper(Args&&... args)
+        : shared_wrapper_storage_instance<Type, StoredType, Factory>(
+              std::forward<Args>(args)...) {}
+};
 
-    template <typename Context, typename Container>
-    void construct(Context& context, Container& container) {
-        assert(!instance_);
-        instance_ = Factory::template construct<std::unique_ptr<Type>>(
-            context, container);
-    }
+template <typename Type, typename StoredType, typename Factory,
+          bool IsWrapper>
+class shared_storage_instance_impl;
 
-    std::unique_ptr<StoredType>& get() const { return instance_; }
-    void reset() { instance_.reset(); }
-    bool empty() const { return instance_.get() == nullptr; }
+template <typename Type, typename StoredType, typename Factory>
+class shared_storage_instance_impl<Type, StoredType, Factory, false>
+    : public shared_storage_instance_value<Type, StoredType, Factory> {
+    using instance_type = shared_storage_instance_value<Type, StoredType, Factory>;
 
-  private:
-    mutable std::unique_ptr<StoredType> instance_;
+  public:
+    template <typename... Args>
+    shared_storage_instance_impl(Args&&... args)
+        : instance_type(std::forward<Args>(args)...) {}
 };
 
 template <typename Type, typename StoredType, typename Factory>
-class storage_instance<shared, std::shared_ptr<Type>,
-                       std::shared_ptr<StoredType>, Factory> : Factory {
+class shared_storage_instance_impl<Type, StoredType, Factory, true>
+    : public shared_storage_instance_wrapper<Type, StoredType, Factory> {
+    using instance_type =
+        shared_storage_instance_wrapper<Type, StoredType, Factory>;
+
   public:
     template <typename... Args>
-    storage_instance(Args&&... args) : Factory(std::forward<Args>(args)...) {}
+    shared_storage_instance_impl(Args&&... args)
+        : instance_type(std::forward<Args>(args)...) {}
+};
 
-    template <typename Context, typename Container>
-    void construct(Context& context, Container& container) {
-        assert(!instance_);
-        instance_ = Factory::template construct<std::shared_ptr<Type>>(
-            context, container);
-    }
+template <typename Type, typename StoredType, typename Factory>
+class storage_instance<shared, Type, StoredType, Factory>
+    : public shared_storage_instance_impl<Type, StoredType, Factory,
+                                          is_wrapper_object_v<Type>> {
+    using instance_type = shared_storage_instance_impl<
+        Type, StoredType, Factory, is_wrapper_object_v<Type>>;
 
-    std::shared_ptr<StoredType>& get() const { return instance_; }
-    void reset() { instance_.reset(); }
-    bool empty() const { return instance_.get() == nullptr; }
-
-  private:
-    mutable std::shared_ptr<StoredType> instance_;
+  public:
+    template <typename... Args>
+    storage_instance(Args&&... args) : instance_type(std::forward<Args>(args)...) {}
 };
 
 // TODO: the container should act as a vector of pointers, so this should not
 // delete
 template <typename Type, typename StoredType, typename Factory>
 class storage_instance<shared, Type*, StoredType*, Factory>
-    : public storage_instance<shared, std::unique_ptr<Type>,
-                              std::unique_ptr<StoredType>, Factory> {
+    : public shared_wrapper_storage_instance<std::unique_ptr<Type>,
+                                             std::unique_ptr<StoredType>,
+                                             Factory> {
+    using instance_type =
+        shared_wrapper_storage_instance<std::unique_ptr<Type>,
+                                        std::unique_ptr<StoredType>, Factory>;
+
   public:
     template <typename... Args>
-    storage_instance(Args&&... args)
-        : storage_instance<shared, std::unique_ptr<Type>,
-                           std::unique_ptr<StoredType>, Factory>(
-              std::forward<Args>(args)...) {}
+    storage_instance(Args&&... args) : instance_type(std::forward<Args>(args)...) {}
 
-    template <typename Context, typename Container>
-    void construct(Context& context, Container& container) {
-        storage_instance<shared, std::unique_ptr<Type>,
-                         std::unique_ptr<StoredType>,
-                         Factory>::construct(context, container);
-    }
-
-    StoredType* get() const {
-        return storage_instance<shared, std::unique_ptr<Type>,
-                                std::unique_ptr<StoredType>, Factory>::get()
-            .get();
-    }
-};
-
-template <typename Type, typename StoredType, typename Factory>
-class storage_instance<shared, std::optional<Type>, StoredType, Factory>
-    : Factory {
-  public:
-    template <typename... Args>
-    storage_instance(Args&&... args) : Factory(std::forward<Args>(args)...) {}
-
-    template <typename Context, typename Container>
-    void construct(Context& context, Container& container) {
-        instance_.emplace(
-            Factory::template construct<Type>(context, container));
-    }
-
-    std::optional<Type>& get() const { return instance_; }
-
-    void reset() { instance_.reset(); }
-    bool empty() const { return !instance_.has_value(); }
-
-  private:
-    mutable std::optional<Type> instance_;
+    StoredType* get() const { return instance_type::get().get(); }
 };
 
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
 class storage<shared, Type, StoredType, Factory, Conversions>
     : public resettable_i {
-    // TODO
-    // static_assert(std::is_trivially_destructible_v< Type > ==
-    // std::is_trivially_destructible_v< storage_instance< Type, shared > >);
     storage_instance<shared, Type, StoredType, Factory> instance_;
 
   public:

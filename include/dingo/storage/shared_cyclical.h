@@ -10,12 +10,11 @@
 #include <dingo/config.h>
 
 #include <dingo/aligned_storage.h>
+#include <dingo/detail/storage_conversion_traits.h>
+#include <dingo/detail/wrapper_storage.h>
 #include <dingo/decay.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/storage.h>
-
-#include <atomic>
-#include <memory>
 
 namespace dingo {
 struct shared_cyclical {};
@@ -45,12 +44,40 @@ static constexpr bool is_virtual_base_of_v =
     is_virtual_base_of<Base, Derived>::value;
 
 namespace detail {
+template <typename Type, typename Interface, typename = void>
+struct supports_shared_cyclical_wrapper_conversion : std::false_type {};
+
+template <typename Type, typename Interface>
+struct supports_shared_cyclical_wrapper_conversion<
+    Type, Interface, std::enable_if_t<has_wrapper_rebind_v<Type, Interface>>>
+    : std::bool_constant<
+          is_wrapper_registration_v<Type, Interface> &&
+          supports_shared_cyclical_wrapper_types_v<
+              Type, storage_rebind_t<Type, Interface>>> {};
+
+template <typename Type, typename Interface>
+inline constexpr bool supports_shared_cyclical_wrapper_conversion_v =
+    supports_shared_cyclical_wrapper_conversion<Type, Interface>::value;
+
 template <typename Type, typename U>
-struct conversions<shared_cyclical, Type, U> {
+struct conversions<shared_cyclical, Type, U,
+                   std::enable_if_t<is_plain_value_registration_v<Type, U>>> {
     using value_types = type_list<>;
     using lvalue_reference_types = type_list<U&>;
     using rvalue_reference_types = type_list<>;
     using pointer_types = type_list<U*>;
+    using conversion_types = type_list<>;
+};
+
+template <typename Type, typename U>
+struct conversions<
+    shared_cyclical, Type, U,
+    std::enable_if_t<is_wrapper_registration_v<Type, U> &&
+                     !supports_shared_cyclical_wrapper_conversion_v<Type, U>>> {
+    using value_types = type_list<>;
+    using lvalue_reference_types = type_list<>;
+    using rvalue_reference_types = type_list<>;
+    using pointer_types = type_list<>;
     using conversion_types = type_list<>;
 };
 
@@ -64,12 +91,24 @@ struct conversions<shared_cyclical, Type*, U> {
 };
 
 template <typename Type, typename U>
-struct conversions<shared_cyclical, std::shared_ptr<Type>, U> {
-    using value_types = type_list<std::shared_ptr<U>>;
-    using lvalue_reference_types = type_list<U&, std::shared_ptr<U>&>;
+struct conversions<
+    shared_cyclical, Type, U,
+    std::enable_if_t<supports_shared_cyclical_wrapper_conversion_v<Type, U>>> {
+    using value_types =
+        type_list_if_t<has_copyable_wrapper_rebind_v<Type, U>,
+                       storage_rebind_t<Type, U>>;
+    using lvalue_reference_types =
+        type_list_cat_t<type_list<U&>,
+                        type_list_if_t<has_wrapper_rebind_v<Type, U>,
+                                       storage_rebind_t<Type, U>&>>;
     using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, std::shared_ptr<U>*>;
-    using conversion_types = type_list<std::shared_ptr<U>>;
+    using pointer_types =
+        type_list_cat_t<type_list<U*>,
+                        type_list_if_t<has_wrapper_rebind_v<Type, U>,
+                                       storage_rebind_t<Type, U>*>>;
+    using conversion_types =
+        type_list_if_t<has_copyable_wrapper_rebind_v<Type, U>,
+                       storage_rebind_t<Type, U>>;
 };
 
 // Disallow virtual bases as interfaces as in cyclical storage, we can't
@@ -154,61 +193,19 @@ class storage_instance_shared_impl<Type, Factory, true> : Factory {
 
 template <typename Type, typename StoredType, typename Factory>
 class storage_instance<shared_cyclical, Type, StoredType, Factory>
-    : public storage_instance_shared_impl<Type, Factory> {
+    : public std::conditional_t<
+          supports_shared_cyclical_wrapper_storage_v<Type, StoredType>,
+          shared_cyclical_wrapper_storage_instance<Type, StoredType, Factory>,
+          storage_instance_shared_impl<Type, Factory>> {
+    using instance_type = std::conditional_t<
+        supports_shared_cyclical_wrapper_storage_v<Type, StoredType>,
+        shared_cyclical_wrapper_storage_instance<Type, StoredType, Factory>,
+        storage_instance_shared_impl<Type, Factory>>;
+
   public:
     template <typename... Args>
     storage_instance(Args&&... args)
-        : storage_instance_shared_impl<Type, Factory>(
-              std::forward<Args>(args)...) {}
-};
-
-template <typename Type, typename StoredType, typename Factory>
-class storage_instance<shared_cyclical, std::shared_ptr<Type>,
-                       std::shared_ptr<StoredType>, Factory> : Factory {
-    using storage_type = dingo::aligned_storage_t<sizeof(Type), alignof(Type)>;
-    
-    class deleter {
-      public:
-        void set_constructed() { constructed_ = true; }
-
-        void operator()(Type* ptr) {
-            if constexpr (!std::is_trivially_destructible_v<Type>) {
-                if (constructed_)
-                    ptr->~Type();
-            }
-
-            delete reinterpret_cast<storage_type*>(ptr);
-        }
-
-      private:
-        bool constructed_ = false;
-    };
-
-  public:
-    template <typename... Args>
-    storage_instance(Args&&... args) : Factory(std::forward<Args>(args)...) {}
-
-    template <typename Context> std::shared_ptr<StoredType>& resolve(Context&) {
-        assert(!instance_);
-        instance_.reset(reinterpret_cast<Type*>(new storage_type), deleter());
-        return instance_;
-    }
-
-    std::shared_ptr<StoredType>& get() { return instance_; }
-
-    template <typename Context, typename Container>
-    void construct(Context& context, Container& container) {
-        assert(instance_);
-        Factory::template construct<Type*>(instance_.get(), context, container);
-        std::get_deleter<deleter>(instance_)->set_constructed();
-    }
-
-    bool empty() const { return !instance_; }
-
-    void reset() { instance_.reset(); }
-
-  private:
-    std::shared_ptr<StoredType> instance_;
+        : instance_type(std::forward<Args>(args)...) {}
 };
 
 template <typename Type, typename StoredType, typename Factory,
