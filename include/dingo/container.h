@@ -23,7 +23,6 @@
 #include <dingo/rtti/static_provider.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/static_allocator.h>
-#include <dingo/storage/unique.h> // TODO
 #include <dingo/type_cache.h>
 #include <dingo/type_map.h>
 #include <dingo/type_registration.h>
