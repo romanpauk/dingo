@@ -14,7 +14,7 @@
 
 namespace dingo {
 
-TEST(component_container_test, shared_unique_graph) {
+TEST(bindings_container_test, shared_unique_graph) {
     struct Logger {};
     struct Service {
         explicit Service(Logger& logger) : logger_(logger) {}
@@ -22,17 +22,17 @@ TEST(component_container_test, shared_unique_graph) {
     };
 
     using application =
-        component<registration<scope<shared>, storage<Logger>>,
+        bindings<registration<scope<shared>, storage<Logger>>,
                   registration<scope<unique>, storage<Service>>>;
 
-    component_container<application> container;
+    bindings_container<application> container;
     auto service = container.resolve<Service>();
     auto& logger = container.resolve<Logger&>();
 
     ASSERT_EQ(&service.logger_, &logger);
 }
 
-TEST(component_container_test, nested_autodetected_graph) {
+TEST(bindings_container_test, nested_autodetected_graph) {
     struct Logger {};
     struct Repository {
         explicit Repository(Logger& logger) : logger_(logger) {}
@@ -46,11 +46,11 @@ TEST(component_container_test, nested_autodetected_graph) {
     };
 
     using application =
-        component<registration<scope<shared>, storage<Logger>>,
+        bindings<registration<scope<shared>, storage<Logger>>,
                   registration<scope<shared>, storage<Repository>>,
                   registration<scope<unique>, storage<Service>>>;
 
-    component_container<application> container;
+    bindings_container<application> container;
     auto service = container.resolve<Service>();
     auto& logger = container.resolve<Logger&>();
     auto& repository = container.resolve<Repository&>();
@@ -60,7 +60,100 @@ TEST(component_container_test, nested_autodetected_graph) {
     ASSERT_EQ(&repository.logger_, &logger);
 }
 
-TEST(component_container_test, shared_interface_conversion_cache) {
+TEST(bindings_container_test, bindings_factory_call) {
+    struct Logger {
+        int value() const { return 7; }
+    };
+    struct Service {
+        explicit Service(Logger& logger) : value_(logger.value()) {}
+        int value_;
+    };
+
+    using application = bindings<registration<scope<shared>, storage<Logger>>>;
+
+    auto service = factory<application, Service>{}();
+
+    ASSERT_EQ(service.value_, 7);
+}
+
+TEST(bindings_container_test, open_root_resolve_with_bind) {
+    struct Logger {
+        int value() const { return 7; }
+    };
+    struct Repository {
+        explicit Repository(Logger& logger) : logger_(logger) {}
+        Logger& logger_;
+    };
+    struct Service {
+        Service(Repository& repository, Logger& logger)
+            : repository_(repository), logger_(logger) {}
+        Repository& repository_;
+        Logger& logger_;
+    };
+
+    using application =
+        bindings<registration<scope<shared>, storage<Repository>>>;
+
+    Logger logger;
+    bindings_container<application> container;
+    auto service = container.resolve<Service>(bind<Logger&>(logger));
+    auto& repository = container.resolve<Repository&>(bind<Logger&>(logger));
+
+    ASSERT_EQ(&service.logger_, &logger);
+    ASSERT_EQ(&service.repository_, &repository);
+    ASSERT_EQ(&repository.logger_, &logger);
+}
+
+TEST(bindings_container_test, bindings_factory_call_with_bind) {
+    struct Logger {
+        int value() const { return 7; }
+    };
+    struct Service {
+        explicit Service(Logger& logger) : value_(logger.value()) {}
+        int value_;
+    };
+
+    using application = bindings<>;
+
+    Logger logger;
+    auto service = factory<application, Service>{}(bind<Logger&>(logger));
+
+    ASSERT_EQ(service.value_, 7);
+}
+
+TEST(bindings_container_test, external_reference_graph) {
+    struct ILogger {
+        virtual ~ILogger() = default;
+        virtual int value() const = 0;
+    };
+    struct Logger : ILogger {
+        int value() const override { return 7; }
+    };
+    struct Service {
+        explicit Service(ILogger& logger) : logger_(logger) {}
+        ILogger& logger_;
+    };
+
+    using application =
+        bindings<registration<scope<external>, storage<Logger&>,
+                               interfaces<ILogger>>,
+                  registration<scope<unique>, storage<Service>>>;
+
+    static_assert(bindings_constructible_v<application, Service>);
+    static_assert(!std::is_default_constructible_v<
+                  bindings_container<application>>);
+
+    Logger logger;
+    bindings_container<application> container(bind<ILogger&>(logger));
+    auto service = container.resolve<Service>();
+    auto& interface = container.resolve<ILogger&>();
+
+    ASSERT_EQ(&service.logger_, &interface);
+    ASSERT_EQ(&interface, &logger);
+    ASSERT_EQ(interface.value(), 7);
+}
+
+TEST(bindings_container_test, shared_interface_conversion_cache) {
     struct IService {
         virtual ~IService() = default;
     };
@@ -68,10 +161,10 @@ TEST(component_container_test, shared_interface_conversion_cache) {
     struct Service : IService {};
 
     using application =
-        component<registration<scope<shared>, storage<std::shared_ptr<Service>>,
+        bindings<registration<scope<shared>, storage<std::shared_ptr<Service>>,
                                interfaces<IService>>>;
 
-    component_container<application> container;
+    bindings_container<application> container;
     auto& service1 = container.resolve<std::shared_ptr<IService>&>();
     auto& service2 = container.resolve<std::shared_ptr<IService>&>();
 
@@ -79,7 +172,7 @@ TEST(component_container_test, shared_interface_conversion_cache) {
     ASSERT_EQ(service1.get(), service2.get());
 }
 
-TEST(component_container_test, indexed_resolution) {
+TEST(bindings_container_test, indexed_resolution) {
     struct IAnimal {
         virtual ~IAnimal() = default;
         virtual int sound() const = 0;
@@ -94,12 +187,12 @@ TEST(component_container_test, indexed_resolution) {
     };
 
     using animals =
-        component<indexed_registration<value_id<size_t, 1>, scope<shared>,
+        bindings<indexed_registration<value_id<size_t, 1>, scope<shared>,
                                        storage<Dog>, interfaces<IAnimal>>,
                   indexed_registration<value_id<size_t, 2>, scope<shared>,
                                        storage<Cat>, interfaces<IAnimal>>>;
 
-    component_container<animals> container;
+    bindings_container<animals> container;
 
     ASSERT_EQ((container.resolve<indexed_request<IAnimal&, value_id<size_t, 1>>>()
                    .sound()),
@@ -109,7 +202,7 @@ TEST(component_container_test, indexed_resolution) {
               2);
 }
 
-TEST(component_container_test, unmanaged_construct) {
+TEST(bindings_container_test, unmanaged_construct) {
     struct Logger {};
     struct Service {
         explicit Service(Logger& logger) : logger_(logger) {}
@@ -121,17 +214,17 @@ TEST(component_container_test, unmanaged_construct) {
     };
 
     using application =
-        component<registration<scope<shared>, storage<Logger>>,
+        bindings<registration<scope<shared>, storage<Logger>>,
                   registration<scope<unique>, storage<Service>>>;
 
-    component_container<application> container;
+    bindings_container<application> container;
     auto unmanaged = container.construct<Unmanaged>();
     auto& logger = container.resolve<Logger&>();
 
     ASSERT_EQ(&unmanaged.service_.logger_, &logger);
 }
 
-TEST(component_container_test, explicit_constructor_factory) {
+TEST(bindings_container_test, explicit_constructor_factory) {
     struct Logger {};
     struct Service {
         explicit Service(Logger& logger) : logger_(logger) {}
@@ -143,11 +236,11 @@ TEST(component_container_test, explicit_constructor_factory) {
                   std::tuple<Logger&>>);
 
     using application =
-        component<registration<scope<shared>, storage<Logger>>,
+        bindings<registration<scope<shared>, storage<Logger>>,
                   registration<scope<unique>, storage<Service>,
                                factory<constructor<Service(Logger&)>>>>;
 
-    component_container<application> container;
+    bindings_container<application> container;
     auto service = container.resolve<Service>();
     auto& logger = container.resolve<Logger&>();
 

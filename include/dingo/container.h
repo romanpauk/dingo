@@ -14,8 +14,8 @@
 #include <dingo/class_instance_factory.h>
 #include <dingo/class_instance_factory_traits.h>
 #include <dingo/collection_traits.h>
-#include <dingo/component.h>
-#include <dingo/component_container.h>
+#include <dingo/bindings.h>
+#include <dingo/bindings_container.h>
 #include <dingo/decay.h>
 #include <dingo/exceptions.h>
 #include <dingo/factory/callable.h>
@@ -168,6 +168,29 @@ class container : public allocator_base<Allocator> {
             return construct_collection<
                 typename registration::storage_type::type>(fn);
         }));
+    }
+
+    template <typename Factory>
+    auto& register_factory(Factory&& factory) {
+        using factory_type = std::decay_t<Factory>;
+        using root_type = typename factory_type::root_type;
+        using bindings_type = typename factory_type::bindings_type;
+        using factory_child_container_type =
+            typename container_type::template child_container_type<factory_type>;
+
+        static_assert(
+            !detail::bindings_has_external_bindings<bindings_type>::value,
+            "register_factory does not support external bindings; bind them directly with factory::operator()");
+
+        (void)factory;
+        auto child = std::allocate_shared<factory_child_container_type>(
+            allocator_traits::rebind<factory_child_container_type>(
+                get_allocator()),
+            this, get_allocator());
+        install<bindings_type>(*child);
+        register_type<scope<unique>, storage<root_type>>(
+            callable([child] { return child->template construct<root_type>(); }));
+        return *child;
     }
 
     template <typename... TypeArgs> auto& register_type_collection() {

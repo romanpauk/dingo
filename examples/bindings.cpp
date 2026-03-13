@@ -20,7 +20,7 @@ int main() {
     using namespace dingo;
 
     using application =
-        component<registration<scope<shared>, storage<Logger>>,
+        bindings<registration<scope<shared>, storage<Logger>>,
                   registration<scope<unique>, storage<Service>>>;
 
     container<> container;

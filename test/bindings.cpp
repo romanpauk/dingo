@@ -17,15 +17,15 @@
 #include "test.h"
 
 namespace dingo {
-template <typename T> struct component_test : public test<T> {};
-TYPED_TEST_SUITE(component_test, container_types, );
+template <typename T> struct bindings_test : public test<T> {};
+TYPED_TEST_SUITE(bindings_test, container_types, );
 
-template <typename BaseTraits> struct indexed_component_container_traits : BaseTraits {
+template <typename BaseTraits> struct indexed_bindings_container_traits : BaseTraits {
     using index_definition_type =
         std::tuple<std::tuple<size_t, index_type::array<3>>>;
 };
 
-TEST(component_static_check, autodetected_graph) {
+TEST(bindings_static_check, autodetected_graph) {
     struct Logger {};
     struct Repository {
         explicit Repository(Logger& logger_ref) : logger(logger_ref) {}
@@ -39,22 +39,22 @@ TEST(component_static_check, autodetected_graph) {
     };
 
     using application =
-        component<registration<scope<shared>, storage<Logger>>,
+        bindings<registration<scope<shared>, storage<Logger>>,
                   registration<scope<shared>, storage<Repository>>,
                   registration<scope<unique>, storage<Service>>>;
-    using service_binding = detail::find_component_binding_t<
-        detail::component_bindings_t<application>, Service,
-        detail::component_no_id>;
+    using service_binding = detail::find_binding_definition_t<
+        detail::binding_definitions_t<application>, Service,
+        detail::no_binding_id>;
 
-    static_assert(component_constructible_v<application, Service>);
-    static_assert(component_resolvable_v<application, Logger&>);
+    static_assert(bindings_constructible_v<application, Service>);
+    static_assert(bindings_resolvable_v<application, Logger&>);
     static_assert(std::is_same_v<
-                  detail::component_binding_factory_argument_types_t<
+                  detail::binding_factory_adapter_argument_types_t<
                       service_binding, application>,
                   std::tuple<Repository&, Logger&>>);
 }
 
-TEST(component_static_check,
+TEST(bindings_static_check,
      autodetected_graph_prefers_highest_arity_for_default_constructible_type) {
     struct Logger {
         int value = 7;
@@ -71,26 +71,44 @@ TEST(component_static_check,
     };
 
     using application =
-        component<registration<scope<shared>, storage<Logger>>,
+        bindings<registration<scope<shared>, storage<Logger>>,
                   registration<scope<shared>, storage<Repository>>,
                   registration<scope<unique>, storage<Service>>>;
 
-    static_assert(!component_constructible_v<application, Service>);
+    static_assert(!bindings_constructible_v<application, Service>);
 }
 
-TEST(component_static_check, missing_dependency) {
+TEST(bindings_static_check, external_dependency) {
+    struct ILogger {
+        virtual ~ILogger() = default;
+    };
+    struct Logger : ILogger {};
+    struct Service {
+        explicit Service(ILogger&) {}
+    };
+
+    using application =
+        bindings<registration<scope<external>, storage<Logger&>,
+                               interfaces<ILogger>>,
+                  registration<scope<unique>, storage<Service>>>;
+
+    static_assert(bindings_constructible_v<application, Service>);
+    static_assert(bindings_resolvable_v<application, ILogger&>);
+}
+
+TEST(bindings_static_check, missing_dependency) {
     struct Missing {};
     struct Service {
         explicit Service(Missing&) {}
     };
 
     using application =
-        component<registration<scope<unique>, storage<Service>>>;
+        bindings<registration<scope<unique>, storage<Service>>>;
 
-    static_assert(!component_constructible_v<application, Service>);
+    static_assert(!bindings_constructible_v<application, Service>);
 }
 
-TEST(component_static_check, ambiguous_binding) {
+TEST(bindings_static_check, ambiguous_binding) {
     struct IValue {
         virtual ~IValue() = default;
     };
@@ -98,13 +116,13 @@ TEST(component_static_check, ambiguous_binding) {
     struct ValueB : IValue {};
 
     using application =
-        component<registration<scope<shared>, storage<ValueA>, interfaces<IValue>>,
+        bindings<registration<scope<shared>, storage<ValueA>, interfaces<IValue>>,
                   registration<scope<shared>, storage<ValueB>, interfaces<IValue>>>;
 
-    static_assert(!component_constructible_v<application, IValue&>);
+    static_assert(!bindings_constructible_v<application, IValue&>);
 }
 
-TEST(component_static_check, cycle_policy) {
+TEST(bindings_static_check, cycle_policy) {
     struct B;
 
     struct A {
@@ -116,34 +134,34 @@ TEST(component_static_check, cycle_policy) {
     };
 
     using invalid_cycle =
-        component<registration<scope<shared>, storage<A>>,
+        bindings<registration<scope<shared>, storage<A>>,
                   registration<scope<shared>, storage<B>>>;
     using valid_cycle =
-        component<registration<scope<shared_cyclical>, storage<A>>,
+        bindings<registration<scope<shared_cyclical>, storage<A>>,
                   registration<scope<shared_cyclical>, storage<B>>>;
 
-    static_assert(!component_constructible_v<invalid_cycle, A&>);
-    static_assert(component_constructible_v<valid_cycle, A&>);
+    static_assert(!bindings_constructible_v<invalid_cycle, A&>);
+    static_assert(bindings_constructible_v<valid_cycle, A&>);
 }
 
-TEST(component_static_check, indexed_request) {
+TEST(bindings_static_check, indexed_request) {
     struct IAnimal {
         virtual ~IAnimal() = default;
     };
     struct Dog : IAnimal {};
 
     using animals =
-        component<indexed_registration<value_id<size_t, 1>, scope<shared>,
+        bindings<indexed_registration<value_id<size_t, 1>, scope<shared>,
                                        storage<Dog>, interfaces<IAnimal>>>;
 
-    static_assert(component_resolvable_v<animals, IAnimal&,
+    static_assert(bindings_resolvable_v<animals, IAnimal&,
                                          value_id<size_t, 1>>);
-    static_assert(component_constructible_v<
+    static_assert(bindings_constructible_v<
                   animals,
                   indexed_request<IAnimal&, value_id<size_t, 1>>>);
 }
 
-TYPED_TEST(component_test, install_component) {
+TYPED_TEST(bindings_test, install_component) {
     using container_type = TypeParam;
 
     struct A {};
@@ -153,7 +171,7 @@ TYPED_TEST(component_test, install_component) {
     };
 
     using app_component =
-        component<registration<scope<shared>, storage<A>>,
+        bindings<registration<scope<shared>, storage<A>>,
                   registration<scope<unique>, storage<B>>>;
 
     container_type container;
@@ -165,7 +183,7 @@ TYPED_TEST(component_test, install_component) {
     ASSERT_EQ(&b.a_, &a);
 }
 
-TYPED_TEST(component_test, install_autodetected_graph) {
+TYPED_TEST(bindings_test, install_autodetected_graph) {
     using container_type = TypeParam;
 
     struct Logger {};
@@ -181,7 +199,7 @@ TYPED_TEST(component_test, install_autodetected_graph) {
     };
 
     using application =
-        component<registration<scope<shared>, storage<Logger>>,
+        bindings<registration<scope<shared>, storage<Logger>>,
                   registration<scope<shared>, storage<Repository>>,
                   registration<scope<unique>, storage<Service>>>;
 
@@ -197,7 +215,33 @@ TYPED_TEST(component_test, install_autodetected_graph) {
     ASSERT_EQ(&repository.logger_, &logger);
 }
 
-TYPED_TEST(component_test, install_nested_component) {
+TYPED_TEST(bindings_test, register_factory_uses_parent_runtime_dependencies) {
+    using container_type = TypeParam;
+
+    struct Logger {};
+    struct Repository {
+        explicit Repository(Logger& logger) : logger_(logger) {}
+        Logger& logger_;
+    };
+    struct Service {
+        explicit Service(Repository& repository) : repository_(repository) {}
+        Repository& repository_;
+    };
+
+    using application =
+        bindings<registration<scope<shared>, storage<Repository>>>;
+
+    container_type container;
+    container.template register_type<scope<shared>, storage<Logger>>();
+    container.register_factory(factory<application, Service>{});
+
+    auto service = container.template resolve<Service>();
+    auto& logger = container.template resolve<Logger&>();
+
+    ASSERT_EQ(&service.repository_.logger_, &logger);
+}
+
+TYPED_TEST(bindings_test, install_nested_component) {
     using container_type = TypeParam;
 
     struct IValue {
@@ -210,8 +254,8 @@ TYPED_TEST(component_test, install_nested_component) {
     };
 
     using infrastructure =
-        component<registration<scope<shared>, storage<Value>, interfaces<IValue>>>;
-    using application = component<infrastructure>;
+        bindings<registration<scope<shared>, storage<Value>, interfaces<IValue>>>;
+    using application = bindings<infrastructure>;
 
     container_type container;
     install<application>(container);
@@ -219,7 +263,7 @@ TYPED_TEST(component_test, install_nested_component) {
     ASSERT_EQ(container.template resolve<IValue&>().value(), 7);
 }
 
-TYPED_TEST(component_test, install_indexed_component) {
+TYPED_TEST(bindings_test, install_indexed_bindings) {
     struct IAnimal {
         virtual ~IAnimal() = default;
         virtual int sound() const = 0;
@@ -233,11 +277,11 @@ TYPED_TEST(component_test, install_indexed_component) {
         int sound() const override { return 2; }
     };
 
-    using container_traits = indexed_component_container_traits<
+    using container_traits = indexed_bindings_container_traits<
         typename TypeParam::container_traits_type>;
 
     using animal_component =
-        component<indexed_registration<value_id<size_t, 1>, scope<shared>,
+        bindings<indexed_registration<value_id<size_t, 1>, scope<shared>,
                                        storage<Dog>, interfaces<IAnimal>>,
                   indexed_registration<value_id<size_t, 2>, scope<shared>,
                                        storage<Cat>, interfaces<IAnimal>>>;
