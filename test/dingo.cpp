@@ -98,32 +98,28 @@ TYPED_TEST(dingo_test, type_already_registered) {
 TYPED_TEST(dingo_test, shared_unique_reference) {
     using container_type = TypeParam;
 
-    struct UniqueBase {
-        UniqueBase() {}
-        int value = 1;
-    };
-
     struct Unique {
-        Unique(UniqueBase& base): base_(base) {}
-        UniqueBase& base_;
+        Unique() = default;
+        std::shared_ptr<int> token = std::make_shared<int>(1);
     };
 
     struct Shared {
-        Shared(Unique& a): a_(a) {}
-        Unique& a_;
+        Shared(Unique& unique) : token(unique.token) {}
+        std::weak_ptr<int> token;
     };
 
     container_type container;
     container.template register_type<scope<shared>, storage<Shared>>();
-    container.template register_type<scope<unique>, storage<Unique>>();
-    container.template register_type<scope<unique>, storage<UniqueBase>>();
+    container.template register_type<scope<unique>, storage<Unique>,
+                                     factory<constructor<Unique()>>>();
 
     // TODO: We need to detect that we are returning dangling reference to unique instance
     // For top-level container.resolve(), the reference is removed and copy is returned.
     // For recursively instantiated types, the context type needs to be checked. If it is
     // shared scope, all is fine.
     auto& c = container.template resolve<Shared&>();
-    ASSERT_EQ(c.a_.base_.value, 1);
+    ASSERT_FALSE(c.token.expired());
+    ASSERT_FALSE(container.template resolve<Shared&>().token.expired());
 }
 
 TYPED_TEST(dingo_test, shared_unique_reference_exception) {

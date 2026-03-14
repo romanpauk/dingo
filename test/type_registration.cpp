@@ -5,6 +5,13 @@
 // SPDX-License-Identifier: MIT
 //
 
+#include <dingo/class_instance_conversions.h>
+#include <dingo/class_instance_resolver.h>
+#include <dingo/rebind_type.h>
+#include <dingo/rtti/rtti.h>
+#include <dingo/rtti/typeid_provider.h>
+#include <dingo/storage/external.h>
+#include <dingo/storage/shared.h>
 #include <dingo/type_registration.h>
 
 #include <gtest/gtest.h>
@@ -57,4 +64,61 @@ TEST(type_registration_test, registration_deduction) {
         std::is_same_v<
             typename type_registration<scope<int>, storage<int>>::factory_type,
             factory<constructor_detection<int>>>);
+}
+
+TEST(type_registration_test, registration_specialization) {
+    struct A {};
+
+    using shared_registration = type_registration<scope<shared>, storage<A>>;
+    using shared_storage = detail::storage<
+        typename shared_registration::scope_type::type,
+        typename shared_registration::storage_type::type,
+        rebind_type_t<typename shared_registration::storage_type::type,
+                      decay_t<typename shared_registration::storage_type::type>>,
+        typename shared_registration::factory_type::type,
+        typename shared_registration::conversions_type::type>;
+    using shared_resolver =
+        class_instance_resolver<rtti<typeid_provider>, A, shared_storage>;
+
+    using shared_ptr_registration =
+        type_registration<scope<shared>, storage<std::shared_ptr<A>>>;
+    using shared_ptr_storage = detail::storage<
+        typename shared_ptr_registration::scope_type::type,
+        typename shared_ptr_registration::storage_type::type,
+        rebind_type_t<typename shared_ptr_registration::storage_type::type,
+                      decay_t<typename shared_ptr_registration::storage_type::type>>,
+        typename shared_ptr_registration::factory_type::type,
+        typename shared_ptr_registration::conversions_type::type>;
+    using shared_ptr_resolver =
+        class_instance_resolver<rtti<typeid_provider>, A, shared_ptr_storage>;
+
+    using external_registration =
+        type_registration<scope<external>, storage<A&>>;
+    using external_storage = detail::storage<
+        typename external_registration::scope_type::type,
+        typename external_registration::storage_type::type,
+        rebind_type_t<typename external_registration::storage_type::type,
+                      decay_t<typename external_registration::storage_type::type>>,
+        typename external_registration::factory_type::type,
+        typename external_registration::conversions_type::type>;
+    using external_resolver =
+        class_instance_resolver<rtti<typeid_provider>, A, external_storage>;
+
+    using external_shared_registration =
+        type_registration<scope<external>, storage<std::shared_ptr<A>>>;
+    using external_shared_storage = detail::storage<
+        typename external_shared_registration::scope_type::type,
+        typename external_shared_registration::storage_type::type,
+        rebind_type_t<typename external_shared_registration::storage_type::type,
+                      decay_t<typename external_shared_registration::storage_type::type>>,
+        typename external_shared_registration::factory_type::type,
+        typename external_shared_registration::conversions_type::type>;
+    using external_shared_resolver = class_instance_resolver<
+        rtti<typeid_provider>, A, external_shared_storage>;
+
+    static_assert(std::is_empty_v<class_instance_conversions<type_list<>>>);
+    static_assert(
+        std::is_trivially_destructible_v<class_instance_conversions<type_list<>>>);
+    static_assert(sizeof(shared_resolver) < sizeof(shared_ptr_resolver));
+    static_assert(sizeof(external_resolver) < sizeof(external_shared_resolver));
 }
