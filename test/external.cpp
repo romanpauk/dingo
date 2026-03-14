@@ -230,6 +230,8 @@ TYPED_TEST(external_test, optional_ref) {
     container
         .template register_type<scope<external>, storage<std::optional<Class>&>,
                                 interfaces<Class, IClass>>(c);
+    ASSERT_EQ(&container.template resolve<std::optional<Class>&>(), &c);
+    ASSERT_EQ(container.template resolve<Class*>(), std::addressof(c.value()));
     AssertClass(*container.template resolve<std::optional<Class>&>());
     AssertClass(container.template resolve<Class&>());
     AssertClass(container.template resolve<IClass&>());

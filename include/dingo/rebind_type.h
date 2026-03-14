@@ -10,56 +10,49 @@
 #include <dingo/config.h>
 
 #include <dingo/type_list.h>
+#include <dingo/type_traits.h>
 
-#include <memory>
-#include <optional>
+#include <type_traits>
 
 namespace dingo {
 struct runtime_type {};
 
-template <class T, class U> struct rebind_type {
+template <class T, class U, class = void> struct rebind_type {
     using type = U;
 };
 
 template <typename T, typename U>
 using rebind_type_t = typename rebind_type<T, U>::type;
 
-template <class T, class U> struct rebind_type<const T, U> {
+template <class T, class U> struct rebind_type<const T, U, void> {
     using type = typename rebind_type<T, U>::type;
 };
 
-template <class T, class U> struct rebind_type<T&, U> {
+template <class T, class U> struct rebind_type<T&, U, void> {
     using type = typename rebind_type<T, U>::type&;
 };
 
-template <class T, class U> struct rebind_type<T&&, U> {
+template <class T, class U> struct rebind_type<T&&, U, void> {
     using type = typename rebind_type<T, U>::type&&;
 };
 
-template <class T, class U> struct rebind_type<T*, U> {
+template <class T, class U> struct rebind_type<T*, U, void> {
     using type = typename rebind_type<T, U>::type*;
 };
 
-template <class T, class U> struct rebind_type<const T*, U> {
+template <class T, class U> struct rebind_type<const T*, U, void> {
     using type = typename rebind_type<T, U>::type*;
 };
 
-template <class T, class U> struct rebind_type<std::shared_ptr<T>, U> {
-    using type = std::shared_ptr<U>;
-};
-
-template <class T, class U> struct rebind_type<std::optional<T>, U> {
-    using type = std::optional<U>;
-};
-
-// TODO: how to rebind those properly?
-template <class T, class Deleter, class U>
-struct rebind_type<std::unique_ptr<T, Deleter>, U> {
-    using type = std::unique_ptr<U, std::default_delete<U>>;
+template <class T, class U>
+struct rebind_type<
+    T, U,
+    std::enable_if_t<type_traits<T>::enabled && !std::is_pointer_v<T>>> {
+    using type = typename type_traits<T>::template rebind_t<U>;
 };
 
 template <typename U, typename... Args>
-struct rebind_type<type_list<Args...>, U> {
+struct rebind_type<type_list<Args...>, U, void> {
     using type = type_list<typename rebind_type<Args, U>::type...>;
 };
 

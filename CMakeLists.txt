@@ -111,6 +111,7 @@ if(DINGO_DEVELOPMENT_MODE)
         index/array.h
         index/map.h
         index/unordered_map.h
+        interface_storage_traits.h
         rebind_type.h
         resettable_i.h
         resolving_context.h
@@ -125,9 +126,11 @@ if(DINGO_DEVELOPMENT_MODE)
         storage/unique.h
         type_cache.h
         type_conversion.h
+        type_conversion_traits.h
         type_list.h
         type_map.h
         type_registration.h
+        type_storage_traits.h
         type_traits.h
     )
 
@@ -206,6 +209,7 @@ if(DINGO_DEVELOPMENT_MODE)
             test/test.h
             test/type_registration.cpp
             test/unique.cpp
+            test/type_traits.cpp
         )
         add_test(NAME dingo_test COMMAND dingo_test)
         target_link_libraries(dingo_test dingo::dingo gtest_main)

@@ -13,54 +13,15 @@
 #include <dingo/decay.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/storage.h>
-#include <dingo/type_list.h>
+#include <dingo/type_conversion_traits.h>
+#include <dingo/type_storage_traits.h>
 
 namespace dingo {
 struct shared {};
 
 namespace detail {
-template <typename Type, typename U> struct conversions<shared, Type, U> {
-    using value_types = type_list<U>;
-    using lvalue_reference_types = type_list<U&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*>;
-    using conversion_types = type_list<>;
-};
-
-template <typename Type, typename U> struct conversions<shared, Type*, U> {
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<U&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*>;
-    using conversion_types = type_list<>;
-};
-
-template <typename Type, typename U>
-struct conversions<shared, std::shared_ptr<Type>, U> {
-    using value_types = type_list<U, std::shared_ptr<U>>;
-    using lvalue_reference_types = type_list<U&, std::shared_ptr<U>&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, std::shared_ptr<U>*>;
-    using conversion_types = type_list<std::shared_ptr<U>>;
-};
-
-template <typename Type, typename U>
-struct conversions<shared, std::unique_ptr<Type>, U> {
-    using value_types = type_list<U>;
-    using lvalue_reference_types = type_list<U&, std::unique_ptr<U>&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, std::unique_ptr<U>*>;
-    using conversion_types = type_list<>;
-};
-
-template <typename Type, typename U>
-struct conversions<shared, std::optional<Type>, U> {
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<U&, std::optional<U>&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, std::optional<U>*>;
-    using conversion_types = type_list<>;
-};
+template <typename Type, typename U> struct conversions<shared, Type, U>
+    : type_storage_traits<shared, Type, U> {};
 
 template <typename Type, typename Factory>
 struct storage_instance_base : Factory {
@@ -122,12 +83,12 @@ struct storage_instance_dtor<Type, Factory, false>
     }
 };
 
-template <typename Type, typename StoredType, typename Factory>
-class storage_instance<shared, Type, StoredType, Factory>
-    : public storage_instance_dtor<Type, Factory> {
+template <typename Type, typename StoredType, typename Factory,
+          typename = void>
+class shared_storage_instance_impl : public storage_instance_dtor<Type, Factory> {
   public:
     template <typename... Args>
-    storage_instance(Args&&... args)
+    shared_storage_instance_impl(Args&&... args)
         : storage_instance_dtor<Type, Factory>(std::forward<Args>(args)...) {}
 
     static_assert(
@@ -136,96 +97,81 @@ class storage_instance<shared, Type, StoredType, Factory>
 };
 
 template <typename Type, typename StoredType, typename Factory>
-class storage_instance<shared, std::unique_ptr<Type>,
-                       std::unique_ptr<StoredType>, Factory> : Factory {
+class shared_storage_instance_impl<
+    Type, StoredType, Factory, std::enable_if_t<has_type_traits_v<Type>>>
+    : Factory {
   public:
     template <typename... Args>
-    storage_instance(Args&&... args) : Factory(std::forward<Args>(args)...) {}
+    shared_storage_instance_impl(Args&&... args)
+        : Factory(std::forward<Args>(args)...) {}
 
     template <typename Context, typename Container>
     void construct(Context& context, Container& container) {
-        assert(!instance_);
-        instance_ = Factory::template construct<std::unique_ptr<Type>>(
-            context, container);
+        assert(empty());
+        new (&instance_) StoredType(
+            type_conversion_traits<StoredType, Type>::convert(
+                Factory::template construct<Type>(context, container)));
+        initialized_ = true;
     }
 
-    std::unique_ptr<StoredType>& get() const { return instance_; }
-    void reset() { instance_.reset(); }
-    bool empty() const { return instance_.get() == nullptr; }
+    ~shared_storage_instance_impl() { reset(); }
+
+    StoredType& get() const { return *get_ptr(); }
+
+    void reset() {
+        if (initialized_) {
+            get_ptr()->~StoredType();
+            initialized_ = false;
+        }
+    }
+
+    bool empty() const { return !initialized_; }
 
   private:
-    mutable std::unique_ptr<StoredType> instance_;
+    StoredType* get_ptr() const {
+        return reinterpret_cast<StoredType*>(&instance_);
+    }
+
+    mutable aligned_storage_t<sizeof(StoredType), alignof(StoredType)> instance_;
+    bool initialized_ = false;
 };
 
 template <typename Type, typename StoredType, typename Factory>
-class storage_instance<shared, std::shared_ptr<Type>,
-                       std::shared_ptr<StoredType>, Factory> : Factory {
-  public:
-    template <typename... Args>
-    storage_instance(Args&&... args) : Factory(std::forward<Args>(args)...) {}
-
-    template <typename Context, typename Container>
-    void construct(Context& context, Container& container) {
-        assert(!instance_);
-        instance_ = Factory::template construct<std::shared_ptr<Type>>(
-            context, container);
-    }
-
-    std::shared_ptr<StoredType>& get() const { return instance_; }
-    void reset() { instance_.reset(); }
-    bool empty() const { return instance_.get() == nullptr; }
-
-  private:
-    mutable std::shared_ptr<StoredType> instance_;
-};
-
-// TODO: the container should act as a vector of pointers, so this should not
-// delete
-template <typename Type, typename StoredType, typename Factory>
-class storage_instance<shared, Type*, StoredType*, Factory>
-    : public storage_instance<shared, std::unique_ptr<Type>,
-                              std::unique_ptr<StoredType>, Factory> {
+class storage_instance<shared, Type, StoredType, Factory>
+    : public shared_storage_instance_impl<Type, StoredType, Factory> {
   public:
     template <typename... Args>
     storage_instance(Args&&... args)
-        : storage_instance<shared, std::unique_ptr<Type>,
-                           std::unique_ptr<StoredType>, Factory>(
+        : shared_storage_instance_impl<Type, StoredType, Factory>(
               std::forward<Args>(args)...) {}
-
-    template <typename Context, typename Container>
-    void construct(Context& context, Container& container) {
-        storage_instance<shared, std::unique_ptr<Type>,
-                         std::unique_ptr<StoredType>,
-                         Factory>::construct(context, container);
-    }
-
-    StoredType* get() const {
-        return storage_instance<shared, std::unique_ptr<Type>,
-                                std::unique_ptr<StoredType>, Factory>::get()
-            .get();
-    }
 };
 
 template <typename Type, typename StoredType, typename Factory>
-class storage_instance<shared, std::optional<Type>, StoredType, Factory>
+class storage_instance<shared, Type*, StoredType*, Factory>
     : Factory {
   public:
     template <typename... Args>
     storage_instance(Args&&... args) : Factory(std::forward<Args>(args)...) {}
 
+    ~storage_instance() { reset(); }
+
     template <typename Context, typename Container>
     void construct(Context& context, Container& container) {
-        instance_.emplace(
-            Factory::template construct<Type>(context, container));
+        assert(empty());
+        instance_ = Factory::template construct<Type*>(context, container);
     }
 
-    std::optional<Type>& get() const { return instance_; }
-
-    void reset() { instance_.reset(); }
-    bool empty() const { return !instance_.has_value(); }
+    StoredType* get() const {
+        return type_conversion_traits<StoredType*, Type*>::convert(instance_);
+    }
+    void reset() {
+        delete instance_;
+        instance_ = nullptr;
+    }
+    bool empty() const { return instance_ == nullptr; }
 
   private:
-    mutable std::optional<Type> instance_;
+    Type* instance_ = nullptr;
 };
 
 template <typename Type, typename StoredType, typename Factory,
