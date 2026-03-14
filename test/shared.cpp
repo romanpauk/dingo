@@ -7,6 +7,7 @@
 
 #include <dingo/container.h>
 #include <dingo/factory/constructor.h>
+#include <dingo/type_conversion_traits.h>
 #include <dingo/storage/shared.h>
 
 #include <gtest/gtest.h>
@@ -17,6 +18,33 @@
 #include "test.h"
 
 namespace dingo {
+namespace {
+struct pointer_conversion_view {
+    virtual ~pointer_conversion_view() = default;
+};
+
+struct pointer_conversion_owner : pointer_conversion_view {
+    static inline int destructors = 0;
+
+    pointer_conversion_owner() : view_(new pointer_conversion_view) {}
+
+    ~pointer_conversion_owner() {
+        ++destructors;
+        delete view_;
+    }
+
+    pointer_conversion_view* view_;
+};
+} // namespace
+
+template <>
+struct type_conversion_traits<pointer_conversion_view*,
+                              pointer_conversion_owner*> {
+    static pointer_conversion_view* convert(pointer_conversion_owner* source) {
+        return source->view_;
+    }
+};
+
 template <typename T> struct shared_test : public test<T> {};
 TYPED_TEST_SUITE(shared_test, container_types, );
 
@@ -96,6 +124,25 @@ TYPED_TEST(shared_test, ptr_interface) {
     AssertClass(container.template resolve<const IClass&>());
     AssertClass(container.template resolve<IClass*>());
     AssertClass(container.template resolve<const IClass*>());
+}
+
+TYPED_TEST(shared_test, ptr_interface_deletes_owner_not_converted_pointer) {
+    using container_type = TypeParam;
+
+    pointer_conversion_owner::destructors = 0;
+
+    {
+        container_type container;
+        container.template register_type<scope<shared>,
+                                         storage<pointer_conversion_owner*>,
+                                         interfaces<pointer_conversion_view>>();
+
+        auto* view = container.template resolve<pointer_conversion_view*>();
+        ASSERT_NE(view, nullptr);
+        EXPECT_EQ(pointer_conversion_owner::destructors, 0);
+    }
+
+    EXPECT_EQ(pointer_conversion_owner::destructors, 1);
 }
 
 TYPED_TEST(shared_test, shared_ptr) {

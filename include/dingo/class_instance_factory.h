@@ -30,15 +30,11 @@ template <typename Container, typename Storage> struct class_instance_factory_da
     Container container;
 };
 
-template <typename T> struct class_instance_factory_data_traits {
-    using container_type = typename T::container_type;
-    static T& get_data(T& data) { return data; }
-};
+template <typename T> T& get_factory_data(T& data) { return data; }
 
-template <typename T> struct class_instance_factory_data_traits<std::shared_ptr<T>> {
-    using container_type = typename T::container_type;
-    static T& get_data(std::shared_ptr<T>& data) { return *data; }
-};
+template <typename T> T& get_factory_data(std::shared_ptr<T>& data) {
+    return *data;
+}
 
 template <typename RTTI, typename Factory, typename Context>
 void* resolve_address(Factory&, Context&, type_list<>,
@@ -78,7 +74,9 @@ template <typename Container, typename Type, typename Storage,
 class class_instance_factory : public class_instance_factory_i<Container> {
   public:
     using storage_type = Storage;
-    using container_type = typename class_instance_factory_data_traits<Data>::container_type;
+    using data_type = std::remove_reference_t<decltype(get_factory_data(
+        std::declval<Data&>()))>;
+    using container_type = typename data_type::container_type;
 
   private:
     class_instance_resolver<typename Container::rtti_type, Type, Storage> resolver_;
@@ -86,14 +84,14 @@ class class_instance_factory : public class_instance_factory_i<Container> {
     // tear down cached instances before preserved construction temporaries.
     Data data_;
 
-    auto& get_storage() { return class_instance_factory_data_traits<Data>::get_data(data_).storage; }
+    auto& get_storage() { return get_factory_data(data_).storage; }
 
   public:
     template <typename... Args>
     class_instance_factory(Args&&... args)
         : data_(std::forward<Args>(args)...) {}
 
-    auto& get_container() { return class_instance_factory_data_traits<Data>::get_data(data_).container; }
+    auto& get_container() { return get_factory_data(data_).container; }
     
     void*
     get_value(resolving_context& context,

@@ -9,8 +9,6 @@
 
 #include <dingo/config.h>
 
-#include <dingo/type_traits.h>
-
 namespace dingo {
 template <typename... Types> struct type_list {};
 template <typename T> struct type_list_iterator {

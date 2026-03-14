@@ -8,12 +8,19 @@
 #pragma once
 
 #include <dingo/config.h>
-#include <dingo/type_traits.h>
+#include <dingo/rebind_type.h>
 
-#include <memory>
-#include <vector>
+#include <type_traits>
 
 namespace dingo {
+namespace detail {
+template <typename T, typename = void>
+struct factory_result_has_value_type : std::false_type {};
+
+template <typename T>
+struct factory_result_has_value_type<T, std::void_t<typename T::value_type>>
+    : std::true_type {};
+} // namespace detail
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -29,7 +36,7 @@ template <typename RTTI, typename T> struct class_instance_factory_traits {
         // TODO: test shared storage with non-copyable type requested as value
         // TODO: this should recursively extract value_type (originally a workaround
         // for vector<unique_ptr> that is copy-constructible).
-        if constexpr (has_value_type_v<T>) {
+        if constexpr (detail::factory_result_has_value_type<T>::value) {
             if constexpr (std::is_copy_constructible_v<
                               typename T::value_type>) {
                 return *static_cast<T*>(ptr);
