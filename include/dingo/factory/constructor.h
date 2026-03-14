@@ -13,11 +13,14 @@
 #include <dingo/decay.h>
 #include <dingo/factory/constructor_detection.h>
 
+#include <tuple>
+
 namespace dingo {
 
 template <typename...> struct constructor;
 
 template <typename T, typename... Args> struct constructor<T(Args...)> {
+    using arguments = std::tuple<Args...>;
     static constexpr size_t arity = sizeof...(Args);
     static constexpr bool valid =
         detail::is_list_initializable_v<T, Args...> ||
