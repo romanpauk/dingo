@@ -15,6 +15,8 @@
 #include <dingo/factory/constructor_typedef.h>
 #include <dingo/type_list.h>
 
+#include <tuple>
+
 namespace dingo {
 
 namespace detail {
@@ -248,35 +250,61 @@ struct direct_initialization<T, Arg>
 template <typename T, typename... Args>
 inline constexpr bool is_direct_initializable_v = direct_initialization<T, Args...>{};
 
+template <typename T, typename Tag, typename Sequence>
+struct detection_arguments;
+
+template <typename T, typename Tag, size_t... Is>
+struct detection_arguments<T, Tag, std::index_sequence<Is...>> {
+    using type = std::tuple<std::conditional_t<true, constructor_argument<T, Tag>,
+                                               std::integral_constant<size_t, Is>>...>;
+};
+
 template <typename T, template <typename...> typename IsConstructible,
-          bool Assert, size_t N, bool Constructible, typename... Args>
-struct constructor_detection_impl;
+          typename Tuple>
+struct detected_constructor_arguments;
+
+template <typename T, template <typename...> typename IsConstructible,
+          typename Tuple, bool Constructible>
+struct detected_constructor_arguments_impl;
+
+template <typename T, template <typename...> typename IsConstructible,
+          typename... Args>
+struct detected_constructor_arguments_impl<T, IsConstructible,
+                                          std::tuple<Args...>, true> {
+    static constexpr bool valid = true;
+    using type = std::tuple<Args...>;
+};
+
+template <typename T, template <typename...> typename IsConstructible>
+struct detected_constructor_arguments_impl<T, IsConstructible, std::tuple<>, false> {
+    using type = std::tuple<>;
+    static constexpr bool valid = false;
+};
+
+template <typename T, template <typename...> typename IsConstructible,
+          typename Head, typename... Tail>
+struct detected_constructor_arguments_impl<T, IsConstructible,
+                                          std::tuple<Head, Tail...>, false>
+    : detected_constructor_arguments_impl<
+          T, IsConstructible, std::tuple<Tail...>,
+          IsConstructible<T, Tail...>::value> {};
+
+template <typename T, template <typename...> typename IsConstructible,
+          typename... Args>
+struct detected_constructor_arguments<T, IsConstructible, std::tuple<Args...>>
+    : detected_constructor_arguments_impl<T, IsConstructible, std::tuple<Args...>,
+                                          IsConstructible<T, Args...>::value> {
+};
 
 // Generates N arguments of type class_factory_argument<T>, going 1, 2, 3... N.
 template <typename T, typename Tag, template <typename...> typename IsConstructible,
-          bool Assert = true, size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS,
-          typename = void, typename... Args>
-struct constructor_detection
-    : constructor_detection<T, Tag, IsConstructible, Assert, N, void,
-                            constructor_argument<T, Tag>, Args...> {};
-
-// Upon reaching N, generates N attempts to instantiate, going N, N-1, N-2... 0
-// arguments. This assures that container will select the construction method
-// with the most arguments as it will be the first seen in the hierarchy (this
-// is needed to fill default-constructible aggregate types with instances from
-// container).
-template <typename T, typename Tag, template <typename...> typename IsConstructible,
-          bool Assert, size_t N, typename... Args>
-struct constructor_detection<T, Tag, IsConstructible, Assert, N,
-                             typename std::enable_if_t<sizeof...(Args) == N>,
-                             Args...>
-    : constructor_detection_impl<T, IsConstructible, Assert, N,
-                                 IsConstructible<T, Args...>::value,
-                                 std::tuple<Args...>> {};
+          bool Assert = true, size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS>
+struct constructor_detection;
 
 template <typename T, typename... Args> struct constructor_methods;
 template <typename T, typename... Args>
 struct constructor_methods<T, std::tuple<Args...>> {
+    using arguments = std::tuple<Args...>;
     static constexpr size_t arity = sizeof...(Args);
     static constexpr bool valid = true;
 
@@ -302,33 +330,34 @@ struct constructor_methods<T, std::tuple<Args...>> {
     }
 };
 
-// Construction was found. Bail out (by not inheriting detection anymore).
-template <typename T, template <typename...> typename IsConstructible,
-          bool Assert, size_t N, typename... Args>
-struct constructor_detection_impl<T, IsConstructible, Assert, N, true,
-                                  std::tuple<Args...>>
-    : constructor_methods< T, std::tuple<Args...> >{};
-
-// Construction was not found. Generate next level of inheritance with one less
-// argument.
-template <typename T, template <typename...> typename IsConstructible,
-          bool Assert, size_t N, typename Head, typename... Tail>
-struct constructor_detection_impl<T, IsConstructible, Assert, N, false,
-                                  std::tuple<Head, Tail...>>
-    : constructor_detection_impl<T, IsConstructible, Assert, N,
-                                 IsConstructible<T, Tail...>::value,
-                                 std::tuple<Tail...>> {};
-
-// Construction was not found, and no more arguments can be removed.
-template <typename T, template <typename...> typename IsConstructible,
+template <typename T, typename Tag, template <typename...> typename IsConstructible,
           bool Assert, size_t N>
-struct constructor_detection_impl<T, IsConstructible, Assert, N, false,
-                                  std::tuple<>> {
-    static constexpr size_t arity = 0;
-    static constexpr bool valid = false;
-    // TODO: move this assert elsewhere
+struct constructor_detection {
+  private:
+    using candidates =
+        typename detection_arguments<T, Tag, std::make_index_sequence<N>>::type;
+    using detection =
+        detected_constructor_arguments<T, IsConstructible, candidates>;
+    using selected_arguments = typename detection::type;
+
+  public:
+    static constexpr size_t arity = std::tuple_size_v<selected_arguments>;
+    static constexpr bool valid = detection::valid;
+
     static_assert(!Assert || valid,
                   "class T construction not detected or ambiguous");
+
+    template <typename Type, typename Context, typename Container>
+    static Type construct(Context& ctx, Container& container) {
+        return constructor_methods<T, selected_arguments>::template construct<Type>(
+            ctx, container);
+    }
+
+    template <typename Type, typename Context, typename Container>
+    static void construct(void* ptr, Context& ctx, Container& container) {
+        constructor_methods<T, selected_arguments>::template construct<Type>(
+            ptr, ctx, container);
+    }
 };
 
 } // namespace detail
