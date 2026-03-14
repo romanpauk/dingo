@@ -46,18 +46,27 @@ void* resolve_address(Factory&, Context&, type_list<>,
     throw type_not_convertible_exception();
 }
 
+template <typename RTTI, typename Factory, typename Context, typename Head>
+void* resolve_address(Factory& factory, Context& context,
+                      type_list<Head>,
+                      const typename RTTI::type_index& type) {
+    if (!(RTTI::template get_type_index<Head>() == type))
+        throw type_not_convertible_exception();
+    return factory.template resolve_address<Head>(context);
+}
+
 // TODO: instead of StorageTag, rvalue reference can be used to determine
 // move-ability
 template <typename RTTI, typename Factory, typename Context, typename Head,
-          typename... Tail>
+          typename Next, typename... Tail>
 void* resolve_address(Factory& factory, Context& context,
-                              type_list<Head, Tail...>,
+                              type_list<Head, Next, Tail...>,
                               const typename RTTI::type_index& type) {
     if (RTTI::template get_type_index<Head>() == type) {
         return factory.template resolve_address<Head>(context);
     } else {
         return resolve_address<RTTI>(factory, context,
-                                             type_list<Tail...>{}, type);
+                                             type_list<Next, Tail...>{}, type);
     }
 }
 
@@ -72,8 +81,10 @@ class class_instance_factory : public class_instance_factory_i<Container> {
     using container_type = typename class_instance_factory_data_traits<Data>::container_type;
 
   private:
-    Data data_;
     class_instance_resolver<typename Container::rtti_type, Type, Storage> resolver_;
+    // `data_` must be destroyed before `resolver_` so shared storage can
+    // tear down cached instances before preserved construction temporaries.
+    Data data_;
 
     auto& get_storage() { return class_instance_factory_data_traits<Data>::get_data(data_).storage; }
 

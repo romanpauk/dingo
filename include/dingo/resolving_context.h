@@ -9,6 +9,7 @@
 
 #include <dingo/config.h>
 
+#include <dingo/allocator.h>
 #include <dingo/aligned_storage.h>
 #include <dingo/annotated.h>
 #include <dingo/arena_allocator.h>

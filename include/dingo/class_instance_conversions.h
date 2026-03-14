@@ -19,6 +19,12 @@
 
 namespace dingo {
 
+template <typename... Types> struct class_instance_conversions;
+
+template <> struct class_instance_conversions<> {
+    void reset() {}
+};
+
 template< typename T > struct class_instance_conversion {
     template< typename... Args > T& construct(Args&&... args) {
         auto* instance = reinterpret_cast<T*>(&storage_);
@@ -66,5 +72,9 @@ template< typename... Types > struct class_instance_conversions
 template< typename... Args > struct class_instance_conversions< type_list<Args...> >
 : class_instance_conversions<Args...>
 {}; 
+
+template <> struct class_instance_conversions<type_list<>> {
+    void reset() {}
+};
 
 } // namespace dingo
