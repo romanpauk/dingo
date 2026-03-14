@@ -17,6 +17,15 @@ void AssertTypeNotConvertible(Container& container) {
     });
 }
 
+template <typename Type, typename MissingTypes, typename Container>
+void AssertTypeNotFound(Container& container) {
+    for_each(MissingTypes{}, [&](auto element) {
+        ASSERT_THROW(
+            container.template resolve<typename decltype(element)::type>(),
+            type_not_found_exception);
+    });
+}
+
 template <class T> void AssertClass(T&& cls) {
     ASSERT_EQ(cls.GetName(), "Class");
 }

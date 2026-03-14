@@ -25,14 +25,14 @@ template <typename T, typename... Args> struct constructor<T(Args...)> {
 
     template <typename Type, typename Context, typename Container>
     static Type construct(Context& ctx, Container& container) {
-        return class_traits<Type>::construct(
+        return detail::construction_traits<Type, T>::construct(
             ctx.template resolve<Args>(container)...);
     }
 
     template <typename Type, typename Context, typename Container>
     static void construct(void* ptr, Context& ctx, Container& container) {
-        class_traits<Type>::construct(ptr,
-                                      ctx.template resolve<Args>(container)...);
+        detail::construction_traits<Type, T>::construct(
+            ptr, ctx.template resolve<Args>(container)...);
     }
 };
 
