@@ -11,6 +11,7 @@
 #include <dingo/type_traits.h>
 
 #include <type_traits>
+#include <variant>
 
 namespace dingo {
 
@@ -61,5 +62,69 @@ struct class_traits<
         new (ptr) T(type_traits<T>::make(std::forward<Args>(args)...));
     }
 };
+
+namespace detail {
+template <typename Variant, typename Selected> struct variant_alternative_count;
+
+template <typename Selected, typename... Alternatives>
+struct variant_alternative_count<std::variant<Alternatives...>, Selected>
+    : std::integral_constant<size_t,
+                             (0u + ... + (std::is_same_v<Selected, Alternatives> ? 1u
+                                                                                 : 0u))> {};
+
+template <typename Type, typename Selected, typename = void>
+struct construction_traits {
+    template <typename... Args> static Type construct(Args&&... args) {
+        return class_traits<Type>::construct(std::forward<Args>(args)...);
+    }
+
+    template <typename... Args>
+    static void construct(void* ptr, Args&&... args) {
+        class_traits<Type>::construct(ptr, std::forward<Args>(args)...);
+    }
+};
+
+template <typename... Alternatives, typename Selected>
+struct construction_traits<
+    std::variant<Alternatives...>, Selected,
+    std::enable_if_t<
+        variant_alternative_count<std::variant<Alternatives...>, Selected>::value == 1>> {
+    using type = std::variant<Alternatives...>;
+
+    template <typename... Args> static type construct(Args&&... args) {
+        return type(std::in_place_type<Selected>,
+                    class_traits<Selected>::construct(
+                        std::forward<Args>(args)...));
+    }
+
+    template <typename... Args>
+    static void construct(void* ptr, Args&&... args) {
+        new (ptr) type(std::in_place_type<Selected>,
+                       class_traits<Selected>::construct(
+                           std::forward<Args>(args)...));
+    }
+};
+
+template <typename... Alternatives, typename Selected>
+struct construction_traits<
+    std::variant<Alternatives...>*, Selected,
+    std::enable_if_t<
+        variant_alternative_count<std::variant<Alternatives...>, Selected>::value == 1>> {
+    using type = std::variant<Alternatives...>;
+
+    template <typename... Args> static type* construct(Args&&... args) {
+        return new type(std::in_place_type<Selected>,
+                        class_traits<Selected>::construct(
+                            std::forward<Args>(args)...));
+    }
+
+    template <typename... Args>
+    static void construct(void* ptr, Args&&... args) {
+        new (ptr) type(std::in_place_type<Selected>,
+                       class_traits<Selected>::construct(
+                           std::forward<Args>(args)...));
+    }
+};
+} // namespace detail
 
 } // namespace dingo

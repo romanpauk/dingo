@@ -285,7 +285,7 @@ struct constructor_methods<T, std::tuple<Args...>> {
 
     template <typename Type, typename Context, typename Container>
     static Type construct(Context& ctx, Container& container) {
-        return class_traits<Type>::construct(
+        return detail::construction_traits<Type, T>::construct(
             ((void)sizeof(Args),
              constructor_argument_impl<T, Context, Container,
                                        typename Args::tag_type>(ctx,
@@ -294,7 +294,7 @@ struct constructor_methods<T, std::tuple<Args...>> {
 
     template <typename Type, typename Context, typename Container>
     static void construct(void* ptr, Context& ctx, Container& container) {
-        class_traits<Type>::construct(
+        detail::construction_traits<Type, T>::construct(
             ptr, ((void)sizeof(Args),
                   constructor_argument_impl<T, Context, Container,
                                             typename Args::tag_type>(

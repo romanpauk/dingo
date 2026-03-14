@@ -11,6 +11,8 @@
 
 #include <gtest/gtest.h>
 
+#include <variant>
+
 #include "assert.h"
 #include "class.h"
 #include "containers.h"
@@ -191,6 +193,38 @@ TYPED_TEST(unique_test, optional) {
     }
 
     ASSERT_EQ(Class::Destructor, Class::GetTotalInstances());
+}
+
+TYPED_TEST(unique_test, variant_factory_selects_alternative) {
+    using container_type = TypeParam;
+
+    struct A {
+        explicit A(int init) : value(init) {}
+        int value;
+    };
+    struct B {
+        explicit B(float init) : value(init) {}
+        float value;
+    };
+
+    container_type container;
+    container.template register_type<scope<unique>, storage<int>>();
+    container.template register_type<
+        scope<unique>, storage<std::variant<A, B>>,
+        factory<constructor_detection<A>>>();
+
+    auto value = container.template resolve<std::variant<A, B>>();
+    ASSERT_TRUE(std::holds_alternative<A>(value));
+    EXPECT_EQ(std::get<A>(value).value, 0);
+
+    auto moved = container.template resolve<std::variant<A, B>&&>();
+    ASSERT_TRUE(std::holds_alternative<A>(moved));
+    EXPECT_EQ(std::get<A>(moved).value, 0);
+
+    AssertTypeNotFound<
+        std::variant<A, B>,
+        type_list<A, A&&, A*, B, B&&, B*>>(
+        container);
 }
 
 // TODO: shared_ptr needs to be passed as &&

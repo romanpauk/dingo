@@ -11,6 +11,8 @@
 
 #include <gtest/gtest.h>
 
+#include <variant>
+
 #include "assert.h"
 #include "class.h"
 #include "containers.h"
@@ -248,6 +250,31 @@ TYPED_TEST(external_test, optional_move) {
     AssertClass(*container.template resolve<std::optional<Class>&>());
     AssertClass(container.template resolve<Class&>());
     AssertClass(container.template resolve<IClass&>());
+}
+
+TYPED_TEST(external_test, variant_ref) {
+    using container_type = TypeParam;
+    struct A {
+        explicit A(int init) : value(init) {}
+        int value;
+    };
+    struct B {
+        explicit B(float init) : value(init) {}
+        float value;
+    };
+
+    std::variant<A, B> c(std::in_place_type<A>, 7);
+
+    container_type container;
+    container
+        .template register_type<scope<external>, storage<std::variant<A, B>&>>(
+            c);
+
+    auto& value = container.template resolve<std::variant<A, B>&>();
+
+    ASSERT_EQ(&value, &c);
+    ASSERT_TRUE(std::holds_alternative<A>(value));
+    EXPECT_EQ(std::get<A>(value).value, 7);
 }
 
 TYPED_TEST(external_test, shared_multiple) {

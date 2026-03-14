@@ -9,8 +9,11 @@
 #include <dingo/factory/constructor.h>
 #include <dingo/type_conversion_traits.h>
 #include <dingo/storage/shared.h>
+#include <dingo/storage/unique.h>
 
 #include <gtest/gtest.h>
+
+#include <variant>
 
 #include "assert.h"
 #include "class.h"
@@ -293,6 +296,29 @@ TYPED_TEST(shared_test, optional_interface) {
         scope<shared>, storage<std::optional<Class>>, interfaces<IClass>>();
     AssertClass(container.template resolve<IClass*>());
     AssertClass(container.template resolve<IClass&>());
+}
+
+TYPED_TEST(shared_test, variant_factory_selects_alternative) {
+    using container_type = TypeParam;
+
+    struct A {
+        explicit A(int init) : value(init) {}
+        int value;
+    };
+    struct B {
+        explicit B(float init) : value(init) {}
+        float value;
+    };
+
+    container_type container;
+    container.template register_type<scope<unique>, storage<int>>();
+    container.template register_type<
+        scope<shared>, storage<std::variant<A, B>>,
+        factory<constructor_detection<A>>>();
+
+    auto& value = container.template resolve<std::variant<A, B>&>();
+    ASSERT_TRUE(std::holds_alternative<A>(value));
+    EXPECT_EQ(std::get<A>(value).value, 0);
 }
 
 TYPED_TEST(shared_test, shared_multiple) {

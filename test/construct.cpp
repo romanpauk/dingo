@@ -12,6 +12,8 @@
 
 #include <gtest/gtest.h>
 
+#include <variant>
+
 #include "assert.h"
 #include "class.h"
 #include "containers.h"
@@ -124,6 +126,34 @@ TYPED_TEST(construct_test, resolve) {
     container.template construct<std::optional<B>>();
 
     container.template construct<C>();
+}
+
+TYPED_TEST(construct_test, variant_selected_alternative) {
+    using container_type = TypeParam;
+
+    struct A {
+        explicit A(int init) : value(init) {}
+        int value;
+    };
+    struct B {
+        explicit B(float init) : value(init) {}
+        float value;
+    };
+
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(7);
+    container.template register_type<scope<external>, storage<float>>(3.5f);
+
+    auto detected =
+        container.template construct<std::variant<A, B>,
+                                     constructor_detection<A>>();
+    ASSERT_TRUE(std::holds_alternative<A>(detected));
+    EXPECT_EQ(std::get<A>(detected).value, 7);
+
+    auto explicit_ctor =
+        container.template construct<std::variant<A, B>, constructor<B(float)>>();
+    ASSERT_TRUE(std::holds_alternative<B>(explicit_ctor));
+    EXPECT_FLOAT_EQ(std::get<B>(explicit_ctor).value, 3.5f);
 }
 
 } // namespace dingo

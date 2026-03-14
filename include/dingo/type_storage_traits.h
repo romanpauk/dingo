@@ -14,6 +14,7 @@
 
 #include <memory>
 #include <optional>
+#include <variant>
 
 namespace dingo {
 struct unique;
@@ -150,6 +151,15 @@ struct type_storage_traits<unique, std::optional<T>, U> {
     using rvalue_reference_types = type_list<std::optional<U>&&>;
     using pointer_types = type_list<>;
     using conversion_types = type_list<std::optional<U>>;
+};
+
+template <typename... Ts>
+struct type_storage_traits<unique, std::variant<Ts...>, std::variant<Ts...>> {
+    using value_types = type_list<std::variant<Ts...>>;
+    using lvalue_reference_types = type_list<>;
+    using rvalue_reference_types = type_list<std::variant<Ts...>&&>;
+    using pointer_types = type_list<>;
+    using conversion_types = type_list<std::variant<Ts...>>;
 };
 
 template <typename T, typename U>
