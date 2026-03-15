@@ -23,12 +23,51 @@ struct IClass {
 
 template <size_t = 0> struct Class : IClass {};
 
+struct BindingInterface {
+    virtual ~BindingInterface() {}
+};
+
+struct BindingSharedService : BindingInterface {};
+
+using shared_int_bindings =
+    dingo::bindings<dingo::registration<dingo::scope<dingo::shared>,
+                                        dingo::storage<int>>>;
+
+using shared_interface_bindings =
+    dingo::bindings<
+        dingo::registration<dingo::scope<dingo::shared>,
+                            dingo::storage<std::shared_ptr<BindingSharedService>>,
+                            dingo::interfaces<BindingInterface>>>;
+
+using external_int_bindings =
+    dingo::bindings<dingo::registration<dingo::scope<dingo::external>,
+                                        dingo::storage<int&>>>;
+
+using unique_int_bindings =
+    dingo::bindings<dingo::registration<dingo::scope<dingo::unique>,
+                                        dingo::storage<int>>>;
+
 bool is_empty(const std::string& val) { return val.empty(); }
 
 bool is_empty(const int& val) { return val == 0; }
 
 template <typename T> bool is_empty(const std::shared_ptr<T>& val) {
     return val.get() == 0;
+}
+
+template <typename T> void benchmark_consume(const T& value) {
+    benchmark::DoNotOptimize(value);
+    benchmark::ClobberMemory();
+}
+
+template <typename T> void benchmark_consume(T& value) {
+    benchmark::DoNotOptimize(std::addressof(value));
+    benchmark::ClobberMemory();
+}
+
+template <typename T> void benchmark_consume(const std::shared_ptr<T>& value) {
+    benchmark::DoNotOptimize(value.get());
+    benchmark::ClobberMemory();
 }
 
 template <typename ContainerTraits>
@@ -40,7 +79,9 @@ static void resolve_container_unique_int(benchmark::State& state) {
 
     size_t count = 0;
     for (auto _ : state) {
-        count += is_empty(container.template resolve<int>());
+        auto value = container.template resolve<int>();
+        benchmark_consume(value);
+        count += is_empty(value);
     }
     benchmark::DoNotOptimize(count);
     state.SetBytesProcessed(state.iterations());
@@ -55,7 +96,9 @@ static void resolve_container_unique_string(benchmark::State& state) {
                                      factory<constructor<std::string()>>>();
     size_t count = 0;
     for (auto _ : state) {
-        count += is_empty(container.template resolve<std::string>());
+        auto value = container.template resolve<std::string>();
+        benchmark_consume(value);
+        count += is_empty(value);
     }
     benchmark::DoNotOptimize(count);
     state.SetBytesProcessed(state.iterations());
@@ -70,7 +113,9 @@ static void resolve_container_shared(benchmark::State& state) {
 
     size_t count = 0;
     for (auto _ : state) {
-        count += is_empty(container.template resolve<int&>());
+        auto& value = container.template resolve<int&>();
+        benchmark_consume(value);
+        count += is_empty(value);
     }
     benchmark::DoNotOptimize(count);
     state.SetBytesProcessed(state.iterations());
@@ -86,7 +131,9 @@ static void resolve_container_shared_ptr(benchmark::State& state) {
 
     size_t count = 0;
     for (auto _ : state) {
-        count += is_empty(container.template resolve<std::shared_ptr<int>&>());
+        auto& value = container.template resolve<std::shared_ptr<int>&>();
+        benchmark_consume(value);
+        count += is_empty(value);
     }
     benchmark::DoNotOptimize(count);
     state.SetBytesProcessed(state.iterations());
@@ -103,8 +150,9 @@ resolve_container_shared_ptr_conversion_storage(benchmark::State& state) {
 
     size_t count = 0;
     for (auto _ : state) {
-        count +=
-            is_empty(container.template resolve<std::shared_ptr<IClass>&>());
+        auto& value = container.template resolve<std::shared_ptr<IClass>&>();
+        benchmark_consume(value);
+        count += is_empty(value);
     }
     benchmark::DoNotOptimize(count);
     state.SetBytesProcessed(state.iterations());
@@ -121,8 +169,9 @@ resolve_container_shared_ptr_conversion_resolver(benchmark::State& state) {
                                      interfaces<Class<>, IClass>>();
     size_t count = 0;
     for (auto _ : state) {
-        count +=
-            is_empty(container.template resolve<std::shared_ptr<IClass>&>());
+        auto& value = container.template resolve<std::shared_ptr<IClass>&>();
+        benchmark_consume(value);
+        count += is_empty(value);
     }
     benchmark::DoNotOptimize(count);
     state.SetBytesProcessed(state.iterations());
@@ -138,7 +187,92 @@ static void resolve_container_external(benchmark::State& state) {
 
     size_t count = 0;
     for (auto _ : state) {
-        count += is_empty(container.template resolve<int&>());
+        auto& value = container.template resolve<int&>();
+        benchmark_consume(value);
+        count += is_empty(value);
+    }
+    benchmark::DoNotOptimize(count);
+    state.SetBytesProcessed(state.iterations());
+}
+
+static void resolve_static_bindings_shared_first(benchmark::State& state) {
+    size_t count = 0;
+    for (auto _ : state) {
+        dingo::static_container<shared_int_bindings> container;
+        auto& value = container.template resolve<int&>();
+        benchmark_consume(value);
+        count += is_empty(value);
+    }
+    benchmark::DoNotOptimize(count);
+    state.SetBytesProcessed(state.iterations());
+}
+
+static void resolve_static_bindings_shared_repeated(benchmark::State& state) {
+    dingo::static_container<shared_int_bindings> container;
+    benchmark_consume(container.template resolve<int&>());
+
+    size_t count = 0;
+    for (auto _ : state) {
+        auto& value = container.template resolve<int&>();
+        benchmark_consume(value);
+        count += is_empty(value);
+    }
+    benchmark::DoNotOptimize(count);
+    state.SetBytesProcessed(state.iterations());
+}
+
+static void
+resolve_static_bindings_shared_interface_first(benchmark::State& state) {
+    size_t count = 0;
+    for (auto _ : state) {
+        dingo::static_container<shared_interface_bindings> container;
+        auto& value = container.template resolve<std::shared_ptr<BindingInterface>&>();
+        benchmark_consume(value);
+        count += is_empty(value);
+    }
+    benchmark::DoNotOptimize(count);
+    state.SetBytesProcessed(state.iterations());
+}
+
+static void
+resolve_static_bindings_shared_interface_repeated(benchmark::State& state) {
+    dingo::static_container<shared_interface_bindings> container;
+    benchmark_consume(
+        container.template resolve<std::shared_ptr<BindingInterface>&>());
+
+    size_t count = 0;
+    for (auto _ : state) {
+        auto& value = container.template resolve<std::shared_ptr<BindingInterface>&>();
+        benchmark_consume(value);
+        count += is_empty(value);
+    }
+    benchmark::DoNotOptimize(count);
+    state.SetBytesProcessed(state.iterations());
+}
+
+static void resolve_static_bindings_external_repeated(benchmark::State& state) {
+    int value = 1;
+    dingo::static_container<external_int_bindings> container(
+        dingo::bind<int&>(value));
+
+    size_t count = 0;
+    for (auto _ : state) {
+        auto& resolved = container.template resolve<int&>();
+        benchmark_consume(resolved);
+        count += is_empty(resolved);
+    }
+    benchmark::DoNotOptimize(count);
+    state.SetBytesProcessed(state.iterations());
+}
+
+static void resolve_static_bindings_unique(benchmark::State& state) {
+    dingo::static_container<unique_int_bindings> container;
+
+    size_t count = 0;
+    for (auto _ : state) {
+        auto value = container.template resolve<int>();
+        benchmark_consume(value);
+        count += is_empty(value);
     }
     benchmark::DoNotOptimize(count);
     state.SetBytesProcessed(state.iterations());
@@ -255,6 +389,13 @@ BENCHMARK_TEMPLATE(resolve_container_external, dingo::static_container_traits<>)
     ->UseRealTime();
 BENCHMARK_TEMPLATE(resolve_container_external, dingo::dynamic_container_traits)
     ->UseRealTime();
+
+BENCHMARK(resolve_static_bindings_shared_first)->UseRealTime();
+BENCHMARK(resolve_static_bindings_shared_repeated)->UseRealTime();
+BENCHMARK(resolve_static_bindings_shared_interface_first)->UseRealTime();
+BENCHMARK(resolve_static_bindings_shared_interface_repeated)->UseRealTime();
+BENCHMARK(resolve_static_bindings_external_repeated)->UseRealTime();
+BENCHMARK(resolve_static_bindings_unique)->UseRealTime();
 
 BENCHMARK_TEMPLATE(register_type,
                    dingo::container<dingo::static_container_traits<>>)

@@ -204,6 +204,79 @@ template <typename Bindings, typename RequestKey, typename Id>
 using find_binding_definition_t =
     typename find_binding_definition<Bindings, RequestKey, Id>::type;
 
+template <typename Component, typename Bind>
+using bound_binding_t = find_binding_definition_t<
+    binding_definitions_t<Component>, decay_t<typename Bind::request_type>,
+    typename Bind::id_type>;
+
+template <typename Binding, typename = void>
+struct bound_targets_external : std::false_type {};
+
+template <typename Binding>
+struct bound_targets_external<
+    Binding, std::void_t<typename Binding::scope>>
+    : std::bool_constant<std::is_same_v<typename Binding::scope, external>> {};
+
+template <typename Component, typename Bind>
+struct bound_valid
+    : std::bool_constant<
+          bound_targets_external<
+              bound_binding_t<Component, Bind>>::value> {};
+
+template <typename Binding, typename Component, typename Bind>
+struct bound_matches_binding
+    : std::bool_constant<
+          bound_valid<Component, Bind>::value &&
+          std::is_same_v<Binding, bound_binding_t<Component, Bind>>> {};
+
+template <typename Binding, typename Component, typename... Binds>
+struct binding_bound_count
+    : std::integral_constant<size_t,
+                             (0u + ... +
+                              (bound_matches_binding<
+                                   Binding, Component, Binds>::value
+                                   ? 1u
+                                   : 0u))> {};
+
+template <typename Bindings> struct external_binding_count_for_bindings;
+
+template <typename... Bindings>
+struct external_binding_count_for_bindings<type_list<Bindings...>>
+    : std::integral_constant<
+          size_t,
+          (0u + ... +
+           (std::is_same_v<typename Bindings::scope, external> ? 1u : 0u))> {};
+
+template <typename Component, typename Bindings, typename... Binds>
+struct external_bindings_satisfied;
+
+template <typename Component, typename... Bindings, typename... Binds>
+struct external_bindings_satisfied<Component, type_list<Bindings...>,
+                                   Binds...>
+    : std::bool_constant<
+          (((!std::is_same_v<typename Bindings::scope, external>) ||
+            binding_bound_count<Bindings, Component, Binds...>::value == 1) &&
+           ...)> {};
+
+template <typename Binding, typename Component>
+void find_external_bind() {
+    static_assert(dependent_false<Binding, Component>::value,
+                  "missing external bindings entry");
+}
+
+template <typename Binding, typename Component, typename FirstBind,
+          typename... RestBinds>
+decltype(auto) find_external_bind(FirstBind&& first_bind,
+                                  RestBinds&&... rest_binds) {
+    if constexpr (bound_matches_binding<Binding, Component,
+                                        decay_t<FirstBind>>::value) {
+        return std::forward<FirstBind>(first_bind);
+    } else {
+        return find_external_bind<Binding, Component>(
+            std::forward<RestBinds>(rest_binds)...);
+    }
+}
+
 template <typename Request>
 using request_runtime_type_t =
     rebind_type_t<typename annotated_traits<Request>::type, runtime_type>;
@@ -1001,31 +1074,70 @@ struct bindings_constructible
     : std::conjunction<
           root_constructible<Component, Roots, ProvidedBindings>...> {};
 
-template <typename Entry> struct install_bindings_entry {
-    template <typename Container> static void install(Container&) {
+template <typename Bindings> struct bindings_has_external_bindings;
+
+template <typename... Entries>
+struct bindings_has_external_bindings<bindings<Entries...>>
+    : std::bool_constant<
+          external_binding_count_for_bindings<
+              binding_definitions_t<bindings<Entries...>>>::value != 0> {};
+
+template <typename Component, typename Entry> struct install_bindings_entry {
+    template <typename Container, typename... Binds>
+    static void install(Container&, Binds&&...) {
         static_assert(dependent_false<Entry>::value,
                       "unsupported bindings entry");
     }
 };
 
-template <typename... Policies>
-struct install_bindings_entry<registration<Policies...>> {
-    template <typename Container> static void install(Container& container) {
-        container.template register_type<Policies...>();
+template <typename Component, typename... Policies>
+struct install_bindings_entry<Component, registration<Policies...>> {
+    using registration_type = type_registration<Policies...>;
+
+    template <typename Container, typename... Binds>
+    static void install(Container& container, Binds&&... binds) {
+        if constexpr (std::is_same_v<typename registration_type::scope_type::type,
+                                     external>) {
+            using binding_type = binding_definition<Policies...>;
+            auto&& bind = find_external_bind<binding_type, Component>(
+                std::forward<Binds>(binds)...);
+            container.template register_type<Policies...>(
+                std::forward<decltype(bind)>(bind).get());
+        } else {
+            container.template register_type<Policies...>();
+        }
     }
 };
 
-template <typename Id, typename... Policies>
-struct install_bindings_entry<indexed_registration<Id, Policies...>> {
-    template <typename Container> static void install(Container& container) {
-        container.template register_indexed_type<Policies...>(Id::get());
+template <typename Component, typename Id, typename... Policies>
+struct install_bindings_entry<Component, indexed_registration<Id, Policies...>> {
+    using registration_type = type_registration<Policies...>;
+
+    template <typename Container, typename... Binds>
+    static void install(Container& container, Binds&&... binds) {
+        if constexpr (std::is_same_v<typename registration_type::scope_type::type,
+                                     external>) {
+            using binding_type = indexed_binding_definition<Id, Policies...>;
+            auto&& bind = find_external_bind<binding_type, Component>(
+                std::forward<Binds>(binds)...);
+            container.template register_indexed_type<Policies...>(
+                std::forward<decltype(bind)>(bind).get(), Id::get());
+        } else {
+            container.template register_indexed_type<Policies...>(Id::get());
+        }
     }
 };
 
-template <typename... Entries> struct install_bindings_entry<bindings<Entries...>> {
-    template <typename Container> static void install(Container& container) {
+template <typename Component, typename... Entries>
+struct install_bindings_entry<Component, bindings<Entries...>> {
+    template <typename Container, typename... Binds>
+    static void install(Container& container, Binds&&... binds) {
         using swallow = int[];
-        (void)swallow{0, (install_bindings_entry<Entries>::install(container), 0)...};
+        (void)swallow{
+            0,
+            (install_bindings_entry<Component, Entries>::install(
+                 container, std::forward<Binds>(binds)...),
+             0)...};
     }
 };
 
@@ -1061,9 +1173,10 @@ auto bind(Value&& value) {
         std::forward<Value>(value));
 }
 
-template <typename Component, typename Container>
-void install(Container& container) {
-    detail::install_bindings_entry<Component>::install(container);
+template <typename Component, typename Container, typename... Binds>
+void install(Container& container, Binds&&... binds) {
+    detail::install_bindings_entry<Component, Component>::install(
+        container, std::forward<Binds>(binds)...);
 }
 
 } // namespace dingo

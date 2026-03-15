@@ -120,6 +120,7 @@ if(DINGO_DEVELOPMENT_MODE)
         rtti/static_provider.h
         rtti/rtti.h
         rtti/typeid_provider.h
+        static_container.h
         static_allocator.h
         storage.h
         storage/external.h

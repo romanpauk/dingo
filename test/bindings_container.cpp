@@ -14,6 +14,43 @@
 
 namespace dingo {
 
+TEST(static_container_test, shared_unique_graph) {
+    struct Logger {};
+    struct Service {
+        explicit Service(Logger& logger) : logger_(logger) {}
+        Logger& logger_;
+    };
+
+    using application =
+        bindings<registration<scope<shared>, storage<Logger>>,
+                 registration<scope<unique>, storage<Service>>>;
+
+    static_container<application> container;
+    auto service = container.resolve<Service>();
+    auto& logger = container.resolve<Logger&>();
+
+    ASSERT_EQ(&service.logger_, &logger);
+}
+
+TEST(static_container_test, shared_interface_conversion_cache) {
+    struct IService {
+        virtual ~IService() = default;
+    };
+
+    struct Service : IService {};
+
+    using application =
+        bindings<registration<scope<shared>, storage<std::shared_ptr<Service>>,
+                              interfaces<IService>>>;
+
+    static_container<application> container;
+    auto& service1 = container.resolve<std::shared_ptr<IService>&>();
+    auto& service2 = container.resolve<std::shared_ptr<IService>&>();
+
+    ASSERT_EQ(&service1, &service2);
+    ASSERT_EQ(service1.get(), service2.get());
+}
+
 TEST(bindings_container_test, shared_unique_graph) {
     struct Logger {};
     struct Service {

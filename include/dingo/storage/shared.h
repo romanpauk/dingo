@@ -205,6 +205,11 @@ class storage<shared, Type, StoredType, Factory, Conversions>
         return instance_.get();
     }
 
+    auto get_stable() -> decltype(instance_.get()) {
+        assert(!instance_.empty());
+        return instance_.get();
+    }
+
     bool is_resolved() const { return !instance_.empty(); }
     void reset() override { instance_.reset(); }
 };

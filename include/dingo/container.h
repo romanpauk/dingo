@@ -599,4 +599,57 @@ class container : public allocator_base<Allocator> {
     typename ContainerTraits::template type_cache_type<void*, allocator_type>
         type_cache_;
 };
+
+namespace detail {
+
+template <typename Root, typename Container>
+decltype(auto) resolve_bindings_root(Container& container) {
+    using traits = request_traits<Root>;
+    using request_type = typename traits::request_type;
+    using id_type = typename traits::id_type;
+
+    if constexpr (std::is_same_v<id_type, no_binding_id>) {
+        return container.template resolve<request_type>();
+    } else {
+        return container.template resolve<request_type>(id_type::get());
+    }
+}
+
+} // namespace detail
+
+template <typename... Entries, typename Root>
+struct factory<bindings<Entries...>, Root> {
+    using bindings_type = bindings<Entries...>;
+    using root_type = Root;
+    using self_type = factory<bindings_type, root_type>;
+
+    template <typename... Binds>
+    auto operator()(Binds&&... binds) const {
+        // Standalone bindings factories already know the whole compile-time
+        // graph, so use the direct bindings runtime instead of re-installing
+        // registrations into a fresh container on every call.
+        if constexpr (detail::bindings_has_external_bindings<bindings_type>::value) {
+            bindings_container<bindings_type> direct_container(
+                std::forward<Binds>(binds)...);
+            return direct_container.template resolve<root_type>();
+        } else {
+            bindings_container<bindings_type> direct_container;
+            return direct_container.template resolve<root_type>(
+                std::forward<Binds>(binds)...);
+        }
+    }
+
+    template <typename Type, typename Context, typename Container>
+    Type construct(Context&, Container& container) const {
+        static_assert(
+            !detail::bindings_has_external_bindings<bindings_type>::value,
+            "register_factory does not support external bindings; bind them directly with factory::operator()");
+
+        using child_container_type =
+            typename Container::template child_container_type<self_type>;
+        child_container_type child(&container, container.get_allocator());
+        install<bindings_type>(child);
+        return detail::resolve_bindings_root<root_type>(child);
+    }
+};
 } // namespace dingo

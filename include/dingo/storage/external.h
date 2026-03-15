@@ -109,6 +109,9 @@ class storage<external, Type, StoredType, Factory, Conversions>
     auto resolve(Context&, Container&) -> decltype(instance_.get()) {
         return instance_.get();
     }
+
+    auto get_stable() -> decltype(instance_.get()) { return instance_.get(); }
+
     constexpr bool is_resolved() const { return true; }
 
     void reset() override {}
