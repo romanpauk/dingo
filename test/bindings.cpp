@@ -1,0 +1,296 @@
+//
+// This file is part of dingo project <https://github.com/romanpauk/dingo>
+//
+// See LICENSE for license and copyright information
+// SPDX-License-Identifier: MIT
+//
+
+#include <dingo/container.h>
+#include <dingo/index/array.h>
+#include <dingo/storage/shared.h>
+#include <dingo/storage/shared_cyclical.h>
+#include <dingo/storage/unique.h>
+
+#include <gtest/gtest.h>
+
+#include "containers.h"
+#include "test.h"
+
+namespace dingo {
+template <typename T> struct bindings_test : public test<T> {};
+TYPED_TEST_SUITE(bindings_test, container_types, );
+
+template <typename BaseTraits> struct indexed_bindings_container_traits : BaseTraits {
+    using index_definition_type =
+        std::tuple<std::tuple<size_t, index_type::array<3>>>;
+};
+
+TEST(bindings_static_check, autodetected_graph) {
+    struct Logger {};
+    struct Repository {
+        explicit Repository(Logger& logger_ref) : logger(logger_ref) {}
+        Logger& logger;
+    };
+    struct Service {
+        Service(Repository& repository_ref, Logger& logger_ref)
+            : repository(repository_ref), logger(logger_ref) {}
+        Repository& repository;
+        Logger& logger;
+    };
+
+    using application =
+        bindings<registration<scope<shared>, storage<Logger>>,
+                  registration<scope<shared>, storage<Repository>>,
+                  registration<scope<unique>, storage<Service>>>;
+    using service_binding = detail::find_binding_definition_t<
+        detail::binding_definitions_t<application>, Service,
+        detail::no_binding_id>;
+
+    static_assert(bindings_constructible_v<application, Service>);
+    static_assert(bindings_resolvable_v<application, Logger&>);
+    static_assert(std::is_same_v<
+                  detail::binding_factory_adapter_argument_types_t<
+                      service_binding, application>,
+                  std::tuple<Repository&, Logger&>>);
+}
+
+TEST(bindings_static_check,
+     autodetected_graph_prefers_highest_arity_for_default_constructible_type) {
+    struct Logger {
+        int value = 7;
+    };
+    struct Repository {
+        explicit Repository(Logger& logger_ref) : logger(logger_ref) {}
+        Logger& logger;
+    };
+    struct Service {
+        Service(Repository& repository_ref, Logger& logger_ref)
+            : repository(repository_ref), logger(logger_ref) {}
+        Repository& repository;
+        Logger& logger;
+    };
+
+    using application =
+        bindings<registration<scope<shared>, storage<Logger>>,
+                  registration<scope<shared>, storage<Repository>>,
+                  registration<scope<unique>, storage<Service>>>;
+
+    static_assert(!bindings_constructible_v<application, Service>);
+}
+
+TEST(bindings_static_check, external_dependency) {
+    struct ILogger {
+        virtual ~ILogger() = default;
+    };
+    struct Logger : ILogger {};
+    struct Service {
+        explicit Service(ILogger&) {}
+    };
+
+    using application =
+        bindings<registration<scope<external>, storage<Logger&>,
+                               interfaces<ILogger>>,
+                  registration<scope<unique>, storage<Service>>>;
+
+    static_assert(bindings_constructible_v<application, Service>);
+    static_assert(bindings_resolvable_v<application, ILogger&>);
+}
+
+TEST(bindings_static_check, missing_dependency) {
+    struct Missing {};
+    struct Service {
+        explicit Service(Missing&) {}
+    };
+
+    using application =
+        bindings<registration<scope<unique>, storage<Service>>>;
+
+    static_assert(!bindings_constructible_v<application, Service>);
+}
+
+TEST(bindings_static_check, ambiguous_binding) {
+    struct IValue {
+        virtual ~IValue() = default;
+    };
+    struct ValueA : IValue {};
+    struct ValueB : IValue {};
+
+    using application =
+        bindings<registration<scope<shared>, storage<ValueA>, interfaces<IValue>>,
+                  registration<scope<shared>, storage<ValueB>, interfaces<IValue>>>;
+
+    static_assert(!bindings_constructible_v<application, IValue&>);
+}
+
+TEST(bindings_static_check, cycle_policy) {
+    struct B;
+
+    struct A {
+        explicit A(B&) {}
+    };
+
+    struct B {
+        explicit B(A&) {}
+    };
+
+    using invalid_cycle =
+        bindings<registration<scope<shared>, storage<A>>,
+                  registration<scope<shared>, storage<B>>>;
+    using valid_cycle =
+        bindings<registration<scope<shared_cyclical>, storage<A>>,
+                  registration<scope<shared_cyclical>, storage<B>>>;
+
+    static_assert(!bindings_constructible_v<invalid_cycle, A&>);
+    static_assert(bindings_constructible_v<valid_cycle, A&>);
+}
+
+TEST(bindings_static_check, indexed_request) {
+    struct IAnimal {
+        virtual ~IAnimal() = default;
+    };
+    struct Dog : IAnimal {};
+
+    using animals =
+        bindings<indexed_registration<value_id<size_t, 1>, scope<shared>,
+                                       storage<Dog>, interfaces<IAnimal>>>;
+
+    static_assert(bindings_resolvable_v<animals, IAnimal&,
+                                         value_id<size_t, 1>>);
+    static_assert(bindings_constructible_v<
+                  animals,
+                  indexed_request<IAnimal&, value_id<size_t, 1>>>);
+}
+
+TYPED_TEST(bindings_test, install_component) {
+    using container_type = TypeParam;
+
+    struct A {};
+    struct B {
+        explicit B(A& a) : a_(a) {}
+        A& a_;
+    };
+
+    using app_component =
+        bindings<registration<scope<shared>, storage<A>>,
+                  registration<scope<unique>, storage<B>>>;
+
+    container_type container;
+    install<app_component>(container);
+
+    auto b = container.template resolve<B>();
+    auto& a = container.template resolve<A&>();
+
+    ASSERT_EQ(&b.a_, &a);
+}
+
+TYPED_TEST(bindings_test, install_autodetected_graph) {
+    using container_type = TypeParam;
+
+    struct Logger {};
+    struct Repository {
+        explicit Repository(Logger& logger) : logger_(logger) {}
+        Logger& logger_;
+    };
+    struct Service {
+        Service(Repository& repository, Logger& logger)
+            : repository_(repository), logger_(logger) {}
+        Repository& repository_;
+        Logger& logger_;
+    };
+
+    using application =
+        bindings<registration<scope<shared>, storage<Logger>>,
+                  registration<scope<shared>, storage<Repository>>,
+                  registration<scope<unique>, storage<Service>>>;
+
+    container_type container;
+    install<application>(container);
+
+    auto service = container.template resolve<Service>();
+    auto& logger = container.template resolve<Logger&>();
+    auto& repository = container.template resolve<Repository&>();
+
+    ASSERT_EQ(&service.logger_, &logger);
+    ASSERT_EQ(&service.repository_, &repository);
+    ASSERT_EQ(&repository.logger_, &logger);
+}
+
+TYPED_TEST(bindings_test, register_factory_uses_parent_runtime_dependencies) {
+    using container_type = TypeParam;
+
+    struct Logger {};
+    struct Repository {
+        explicit Repository(Logger& logger) : logger_(logger) {}
+        Logger& logger_;
+    };
+    struct Service {
+        explicit Service(Repository& repository) : repository_(repository) {}
+        Repository& repository_;
+    };
+
+    using application =
+        bindings<registration<scope<shared>, storage<Repository>>>;
+
+    container_type container;
+    container.template register_type<scope<shared>, storage<Logger>>();
+    container.register_factory(factory<application, Service>{});
+
+    auto service = container.template resolve<Service>();
+    auto& logger = container.template resolve<Logger&>();
+
+    ASSERT_EQ(&service.repository_.logger_, &logger);
+}
+
+TYPED_TEST(bindings_test, install_nested_component) {
+    using container_type = TypeParam;
+
+    struct IValue {
+        virtual ~IValue() = default;
+        virtual int value() const = 0;
+    };
+
+    struct Value : IValue {
+        int value() const override { return 7; }
+    };
+
+    using infrastructure =
+        bindings<registration<scope<shared>, storage<Value>, interfaces<IValue>>>;
+    using application = bindings<infrastructure>;
+
+    container_type container;
+    install<application>(container);
+
+    ASSERT_EQ(container.template resolve<IValue&>().value(), 7);
+}
+
+TYPED_TEST(bindings_test, install_indexed_bindings) {
+    struct IAnimal {
+        virtual ~IAnimal() = default;
+        virtual int sound() const = 0;
+    };
+
+    struct Dog : IAnimal {
+        int sound() const override { return 1; }
+    };
+
+    struct Cat : IAnimal {
+        int sound() const override { return 2; }
+    };
+
+    using container_traits = indexed_bindings_container_traits<
+        typename TypeParam::container_traits_type>;
+
+    using animal_component =
+        bindings<indexed_registration<value_id<size_t, 1>, scope<shared>,
+                                       storage<Dog>, interfaces<IAnimal>>,
+                  indexed_registration<value_id<size_t, 2>, scope<shared>,
+                                       storage<Cat>, interfaces<IAnimal>>>;
+
+    container<container_traits> container;
+    install<animal_component>(container);
+
+    ASSERT_EQ(container.template resolve<IAnimal&>(size_t(1)).sound(), 1);
+    ASSERT_EQ(container.template resolve<IAnimal&>(size_t(2)).sound(), 2);
+}
+
+} // namespace dingo
