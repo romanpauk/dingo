@@ -962,6 +962,8 @@ class static_container_impl<StaticBindings, type_list<Bindings...>> {
     template <typename... Binds,
               typename = std::enable_if_t<(sizeof...(Binds) != 0)>,
               typename = std::enable_if_t<
+                  (is_bound_value_v<std::decay_t<Binds>> && ...)>,
+              typename = std::enable_if_t<
                   bind_constructor_validation<StaticBindings,
                                               type_list<Bindings...>,
                                               std::decay_t<Binds>...>::value>>
@@ -1000,10 +1002,10 @@ class static_container_impl<StaticBindings, type_list<Bindings...>> {
         if constexpr (sizeof...(Binds) == 0 &&
                       request_unscoped_resolvable_v<StaticBindings, Request>) {
             return resolve_dependency_unscoped<Request>();
+        } else {
+            resolving_context context;
+            return resolve_root<Request>(context, std::forward<Binds>(binds)...);
         }
-
-        resolving_context context;
-        return resolve_root<Request>(context, std::forward<Binds>(binds)...);
     }
 
     template <typename T, typename... Binds>

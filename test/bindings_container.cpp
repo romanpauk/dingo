@@ -183,11 +183,11 @@ TEST(bindings_container_test, external_reference_graph) {
     Logger logger;
     bindings_container<application> container(bind<ILogger&>(logger));
     auto service = container.resolve<Service>();
-    auto& interface = container.resolve<ILogger&>();
+    auto& logger_interface = container.resolve<ILogger&>();
 
-    ASSERT_EQ(&service.logger_, &interface);
-    ASSERT_EQ(&interface, &logger);
-    ASSERT_EQ(interface.value(), 7);
+    ASSERT_EQ(&service.logger_, &logger_interface);
+    ASSERT_EQ(&logger_interface, &logger);
+    ASSERT_EQ(logger_interface.value(), 7);
 }
 
 TEST(bindings_container_test, shared_interface_conversion_cache) {
