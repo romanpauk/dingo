@@ -38,7 +38,8 @@ struct storage_instance_base : Factory {
     template <typename Context, typename Container>
     void construct(Context& context, Container& container) {
         assert(!initialized_);
-        Factory::template construct<Type*>(&instance_, context, container);
+        detail::construct_factory<Type*>(
+            &instance_, context, container, static_cast<Factory&>(*this));
         initialized_ = true;
     }
 #ifdef _MSC_VER
@@ -110,7 +111,8 @@ class shared_storage_instance_impl<
         assert(empty());
         new (&instance_) StoredType(
             type_conversion_traits<StoredType, Type>::convert(
-                Factory::template construct<Type>(context, container)));
+                detail::construct_factory<Type>(
+                    context, container, static_cast<Factory&>(*this))));
         initialized_ = true;
     }
 
@@ -158,7 +160,8 @@ class storage_instance<shared, Type*, StoredType*, Factory>
     template <typename Context, typename Container>
     void construct(Context& context, Container& container) {
         assert(empty());
-        instance_ = Factory::template construct<Type*>(context, container);
+        instance_ = detail::construct_factory<Type*>(
+            context, container, static_cast<Factory&>(*this));
     }
 
     StoredType* get() const {
@@ -199,6 +202,11 @@ class storage<shared, Type, StoredType, Factory, Conversions>
         -> decltype(instance_.get()) {
         if (instance_.empty())
             instance_.construct(context, container);
+        return instance_.get();
+    }
+
+    auto get_stable() -> decltype(instance_.get()) {
+        assert(!instance_.empty());
         return instance_.get();
     }
 

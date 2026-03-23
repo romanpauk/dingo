@@ -96,6 +96,8 @@ if(DINGO_DEVELOPMENT_MODE)
         class_instance_resolver.h
         class_traits.h
         collection_traits.h
+        bindings.h
+        bindings_container.h
         config.h
         constructor.h
         container.h
@@ -118,6 +120,7 @@ if(DINGO_DEVELOPMENT_MODE)
         rtti/static_provider.h
         rtti/rtti.h
         rtti/typeid_provider.h
+        static_container.h
         static_allocator.h
         storage.h
         storage/external.h
@@ -194,6 +197,8 @@ if(DINGO_DEVELOPMENT_MODE)
             test/assert.h
             test/class.h
             test/class_factory.cpp
+            test/bindings.cpp
+            test/bindings_container.cpp
             test/construct.cpp
             test/constructor_detection.cpp
             test/containers.h

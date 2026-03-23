@@ -39,7 +39,9 @@ template <typename... Args> struct interfaces<type_list<Args...>> {
     template <typename U> using rebind_t = interfaces<U>;
 };
 
-template <typename T> struct factory {
+template <typename T, typename... Args> struct factory;
+
+template <typename T> struct factory<T> {
     using type = T;
     template <typename U> using rebind_t = factory<U>;
 };

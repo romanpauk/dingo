@@ -37,12 +37,14 @@ class storage<unique, Type, StoredType, Factory, Conversions> : Factory {
 
     template <typename Context, typename Container>
     Type resolve(Context& context, Container& container) {
-        return Factory::template construct<Type>(context, container);
+        return detail::construct_factory<Type>(
+            context, container, static_cast<Factory&>(*this));
     }
 
     template <typename Context, typename Container>
     void resolve(void* ptr, Context& context, Container& container) {
-        Factory::template construct<Type>(ptr, context, container);
+        detail::construct_factory<Type>(
+            ptr, context, container, static_cast<Factory&>(*this));
     }
 };
 } // namespace detail
