@@ -122,6 +122,22 @@ TEST(bindings_static_check, ambiguous_binding) {
     static_assert(!bindings_constructible_v<application, IValue&>);
 }
 
+TEST(bindings_static_check, ambiguous_dependency) {
+    struct IValue {};
+    struct ValueA : IValue {};
+    struct ValueB : IValue {};
+    struct Consumer {
+        explicit Consumer(IValue&) {}
+    };
+
+    using application =
+        bindings<registration<scope<shared>, storage<ValueA>, interfaces<IValue>>,
+                  registration<scope<shared>, storage<ValueB>, interfaces<IValue>>,
+                  registration<scope<unique>, storage<Consumer>>>;
+
+    static_assert(!bindings_constructible_v<application, Consumer>);
+}
+
 TEST(bindings_static_check, cycle_policy) {
     struct B;
 
@@ -161,7 +177,7 @@ TEST(bindings_static_check, indexed_request) {
                   indexed_request<IAnimal&, value_id<size_t, 1>>>);
 }
 
-TYPED_TEST(bindings_test, install_component) {
+TYPED_TEST(bindings_test, register_bindings_component) {
     using container_type = TypeParam;
 
     struct A {};
@@ -175,15 +191,15 @@ TYPED_TEST(bindings_test, install_component) {
                   registration<scope<unique>, storage<B>>>;
 
     container_type container;
-    install<app_component>(container);
+    container.template register_bindings<app_component, B, A*>();
 
     auto b = container.template resolve<B>();
-    auto& a = container.template resolve<A&>();
+    auto* a = container.template resolve<A*>();
 
-    ASSERT_EQ(&b.a_, &a);
+    ASSERT_EQ(&b.a_, a);
 }
 
-TYPED_TEST(bindings_test, install_autodetected_graph) {
+TYPED_TEST(bindings_test, register_bindings_autodetected_graph) {
     using container_type = TypeParam;
 
     struct Logger {};
@@ -204,18 +220,52 @@ TYPED_TEST(bindings_test, install_autodetected_graph) {
                   registration<scope<unique>, storage<Service>>>;
 
     container_type container;
-    install<application>(container);
+    container.template register_bindings<application, Service, Logger*,
+                                         Repository*>();
 
     auto service = container.template resolve<Service>();
-    auto& logger = container.template resolve<Logger&>();
-    auto& repository = container.template resolve<Repository&>();
+    auto* logger = container.template resolve<Logger*>();
+    auto* repository = container.template resolve<Repository*>();
 
-    ASSERT_EQ(&service.logger_, &logger);
-    ASSERT_EQ(&service.repository_, &repository);
-    ASSERT_EQ(&repository.logger_, &logger);
+    ASSERT_EQ(&service.logger_, logger);
+    ASSERT_EQ(&service.repository_, repository);
+    ASSERT_EQ(&repository->logger_, logger);
 }
 
-TYPED_TEST(bindings_test, register_factory_uses_parent_runtime_dependencies) {
+TYPED_TEST(bindings_test, register_bindings_supports_external_binds) {
+    using container_type = TypeParam;
+
+    struct ILogger {
+        virtual ~ILogger() = default;
+        virtual int value() const = 0;
+    };
+    struct Logger : ILogger {
+        int value() const override { return 7; }
+    };
+    struct Service {
+        explicit Service(ILogger& logger) : logger_(logger) {}
+        ILogger& logger_;
+    };
+
+    using application =
+        bindings<registration<scope<external>, storage<Logger&>,
+                               interfaces<ILogger>>,
+                  registration<scope<unique>, storage<Service>>>;
+
+    Logger logger;
+    container_type container;
+    container.template register_bindings<application, Service, ILogger*>(
+        bind<ILogger&>(logger));
+
+    auto service = container.template resolve<Service>();
+    auto* logger_interface = container.template resolve<ILogger*>();
+
+    ASSERT_EQ(&service.logger_, logger_interface);
+    ASSERT_EQ(logger_interface, &logger);
+    ASSERT_EQ(logger_interface->value(), 7);
+}
+
+TYPED_TEST(bindings_test, register_bindings_uses_parent_runtime_dependencies) {
     using container_type = TypeParam;
 
     struct Logger {};
@@ -233,7 +283,7 @@ TYPED_TEST(bindings_test, register_factory_uses_parent_runtime_dependencies) {
 
     container_type container;
     container.template register_type<scope<shared>, storage<Logger>>();
-    container.register_factory(factory<application, Service>{});
+    container.template register_bindings<application, Service>();
 
     auto service = container.template resolve<Service>();
     auto& logger = container.template resolve<Logger&>();
@@ -241,7 +291,58 @@ TYPED_TEST(bindings_test, register_factory_uses_parent_runtime_dependencies) {
     ASSERT_EQ(&service.repository_.logger_, &logger);
 }
 
-TYPED_TEST(bindings_test, install_nested_component) {
+TYPED_TEST(bindings_test, register_bindings_root_supports_external_binds) {
+    using container_type = TypeParam;
+
+    struct ILogger {
+        virtual ~ILogger() = default;
+        virtual int value() const = 0;
+    };
+    struct Logger : ILogger {
+        int value() const override { return 7; }
+    };
+    struct Service {
+        explicit Service(ILogger& logger) : logger_(logger) {}
+        ILogger& logger_;
+    };
+
+    using application =
+        bindings<registration<scope<external>, storage<Logger&>,
+                               interfaces<ILogger>>>;
+
+    Logger logger;
+    container_type container;
+    container.template register_bindings<application, Service>(
+        bind<ILogger&>(logger));
+
+    auto service = container.template resolve<Service>();
+
+    ASSERT_EQ(&service.logger_, &logger);
+    ASSERT_EQ(service.logger_.value(), 7);
+}
+
+TYPED_TEST(bindings_test, register_bindings_preserves_bindings_shared_state) {
+    using container_type = TypeParam;
+
+    struct Repository {};
+    struct Service {
+        explicit Service(Repository& repository) : repository_(repository) {}
+        Repository& repository_;
+    };
+
+    using application =
+        bindings<registration<scope<shared>, storage<Repository>>>;
+
+    container_type container;
+    container.template register_bindings<application, Service>();
+
+    auto service1 = container.template resolve<Service>();
+    auto service2 = container.template resolve<Service>();
+
+    ASSERT_EQ(&service1.repository_, &service2.repository_);
+}
+
+TYPED_TEST(bindings_test, register_bindings_nested_component) {
     using container_type = TypeParam;
 
     struct IValue {
@@ -258,12 +359,12 @@ TYPED_TEST(bindings_test, install_nested_component) {
     using application = bindings<infrastructure>;
 
     container_type container;
-    install<application>(container);
+    container.template register_bindings<application, IValue*>();
 
-    ASSERT_EQ(container.template resolve<IValue&>().value(), 7);
+    ASSERT_EQ(container.template resolve<IValue*>()->value(), 7);
 }
 
-TYPED_TEST(bindings_test, install_indexed_bindings) {
+TYPED_TEST(bindings_test, register_bindings_indexed_bindings) {
     struct IAnimal {
         virtual ~IAnimal() = default;
         virtual int sound() const = 0;
@@ -287,10 +388,12 @@ TYPED_TEST(bindings_test, install_indexed_bindings) {
                                        storage<Cat>, interfaces<IAnimal>>>;
 
     container<container_traits> container;
-    install<animal_component>(container);
+    container.template register_bindings<
+        animal_component, indexed_request<IAnimal*, value_id<size_t, 1>>,
+        indexed_request<IAnimal*, value_id<size_t, 2>>>();
 
-    ASSERT_EQ(container.template resolve<IAnimal&>(size_t(1)).sound(), 1);
-    ASSERT_EQ(container.template resolve<IAnimal&>(size_t(2)).sound(), 2);
+    ASSERT_EQ(container.template resolve<IAnimal*>(size_t(1))->sound(), 1);
+    ASSERT_EQ(container.template resolve<IAnimal*>(size_t(2))->sound(), 2);
 }
 
 } // namespace dingo

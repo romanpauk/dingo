@@ -171,16 +171,9 @@ struct bind_constructor_validation;
 
 template <typename StaticBindings, typename... Bindings, typename... Binds>
 struct bind_constructor_validation<StaticBindings, type_list<Bindings...>,
-                                   Binds...> : std::true_type {
-    static_assert((is_bound_value_v<Binds> && ...),
-                  "static_container constructor expects dingo::bind(...) arguments");
-    static_assert((bound_valid<StaticBindings, Binds>::value && ...),
-                  "bind does not match an external bindings entry");
-    static_assert(
-        external_bindings_satisfied<StaticBindings, type_list<Bindings...>,
-                                    Binds...>::value,
-        "external bindings entrys must be supplied exactly once");
-};
+                                   Binds...>
+    : bind_argument_validation<StaticBindings, type_list<Bindings...>,
+                               Binds...> {};
 
 template <typename Factory, typename ArgumentTypes> struct direct_factory_adapter;
 
@@ -938,6 +931,10 @@ class static_container_impl<StaticBindings, type_list<Bindings...>> {
         !std::is_same_v<direct_binding_t<Request>, no_binding_id> &&
         !std::is_same_v<direct_binding_t<Request>, ambiguous_binding>;
 
+    template <typename Request>
+    static constexpr bool has_ambiguous_binding_v =
+        std::is_same_v<direct_binding_t<Request>, ambiguous_binding>;
+
     template <typename Request, typename... Binds>
     using provided_bindings_t = type_list<std::decay_t<Binds>...>;
 
@@ -999,13 +996,11 @@ class static_container_impl<StaticBindings, type_list<Bindings...>> {
             }
         }
 
-        if constexpr (sizeof...(Binds) == 0 &&
-                      request_unscoped_resolvable_v<StaticBindings, Request>) {
-            return resolve_dependency_unscoped<Request>();
-        } else {
-            resolving_context context;
-            return resolve_root<Request>(context, std::forward<Binds>(binds)...);
-        }
+        return resolve_with_runtime_context<Request>(
+            std::bool_constant<sizeof...(Binds) == 0 &&
+                               request_unscoped_resolvable_v<StaticBindings,
+                                                             Request>>{},
+            std::forward<Binds>(binds)...);
     }
 
     template <typename T, typename... Binds>
@@ -1184,6 +1179,19 @@ class static_container_impl<StaticBindings, type_list<Bindings...>> {
         }
     }
 
+    template <typename Request, typename... Binds>
+    top_level_resolved_type_t<Request> resolve_with_runtime_context(
+        std::true_type, Binds&&...) {
+        return resolve_dependency_unscoped<Request>();
+    }
+
+    template <typename Request, typename... Binds>
+    top_level_resolved_type_t<Request> resolve_with_runtime_context(
+        std::false_type, Binds&&... binds) {
+        resolving_context context;
+        return resolve_root<Request>(context, std::forward<Binds>(binds)...);
+    }
+
     template <typename Binding, typename FirstBind, typename... RestBinds>
     static decltype(auto) external_bind(FirstBind&& first_bind,
                                         RestBinds&&... rest_binds) {
@@ -1214,6 +1222,182 @@ class static_container_impl<StaticBindings, type_list<Bindings...>> {
     std::tuple<binding_state_type<Bindings>...> states_;
 };
 
+template <typename StaticBindings, typename ParentContainer, typename Bindings>
+class runtime_bindings_container_impl;
+
+template <typename StaticBindings, typename ParentContainer, typename... Bindings>
+class runtime_bindings_container_impl<StaticBindings, ParentContainer,
+                                      type_list<Bindings...>> {
+  public:
+    using bindings_type = StaticBindings;
+
+  private:
+    using self_type = runtime_bindings_container_impl<
+        StaticBindings, ParentContainer, type_list<Bindings...>>;
+
+    template <typename Binding>
+    using binding_state_type = binding_state_t<Binding, self_type>;
+
+    template <typename Request>
+    using resolved_type_t = typename request_traits<Request>::request_type;
+
+    template <typename Request>
+    using top_level_resolved_type_t =
+        std::conditional_t<std::is_rvalue_reference_v<resolved_type_t<Request>>,
+                           std::remove_reference_t<resolved_type_t<Request>>,
+                           resolved_type_t<Request>>;
+
+    template <typename Request>
+    using direct_binding_t =
+        find_binding_definition_t<type_list<Bindings...>,
+                                  decay_t<resolved_type_t<Request>>,
+                                  typename request_traits<Request>::id_type>;
+
+    template <typename Request>
+    static constexpr bool has_direct_binding_v =
+        !std::is_same_v<direct_binding_t<Request>, no_binding_id> &&
+        !std::is_same_v<direct_binding_t<Request>, ambiguous_binding>;
+
+    template <typename Request>
+    static constexpr bool has_ambiguous_binding_v =
+        std::is_same_v<direct_binding_t<Request>, ambiguous_binding>;
+
+  public:
+    template <typename... Binds,
+              typename = std::enable_if_t<
+                  (is_bound_value_v<std::decay_t<Binds>> && ...)>>
+    explicit runtime_bindings_container_impl(ParentContainer* parent,
+                                             Binds&&... binds)
+        : parent_(parent),
+          states_(make_state<Bindings>(std::forward<Binds>(binds)...)...) {
+        using validation = bind_argument_validation<
+            StaticBindings, type_list<Bindings...>, std::decay_t<Binds>...>;
+        static_assert(validation::value,
+                      "invalid bind arguments for runtime_bindings_container");
+    }
+
+    template <typename Request>
+    top_level_resolved_type_t<Request> resolve() {
+        resolving_context context;
+        return resolve<Request, true>(context);
+    }
+
+    template <typename Request,
+              typename R = std::conditional_t<
+                  std::is_rvalue_reference_v<resolved_type_t<Request>>,
+                  std::remove_reference_t<resolved_type_t<Request>>,
+                  resolved_type_t<Request>>>
+    R resolve(resolving_context& context) {
+        return resolve_dependency<Request>(context);
+    }
+
+    template <typename Request, bool RemoveRvalueReferences, bool = true,
+              typename R = std::conditional_t<
+                  RemoveRvalueReferences &&
+                      std::is_rvalue_reference_v<resolved_type_t<Request>>,
+                  std::remove_reference_t<resolved_type_t<Request>>,
+                  resolved_type_t<Request>>>
+    R resolve(resolving_context& context) {
+        if constexpr (!RemoveRvalueReferences &&
+                      std::is_rvalue_reference_v<resolved_type_t<Request>>) {
+            using temporary_type =
+                std::remove_reference_t<resolved_type_t<Request>>;
+            auto& instance =
+                context.template construct<temporary_type>(resolve<Request>(context));
+            return std::move(instance);
+        } else {
+            return resolve<Request>(context);
+        }
+    }
+
+    template <typename T,
+              typename Factory = ::dingo::constructor_detection<decay_t<T>>>
+    T construct(Factory factory = Factory()) {
+        resolving_context context;
+        return construct<T>(context, factory);
+    }
+
+    template <typename T,
+              typename Factory = ::dingo::constructor_detection<decay_t<T>>>
+    T construct(resolving_context& context, Factory factory = Factory()) {
+        return factory.template construct<T>(context, *this);
+    }
+
+  private:
+    template <typename Request>
+    top_level_resolved_type_t<Request> resolve_parent(
+        resolving_context& context) {
+        static_assert(!std::is_same_v<ParentContainer, void>,
+                      "missing parent container");
+        assert(parent_ != nullptr);
+
+        using id_type = typename request_traits<Request>::id_type;
+        if constexpr (std::is_same_v<id_type, no_binding_id>) {
+            return parent_->template resolve<resolved_type_t<Request>, false>(
+                context);
+        } else {
+            return parent_->template resolve<resolved_type_t<Request>, false>(
+                context, id_type::get());
+        }
+    }
+
+    template <typename Request>
+    top_level_resolved_type_t<Request> resolve_dependency(
+        resolving_context& context) {
+        if constexpr (has_ambiguous_binding_v<Request>) {
+            static_assert(!has_ambiguous_binding_v<Request>,
+                          "binding is ambiguous");
+        } else if constexpr (has_direct_binding_v<Request>) {
+            using binding = direct_binding_t<Request>;
+
+            if constexpr (binding_state_type<binding>::supports_stable_resolution) {
+                if (state<binding>().is_stable()) {
+                    if constexpr (binding_state_type<binding>::template supports_exact_root_resolution<
+                                      Request>) {
+                        return state<binding>().template resolve_stable_exact<Request>();
+                    } else {
+                        return state<binding>().template resolve_stable<Request>();
+                    }
+                }
+            }
+
+            return state<binding>().template resolve<Request>(context, *this);
+        } else {
+            return resolve_parent<Request>(context);
+        }
+    }
+
+    template <typename Binding> binding_state_type<Binding>& state() {
+        return std::get<binding_state_type<Binding>>(states_);
+    }
+
+    template <typename Binding, typename FirstBind, typename... RestBinds>
+    static decltype(auto) external_bind(FirstBind&& first_bind,
+                                        RestBinds&&... rest_binds) {
+        if constexpr (bound_matches_binding<Binding, StaticBindings,
+                                            std::decay_t<FirstBind>>::value) {
+            return std::forward<FirstBind>(first_bind);
+        } else {
+            static_assert(sizeof...(RestBinds) != 0,
+                          "missing external bindings entry");
+            return external_bind<Binding>(std::forward<RestBinds>(rest_binds)...);
+        }
+    }
+
+    template <typename Binding, typename... Binds>
+    static binding_state_type<Binding> make_state(Binds&&... binds) {
+        if constexpr (std::is_same_v<typename Binding::scope, external>) {
+            return binding_state_type<Binding>(
+                external_bind<Binding>(std::forward<Binds>(binds)...));
+        } else {
+            return binding_state_type<Binding>();
+        }
+    }
+
+    ParentContainer* parent_;
+    std::tuple<binding_state_type<Bindings>...> states_;
+};
+
 } // namespace detail
 
 template <typename StaticBindings>
@@ -1222,6 +1406,21 @@ class static_container
                                            detail::binding_definitions_t<StaticBindings>> {
     using base_type = detail::static_container_impl<
         StaticBindings, detail::binding_definitions_t<StaticBindings>>;
+
+  public:
+    using base_type::base_type;
+    using base_type::construct;
+    using base_type::resolve;
+};
+
+template <typename StaticBindings, typename ParentContainer>
+class runtime_bindings_container
+    : public detail::runtime_bindings_container_impl<
+          StaticBindings, ParentContainer,
+          detail::binding_definitions_t<StaticBindings>> {
+    using base_type = detail::runtime_bindings_container_impl<
+        StaticBindings, ParentContainer,
+        detail::binding_definitions_t<StaticBindings>>;
 
   public:
     using base_type::base_type;

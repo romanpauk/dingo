@@ -24,10 +24,10 @@ int main() {
                   registration<scope<unique>, storage<Service>>>;
 
     container<> container;
-    install<application>(container);
+    container.template register_bindings<application, Service, Logger*>();
 
     auto service = container.resolve<Service>();
-    auto& logger = container.resolve<Logger&>();
+    auto* logger = container.resolve<Logger*>();
 
-    return &service.logger_ == &logger ? 0 : 1;
+    return &service.logger_ == logger ? 0 : 1;
 }

@@ -43,6 +43,11 @@ template <typename T> struct is_none : std::bool_constant<false> {};
 template <> struct is_none<none_t> : std::bool_constant<true> {};
 template <typename T> static constexpr auto is_none_v = is_none<T>::value;
 
+namespace detail {
+template <typename Root, typename CompiledContainer>
+struct registered_bindings_factory;
+}
+
 struct dynamic_container_traits {
     template <typename> using rebind_t = dynamic_container_traits;
 
@@ -87,6 +92,9 @@ class container : public allocator_base<Allocator> {
     template <typename ContainerTraitsT, typename AllocatorT,
               typename ParentContainerT>
     friend class container;
+    template <typename StaticBindings, typename ParentContainerT,
+              typename BindingsT>
+    friend class detail::runtime_bindings_container_impl;
 
     template <typename ContainerTraitsT, typename AllocatorT,
               typename ParentContainerT>
@@ -170,27 +178,28 @@ class container : public allocator_base<Allocator> {
         }));
     }
 
-    template <typename Factory>
-    auto& register_factory(Factory&& factory) {
-        using factory_type = std::decay_t<Factory>;
-        using root_type = typename factory_type::root_type;
-        using bindings_type = typename factory_type::bindings_type;
-        using factory_child_container_type =
-            typename container_type::template child_container_type<factory_type>;
+    template <typename Bindings, typename Root, typename... Roots,
+              typename... Binds>
+    auto& register_bindings(Binds&&... binds) {
+        using bindings_type = Bindings;
+        using compiled_container_type =
+            runtime_bindings_container<bindings_type, container_type>;
+        using validation = detail::bind_argument_validation<
+            bindings_type, detail::binding_definitions_t<bindings_type>,
+            std::decay_t<Binds>...>;
 
-        static_assert(
-            !detail::bindings_has_external_bindings<bindings_type>::value,
-            "register_factory does not support external bindings; bind them directly with factory::operator()");
+        static_assert(validation::value,
+                      "invalid bind arguments for register_bindings");
 
-        (void)factory;
-        auto child = std::allocate_shared<factory_child_container_type>(
-            allocator_traits::rebind<factory_child_container_type>(
-                get_allocator()),
-            this, get_allocator());
-        install<bindings_type>(*child);
-        register_type<scope<unique>, storage<root_type>>(
-            callable([child] { return child->template construct<root_type>(); }));
-        return *child;
+        auto compiled_container =
+            std::allocate_shared<compiled_container_type>(
+                allocator_traits::rebind<compiled_container_type>(
+                    get_allocator()),
+                this, std::forward<Binds>(binds)...);
+
+        register_bindings_root<Root>(compiled_container);
+        (register_bindings_root<Roots>(compiled_container), ...);
+        return *compiled_container;
     }
 
     template <typename... TypeArgs> auto& register_type_collection() {
@@ -333,6 +342,11 @@ class container : public allocator_base<Allocator> {
                       1) {
             using interface_type = std::tuple_element_t<
                 0, typename registration::interface_type::type_tuple>;
+            using factory_key_type = std::conditional_t<
+                !is_none_v<std::decay_t<IdType>> && !is_none_v<std::decay_t<Arg>>,
+                type_list<interface_type, typename storage_type::type,
+                          std::decay_t<Arg>>,
+                type_list<interface_type, typename storage_type::type>>;
 
             using class_instance_factory_type = class_instance_factory<
                 container_type, typename annotated_traits<interface_type>::type,
@@ -342,13 +356,15 @@ class container : public allocator_base<Allocator> {
                 auto&& [factory, factory_container] =
                     allocate_factory<class_instance_factory_type>(
                         this, std::forward<Arg>(arg));
-                register_type_factory<interface_type, storage_type>(
+                register_type_factory<interface_type, storage_type,
+                                      factory_key_type>(
                     std::move(factory), std::move(id));
                 return *factory_container;
             } else {
                 auto&& [factory, factory_container] =
                     allocate_factory<class_instance_factory_type>(this);
-                register_type_factory<interface_type, storage_type>(
+                register_type_factory<interface_type, storage_type,
+                                      factory_key_type>(
                     std::move(factory), std::move(id));
                 return *factory_container;
             }
@@ -370,6 +386,12 @@ class container : public allocator_base<Allocator> {
                 typename registration::interface_type::type{},
                 [&](auto element) {
                     using interface_type = typename decltype(element)::type;
+                    using factory_key_type = std::conditional_t<
+                        !is_none_v<std::decay_t<IdType>> &&
+                            !is_none_v<std::decay_t<Arg>>,
+                        type_list<interface_type, typename storage_type::type,
+                                  std::decay_t<Arg>>,
+                        type_list<interface_type, typename storage_type::type>>;
 
                     using class_instance_factory_type = class_instance_factory<
                         container_type,
@@ -377,7 +399,8 @@ class container : public allocator_base<Allocator> {
                         storage_type,
                         std::shared_ptr<class_instance_factory_data_type>>;
 
-                    register_type_factory<interface_type, storage_type>(
+                    register_type_factory<interface_type, storage_type,
+                                          factory_key_type>(
                         allocate_factory<class_instance_factory_type>(data)
                             .first,
                         id);
@@ -386,8 +409,10 @@ class container : public allocator_base<Allocator> {
         }
     }
 
-    template <typename TypeInterface, typename TypeStorage, typename Factory,
-              typename IdType>
+    template <typename TypeInterface, typename TypeStorage,
+              typename FactoryKey =
+                  type_list<TypeInterface, typename TypeStorage::type>,
+              typename Factory, typename IdType>
     void register_type_factory(Factory&& factory, IdType&& id) {
         // static_allocator returns null in the case an allocation (eg. the
         // factory can be null) There is no need to throw here as the insertion
@@ -403,10 +428,8 @@ class container : public allocator_base<Allocator> {
         auto pb =
             type_factories_.template insert<TypeInterface>(get_allocator());
         auto& data = pb.first;
-        if (!data.factories
-                 .template insert<
-                     type_list<TypeInterface, typename TypeStorage::type>>(
-                     std::forward<Factory>(factory))
+        if (!data.factories.template insert<FactoryKey>(
+                 std::forward<Factory>(factory))
                  .second) {
             throw type_already_registered_exception();
         }
@@ -415,8 +438,7 @@ class container : public allocator_base<Allocator> {
             if (!data.template get_index<IdType>(get_allocator())
                      .emplace(std::forward<IdType>(id),
                               index_data{factory_ptr, nullptr})) {
-                bool erased = data.factories.template erase<
-                    type_list<TypeInterface, typename TypeStorage::type>>();
+                bool erased = data.factories.template erase<FactoryKey>();
                 assert(erased);
                 (void)erased;
                 throw type_index_already_registered_exception();
@@ -535,6 +557,28 @@ class container : public allocator_base<Allocator> {
         return class_instance_factory_traits<rtti_type, T>::convert(ptr);
     }
 
+    template <typename Root, typename CompiledContainer>
+    void register_bindings_root(
+        const std::shared_ptr<CompiledContainer>& compiled_container) {
+        using request_type = typename detail::request_traits<Root>::request_type;
+        using id_type = typename detail::request_traits<Root>::id_type;
+
+        static_assert(
+            !std::is_reference_v<request_type>,
+            "register_bindings roots must not be references; use a value, pointer, or smart pointer root");
+
+        if constexpr (std::is_same_v<id_type, detail::no_binding_id>) {
+            register_type<scope<unique>, storage<request_type>>(
+                detail::registered_bindings_factory<Root, CompiledContainer>(
+                    compiled_container));
+        } else {
+            register_indexed_type<scope<unique>, storage<request_type>>(
+                detail::registered_bindings_factory<Root, CompiledContainer>(
+                    compiled_container),
+                id_type::get());
+        }
+    }
+
     template <class Storage, class TypeInterface, class Type>
     void check_interface_requirements() {
         static_assert(!std::is_reference_v<TypeInterface>);
@@ -602,18 +646,37 @@ class container : public allocator_base<Allocator> {
 
 namespace detail {
 
-template <typename Root, typename Container>
-decltype(auto) resolve_bindings_root(Container& container) {
-    using traits = request_traits<Root>;
-    using request_type = typename traits::request_type;
-    using id_type = typename traits::id_type;
+template <typename Root, typename CompiledContainer>
+struct registered_bindings_factory {
+    explicit registered_bindings_factory(
+        std::shared_ptr<CompiledContainer> compiled_container)
+        : compiled_container_(std::move(compiled_container)) {}
 
-    if constexpr (std::is_same_v<id_type, no_binding_id>) {
-        return container.template resolve<request_type>();
-    } else {
-        return container.template resolve<request_type>(id_type::get());
+    template <typename Type, typename Context, typename Container>
+    Type construct(Context& context, Container&) {
+        if constexpr (detail::open_root_supported<Root>::value) {
+            using request_type = typename detail::request_traits<Root>::request_type;
+            return compiled_container_->template construct<request_type>(context);
+        } else {
+            return compiled_container_->template resolve<Root>(context);
+        }
     }
-}
+
+    template <typename Type, typename Context, typename Container>
+    void construct(void* ptr, Context& context, Container&) {
+        if constexpr (detail::open_root_supported<Root>::value) {
+            using request_type = typename detail::request_traits<Root>::request_type;
+            new (ptr) decay_t<Type>(
+                compiled_container_->template construct<request_type>(context));
+        } else {
+            new (ptr) decay_t<Type>(
+                compiled_container_->template resolve<Root>(context));
+        }
+    }
+
+  private:
+    std::shared_ptr<CompiledContainer> compiled_container_;
+};
 
 } // namespace detail
 
@@ -640,16 +703,18 @@ struct factory<bindings<Entries...>, Root> {
     }
 
     template <typename Type, typename Context, typename Container>
-    Type construct(Context&, Container& container) const {
+    Type construct(Context& context, Container& container) const {
         static_assert(
             !detail::bindings_has_external_bindings<bindings_type>::value,
-            "register_factory does not support external bindings; bind them directly with factory::operator()");
+            "register_bindings does not support external bindings; bind them directly with factory::operator()");
 
-        using child_container_type =
-            typename Container::template child_container_type<self_type>;
-        child_container_type child(&container, container.get_allocator());
-        install<bindings_type>(child);
-        return detail::resolve_bindings_root<root_type>(child);
+        runtime_bindings_container<bindings_type, Container> child(&container);
+        if constexpr (detail::open_root_supported<root_type>::value) {
+            using request_type = typename detail::request_traits<root_type>::request_type;
+            return child.template construct<request_type>(context);
+        } else {
+            return child.template resolve<root_type>(context);
+        }
     }
 };
 } // namespace dingo

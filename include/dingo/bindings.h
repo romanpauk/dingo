@@ -258,6 +258,22 @@ struct external_bindings_satisfied<Component, type_list<Bindings...>,
             binding_bound_count<Bindings, Component, Binds...>::value == 1) &&
            ...)> {};
 
+template <typename Component, typename Bindings, typename... Binds>
+struct bind_argument_validation;
+
+template <typename Component, typename... Bindings, typename... Binds>
+struct bind_argument_validation<Component, type_list<Bindings...>, Binds...>
+    : std::true_type {
+    static_assert((is_bound_value_v<Binds> && ...),
+                  "register_bindings expects dingo::bind(...) arguments");
+    static_assert((bound_valid<Component, Binds>::value && ...),
+                  "bind does not match an external bindings entry");
+    static_assert(
+        external_bindings_satisfied<Component, type_list<Bindings...>,
+                                    Binds...>::value,
+        "external bindings entries must be supplied exactly once");
+};
+
 template <typename Binding, typename Component>
 void find_external_bind() {
     static_assert(dependent_false<Binding, Component>::value,
@@ -1082,65 +1098,6 @@ struct bindings_has_external_bindings<bindings<Entries...>>
           external_binding_count_for_bindings<
               binding_definitions_t<bindings<Entries...>>>::value != 0> {};
 
-template <typename Component, typename Entry> struct install_bindings_entry {
-    template <typename Container, typename... Binds>
-    static void install(Container&, Binds&&...) {
-        static_assert(dependent_false<Entry>::value,
-                      "unsupported bindings entry");
-    }
-};
-
-template <typename Component, typename... Policies>
-struct install_bindings_entry<Component, registration<Policies...>> {
-    using registration_type = type_registration<Policies...>;
-
-    template <typename Container, typename... Binds>
-    static void install(Container& container, Binds&&... binds) {
-        if constexpr (std::is_same_v<typename registration_type::scope_type::type,
-                                     external>) {
-            using binding_type = binding_definition<Policies...>;
-            auto&& bind = find_external_bind<binding_type, Component>(
-                std::forward<Binds>(binds)...);
-            container.template register_type<Policies...>(
-                std::forward<decltype(bind)>(bind).get());
-        } else {
-            container.template register_type<Policies...>();
-        }
-    }
-};
-
-template <typename Component, typename Id, typename... Policies>
-struct install_bindings_entry<Component, indexed_registration<Id, Policies...>> {
-    using registration_type = type_registration<Policies...>;
-
-    template <typename Container, typename... Binds>
-    static void install(Container& container, Binds&&... binds) {
-        if constexpr (std::is_same_v<typename registration_type::scope_type::type,
-                                     external>) {
-            using binding_type = indexed_binding_definition<Id, Policies...>;
-            auto&& bind = find_external_bind<binding_type, Component>(
-                std::forward<Binds>(binds)...);
-            container.template register_indexed_type<Policies...>(
-                std::forward<decltype(bind)>(bind).get(), Id::get());
-        } else {
-            container.template register_indexed_type<Policies...>(Id::get());
-        }
-    }
-};
-
-template <typename Component, typename... Entries>
-struct install_bindings_entry<Component, bindings<Entries...>> {
-    template <typename Container, typename... Binds>
-    static void install(Container& container, Binds&&... binds) {
-        using swallow = int[];
-        (void)swallow{
-            0,
-            (install_bindings_entry<Component, Entries>::install(
-                 container, std::forward<Binds>(binds)...),
-             0)...};
-    }
-};
-
 } // namespace detail
 
 template <typename Component, typename Request,
@@ -1171,12 +1128,6 @@ auto bind(Value&& value) {
 
     return detail::bound_value<request_type, id_type, stored_type>(
         std::forward<Value>(value));
-}
-
-template <typename Component, typename Container, typename... Binds>
-void install(Container& container, Binds&&... binds) {
-    detail::install_bindings_entry<Component, Component>::install(
-        container, std::forward<Binds>(binds)...);
 }
 
 } // namespace dingo
