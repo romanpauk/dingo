@@ -191,12 +191,12 @@ TYPED_TEST(bindings_test, register_bindings_component) {
                   registration<scope<unique>, storage<B>>>;
 
     container_type container;
-    container.template register_bindings<app_component, B, A*>();
+    container.template register_bindings<app_component, B>();
 
-    auto b = container.template resolve<B>();
-    auto* a = container.template resolve<A*>();
+    auto b1 = container.template resolve<B>();
+    auto b2 = container.template resolve<B>();
 
-    ASSERT_EQ(&b.a_, a);
+    ASSERT_EQ(&b1.a_, &b2.a_);
 }
 
 TYPED_TEST(bindings_test, register_bindings_autodetected_graph) {
@@ -220,16 +220,11 @@ TYPED_TEST(bindings_test, register_bindings_autodetected_graph) {
                   registration<scope<unique>, storage<Service>>>;
 
     container_type container;
-    container.template register_bindings<application, Service, Logger*,
-                                         Repository*>();
+    container.template register_bindings<application, Service>();
 
     auto service = container.template resolve<Service>();
-    auto* logger = container.template resolve<Logger*>();
-    auto* repository = container.template resolve<Repository*>();
 
-    ASSERT_EQ(&service.logger_, logger);
-    ASSERT_EQ(&service.repository_, repository);
-    ASSERT_EQ(&repository->logger_, logger);
+    ASSERT_EQ(&service.repository_.logger_, &service.logger_);
 }
 
 TYPED_TEST(bindings_test, register_bindings_supports_external_binds) {
@@ -254,15 +249,13 @@ TYPED_TEST(bindings_test, register_bindings_supports_external_binds) {
 
     Logger logger;
     container_type container;
-    container.template register_bindings<application, Service, ILogger*>(
+    container.template register_bindings<application, Service>(
         bind<ILogger&>(logger));
 
     auto service = container.template resolve<Service>();
-    auto* logger_interface = container.template resolve<ILogger*>();
 
-    ASSERT_EQ(&service.logger_, logger_interface);
-    ASSERT_EQ(logger_interface, &logger);
-    ASSERT_EQ(logger_interface->value(), 7);
+    ASSERT_EQ(&service.logger_, &logger);
+    ASSERT_EQ(service.logger_.value(), 7);
 }
 
 TYPED_TEST(bindings_test, register_bindings_uses_parent_runtime_dependencies) {
@@ -354,14 +347,20 @@ TYPED_TEST(bindings_test, register_bindings_nested_component) {
         int value() const override { return 7; }
     };
 
+    struct Service {
+        explicit Service(IValue& value) : value_(value) {}
+        IValue& value_;
+    };
+
     using infrastructure =
         bindings<registration<scope<shared>, storage<Value>, interfaces<IValue>>>;
-    using application = bindings<infrastructure>;
+    using application =
+        bindings<infrastructure, registration<scope<unique>, storage<Service>>>;
 
     container_type container;
-    container.template register_bindings<application, IValue*>();
+    container.template register_bindings<application, Service>();
 
-    ASSERT_EQ(container.template resolve<IValue*>()->value(), 7);
+    ASSERT_EQ(container.template resolve<Service>().value_.value(), 7);
 }
 
 TYPED_TEST(bindings_test, register_bindings_indexed_bindings) {
@@ -378,22 +377,23 @@ TYPED_TEST(bindings_test, register_bindings_indexed_bindings) {
         int sound() const override { return 2; }
     };
 
+    using dog_id = value_id<size_t, 1>;
+    using cat_id = value_id<size_t, 2>;
+
     using container_traits = indexed_bindings_container_traits<
         typename TypeParam::container_traits_type>;
 
     using animal_component =
-        bindings<indexed_registration<value_id<size_t, 1>, scope<shared>,
-                                       storage<Dog>, interfaces<IAnimal>>,
-                  indexed_registration<value_id<size_t, 2>, scope<shared>,
-                                       storage<Cat>, interfaces<IAnimal>>>;
+        bindings<indexed_registration<dog_id, scope<shared>, storage<Dog>,
+                                      interfaces<Dog, IAnimal>>,
+                  indexed_registration<cat_id, scope<shared>, storage<Cat>,
+                                      interfaces<Cat, IAnimal>>>;
 
     container<container_traits> container;
-    container.template register_bindings<
-        animal_component, indexed_request<IAnimal*, value_id<size_t, 1>>,
-        indexed_request<IAnimal*, value_id<size_t, 2>>>();
+    container.template register_bindings<animal_component,
+                                         indexed_request<Dog, dog_id>>();
 
-    ASSERT_EQ(container.template resolve<IAnimal*>(size_t(1))->sound(), 1);
-    ASSERT_EQ(container.template resolve<IAnimal*>(size_t(2))->sound(), 2);
+    ASSERT_EQ(container.template resolve<Dog>(size_t(1)).sound(), 1);
 }
 
 } // namespace dingo

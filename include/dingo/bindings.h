@@ -17,6 +17,7 @@
 #include <dingo/storage/shared_cyclical.h>
 #include <dingo/type_list.h>
 #include <dingo/type_registration.h>
+#include <dingo/type_traits.h>
 
 #include <functional>
 #include <type_traits>
@@ -1052,8 +1053,8 @@ struct open_root_supported
                          no_binding_id> &&
           !std::is_reference_v<
               typename request_traits<Root>::request_type> &&
-          !std::is_pointer_v<
-              typename request_traits<Root>::request_type>> {};
+          !has_type_traits_v<std::remove_cv_t<std::remove_reference_t<
+              typename request_traits<Root>::request_type>>>> {};
 
 template <typename Component, typename Root,
           typename ProvidedBindings = type_list<>, typename = void>
