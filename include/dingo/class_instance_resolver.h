@@ -23,21 +23,49 @@ struct external;
 struct shared;
 struct shared_cyclical;
 
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
+
 template <typename T, bool DefaultConstructible = std::is_default_constructible_v<T>>
 struct class_recursion_guard {
-    class_recursion_guard() {
-        if (this->visited_)
-            throw type_recursion_exception();
-        this->visited_ = true;
+    explicit class_recursion_guard(resolving_context& context)
+        : context_(&context)
+        , parent_(context.active_type_frame_)
+        , frame_{parent_, describe_type<T>()} {
+        context_->active_type_frame_ = &frame_;
+        if (visited_) {
+            auto exception = detail::make_type_recursion_exception<T>(context);
+            context_->active_type_frame_ = parent_;
+            throw exception;
+        }
+        visited_ = true;
     }
 
-    ~class_recursion_guard() { this->visited_ = false; }
-    static bool visited_;
+    ~class_recursion_guard() {
+        visited_ = false;
+        context_->active_type_frame_ = parent_;
+    }
+
+  private:
+    resolving_context* context_;
+    const typename resolving_context::type_frame* parent_;
+    typename resolving_context::type_frame frame_;
+    static thread_local bool visited_;
 };
 
-template <typename T, bool DefaultConstructible> bool class_recursion_guard<T, DefaultConstructible>::visited_ = false;
+template <typename T, bool DefaultConstructible>
+thread_local bool class_recursion_guard<T, DefaultConstructible>::visited_ =
+    false;
 
-template <typename T> struct class_recursion_guard<T, true> {};
+template <typename T> struct class_recursion_guard<T, true> {
+    explicit class_recursion_guard(resolving_context&) {}
+};
+
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 template <typename Context, typename T>
 void* get_address(Context& context, T&& instance) {
@@ -80,11 +108,13 @@ struct shared_class_instance_resolver<RTTI, Type, Storage, false> {
     template <typename Target, typename Source, typename Context,
               typename Container, typename Factory>
     void* resolve_address(Context& context, Container& container,
-                          Storage& storage, Factory& factory) {
+                          Storage& storage, Factory& factory,
+                          type_descriptor requested_type,
+                          type_descriptor registered_type) {
         if (!storage.is_resolved()) {
             [[maybe_unused]] class_recursion_guard<
                 decay_t<typename Storage::type>>
-                recursion_guard;
+                recursion_guard(context);
 
             // Shared instances can capture references to temporaries created
             // while constructing the object graph, even when there is no
@@ -94,7 +124,7 @@ struct shared_class_instance_resolver<RTTI, Type, Storage, false> {
 
             auto&& instance =
                 type_conversion<typename Storage::tag_type, Target, Source>::
-                    apply(factory, context);
+                    apply(factory, context, requested_type, registered_type);
             void* p = ::dingo::get_address(
                 context, std::forward<decltype(instance)>(instance));
             context.pop();
@@ -103,7 +133,7 @@ struct shared_class_instance_resolver<RTTI, Type, Storage, false> {
 
         auto&& instance =
             type_conversion<typename Storage::tag_type, Target, Source>::apply(
-                factory, context);
+                factory, context, requested_type, registered_type);
         return ::dingo::get_address(
             context, std::forward<decltype(instance)>(instance));
     }
@@ -129,18 +159,20 @@ struct shared_class_instance_resolver<RTTI, Type, Storage, true>
     template <typename Target, typename Source, typename Context,
               typename Container, typename Factory>
     void* resolve_address(Context& context, Container& container,
-                          Storage& storage, Factory& factory) {
+                          Storage& storage, Factory& factory,
+                          type_descriptor requested_type,
+                          type_descriptor registered_type) {
         if (!initialized_) {
             [[maybe_unused]] class_recursion_guard<
                 decay_t<typename Storage::type>>
-                recursion_guard;
+                recursion_guard(context);
 
             context.push(&closure_);
             storage.resolve(context, container);
 
             auto&& instance =
                 type_conversion<typename Storage::tag_type, Target, Source>::
-                    apply(factory, context);
+                    apply(factory, context, requested_type, registered_type);
             initialized_ = true;
 
             void* p = ::dingo::get_address(
@@ -151,7 +183,7 @@ struct shared_class_instance_resolver<RTTI, Type, Storage, true>
 
         auto&& instance =
             type_conversion<typename Storage::tag_type, Target, Source>::apply(
-                factory, context);
+                factory, context, requested_type, registered_type);
         return ::dingo::get_address(
             context, std::forward<decltype(instance)>(instance));
     }
@@ -189,10 +221,11 @@ struct external_class_instance_resolver<RTTI, Type, Storage, false> {
     template <typename Target, typename Source, typename Context,
               typename Container, typename Factory>
     void* resolve_address(Context& context, Container&, Storage&,
-                          Factory& factory) {
+                          Factory& factory, type_descriptor requested_type,
+                          type_descriptor registered_type) {
         auto&& instance =
             type_conversion<typename Storage::tag_type, Target, Source>::apply(
-                factory, context);
+                factory, context, requested_type, registered_type);
         return ::dingo::get_address(
             context, std::forward<decltype(instance)>(instance));
     }
@@ -220,10 +253,11 @@ struct external_class_instance_resolver<RTTI, Type, Storage, true>
     template <typename Target, typename Source, typename Context,
               typename Container, typename Factory>
     void* resolve_address(Context& context, Container&, Storage&,
-                          Factory& factory) {
+                          Factory& factory, type_descriptor requested_type,
+                          type_descriptor registered_type) {
         auto&& instance =
             type_conversion<typename Storage::tag_type, Target, Source>::apply(
-                factory, context);
+                factory, context, requested_type, registered_type);
         return ::dingo::get_address(
             context, std::forward<decltype(instance)>(instance));
     }
@@ -254,16 +288,17 @@ struct class_instance_resolver<RTTI, Type, Storage, unique> {
 
     template <typename Target, typename Source, typename Context, typename Container, typename Factory>
     void* resolve_address(Context& context, Container& container,
-        Storage& storage, Factory& factory) {
+        Storage& storage, Factory& factory, type_descriptor requested_type,
+        type_descriptor registered_type) {
         // TODO: GCC warns about unused variables in factory where we have no clue if they will be used...
         (void)container;
         (void)storage;
 
         [[maybe_unused]] class_recursion_guard<decay_t<typename Storage::type>>
-            recursion_guard;
+            recursion_guard(context);
         auto&& instance =
             type_conversion<typename Storage::tag_type, Target, Source>::apply(
-                factory, context);
+                factory, context, requested_type, registered_type);
         return ::dingo::get_address(context, std::forward<decltype(instance)>(instance));
     }
 

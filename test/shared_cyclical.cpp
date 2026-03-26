@@ -14,6 +14,8 @@
 
 #include <gtest/gtest.h>
 
+#include <string>
+
 #include "assert.h"
 #include "class.h"
 #include "containers.h"
@@ -39,8 +41,31 @@ TYPED_TEST(shared_cyclical_test, recursion_exception) {
         .template register_type<scope<shared>, storage<std::shared_ptr<A>>>();
     container.template register_type<scope<shared>, storage<B>>();
 
-    ASSERT_THROW(container.template resolve<A>(), type_recursion_exception);
-    ASSERT_THROW(container.template resolve<B>(), type_recursion_exception);
+    try {
+        (void)container.template resolve<A>();
+        FAIL() << "expected type_recursion_exception";
+    } catch (const type_recursion_exception& e) {
+        std::string expected = "recursive dependency detected: ";
+        expected += type_name<A>();
+        expected += " -> ";
+        expected += type_name<B>();
+        expected += " -> ";
+        expected += type_name<A>();
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+
+    try {
+        (void)container.template resolve<B>();
+        FAIL() << "expected type_recursion_exception";
+    } catch (const type_recursion_exception& e) {
+        std::string expected = "recursive dependency detected: ";
+        expected += type_name<B>();
+        expected += " -> ";
+        expected += type_name<A>();
+        expected += " -> ";
+        expected += type_name<B>();
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
 }
 
 TYPED_TEST(shared_cyclical_test, value) {

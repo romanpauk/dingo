@@ -127,6 +127,7 @@ if(DINGO_DEVELOPMENT_MODE)
         type_cache.h
         type_conversion.h
         type_conversion_traits.h
+        type_name.h
         type_list.h
         type_map.h
         type_registration.h
@@ -207,6 +208,7 @@ if(DINGO_DEVELOPMENT_MODE)
             test/shared.cpp
             test/shared_cyclical.cpp
             test/test.h
+            test/type_name.cpp
             test/type_registration.cpp
             test/unique.cpp
             test/type_traits.cpp

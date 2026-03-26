@@ -61,11 +61,14 @@ template <typename T> struct type_traits<T*> {
     static T* from_pointer(T* ptr) { return ptr; }
 
     template <typename TargetType, typename Factory, typename Context>
-    static TargetType resolve_type(Factory& factory, Context& context) {
+    static TargetType resolve_type(Factory& factory, Context& context,
+                                   type_descriptor requested_type,
+                                   type_descriptor registered_type) {
         if constexpr (std::is_same_v<TargetType, rebind_t<T>>)
             return factory.resolve(context);
         else
-            throw type_not_convertible_exception();
+            throw detail::make_type_not_convertible_exception(requested_type,
+                                                              registered_type);
     }
 };
 
@@ -103,11 +106,14 @@ struct type_traits<std::unique_ptr<T, Deleter>> {
     }
 
     template <typename TargetType, typename Factory, typename Context>
-    static TargetType& resolve_type(Factory& factory, Context& context) {
+    static TargetType& resolve_type(Factory& factory, Context& context,
+                                    type_descriptor requested_type,
+                                    type_descriptor registered_type) {
         if constexpr (std::is_same_v<TargetType, rebind_t<T>>)
             return factory.resolve(context);
         else
-            throw type_not_convertible_exception();
+            throw detail::make_type_not_convertible_exception(requested_type,
+                                                              registered_type);
     }
 };
 
@@ -144,7 +150,8 @@ template <typename T> struct type_traits<std::shared_ptr<T>> {
     }
 
     template <typename TargetType, typename Factory, typename Context>
-    static TargetType& resolve_type(Factory& factory, Context& context) {
+    static TargetType& resolve_type(Factory& factory, Context& context,
+                                    type_descriptor, type_descriptor) {
         return factory.template resolve<TargetType>(context);
     }
 };
@@ -180,11 +187,14 @@ template <typename T> struct type_traits<std::optional<T>> {
     }
 
     template <typename TargetType, typename Factory, typename Context>
-    static TargetType& resolve_type(Factory& factory, Context& context) {
+    static TargetType& resolve_type(Factory& factory, Context& context,
+                                    type_descriptor requested_type,
+                                    type_descriptor registered_type) {
         if constexpr (std::is_same_v<TargetType, rebind_t<T>>)
             return factory.resolve(context);
         else
-            throw type_not_convertible_exception();
+            throw detail::make_type_not_convertible_exception(requested_type,
+                                                              registered_type);
     }
 };
 

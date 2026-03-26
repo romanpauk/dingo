@@ -9,6 +9,7 @@
 
 #include <dingo/config.h>
 #include <dingo/rebind_type.h>
+#include <dingo/type_descriptor.h>
 
 #include <type_traits>
 
@@ -52,7 +53,8 @@ template <typename RTTI, typename T> struct class_instance_factory_traits {
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_value(
             context,
-            RTTI::template get_type_index<rebind_type_t<T, runtime_type>>());
+            RTTI::template get_type_index<rebind_type_t<T, runtime_type>>(),
+            describe_type<T>());
     }
 };
 #ifdef _MSC_VER
@@ -67,7 +69,8 @@ struct class_instance_factory_traits<RTTI, T&> {
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_lvalue_reference(
             context,
-            RTTI::template get_type_index<rebind_type_t<T&, runtime_type>>());
+            RTTI::template get_type_index<rebind_type_t<T&, runtime_type>>(),
+            describe_type<T&>());
     }
 };
 
@@ -79,7 +82,8 @@ struct class_instance_factory_traits<RTTI, const T&> {
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_lvalue_reference(
             context,
-            RTTI::template get_type_index<rebind_type_t<T&, runtime_type>>());
+            RTTI::template get_type_index<rebind_type_t<T&, runtime_type>>(),
+            describe_type<const T&>());
     }
 };
 
@@ -91,7 +95,8 @@ struct class_instance_factory_traits<RTTI, T&&> {
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_rvalue_reference(
             context,
-            RTTI::template get_type_index<rebind_type_t<T&&, runtime_type>>());
+            RTTI::template get_type_index<rebind_type_t<T&&, runtime_type>>(),
+            describe_type<T&&>());
     }
 };
 
@@ -103,7 +108,8 @@ struct class_instance_factory_traits<RTTI, T*> {
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_pointer(
             context,
-            RTTI::template get_type_index<rebind_type_t<T*, runtime_type>>());
+            RTTI::template get_type_index<rebind_type_t<T*, runtime_type>>(),
+            describe_type<T*>());
     }
 };
 

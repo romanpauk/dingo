@@ -14,6 +14,8 @@
 
 #include <gtest/gtest.h>
 
+#include <string>
+
 #include "assert.h"
 #include "class.h"
 #include "containers.h"
@@ -132,6 +134,34 @@ TYPED_TEST(index_test, register_indexed_type_shared) {
         container.template resolve<IClass&>(value<index_type>(1)).GetTag(), 1);
     ASSERT_THROW(container.template resolve<IClass&>(value<index_type>(-1)),
                  type_not_found_exception);
+}
+
+TEST(index_test, exception_message_index_out_of_range) {
+    using container_type =
+        container<dynamic_container_with_index<size_t, index_type::array<2>>>;
+
+    container_type container;
+
+    try {
+        container.template register_indexed_type<
+            scope<shared>, storage<std::shared_ptr<Class>>, interfaces<IClass>>(
+            size_t(3));
+        FAIL() << "expected type_index_out_of_range_exception";
+    } catch (const type_index_out_of_range_exception& e) {
+        std::string expected = "type index out of range: key type ";
+        expected += type_name<size_t>();
+        expected += ", value 3, bound 2";
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+}
+
+TEST(index_test, exception_message_index_out_of_range_negative) {
+    auto e = detail::make_type_index_out_of_range_exception(-1, size_t(2));
+
+    std::string expected = "type index out of range: key type ";
+    expected += type_name<int>();
+    expected += ", value -1, bound 2";
+    ASSERT_STREQ(e.what(), expected.c_str());
 }
 
 } // namespace dingo

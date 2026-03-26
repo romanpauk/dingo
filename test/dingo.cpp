@@ -13,6 +13,8 @@
 
 #include <gtest/gtest.h>
 
+#include <string>
+
 #include "assert.h"
 #include "class.h"
 #include "containers.h"
@@ -149,6 +151,101 @@ TYPED_TEST(dingo_test, shared_unique_reference_exception) {
     // Two Uniques should be destroyed as there is one move constructor
     // TODO: pass counters
     ASSERT_EQ(unique_dtor, 2);
+}
+
+TYPED_TEST(dingo_test, exception_message_type_not_found) {
+    using container_type = TypeParam;
+
+    struct Dependency {};
+    struct Missing {
+        explicit Missing(Dependency&) {}
+    };
+
+    container_type container;
+
+    try {
+        (void)container.template resolve<Missing>();
+        FAIL() << "expected type_not_found_exception";
+    } catch (const type_not_found_exception& e) {
+        std::string expected = "type not found: ";
+        expected += type_name<Missing>();
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+}
+
+TYPED_TEST(dingo_test, exception_message_type_ambiguous) {
+    using container_type = TypeParam;
+
+    struct IValue {
+        virtual ~IValue() = default;
+    };
+    struct ValueA : IValue {};
+    struct ValueB : IValue {};
+
+    container_type container;
+    container.template register_type<scope<shared>, storage<ValueA>,
+                                     interfaces<IValue>>();
+    container.template register_type<scope<shared>, storage<ValueB>,
+                                     interfaces<IValue>>();
+
+    try {
+        (void)container.template resolve<IValue&>();
+        FAIL() << "expected type_ambiguous_exception";
+    } catch (const type_ambiguous_exception& e) {
+        std::string expected = "type resolution is ambiguous: ";
+        expected += type_name<IValue&>();
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+}
+
+TYPED_TEST(dingo_test, exception_message_type_already_registered) {
+    using container_type = TypeParam;
+
+    struct IService {
+        virtual ~IService() = default;
+    };
+    struct Service : IService {};
+
+    container_type container;
+    container.template register_type<scope<shared>, storage<Service>,
+                                     interfaces<IService>>();
+
+    try {
+        container.template register_type<scope<shared>, storage<Service>,
+                                         interfaces<IService>>();
+        FAIL() << "expected type_already_registered_exception";
+    } catch (const type_already_registered_exception& e) {
+        std::string expected = "type already registered: interface ";
+        expected += type_name<IService>();
+        expected += ", storage ";
+        expected += type_name<Service>();
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+}
+
+TYPED_TEST(dingo_test, exception_message_type_not_convertible) {
+    using container_type = TypeParam;
+
+    struct IService {
+        virtual ~IService() = default;
+    };
+    struct Service : IService {};
+
+    Service service;
+    container_type container;
+    container.template register_type<scope<external>, storage<Service&>,
+                                     interfaces<IService>>(service);
+
+    try {
+        (void)container.template resolve<std::shared_ptr<IService>>();
+        FAIL() << "expected type_not_convertible_exception";
+    } catch (const type_not_convertible_exception& e) {
+        std::string expected = "type is not convertible to ";
+        expected += type_name<std::shared_ptr<IService>>();
+        expected += " from ";
+        expected += type_name<Service&>();
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
 }
 
 } // namespace dingo

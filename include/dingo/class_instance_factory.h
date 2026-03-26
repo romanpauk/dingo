@@ -36,19 +36,29 @@ template <typename T> T& get_factory_data(std::shared_ptr<T>& data) {
     return *data;
 }
 
+namespace detail {
+template <typename Storage>
+using registered_type_t = typename Storage::type;
+} // namespace detail
+
 template <typename RTTI, typename Factory, typename Context>
 void* resolve_address(Factory&, Context&, type_list<>,
-                              const typename RTTI::type_index&) {
-    throw type_not_convertible_exception();
+                      const typename RTTI::type_index&, type_descriptor requested_type,
+                      type_descriptor registered_type) {
+    throw detail::make_type_not_convertible_exception(requested_type,
+                                                      registered_type);
 }
 
 template <typename RTTI, typename Factory, typename Context, typename Head>
 void* resolve_address(Factory& factory, Context& context,
-                      type_list<Head>,
-                      const typename RTTI::type_index& type) {
+                      type_list<Head>, const typename RTTI::type_index& type,
+                      type_descriptor requested_type,
+                      type_descriptor registered_type) {
     if (!(RTTI::template get_type_index<Head>() == type))
-        throw type_not_convertible_exception();
-    return factory.template resolve_address<Head>(context);
+        throw detail::make_type_not_convertible_exception(
+            requested_type, registered_type);
+    return factory.template resolve_address<Head>(context, requested_type,
+                                                  registered_type);
 }
 
 // TODO: instead of StorageTag, rvalue reference can be used to determine
@@ -56,13 +66,15 @@ void* resolve_address(Factory& factory, Context& context,
 template <typename RTTI, typename Factory, typename Context, typename Head,
           typename Next, typename... Tail>
 void* resolve_address(Factory& factory, Context& context,
-                              type_list<Head, Next, Tail...>,
-                              const typename RTTI::type_index& type) {
+                      type_list<Head, Next, Tail...>, const typename RTTI::type_index& type,
+                      type_descriptor requested_type,
+                      type_descriptor registered_type) {
     if (RTTI::template get_type_index<Head>() == type) {
-        return factory.template resolve_address<Head>(context);
+        return factory.template resolve_address<Head>(context, requested_type,
+                                                      registered_type);
     } else {
-        return resolve_address<RTTI>(factory, context,
-                                             type_list<Next, Tail...>{}, type);
+        return resolve_address<RTTI>(factory, context, type_list<Next, Tail...>{},
+                                     type, requested_type, registered_type);
     }
 }
 
@@ -86,6 +98,10 @@ class class_instance_factory : public class_instance_factory_i<Container> {
 
     auto& get_storage() { return get_factory_data(data_).storage; }
 
+    static constexpr type_descriptor registered_type() {
+        return describe_type<detail::registered_type_t<Storage>>();
+    }
+
   public:
     template <typename... Args>
     class_instance_factory(Args&&... args)
@@ -95,36 +111,44 @@ class class_instance_factory : public class_instance_factory_i<Container> {
     
     void*
     get_value(resolving_context& context,
-              const typename Container::rtti_type::type_index& type) override {
+              const typename Container::rtti_type::type_index& type,
+              type_descriptor requested_type) override {
+        using value_types = typename Storage::conversions::value_types;
         return ::dingo::resolve_address<typename Container::rtti_type>(
-            *this, context, typename Storage::conversions::value_types{},
-            type);
+            *this, context, value_types{}, type, requested_type,
+            registered_type());
     }
 
     void* get_lvalue_reference(
         resolving_context& context,
-        const typename Container::rtti_type::type_index& type) override {
+        const typename Container::rtti_type::type_index& type,
+        type_descriptor requested_type) override {
+        using lvalue_reference_types =
+            typename Storage::conversions::lvalue_reference_types;
         return ::dingo::resolve_address<typename Container::rtti_type>(
-            *this, context,
-            typename Storage::conversions::lvalue_reference_types{},
-            type);
+            *this, context, lvalue_reference_types{}, type, requested_type,
+            registered_type());
     }
 
     void* get_rvalue_reference(
         resolving_context& context,
-        const typename Container::rtti_type::type_index& type) override {
+        const typename Container::rtti_type::type_index& type,
+        type_descriptor requested_type) override {
+        using rvalue_reference_types =
+            typename Storage::conversions::rvalue_reference_types;
         return ::dingo::resolve_address<typename Container::rtti_type>(
-            *this, context,
-            typename Storage::conversions::rvalue_reference_types{},
-            type);
+            *this, context, rvalue_reference_types{}, type, requested_type,
+            registered_type());
     }
 
     void* get_pointer(
         resolving_context& context,
-        const typename Container::rtti_type::type_index& type) override {
+        const typename Container::rtti_type::type_index& type,
+        type_descriptor requested_type) override {
+        using pointer_types = typename Storage::conversions::pointer_types;
         return ::dingo::resolve_address<typename Container::rtti_type>(
-            *this, context,
-            typename Storage::conversions::pointer_types{}, type);
+            *this, context, pointer_types{}, type, requested_type,
+            registered_type());
     }
 
 #ifdef _MSC_VER
@@ -132,12 +156,14 @@ class class_instance_factory : public class_instance_factory_i<Container> {
 #pragma warning(disable : 4702)
 #endif
     template <typename T, typename Context>
-    void* resolve_address(Context& context) {
+    void* resolve_address(Context& context, type_descriptor requested_type,
+                          type_descriptor registered_type) {
         using Target = std::remove_reference_t<rebind_type_t<T, Type>>;
         using Source = decltype(resolve(context));
 
         return resolver_.template resolve_address<Target, Source>(context,
-            get_container(), get_storage(), *this);
+            get_container(), get_storage(), *this, requested_type,
+            registered_type);
     }
 #ifdef _MSC_VER
 #pragma warning(pop)
