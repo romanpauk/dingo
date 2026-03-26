@@ -26,7 +26,8 @@ struct index_collection<Key, Value, Allocator, index_type::array<N>> {
 
     bool emplace(Key key, Value value) {
         if (key >= array_.size())
-            throw type_index_out_of_range_exception();
+            throw detail::make_type_index_out_of_range_exception(
+                key, array_.size());
         if (!array_[key]) {
             array_[key] = value;
             return true;

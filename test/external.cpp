@@ -11,6 +11,7 @@
 
 #include <gtest/gtest.h>
 
+#include <string>
 #include <variant>
 
 #include "assert.h"
@@ -103,6 +104,26 @@ TYPED_TEST(external_test, shared_ptr_interface) {
     AssertClass(*container.template resolve<std::shared_ptr<IClass>>());
 }
 
+TYPED_TEST(external_test, exception_message_type_not_convertible_shared_ptr_interface) {
+    using container_type = TypeParam;
+    auto c = std::make_shared<Class>();
+
+    container_type container;
+    container.template register_type<
+        scope<external>, storage<std::shared_ptr<Class>>, interfaces<IClass>>(c);
+
+    try {
+        (void)container.template resolve<std::unique_ptr<IClass>>();
+        FAIL() << "expected type_not_convertible_exception";
+    } catch (const type_not_convertible_exception& e) {
+        std::string expected = "type is not convertible to ";
+        expected += type_name<std::unique_ptr<IClass>>();
+        expected += " from ";
+        expected += type_name<std::shared_ptr<Class>>();
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+}
+
 TYPED_TEST(external_test, shared_ptr) {
     using container_type = TypeParam;
     auto c = std::make_shared<Class>();
@@ -164,6 +185,28 @@ TYPED_TEST(external_test, shared_ptr_ref) {
     AssertClass(container.template resolve<const IClass*>());
 }
 
+TYPED_TEST(external_test,
+           exception_message_type_not_convertible_shared_ptr_interface_ref) {
+    using container_type = TypeParam;
+    auto c = std::make_shared<Class>();
+
+    container_type container;
+    container.template register_type<scope<external>,
+                                     storage<std::shared_ptr<Class>&>,
+                                     interfaces<IClass>>(c);
+
+    try {
+        (void)container.template resolve<std::unique_ptr<IClass>>();
+        FAIL() << "expected type_not_convertible_exception";
+    } catch (const type_not_convertible_exception& e) {
+        std::string expected = "type is not convertible to ";
+        expected += type_name<std::unique_ptr<IClass>>();
+        expected += " from ";
+        expected += type_name<std::shared_ptr<Class>&>();
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+}
+
 TYPED_TEST(external_test, unique_ptr_ref) {
     using container_type = TypeParam;
     auto c = std::make_unique<Class>();
@@ -185,6 +228,28 @@ TYPED_TEST(external_test, unique_ptr_ref) {
 
     ASSERT_THROW(container.template resolve<std::unique_ptr<IClass>&>(),
                  type_not_convertible_exception);
+}
+
+TYPED_TEST(external_test,
+           exception_message_type_not_convertible_unique_ptr_interface_ref) {
+    using container_type = TypeParam;
+    auto c = std::make_unique<Class>();
+
+    container_type container;
+    container.template register_type<scope<external>,
+                                     storage<std::unique_ptr<Class>&>,
+                                     interfaces<Class, IClass>>(c);
+
+    try {
+        (void)container.template resolve<std::unique_ptr<IClass>&>();
+        FAIL() << "expected type_not_convertible_exception";
+    } catch (const type_not_convertible_exception& e) {
+        std::string expected = "type is not convertible to ";
+        expected += type_name<std::unique_ptr<IClass>&>();
+        expected += " from ";
+        expected += type_name<std::unique_ptr<Class>&>();
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
 }
 
 TYPED_TEST(external_test, unique_ptr_move) {
@@ -224,6 +289,27 @@ TYPED_TEST(external_test, unique_ptr_interface_move) {
     AssertClass(container.template resolve<IClass&>());
 }
 
+TYPED_TEST(external_test, exception_message_type_not_convertible_unique_ptr_value) {
+    using container_type = TypeParam;
+    auto c = std::make_unique<Class>();
+
+    container_type container;
+    container.template register_type<scope<external>,
+                                     storage<std::unique_ptr<Class>>,
+                                     interfaces<Class, IClass>>(std::move(c));
+
+    try {
+        (void)container.template resolve<Class>();
+        FAIL() << "expected type_not_convertible_exception";
+    } catch (const type_not_convertible_exception& e) {
+        std::string expected = "type is not convertible to ";
+        expected += type_name<Class>();
+        expected += " from ";
+        expected += type_name<std::unique_ptr<Class>>();
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+}
+
 TYPED_TEST(external_test, optional_ref) {
     using container_type = TypeParam;
     auto c = std::make_optional<Class>();
@@ -250,6 +336,52 @@ TYPED_TEST(external_test, optional_move) {
     AssertClass(*container.template resolve<std::optional<Class>&>());
     AssertClass(container.template resolve<Class&>());
     AssertClass(container.template resolve<IClass&>());
+}
+
+TYPED_TEST(external_test,
+           exception_message_type_not_convertible_optional_interface_ref) {
+    using container_type = TypeParam;
+    struct Base {};
+    struct Derived : Base {};
+
+    auto c = std::make_optional<Derived>();
+
+    container_type container;
+    container
+        .template register_type<scope<external>, storage<std::optional<Derived>&>,
+                                interfaces<Base>>(c);
+
+    try {
+        (void)container.template resolve<std::optional<Base>&>();
+        FAIL() << "expected type_not_convertible_exception";
+    } catch (const type_not_convertible_exception& e) {
+        std::string expected = "type is not convertible to ";
+        expected += type_name<std::optional<Base>&>();
+        expected += " from ";
+        expected += type_name<std::optional<Derived>&>();
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+}
+
+TYPED_TEST(external_test, exception_message_type_not_convertible_optional_value) {
+    using container_type = TypeParam;
+    auto c = std::make_optional<Class>();
+
+    container_type container;
+    container
+        .template register_type<scope<external>, storage<std::optional<Class>>,
+                                interfaces<Class, IClass>>(std::move(c));
+
+    try {
+        (void)container.template resolve<Class>();
+        FAIL() << "expected type_not_convertible_exception";
+    } catch (const type_not_convertible_exception& e) {
+        std::string expected = "type is not convertible to ";
+        expected += type_name<Class>();
+        expected += " from ";
+        expected += type_name<std::optional<Class>>();
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
 }
 
 TYPED_TEST(external_test, variant_ref) {

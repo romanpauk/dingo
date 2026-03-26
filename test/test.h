@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <dingo/type_name.h>
+
 #include <gtest/gtest.h>
 
 #include "class.h"

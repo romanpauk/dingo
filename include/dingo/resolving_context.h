@@ -16,7 +16,6 @@
 #include <dingo/exceptions.h>
 #include <dingo/factory/constructor_detection.h>
 
-#include <stack>
 #include <vector>
 
 namespace dingo {
@@ -47,6 +46,11 @@ class resolving_context {
         };
 
         std::vector<destructible, arena_allocator<destructible>> destructibles_;
+    };
+
+    struct type_frame {
+        const type_frame* parent;
+        type_descriptor type;
     };
 
     resolving_context()
@@ -107,6 +111,23 @@ class resolving_context {
 
     std::size_t closures_size() const { return closures_.size(); }
 
+    bool has_type_path() const { return active_type_frame_ != nullptr; }
+
+    void append_type_path(std::string& message) const {
+        std::vector<type_descriptor> names;
+        for (auto* frame = active_type_frame_; frame != nullptr;
+             frame = frame->parent) {
+            names.emplace_back(frame->type);
+        }
+
+        for (auto it = names.rbegin(); it != names.rend(); ++it) {
+            if (it != names.rbegin()) {
+                message += " -> ";
+            }
+            append_type_name(message, *it);
+        }
+    }
+
   private:
     template <typename T> void register_destructor(T* instance) {
         static_assert(!std::is_trivially_destructible_v<T>);
@@ -120,7 +141,11 @@ class resolving_context {
     aligned_storage_t<DINGO_CONTEXT_ARENA_BUFFER_SIZE, alignof(std::max_align_t)> arena_buffer_;
     arena<> arena_;
     std::vector<closure*, arena_allocator<closure*>> closures_;
+    const type_frame* active_type_frame_ = nullptr;
     closure closure_;
+
+    template <typename T, bool DefaultConstructible>
+    friend struct class_recursion_guard;
 };
 
 } // namespace dingo

@@ -239,7 +239,8 @@ class container : public allocator_base<Allocator> {
                                                               // be
         // more generic...
         if (!data)
-            throw type_not_found_exception();
+            throw detail::make_collection_type_not_found_exception<
+                T, typename collection_traits<T>::resolve_type>();
 
         collection_traits<T>::reserve(results, data->factories.size());
         for (auto&& p : data->factories) {
@@ -383,7 +384,8 @@ class container : public allocator_base<Allocator> {
                      type_list<TypeInterface, typename TypeStorage::type>>(
                      std::forward<Factory>(factory))
                  .second) {
-            throw type_already_registered_exception();
+            throw detail::make_type_already_registered_exception<
+                TypeInterface, typename TypeStorage::type>();
         }
 
         if constexpr (!is_none_v<std::decay_t<IdType>>) {
@@ -394,7 +396,8 @@ class container : public allocator_base<Allocator> {
                     type_list<TypeInterface, typename TypeStorage::type>>();
                 assert(erased);
                 (void)erased;
-                throw type_index_already_registered_exception();
+                throw detail::make_type_index_already_registered_exception<
+                    TypeInterface, typename TypeStorage::type, IdType>();
             }
         }
     }
@@ -431,7 +434,7 @@ class container : public allocator_base<Allocator> {
                     return resolve<T, typename annotated_traits<T>::type>(
                         *factory, context);
                 } else {
-                    throw type_ambiguous_exception();
+                    throw detail::make_type_ambiguous_exception<T>();
                 }
             } else {
                 auto indexed =
@@ -472,7 +475,11 @@ class container : public allocator_base<Allocator> {
             }
         }
 
-        throw type_not_found_exception();
+        if constexpr (is_none_v<std::decay_t<IdType>>) {
+            throw detail::make_type_not_found_exception<T>();
+        } else {
+            throw detail::make_type_not_found_exception<T, std::decay_t<IdType>>();
+        }
     }
 #ifdef _MSC_VER
 #pragma warning(pop)

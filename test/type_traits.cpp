@@ -124,7 +124,8 @@ template <typename T> struct type_traits<test_shared<T>> {
     }
 
     template <typename TargetWrapper, typename Factory, typename Context>
-    static TargetWrapper& resolve_type(Factory& factory, Context& context) {
+    static TargetWrapper& resolve_type(Factory& factory, Context& context,
+                                       type_descriptor, type_descriptor) {
         return factory.template resolve<TargetWrapper>(context);
     }
 };
@@ -152,11 +153,14 @@ template <typename T> struct type_traits<test_unique<T>> {
     }
 
     template <typename TargetWrapper, typename Factory, typename Context>
-    static TargetWrapper& resolve_type(Factory& factory, Context& context) {
+    static TargetWrapper& resolve_type(Factory& factory, Context& context,
+                                       type_descriptor requested_type,
+                                       type_descriptor registered_type) {
         if constexpr (std::is_same_v<TargetWrapper, rebind_t<T>>)
             return factory.resolve(context);
         else
-            throw type_not_convertible_exception();
+            throw detail::make_type_not_convertible_exception(requested_type,
+                                                              registered_type);
     }
 };
 
@@ -185,11 +189,14 @@ template <typename T> struct type_traits<test_optional<T>> {
     }
 
     template <typename TargetWrapper, typename Factory, typename Context>
-    static TargetWrapper& resolve_type(Factory& factory, Context& context) {
+    static TargetWrapper& resolve_type(Factory& factory, Context& context,
+                                       type_descriptor requested_type,
+                                       type_descriptor registered_type) {
         if constexpr (std::is_same_v<TargetWrapper, rebind_t<T>>)
             return factory.resolve(context);
         else
-            throw type_not_convertible_exception();
+            throw detail::make_type_not_convertible_exception(requested_type,
+                                                              registered_type);
     }
 };
 

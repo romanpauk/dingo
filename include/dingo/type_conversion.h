@@ -42,14 +42,17 @@ struct unique;
 template <typename StorageTag, typename Target, typename Source, typename = void>
 struct type_conversion {
     template <typename Factory, typename Context>
-    static void* apply(Factory& factory, Context& context);
+    static void* apply(Factory& factory, Context& context,
+                       type_descriptor requested_type,
+                       type_descriptor registered_type);
 };
 
 template <typename Target, typename Source>
 struct type_conversion<unique, Target, Source,
                        std::enable_if_t<!std::is_pointer_v<Source>>> {
     template <typename Factory, typename Context>
-    static Target apply(Factory& factory, Context& context) {
+    static Target apply(Factory& factory, Context& context, type_descriptor,
+                        type_descriptor) {
         return factory.resolve(context);
     }
 };
@@ -57,7 +60,8 @@ struct type_conversion<unique, Target, Source,
 template <typename Target, typename Source>
 struct type_conversion<unique, Target*, Source*, void> {
     template <typename Factory, typename Context>
-    static Target* apply(Factory& factory, Context& context) {
+    static Target* apply(Factory& factory, Context& context, type_descriptor,
+                         type_descriptor) {
         return factory.resolve(context);
     }
 };
@@ -68,7 +72,8 @@ struct type_conversion<
     std::enable_if_t<is_pointer_like_type_v<Target> &&
                      detail::has_type_from_pointer_v<Target, Source*>>> {
     template <typename Factory, typename Context>
-    static Target apply(Factory& factory, Context& context) {
+    static Target apply(Factory& factory, Context& context, type_descriptor,
+                        type_descriptor) {
         return type_traits<Target>::from_pointer(factory.resolve(context));
     }
 };
@@ -78,7 +83,8 @@ struct type_conversion<
     StorageTag, Target, Source&,
     std::enable_if_t<!has_type_traits_v<Source> && !std::is_pointer_v<Target>>> {
     template <typename Factory, typename Context>
-    static Target& apply(Factory& factory, Context& context) {
+    static Target& apply(Factory& factory, Context& context, type_descriptor,
+                         type_descriptor) {
         return factory.resolve(context);
     }
 };
@@ -90,7 +96,8 @@ struct type_conversion<
                      !detail::is_std_optional_v<Target> &&
                      std::is_same_v<Target, Source>>> {
     template <typename Factory, typename Context>
-    static Target& apply(Factory& factory, Context& context) {
+    static Target& apply(Factory& factory, Context& context, type_descriptor,
+                         type_descriptor) {
         return factory.resolve(context);
     }
 };
@@ -102,7 +109,8 @@ struct type_conversion<
                      !detail::is_std_optional_v<Target> &&
                      std::is_same_v<Target, Source>>> {
     template <typename Factory, typename Context>
-    static Target* apply(Factory& factory, Context& context) {
+    static Target* apply(Factory& factory, Context& context, type_descriptor,
+                         type_descriptor) {
         return std::addressof(factory.resolve(context));
     }
 };
@@ -113,7 +121,8 @@ struct type_conversion<
     std::enable_if_t<!has_type_traits_v<Target> && !std::is_pointer_v<Target> &&
                      has_type_traits_v<Source> && !detail::is_std_optional_v<Source>>> {
     template <typename Factory, typename Context>
-    static Target& apply(Factory& factory, Context& context) {
+    static Target& apply(Factory& factory, Context& context, type_descriptor,
+                         type_descriptor) {
         return *type_traits<Source>::get(factory.resolve(context));
     }
 };
@@ -124,7 +133,8 @@ struct type_conversion<
     std::enable_if_t<!has_type_traits_v<Target> && has_type_traits_v<Source> &&
                      !detail::is_std_optional_v<Source>>> {
     template <typename Factory, typename Context>
-    static Target* apply(Factory& factory, Context& context) {
+    static Target* apply(Factory& factory, Context& context, type_descriptor,
+                         type_descriptor) {
         return type_traits<Source>::get(factory.resolve(context));
     }
 };
@@ -134,9 +144,11 @@ struct type_conversion<
     StorageTag, Target, Source&,
     std::enable_if_t<is_pointer_like_type_v<Target> && is_pointer_like_type_v<Source>>> {
     template <typename Factory, typename Context>
-    static Target& apply(Factory& factory, Context& context) {
+    static Target& apply(Factory& factory, Context& context,
+                         type_descriptor requested_type,
+                         type_descriptor registered_type) {
         return type_traits<Source>::template resolve_type<Target>(
-            factory, context);
+            factory, context, requested_type, registered_type);
     }
 };
 
@@ -145,17 +157,19 @@ struct type_conversion<
     StorageTag, Target*, Source&,
     std::enable_if_t<is_pointer_like_type_v<Target> && is_pointer_like_type_v<Source>>> {
     template <typename Factory, typename Context>
-    static Target* apply(Factory& factory, Context& context) {
-        return std::addressof(
-            type_traits<Source>::template resolve_type<Target>(factory,
-                                                               context));
+    static Target* apply(Factory& factory, Context& context,
+                         type_descriptor requested_type,
+                         type_descriptor registered_type) {
+        return std::addressof(type_traits<Source>::template resolve_type<Target>(
+            factory, context, requested_type, registered_type));
     }
 };
 
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, Target*, Source*, void> {
     template <typename Factory, typename Context>
-    static Target* apply(Factory& factory, Context& context) {
+    static Target* apply(Factory& factory, Context& context, type_descriptor,
+                         type_descriptor) {
         return factory.resolve(context);
     }
 };
@@ -165,7 +179,8 @@ struct type_conversion<
     StorageTag, Target, Source*,
     std::enable_if_t<!is_pointer_like_type_v<Target> && !std::is_pointer_v<Target>>> {
     template <typename Factory, typename Context>
-    static Target& apply(Factory& factory, Context& context) {
+    static Target& apply(Factory& factory, Context& context, type_descriptor,
+                         type_descriptor) {
         return *factory.resolve(context);
     }
 };
@@ -175,7 +190,8 @@ struct type_conversion<
     StorageTag, Target*, Source&,
     std::enable_if_t<!has_type_traits_v<Source> && !is_pointer_like_type_v<Target>>> {
     template <typename Factory, typename Context>
-    static Target* apply(Factory& factory, Context& context) {
+    static Target* apply(Factory& factory, Context& context, type_descriptor,
+                         type_descriptor) {
         return std::addressof(factory.resolve(context));
     }
 };
@@ -183,7 +199,8 @@ struct type_conversion<
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, Target, std::optional<Source>&, void> {
     template <typename Factory, typename Context>
-    static Target& apply(Factory& factory, Context& context) {
+    static Target& apply(Factory& factory, Context& context, type_descriptor,
+                         type_descriptor) {
         return factory.resolve(context).value();
     }
 };
@@ -191,7 +208,8 @@ struct type_conversion<StorageTag, Target, std::optional<Source>&, void> {
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, Target*, std::optional<Source>&, void> {
     template <typename Factory, typename Context>
-    static Target* apply(Factory& factory, Context& context) {
+    static Target* apply(Factory& factory, Context& context, type_descriptor,
+                         type_descriptor) {
         return &factory.resolve(context).value();
     }
 };
@@ -200,10 +218,13 @@ template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, std::optional<Target>,
                        std::optional<Source>&, void> {
     template <typename Factory, typename Context>
-    static std::optional<Source>& apply(Factory& factory, Context& context) {
+    static std::optional<Source>& apply(Factory& factory, Context& context,
+                                        type_descriptor requested_type,
+                                        type_descriptor registered_type) {
         if constexpr (std::is_same_v<Target, Source>)
             return factory.resolve(context);
-        throw type_not_convertible_exception();
+        throw detail::make_type_not_convertible_exception(requested_type,
+                                                          registered_type);
     }
 };
 
@@ -211,10 +232,13 @@ template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<StorageTag, std::optional<Target>*,
                        std::optional<Source>&, void> {
     template <typename Factory, typename Context>
-    static std::optional<Target>* apply(Factory& factory, Context& context) {
+    static std::optional<Target>* apply(Factory& factory, Context& context,
+                                        type_descriptor requested_type,
+                                        type_descriptor registered_type) {
         if constexpr (std::is_same_v<Target, Source>)
             return &factory.resolve(context);
-        throw type_not_convertible_exception();
+        throw detail::make_type_not_convertible_exception(requested_type,
+                                                          registered_type);
     }
 };
 
