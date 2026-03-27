@@ -9,11 +9,11 @@
 
 #include <dingo/config.h>
 
-#include <dingo/rtti/rtti.h>
+#include <dingo/type_identity/type_identity.h>
 
 namespace dingo {
 
-template<> class rtti<static_provider> {
+template<> class type_identity<static_provider> {
     template <typename T> struct type_index_tag {
         // TODO: This will not work across modules.
         // Should probably detect it first, handle it next.
@@ -38,15 +38,15 @@ template<> class rtti<static_provider> {
         size_t value_;
     };
 
-    template <typename T> static constexpr type_index get_type_index() {
+    template <typename T> static constexpr type_index get() {
         return reinterpret_cast<size_t>(&type_index_tag<T>::tag);
     }
 };
 } // namespace dingo
 
 namespace std {
-    template<> struct hash<typename dingo::rtti<dingo::static_provider>::type_index> {
-        size_t operator()(const typename dingo::rtti<dingo::static_provider>::type_index& value) const {
+    template<> struct hash<typename dingo::type_identity<dingo::static_provider>::type_index> {
+        size_t operator()(const typename dingo::type_identity<dingo::static_provider>::type_index& value) const {
             return hash<size_t>()(value.value_);
         }
     };

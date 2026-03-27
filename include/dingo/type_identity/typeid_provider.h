@@ -8,13 +8,13 @@
 #pragma once
 
 #include <dingo/config.h>
-#include <dingo/rtti/rtti.h>
+#include <dingo/type_identity/type_identity.h>
 
 #include <typeindex>
 
 namespace dingo {
 
-template<> class rtti<typeid_provider> {
+template<> class type_identity<typeid_provider> {
     template <typename T> struct wrapper {};
 
   public:
@@ -34,7 +34,7 @@ template<> class rtti<typeid_provider> {
         std::type_index value_;
     };
 
-    template <typename T> static type_index get_type_index() {
+    template <typename T> static type_index get() {
         return std::type_index(typeid(wrapper<T>));
     }
 };
@@ -42,8 +42,8 @@ template<> class rtti<typeid_provider> {
 } // namespace dingo
 
 namespace std {
-    template<> struct hash<typename dingo::rtti<dingo::typeid_provider>::type_index> {
-        size_t operator()(const typename dingo::rtti<dingo::typeid_provider>::type_index& value) const {
+    template<> struct hash<typename dingo::type_identity<dingo::typeid_provider>::type_index> {
+        size_t operator()(const typename dingo::type_identity<dingo::typeid_provider>::type_index& value) const {
             return hash<std::type_index>()(value.value_);
         }
     };

@@ -78,7 +78,7 @@ void* get_address(Context& context, T&& instance) {
     }
 }
 
-template <typename RTTI, typename Type, typename Storage,
+template <typename TypeIdentity, typename Type, typename Storage,
           typename StorageTag = typename Storage::tag_type>
 struct class_instance_resolver;
 
@@ -91,12 +91,12 @@ template <typename Types>
 static constexpr bool resolver_has_conversion_cache_v =
     type_list_size_v<Types> != 0;
 
-template <typename RTTI, typename Type, typename Storage,
+template <typename TypeIdentity, typename Type, typename Storage,
           bool HasConversionCache>
 struct shared_class_instance_resolver;
 
-template <typename RTTI, typename Type, typename Storage>
-struct shared_class_instance_resolver<RTTI, Type, Storage, false> {
+template <typename TypeIdentity, typename Type, typename Storage>
+struct shared_class_instance_resolver<TypeIdentity, Type, Storage, false> {
     ~shared_class_instance_resolver() { closure_.reset(); }
 
     template <typename Context, typename Container>
@@ -142,8 +142,8 @@ struct shared_class_instance_resolver<RTTI, Type, Storage, false> {
     resolving_context::closure closure_;
 };
 
-template <typename RTTI, typename Type, typename Storage>
-struct shared_class_instance_resolver<RTTI, Type, Storage, true>
+template <typename TypeIdentity, typename Type, typename Storage>
+struct shared_class_instance_resolver<TypeIdentity, Type, Storage, true>
     : class_instance_conversions<resolver_conversion_types_t<Type, Storage>> {
     using class_instance_conversions_type =
         class_instance_conversions<resolver_conversion_types_t<Type, Storage>>;
@@ -202,12 +202,12 @@ struct shared_class_instance_resolver<RTTI, Type, Storage, true>
     resolving_context::closure closure_;
 };
 
-template <typename RTTI, typename Type, typename Storage,
+template <typename TypeIdentity, typename Type, typename Storage,
           bool HasConversionCache>
 struct external_class_instance_resolver;
 
-template <typename RTTI, typename Type, typename Storage>
-struct external_class_instance_resolver<RTTI, Type, Storage, false> {
+template <typename TypeIdentity, typename Type, typename Storage>
+struct external_class_instance_resolver<TypeIdentity, Type, Storage, false> {
     template <typename Context, typename Container>
     decltype(auto) resolve(Context& context, Container& container,
                            Storage& storage) {
@@ -234,8 +234,8 @@ struct external_class_instance_resolver<RTTI, Type, Storage, false> {
 #endif
 };
 
-template <typename RTTI, typename Type, typename Storage>
-struct external_class_instance_resolver<RTTI, Type, Storage, true>
+template <typename TypeIdentity, typename Type, typename Storage>
+struct external_class_instance_resolver<TypeIdentity, Type, Storage, true>
     : class_instance_conversions<resolver_conversion_types_t<Type, Storage>> {
     using class_instance_conversions_type =
         class_instance_conversions<resolver_conversion_types_t<Type, Storage>>;
@@ -277,8 +277,8 @@ struct external_class_instance_resolver<RTTI, Type, Storage, true>
 };
 } // namespace detail
 
-template <typename RTTI, typename Type, typename Storage>
-struct class_instance_resolver<RTTI, Type, Storage, unique> {
+template <typename TypeIdentity, typename Type, typename Storage>
+struct class_instance_resolver<TypeIdentity, Type, Storage, unique> {
     template <typename Context, typename Container>
     decltype(auto) resolve(Context& context, Container& container,
                            Storage& storage)
@@ -308,21 +308,21 @@ private:
     }
 };
 
-template <typename RTTI, typename Type, typename Storage>
-struct class_instance_resolver<RTTI, Type, Storage, shared>
+template <typename TypeIdentity, typename Type, typename Storage>
+struct class_instance_resolver<TypeIdentity, Type, Storage, shared>
     : detail::shared_class_instance_resolver<
-          RTTI, Type, Storage,
+          TypeIdentity, Type, Storage,
           detail::resolver_has_conversion_cache_v<
               detail::resolver_conversion_types_t<Type, Storage>>> {};
 
-template <typename RTTI, typename Type, typename Storage>
-struct class_instance_resolver<RTTI, Type, Storage, shared_cyclical>
-    : class_instance_resolver<RTTI, Type, Storage, external> {};
+template <typename TypeIdentity, typename Type, typename Storage>
+struct class_instance_resolver<TypeIdentity, Type, Storage, shared_cyclical>
+    : class_instance_resolver<TypeIdentity, Type, Storage, external> {};
 
-template <typename RTTI, typename Type, typename Storage>
-struct class_instance_resolver<RTTI, Type, Storage, external>
+template <typename TypeIdentity, typename Type, typename Storage>
+struct class_instance_resolver<TypeIdentity, Type, Storage, external>
     : detail::external_class_instance_resolver<
-          RTTI, Type, Storage,
+          TypeIdentity, Type, Storage,
           detail::resolver_has_conversion_cache_v<
               detail::resolver_conversion_types_t<Type, Storage>>> {};
 

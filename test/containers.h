@@ -8,18 +8,18 @@
 #pragma once
 
 #include <dingo/container.h>
-#include <dingo/rtti/static_provider.h>
-#include <dingo/rtti/typeid_provider.h>
+#include <dingo/type_identity/static_provider.h>
+#include <dingo/type_identity/typeid_provider.h>
 #include <dingo/type_cache.h>
 #include <dingo/type_map.h>
 
 template <typename Tag = void>
-struct static_container_with_dynamic_rtti_traits {
+struct static_container_with_typeid_identity_traits {
     template <typename TagT>
-    using rebind_t = static_container_with_dynamic_rtti_traits<TagT>;
+    using rebind_t = static_container_with_typeid_identity_traits<TagT>;
 
     using tag_type = Tag;
-    using rtti_type = dingo::rtti<dingo::typeid_provider>;
+    using type_identity = dingo::type_identity<dingo::typeid_provider>;
     template <typename Value, typename Allocator>
     using type_map_type = dingo::static_type_map<Value, Tag, Allocator>;
     template <typename Value, typename Allocator>
@@ -30,24 +30,26 @@ struct static_container_with_dynamic_rtti_traits {
 };
 
 template <typename Tag = void>
-struct static_container_without_cache : dingo::static_container_traits<> {
+struct static_container_without_cache : dingo::static_container_traits<Tag> {
     template <typename TagT>
     using rebind_t = static_container_without_cache<TagT>;
-    static constexpr bool cache_enabled = false;
+
     using tag_type = Tag;
+    static constexpr bool cache_enabled = false;
 };
 
-struct dynamic_container_with_static_rtti_traits {
+struct dynamic_container_with_static_identity_traits {
     template <typename>
-    using rebind_t = dynamic_container_with_static_rtti_traits;
+    using rebind_t = dynamic_container_with_static_identity_traits;
 
     using tag_type = void;
-    using rtti_type = dingo::rtti<dingo::static_provider>;
+    using type_identity = dingo::type_identity<dingo::static_provider>;
     template <typename Value, typename Allocator>
-    using type_map_type = dingo::dynamic_type_map<Value, rtti_type, Allocator>;
+    using type_map_type =
+        dingo::dynamic_type_map<Value, type_identity, Allocator>;
     template <typename Value, typename Allocator>
     using type_cache_type =
-        dingo::dynamic_type_cache<Value, rtti_type, Allocator>;
+        dingo::dynamic_type_cache<Value, type_identity, Allocator>;
     using allocator_type = std::allocator<char>;
     using index_definition_type = std::tuple<>;
     static constexpr bool cache_enabled = true;
@@ -60,7 +62,7 @@ struct dynamic_container_without_cache : dingo::dynamic_container_traits {
 using container_types = ::testing::Types<
     dingo::container<dingo::static_container_traits<>>,
     dingo::container<dingo::dynamic_container_traits>,
-    dingo::container<static_container_with_dynamic_rtti_traits<>>,
+    dingo::container<static_container_with_typeid_identity_traits<>>,
     dingo::container<static_container_without_cache<>>,
-    dingo::container<dynamic_container_with_static_rtti_traits>,
+    dingo::container<dynamic_container_with_static_identity_traits>,
     dingo::container<dynamic_container_without_cache>>;

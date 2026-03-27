@@ -15,20 +15,20 @@
 #include <memory>
 
 namespace dingo {
-template <typename Value, typename RTTI, typename Allocator>
+template <typename Value, typename TypeIdentity, typename Allocator>
 struct dynamic_type_cache {
     dynamic_type_cache(Allocator& allocator) : values_(allocator) {}
 
     template <typename Key, typename ValueT>
     void insert(ValueT&& value) {
-        auto pb = values_.emplace(RTTI::template get_type_index<Key>(),
+        auto pb = values_.emplace(TypeIdentity::template get<Key>(),
                                   std::forward<ValueT>(value));
         (void)pb;
         assert(pb.second);
     }
 
     template <typename Key> const Value& get() {
-        auto it = values_.find(RTTI::template get_type_index<Key>());
+        auto it = values_.find(TypeIdentity::template get<Key>());
         if (it != values_.end()) return it->second;
         return empty_;
     }
@@ -36,20 +36,20 @@ struct dynamic_type_cache {
   private:
     using allocator_type =
         typename std::allocator_traits<Allocator>::template rebind_alloc<
-            std::pair<const typename RTTI::type_index, Value>>;
+            std::pair<const typename TypeIdentity::type_index, Value>>;
 
-    std::map<typename RTTI::type_index, Value,
-             std::less<typename RTTI::type_index>, allocator_type>
+    std::map<typename TypeIdentity::type_index, Value,
+             std::less<typename TypeIdentity::type_index>, allocator_type>
         values_;
-    // std::unordered_map< typename RTTI::type_index, Value, typename
-    // RTTI::type_index::hasher, std::equal_to< typename RTTI::type_index >,
+    // std::unordered_map< typename TypeIdentity::type_index, Value, typename
+    // TypeIdentity::type_index::hasher, std::equal_to< typename TypeIdentity::type_index >,
     // map_allocator_type > values_;
 
     static Value empty_;
 };
 
-template <typename Value, typename RTTI, typename Allocator>
-Value dynamic_type_cache<Value, RTTI, Allocator>::empty_;
+template <typename Value, typename TypeIdentity, typename Allocator>
+Value dynamic_type_cache<Value, TypeIdentity, Allocator>::empty_;
 
 template <typename Value, typename Tag> struct static_type_cache_node {
     Value value;
