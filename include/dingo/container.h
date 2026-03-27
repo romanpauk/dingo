@@ -41,6 +41,8 @@ template <typename T> struct is_none : std::bool_constant<false> {};
 template <> struct is_none<none_t> : std::bool_constant<true> {};
 template <typename T> static constexpr auto is_none_v = is_none<T>::value;
 
+template <typename T> struct is_auto_constructible : std::is_aggregate<T> {};
+
 struct dynamic_container_traits {
     template <typename> using rebind_t = dynamic_container_traits;
 
@@ -461,10 +463,10 @@ class container : public allocator_base<Allocator> {
         }
 
         // If we are trying to construct T and it is not wrapped in any way
-        // and it is an aggregate type (needed so the code below compiles for
-        // types with ambiguous construction like std::map<>)
+        // and it is marked as auto-constructible. Aggregates are enabled by
+        // default, while user types can opt in by specializing the trait.
         if constexpr (std::is_same_v< Type, std::decay_t<T> > &&
-            std::is_aggregate_v< std::decay_t<T> >
+            is_auto_constructible< std::decay_t<T> >::value
         ) {
             // And it is constructible
             using type_detection = detail::automatic;
