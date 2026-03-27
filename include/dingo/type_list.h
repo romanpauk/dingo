@@ -20,20 +20,22 @@ struct type_list_size : std::integral_constant<size_t, sizeof...(Types)> {};
 template <typename... Types>
 static constexpr size_t type_list_size_v = type_list_size<Types...>::value;
 
-template <typename RTTI, typename Function>
-bool for_type(type_list<>, const typename RTTI::type_index&, Function&&) {
+template <typename TypeIdentity, typename Function>
+bool for_type(type_list<>, const typename TypeIdentity::type_index&,
+              Function&&) {
     return false;
 }
 
-template <typename RTTI, typename Function, typename Head, typename... Tail>
-bool for_type(type_list<Head, Tail...>, const typename RTTI::type_index& type,
-              Function&& fn) {
-    if (RTTI::template get_type_index<Head>() == type) {
+template <typename TypeIdentity, typename Function, typename Head,
+          typename... Tail>
+bool for_type(type_list<Head, Tail...>,
+              const typename TypeIdentity::type_index& type, Function&& fn) {
+    if (TypeIdentity::template get<Head>() == type) {
         fn(type_list_iterator<Head>());
         return true;
     } else {
-        return for_type<RTTI>(type_list<Tail...>{}, type,
-                              std::forward<Function>(fn));
+        return for_type<TypeIdentity>(type_list<Tail...>{}, type,
+                                      std::forward<Function>(fn));
     }
 }
 

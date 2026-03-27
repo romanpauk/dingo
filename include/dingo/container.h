@@ -21,8 +21,8 @@
 #include <dingo/interface_storage_traits.h>
 #include <dingo/index.h>
 #include <dingo/resolving_context.h>
-#include <dingo/rtti/static_provider.h>
-#include <dingo/rtti/typeid_provider.h>
+#include <dingo/type_identity/static_provider.h>
+#include <dingo/type_identity/typeid_provider.h>
 #include <dingo/static_allocator.h>
 #include <dingo/type_cache.h>
 #include <dingo/type_map.h>
@@ -45,11 +45,11 @@ struct dynamic_container_traits {
     template <typename> using rebind_t = dynamic_container_traits;
 
     using tag_type = none_t;
-    using rtti_type = rtti<typeid_provider>;
+    using type_identity = dingo::type_identity<typeid_provider>;
     template <typename Value, typename Allocator>
-    using type_map_type = dynamic_type_map<Value, rtti_type, Allocator>;
+    using type_map_type = dynamic_type_map<Value, type_identity, Allocator>;
     template <typename Value, typename Allocator>
-    using type_cache_type = dynamic_type_cache<Value, rtti_type, Allocator>;
+    using type_cache_type = dynamic_type_cache<Value, type_identity, Allocator>;
     using allocator_type = std::allocator<char>;
     using index_definition_type = std::tuple<>;
     static constexpr bool cache_enabled = true;
@@ -59,7 +59,7 @@ template <typename Tag = void> struct static_container_traits {
     template <typename TagT> using rebind_t = static_container_traits<TagT>;
 
     using tag_type = Tag;
-    using rtti_type = rtti<static_provider>;
+    using type_identity = dingo::type_identity<static_provider>;
     template <typename Value, typename Allocator>
     using type_map_type = static_type_map<Value, Tag, Allocator>;
     template <typename Value, typename Allocator>
@@ -100,7 +100,6 @@ class container : public allocator_base<Allocator> {
   public:
     using container_traits_type = ContainerTraits;
     using allocator_type = Allocator;
-    using rtti_type = typename ContainerTraits::rtti_type;
     using index_definition_type =
         typename ContainerTraits::index_definition_type;
 
@@ -188,7 +187,7 @@ class container : public allocator_base<Allocator> {
                 void* cache = type_cache_.template get<T>();
                 if (cache) {
                     return class_instance_factory_traits<
-                        rtti_type,
+                        type_identity,
                         typename annotated_traits<T>::type>::convert(cache);
                 }
             } else {
@@ -201,7 +200,7 @@ class container : public allocator_base<Allocator> {
                     if (indexed) {
                         if (indexed->cache) {
                             return class_instance_factory_traits<
-                                rtti_type, typename annotated_traits<T>::type>::
+                                type_identity, typename annotated_traits<T>::type>::
                                 convert(indexed->cache);
                         }
                     }
@@ -258,6 +257,8 @@ class container : public allocator_base<Allocator> {
     }
 
   private:
+    using type_identity = typename container_traits_type::type_identity;
+
     template <typename... TypeArgs, typename Arg, typename IdType>
     auto& register_type_impl(Arg&& arg, IdType&& id) {
         using registration =
@@ -421,7 +422,7 @@ class container : public allocator_base<Allocator> {
             void* cache = type_cache_.template get<T>();
             if (cache) {
                 return class_instance_factory_traits<
-                    rtti_type,
+                    type_identity,
                     typename annotated_traits<T>::type>::convert(cache);
             }
         }
@@ -444,7 +445,7 @@ class container : public allocator_base<Allocator> {
                     if constexpr (cache_enabled && CheckCache) {
                         if (indexed->cache) {
                             return class_instance_factory_traits<
-                                rtti_type, typename annotated_traits<T>::type>::
+                                type_identity, typename annotated_traits<T>::type>::
                                 convert(indexed->cache);
                         }
                     }
@@ -488,33 +489,33 @@ class container : public allocator_base<Allocator> {
     // TODO: two different resolve() calls due to different caches
     template <typename CachedT, typename T, typename Factory, typename Context>
     T resolve(Factory& factory, Context& context) {
-        void* ptr = class_instance_factory_traits<rtti_type, T>::resolve(
+        void* ptr = class_instance_factory_traits<type_identity, T>::resolve(
             factory, context);
         if constexpr (cache_enabled) {
             if (factory.cacheable)
                 type_cache_.template insert<CachedT>(ptr);
         }
-        return class_instance_factory_traits<rtti_type, T>::convert(ptr);
+        return class_instance_factory_traits<type_identity, T>::convert(ptr);
     }
 
     struct index_data;
 
     template <typename CachedT, typename T, typename Factory, typename Context>
     T resolve(Factory& factory, Context& context, index_data& data) {
-        void* ptr = class_instance_factory_traits<rtti_type, T>::resolve(
+        void* ptr = class_instance_factory_traits<type_identity, T>::resolve(
             factory, context);
         if constexpr (cache_enabled) {
             if (factory.cacheable)
                 data.cache = ptr;
         }
-        return class_instance_factory_traits<rtti_type, T>::convert(ptr);
+        return class_instance_factory_traits<type_identity, T>::convert(ptr);
     }
 
     template <typename T, typename Factory, typename Context>
     T resolve_collection_type(Factory& factory, Context& context) {
-        void* ptr = class_instance_factory_traits<rtti_type, T>::resolve(
+        void* ptr = class_instance_factory_traits<type_identity, T>::resolve(
             factory, context);
-        return class_instance_factory_traits<rtti_type, T>::convert(ptr);
+        return class_instance_factory_traits<type_identity, T>::convert(ptr);
     }
 
     template <class Storage, class TypeInterface, class Type>
@@ -531,7 +532,7 @@ class container : public allocator_base<Allocator> {
 
     template <typename U, typename... Args>
     std::pair<
-        class_instance_factory_ptr<class_instance_factory_i<container_type>>,
+        class_instance_factory_ptr<class_instance_factory_i<type_identity>>,
         typename U::container_type*>
     allocate_factory(Args&&... args) {
         auto alloc = allocator_traits::rebind<U>(get_allocator());
@@ -552,7 +553,7 @@ class container : public allocator_base<Allocator> {
     parent_container_type* parent_ = nullptr;
 
     struct index_data {
-        class_instance_factory_i<container_type>* factory;
+        class_instance_factory_i<type_identity>* factory;
         void* cache;
 
         operator bool() const { return factory != nullptr; }
@@ -568,7 +569,7 @@ class container : public allocator_base<Allocator> {
 
         typename ContainerTraits::template type_map_type<
             class_instance_factory_ptr<
-                class_instance_factory_i<container_type>>,
+                class_instance_factory_i<type_identity>>,
             allocator_type>
             factories;
     };

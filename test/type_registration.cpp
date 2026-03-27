@@ -8,8 +8,8 @@
 #include <dingo/class_instance_conversions.h>
 #include <dingo/class_instance_resolver.h>
 #include <dingo/rebind_type.h>
-#include <dingo/rtti/rtti.h>
-#include <dingo/rtti/typeid_provider.h>
+#include <dingo/type_identity/type_identity.h>
+#include <dingo/type_identity/typeid_provider.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/type_registration.h>
@@ -78,7 +78,7 @@ TEST(type_registration_test, registration_specialization) {
         typename shared_registration::factory_type::type,
         typename shared_registration::conversions_type::type>;
     using shared_resolver =
-        class_instance_resolver<rtti<typeid_provider>, A, shared_storage>;
+        class_instance_resolver<type_identity<typeid_provider>, A, shared_storage>;
 
     using shared_ptr_registration =
         type_registration<scope<shared>, storage<std::shared_ptr<A>>>;
@@ -90,7 +90,7 @@ TEST(type_registration_test, registration_specialization) {
         typename shared_ptr_registration::factory_type::type,
         typename shared_ptr_registration::conversions_type::type>;
     using shared_ptr_resolver =
-        class_instance_resolver<rtti<typeid_provider>, A, shared_ptr_storage>;
+        class_instance_resolver<type_identity<typeid_provider>, A, shared_ptr_storage>;
 
     using external_registration =
         type_registration<scope<external>, storage<A&>>;
@@ -102,7 +102,7 @@ TEST(type_registration_test, registration_specialization) {
         typename external_registration::factory_type::type,
         typename external_registration::conversions_type::type>;
     using external_resolver =
-        class_instance_resolver<rtti<typeid_provider>, A, external_storage>;
+        class_instance_resolver<type_identity<typeid_provider>, A, external_storage>;
 
     using external_shared_registration =
         type_registration<scope<external>, storage<std::shared_ptr<A>>>;
@@ -114,7 +114,7 @@ TEST(type_registration_test, registration_specialization) {
         typename external_shared_registration::factory_type::type,
         typename external_shared_registration::conversions_type::type>;
     using external_shared_resolver = class_instance_resolver<
-        rtti<typeid_provider>, A, external_shared_storage>;
+        type_identity<typeid_provider>, A, external_shared_storage>;
 
     static_assert(std::is_empty_v<class_instance_conversions<type_list<>>>);
     static_assert(

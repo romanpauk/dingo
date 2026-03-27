@@ -28,7 +28,8 @@ struct factory_result_has_value_type<T, std::void_t<typename T::value_type>>
 #pragma warning(disable : 4702)
 #endif
 // TODO: clean up the templates
-template <typename RTTI, typename T> struct class_instance_factory_traits {
+template <typename TypeIdentity, typename T>
+struct class_instance_factory_traits {
     static T convert(void* ptr) {
         // TODO: this assumes that when resolve a value category that can't be
         // copied, we can move it, as the storage is unique anyway, so the
@@ -53,7 +54,8 @@ template <typename RTTI, typename T> struct class_instance_factory_traits {
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_value(
             context,
-            RTTI::template get_type_index<rebind_type_t<T, runtime_type>>(),
+            TypeIdentity::template get<
+                rebind_type_t<T, runtime_type>>(),
             describe_type<T>());
     }
 };
@@ -61,54 +63,58 @@ template <typename RTTI, typename T> struct class_instance_factory_traits {
 #pragma warning(pop)
 #endif
 
-template <typename RTTI, typename T>
-struct class_instance_factory_traits<RTTI, T&> {
+template <typename TypeIdentity, typename T>
+struct class_instance_factory_traits<TypeIdentity, T&> {
     static T& convert(void* ptr) { return *static_cast<T*>(ptr); }
 
     template <typename Factory, typename Context>
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_lvalue_reference(
             context,
-            RTTI::template get_type_index<rebind_type_t<T&, runtime_type>>(),
+            TypeIdentity::template get<
+                rebind_type_t<T&, runtime_type>>(),
             describe_type<T&>());
     }
 };
 
-template <typename RTTI, typename T>
-struct class_instance_factory_traits<RTTI, const T&> {
+template <typename TypeIdentity, typename T>
+struct class_instance_factory_traits<TypeIdentity, const T&> {
     static T& convert(void* ptr) { return *static_cast<T*>(ptr); }
 
     template <typename Factory, typename Context>
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_lvalue_reference(
             context,
-            RTTI::template get_type_index<rebind_type_t<T&, runtime_type>>(),
+            TypeIdentity::template get<
+                rebind_type_t<T&, runtime_type>>(),
             describe_type<const T&>());
     }
 };
 
-template <typename RTTI, typename T>
-struct class_instance_factory_traits<RTTI, T&&> {
+template <typename TypeIdentity, typename T>
+struct class_instance_factory_traits<TypeIdentity, T&&> {
     static T&& convert(void* ptr) { return std::move(*static_cast<T*>(ptr)); }
 
     template <typename Factory, typename Context>
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_rvalue_reference(
             context,
-            RTTI::template get_type_index<rebind_type_t<T&&, runtime_type>>(),
+            TypeIdentity::template get<
+                rebind_type_t<T&&, runtime_type>>(),
             describe_type<T&&>());
     }
 };
 
-template <typename RTTI, typename T>
-struct class_instance_factory_traits<RTTI, T*> {
+template <typename TypeIdentity, typename T>
+struct class_instance_factory_traits<TypeIdentity, T*> {
     static T* convert(void* ptr) { return static_cast<T*>(ptr); }
 
     template <typename Factory, typename Context>
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_pointer(
             context,
-            RTTI::template get_type_index<rebind_type_t<T*, runtime_type>>(),
+            TypeIdentity::template get<
+                rebind_type_t<T*, runtime_type>>(),
             describe_type<T*>());
     }
 };

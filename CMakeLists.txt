@@ -115,9 +115,9 @@ if(DINGO_DEVELOPMENT_MODE)
         rebind_type.h
         resettable_i.h
         resolving_context.h
-        rtti/static_provider.h
-        rtti/rtti.h
-        rtti/typeid_provider.h
+        type_identity/static_provider.h
+        type_identity/type_identity.h
+        type_identity/typeid_provider.h
         static_allocator.h
         storage.h
         storage/external.h

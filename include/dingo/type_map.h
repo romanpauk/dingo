@@ -15,22 +15,22 @@
 #include <memory>
 
 namespace dingo {
-template <typename Value, typename RTTI, typename Allocator>
+template <typename Value, typename TypeIdentity, typename Allocator>
 struct dynamic_type_map {
     dynamic_type_map(Allocator& allocator) : values_(allocator) {}
 
     template <typename Key> std::pair<Value&, bool> insert(Value&& value) {
-        auto pb = values_.emplace(RTTI::template get_type_index<Key>(),
+        auto pb = values_.emplace(TypeIdentity::template get<Key>(),
                                   std::forward<Value>(value));
         return {pb.first->second, pb.second};
     }
 
     template <typename Key> bool erase() {
-        return values_.erase(RTTI::template get_type_index<Key>());
+        return values_.erase(TypeIdentity::template get<Key>());
     }
 
     template <typename Key> Value* get() {
-        auto it = values_.find(RTTI::template get_type_index<Key>());
+        auto it = values_.find(TypeIdentity::template get<Key>());
         return it != values_.end() ? &it->second : nullptr;
     }
 
@@ -47,13 +47,13 @@ struct dynamic_type_map {
   private:
     using allocator_type =
         typename std::allocator_traits<Allocator>::template rebind_alloc<
-            std::pair<const typename RTTI::type_index, Value>>;
+            std::pair<const typename TypeIdentity::type_index, Value>>;
 
-    std::map<typename RTTI::type_index, Value,
-             std::less<typename RTTI::type_index>, allocator_type>
+    std::map<typename TypeIdentity::type_index, Value,
+             std::less<typename TypeIdentity::type_index>, allocator_type>
         values_;
-    // std::unordered_map< typename RTTI::type_index, Value, typename
-    //    std::hash< typename RTTI::type_index>, std::equal_to< typename RTTI::type_index >,
+    // std::unordered_map< typename TypeIdentity::type_index, Value, typename
+    //    std::hash< typename TypeIdentity::type_index>, std::equal_to< typename TypeIdentity::type_index >,
     //    allocator_type > values2_;
 };
 

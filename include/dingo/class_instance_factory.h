@@ -41,20 +41,22 @@ template <typename Storage>
 using registered_type_t = typename Storage::type;
 } // namespace detail
 
-template <typename RTTI, typename Factory, typename Context>
+template <typename TypeIdentity, typename Factory, typename Context>
 void* resolve_address(Factory&, Context&, type_list<>,
-                      const typename RTTI::type_index&, type_descriptor requested_type,
+                      const typename TypeIdentity::type_index&,
+                      type_descriptor requested_type,
                       type_descriptor registered_type) {
     throw detail::make_type_not_convertible_exception(requested_type,
                                                       registered_type);
 }
 
-template <typename RTTI, typename Factory, typename Context, typename Head>
+template <typename TypeIdentity, typename Factory, typename Context, typename Head>
 void* resolve_address(Factory& factory, Context& context,
-                      type_list<Head>, const typename RTTI::type_index& type,
+                      type_list<Head>,
+                      const typename TypeIdentity::type_index& type,
                       type_descriptor requested_type,
                       type_descriptor registered_type) {
-    if (!(RTTI::template get_type_index<Head>() == type))
+    if (!(TypeIdentity::template get<Head>() == type))
         throw detail::make_type_not_convertible_exception(
             requested_type, registered_type);
     return factory.template resolve_address<Head>(context, requested_type,
@@ -63,35 +65,42 @@ void* resolve_address(Factory& factory, Context& context,
 
 // TODO: instead of StorageTag, rvalue reference can be used to determine
 // move-ability
-template <typename RTTI, typename Factory, typename Context, typename Head,
+template <typename TypeIdentity, typename Factory, typename Context,
+          typename Head,
           typename Next, typename... Tail>
 void* resolve_address(Factory& factory, Context& context,
-                      type_list<Head, Next, Tail...>, const typename RTTI::type_index& type,
+                      type_list<Head, Next, Tail...>,
+                      const typename TypeIdentity::type_index& type,
                       type_descriptor requested_type,
                       type_descriptor registered_type) {
-    if (RTTI::template get_type_index<Head>() == type) {
+    if (TypeIdentity::template get<Head>() == type) {
         return factory.template resolve_address<Head>(context, requested_type,
                                                       registered_type);
     } else {
-        return resolve_address<RTTI>(factory, context, type_list<Next, Tail...>{},
-                                     type, requested_type, registered_type);
+        return resolve_address<TypeIdentity>(
+            factory, context, type_list<Next, Tail...>{}, type, requested_type,
+            registered_type);
     }
 }
 
-// TODO: the container here is just for RTTI, but it is needed to get the
-// inner container type and that is very hard. Perhaps pass RTTI and inner
-// container directly?
+// TODO: the container here is just for type identity, but it is needed to get
+// the inner container type and that is very hard. Perhaps pass type identity
+// and inner container directly?
 template <typename Container, typename Type, typename Storage,
           typename Data>
-class class_instance_factory : public class_instance_factory_i<Container> {
+class class_instance_factory
+    : public class_instance_factory_i<
+          typename Container::container_traits_type::type_identity> {
   public:
     using storage_type = Storage;
     using data_type = std::remove_reference_t<decltype(get_factory_data(
         std::declval<Data&>()))>;
     using container_type = typename data_type::container_type;
+    using type_identity =
+        typename container_type::container_traits_type::type_identity;
 
   private:
-    class_instance_resolver<typename Container::rtti_type, Type, Storage> resolver_;
+    class_instance_resolver<type_identity, Type, Storage> resolver_;
     // `data_` must be destroyed before `resolver_` so shared storage can
     // tear down cached instances before preserved construction temporaries.
     Data data_;
@@ -111,42 +120,41 @@ class class_instance_factory : public class_instance_factory_i<Container> {
     
     void*
     get_value(resolving_context& context,
-              const typename Container::rtti_type::type_index& type,
+              const typename type_identity::type_index& type,
               type_descriptor requested_type) override {
         using value_types = typename Storage::conversions::value_types;
-        return ::dingo::resolve_address<typename Container::rtti_type>(
-            *this, context, value_types{}, type, requested_type,
-            registered_type());
+        return ::dingo::resolve_address<type_identity>(
+            *this, context, value_types{}, type, requested_type, registered_type());
     }
 
     void* get_lvalue_reference(
         resolving_context& context,
-        const typename Container::rtti_type::type_index& type,
+        const typename type_identity::type_index& type,
         type_descriptor requested_type) override {
         using lvalue_reference_types =
             typename Storage::conversions::lvalue_reference_types;
-        return ::dingo::resolve_address<typename Container::rtti_type>(
+        return ::dingo::resolve_address<type_identity>(
             *this, context, lvalue_reference_types{}, type, requested_type,
             registered_type());
     }
 
     void* get_rvalue_reference(
         resolving_context& context,
-        const typename Container::rtti_type::type_index& type,
+        const typename type_identity::type_index& type,
         type_descriptor requested_type) override {
         using rvalue_reference_types =
             typename Storage::conversions::rvalue_reference_types;
-        return ::dingo::resolve_address<typename Container::rtti_type>(
+        return ::dingo::resolve_address<type_identity>(
             *this, context, rvalue_reference_types{}, type, requested_type,
             registered_type());
     }
 
     void* get_pointer(
         resolving_context& context,
-        const typename Container::rtti_type::type_index& type,
+        const typename type_identity::type_index& type,
         type_descriptor requested_type) override {
         using pointer_types = typename Storage::conversions::pointer_types;
-        return ::dingo::resolve_address<typename Container::rtti_type>(
+        return ::dingo::resolve_address<type_identity>(
             *this, context, pointer_types{}, type, requested_type,
             registered_type());
     }

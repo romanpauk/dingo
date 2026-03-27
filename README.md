@@ -19,7 +19,7 @@ Features Overview:
 - [Customizable Factories](#factories)
 - [Service Locator Pattern](#service-locator)
 - [Runtime-based Resolution](#runtime-based-resolution)
-- [Customizable RTTI](#customizable-rtti)
+- [Customizable Type Identity](#customizable-type-identity)
 - [Container Nesting](#container-nesting)
 - [Static and Dynamic Containers](#static-and-dynamic-containers)
 - [Multibindings](#multibindings)
@@ -620,24 +620,24 @@ struct B {
 
 <!-- } -->
 
-#### Customizable RTTI
+#### Customizable Type Identity
 
-For non-RTTI enabled builds, it is possible to parametrize the container with
-custom RTTI implementation. No library functionality depends on dynamic_cast
-conversion. Two RTTI providers are available: dynamic one based on typeid
-operator and static one, based on template specializations.
+For non-RTTI enabled builds, it is possible to parametrize the container with a
+custom type identity implementation. No library functionality depends on
+`dynamic_cast` conversion. Two type identity implementations are available:
+dynamic one based on `typeid` and static one based on template specializations.
 
 #### Static and Dynamic Containers
 
 Static and dynamic container are just differently parametrized containers using
 container traits.
 
-Container type can be parametrized with a custom memory allocator, RTTI provider
-and type map implementation. Dynamic containers use standard allocator, operator
-typeid() and type map implemented using standard map. Static containers use
-template specializations to implement required features, as all types that are
-ever present are always different types, allowing static member variables to be
-used to store and retrieve required data quickly.
+Container type can be parametrized with a custom memory allocator, type identity
+implementation, and type map implementation. Dynamic containers use standard
+allocator, `typeid`, and type map implemented using standard map. Static
+containers use template specializations to implement required features, as all
+types that are ever present are always different types, allowing static member
+variables to be used to store and retrieve required data quickly.
 
 While dynamic containers can be created completely freely, with static
 containers it is a user's responsibility to use type tag to distinguish the
