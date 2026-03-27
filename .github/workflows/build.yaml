@@ -44,9 +44,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
       - name: CCache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@v1.2.22
         with:
           key: ${{ matrix.os }}-${{ matrix.config }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
       - name: Configure
@@ -90,13 +90,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Setup MSVC Developer Command Prompt
-        uses: TheMrMilchmann/setup-msvc-dev@v3
+        uses: TheMrMilchmann/setup-msvc-dev@v4.0.0
         with:
           arch: x64
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
       - name: CCache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@v1.2.22
         with:
           key: ${{ matrix.os }}-${{ matrix.config }}-${{ matrix.std }}
       - name: Configure
@@ -120,4 +120,3 @@ jobs:
         run: |
             cmake -S test/fetchcontent -B fetchcontent-build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
             cmake --build fetchcontent-build -j ${{ env.JOBS }}
-
