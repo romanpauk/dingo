@@ -21,6 +21,17 @@ struct factory_result_has_value_type : std::false_type {};
 template <typename T>
 struct factory_result_has_value_type<T, std::void_t<typename T::value_type>>
     : std::true_type {};
+
+template <typename T> constexpr bool factory_result_copies_from_storage() {
+    if constexpr (type_traits<T>::enabled && is_pointer_like_type_v<T> &&
+                  std::is_copy_constructible_v<T>) {
+        return true;
+    } else if constexpr (factory_result_has_value_type<T>::value) {
+        return std::is_copy_constructible_v<typename T::value_type>;
+    } else {
+        return std::is_copy_constructible_v<T>;
+    }
+}
 } // namespace detail
 
 #ifdef _MSC_VER
@@ -30,19 +41,7 @@ struct factory_result_has_value_type<T, std::void_t<typename T::value_type>>
 // TODO: clean up the templates
 template <typename RTTI, typename T> struct class_instance_factory_traits {
     static T convert(void* ptr) {
-        // TODO: this assumes that when resolve a value category that can't be
-        // copied, we can move it, as the storage is unique anyway, so the
-        // destruction by move does not matter. But at this place we have no
-        // clue if the storage is unique or not.
-        // TODO: test shared storage with non-copyable type requested as value
-        // TODO: this should recursively extract value_type (originally a workaround
-        // for vector<unique_ptr> that is copy-constructible).
-        if constexpr (detail::factory_result_has_value_type<T>::value) {
-            if constexpr (std::is_copy_constructible_v<
-                              typename T::value_type>) {
-                return *static_cast<T*>(ptr);
-            }
-        } else if constexpr (std::is_copy_constructible_v<T>) {
+        if constexpr (detail::factory_result_copies_from_storage<T>()) {
             return *static_cast<T*>(ptr);
         }
 
@@ -52,8 +51,7 @@ template <typename RTTI, typename T> struct class_instance_factory_traits {
     template <typename Factory, typename Context>
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_value(
-            context,
-            RTTI::template get_type_index<rebind_type_t<T, runtime_type>>(),
+            context, RTTI::template get_type_index<rebind_leaf_t<T, runtime_type>>(),
             describe_type<T>());
     }
 };
@@ -68,8 +66,7 @@ struct class_instance_factory_traits<RTTI, T&> {
     template <typename Factory, typename Context>
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_lvalue_reference(
-            context,
-            RTTI::template get_type_index<rebind_type_t<T&, runtime_type>>(),
+            context, RTTI::template get_type_index<rebind_leaf_t<T&, runtime_type>>(),
             describe_type<T&>());
     }
 };
@@ -81,8 +78,7 @@ struct class_instance_factory_traits<RTTI, const T&> {
     template <typename Factory, typename Context>
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_lvalue_reference(
-            context,
-            RTTI::template get_type_index<rebind_type_t<T&, runtime_type>>(),
+            context, RTTI::template get_type_index<rebind_leaf_t<T&, runtime_type>>(),
             describe_type<const T&>());
     }
 };
@@ -94,8 +90,7 @@ struct class_instance_factory_traits<RTTI, T&&> {
     template <typename Factory, typename Context>
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_rvalue_reference(
-            context,
-            RTTI::template get_type_index<rebind_type_t<T&&, runtime_type>>(),
+            context, RTTI::template get_type_index<rebind_leaf_t<T&&, runtime_type>>(),
             describe_type<T&&>());
     }
 };
@@ -107,8 +102,7 @@ struct class_instance_factory_traits<RTTI, T*> {
     template <typename Factory, typename Context>
     static void* resolve(Factory& factory, Context& context) {
         return factory.get_pointer(
-            context,
-            RTTI::template get_type_index<rebind_type_t<T*, runtime_type>>(),
+            context, RTTI::template get_type_index<rebind_leaf_t<T*, runtime_type>>(),
             describe_type<T*>());
     }
 };

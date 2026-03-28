@@ -14,7 +14,7 @@
 #include <dingo/class_instance_factory.h>
 #include <dingo/class_instance_factory_traits.h>
 #include <dingo/collection_traits.h>
-#include <dingo/decay.h>
+#include <dingo/normalized_type.h>
 #include <dingo/exceptions.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/invoke.h>
@@ -194,7 +194,7 @@ class container : public allocator_base<Allocator> {
                         typename annotated_traits<T>::type>::convert(cache);
                 }
             } else {
-                auto data = type_factories_.template get<decay_t<T>>();
+                auto data = type_factories_.template get<normalized_type_t<T>>();
                 if (data) {
                     auto indexed =
                         data->template get_index<IdType>(get_allocator())
@@ -216,7 +216,8 @@ class container : public allocator_base<Allocator> {
         return resolve<T, true, false>(context, std::forward<IdType>(id));
     }
 
-    template <typename T, typename Factory = constructor_detection<decay_t<T>>>
+    template <typename T,
+              typename Factory = constructor_detection<normalized_type_t<T>>>
     T construct(Factory factory = Factory()) {
         // TODO: nothrow constructuble
         resolving_context context;
@@ -231,24 +232,24 @@ class container : public allocator_base<Allocator> {
     }
 
     template <typename T, typename Fn> T construct_collection(Fn&& fn) {
-        static_assert(collection_traits<T>::is_collection,
+        using collection_type = collection_traits<T>;
+        using resolve_type = typename collection_type::resolve_type;
+        using lookup_type = normalized_type_t<resolve_type>;
+
+        static_assert(collection_type::is_collection,
                       "missing collection_traits specialization for type T");
 
         T results;
         resolving_context context;
-        auto data = type_factories_.template get<decay_t<decay_t<
-            typename collection_traits<T>::resolve_type>>>(); // TODO: needs to
-                                                              // be
-        // more generic...
+        auto data = type_factories_.template get<lookup_type>();
         if (!data)
-            throw detail::make_collection_type_not_found_exception<
-                T, typename collection_traits<T>::resolve_type>();
+            throw detail::make_collection_type_not_found_exception<T,
+                                                                   resolve_type>();
 
-        collection_traits<T>::reserve(results, data->factories.size());
+        collection_type::reserve(results, data->factories.size());
         for (auto&& p : data->factories) {
-            fn(results,
-               resolve_collection_type<typename collection_traits<T>::resolve_type>(
-                   *p.second, context));
+            fn(results, resolve_collection_type<resolve_type>(*p.second,
+                                                              context));
         }
         return results;
     }
@@ -278,20 +279,22 @@ class container : public allocator_base<Allocator> {
         //
         using interface_type_0 = std::tuple_element_t<
             0, typename registration::interface_type::type_tuple>;
-        using stored_type = rebind_type_t<
-            typename registration::storage_type::type,
-            std::conditional_t<
-                std::tuple_size_v<
-                    typename registration::interface_type::type_tuple> == 1 &&
-                    std::has_virtual_destructor_v<interface_type_0> &&
-                    is_interface_storage_rebindable_v<
-                        typename registration::storage_type::type>,
-                interface_type_0,
-                decay_t<typename registration::storage_type::type>>>;
+        using registered_storage_type = typename registration::storage_type::type;
+        static constexpr bool should_store_interface =
+            std::tuple_size_v<typename registration::interface_type::type_tuple> ==
+                1 &&
+            std::has_virtual_destructor_v<interface_type_0> &&
+            is_interface_storage_rebindable_v<registered_storage_type,
+                                              interface_type_0>;
+        using stored_leaf_type =
+            std::conditional_t<should_store_interface, interface_type_0,
+                               leaf_type_t<registered_storage_type>>;
+        using stored_type =
+            rebind_leaf_t<registered_storage_type, stored_leaf_type>;
 
         using storage_type =
             detail::storage<typename registration::scope_type::type,
-                            typename registration::storage_type::type,
+                            registered_storage_type,
                             stored_type,
                             typename registration::factory_type::type,
                             typename registration::conversions_type::type>;
@@ -416,7 +419,7 @@ class container : public allocator_base<Allocator> {
                                      std::remove_reference_t<T>, T>,
                   T>>
     R resolve(resolving_context& context, IdType&& id = IdType()) {
-        using Type = decay_t<T>;
+        using Type = normalized_type_t<T>;
         static_assert(!std::is_const_v<Type>);
 
         if constexpr (cache_enabled && CheckCache) {
@@ -521,12 +524,17 @@ class container : public allocator_base<Allocator> {
 
     template <class Storage, class TypeInterface, class Type>
     void check_interface_requirements() {
+        using normalized_type = normalized_type_t<Type>;
+        using normalized_interface_type = normalized_type_t<TypeInterface>;
+
         static_assert(!std::is_reference_v<TypeInterface>);
         static_assert(
-            std::is_convertible_v<decay_t<Type>*, decay_t<TypeInterface>*>);
-        if constexpr (!std::is_same_v<decay_t<Type>, decay_t<TypeInterface>>) {
+            std::is_convertible_v<normalized_type*, normalized_interface_type*>);
+        if constexpr (!std::is_same_v<normalized_type,
+                                      normalized_interface_type>) {
             static_assert(detail::storage_interface_requirements_v<
-                              Storage, decay_t<Type>, decay_t<TypeInterface>>,
+                              Storage, normalized_type,
+                              normalized_interface_type>,
                           "storage requirements not met");
         }
     }

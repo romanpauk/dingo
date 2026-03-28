@@ -10,15 +10,52 @@
 #include <dingo/config.h>
 
 #include <dingo/aligned_storage.h>
-#include <dingo/decay.h>
+#include <dingo/normalized_type.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/storage.h>
+#include <dingo/type_storage_traits.h>
 
 #include <atomic>
 #include <memory>
 
 namespace dingo {
 struct shared_cyclical {};
+
+template <typename Type, typename U>
+struct storage_traits<
+    shared_cyclical, Type, U,
+    std::enable_if_t<!type_traits<Type>::enabled && !std::is_pointer_v<Type> &&
+                     !std::is_reference_v<Type>>> {
+    static constexpr bool enabled = true;
+
+    using value_types = type_list<>;
+    using lvalue_reference_types = type_list<U&>;
+    using rvalue_reference_types = type_list<>;
+    using pointer_types = type_list<U*>;
+    using conversion_types = type_list<>;
+};
+
+template <typename Type, typename U>
+struct storage_traits<shared_cyclical, Type*, U> {
+    static constexpr bool enabled = true;
+
+    using value_types = type_list<>;
+    using lvalue_reference_types = type_list<U&>;
+    using rvalue_reference_types = type_list<>;
+    using pointer_types = type_list<U*>;
+    using conversion_types = type_list<>;
+};
+
+template <typename Type, typename U>
+struct storage_traits<shared_cyclical, std::shared_ptr<Type>, U> {
+    static constexpr bool enabled = true;
+
+    using value_types = type_list<std::shared_ptr<U>>;
+    using lvalue_reference_types = type_list<U&, std::shared_ptr<U>&>;
+    using rvalue_reference_types = type_list<>;
+    using pointer_types = type_list<U*, std::shared_ptr<U>*>;
+    using conversion_types = type_list<std::shared_ptr<U>>;
+};
 
 template <typename Base, typename Derived> struct is_virtual_base_of {
 #if defined(__GNUG__)
@@ -45,32 +82,8 @@ static constexpr bool is_virtual_base_of_v =
     is_virtual_base_of<Base, Derived>::value;
 
 namespace detail {
-template <typename Type, typename U>
-struct conversions<shared_cyclical, Type, U> {
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<U&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*>;
-    using conversion_types = type_list<>;
-};
-
-template <typename Type, typename U>
-struct conversions<shared_cyclical, Type*, U> {
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<U&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*>;
-    using conversion_types = type_list<>;
-};
-
-template <typename Type, typename U>
-struct conversions<shared_cyclical, std::shared_ptr<Type>, U> {
-    using value_types = type_list<std::shared_ptr<U>>;
-    using lvalue_reference_types = type_list<U&, std::shared_ptr<U>&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, std::shared_ptr<U>*>;
-    using conversion_types = type_list<std::shared_ptr<U>>;
-};
+template <typename Type, typename U> struct conversions<shared_cyclical, Type, U>
+    : type_storage_traits<shared_cyclical, Type, U> {};
 
 // Disallow virtual bases as interfaces as in cyclical storage, we can't
 // properly calculate the cast when the object is not constructed
@@ -82,16 +95,16 @@ struct storage_interface_requirements<
 
 template <typename Type, typename Factory,
           bool IsTriviallyDestructible = std::is_trivially_destructible_v<Type>>
-class storage_instance_shared_impl;
+class cyclical_storage_instance_impl;
 
 template <typename Type, typename Factory>
-class storage_instance_shared_impl<Type, Factory, false> : Factory {
+class cyclical_storage_instance_impl<Type, Factory, false> : Factory {
   public:
     template <typename... Args>
-    storage_instance_shared_impl(Args&&... args)
+    cyclical_storage_instance_impl(Args&&... args)
         : Factory(std::forward<Args>(args)...) {}
 
-    ~storage_instance_shared_impl() { reset(); }
+    ~cyclical_storage_instance_impl() { reset(); }
 
     template <typename Context> Type* resolve(Context&) {
         assert(!resolved_);
@@ -124,10 +137,10 @@ class storage_instance_shared_impl<Type, Factory, false> : Factory {
 };
 
 template <typename Type, typename Factory>
-class storage_instance_shared_impl<Type, Factory, true> : Factory {
+class cyclical_storage_instance_impl<Type, Factory, true> : Factory {
   public:
     template <typename... Args>
-    storage_instance_shared_impl(Args&&... args)
+    cyclical_storage_instance_impl(Args&&... args)
         : Factory(std::forward<Args>(args)...) {}
 
     template <typename Context> Type* resolve(Context&) {
@@ -154,14 +167,17 @@ class storage_instance_shared_impl<Type, Factory, true> : Factory {
 
 template <typename Type, typename StoredType, typename Factory>
 class storage_instance<shared_cyclical, Type, StoredType, Factory>
-    : public storage_instance_shared_impl<Type, Factory> {
+    : public cyclical_storage_instance_impl<Type, Factory> {
   public:
     template <typename... Args>
     storage_instance(Args&&... args)
-        : storage_instance_shared_impl<Type, Factory>(
+        : cyclical_storage_instance_impl<Type, Factory>(
               std::forward<Args>(args)...) {}
 };
 
+// This path is intentionally std::shared_ptr-specific. We need to publish a
+// copyable owning handle before the pointee is constructed so cyclical
+// dependencies can observe a stable address during construction.
 template <typename Type, typename StoredType, typename Factory>
 class storage_instance<shared_cyclical, std::shared_ptr<Type>,
                        std::shared_ptr<StoredType>, Factory> : Factory {

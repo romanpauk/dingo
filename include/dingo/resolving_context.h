@@ -86,14 +86,19 @@ class resolving_context {
         return allocator_traits::allocate(allocator, 1);
     }
 
-    template <typename T, typename DetectionTag, typename Container> T construct_temporary(Container& container) {
-        using Type = decay_t<T>;
-        arena_allocator<void> alloc(closures_.back()->arena_);
-        auto allocator = allocator_traits::rebind<Type>(alloc);
+    template <typename T, typename DetectionTag, typename Container>
+    T construct_temporary(Container& container) {
+        using temporary_type = normalized_type_t<T>;
+
+        auto& active_closure = *closures_.back();
+        arena_allocator<void> alloc(active_closure.arena_);
+        auto allocator = allocator_traits::rebind<temporary_type>(alloc);
         auto instance = allocator_traits::allocate(allocator, 1);
-        constructor_detection<Type, DetectionTag>().template construct<Type>(instance, *this, container);
-        if constexpr (!std::is_trivially_destructible_v<Type>)
+        constructor_detection<temporary_type, DetectionTag>()
+            .template construct<temporary_type>(instance, *this, container);
+        if constexpr (!std::is_trivially_destructible_v<temporary_type>)
             register_destructor(instance);
+
         if constexpr (std::is_lvalue_reference_v<T>) {
             return *instance;
         } else {

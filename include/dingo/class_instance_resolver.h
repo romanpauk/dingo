@@ -10,7 +10,6 @@
 #include <dingo/config.h>
 
 #include <dingo/class_instance_conversions.h>
-#include <dingo/decay.h>
 #include <dingo/exceptions.h>
 #include <dingo/resolving_context.h>
 #include <dingo/type_conversion.h>
@@ -85,7 +84,7 @@ struct class_instance_resolver;
 namespace detail {
 template <typename Type, typename Storage>
 using resolver_conversion_types_t =
-    rebind_type_t<typename Storage::conversions::conversion_types, Type>;
+    rebind_leaf_t<typename Storage::conversions::conversion_types, Type>;
 
 template <typename Types>
 static constexpr bool resolver_has_conversion_cache_v =
@@ -113,7 +112,7 @@ struct shared_class_instance_resolver<RTTI, Type, Storage, false> {
                           type_descriptor registered_type) {
         if (!storage.is_resolved()) {
             [[maybe_unused]] class_recursion_guard<
-                decay_t<typename Storage::type>>
+                leaf_type_t<typename Storage::type>>
                 recursion_guard(context);
 
             // Shared instances can capture references to temporaries created
@@ -164,7 +163,7 @@ struct shared_class_instance_resolver<RTTI, Type, Storage, true>
                           type_descriptor registered_type) {
         if (!initialized_) {
             [[maybe_unused]] class_recursion_guard<
-                decay_t<typename Storage::type>>
+                leaf_type_t<typename Storage::type>>
                 recursion_guard(context);
 
             context.push(&closure_);
@@ -281,29 +280,33 @@ template <typename RTTI, typename Type, typename Storage>
 struct class_instance_resolver<RTTI, Type, Storage, unique> {
     template <typename Context, typename Container>
     decltype(auto) resolve(Context& context, Container& container,
-                           Storage& storage)
-    {
+                           Storage& storage) {
         return storage.resolve(context, container);
     }
 
-    template <typename Target, typename Source, typename Context, typename Container, typename Factory>
+    template <typename Target, typename Source, typename Context,
+              typename Container, typename Factory>
     void* resolve_address(Context& context, Container& container,
-        Storage& storage, Factory& factory, type_descriptor requested_type,
-        type_descriptor registered_type) {
-        // TODO: GCC warns about unused variables in factory where we have no clue if they will be used...
+                          Storage& storage, Factory& factory,
+                          type_descriptor requested_type,
+                          type_descriptor registered_type) {
+        // TODO: GCC warns about unused variables in factory where we have no
+        // clue if they will be used...
         (void)container;
         (void)storage;
 
-        [[maybe_unused]] class_recursion_guard<decay_t<typename Storage::type>>
+        [[maybe_unused]] class_recursion_guard<leaf_type_t<typename Storage::type>>
             recursion_guard(context);
         auto&& instance =
             type_conversion<typename Storage::tag_type, Target, Source>::apply(
                 factory, context, requested_type, registered_type);
-        return ::dingo::get_address(context, std::forward<decltype(instance)>(instance));
+        return ::dingo::get_address(
+            context, std::forward<decltype(instance)>(instance));
     }
 
-private:
-    template <typename T, typename Context, typename... Args> T& construct_conversion(Context& context, Args&&... args) {
+  private:
+    template <typename T, typename Context, typename... Args>
+    T& construct_conversion(Context& context, Args&&... args) {
         return context.template construct<T>(std::forward<Args>(args)...);
     }
 };

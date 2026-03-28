@@ -214,6 +214,50 @@ TYPED_TEST(shared_test, shared_ptr_single_interface) {
     AssertClass(*container.template resolve<std::shared_ptr<IClass>&>());
 }
 
+TYPED_TEST(shared_test, shared_ptr_nested_unique_ptr) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<
+        scope<shared>, storage<std::shared_ptr<std::unique_ptr<Class>>>,
+        interfaces<Class>>();
+
+    auto& outer =
+        container.template resolve<std::shared_ptr<std::unique_ptr<Class>>&>();
+    auto& inner = container.template resolve<std::unique_ptr<Class>&>();
+    auto* leaf = container.template resolve<Class*>();
+
+    AssertClass(*inner);
+    AssertClass(*leaf);
+    ASSERT_EQ(outer.get(), std::addressof(inner));
+    ASSERT_EQ(inner.get(), leaf);
+    ASSERT_THROW(container.template resolve<std::unique_ptr<Class>>(),
+                 type_not_convertible_exception);
+}
+
+TYPED_TEST(shared_test, shared_ptr_nested_unique_ptr_interface) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<
+        scope<shared>, storage<std::shared_ptr<std::unique_ptr<Class>>>,
+        interfaces<IClass>>();
+
+    auto& leaf = container.template resolve<IClass&>();
+    auto* ptr = container.template resolve<IClass*>();
+
+    AssertClass(leaf);
+    AssertClass(*ptr);
+    ASSERT_EQ(ptr, std::addressof(leaf));
+    ASSERT_THROW(container.template resolve<std::unique_ptr<IClass>&>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<std::shared_ptr<IClass>>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(
+        container.template resolve<std::shared_ptr<std::unique_ptr<IClass>>&>(),
+        type_not_convertible_exception);
+}
+
 TYPED_TEST(shared_test, unique_ptr) {
     using container_type = TypeParam;
 

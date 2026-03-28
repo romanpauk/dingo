@@ -15,6 +15,23 @@ template <typename T> struct type_list_iterator {
     using type = T;
 };
 
+template <typename... Lists> struct type_list_cat;
+
+template <> struct type_list_cat<> {
+    using type = type_list<>;
+};
+
+template <typename... Types> struct type_list_cat<type_list<Types...>> {
+    using type = type_list<Types...>;
+};
+
+template <typename... Left, typename... Right, typename... Tail>
+struct type_list_cat<type_list<Left...>, type_list<Right...>, Tail...>
+    : type_list_cat<type_list<Left..., Right...>, Tail...> {};
+
+template <typename... Lists>
+using type_list_cat_t = typename type_list_cat<Lists...>::type;
+
 template <typename... Types>
 struct type_list_size : std::integral_constant<size_t, sizeof...(Types)> {};
 template <typename... Types>

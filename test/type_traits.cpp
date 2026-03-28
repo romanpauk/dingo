@@ -104,6 +104,10 @@ template <typename T> class test_optional {
 template <typename T> struct type_traits<test_shared<T>> {
     static constexpr bool enabled = true;
     static constexpr bool is_pointer_like = true;
+    static constexpr bool is_value_borrowable = true;
+
+    template <typename>
+    static constexpr bool is_handle_rebindable = true;
 
     using value_type = T;
 
@@ -111,6 +115,10 @@ template <typename T> struct type_traits<test_shared<T>> {
 
     static T* get(test_shared<T>& wrapper) { return wrapper.get(); }
     static const T* get(const test_shared<T>& wrapper) { return wrapper.get(); }
+    static T& borrow(test_shared<T>& wrapper) { return *wrapper.get(); }
+    static const T& borrow(const test_shared<T>& wrapper) {
+        return *wrapper.get();
+    }
     static bool empty(const test_shared<T>& wrapper) { return !wrapper.get(); }
     static void reset(test_shared<T>& wrapper) { wrapper.reset(); }
 
@@ -133,6 +141,11 @@ template <typename T> struct type_traits<test_shared<T>> {
 template <typename T> struct type_traits<test_unique<T>> {
     static constexpr bool enabled = true;
     static constexpr bool is_pointer_like = true;
+    static constexpr bool is_value_borrowable = true;
+    static constexpr bool is_reference_resolvable = true;
+
+    template <typename>
+    static constexpr bool is_handle_rebindable = true;
 
     using value_type = T;
 
@@ -140,6 +153,10 @@ template <typename T> struct type_traits<test_unique<T>> {
 
     static T* get(test_unique<T>& wrapper) { return wrapper.get(); }
     static const T* get(const test_unique<T>& wrapper) { return wrapper.get(); }
+    static T& borrow(test_unique<T>& wrapper) { return *wrapper.get(); }
+    static const T& borrow(const test_unique<T>& wrapper) {
+        return *wrapper.get();
+    }
     static bool empty(const test_unique<T>& wrapper) { return !wrapper.get(); }
     static void reset(test_unique<T>& wrapper) { wrapper.reset(); }
 
@@ -167,6 +184,10 @@ template <typename T> struct type_traits<test_unique<T>> {
 template <typename T> struct type_traits<test_optional<T>> {
     static constexpr bool enabled = true;
     static constexpr bool is_pointer_like = false;
+    static constexpr bool is_value_borrowable = true;
+
+    template <typename>
+    static constexpr bool is_handle_rebindable = false;
 
     using value_type = T;
 
@@ -175,6 +196,10 @@ template <typename T> struct type_traits<test_optional<T>> {
     static T* get(test_optional<T>& wrapper) { return wrapper.get(); }
     static const T* get(const test_optional<T>& wrapper) {
         return wrapper.get();
+    }
+    static T& borrow(test_optional<T>& wrapper) { return *wrapper.get(); }
+    static const T& borrow(const test_optional<T>& wrapper) {
+        return *wrapper.get();
     }
     static bool empty(const test_optional<T>& wrapper) {
         return !wrapper.has_value();
@@ -201,7 +226,9 @@ template <typename T> struct type_traits<test_optional<T>> {
 };
 
 template <typename T, typename U>
-struct type_storage_traits<unique, test_shared<T>, U> {
+struct storage_traits<unique, test_shared<T>, U> {
+    static constexpr bool enabled = true;
+
     using value_types = type_list<test_shared<U>>;
     using lvalue_reference_types = type_list<>;
     using rvalue_reference_types = type_list<test_shared<U>&&>;
@@ -210,7 +237,9 @@ struct type_storage_traits<unique, test_shared<T>, U> {
 };
 
 template <typename T, typename U>
-struct type_storage_traits<shared, test_shared<T>, U> {
+struct storage_traits<shared, test_shared<T>, U> {
+    static constexpr bool enabled = true;
+
     using value_types = type_list<U, test_shared<U>>;
     using lvalue_reference_types = type_list<U&, test_shared<U>&>;
     using rvalue_reference_types = type_list<>;
@@ -219,7 +248,9 @@ struct type_storage_traits<shared, test_shared<T>, U> {
 };
 
 template <typename T, typename U>
-struct type_storage_traits<external, test_shared<T>, U> {
+struct storage_traits<external, test_shared<T>, U> {
+    static constexpr bool enabled = true;
+
     using value_types = type_list<test_shared<U>>;
     using lvalue_reference_types = type_list<U&, test_shared<U>&>;
     using rvalue_reference_types = type_list<>;
@@ -228,7 +259,9 @@ struct type_storage_traits<external, test_shared<T>, U> {
 };
 
 template <typename T, typename U>
-struct type_storage_traits<unique, test_unique<T>, U> {
+struct storage_traits<unique, test_unique<T>, U> {
+    static constexpr bool enabled = true;
+
     using value_types = type_list<test_unique<U>, test_shared<U>>;
     using lvalue_reference_types = type_list<>;
     using rvalue_reference_types =
@@ -238,7 +271,9 @@ struct type_storage_traits<unique, test_unique<T>, U> {
 };
 
 template <typename T, typename U>
-struct type_storage_traits<shared, test_unique<T>, U> {
+struct storage_traits<shared, test_unique<T>, U> {
+    static constexpr bool enabled = true;
+
     using value_types = type_list<U>;
     using lvalue_reference_types = type_list<U&, test_unique<U>&>;
     using rvalue_reference_types = type_list<>;
@@ -247,7 +282,9 @@ struct type_storage_traits<shared, test_unique<T>, U> {
 };
 
 template <typename T, typename U>
-struct type_storage_traits<external, test_unique<T>, U> {
+struct storage_traits<external, test_unique<T>, U> {
+    static constexpr bool enabled = true;
+
     using value_types = type_list<>;
     using lvalue_reference_types = type_list<U&, test_unique<U>&>;
     using rvalue_reference_types = type_list<>;
@@ -256,7 +293,9 @@ struct type_storage_traits<external, test_unique<T>, U> {
 };
 
 template <typename T, typename U>
-struct type_storage_traits<unique, test_optional<T>, U> {
+struct storage_traits<unique, test_optional<T>, U> {
+    static constexpr bool enabled = true;
+
     using value_types = type_list<test_optional<U>>;
     using lvalue_reference_types = type_list<>;
     using rvalue_reference_types = type_list<test_optional<U>&&>;
@@ -265,20 +304,24 @@ struct type_storage_traits<unique, test_optional<T>, U> {
 };
 
 template <typename T, typename U>
-struct type_storage_traits<shared, test_optional<T>, U> {
+struct storage_traits<shared, test_optional<T>, U> {
+    static constexpr bool enabled = true;
+
     using value_types = type_list<>;
-    using lvalue_reference_types = type_list<U&, test_optional<U>&>;
+    using lvalue_reference_types = type_list<U&, exact_lookup<test_optional<T>>&>;
     using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, test_optional<U>*>;
+    using pointer_types = type_list<U*, exact_lookup<test_optional<T>>*>;
     using conversion_types = type_list<>;
 };
 
 template <typename T, typename U>
-struct type_storage_traits<external, test_optional<T>, U> {
+struct storage_traits<external, test_optional<T>, U> {
+    static constexpr bool enabled = true;
+
     using value_types = type_list<>;
-    using lvalue_reference_types = type_list<U&, test_optional<U>&>;
+    using lvalue_reference_types = type_list<U&, exact_lookup<test_optional<T>>&>;
     using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, test_optional<U>*>;
+    using pointer_types = type_list<U*, exact_lookup<test_optional<T>>*>;
     using conversion_types = type_list<>;
 };
 
@@ -309,6 +352,9 @@ struct type_conversion_traits<test_optional<U>, test_optional<T>> {
         return target;
     }
 };
+
+static_assert(is_interface_storage_rebindable_v<test_shared<Class>, IClass>);
+static_assert(is_interface_storage_rebindable_v<test_unique<Class>, IClass>);
 
 TEST(type_traits_test, shared_storage_uses_custom_shared_wrapper) {
     container<> container;

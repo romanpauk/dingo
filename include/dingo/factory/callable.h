@@ -24,7 +24,7 @@ template <typename T> struct callable {
     template <typename Type, typename Context, typename Container>
     void construct(void* ptr, Context& ctx, Container& container) {
         // TODO
-        new (ptr) decay_t<Type>(
+        new (ptr) normalized_type_t<Type>(
             detail::function_impl<decltype(&T::operator())>::construct(
                 fn_, ctx, container));
     }

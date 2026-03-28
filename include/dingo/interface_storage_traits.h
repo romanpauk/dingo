@@ -8,10 +8,19 @@
 #pragma once
 
 #include <dingo/config.h>
+#include <dingo/rebind_type.h>
 #include <dingo/type_traits.h>
 
 namespace dingo {
-template <typename T>
+namespace detail {
+template <typename Source, typename Target>
+inline constexpr bool is_handle_rebindable_v =
+    type_traits<Source>::enabled && type_traits<Source>::is_pointer_like &&
+    type_traits<Source>::template is_handle_rebindable<Target>;
+} // namespace detail
+
+template <typename Storage, typename Interface>
 inline constexpr bool is_interface_storage_rebindable_v =
-    has_type_traits_v<T> && type_traits<T>::is_pointer_like;
+    detail::is_handle_rebindable_v<Storage,
+                                   rebind_leaf_t<Storage, Interface>>;
 } // namespace dingo
