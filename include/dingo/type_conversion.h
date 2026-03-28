@@ -17,6 +17,7 @@
 #include <dingo/type_traits.h>
 
 #include <cassert>
+#include <cstddef>
 #include <memory>
 
 #ifdef _MSC_VER
@@ -138,7 +139,8 @@ struct type_conversion<unique, Target, Source,
 };
 
 template <typename Target, typename Source>
-struct type_conversion<unique, Target*, Source*, void> {
+struct type_conversion<unique, Target*, Source*,
+                       std::enable_if_t<!std::is_array_v<Target>>> {
     template <typename Factory, typename Context>
     static Target* apply(Factory& factory, Context& context, type_descriptor,
                          type_descriptor) {
@@ -156,6 +158,32 @@ struct type_conversion<
                         type_descriptor) {
         return type_traits<Target>::from_pointer(
             detail::resolve_source(factory, context));
+    }
+};
+
+template <typename Array, typename Source, typename Deleter>
+struct type_conversion<unique, std::unique_ptr<Array, Deleter>, Source*,
+                       std::enable_if_t<(std::rank_v<Array> > 1) &&
+                                        (std::extent_v<Array, 0> != 0)>> {
+    template <typename Factory, typename Context>
+    static std::unique_ptr<Array, Deleter>
+    apply(Factory&, Context&, type_descriptor requested_type,
+          type_descriptor registered_type) {
+        throw detail::make_type_not_convertible_exception(requested_type,
+                                                          registered_type);
+    }
+};
+
+template <typename Array, typename Source>
+struct type_conversion<unique, std::shared_ptr<Array>, Source*,
+                       std::enable_if_t<(std::rank_v<Array> > 1) &&
+                                        (std::extent_v<Array, 0> != 0)>> {
+    template <typename Factory, typename Context>
+    static std::shared_ptr<Array>
+    apply(Factory&, Context&, type_descriptor requested_type,
+          type_descriptor registered_type) {
+        throw detail::make_type_not_convertible_exception(requested_type,
+                                                          registered_type);
     }
 };
 
@@ -226,6 +254,19 @@ struct type_conversion<
     }
 };
 
+template <typename StorageTag, typename Target, size_t N, typename Source>
+struct type_conversion<
+    StorageTag, Target[N], Source*,
+    std::enable_if_t<std::is_same_v<std::remove_cv_t<Source>,
+                                    std::remove_cv_t<Target>>>> {
+    template <typename Factory, typename Context>
+    static Target (&apply(Factory& factory, Context& context, type_descriptor,
+                          type_descriptor))[N] {
+        return *reinterpret_cast<Target(*)[N]>(
+            detail::resolve_source(factory, context));
+    }
+};
+
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<
     StorageTag, Target*, Source&,
@@ -238,6 +279,53 @@ struct type_conversion<
                          type_descriptor registered_type) {
         return detail::resolve_borrowed_pointer<Target, Source>(
             factory, context, requested_type, registered_type);
+    }
+};
+
+template <typename StorageTag, typename Target, typename Source>
+struct type_conversion<
+    StorageTag, Target*, Source*,
+    std::enable_if_t<std::is_array_v<Target> &&
+                     std::is_same_v<std::remove_cv_t<Source>,
+                                    std::remove_cv_t<Target>>>> {
+    template <typename Factory, typename Context>
+    static Target* apply(Factory& factory, Context& context, type_descriptor,
+                         type_descriptor) {
+        return detail::resolve_source(factory, context);
+    }
+};
+
+template <typename StorageTag, typename Target, size_t N, typename Source>
+struct type_conversion<
+    StorageTag, Target (*)[N], Source*,
+    std::enable_if_t<std::is_same_v<std::remove_cv_t<Source>,
+                                    std::remove_cv_t<Target>>>> {
+    template <typename Factory, typename Context>
+    static Target (*apply(Factory& factory, Context& context, type_descriptor,
+                          type_descriptor))[N] {
+        return reinterpret_cast<Target(*)[N]>(
+            detail::resolve_source(factory, context));
+    }
+};
+
+template <typename StorageTag, typename Target, typename Source>
+struct type_conversion<
+    StorageTag, Target*, Source&,
+    std::enable_if_t<!type_traits<Target>::enabled &&
+                     type_traits<Source>::enabled &&
+                     !type_traits<Source>::is_value_borrowable>> {
+    template <typename Factory, typename Context>
+    static Target* apply(Factory& factory, Context& context,
+                         [[maybe_unused]] type_descriptor requested_type,
+                         [[maybe_unused]] type_descriptor registered_type) {
+        auto& source = detail::resolve_source(factory, context);
+        if constexpr (std::is_convertible_v<decltype(type_traits<Source>::get(source)),
+                                            Target*>) {
+            return type_traits<Source>::get(source);
+        } else {
+            throw detail::make_type_not_convertible_exception(requested_type,
+                                                              registered_type);
+        }
     }
 };
 
@@ -268,7 +356,8 @@ struct type_conversion<
 };
 
 template <typename StorageTag, typename Target, typename Source>
-struct type_conversion<StorageTag, Target*, Source*, void> {
+struct type_conversion<StorageTag, Target*, Source*,
+                       std::enable_if_t<!std::is_array_v<Target>>> {
     template <typename Factory, typename Context>
     static Target* apply(Factory& factory, Context& context, type_descriptor,
                          type_descriptor) {
@@ -279,7 +368,9 @@ struct type_conversion<StorageTag, Target*, Source*, void> {
 template <typename StorageTag, typename Target, typename Source>
 struct type_conversion<
     StorageTag, Target, Source*,
-    std::enable_if_t<!is_pointer_like_type_v<Target> && !std::is_pointer_v<Target>>> {
+    std::enable_if_t<!is_pointer_like_type_v<Target> &&
+                     !std::is_pointer_v<Target> &&
+                     !std::is_array_v<Target>>> {
     template <typename Factory, typename Context>
     static Target& apply(Factory& factory, Context& context, type_descriptor,
                          type_descriptor) {

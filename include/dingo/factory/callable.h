@@ -16,7 +16,7 @@ template <typename T> struct callable {
     callable(T fn) : fn_(fn) {}
 
     template <typename Type, typename Context, typename Container>
-    Type construct(Context& ctx, Container& container) {
+    auto construct(Context& ctx, Container& container) {
         return detail::function_impl<decltype(&T::operator())>::construct(
             fn_, ctx, container);
     }

@@ -94,6 +94,14 @@ struct leaf_base<
     using type = typename leaf_type<typename type_traits<T>::value_type>::type;
 };
 
+template <typename T, size_t N> struct leaf_base<T[N], void> {
+    using type = typename leaf_type<T>::type;
+};
+
+template <typename T> struct leaf_base<T[], void> {
+    using type = typename leaf_type<T>::type;
+};
+
 template <typename... Args> struct leaf_base<type_list<Args...>, void> {
     using type = type_list<typename leaf_type<Args>::type...>;
 };
@@ -109,13 +117,23 @@ struct rebind_base<
     using type = typename type_traits<T>::template rebind_t<U>;
 };
 
+template <typename T, size_t N, class U> struct rebind_base<T[N], U, void> {
+    using rebound = typename rebind_type<T, U>::type;
+    using type = rebound[N];
+};
+
+template <typename T, class U> struct rebind_base<T[], U, void> {
+    using rebound = typename rebind_type<T, U>::type;
+    using type = rebound[];
+};
+
 template <typename U, typename... Args>
 struct rebind_base<type_list<Args...>, U, void> {
     using type = type_list<typename rebind_type<Args, U>::type...>;
 };
 
 template <class T, class U, class = void> struct rebind_leaf_base {
-    using type = U;
+    using type = typename leaf_type<U>::type;
 };
 
 template <class T, class U> struct rebind_leaf_base<exact_lookup<T>, U, void> {
@@ -128,6 +146,17 @@ struct rebind_leaf_base<
     std::enable_if_t<type_traits<T>::enabled && !std::is_pointer_v<T>>> {
     using type = typename type_traits<T>::template rebind_t<
         typename rebind_leaf_type<typename type_traits<T>::value_type, U>::type>;
+};
+
+template <typename T, size_t N, class U>
+struct rebind_leaf_base<T[N], U, void> {
+    using rebound = typename rebind_leaf_type<T, U>::type;
+    using type = rebound[N];
+};
+
+template <typename T, class U> struct rebind_leaf_base<T[], U, void> {
+    using rebound = typename rebind_leaf_type<T, U>::type;
+    using type = rebound[];
 };
 
 template <typename U, typename... Args>
@@ -149,8 +178,19 @@ template <class T, class U, class = void> struct resolved_base {
 };
 
 template <class T, class U>
-struct resolved_base<exact_lookup<T>, U, void> {
+struct resolved_base<
+    exact_lookup<T>, U,
+    std::enable_if_t<!std::is_same_v<typename leaf_type<T>::type,
+                                     runtime_type>>> {
     using type = T;
+};
+
+template <class T, class U>
+struct resolved_base<
+    exact_lookup<T>, U,
+    std::enable_if_t<std::is_same_v<typename leaf_type<T>::type,
+                                    runtime_type>>> {
+    using type = typename rebind_leaf_type<T, typename leaf_type<U>::type>::type;
 };
 } // namespace detail
 

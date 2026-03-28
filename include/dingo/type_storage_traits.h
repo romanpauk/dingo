@@ -50,7 +50,8 @@ struct combined_storage_types {
 template <typename Type, typename U>
 struct storage_traits<
     shared, Type, U,
-    std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type>>> {
+    std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type> &&
+                     !std::is_array_v<Type>>> {
     static constexpr bool enabled = true;
 
     using value_types = type_list<U>;
@@ -63,7 +64,8 @@ struct storage_traits<
 template <typename Type, typename U>
 struct storage_traits<
     external, Type, U,
-    std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type>>> {
+    std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type> &&
+                     !std::is_array_v<Type>>> {
     static constexpr bool enabled = true;
 
     using value_types = type_list<U>;
@@ -79,7 +81,8 @@ struct storage_traits<external, Type&, U> : storage_traits<external, Type, U> {}
 template <typename Type, typename U>
 struct storage_traits<
     unique, Type, U,
-    std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type>>> {
+    std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type> &&
+                     !std::is_array_v<Type>>> {
     static constexpr bool enabled = true;
 
     using value_types = type_list<U>;
@@ -92,7 +95,8 @@ struct storage_traits<
 template <typename Type, typename U>
 struct resolution_traits<
     unique, Type, U,
-    std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type>>> {
+    std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type> &&
+                     !std::is_array_v<Type>>> {
     using value_types = type_list<std::optional<U>>;
     using lvalue_reference_types = type_list<>;
     using rvalue_reference_types = type_list<std::optional<U>&&>;

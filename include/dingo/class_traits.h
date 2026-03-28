@@ -36,6 +36,18 @@ template <typename T> struct class_traits<T*> {
     }
 };
 
+template <typename T, size_t N> struct class_traits<T[N]> {
+    template <typename... Args> static T* construct(Args&&... args) {
+        return detail::make_bounded_array<T, N>(std::forward<Args>(args)...);
+    }
+
+    template <typename... Args>
+    static void construct(void* ptr, Args&&... args) {
+        detail::construct_bounded_array<T, N>(ptr,
+                                              std::forward<Args>(args)...);
+    }
+};
+
 template <typename T> struct class_traits<T&> {
     template <typename... Args> static T& construct(Args&&...) {
         static_assert(true, "references cannot be constructed");
@@ -64,7 +76,7 @@ struct class_traits<
 namespace detail {
 template <typename Type, typename Selected, typename = void>
 struct construction_dispatch {
-    template <typename... Args> static Type construct(Args&&... args) {
+    template <typename... Args> static auto construct(Args&&... args) {
         return class_traits<Type>::construct(std::forward<Args>(args)...);
     }
 
@@ -80,7 +92,7 @@ struct construction_dispatch<
     std::enable_if_t<construction_traits<Type, Selected>::enabled>> {
     using type = typename construction_traits<Type, Selected>::type;
 
-    template <typename... Args> static type construct(Args&&... args) {
+    template <typename... Args> static auto construct(Args&&... args) {
         return construction_traits<Type, Selected>::wrap(
             class_traits<Selected>::construct(std::forward<Args>(args)...));
     }
@@ -98,7 +110,7 @@ struct construction_dispatch<
     std::enable_if_t<construction_traits<Type, Selected>::enabled>> {
     using type = typename construction_traits<Type, Selected>::type;
 
-    template <typename... Args> static type* construct(Args&&... args) {
+    template <typename... Args> static auto construct(Args&&... args) {
         return new type(construction_traits<Type, Selected>::wrap(
             class_traits<Selected>::construct(std::forward<Args>(args)...)));
     }

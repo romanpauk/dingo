@@ -16,6 +16,7 @@ Features Overview:
 
 - [Non-intrusive Class Registration](#non-intrusive-class-registration)
 - [Customizable Scopes](#scopes)
+- [Array Support](#array-support)
 - [Customizable Factories](#factories)
 - [Service Locator Pattern](#service-locator)
 - [Runtime-based Resolution](#runtime-based-resolution)
@@ -435,6 +436,77 @@ assert(b.aptr_ == &a);
 
 See [dingo/storage/shared_cyclical.h](include/dingo/storage/shared_cyclical.h)
 for allowed conversions for accessing shared cycle-aware instances.
+
+#### Array Support
+
+Dingo supports raw C++ arrays, `std::unique_ptr<T[]>` and
+`std::shared_ptr<T[]>`, including N-D array shapes.
+
+Supported registration forms:
+
+- `storage<T[N]>`, `storage<T[M][N]>`, ...
+- `storage<std::unique_ptr<T[]>>`, `storage<std::unique_ptr<T[][N]>>`, ...
+- `storage<std::shared_ptr<T[]>>`, `storage<std::shared_ptr<T[][N]>>`, ...
+
+Supported query and injection forms depend on the stored shape and scope:
+
+- fixed raw arrays can be queried exactly as `T(*)[N]`, `T(&)[N]`, `T(*)[M][N]`,
+  ...
+- N-D raw arrays expose row views such as `T(*)[N]` in addition to the exact
+  full shape
+- unique array storage can hand out owning handles such as
+  `std::unique_ptr<T[]>`
+- shared array storage can hand out stable borrowed views and shared handles
+
+Important constraints:
+
+- `resolve<T[N]>()` is not supported because C++ arrays are not returned by
+  value
+- nested arrays are shape-preserving, so they do not flatten to `T*`
+- array registrations require matching element types; polymorphic
+  `interfaces<Base>` on `storage<Derived[N]>` is rejected
+
+<!-- { include("examples/array.cpp", scope="////") -->
+
+Example code included from [examples/array.cpp](examples/array.cpp):
+
+```c++
+using namespace dingo;
+
+struct cell {
+    cell() = default;
+};
+
+struct row_consumer {
+    cell (*rows)[3];
+
+    explicit row_consumer(cell (*init)[3]) : rows(init) {}
+};
+
+container<> raw_container;
+// Register a raw N-D array in shared scope.
+raw_container.register_type<scope<shared>, storage<cell[2][3]>>();
+
+// Resolve row view, exact pointer view and inject the row view.
+/*auto* rows =*/raw_container.resolve<cell (*)[3]>();
+/*auto& exact =*/raw_container.resolve<cell (&)[2][3]>();
+/*row_consumer borrowed =*/
+raw_container.construct<row_consumer, constructor<row_consumer(cell (*)[3])>>();
+
+container<> unique_container;
+// Register a fixed-size array in unique scope and resolve it as an owning
+// dynamic array handle.
+unique_container.register_type<scope<unique>, storage<cell[4]>>();
+/*auto owned =*/unique_container.resolve<std::unique_ptr<cell[]>>();
+
+container<> shared_container;
+// Register a shared smart array directly.
+shared_container.register_type<scope<shared>, storage<std::shared_ptr<cell[]>>>(
+    callable([] { return std::shared_ptr<cell[]>(new cell[4]); }));
+/*auto shared =*/shared_container.resolve<std::shared_ptr<cell[]>>();
+```
+
+<!-- } -->
 
 #### Runtime-based Resolution
 

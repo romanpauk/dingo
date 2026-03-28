@@ -27,7 +27,7 @@ template <typename T, typename... Args> struct constructor<T(Args...)> {
         detail::is_direct_initializable_v<T, Args...>;
 
     template <typename Type, typename Context, typename Container>
-    static Type construct(Context& ctx, Container& container) {
+    static auto construct(Context& ctx, Container& container) {
         return detail::construction_dispatch<Type, T>::construct(
             ctx.template resolve<Args>(container)...);
     }

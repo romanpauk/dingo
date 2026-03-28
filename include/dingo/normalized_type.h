@@ -18,6 +18,24 @@ namespace dingo {
 template <class T, class = void> struct normalized_type : std::decay<T> {};
 
 template <class T> struct normalized_type<const T> : normalized_type<T> {};
+template <class T, size_t N>
+struct normalized_type<T (*)[N], void> {
+    using type = T[N];
+};
+template <class T, size_t N>
+struct normalized_type<const T (*)[N], void> {
+    using type = T[N];
+};
+template <class T, size_t N>
+struct normalized_type<T (&)[N], void> {
+    using type = T[N];
+};
+template <class T, size_t N>
+struct normalized_type<const T (&)[N], void> {
+    using type = T[N];
+};
+template <class T, size_t N> struct normalized_type<T[N]> : normalized_type<T> {};
+template <class T> struct normalized_type<T[]> : normalized_type<T> {};
 template <class T> struct normalized_type<T*> : normalized_type<T> {};
 template <class T> struct normalized_type<const T*> : normalized_type<T> {};
 template <class T> struct normalized_type<T&> : normalized_type<T> {};

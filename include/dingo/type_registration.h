@@ -15,6 +15,8 @@
 #include <dingo/type_list.h>
 
 namespace dingo {
+struct unique;
+
 template <typename T> struct storage {
     using type = T;
     template <typename U> using rebind_t = storage<U>;
@@ -84,12 +86,46 @@ using registration_factory_t =
                          ::dingo::factory<::dingo::constructor_detection<
                              leaf_type_t<typename registration_storage_t<Args...>::type>>>>>;
 
+template <typename StorageType, typename ScopeType, typename = void>
+struct deduced_interface_type {
+    using type = ::dingo::interfaces<leaf_type_t<StorageType>>;
+};
+
+template <typename StorageType, typename ScopeType>
+struct deduced_interface_type<
+    StorageType, ScopeType,
+    std::enable_if_t<!std::is_same_v<typename ScopeType::type, unique> &&
+                     type_traits<StorageType>::enabled &&
+                     !std::is_pointer_v<StorageType> &&
+                     std::is_array_v<typename type_traits<StorageType>::value_type>>> {
+    using type = ::dingo::interfaces<typename type_traits<StorageType>::value_type,
+                                     leaf_type_t<StorageType>>;
+};
+
+template <typename StorageType, typename ScopeType>
+struct deduced_interface_type<
+    StorageType, ScopeType,
+    std::enable_if_t<std::is_array_v<StorageType> &&
+                     (std::rank_v<StorageType> > 1)>> {
+    using type = ::dingo::interfaces<std::remove_extent_t<StorageType>,
+                                     StorageType, leaf_type_t<StorageType>>;
+};
+
+template <typename StorageType, typename ScopeType>
+struct deduced_interface_type<
+    StorageType, ScopeType,
+    std::enable_if_t<std::is_array_v<StorageType> &&
+                     (std::rank_v<StorageType> == 1)>> {
+    using type = ::dingo::interfaces<StorageType, leaf_type_t<StorageType>>;
+};
+
 template <typename... Args>
 using registration_interface_t =
     get_type_t<::dingo::interfaces<void>,
                type_list<Args...,
-                         ::dingo::interfaces<leaf_type_t<
-                             typename registration_storage_t<Args...>::type>>,
+                         typename deduced_interface_type<
+                             typename registration_storage_t<Args...>::type,
+                             registration_scope_t<Args...>>::type,
                          ::dingo::interfaces<leaf_type_t<
                              typename registration_factory_t<Args...>::type>>>>;
 

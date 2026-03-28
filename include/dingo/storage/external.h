@@ -66,6 +66,17 @@ class storage_instance<external, Type, StoredType, void>
               std::forward<T>(instance)) {}
 };
 
+template <typename Type, size_t N, typename StoredType>
+class storage_instance<external, Type[N], StoredType, void> {
+  public:
+    storage_instance(Type (&instance)[N]) : instance_(instance) {}
+
+    Type* get() { return instance_; }
+
+  private:
+    Type (&instance_)[N];
+};
+
 template <typename Type, typename StoredType>
 class storage_instance<external, Type&, StoredType, void> {
   public:
