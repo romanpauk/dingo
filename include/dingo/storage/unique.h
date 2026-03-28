@@ -36,13 +36,38 @@ class storage<unique, Type, StoredType, Factory, Conversions> : Factory {
     using tag_type = unique;
 
     template <typename Context, typename Container>
-    Type resolve(Context& context, Container& container) {
+    auto resolve(Context& context, Container& container) {
         return Factory::template construct<Type>(context, container);
     }
 
     template <typename Context, typename Container>
     void resolve(void* ptr, Context& context, Container& container) {
         Factory::template construct<Type>(ptr, context, container);
+    }
+};
+
+template <typename Type, size_t N, typename StoredType, typename Factory,
+          typename Conversions>
+class storage<unique, Type[N], StoredType, Factory, Conversions> : Factory {
+  public:
+    template <typename... Args>
+    storage(Args&&... args) : Factory(std::forward<Args>(args)...) {}
+
+    static constexpr bool cacheable = false;
+
+    using conversions = Conversions;
+    using type = Type[N];
+    using stored_type = StoredType;
+    using tag_type = unique;
+
+    template <typename Context, typename Container>
+    auto resolve(Context& context, Container& container) {
+        return Factory::template construct<Type[N]>(context, container);
+    }
+
+    template <typename Context, typename Container>
+    void resolve(void* ptr, Context& context, Container& container) {
+        Factory::template construct<Type[N]>(ptr, context, container);
     }
 };
 } // namespace detail

@@ -150,6 +150,7 @@ TEST(type_registration_test, registration_specialization) {
     static_assert(
         !is_interface_storage_rebindable_v<std::unique_ptr<std::shared_ptr<A>>,
                                            I>);
+
     static_assert(
         std::is_same_v<nested_stored_type, std::shared_ptr<std::unique_ptr<A>>>);
 
@@ -179,6 +180,7 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
     static_assert(std::is_same_v<rebind_leaf_t<nested_list, I>,
                                  type_list<std::shared_ptr<std::unique_ptr<I>>&,
                                            std::unique_ptr<I*>>>);
+
 }
 
 TEST(type_registration_test, normalized_type_trait) {

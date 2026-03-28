@@ -23,6 +23,17 @@ namespace detail {
 template <typename Type, typename U> struct conversions<shared, Type, U>
     : type_storage_traits<shared, Type, U> {};
 
+template <typename Type>
+void destroy_array_value(Type& value) {
+    if constexpr (std::is_array_v<Type>) {
+        for (size_t i = std::extent_v<Type>; i > 0; --i) {
+            destroy_array_value(value[i - 1]);
+        }
+    } else if constexpr (!std::is_trivially_destructible_v<Type>) {
+        value.~Type();
+    }
+}
+
 template <typename Type, typename Factory>
 struct storage_instance_base : Factory {
     template <typename... Args>
@@ -144,6 +155,52 @@ class storage_instance<shared, Type, StoredType, Factory>
     storage_instance(Args&&... args)
         : shared_storage_instance_impl<Type, StoredType, Factory>(
               std::forward<Args>(args)...) {}
+};
+
+template <typename Type, size_t N, typename StoredType, typename Factory>
+class storage_instance<shared, Type[N], StoredType, Factory>
+    : Factory {
+  public:
+    template <typename... Args>
+    storage_instance(Args&&... args)
+        : Factory(std::forward<Args>(args)...) {}
+
+    ~storage_instance() { reset(); }
+
+    template <typename Context, typename Container>
+    void construct(Context& context, Container& container) {
+        assert(empty());
+        Factory::template construct<Type[N]>(&instance_, context, container);
+        initialized_ = true;
+    }
+
+    Type* get() const {
+        return std::addressof((*get_array())[0]);
+    }
+
+    void reset() {
+        if (!initialized_) {
+            return;
+        }
+
+        if constexpr (std::is_array_v<Type> ||
+                      !std::is_trivially_destructible_v<Type>) {
+            for (size_t i = N; i > 0; --i) {
+                destroy_array_value((*get_array())[i - 1]);
+            }
+        }
+        initialized_ = false;
+    }
+
+    bool empty() const { return !initialized_; }
+
+  private:
+    Type (*get_array() const)[N] {
+        return reinterpret_cast<Type(*)[N]>(&instance_);
+    }
+
+    mutable aligned_storage_t<sizeof(Type[N]), alignof(Type[N])> instance_;
+    bool initialized_ = false;
 };
 
 template <typename Type, typename StoredType, typename Factory>

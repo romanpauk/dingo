@@ -108,6 +108,27 @@ struct storage_traits<StorageTag, const Type&, U>
 namespace detail {
 template <typename T, typename... Args> T make_nested(Args&&... args);
 
+template <typename T, size_t N, typename... Args>
+T* make_bounded_array(Args&&... args) {
+    static_assert(sizeof...(Args) <= N,
+                  "too many initializers for bounded array construction");
+    return new T[N]{std::forward<Args>(args)...};
+}
+
+template <typename T, size_t N, typename... Args>
+void construct_bounded_array(void* ptr, Args&&... args) {
+    static_assert(sizeof...(Args) <= N,
+                  "too many initializers for bounded array construction");
+    new (ptr) T[N]{std::forward<Args>(args)...};
+}
+
+template <typename T, typename... Args> T* make_dynamic_array(Args&&... args) {
+    static_assert(sizeof...(Args) > 0,
+                  "dynamic arrays require an explicit size via a custom "
+                  "factory or element initializers");
+    return new T[sizeof...(Args)]{std::forward<Args>(args)...};
+}
+
 template <typename Type, typename Pointer, typename = void>
 struct has_type_from_pointer : std::false_type {};
 
@@ -121,9 +142,34 @@ template <typename Type, typename Pointer>
 inline constexpr bool has_type_from_pointer_v =
     has_type_from_pointer<Type, Pointer>::value;
 
+template <typename Type, typename = void>
+struct is_array_like_type : std::is_array<Type> {};
+
+template <typename Type>
+inline constexpr bool is_array_like_type_v = is_array_like_type<Type>::value;
+
+template <typename Type, typename = void>
+struct array_like_exact_interface_type {
+    using type = Type;
+};
+
+template <typename Type>
+using array_like_exact_interface_type_t =
+    typename array_like_exact_interface_type<Type>::type;
+
 template <typename Type, typename U, typename = void>
 struct wrapper_rebind_leaf {
     using type = U;
+};
+
+template <typename Type, size_t N, typename U>
+struct wrapper_rebind_leaf<Type[N], U, void> {
+    using type = typename wrapper_rebind_leaf<Type, U>::type[N];
+};
+
+template <typename Type, typename U>
+struct wrapper_rebind_leaf<Type[], U, void> {
+    using type = typename wrapper_rebind_leaf<Type, U>::type[];
 };
 
 template <typename Type, typename U>
@@ -144,6 +190,19 @@ template <typename Type> struct wrapper_lvalue_reference_type {
 
 template <typename Type> struct wrapper_pointer_type {
     using type = type_list<Type*>;
+};
+
+template <typename Handle, typename T, typename U, typename = void>
+struct smart_array_pointer_types {
+    using type = type_list<U*, Handle*>;
+};
+
+template <typename Handle, typename T, typename U>
+struct smart_array_pointer_types<
+    Handle, T, U, std::enable_if_t<std::is_array_v<T>>> {
+    using type =
+        type_list<exact_lookup<typename wrapper_rebind_leaf<T, U>::type>*,
+                  Handle*>;
 };
 
 template <typename Type> struct copyable_wrapper_value_type {
@@ -177,6 +236,29 @@ template <typename Handle> struct wrapper_storage_types {
     using copyable_value_types =
         typename recursive_wrapper_types<copyable_wrapper_value_type,
                                          Handle>::type;
+};
+
+template <typename Array, typename Deleter>
+struct is_array_like_type<
+    std::unique_ptr<Array, Deleter>,
+    std::enable_if_t<std::is_array_v<Array>>> : std::true_type {};
+
+template <typename Array, typename Deleter>
+struct array_like_exact_interface_type<
+    std::unique_ptr<Array, Deleter>,
+    std::enable_if_t<std::is_array_v<Array>>> {
+    using type = typename type_traits<std::unique_ptr<Array, Deleter>>::value_type;
+};
+
+template <typename Array>
+struct is_array_like_type<std::shared_ptr<Array>,
+                          std::enable_if_t<std::is_array_v<Array>>>
+    : std::true_type {};
+
+template <typename Array>
+struct array_like_exact_interface_type<
+    std::shared_ptr<Array>, std::enable_if_t<std::is_array_v<Array>>> {
+    using type = typename type_traits<std::shared_ptr<Array>>::value_type;
 };
 } // namespace detail
 
@@ -212,6 +294,92 @@ struct storage_traits<unique, Type*, U> {
         type_list<std::unique_ptr<U>&&, std::shared_ptr<U>&&>;
     using pointer_types = type_list<U*>;
     using conversion_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
+};
+
+template <typename T, typename U>
+struct storage_traits<unique, T[], U> {
+    static constexpr bool enabled = true;
+
+    using rebound_unique_handle = detail::wrapper_rebind_leaf_t<std::unique_ptr<T[]>, U>;
+    using rebound_shared_handle = detail::wrapper_rebind_leaf_t<std::shared_ptr<T[]>, U>;
+
+    using value_types =
+        type_list<rebound_unique_handle, rebound_shared_handle>;
+    using lvalue_reference_types = type_list<>;
+    using rvalue_reference_types =
+        type_list<rebound_unique_handle&&, rebound_shared_handle&&>;
+    using pointer_types = type_list<typename detail::wrapper_rebind_leaf<T, U>::type*>;
+    using conversion_types =
+        type_list<rebound_unique_handle, rebound_shared_handle>;
+};
+
+template <typename T, size_t N, typename U>
+struct storage_traits<unique, T[N], U> {
+    static constexpr bool enabled = true;
+
+    using rebound_unique_handle = detail::wrapper_rebind_leaf_t<std::unique_ptr<T[]>, U>;
+    using rebound_shared_handle = detail::wrapper_rebind_leaf_t<std::shared_ptr<T[]>, U>;
+    using rebound_row_type = typename detail::wrapper_rebind_leaf<T, U>::type;
+    using rebound_exact_type = typename detail::wrapper_rebind_leaf<T[N], U>::type;
+
+    using value_types =
+        type_list<rebound_unique_handle, rebound_shared_handle>;
+    using lvalue_reference_types = type_list<>;
+    using rvalue_reference_types =
+        type_list<rebound_unique_handle&&, rebound_shared_handle&&>;
+    using pointer_types = type_list<rebound_row_type*, exact_lookup<rebound_exact_type>*>;
+    using conversion_types =
+        type_list<rebound_unique_handle, rebound_shared_handle>;
+};
+
+template <typename T, typename U>
+struct storage_traits<shared, T[], U> {
+    static constexpr bool enabled = true;
+
+    using value_types = type_list<>;
+    using lvalue_reference_types = type_list<>;
+    using rvalue_reference_types = type_list<>;
+    using pointer_types = type_list<typename detail::wrapper_rebind_leaf<T, U>::type*>;
+    using conversion_types = type_list<>;
+};
+
+template <typename T, size_t N, typename U>
+struct storage_traits<shared, T[N], U> {
+    static constexpr bool enabled = true;
+
+    using rebound_row_type = typename detail::wrapper_rebind_leaf<T, U>::type;
+    using rebound_exact_type = typename detail::wrapper_rebind_leaf<T[N], U>::type;
+
+    using value_types = type_list<>;
+    using lvalue_reference_types = type_list<exact_lookup<rebound_exact_type>&>;
+    using rvalue_reference_types = type_list<>;
+    using pointer_types = type_list<rebound_row_type*, exact_lookup<rebound_exact_type>*>;
+    using conversion_types = type_list<>;
+};
+
+template <typename T, typename U>
+struct storage_traits<external, T[], U> {
+    static constexpr bool enabled = true;
+
+    using value_types = type_list<>;
+    using lvalue_reference_types = type_list<>;
+    using rvalue_reference_types = type_list<>;
+    using pointer_types = type_list<typename detail::wrapper_rebind_leaf<T, U>::type*>;
+    using conversion_types = type_list<>;
+};
+
+template <typename T, size_t N, typename U>
+struct storage_traits<external, T[N], U> {
+    static constexpr bool enabled = true;
+
+    using rebound_row_type = typename detail::wrapper_rebind_leaf<T, U>::type;
+    using rebound_exact_type = typename detail::wrapper_rebind_leaf<T[N], U>::type;
+
+    using value_types = type_list<>;
+    using lvalue_reference_types = type_list<exact_lookup<rebound_exact_type>&>;
+    using rvalue_reference_types = type_list<>;
+    using pointer_types = type_list<rebound_row_type*, exact_lookup<rebound_exact_type>*>;
+    using conversion_types = type_list<>;
 };
 
 template <typename T> struct type_traits<T*> {
@@ -305,8 +473,65 @@ template <> struct type_traits<const void*> {
     }
 };
 
+template <typename Array, typename Deleter>
+struct type_traits<
+    std::unique_ptr<Array, Deleter>,
+    std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>> {
+    static constexpr bool enabled = true;
+    static constexpr bool is_pointer_like = true;
+    static constexpr bool is_value_borrowable = false;
+    static constexpr bool is_reference_resolvable = true;
+
+    template <typename Target>
+    static constexpr bool is_handle_rebindable =
+        std::is_constructible_v<Target, std::unique_ptr<Array, Deleter>>;
+
+    using value_type = std::remove_extent_t<Array>;
+
+    template <typename U>
+    using rebind_t = std::unique_ptr<U[], std::default_delete<U[]>>;
+
+    static value_type* get(std::unique_ptr<Array, Deleter>& wrapper) {
+        return wrapper.get();
+    }
+
+    static const value_type* get(const std::unique_ptr<Array, Deleter>& wrapper) {
+        return wrapper.get();
+    }
+
+    static bool empty(const std::unique_ptr<Array, Deleter>& wrapper) {
+        return wrapper.get() == nullptr;
+    }
+
+    static void reset(std::unique_ptr<Array, Deleter>& wrapper) {
+        wrapper.reset();
+    }
+
+    template <typename... Args>
+    static std::unique_ptr<Array, Deleter> make(Args&&... args) {
+        return std::unique_ptr<Array, Deleter>(detail::make_dynamic_array<value_type>(
+            std::forward<Args>(args)...));
+    }
+
+    static std::unique_ptr<Array, Deleter> from_pointer(value_type* ptr) {
+        return std::unique_ptr<Array, Deleter>(ptr);
+    }
+
+    template <typename TargetType, typename Factory, typename Context>
+    static TargetType& resolve_type(Factory& factory, Context& context,
+                                    type_descriptor requested_type,
+                                    type_descriptor registered_type) {
+        if constexpr (std::is_same_v<TargetType, rebind_t<value_type>>)
+            return factory.resolve(context);
+        else
+            throw detail::make_type_not_convertible_exception(requested_type,
+                                                              registered_type);
+    }
+};
+
 template <typename T, typename Deleter>
-struct type_traits<std::unique_ptr<T, Deleter>> {
+struct type_traits<std::unique_ptr<T, Deleter>,
+                   std::enable_if_t<!std::is_array_v<T>>> {
     static constexpr bool enabled = true;
     static constexpr bool is_pointer_like = true;
     static constexpr bool is_value_borrowable = true;
@@ -369,8 +594,63 @@ struct type_traits<std::unique_ptr<T, Deleter>> {
     }
 };
 
+template <typename Array, typename Deleter, typename U>
+struct storage_traits<
+    unique, std::unique_ptr<Array, Deleter>, U,
+    std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>> {
+    static constexpr bool enabled = true;
+
+    using rebound_handle =
+        detail::wrapper_rebind_leaf_t<std::unique_ptr<Array, Deleter>, U>;
+    using shared_handle =
+        detail::wrapper_rebind_leaf_t<std::shared_ptr<Array>, U>;
+
+    using value_types = type_list<rebound_handle, shared_handle>;
+    using lvalue_reference_types = type_list<>;
+    using rvalue_reference_types = type_list<rebound_handle&&, shared_handle&&>;
+    using pointer_types = type_list<>;
+    using conversion_types = type_list<rebound_handle, shared_handle>;
+};
+
+template <typename Array, typename Deleter, typename U>
+struct storage_traits<
+    shared, std::unique_ptr<Array, Deleter>, U,
+    std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>> {
+    static constexpr bool enabled = true;
+
+    using handle_type =
+        detail::wrapper_rebind_leaf_t<std::unique_ptr<Array, Deleter>, U>;
+    using pointer_types =
+        typename detail::smart_array_pointer_types<
+            handle_type, std::remove_extent_t<Array>, U>::type;
+
+    using value_types = type_list<>;
+    using lvalue_reference_types = type_list<handle_type&>;
+    using rvalue_reference_types = type_list<>;
+    using conversion_types = type_list<>;
+};
+
+template <typename Array, typename Deleter, typename U>
+struct storage_traits<
+    external, std::unique_ptr<Array, Deleter>, U,
+    std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>> {
+    static constexpr bool enabled = true;
+
+    using handle_type =
+        detail::wrapper_rebind_leaf_t<std::unique_ptr<Array, Deleter>, U>;
+    using pointer_types =
+        typename detail::smart_array_pointer_types<
+            handle_type, std::remove_extent_t<Array>, U>::type;
+
+    using value_types = type_list<>;
+    using lvalue_reference_types = type_list<handle_type&>;
+    using rvalue_reference_types = type_list<>;
+    using conversion_types = type_list<>;
+};
+
 template <typename T, typename Deleter, typename U>
-struct storage_traits<unique, std::unique_ptr<T, Deleter>, U> {
+struct storage_traits<unique, std::unique_ptr<T, Deleter>, U,
+                      std::enable_if_t<!std::is_array_v<T>>> {
     static constexpr bool enabled = true;
 
     using rebound_handle =
@@ -386,7 +666,8 @@ struct storage_traits<unique, std::unique_ptr<T, Deleter>, U> {
 };
 
 template <typename T, typename Deleter, typename U>
-struct storage_traits<shared, std::unique_ptr<T, Deleter>, U> {
+struct storage_traits<shared, std::unique_ptr<T, Deleter>, U,
+                      std::enable_if_t<!std::is_array_v<T>>> {
     static constexpr bool enabled = true;
 
     using handle_type =
@@ -401,7 +682,8 @@ struct storage_traits<shared, std::unique_ptr<T, Deleter>, U> {
 };
 
 template <typename T, typename Deleter, typename U>
-struct storage_traits<external, std::unique_ptr<T, Deleter>, U> {
+struct storage_traits<external, std::unique_ptr<T, Deleter>, U,
+                      std::enable_if_t<!std::is_array_v<T>>> {
     static constexpr bool enabled = true;
 
     using handle_type =
@@ -415,7 +697,53 @@ struct storage_traits<external, std::unique_ptr<T, Deleter>, U> {
     using conversion_types = type_list<>;
 };
 
-template <typename T> struct type_traits<std::shared_ptr<T>> {
+template <typename Array>
+struct type_traits<
+    std::shared_ptr<Array>,
+    std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>> {
+    static constexpr bool enabled = true;
+    static constexpr bool is_pointer_like = true;
+    static constexpr bool is_value_borrowable = false;
+    static constexpr bool is_reference_resolvable = true;
+
+    template <typename Target>
+    static constexpr bool is_handle_rebindable =
+        std::is_constructible_v<Target, std::shared_ptr<Array>>;
+
+    using value_type = std::remove_extent_t<Array>;
+
+    template <typename U> using rebind_t = std::shared_ptr<U[]>;
+
+    static value_type* get(std::shared_ptr<Array>& wrapper) { return wrapper.get(); }
+
+    static const value_type* get(const std::shared_ptr<Array>& wrapper) {
+        return wrapper.get();
+    }
+
+    static bool empty(const std::shared_ptr<Array>& wrapper) {
+        return wrapper.get() == nullptr;
+    }
+
+    static void reset(std::shared_ptr<Array>& wrapper) { wrapper.reset(); }
+
+    template <typename... Args> static std::shared_ptr<Array> make(Args&&... args) {
+        return std::shared_ptr<Array>(detail::make_dynamic_array<value_type>(
+            std::forward<Args>(args)...));
+    }
+
+    static std::shared_ptr<Array> from_pointer(value_type* ptr) {
+        return std::shared_ptr<Array>(ptr);
+    }
+
+    template <typename TargetType, typename Factory, typename Context>
+    static TargetType& resolve_type(Factory& factory, Context& context,
+                                    type_descriptor, type_descriptor) {
+        return factory.template resolve<TargetType>(context);
+    }
+};
+
+template <typename T>
+struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>> {
     static constexpr bool enabled = true;
     static constexpr bool is_pointer_like = true;
     static constexpr bool is_value_borrowable = true;
@@ -469,8 +797,58 @@ template <typename T> struct type_traits<std::shared_ptr<T>> {
     }
 };
 
+template <typename Array, typename U>
+struct storage_traits<
+    unique, std::shared_ptr<Array>, U,
+    std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>> {
+    static constexpr bool enabled = true;
+
+    using rebound_handle = detail::wrapper_rebind_leaf_t<std::shared_ptr<Array>, U>;
+
+    using value_types = type_list<rebound_handle>;
+    using lvalue_reference_types = type_list<>;
+    using rvalue_reference_types = type_list<rebound_handle&&>;
+    using pointer_types = type_list<>;
+    using conversion_types = type_list<rebound_handle>;
+};
+
+template <typename Array, typename U>
+struct storage_traits<
+    shared, std::shared_ptr<Array>, U,
+    std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>> {
+    static constexpr bool enabled = true;
+
+    using handle_type = detail::wrapper_rebind_leaf_t<std::shared_ptr<Array>, U>;
+    using pointer_types =
+        typename detail::smart_array_pointer_types<
+            handle_type, std::remove_extent_t<Array>, U>::type;
+
+    using value_types = type_list<handle_type>;
+    using lvalue_reference_types = type_list<handle_type&>;
+    using rvalue_reference_types = type_list<>;
+    using conversion_types = type_list<handle_type>;
+};
+
+template <typename Array, typename U>
+struct storage_traits<
+    external, std::shared_ptr<Array>, U,
+    std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>> {
+    static constexpr bool enabled = true;
+
+    using handle_type = detail::wrapper_rebind_leaf_t<std::shared_ptr<Array>, U>;
+    using pointer_types =
+        typename detail::smart_array_pointer_types<
+            handle_type, std::remove_extent_t<Array>, U>::type;
+
+    using value_types = type_list<handle_type>;
+    using lvalue_reference_types = type_list<handle_type&>;
+    using rvalue_reference_types = type_list<>;
+    using conversion_types = type_list<handle_type>;
+};
+
 template <typename T, typename U>
-struct storage_traits<unique, std::shared_ptr<T>, U> {
+struct storage_traits<unique, std::shared_ptr<T>, U,
+                      std::enable_if_t<!std::is_array_v<T>>> {
     static constexpr bool enabled = true;
 
     using rebound_handle = detail::wrapper_rebind_leaf_t<std::shared_ptr<T>, U>;
@@ -483,7 +861,8 @@ struct storage_traits<unique, std::shared_ptr<T>, U> {
 };
 
 template <typename T, typename U>
-struct storage_traits<shared, std::shared_ptr<T>, U> {
+struct storage_traits<shared, std::shared_ptr<T>, U,
+                      std::enable_if_t<!std::is_array_v<T>>> {
     static constexpr bool enabled = true;
 
     using handle_type = detail::wrapper_rebind_leaf_t<std::shared_ptr<T>, U>;
@@ -498,7 +877,8 @@ struct storage_traits<shared, std::shared_ptr<T>, U> {
 };
 
 template <typename T, typename U>
-struct storage_traits<external, std::shared_ptr<T>, U> {
+struct storage_traits<external, std::shared_ptr<T>, U,
+                      std::enable_if_t<!std::is_array_v<T>>> {
     static constexpr bool enabled = true;
 
     using handle_type = detail::wrapper_rebind_leaf_t<std::shared_ptr<T>, U>;

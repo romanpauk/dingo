@@ -331,7 +331,7 @@ struct constructor_methods<T, std::tuple<Args...>> {
         detail::is_direct_initializable_v<T, Args...>);
 
     template <typename Type, typename Context, typename Container>
-    static Type construct(Context& ctx, Container& container) {
+    static auto construct(Context& ctx, Container& container) {
         return detail::construction_dispatch<Type, T>::construct(
             ((void)sizeof(Args),
              constructor_argument_impl<T, Context, Container,
@@ -367,7 +367,7 @@ struct constructor_detection {
                   "class T construction not detected or ambiguous");
 
     template <typename Type, typename Context, typename Container>
-    static Type construct(Context& ctx, Container& container) {
+    static auto construct(Context& ctx, Container& container) {
         return constructor_methods<T, selected_arguments>::template construct<Type>(
             ctx, container);
     }
@@ -448,7 +448,7 @@ struct constructor_detection<T, reference, IsConstructible, Assert, N> {
                   "class T construction not detected or ambiguous");
 
     template <typename Type, typename Context, typename Container>
-    static Type construct(Context& ctx, Container& container) {
+    static auto construct(Context& ctx, Container& container) {
         return constructor_methods<T, selected_arguments>::template construct<Type>(
             ctx, container);
     }

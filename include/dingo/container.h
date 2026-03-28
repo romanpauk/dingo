@@ -528,6 +528,23 @@ class container : public allocator_base<Allocator> {
         using normalized_interface_type = normalized_type_t<TypeInterface>;
 
         static_assert(!std::is_reference_v<TypeInterface>);
+        if constexpr (detail::is_array_like_type_v<Type>) {
+            if constexpr (std::is_array_v<TypeInterface>) {
+                using exact_interface_type =
+                    detail::array_like_exact_interface_type_t<Type>;
+                static_assert(
+                    std::is_same_v<std::remove_cv_t<TypeInterface>,
+                                   std::remove_cv_t<exact_interface_type>> ||
+                        (std::is_array_v<Type> && (std::rank_v<Type> > 1) &&
+                         std::is_same_v<std::remove_cv_t<TypeInterface>,
+                                        std::remove_cv_t<std::remove_extent_t<Type>>>),
+                    "array registrations require matching array-shape interfaces");
+            } else {
+                static_assert(
+                    std::is_same_v<normalized_type, normalized_interface_type>,
+                    "array registrations require matching element-type interfaces");
+            }
+        }
         static_assert(
             std::is_convertible_v<normalized_type*, normalized_interface_type*>);
         if constexpr (!std::is_same_v<normalized_type,

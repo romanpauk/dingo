@@ -191,6 +191,7 @@ if(DINGO_DEVELOPMENT_MODE)
     if(DINGO_TESTING_ENABLED)
         add_executable(dingo_test
             test/allocator.cpp
+            test/array.cpp
             test/annotated.cpp
             test/assert.h
             test/class.h
