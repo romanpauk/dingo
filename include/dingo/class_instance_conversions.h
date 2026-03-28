@@ -11,7 +11,7 @@
 
 #include <dingo/aligned_storage.h>
 #include <dingo/arena_allocator.h>
-#include <dingo/decay.h>
+#include <dingo/normalized_type.h>
 #include <dingo/resettable_i.h>
 #include <dingo/type_conversion_traits.h>
 #include <dingo/type_traits.h>
@@ -27,8 +27,8 @@ void construct_class_instance(void* ptr, Args&&... args) {
 }
 
 template <typename T, typename Source>
-std::enable_if_t<has_type_traits_v<T> &&
-                 has_type_traits_v<std::remove_reference_t<Source>>>
+std::enable_if_t<type_traits<T>::enabled &&
+                 type_traits<std::remove_reference_t<Source>>::enabled>
 construct_class_instance(void* ptr, Source&& source) {
     new (ptr) T(type_conversion_traits<
                 T, std::remove_reference_t<Source>>::convert(

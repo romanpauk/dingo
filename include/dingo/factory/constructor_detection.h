@@ -11,7 +11,7 @@
 
 #include <dingo/annotated.h>
 #include <dingo/class_traits.h>
-#include <dingo/decay.h>
+#include <dingo/normalized_type.h>
 #include <dingo/factory/constructor_typedef.h>
 #include <dingo/type_list.h>
 
@@ -21,8 +21,18 @@ namespace dingo {
 
 namespace detail {
 struct reference {};
+struct reference_exact {};
 struct value {};
 struct automatic {};
+
+template <typename DisabledType, typename T>
+using reference_exact_resolvable_t = std::enable_if_t<
+    !std::is_same_v<DisabledType, std::decay_t<T>> &&
+    is_reference_resolvable_v<std::decay_t<T>>>;
+
+template <typename DisabledType, typename T>
+using reference_borrowable_t = std::enable_if_t<
+    !std::is_same_v<DisabledType, std::decay_t<T>>>;
 
 template <class DisabledType, typename Tag> struct constructor_argument;
 
@@ -30,17 +40,19 @@ template <class DisabledType>
 struct constructor_argument<DisabledType, reference> {
     using tag_type = reference;
 
-    template <typename T, typename = typename std::enable_if_t<!std::is_same_v<
-                              DisabledType, typename std::decay_t<T>>>>
+    template <typename T, typename = reference_borrowable_t<DisabledType, T>>
     operator T&();
 
-    template <typename T, typename = typename std::enable_if_t<!std::is_same_v<
-                              DisabledType, typename std::decay_t<T>>>>
+    template <typename T, typename = reference_borrowable_t<DisabledType, T>>
     operator T&&();
+};
 
-    template <typename T, typename = typename std::enable_if_t<!std::is_same_v<
-                              DisabledType, typename std::decay_t<T>>>>
-    operator std::unique_ptr<T>();
+template <class DisabledType>
+struct constructor_argument<DisabledType, reference_exact> {
+    using tag_type = reference_exact;
+
+    template <typename T, typename = reference_exact_resolvable_t<DisabledType, T>>
+    operator T();
 };
 
 template <class DisabledType>
@@ -91,20 +103,17 @@ class constructor_argument_impl<DisabledType, Context, Container, reference> {
     constructor_argument_impl(Context& context, Container& container)
         : context_(context), container_(container) {}
 
-    template <typename T, typename = std::enable_if_t<
-                              !std::is_same_v<DisabledType, std::decay_t<T>>>>
+    template <typename T, typename = reference_borrowable_t<DisabledType, T>>
     operator T*() {
         return context_.template resolve<T*>(container_);
     }
 
-    template <typename T, typename = std::enable_if_t<
-                              !std::is_same_v<DisabledType, std::decay_t<T>>>>
+    template <typename T, typename = reference_borrowable_t<DisabledType, T>>
     operator T&() {
         return context_.template resolve<T&>(container_);
     }
 
-    template <typename T, typename = std::enable_if_t<
-                              !std::is_same_v<DisabledType, std::decay_t<T>>>>
+    template <typename T, typename = reference_borrowable_t<DisabledType, T>>
     operator T&&() {
         return context_.template resolve<T&&>(container_);
     }
@@ -116,10 +125,20 @@ class constructor_argument_impl<DisabledType, Context, Container, reference> {
         return context_.template resolve<annotated<T, Tag>>(container_);
     }
 
-    template <typename T, typename = std::enable_if_t<
-                              !std::is_same_v<DisabledType, std::decay_t<T>>>>
-    operator std::unique_ptr<T>() {
-        return context_.template resolve<std::unique_ptr<T>>(container_);
+  private:
+    Context& context_;
+    Container& container_;
+};
+
+template <typename DisabledType, typename Context, typename Container>
+class constructor_argument_impl<DisabledType, Context, Container, reference_exact> {
+  public:
+    constructor_argument_impl(Context& context, Container& container)
+        : context_(context), container_(container) {}
+
+    template <typename T, typename = reference_exact_resolvable_t<DisabledType, T>>
+    operator T() {
+        return context_.template resolve<std::decay_t<T>>(container_);
     }
 
   private:
@@ -313,7 +332,7 @@ struct constructor_methods<T, std::tuple<Args...>> {
 
     template <typename Type, typename Context, typename Container>
     static Type construct(Context& ctx, Container& container) {
-        return detail::construction_traits<Type, T>::construct(
+        return detail::construction_dispatch<Type, T>::construct(
             ((void)sizeof(Args),
              constructor_argument_impl<T, Context, Container,
                                        typename Args::tag_type>(ctx,
@@ -322,7 +341,7 @@ struct constructor_methods<T, std::tuple<Args...>> {
 
     template <typename Type, typename Context, typename Container>
     static void construct(void* ptr, Context& ctx, Container& container) {
-        detail::construction_traits<Type, T>::construct(
+        detail::construction_dispatch<Type, T>::construct(
             ptr, ((void)sizeof(Args),
                   constructor_argument_impl<T, Context, Container,
                                             typename Args::tag_type>(
@@ -343,6 +362,87 @@ struct constructor_detection {
   public:
     static constexpr size_t arity = std::tuple_size_v<selected_arguments>;
     static constexpr bool valid = detection::valid;
+
+    static_assert(!Assert || valid,
+                  "class T construction not detected or ambiguous");
+
+    template <typename Type, typename Context, typename Container>
+    static Type construct(Context& ctx, Container& container) {
+        return constructor_methods<T, selected_arguments>::template construct<Type>(
+            ctx, container);
+    }
+
+    template <typename Type, typename Context, typename Container>
+    static void construct(void* ptr, Context& ctx, Container& container) {
+        constructor_methods<T, selected_arguments>::template construct<Type>(
+            ptr, ctx, container);
+    }
+};
+
+template <typename T, template <typename...> typename IsConstructible,
+          bool Assert, size_t N>
+struct constructor_detection<T, reference, IsConstructible, Assert, N> {
+  private:
+    template <size_t Arity>
+    using borrow_candidates =
+        typename detection_arguments<T, reference, std::make_index_sequence<Arity>>::type;
+
+    template <size_t Arity>
+    using value_candidates =
+        typename detection_arguments<T, reference_exact, std::make_index_sequence<Arity>>::type;
+
+    template <size_t Arity>
+    using borrow_detection =
+        detected_constructor_arguments<T, IsConstructible, borrow_candidates<Arity>>;
+
+    template <size_t Arity>
+    using value_detection =
+        detected_constructor_arguments<T, IsConstructible, value_candidates<Arity>>;
+
+    template <size_t Arity, typename = void>
+    struct selected_arguments_impl;
+
+    template <typename Borrow, typename Value>
+    using preferred_arguments = std::conditional_t<
+        (std::tuple_size_v<typename Borrow::type> >=
+         std::tuple_size_v<typename Value::type>),
+        typename Borrow::type,
+        typename Value::type>;
+
+    template <typename Dummy>
+    struct selected_arguments_impl<0, Dummy> {
+        using borrow = borrow_detection<0>;
+        using value = value_detection<0>;
+
+        using type = preferred_arguments<borrow, value>;
+        static constexpr bool valid = borrow::valid || value::valid;
+    };
+
+    template <size_t Arity>
+    struct selected_arguments_impl<Arity, std::enable_if_t<(Arity > 0)>> {
+        using borrow = borrow_detection<Arity>;
+        using value = value_detection<Arity>;
+        using next = selected_arguments_impl<Arity - 1>;
+
+        using current_type = preferred_arguments<borrow, value>;
+        using type = std::conditional_t<
+            (std::tuple_size_v<current_type> > 0),
+            current_type,
+            typename next::type>;
+        static constexpr bool valid =
+            borrow::valid || value::valid || next::valid;
+    };
+
+    // `detail::reference` supports the normal borrow-based constructor
+    // detection plus the exact by-value wrapper path. Both remain linear in
+    // constructor arity; the old mixed borrow/value combination search was
+    // removed because it blew up compile-time memory usage.
+    using selected = selected_arguments_impl<N>;
+    using selected_arguments = typename selected::type;
+
+  public:
+    static constexpr size_t arity = std::tuple_size_v<selected_arguments>;
+    static constexpr bool valid = selected::valid;
 
     static_assert(!Assert || valid,
                   "class T construction not detected or ambiguous");

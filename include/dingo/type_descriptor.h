@@ -34,6 +34,19 @@ struct type_descriptor {
     type_descriptor (*pointee)() = nullptr;
 };
 
+constexpr bool operator==(type_descriptor lhs, type_descriptor rhs) {
+    if (lhs.raw_name != rhs.raw_name || lhs.cv != rhs.cv ||
+        lhs.reference != rhs.reference) {
+        return false;
+    }
+
+    if (lhs.pointee == nullptr || rhs.pointee == nullptr) {
+        return lhs.pointee == rhs.pointee;
+    }
+
+    return lhs.pointee() == rhs.pointee();
+}
+
 template <typename T> constexpr std::string_view raw_type_name();
 template <typename T> constexpr type_descriptor describe_type();
 inline void append_type_name(std::string& name, type_descriptor descriptor);

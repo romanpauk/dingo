@@ -99,7 +99,6 @@ if(DINGO_DEVELOPMENT_MODE)
         config.h
         constructor.h
         container.h
-        decay.h
         exceptions.h
         factory/callable.h
         factory/constructor_detection.h
@@ -112,6 +111,7 @@ if(DINGO_DEVELOPMENT_MODE)
         index/map.h
         index/unordered_map.h
         interface_storage_traits.h
+        normalized_type.h
         rebind_type.h
         resettable_i.h
         resolving_context.h

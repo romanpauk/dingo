@@ -10,7 +10,7 @@
 #include <dingo/config.h>
 
 #include <dingo/aligned_storage.h>
-#include <dingo/decay.h>
+#include <dingo/normalized_type.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/storage.h>
 #include <dingo/type_conversion_traits.h>
@@ -98,7 +98,7 @@ class shared_storage_instance_impl : public storage_instance_dtor<Type, Factory>
 
 template <typename Type, typename StoredType, typename Factory>
 class shared_storage_instance_impl<
-    Type, StoredType, Factory, std::enable_if_t<has_type_traits_v<Type>>>
+    Type, StoredType, Factory, std::enable_if_t<type_traits<Type>::enabled>>
     : Factory {
   public:
     template <typename... Args>

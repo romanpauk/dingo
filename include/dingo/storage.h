@@ -8,7 +8,7 @@
 #pragma once
 
 #include <dingo/config.h>
-#include <dingo/decay.h>
+#include <dingo/normalized_type.h>
 #include <dingo/factory/constructor.h>
 
 namespace dingo {

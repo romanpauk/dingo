@@ -227,6 +227,27 @@ TEST(shared_cyclical_test, virtual_base) {
     static_assert(is_virtual_base_of_v<A, C>);
 }
 
+TEST(shared_cyclical_test, storage_traits) {
+    using value_requests = type_storage_traits<shared_cyclical, Class, IClass1>;
+    static_assert(std::is_same_v<typename value_requests::value_types,
+                                 type_list<>>);
+    static_assert(std::is_same_v<typename value_requests::lvalue_reference_types,
+                                 type_list<IClass1&>>);
+    static_assert(
+        std::is_same_v<typename value_requests::pointer_types, type_list<IClass1*>>);
+
+    using shared_requests =
+        type_storage_traits<shared_cyclical, std::shared_ptr<Class>, IClass1>;
+    static_assert(std::is_same_v<typename shared_requests::value_types,
+                                 type_list<std::shared_ptr<IClass1>>>);
+    static_assert(std::is_same_v<
+                  typename shared_requests::lvalue_reference_types,
+                  type_list<IClass1&, std::shared_ptr<IClass1>&>>);
+    static_assert(std::is_same_v<
+                  typename shared_requests::pointer_types,
+                  type_list<IClass1*, std::shared_ptr<IClass1>*>>);
+}
+
 TYPED_TEST(shared_cyclical_test, ambiguous_resolve) {
     struct B;
     struct A {

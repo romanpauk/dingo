@@ -9,7 +9,7 @@
 
 #include <dingo/config.h>
 
-#include <dingo/decay.h>
+#include <dingo/normalized_type.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/storage.h>
 #include <dingo/type_conversion_traits.h>
@@ -43,7 +43,7 @@ class external_storage_instance_impl {
 
 template <typename Type, typename StoredType>
 class external_storage_instance_impl<
-    Type, StoredType, std::enable_if_t<has_type_traits_v<Type>>> {
+    Type, StoredType, std::enable_if_t<type_traits<Type>::enabled>> {
   public:
     template <typename T>
     external_storage_instance_impl(T&& instance)

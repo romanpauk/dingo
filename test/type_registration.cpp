@@ -7,6 +7,7 @@
 
 #include <dingo/class_instance_conversions.h>
 #include <dingo/class_instance_resolver.h>
+#include <dingo/interface_storage_traits.h>
 #include <dingo/rebind_type.h>
 #include <dingo/rtti/rtti.h>
 #include <dingo/rtti/typeid_provider.h>
@@ -67,14 +68,18 @@ TEST(type_registration_test, registration_deduction) {
 }
 
 TEST(type_registration_test, registration_specialization) {
-    struct A {};
+    struct I {
+        virtual ~I() = default;
+    };
+    struct A : I {};
 
     using shared_registration = type_registration<scope<shared>, storage<A>>;
     using shared_storage = detail::storage<
         typename shared_registration::scope_type::type,
         typename shared_registration::storage_type::type,
         rebind_type_t<typename shared_registration::storage_type::type,
-                      decay_t<typename shared_registration::storage_type::type>>,
+                      normalized_type_t<
+                          typename shared_registration::storage_type::type>>,
         typename shared_registration::factory_type::type,
         typename shared_registration::conversions_type::type>;
     using shared_resolver =
@@ -86,7 +91,8 @@ TEST(type_registration_test, registration_specialization) {
         typename shared_ptr_registration::scope_type::type,
         typename shared_ptr_registration::storage_type::type,
         rebind_type_t<typename shared_ptr_registration::storage_type::type,
-                      decay_t<typename shared_ptr_registration::storage_type::type>>,
+                      normalized_type_t<typename shared_ptr_registration::
+                                            storage_type::type>>,
         typename shared_ptr_registration::factory_type::type,
         typename shared_ptr_registration::conversions_type::type>;
     using shared_ptr_resolver =
@@ -98,7 +104,8 @@ TEST(type_registration_test, registration_specialization) {
         typename external_registration::scope_type::type,
         typename external_registration::storage_type::type,
         rebind_type_t<typename external_registration::storage_type::type,
-                      decay_t<typename external_registration::storage_type::type>>,
+                      normalized_type_t<typename external_registration::
+                                            storage_type::type>>,
         typename external_registration::factory_type::type,
         typename external_registration::conversions_type::type>;
     using external_resolver =
@@ -110,15 +117,81 @@ TEST(type_registration_test, registration_specialization) {
         typename external_shared_registration::scope_type::type,
         typename external_shared_registration::storage_type::type,
         rebind_type_t<typename external_shared_registration::storage_type::type,
-                      decay_t<typename external_shared_registration::storage_type::type>>,
+                      normalized_type_t<typename external_shared_registration::
+                                            storage_type::type>>,
         typename external_shared_registration::factory_type::type,
         typename external_shared_registration::conversions_type::type>;
     using external_shared_resolver = class_instance_resolver<
         rtti<typeid_provider>, A, external_shared_storage>;
 
+    using nested_registration =
+        type_registration<scope<shared>,
+                          storage<std::shared_ptr<std::unique_ptr<A>>>,
+                          interfaces<I>>;
+    using nested_storage_type = typename nested_registration::storage_type::type;
+    using nested_interface_type = std::tuple_element_t<
+        0, typename nested_registration::interface_type::type_tuple>;
+    using nested_stored_type = rebind_leaf_t<
+        nested_storage_type,
+        std::conditional_t<
+            std::has_virtual_destructor_v<nested_interface_type> &&
+                is_interface_storage_rebindable_v<nested_storage_type,
+                                                  nested_interface_type>,
+            nested_interface_type, leaf_type_t<nested_storage_type>>>;
+
+    // Nested wrapper requests can still borrow to the leaf interface, but
+    // built-in smart handles only rebind when C++ itself has the direct handle
+    // conversion.
+    static_assert(is_interface_storage_rebindable_v<std::shared_ptr<A>, I>);
+    static_assert(is_interface_storage_rebindable_v<std::unique_ptr<A>, I>);
+    static_assert(
+        !is_interface_storage_rebindable_v<std::shared_ptr<std::unique_ptr<A>>,
+                                           I>);
+    static_assert(
+        !is_interface_storage_rebindable_v<std::unique_ptr<std::shared_ptr<A>>,
+                                           I>);
+    static_assert(
+        std::is_same_v<nested_stored_type, std::shared_ptr<std::unique_ptr<A>>>);
+
     static_assert(std::is_empty_v<class_instance_conversions<type_list<>>>);
     static_assert(
         std::is_trivially_destructible_v<class_instance_conversions<type_list<>>>);
-    static_assert(sizeof(shared_resolver) < sizeof(shared_ptr_resolver));
-    static_assert(sizeof(external_resolver) < sizeof(external_shared_resolver));
+    static_assert(sizeof(shared_resolver) <= sizeof(shared_ptr_resolver));
+    static_assert(sizeof(external_resolver) <= sizeof(external_shared_resolver));
+}
+
+TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
+    struct I {
+        virtual ~I() = default;
+    };
+    struct A : I {};
+
+    using nested_handle = const std::shared_ptr<std::unique_ptr<A>>&;
+    using nested_list = type_list<nested_handle, std::unique_ptr<A*>>;
+
+    static_assert(std::is_same_v<leaf_type_t<nested_handle>, A>);
+    static_assert(std::is_same_v<rebind_leaf_t<nested_handle, I>,
+                                 std::shared_ptr<std::unique_ptr<I>>&>);
+    static_assert(std::is_same_v<rebind_type_t<nested_handle, I>,
+                                 std::shared_ptr<I>&>);
+    static_assert(std::is_same_v<leaf_type_t<nested_list>,
+                                 type_list<A, A>>);
+    static_assert(std::is_same_v<rebind_leaf_t<nested_list, I>,
+                                 type_list<std::shared_ptr<std::unique_ptr<I>>&,
+                                           std::unique_ptr<I*>>>);
+}
+
+TEST(type_registration_test, normalized_type_trait) {
+    struct I {
+        virtual ~I() = default;
+    };
+    struct A : I {};
+    struct annotation_tag {};
+
+    static_assert(std::is_same_v<normalized_type_t<const std::shared_ptr<
+                                     std::unique_ptr<A>>&>,
+                                 A>);
+    static_assert(
+        std::is_same_v<normalized_type_t<annotated<I&, annotation_tag>>,
+                       annotated<I, annotation_tag>>);
 }

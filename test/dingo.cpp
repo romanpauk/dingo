@@ -43,6 +43,28 @@ TYPED_TEST(dingo_test, unique_hierarchy) {
     container.template resolve<B>();
 }
 
+TYPED_TEST(dingo_test, nested_wrapper_injection) {
+    using container_type = TypeParam;
+
+    struct Consumer {
+        Consumer(IClass& value, IClass* ptr) : value_(value), ptr_(ptr) {}
+
+        IClass& value_;
+        IClass* ptr_;
+    };
+
+    container_type container;
+    container.template register_type<
+        scope<shared>, storage<std::shared_ptr<std::unique_ptr<Class>>>,
+        interfaces<IClass>>();
+    container.template register_type<scope<unique>, storage<Consumer>>();
+
+    auto consumer = container.template resolve<Consumer>();
+    AssertClass(consumer.value_);
+    AssertClass(*consumer.ptr_);
+    ASSERT_EQ(consumer.ptr_, std::addressof(consumer.value_));
+}
+
 TYPED_TEST(dingo_test, resolve_rollback) {
     using container_type = TypeParam;
 

@@ -10,7 +10,7 @@
 #include <dingo/config.h>
 
 #include <dingo/class_traits.h>
-#include <dingo/decay.h>
+#include <dingo/normalized_type.h>
 #include <dingo/factory/constructor_detection.h>
 
 #include <tuple>
@@ -28,13 +28,13 @@ template <typename T, typename... Args> struct constructor<T(Args...)> {
 
     template <typename Type, typename Context, typename Container>
     static Type construct(Context& ctx, Container& container) {
-        return detail::construction_traits<Type, T>::construct(
+        return detail::construction_dispatch<Type, T>::construct(
             ctx.template resolve<Args>(container)...);
     }
 
     template <typename Type, typename Context, typename Container>
     static void construct(void* ptr, Context& ctx, Container& container) {
-        detail::construction_traits<Type, T>::construct(
+        detail::construction_dispatch<Type, T>::construct(
             ptr, ctx.template resolve<Args>(container)...);
     }
 };

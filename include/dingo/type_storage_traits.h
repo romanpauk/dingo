@@ -12,9 +12,7 @@
 #include <dingo/type_list.h>
 #include <dingo/type_traits.h>
 
-#include <memory>
 #include <optional>
-#include <variant>
 
 namespace dingo {
 struct unique;
@@ -22,12 +20,39 @@ struct shared;
 struct external;
 
 template <typename StorageTag, typename Type, typename U, typename = void>
-struct type_storage_traits;
+struct resolution_traits {
+    using value_types = type_list<>;
+    using lvalue_reference_types = type_list<>;
+    using rvalue_reference_types = type_list<>;
+    using pointer_types = type_list<>;
+    using conversion_types = type_list<>;
+};
+
+namespace detail {
+template <typename AccessTraits, typename ResolutionTraits>
+struct combined_storage_types {
+    using value_types = type_list_cat_t<typename AccessTraits::value_types,
+                                        typename ResolutionTraits::value_types>;
+    using lvalue_reference_types =
+        type_list_cat_t<typename AccessTraits::lvalue_reference_types,
+                        typename ResolutionTraits::lvalue_reference_types>;
+    using rvalue_reference_types =
+        type_list_cat_t<typename AccessTraits::rvalue_reference_types,
+                        typename ResolutionTraits::rvalue_reference_types>;
+    using pointer_types = type_list_cat_t<typename AccessTraits::pointer_types,
+                                          typename ResolutionTraits::pointer_types>;
+    using conversion_types =
+        type_list_cat_t<typename AccessTraits::conversion_types,
+                        typename ResolutionTraits::conversion_types>;
+};
+} // namespace detail
 
 template <typename Type, typename U>
-struct type_storage_traits<
+struct storage_traits<
     shared, Type, U,
-    std::enable_if_t<!has_type_traits_v<Type> && !std::is_reference_v<Type>>> {
+    std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type>>> {
+    static constexpr bool enabled = true;
+
     using value_types = type_list<U>;
     using lvalue_reference_types = type_list<U&>;
     using rvalue_reference_types = type_list<>;
@@ -36,18 +61,11 @@ struct type_storage_traits<
 };
 
 template <typename Type, typename U>
-struct type_storage_traits<shared, Type*, U> {
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<U&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*>;
-    using conversion_types = type_list<>;
-};
-
-template <typename Type, typename U>
-struct type_storage_traits<
+struct storage_traits<
     external, Type, U,
-    std::enable_if_t<!has_type_traits_v<Type> && !std::is_reference_v<Type>>> {
+    std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type>>> {
+    static constexpr bool enabled = true;
+
     using value_types = type_list<U>;
     using lvalue_reference_types = type_list<U&>;
     using rvalue_reference_types = type_list<>;
@@ -56,96 +74,25 @@ struct type_storage_traits<
 };
 
 template <typename Type, typename U>
-struct type_storage_traits<external, Type&, U> : type_storage_traits<external, Type, U> {
-};
+struct storage_traits<external, Type&, U> : storage_traits<external, Type, U> {};
 
 template <typename Type, typename U>
-struct type_storage_traits<external, Type*, U> {
-    using value_types = type_list<U>;
-    using lvalue_reference_types = type_list<U&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*>;
-    using conversion_types = type_list<>;
-};
-
-template <typename Type, typename U>
-struct type_storage_traits<
+struct storage_traits<
     unique, Type, U,
-    std::enable_if_t<!has_type_traits_v<Type> && !std::is_reference_v<Type>>> {
-    using value_types = type_list<U, std::optional<U>>;
+    std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type>>> {
+    static constexpr bool enabled = true;
+
+    using value_types = type_list<U>;
     using lvalue_reference_types = type_list<U&>;
-    using rvalue_reference_types = type_list<U&&, std::optional<U>&&>;
+    using rvalue_reference_types = type_list<U&&>;
     using pointer_types = type_list<>;
-    using conversion_types = type_list<std::optional<U>>;
+    using conversion_types = type_list<>;
 };
 
 template <typename Type, typename U>
-struct type_storage_traits<unique, Type*, U> {
-    using value_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
-    using lvalue_reference_types = type_list<>;
-    using rvalue_reference_types =
-        type_list<std::unique_ptr<U>&&, std::shared_ptr<U>&&>;
-    using pointer_types = type_list<U*>;
-    using conversion_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
-};
-
-template <typename T, typename Deleter, typename U>
-struct type_storage_traits<unique, std::unique_ptr<T, Deleter>, U> {
-    using value_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
-    using lvalue_reference_types = type_list<>;
-    using rvalue_reference_types =
-        type_list<std::unique_ptr<U>&&, std::shared_ptr<U>&&>;
-    using pointer_types = type_list<>;
-    using conversion_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
-};
-
-template <typename T, typename Deleter, typename U>
-struct type_storage_traits<shared, std::unique_ptr<T, Deleter>, U> {
-    using value_types = type_list<U>;
-    using lvalue_reference_types = type_list<U&, std::unique_ptr<U>&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, std::unique_ptr<U>*>;
-    using conversion_types = type_list<>;
-};
-
-template <typename T, typename Deleter, typename U>
-struct type_storage_traits<external, std::unique_ptr<T, Deleter>, U> {
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<U&, std::unique_ptr<U>&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, std::unique_ptr<U>*>;
-    using conversion_types = type_list<>;
-};
-
-template <typename T, typename U>
-struct type_storage_traits<unique, std::shared_ptr<T>, U> {
-    using value_types = type_list<std::shared_ptr<U>>;
-    using lvalue_reference_types = type_list<>;
-    using rvalue_reference_types = type_list<std::shared_ptr<U>&&>;
-    using pointer_types = type_list<>;
-    using conversion_types = type_list<std::shared_ptr<U>>;
-};
-
-template <typename T, typename U>
-struct type_storage_traits<shared, std::shared_ptr<T>, U> {
-    using value_types = type_list<U, std::shared_ptr<U>>;
-    using lvalue_reference_types = type_list<U&, std::shared_ptr<U>&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, std::shared_ptr<U>*>;
-    using conversion_types = type_list<std::shared_ptr<U>>;
-};
-
-template <typename T, typename U>
-struct type_storage_traits<external, std::shared_ptr<T>, U> {
-    using value_types = type_list<std::shared_ptr<U>>;
-    using lvalue_reference_types = type_list<U&, std::shared_ptr<U>&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, std::shared_ptr<U>*>;
-    using conversion_types = type_list<std::shared_ptr<U>>;
-};
-
-template <typename T, typename U>
-struct type_storage_traits<unique, std::optional<T>, U> {
+struct resolution_traits<
+    unique, Type, U,
+    std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type>>> {
     using value_types = type_list<std::optional<U>>;
     using lvalue_reference_types = type_list<>;
     using rvalue_reference_types = type_list<std::optional<U>&&>;
@@ -153,30 +100,14 @@ struct type_storage_traits<unique, std::optional<T>, U> {
     using conversion_types = type_list<std::optional<U>>;
 };
 
-template <typename... Ts>
-struct type_storage_traits<unique, std::variant<Ts...>, std::variant<Ts...>> {
-    using value_types = type_list<std::variant<Ts...>>;
-    using lvalue_reference_types = type_list<>;
-    using rvalue_reference_types = type_list<std::variant<Ts...>&&>;
-    using pointer_types = type_list<>;
-    using conversion_types = type_list<std::variant<Ts...>>;
-};
+template <typename StorageTag, typename Type, typename U, typename = void>
+struct type_storage_traits;
 
-template <typename T, typename U>
-struct type_storage_traits<shared, std::optional<T>, U> {
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<U&, std::optional<U>&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, std::optional<U>*>;
-    using conversion_types = type_list<>;
-};
-
-template <typename T, typename U>
-struct type_storage_traits<external, std::optional<T>, U> {
-    using value_types = type_list<>;
-    using lvalue_reference_types = type_list<U&, std::optional<U>&>;
-    using rvalue_reference_types = type_list<>;
-    using pointer_types = type_list<U*, std::optional<U>*>;
-    using conversion_types = type_list<>;
-};
+template <typename StorageTag, typename Type, typename U>
+struct type_storage_traits<
+    StorageTag, Type, U,
+    std::enable_if_t<storage_traits<StorageTag, Type, U>::enabled>>
+    : detail::combined_storage_types<
+          storage_traits<StorageTag, Type, U>,
+          resolution_traits<StorageTag, Type, U>> {};
 } // namespace dingo

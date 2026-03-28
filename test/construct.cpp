@@ -136,6 +136,9 @@ TEST(construct_test, class_traits) {
         B(std::shared_ptr<A>) {}
     };
 
+    static_assert(construction_traits<std::variant<A, B>, A>::enabled);
+    static_assert(!construction_traits<std::variant<A, B>, int>::enabled);
+
     class_traits<A>::construct();
     class_traits<B>::construct(nullptr);
     delete class_traits<B*>::construct(nullptr);

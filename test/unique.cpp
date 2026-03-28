@@ -164,6 +164,25 @@ TYPED_TEST(unique_test, unique_ptr_single_interface) {
     AssertClass(container.template resolve<std::unique_ptr<IClass>>());
 }
 
+TYPED_TEST(unique_test, unique_ptr_nested_shared_ptr) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<
+        scope<unique>, storage<std::unique_ptr<std::shared_ptr<Class>>>>();
+
+    auto outer =
+        container.template resolve<std::unique_ptr<std::shared_ptr<Class>>>();
+    ASSERT_NE(outer, nullptr);
+    ASSERT_NE(*outer, nullptr);
+    AssertClass(**outer);
+    ASSERT_THROW(container.template resolve<std::shared_ptr<Class>>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container
+                     .template resolve<std::unique_ptr<std::shared_ptr<IClass>>>(),
+                 type_not_found_exception);
+}
+
 TYPED_TEST(unique_test, optional) {
     using container_type = TypeParam;
 

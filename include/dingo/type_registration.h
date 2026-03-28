@@ -67,6 +67,32 @@ struct get_type<T, type_list<Head, Tail...>> {
 template <typename T, typename... Args>
 using get_type_t = typename get_type<T, Args...>::type;
 
+template <typename... Args>
+using registration_scope_t = get_type_t<::dingo::scope<void>, type_list<Args...>>;
+
+template <typename... Args>
+using registration_storage_t = get_type_t<
+    ::dingo::storage<void>,
+    type_list<Args...,
+              ::dingo::storage<typename get_type_t<::dingo::factory<void>,
+                                                   type_list<Args...>>::type>>>;
+
+template <typename... Args>
+using registration_factory_t =
+    get_type_t<::dingo::factory<void>,
+               type_list<Args...,
+                         ::dingo::factory<::dingo::constructor_detection<
+                             leaf_type_t<typename registration_storage_t<Args...>::type>>>>>;
+
+template <typename... Args>
+using registration_interface_t =
+    get_type_t<::dingo::interfaces<void>,
+               type_list<Args...,
+                         ::dingo::interfaces<leaf_type_t<
+                             typename registration_storage_t<Args...>::type>>,
+                         ::dingo::interfaces<leaf_type_t<
+                             typename registration_factory_t<Args...>::type>>>>;
+
 } // namespace detail
 
 // TODO:
@@ -74,35 +100,22 @@ using get_type_t = typename get_type<T, Args...>::type;
 
 template <typename... Args> struct type_registration {
     // Scope has to be scpecified as there is no way how to deduce it
-    using scope_type = detail::get_type_t<scope<void>, type_list<Args...>>;
+    using scope_type = detail::registration_scope_t<Args...>;
     static_assert(!std::is_same_v<scope_type, scope<void>>,
                   "failed to deduce a scope type");
 
     // Storage can be deduced from Factory
-    using storage_type = detail::get_type_t<
-        storage<void>,
-        type_list<Args..., storage<typename detail::get_type_t<
-                               factory<void>, type_list<Args...>>::type>>>;
+    using storage_type = detail::registration_storage_t<Args...>;
     static_assert(!std::is_same_v<storage_type, storage<void>>,
                   "failed to deduce a storage type");
 
     // Factory can be deduced from Storage
-    using factory_type = detail::get_type_t<
-        factory<void>,
-        type_list<Args...,
-                  factory<constructor_detection<decay_t<typename detail::get_type_t<
-                      storage<void>, type_list<Args...>>::type>>>>>;
+    using factory_type = detail::registration_factory_t<Args...>;
     static_assert(!std::is_same_v<factory_type, factory<void>>,
                   "failed to deduce a factory type");
 
     // Interface can be deduced from Storage or Factory
-    using interface_type = detail::get_type_t<
-        interfaces<void>,
-        type_list<Args...,
-                  interfaces<decay_t<typename detail::get_type_t<
-                      storage<void>, type_list<Args...>>::type>>,
-                  interfaces<decay_t<typename detail::get_type_t<
-                      factory<void>, type_list<Args...>>::type>>>>;
+    using interface_type = detail::registration_interface_t<Args...>;
     static_assert(!std::is_same_v<interface_type, interfaces<void>>,
                   "failed to deduce an interface type");
 

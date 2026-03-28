@@ -9,7 +9,7 @@
 
 #include <dingo/config.h>
 
-#include <dingo/decay.h>
+#include <dingo/normalized_type.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/storage.h>
 #include <dingo/type_storage_traits.h>

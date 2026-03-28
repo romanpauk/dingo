@@ -9,7 +9,7 @@
 
 #include <dingo/config.h>
 
-#include <dingo/decay.h>
+#include <dingo/normalized_type.h>
 
 #include <list>
 #include <map>
@@ -72,5 +72,5 @@ struct collection_traits<std::map<Key, Value, Compare, Allocator>> {
 } // namespace detail
 
 template <class T>
-struct collection_traits : detail::collection_traits<decay_t<T>> {};
+struct collection_traits : detail::collection_traits<normalized_type_t<T>> {};
 } // namespace dingo
