@@ -94,6 +94,30 @@ struct deduced_interface_type {
 template <typename StorageType, typename ScopeType>
 struct deduced_interface_type<
     StorageType, ScopeType,
+    std::void_t<typename ::dingo::detail::alternative_type_interface_types<
+        std::remove_cv_t<std::remove_reference_t<StorageType>>>::type>> {
+    using type = ::dingo::interfaces<
+        typename ::dingo::detail::alternative_type_interface_types<
+            std::remove_cv_t<std::remove_reference_t<StorageType>>>::type>;
+};
+
+template <typename StorageType, typename ScopeType>
+struct deduced_interface_type<
+    StorageType, ScopeType,
+    std::enable_if_t<!std::is_same_v<typename ScopeType::type, unique> &&
+                     type_traits<std::remove_cv_t<
+                         std::remove_reference_t<StorageType>>>::enabled &&
+                     type_traits<std::remove_cv_t<
+                         std::remove_reference_t<StorageType>>>::is_value_borrowable &&
+                     is_alternative_type_v<std::remove_cv_t<leaf_type_t<StorageType>>>>> {
+    using type = ::dingo::interfaces<
+        typename ::dingo::detail::alternative_type_interface_types<
+            std::remove_cv_t<leaf_type_t<StorageType>>>::type>;
+};
+
+template <typename StorageType, typename ScopeType>
+struct deduced_interface_type<
+    StorageType, ScopeType,
     std::enable_if_t<!std::is_same_v<typename ScopeType::type, unique> &&
                      type_traits<StorageType>::enabled &&
                      !std::is_pointer_v<StorageType> &&

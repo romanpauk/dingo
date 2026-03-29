@@ -526,6 +526,9 @@ class container : public allocator_base<Allocator> {
     void check_interface_requirements() {
         using normalized_type = normalized_type_t<Type>;
         using normalized_interface_type = normalized_type_t<TypeInterface>;
+        constexpr bool is_alternative_type_interface =
+            is_alternative_type_interface_compatible_v<normalized_type,
+                                                       normalized_interface_type>;
 
         static_assert(!std::is_reference_v<TypeInterface>);
         if constexpr (detail::is_array_like_type_v<Type>) {
@@ -546,7 +549,9 @@ class container : public allocator_base<Allocator> {
             }
         }
         static_assert(
-            std::is_convertible_v<normalized_type*, normalized_interface_type*>);
+            std::is_convertible_v<normalized_type*, normalized_interface_type*> ||
+            is_alternative_type_interface,
+            "registered type must be pointer-convertible to the interface");
         if constexpr (!std::is_same_v<normalized_type,
                                       normalized_interface_type>) {
             static_assert(detail::storage_interface_requirements_v<
