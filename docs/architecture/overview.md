@@ -24,7 +24,7 @@ It stores factories and asks them for values, references, or pointers.
 
 ### Type Registration
 
-[include/dingo/type_registration.h](../../include/dingo/type_registration.h)
+[include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 reduces a `register_type<...>()` declaration into a complete policy set:
 
 - `scope_type`
@@ -38,7 +38,7 @@ the internal runtime machinery.
 
 ### Factory And Storage
 
-[include/dingo/class_instance_factory.h](../../include/dingo/class_instance_factory.h)
+[include/dingo/resolution/instance_factory.h](../../include/dingo/resolution/instance_factory.h)
 wraps a storage object and the child container used to resolve constructor
 dependencies.
 
@@ -59,14 +59,14 @@ own lifetime policy:
 
 ### Resolver And Conversion Path
 
-[include/dingo/class_instance_resolver.h](../../include/dingo/class_instance_resolver.h)
+[include/dingo/resolution/instance_resolver.h](../../include/dingo/resolution/instance_resolver.h)
 bridges storage and resolution. It is responsible for:
 
 - driving the storage's `resolve(...)`
 - preserving temporaries in the resolving context when needed
 - constructing cached conversion objects for shared and external cases
 
-[include/dingo/type_conversion.h](../../include/dingo/type_conversion.h)
+[include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)
 contains the last-mile conversion rules from the stored source shape to the
 requested target shape.
 
@@ -78,8 +78,8 @@ At a high level, Dingo runs this sequence:
 2. The container creates a storage-backed factory for each exposed interface.
 3. `resolve<T>()` converts `T` into the internal lookup form.
 4. The container finds the matching factory.
-5. `class_instance_factory_traits` asks the factory for the correct access path
-   for `T`: value, lvalue reference, rvalue reference, or pointer.
+5. `instance_factory_traits` asks the factory for the correct access path for
+   `T`: value, lvalue reference, rvalue reference, or pointer.
 6. The factory asks its resolver to get or build the stored instance.
 7. `type_conversion` converts that stored source shape into the requested `T`.
 
@@ -91,7 +91,7 @@ pipeline.
 If you want to follow the core path in source order, start here:
 
 - [include/dingo/container.h](../../include/dingo/container.h)
-- [include/dingo/type_registration.h](../../include/dingo/type_registration.h)
-- [include/dingo/class_instance_factory.h](../../include/dingo/class_instance_factory.h)
-- [include/dingo/class_instance_resolver.h](../../include/dingo/class_instance_resolver.h)
-- [include/dingo/type_conversion.h](../../include/dingo/type_conversion.h)
+- [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
+- [include/dingo/resolution/instance_factory.h](../../include/dingo/resolution/instance_factory.h)
+- [include/dingo/resolution/instance_resolver.h](../../include/dingo/resolution/instance_resolver.h)
+- [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)

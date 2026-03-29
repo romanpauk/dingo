@@ -9,24 +9,24 @@
 
 #include <dingo/config.h>
 
-#include <dingo/allocator.h>
-#include <dingo/annotated.h>
-#include <dingo/class_instance_factory.h>
-#include <dingo/class_instance_factory_traits.h>
-#include <dingo/collection_traits.h>
-#include <dingo/normalized_type.h>
+#include <dingo/memory/allocator.h>
+#include <dingo/registration/annotated.h>
+#include <dingo/resolution/instance_factory.h>
+#include <dingo/resolution/instance_factory_traits.h>
+#include <dingo/registration/collection_traits.h>
+#include <dingo/type/normalized_type.h>
 #include <dingo/exceptions.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/invoke.h>
-#include <dingo/interface_storage_traits.h>
+#include <dingo/resolution/interface_storage_traits.h>
 #include <dingo/index.h>
-#include <dingo/resolving_context.h>
+#include <dingo/resolution/resolving_context.h>
 #include <dingo/rtti/static_provider.h>
 #include <dingo/rtti/typeid_provider.h>
-#include <dingo/static_allocator.h>
-#include <dingo/type_cache.h>
-#include <dingo/type_map.h>
-#include <dingo/type_registration.h>
+#include <dingo/memory/static_allocator.h>
+#include <dingo/resolution/type_cache.h>
+#include <dingo/type/type_map.h>
+#include <dingo/registration/type_registration.h>
 
 #include <functional>
 #include <map>
@@ -189,7 +189,7 @@ class container : public allocator_base<Allocator> {
             if constexpr (is_none_v<std::decay_t<IdType>>) {
                 void* cache = type_cache_.template get<T>();
                 if (cache) {
-                    return class_instance_factory_traits<
+                    return instance_factory_traits<
                         rtti_type,
                         typename annotated_traits<T>::type>::convert(cache);
                 }
@@ -202,7 +202,7 @@ class container : public allocator_base<Allocator> {
 
                     if (indexed) {
                         if (indexed->cache) {
-                            return class_instance_factory_traits<
+                            return instance_factory_traits<
                                 rtti_type, typename annotated_traits<T>::type>::
                                 convert(indexed->cache);
                         }
@@ -299,15 +299,15 @@ class container : public allocator_base<Allocator> {
                             typename registration::factory_type::type,
                             typename registration::conversions_type::type>;
 
-        using class_instance_container_type =
+        using instance_container_type =
             typename container_type::template rebind_t<
                 typename ContainerTraits::template rebind_t<
                     type_list<typename ContainerTraits::tag_type,
                               typename registration::interface_type>>,
                 allocator_type, container_type>;
 
-        using class_instance_factory_data_type =
-            class_instance_factory_data<class_instance_container_type, storage_type>;
+        using instance_factory_data_type =
+            instance_factory_data<instance_container_type, storage_type>;
 
         if constexpr (std::tuple_size_v<
                           typename registration::interface_type::type_tuple> ==
@@ -315,34 +315,34 @@ class container : public allocator_base<Allocator> {
             using interface_type = std::tuple_element_t<
                 0, typename registration::interface_type::type_tuple>;
 
-            using class_instance_factory_type = class_instance_factory<
+            using instance_factory_type = instance_factory<
                 container_type, typename annotated_traits<interface_type>::type,
-                storage_type, class_instance_factory_data_type>;
+                storage_type, instance_factory_data_type>;
 
             if constexpr (!is_none_v<std::decay_t<Arg>>) {
                 auto&& [factory, factory_container] =
-                    allocate_factory<class_instance_factory_type>(
+                    allocate_factory<instance_factory_type>(
                         this, std::forward<Arg>(arg));
                 register_type_factory<interface_type, storage_type>(
                     std::move(factory), std::move(id));
                 return *factory_container;
             } else {
                 auto&& [factory, factory_container] =
-                    allocate_factory<class_instance_factory_type>(this);
+                    allocate_factory<instance_factory_type>(this);
                 register_type_factory<interface_type, storage_type>(
                     std::move(factory), std::move(id));
                 return *factory_container;
             }
         } else {
-            std::shared_ptr<class_instance_factory_data_type> data;
+            std::shared_ptr<instance_factory_data_type> data;
             if constexpr (!is_none_v<std::decay_t<Arg>>) {
-                data = std::allocate_shared<class_instance_factory_data_type>(
-                    allocator_traits::rebind<class_instance_factory_data_type>(
+                data = std::allocate_shared<instance_factory_data_type>(
+                    allocator_traits::rebind<instance_factory_data_type>(
                         get_allocator()),
                     this, std::forward<Arg>(arg));
             } else {
-                data = std::allocate_shared<class_instance_factory_data_type>(
-                    allocator_traits::rebind<class_instance_factory_data_type>(
+                data = std::allocate_shared<instance_factory_data_type>(
+                    allocator_traits::rebind<instance_factory_data_type>(
                         get_allocator()),
                     this);
             }
@@ -352,14 +352,14 @@ class container : public allocator_base<Allocator> {
                 [&](auto element) {
                     using interface_type = typename decltype(element)::type;
 
-                    using class_instance_factory_type = class_instance_factory<
+                    using instance_factory_type = instance_factory<
                         container_type,
                         typename annotated_traits<interface_type>::type,
                         storage_type,
-                        std::shared_ptr<class_instance_factory_data_type>>;
+                        std::shared_ptr<instance_factory_data_type>>;
 
                     register_type_factory<interface_type, storage_type>(
-                        allocate_factory<class_instance_factory_type>(data)
+                        allocate_factory<instance_factory_type>(data)
                             .first,
                         id);
                 });
@@ -425,7 +425,7 @@ class container : public allocator_base<Allocator> {
         if constexpr (cache_enabled && CheckCache) {
             void* cache = type_cache_.template get<T>();
             if (cache) {
-                return class_instance_factory_traits<
+                return instance_factory_traits<
                     rtti_type,
                     typename annotated_traits<T>::type>::convert(cache);
             }
@@ -448,7 +448,7 @@ class container : public allocator_base<Allocator> {
                 if (indexed) {
                     if constexpr (cache_enabled && CheckCache) {
                         if (indexed->cache) {
-                            return class_instance_factory_traits<
+                            return instance_factory_traits<
                                 rtti_type, typename annotated_traits<T>::type>::
                                 convert(indexed->cache);
                         }
@@ -493,33 +493,33 @@ class container : public allocator_base<Allocator> {
     // TODO: two different resolve() calls due to different caches
     template <typename CachedT, typename T, typename Factory, typename Context>
     T resolve(Factory& factory, Context& context) {
-        void* ptr = class_instance_factory_traits<rtti_type, T>::resolve(
+        void* ptr = instance_factory_traits<rtti_type, T>::resolve(
             factory, context);
         if constexpr (cache_enabled) {
             if (factory.cacheable)
                 type_cache_.template insert<CachedT>(ptr);
         }
-        return class_instance_factory_traits<rtti_type, T>::convert(ptr);
+        return instance_factory_traits<rtti_type, T>::convert(ptr);
     }
 
     struct index_data;
 
     template <typename CachedT, typename T, typename Factory, typename Context>
     T resolve(Factory& factory, Context& context, index_data& data) {
-        void* ptr = class_instance_factory_traits<rtti_type, T>::resolve(
+        void* ptr = instance_factory_traits<rtti_type, T>::resolve(
             factory, context);
         if constexpr (cache_enabled) {
             if (factory.cacheable)
                 data.cache = ptr;
         }
-        return class_instance_factory_traits<rtti_type, T>::convert(ptr);
+        return instance_factory_traits<rtti_type, T>::convert(ptr);
     }
 
     template <typename T, typename Factory, typename Context>
     T resolve_collection_type(Factory& factory, Context& context) {
-        void* ptr = class_instance_factory_traits<rtti_type, T>::resolve(
+        void* ptr = instance_factory_traits<rtti_type, T>::resolve(
             factory, context);
-        return class_instance_factory_traits<rtti_type, T>::convert(ptr);
+        return instance_factory_traits<rtti_type, T>::convert(ptr);
     }
 
     template <class Storage, class TypeInterface, class Type>
@@ -558,7 +558,7 @@ class container : public allocator_base<Allocator> {
 
     template <typename U, typename... Args>
     std::pair<
-        class_instance_factory_ptr<class_instance_factory_i<container_type>>,
+        instance_factory_ptr<instance_factory_interface<container_type>>,
         typename U::container_type*>
     allocate_factory(Args&&... args) {
         auto alloc = allocator_traits::rebind<U>(get_allocator());
@@ -579,7 +579,7 @@ class container : public allocator_base<Allocator> {
     parent_container_type* parent_ = nullptr;
 
     struct index_data {
-        class_instance_factory_i<container_type>* factory;
+        instance_factory_interface<container_type>* factory;
         void* cache;
 
         operator bool() const { return factory != nullptr; }
@@ -594,8 +594,8 @@ class container : public allocator_base<Allocator> {
             : index_type(allocator), factories(allocator) {}
 
         typename ContainerTraits::template type_map_type<
-            class_instance_factory_ptr<
-                class_instance_factory_i<container_type>>,
+            instance_factory_ptr<
+                instance_factory_interface<container_type>>,
             allocator_type>
             factories;
     };

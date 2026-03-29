@@ -31,12 +31,13 @@ The default path is straightforward:
 2. Call `resolve<T>()`.
 3. Let Dingo recursively build the required constructor arguments.
 
-<!-- { include("../examples/quick.cpp", scope="////", summary="Quick end-to-end example") -->
+<!-- { include("../examples/container/quick.cpp", scope="////", summary="Quick end-to-end example") -->
 
 <details>
 <summary>Quick end-to-end example</summary>
 
-Example code included from [../examples/quick.cpp](../examples/quick.cpp):
+Example code included from
+[../examples/container/quick.cpp](../examples/container/quick.cpp):
 
 ```c++
 // Class types to be managed by the container. Note that there is no special
@@ -86,8 +87,8 @@ struct D {
 
 See:
 
-- [examples/quick.cpp](../examples/quick.cpp)
-- [examples/non_intrusive.cpp](../examples/non_intrusive.cpp)
+- [examples/container/quick.cpp](../examples/container/quick.cpp)
+- [examples/registration/non_intrusive.cpp](../examples/registration/non_intrusive.cpp)
 
 ## Choose A Scope Deliberately
 
@@ -105,10 +106,10 @@ accept its extra constraints.
 See:
 
 - [Core Concepts: Scopes and Storage](core-concepts.md#scopes-and-storage)
-- [examples/scope_external.cpp](../examples/scope_external.cpp)
-- [examples/scope_unique.cpp](../examples/scope_unique.cpp)
-- [examples/scope_shared.cpp](../examples/scope_shared.cpp)
-- [examples/scope_shared_cyclical.cpp](../examples/scope_shared_cyclical.cpp)
+- [examples/storage/scope_external.cpp](../examples/storage/scope_external.cpp)
+- [examples/storage/scope_unique.cpp](../examples/storage/scope_unique.cpp)
+- [examples/storage/scope_shared.cpp](../examples/storage/scope_shared.cpp)
+- [examples/storage/scope_shared_cyclical.cpp](../examples/storage/scope_shared_cyclical.cpp)
 
 ## Construct Unmanaged Types
 
@@ -121,13 +122,13 @@ Not every type needs to be registered.
 These two APIs are useful at application boundaries where you want dependency
 injection without turning every transient object into container state.
 
-<!-- { include("../examples/construct.cpp", scope="////", summary="Construct an unmanaged type") -->
+<!-- { include("../examples/container/construct.cpp", scope="////", summary="Construct an unmanaged type") -->
 
 <details>
 <summary>Construct an unmanaged type</summary>
 
 Example code included from
-[../examples/construct.cpp](../examples/construct.cpp):
+[../examples/container/construct.cpp](../examples/container/construct.cpp):
 
 ```c++
 // struct A that will be registered with the container
@@ -148,12 +149,13 @@ container.register_type<scope<shared>, storage<A>>();
 </details>
 <!-- } -->
 
-<!-- { include("../examples/invoke.cpp", scope="////", summary="Invoke a callable with injected arguments") -->
+<!-- { include("../examples/container/invoke.cpp", scope="////", summary="Invoke a callable with injected arguments") -->
 
 <details>
 <summary>Invoke a callable with injected arguments</summary>
 
-Example code included from [../examples/invoke.cpp](../examples/invoke.cpp):
+Example code included from
+[../examples/container/invoke.cpp](../examples/container/invoke.cpp):
 
 ```c++
 // struct B that will be constructed using container
@@ -172,8 +174,8 @@ struct B {
 
 See:
 
-- [examples/construct.cpp](../examples/construct.cpp)
-- [examples/invoke.cpp](../examples/invoke.cpp)
+- [examples/container/construct.cpp](../examples/container/construct.cpp)
+- [examples/container/invoke.cpp](../examples/container/invoke.cpp)
 
 ## What To Read Next
 

@@ -27,6 +27,6 @@ resolve<T> -> lookup type -> factory traits -> resolver -> conversion -> T
 The code that owns that flow lives mainly in:
 
 - [include/dingo/container.h](../../include/dingo/container.h)
-- [include/dingo/type_registration.h](../../include/dingo/type_registration.h)
-- [include/dingo/rebind_type.h](../../include/dingo/rebind_type.h)
-- [include/dingo/type_conversion.h](../../include/dingo/type_conversion.h)
+- [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
+- [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
+- [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)

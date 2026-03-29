@@ -16,7 +16,7 @@ The public API starts at `container::register_type<...>()` in
    factory map.
 
 `type_registration<...>` in
-[include/dingo/type_registration.h](../../include/dingo/type_registration.h)
+[include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 deduces these pieces:
 
 - scope
@@ -54,10 +54,10 @@ The sequence is:
 1. Check the cache if container caching is enabled.
 2. Normalize the request type and look up the matching factory set.
 3. Pick the single factory or indexed factory for the request.
-4. Ask `class_instance_factory_traits` how this request should be serviced.
+4. Ask `instance_factory_traits` how this request should be serviced.
 5. Resolve through the selected factory and convert the result back to `T`.
 
-[include/dingo/class_instance_factory_traits.h](../../include/dingo/class_instance_factory_traits.h)
+[include/dingo/resolution/instance_factory_traits.h](../../include/dingo/resolution/instance_factory_traits.h)
 is the small dispatch layer that maps the requested form to the factory API:
 
 - `T` -> `get_value`
@@ -71,7 +71,7 @@ shape.
 ## Factory Path
 
 The factory implementation in
-[include/dingo/class_instance_factory.h](../../include/dingo/class_instance_factory.h)
+[include/dingo/resolution/instance_factory.h](../../include/dingo/resolution/instance_factory.h)
 owns:
 
 - a storage object
@@ -83,7 +83,7 @@ conversion shapes from `Storage::conversions` and tries to match the requested
 lookup type against that list.
 
 If a match is found, the resolver produces the source object and
-[include/dingo/type_conversion.h](../../include/dingo/type_conversion.h)
+[include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)
 converts it to the requested shape.
 
 ## Parent Containers And Auto Construction
@@ -108,7 +108,7 @@ factory.
 These files are useful while reading this flow:
 
 - [include/dingo/container.h](../../include/dingo/container.h)
-- [include/dingo/type_registration.h](../../include/dingo/type_registration.h)
-- [include/dingo/class_instance_factory.h](../../include/dingo/class_instance_factory.h)
-- [include/dingo/class_instance_factory_traits.h](../../include/dingo/class_instance_factory_traits.h)
+- [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
+- [include/dingo/resolution/instance_factory.h](../../include/dingo/resolution/instance_factory.h)
+- [include/dingo/resolution/instance_factory_traits.h](../../include/dingo/resolution/instance_factory_traits.h)
 - [include/dingo/factory/constructor_detection.h](../../include/dingo/factory/constructor_detection.h)

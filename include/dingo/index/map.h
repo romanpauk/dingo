@@ -10,7 +10,7 @@
 #include <dingo/config.h>
 
 #include <dingo/index.h>
-#include <dingo/static_allocator.h>
+#include <dingo/memory/static_allocator.h>
 
 #include <map>
 

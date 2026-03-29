@@ -17,9 +17,10 @@ Tested with:
 
 ## Quick Start
 
-<!-- { include("examples/quick.cpp", scope="////") -->
+<!-- { include("examples/container/quick.cpp", scope="////") -->
 
-Example code included from [examples/quick.cpp](examples/quick.cpp):
+Example code included from
+[examples/container/quick.cpp](examples/container/quick.cpp):
 
 ```c++
 // Class types to be managed by the container. Note that there is no special

@@ -9,11 +9,12 @@
 
 #include <dingo/config.h>
 
-#include <dingo/aligned_storage.h>
-#include <dingo/normalized_type.h>
 #include <dingo/factory/constructor.h>
-#include <dingo/storage.h>
-#include <dingo/type_storage_traits.h>
+#include <dingo/memory/aligned_storage.h>
+#include <dingo/storage/resettable.h>
+#include <dingo/storage/storage.h>
+#include <dingo/storage/type_storage_traits.h>
+#include <dingo/type/normalized_type.h>
 
 #include <atomic>
 #include <memory>
@@ -230,7 +231,7 @@ class storage_instance<shared_cyclical, std::shared_ptr<Type>,
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
 class storage<shared_cyclical, Type, StoredType, Factory, Conversions>
-    : public resettable_i {
+    : public resettable {
     storage_instance<shared_cyclical, Type, StoredType, Factory> instance_;
 
     template <typename T> struct rollback {
