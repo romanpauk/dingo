@@ -1,35 +1,35 @@
 # Motivation and History
 
-Dear reader, the following will hopefully explain the over-engineered mess that
-the library currently is and why is that so. Keeping aside general wisdom that
-"there are better solutions than DI", "DI container is an anti-pattern", "you
-should refactor your code" that often is right, yet often also does not help to
-tackle the problem, this just shows how the library has evolved in time. It does
-not advocate for DI to be the best pattern ever, or this to be the best library,
-in fact, if you will find a need to use something like this, in C++, the project
-is on the crossing.
+This document explains where Dingo came from and why the current design looks
+the way it does.
 
-The first time I've met DI container concept was on a large legacy project in
-2012, using pre-C++11 compiler. Constructor injection was used there, yet the
-wiring code invoking the constructors has quickly become unmaintainable due to
-having 80 or so parameters and there were hundreds of classes. Also, the wiring
-code was single .cpp file compiled in multiple binaries, so soon the #ifdefs
-become undecipherable. Did I mention legacy? No one wanted to hear about large
-refactoring that does not bring direct business value and can destabilize the
-product.
+It is not an argument that dependency injection is always the right answer, or
+that this library is the right fit for every codebase. It is background for
+readers who want to understand the constraints that shaped the project.
+
+I first ran into the DI-container problem on a large legacy project in 2012,
+still using a pre-C++11 compiler. Constructor injection was already in use, but
+the wiring code that invoked those constructors had become unmaintainable:
+classes with 80 or so constructor parameters, hundreds of classes overall, and a
+single wiring `.cpp` compiled into multiple binaries until the `#ifdef` maze
+became unreadable.
+
+Large-scale refactoring was not on the table because it did not map directly to
+business value and carried real delivery risk. The DI work grew out of that
+constraint.
 
 ## First Iteration
 
-To solve the issue with one massive .cpp file constructing massive classes, I've
-developed first version of DI container, using sort of automated setter
-injection. It was intrusive, as each class that had dependencies injected had to
-derive from common base class and the injected dependencies were in smart-ptr
-like classes. This at least solved the problem of having to call gigantic
-constructors. Cycles were supported too, and as a bonus, using smart_ptr's
-operator ->, we were able to assert that proper locks are taken when calling
-from multi-threaded to single-threaded domain. It was also possible to compile
-just the wiring in the unit-test, so there would not be any runtime issues later
-with missing dependencies.
+To get away from one massive `.cpp` constructing massive classes, I built a
+first DI container based on a form of automated setter injection. It was
+intrusive: every class with injected dependencies had to derive from a common
+base, and the injected dependencies lived in smart-pointer-like members.
+
+That version at least removed the need to spell out gigantic constructor calls.
+It also supported cycles and, as a bonus, let us use the smart pointer's
+`operator->` to assert that the correct locks were taken when crossing from a
+multi-threaded domain into a single-threaded one. We could also compile just the
+wiring in a unit test, which helped catch missing dependencies before runtime.
 
 It looked something like this:
 
@@ -52,11 +52,13 @@ It looked something like this:
 
 ## Second Iteration
 
-As part of innovation project, extension was implemented to detect the
-dependencies to be injected from the constructor and to invoke the constructor
-automatically. So the class no longer had to have smart_ptr like members. This
-was still pre-C++11 era, so variadic templates were emulated using generated
-code for 1..N arguments. The above example changed to something like this:
+As part of an internal innovation project, I extended the design to detect
+constructor dependencies automatically and invoke the constructor directly. That
+meant the class no longer needed smart-pointer-like members for injection.
+
+This was still the pre-C++11 era, so variadic templates were emulated with
+generated code for 1..N arguments. The previous example turned into something
+closer to this:
 
 ```c++
     class Service: public IService {
@@ -70,21 +72,25 @@ code for 1..N arguments. The above example changed to something like this:
     };
 ```
 
-INJECT macro was used to declare a typedef that can than be matched to template
-specialization and thus, types of constructor arguments can be retrieved. This
-was still very limited as all instances lifetimes were shared, the container had
-to manage all instances, everything has to be injected using interfaces etc.
+The `INJECT` macro declared a typedef that could then be matched to a template
+specialization, which made constructor-argument types retrievable.
+
+It was still a limited design: all instance lifetimes were shared, the container
+had to manage all instances, and everything had to be injected through
+interfaces.
 
 ## Third Iteration
 
-Interestingly, developers liked to use the second iteration, as it looked
-somehow generic. Problem was that it only looked generic, it was not really
-generic under the hood and it had a very strong limits to what can be done and
-this caused developers to try to fight it, but it was always a lost time as the
-problem was in the core of the library. At that time I've started thinking about
-how to approach this problem with generality it requires, without imposing
-requirements on user-types or their ownership and with some sort of natural
-semantic that developers could expect from C++ library. Instead of requiring of
-all types to be managed by the container and to be retrieved through interfaces,
-the last iteration tries to work with "what is there, in a form that is there,
-in fastest way achievable, in a way developers would be able to write manually".
+Developers liked the second iteration because it looked generic. The problem was
+that it only looked generic. Under the hood it still had strong structural
+limits, and teams kept trying to push through those limits instead of removing
+them at the core.
+
+That is what led to the current direction: a design that tries to stay general
+without imposing ownership rules on user types and without forcing everything
+through framework-specific protocols.
+
+Instead of requiring every type to be fully managed by the container and always
+resolved through interfaces, the current iteration tries to work with what is
+already there, in the form it is already in, with semantics that a C++ developer
+could also write manually.
