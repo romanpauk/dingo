@@ -1,5 +1,7 @@
-file(GLOB_RECURSE MARKDOWN_FILES *.md)
-list(FILTER MARKDOWN_FILES EXCLUDE REGEX ${CMAKE_BINARY_DIR})
+set(MARKDOWN_FILES README.md)
+file(GLOB_RECURSE DOC_MARKDOWN_FILES docs/*.md)
+list(APPEND MARKDOWN_FILES ${DOC_MARKDOWN_FILES})
+list(SORT MARKDOWN_FILES)
 
 # TODO: need to figure out how to force cmake to find the same python version
 # as is in github actions path.

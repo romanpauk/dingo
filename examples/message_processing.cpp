@@ -12,6 +12,7 @@
 
 #include <string>
 
+////
 // Declare Messages and a wrapper that can hold one of the messages,
 // resembling protobuf structure
 struct MessageA {
@@ -52,6 +53,7 @@ struct ProcessorB : IProcessor {
     void process(const MessageWrapper& message) override { message.GetB(); }
 };
 
+////
 int main() {
     using namespace dingo;
 
