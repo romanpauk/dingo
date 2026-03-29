@@ -6,66 +6,66 @@ the feature you care about and start there.
 
 ## Start Here
 
-- [examples/quick.cpp](../examples/quick.cpp): shortest path from registration
-  to resolution
-- [examples/non_intrusive.cpp](../examples/non_intrusive.cpp): registration
-  shape and policy deduction without touching user types
+- [examples/container/quick.cpp](../examples/container/quick.cpp): shortest path
+  from registration to resolution
+- [examples/registration/non_intrusive.cpp](../examples/registration/non_intrusive.cpp):
+  registration shape and policy deduction without touching user types
 
 ## Factories
 
-- [examples/factory_constructor_deduction.cpp](../examples/factory_constructor_deduction.cpp):
+- [examples/factory/factory_constructor_deduction.cpp](../examples/factory/factory_constructor_deduction.cpp):
   what the default constructor selection does
-- [examples/factory_constructor.cpp](../examples/factory_constructor.cpp): how
-  to pin construction to a specific overload
-- [examples/factory_function.cpp](../examples/factory_function.cpp): static
-  member-function-based construction
-- [examples/factory_callable.cpp](../examples/factory_callable.cpp): stateful
-  callable-based construction with injected arguments
+- [examples/factory/factory_constructor.cpp](../examples/factory/factory_constructor.cpp):
+  how to pin construction to a specific overload
+- [examples/factory/factory_function.cpp](../examples/factory/factory_function.cpp):
+  static member-function-based construction
+- [examples/factory/factory_callable.cpp](../examples/factory/factory_callable.cpp):
+  stateful callable-based construction with injected arguments
 
 ## Scopes, Arrays, And Wrappers
 
-- [examples/scope_external.cpp](../examples/scope_external.cpp): use an existing
-  object without moving ownership into the container
-- [examples/scope_unique.cpp](../examples/scope_unique.cpp): create a fresh
-  instance on every resolution
-- [examples/scope_shared.cpp](../examples/scope_shared.cpp): cache and reuse a
-  single stored instance
-- [examples/scope_shared_cyclical.cpp](../examples/scope_shared_cyclical.cpp):
+- [examples/storage/scope_external.cpp](../examples/storage/scope_external.cpp):
+  use an existing object without moving ownership into the container
+- [examples/storage/scope_unique.cpp](../examples/storage/scope_unique.cpp):
+  create a fresh instance on every resolution
+- [examples/storage/scope_shared.cpp](../examples/storage/scope_shared.cpp):
+  cache and reuse a single stored instance
+- [examples/storage/scope_shared_cyclical.cpp](../examples/storage/scope_shared_cyclical.cpp):
   resolve cyclic graphs through two-phase construction
-- [examples/array.cpp](../examples/array.cpp): register and resolve raw arrays
-  plus smart-array forms
-- [examples/variant.cpp](../examples/variant.cpp): construct variants and store
-  registrations whose storage is itself a variant
+- [examples/storage/array.cpp](../examples/storage/array.cpp): register and
+  resolve raw arrays plus smart-array forms
+- [examples/container/variant.cpp](../examples/container/variant.cpp): construct
+  variants and store registrations whose storage is itself a variant
 
 ## Interfaces, Collections, And Dispatch
 
-- [examples/service_locator.cpp](../examples/service_locator.cpp): resolve a
-  concrete type through an interface view
-- [examples/multibindings.cpp](../examples/multibindings.cpp): resolve multiple
-  implementations through a single interface
-- [examples/collection.cpp](../examples/collection.cpp): aggregate a custom
-  collection shape with a custom insertion step
-- [examples/message_processing.cpp](../examples/message_processing.cpp): route
-  messages to indexed handlers
+- [examples/container/service_locator.cpp](../examples/container/service_locator.cpp):
+  resolve a concrete type through an interface view
+- [examples/index/multibindings.cpp](../examples/index/multibindings.cpp):
+  resolve multiple implementations through a single interface
+- [examples/registration/collection.cpp](../examples/registration/collection.cpp):
+  aggregate a custom collection shape with a custom insertion step
+- [examples/index/message_processing.cpp](../examples/index/message_processing.cpp):
+  route messages to indexed handlers
 
 ## Construction Helpers
 
-- [examples/construct.cpp](../examples/construct.cpp): build an unmanaged object
-  from registered dependencies
-- [examples/invoke.cpp](../examples/invoke.cpp): invoke a callable with injected
-  arguments supplied by the container
+- [examples/container/construct.cpp](../examples/container/construct.cpp): build
+  an unmanaged object from registered dependencies
+- [examples/container/invoke.cpp](../examples/container/invoke.cpp): invoke a
+  callable with injected arguments supplied by the container
 
 ## Lookup And Container Topology
 
-- [examples/index.cpp](../examples/index.cpp): resolve by interface and runtime
-  key
-- [examples/nesting.cpp](../examples/nesting.cpp): override registrations in a
-  parent-child container chain
+- [examples/index/index.cpp](../examples/index/index.cpp): resolve by interface
+  and runtime key
+- [examples/container/nesting.cpp](../examples/container/nesting.cpp): override
+  registrations in a parent-child container chain
 
 ## Infrastructure
 
-- [examples/allocator.cpp](../examples/allocator.cpp): provide a custom
-  allocator for container bookkeeping
+- [examples/container/allocator.cpp](../examples/container/allocator.cpp):
+  provide a custom allocator for container bookkeeping
 
 ## Building The Examples
 

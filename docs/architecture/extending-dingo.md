@@ -8,8 +8,8 @@ that matches the problem you are actually solving.
 ### 1. `type_traits`
 
 Specialize `type_traits` in
-[include/dingo/type_traits.h](../../include/dingo/type_traits.h) when you are
-introducing a new wrapper or handle type.
+[include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h) when
+you are introducing a new wrapper or handle type.
 
 `type_traits` defines wrapper semantics:
 
@@ -26,7 +26,7 @@ If Dingo needs to understand the shape of your wrapper, start here.
 ### 2. `storage_traits`
 
 Specialize `storage_traits` in
-[include/dingo/type_storage_traits.h](../../include/dingo/type_storage_traits.h)
+[include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
 when you need to say which result forms a given storage/scope combination can
 expose.
 
@@ -44,7 +44,7 @@ The same wrapper may have different exposure rules under `unique`, `shared`, or
 ### 3. `type_conversion_traits`
 
 Specialize `type_conversion_traits` in
-[include/dingo/type_conversion_traits.h](../../include/dingo/type_conversion_traits.h)
+[include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
 when two wrapper types need a concrete conversion step that is not covered by a
 direct converting constructor or pointer cast.
 
@@ -63,7 +63,7 @@ This is the last-mile "build target wrapper from source wrapper" hook.
 ## Worked Example
 
 The best example is already in
-[test/type_traits.cpp](../../test/type_traits.cpp).
+[test/type/type_traits.cpp](../../test/type/type_traits.cpp).
 
 That test adds:
 
@@ -82,7 +82,7 @@ That file is worth treating as executable documentation.
 ## Interface Storage Rebinding
 
 One extra extension point is
-[include/dingo/interface_storage_traits.h](../../include/dingo/interface_storage_traits.h).
+[include/dingo/resolution/interface_storage_traits.h](../../include/dingo/resolution/interface_storage_traits.h).
 
 The container uses it to decide whether a storage handle can be rebound from a
 concrete leaf type to an interface leaf type. That is the mechanism behind the
@@ -105,7 +105,7 @@ If those five answers are clear, the implementation is usually straightforward.
 
 ## Good Source Companions
 
-- [include/dingo/type_traits.h](../../include/dingo/type_traits.h)
-- [include/dingo/type_storage_traits.h](../../include/dingo/type_storage_traits.h)
-- [include/dingo/type_conversion_traits.h](../../include/dingo/type_conversion_traits.h)
-- [test/type_traits.cpp](../../test/type_traits.cpp)
+- [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
+- [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
+- [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
+- [test/type/type_traits.cpp](../../test/type/type_traits.cpp)

@@ -85,22 +85,11 @@ if(DINGO_DEVELOPMENT_MODE)
     )
 
     set(DINGO_SOURCE_FILES
-        aligned_storage.h
-        allocator.h
-        annotated.h
-        arena_allocator.h
-        class_instance_conversions.h
-        class_instance_factory_i.h
-        class_instance_factory_traits.h
-        class_instance_factory.h
-        class_instance_resolver.h
-        class_traits.h
-        collection_traits.h
         config.h
-        constructor.h
         container.h
         exceptions.h
         factory/callable.h
+        factory/class_traits.h
         factory/constructor_detection.h
         factory/constructor_typedef.h
         factory/constructor.h
@@ -110,29 +99,41 @@ if(DINGO_DEVELOPMENT_MODE)
         index/array.h
         index/map.h
         index/unordered_map.h
-        interface_storage_traits.h
-        normalized_type.h
-        rebind_type.h
-        resettable_i.h
-        resolving_context.h
+        memory/aligned_storage.h
+        memory/allocator.h
+        memory/arena_allocator.h
+        memory/static_allocator.h
+        registration/annotated.h
+        registration/collection_traits.h
+        registration/constructor.h
+        registration/type_registration.h
+        resolution/conversion_cache.h
+        resolution/instance_factory_interface.h
+        resolution/instance_factory_traits.h
+        resolution/instance_factory.h
+        resolution/instance_resolver.h
+        resolution/interface_storage_traits.h
+        resolution/resolving_context.h
+        resolution/type_cache.h
         rtti/static_provider.h
         rtti/rtti.h
         rtti/typeid_provider.h
-        static_allocator.h
-        storage.h
         storage/external.h
+        storage/resettable.h
         storage/shared_cyclical.h
         storage/shared.h
+        storage/storage.h
+        storage/type_storage_traits.h
         storage/unique.h
-        type_cache.h
-        type_conversion.h
-        type_conversion_traits.h
-        type_name.h
-        type_list.h
-        type_map.h
-        type_registration.h
-        type_storage_traits.h
-        type_traits.h
+        type/normalized_type.h
+        type/rebind_type.h
+        type/type_conversion_traits.h
+        type/type_descriptor.h
+        type/type_list.h
+        type/type_map.h
+        type/type_name.h
+        type/type_traits.h
+        resolution/type_conversion.h
     )
 
     set(DINGO_INTERFACE_SOURCES "")
@@ -190,32 +191,33 @@ if(DINGO_DEVELOPMENT_MODE)
 
     if(DINGO_TESTING_ENABLED)
         add_executable(dingo_test
-            test/allocator.cpp
-            test/array.cpp
-            test/annotated.cpp
-            test/assert.h
-            test/class.h
-            test/class_factory.cpp
-            test/construct.cpp
-            test/constructor_detection.cpp
-            test/containers.h
-            test/dingo.cpp
-            test/external.cpp
-            test/index.cpp
-            test/invoke.cpp
-            test/multibindings.cpp
-            test/nested_resolution.cpp
-            test/nesting.cpp
-            test/shared.cpp
-            test/shared_cyclical.cpp
-            test/test.h
-            test/type_name.cpp
-            test/type_registration.cpp
-            test/unique.cpp
-            test/type_traits.cpp
+            test/container/allocator.cpp
+            test/container/construct.cpp
+            test/container/dingo.cpp
+            test/container/invoke.cpp
+            test/container/nested_resolution.cpp
+            test/container/nesting.cpp
+            test/factory/class_factory.cpp
+            test/factory/constructor_detection.cpp
+            test/index/index.cpp
+            test/index/multibindings.cpp
+            test/registration/annotated.cpp
+            test/registration/type_registration.cpp
+            test/storage/array.cpp
+            test/storage/external.cpp
+            test/storage/shared.cpp
+            test/storage/shared_cyclical.cpp
+            test/storage/unique.cpp
+            test/support/assert.h
+            test/support/class.h
+            test/support/containers.h
+            test/support/test.h
+            test/type/type_name.cpp
+            test/type/type_traits.cpp
         )
         add_test(NAME dingo_test COMMAND dingo_test)
         target_link_libraries(dingo_test dingo::dingo gtest_main)
+        target_include_directories(dingo_test PRIVATE test)
 
         target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
 
@@ -227,9 +229,9 @@ if(DINGO_DEVELOPMENT_MODE)
 
     if(DINGO_BENCHMARK_ENABLED)
         add_executable(dingo_benchmark
-            benchmark/basic.cpp
-            benchmark/dingo.cpp
-            benchmark/index.cpp
+            benchmark/container/basic.cpp
+            benchmark/container/dingo.cpp
+            benchmark/index/index.cpp
         )
 
         target_link_libraries(dingo_benchmark
@@ -240,7 +242,7 @@ if(DINGO_DEVELOPMENT_MODE)
         target_link_options(dingo_benchmark PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:LINKER:--demangle>)
 
         if(DINGO_BENCHMARK_FRUIT_ENABLED)
-            target_sources(dingo_benchmark PRIVATE benchmark/fruit.cpp)
+            target_sources(dingo_benchmark PRIVATE benchmark/comparison/fruit.cpp)
             target_link_libraries(dingo_benchmark fruit)
         endif()
     endif()

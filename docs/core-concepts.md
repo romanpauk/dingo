@@ -23,13 +23,13 @@ Common registration policies:
 Many registrations stay short because Dingo can infer the missing policy from
 the rest.
 
-<!-- { include("../examples/non_intrusive.cpp", scope="////", summary="Registration policies example") -->
+<!-- { include("../examples/registration/non_intrusive.cpp", scope="////", summary="Registration policies example") -->
 
 <details>
 <summary>Registration policies example</summary>
 
 Example code included from
-[../examples/non_intrusive.cpp](../examples/non_intrusive.cpp):
+[../examples/registration/non_intrusive.cpp](../examples/registration/non_intrusive.cpp):
 
 ```c++
 container<> container;
@@ -50,8 +50,8 @@ container.register_type<scope<unique>, storage<std::unique_ptr<A>>>();
 
 See:
 
-- [examples/non_intrusive.cpp](../examples/non_intrusive.cpp)
-- [include/dingo/type_registration.h](../include/dingo/type_registration.h)
+- [examples/registration/non_intrusive.cpp](../examples/registration/non_intrusive.cpp)
+- [include/dingo/registration/type_registration.h](../include/dingo/registration/type_registration.h)
 
 ## Scopes And Storage
 
@@ -87,13 +87,13 @@ What you can inject depends on both:
 - some exact wrapper forms intentionally resolve only as the wrapper itself,
   rather than as every possible contained alternative
 
-<!-- { include("../examples/scope_external.cpp", scope="////", summary="External scope example") -->
+<!-- { include("../examples/storage/scope_external.cpp", scope="////", summary="External scope example") -->
 
 <details>
 <summary>External scope example</summary>
 
 Example code included from
-[../examples/scope_external.cpp](../examples/scope_external.cpp):
+[../examples/storage/scope_external.cpp](../examples/storage/scope_external.cpp):
 
 ```c++
 struct A {};
@@ -109,13 +109,13 @@ assert(&container.resolve<A&>() == container.resolve<A*>());
 </details>
 <!-- } -->
 
-<!-- { include("../examples/scope_unique.cpp", scope="////", summary="Unique scope example") -->
+<!-- { include("../examples/storage/scope_unique.cpp", scope="////", summary="Unique scope example") -->
 
 <details>
 <summary>Unique scope example</summary>
 
 Example code included from
-[../examples/scope_unique.cpp](../examples/scope_unique.cpp):
+[../examples/storage/scope_unique.cpp](../examples/storage/scope_unique.cpp):
 
 ```c++
 struct A {};
@@ -129,13 +129,13 @@ container.resolve<A>();
 </details>
 <!-- } -->
 
-<!-- { include("../examples/scope_shared.cpp", scope="////", summary="Shared scope example") -->
+<!-- { include("../examples/storage/scope_shared.cpp", scope="////", summary="Shared scope example") -->
 
 <details>
 <summary>Shared scope example</summary>
 
 Example code included from
-[../examples/scope_shared.cpp](../examples/scope_shared.cpp):
+[../examples/storage/scope_shared.cpp](../examples/storage/scope_shared.cpp):
 
 ```c++
 struct A {};
@@ -149,13 +149,13 @@ assert(container.resolve<A*>() == &container.resolve<A&>());
 </details>
 <!-- } -->
 
-<!-- { include("../examples/scope_shared_cyclical.cpp", scope="////", summary="Shared cyclical scope example") -->
+<!-- { include("../examples/storage/scope_shared_cyclical.cpp", scope="////", summary="Shared cyclical scope example") -->
 
 <details>
 <summary>Shared cyclical scope example</summary>
 
 Example code included from
-[../examples/scope_shared_cyclical.cpp](../examples/scope_shared_cyclical.cpp):
+[../examples/storage/scope_shared_cyclical.cpp](../examples/storage/scope_shared_cyclical.cpp):
 
 ```c++
 // Forward-declare structs that have cyclical dependency
@@ -200,10 +200,10 @@ assert(b.aptr_ == &a);
 
 See:
 
-- [examples/scope_external.cpp](../examples/scope_external.cpp)
-- [examples/scope_unique.cpp](../examples/scope_unique.cpp)
-- [examples/scope_shared.cpp](../examples/scope_shared.cpp)
-- [examples/scope_shared_cyclical.cpp](../examples/scope_shared_cyclical.cpp)
+- [examples/storage/scope_external.cpp](../examples/storage/scope_external.cpp)
+- [examples/storage/scope_unique.cpp](../examples/storage/scope_unique.cpp)
+- [examples/storage/scope_shared.cpp](../examples/storage/scope_shared.cpp)
+- [examples/storage/scope_shared_cyclical.cpp](../examples/storage/scope_shared_cyclical.cpp)
 - [include/dingo/storage/external.h](../include/dingo/storage/external.h)
 - [include/dingo/storage/unique.h](../include/dingo/storage/unique.h)
 - [include/dingo/storage/shared.h](../include/dingo/storage/shared.h)
@@ -228,12 +228,13 @@ The main constraints are:
   `std::unique_ptr<T[]>`
 - shared array storage can hand out stable borrowed views and shared handles
 
-<!-- { include("../examples/array.cpp", scope="////", summary="Array storage and resolution example") -->
+<!-- { include("../examples/storage/array.cpp", scope="////", summary="Array storage and resolution example") -->
 
 <details>
 <summary>Array storage and resolution example</summary>
 
-Example code included from [../examples/array.cpp](../examples/array.cpp):
+Example code included from
+[../examples/storage/array.cpp](../examples/storage/array.cpp):
 
 ```c++
 using namespace dingo;
@@ -276,8 +277,8 @@ shared_container.register_type<scope<shared>, storage<std::shared_ptr<cell[]>>>(
 
 See:
 
-- [examples/array.cpp](../examples/array.cpp)
-- [include/dingo/type_traits.h](../include/dingo/type_traits.h)
+- [examples/storage/array.cpp](../examples/storage/array.cpp)
+- [include/dingo/type/type_traits.h](../include/dingo/type/type_traits.h)
 
 ## Variants
 
@@ -295,12 +296,13 @@ The current rules are narrow on purpose:
 - unique variant storage resolves as the whole variant value or rvalue
 - shared and external variant storage resolve as references to the whole variant
 
-<!-- { include("../examples/variant.cpp", scope="////", summary="Variant construction and storage example") -->
+<!-- { include("../examples/container/variant.cpp", scope="////", summary="Variant construction and storage example") -->
 
 <details>
 <summary>Variant construction and storage example</summary>
 
-Example code included from [../examples/variant.cpp](../examples/variant.cpp):
+Example code included from
+[../examples/container/variant.cpp](../examples/container/variant.cpp):
 
 ```c++
 struct A {
@@ -355,12 +357,12 @@ assert(std::get<A>(ref).value == 9);
 
 See:
 
-- [examples/variant.cpp](../examples/variant.cpp)
-- [test/construct.cpp](../test/construct.cpp)
-- [test/unique.cpp](../test/unique.cpp)
-- [test/shared.cpp](../test/shared.cpp)
-- [test/external.cpp](../test/external.cpp)
-- [include/dingo/type_traits.h](../include/dingo/type_traits.h)
+- [examples/container/variant.cpp](../examples/container/variant.cpp)
+- [test/container/construct.cpp](../test/container/construct.cpp)
+- [test/storage/unique.cpp](../test/storage/unique.cpp)
+- [test/storage/shared.cpp](../test/storage/shared.cpp)
+- [test/storage/external.cpp](../test/storage/external.cpp)
+- [include/dingo/type/type_traits.h](../include/dingo/type/type_traits.h)
 
 ## Factories
 
@@ -419,13 +421,13 @@ Reach for an explicit factory when:
 - construction depends on extra callable state
 - you want to select a specific alternative for variant construction or storage
 
-<!-- { include("../examples/factory_constructor_deduction.cpp", scope="////", summary="Automatically deduced constructor factory") -->
+<!-- { include("../examples/factory/factory_constructor_deduction.cpp", scope="////", summary="Automatically deduced constructor factory") -->
 
 <details>
 <summary>Automatically deduced constructor factory</summary>
 
 Example code included from
-[../examples/factory_constructor_deduction.cpp](../examples/factory_constructor_deduction.cpp):
+[../examples/factory/factory_constructor_deduction.cpp](../examples/factory/factory_constructor_deduction.cpp):
 
 ```c++
 struct A {
@@ -445,13 +447,13 @@ container.register_type<scope<unique>,
 </details>
 <!-- } -->
 
-<!-- { include("../examples/factory_constructor.cpp", scope="////", summary="Explicit constructor selection") -->
+<!-- { include("../examples/factory/factory_constructor.cpp", scope="////", summary="Explicit constructor selection") -->
 
 <details>
 <summary>Explicit constructor selection</summary>
 
 Example code included from
-[../examples/factory_constructor.cpp](../examples/factory_constructor.cpp):
+[../examples/factory/factory_constructor.cpp](../examples/factory/factory_constructor.cpp):
 
 ```c++
 struct A {
@@ -472,13 +474,13 @@ container.register_type<scope<unique>, storage<A>,
 </details>
 <!-- } -->
 
-<!-- { include("../examples/factory_function.cpp", scope="////", summary="Static factory-function example") -->
+<!-- { include("../examples/factory/factory_function.cpp", scope="////", summary="Static factory-function example") -->
 
 <details>
 <summary>Static factory-function example</summary>
 
 Example code included from
-[../examples/factory_function.cpp](../examples/factory_function.cpp):
+[../examples/factory/factory_function.cpp](../examples/factory/factory_function.cpp):
 
 ```c++
 // Declare struct A that has an inaccessible constructor
@@ -499,13 +501,13 @@ container
 </details>
 <!-- } -->
 
-<!-- { include("../examples/factory_callable.cpp", scope="////", summary="Stateful callable factory example") -->
+<!-- { include("../examples/factory/factory_callable.cpp", scope="////", summary="Stateful callable factory example") -->
 
 <details>
 <summary>Stateful callable factory example</summary>
 
 Example code included from
-[../examples/factory_callable.cpp](../examples/factory_callable.cpp):
+[../examples/factory/factory_callable.cpp](../examples/factory/factory_callable.cpp):
 
 ```c++
 struct A {
@@ -528,12 +530,12 @@ assert(container.resolve<A>().value == 4);
 
 See:
 
-- [examples/factory_constructor_deduction.cpp](../examples/factory_constructor_deduction.cpp)
-- [examples/factory_constructor.cpp](../examples/factory_constructor.cpp)
-- [examples/factory_function.cpp](../examples/factory_function.cpp)
-- [examples/factory_callable.cpp](../examples/factory_callable.cpp)
-- [test/constructor_detection.cpp](../test/constructor_detection.cpp)
-- [test/construct.cpp](../test/construct.cpp)
+- [examples/factory/factory_constructor_deduction.cpp](../examples/factory/factory_constructor_deduction.cpp)
+- [examples/factory/factory_constructor.cpp](../examples/factory/factory_constructor.cpp)
+- [examples/factory/factory_function.cpp](../examples/factory/factory_function.cpp)
+- [examples/factory/factory_callable.cpp](../examples/factory/factory_callable.cpp)
+- [test/factory/constructor_detection.cpp](../test/factory/constructor_detection.cpp)
+- [test/container/construct.cpp](../test/container/construct.cpp)
 - [include/dingo/factory/constructor_detection.h](../include/dingo/factory/constructor_detection.h)
 - [include/dingo/factory/constructor.h](../include/dingo/factory/constructor.h)
 - [include/dingo/factory/function.h](../include/dingo/factory/function.h)
@@ -550,13 +552,13 @@ This is the right fit when:
 - concrete implementations should stay hidden behind an interface
 - one concrete type should be resolvable through several interfaces
 
-<!-- { include("../examples/service_locator.cpp", scope="////", summary="Resolve through an interface") -->
+<!-- { include("../examples/container/service_locator.cpp", scope="////", summary="Resolve through an interface") -->
 
 <details>
 <summary>Resolve through an interface</summary>
 
 Example code included from
-[../examples/service_locator.cpp](../examples/service_locator.cpp):
+[../examples/container/service_locator.cpp](../examples/container/service_locator.cpp):
 
 ```c++
 // Interface that will be resolved
@@ -580,7 +582,7 @@ assert(dynamic_cast<A*>(&instance));
 
 See:
 
-- [examples/service_locator.cpp](../examples/service_locator.cpp)
+- [examples/container/service_locator.cpp](../examples/container/service_locator.cpp)
 
 ## Multibindings And Collections
 
@@ -595,13 +597,13 @@ This is a good fit for extension-point style code such as:
 
 The collection can use a standard aggregation rule or a custom one.
 
-<!-- { include("../examples/multibindings.cpp", scope="////", summary="Multibindings example") -->
+<!-- { include("../examples/index/multibindings.cpp", scope="////", summary="Multibindings example") -->
 
 <details>
 <summary>Multibindings example</summary>
 
 Example code included from
-[../examples/multibindings.cpp](../examples/multibindings.cpp):
+[../examples/index/multibindings.cpp](../examples/index/multibindings.cpp):
 
 ```c++
 struct IProcessor {
@@ -628,13 +630,13 @@ container.template resolve<std::vector<IProcessor*>>();
 </details>
 <!-- } -->
 
-<!-- { include("../examples/collection.cpp", scope="////", summary="Custom collection aggregation example") -->
+<!-- { include("../examples/registration/collection.cpp", scope="////", summary="Custom collection aggregation example") -->
 
 <details>
 <summary>Custom collection aggregation example</summary>
 
 Example code included from
-[../examples/collection.cpp](../examples/collection.cpp):
+[../examples/registration/collection.cpp](../examples/registration/collection.cpp):
 
 ```c++
 struct ProcessorBase {
@@ -696,9 +698,9 @@ dispatcher.process(std::string(""));
 
 See:
 
-- [examples/multibindings.cpp](../examples/multibindings.cpp)
-- [examples/collection.cpp](../examples/collection.cpp)
-- [include/dingo/collection_traits.h](../include/dingo/collection_traits.h)
+- [examples/index/multibindings.cpp](../examples/index/multibindings.cpp)
+- [examples/registration/collection.cpp](../examples/registration/collection.cpp)
+- [include/dingo/registration/collection_traits.h](../include/dingo/registration/collection_traits.h)
 
 ## Runtime Model And Error Handling
 

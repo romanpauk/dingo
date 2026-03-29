@@ -9,8 +9,8 @@
 
 #include <dingo/config.h>
 
-#include <dingo/class_traits.h>
-#include <dingo/normalized_type.h>
+#include <dingo/factory/class_traits.h>
+#include <dingo/type/normalized_type.h>
 #include <dingo/factory/constructor_detection.h>
 
 #include <tuple>

@@ -9,10 +9,10 @@
 
 #include <dingo/config.h>
 
-#include <dingo/normalized_type.h>
 #include <dingo/factory/constructor.h>
-#include <dingo/storage.h>
-#include <dingo/type_storage_traits.h>
+#include <dingo/storage/storage.h>
+#include <dingo/storage/type_storage_traits.h>
+#include <dingo/type/normalized_type.h>
 
 namespace dingo {
 struct unique {};

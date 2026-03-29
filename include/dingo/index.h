@@ -9,7 +9,7 @@
 
 #include <dingo/config.h>
 
-#include <dingo/allocator.h>
+#include <dingo/memory/allocator.h>
 #include <dingo/exceptions.h>
 
 #include <tuple>

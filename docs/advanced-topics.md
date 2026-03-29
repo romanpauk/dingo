@@ -20,12 +20,13 @@ Built-in index backends:
 - `std::unordered_map`
 - `std::array`
 
-<!-- { include("../examples/index.cpp", scope="////", summary="Indexed resolution example") -->
+<!-- { include("../examples/index/index.cpp", scope="////", summary="Indexed resolution example") -->
 
 <details>
 <summary>Indexed resolution example</summary>
 
-Example code included from [../examples/index.cpp](../examples/index.cpp):
+Example code included from
+[../examples/index/index.cpp](../examples/index/index.cpp):
 
 ```c++
 struct IAnimal {
@@ -55,13 +56,13 @@ container.template register_indexed_type<
 </details>
 <!-- } -->
 
-<!-- { include("../examples/message_processing.cpp", scope="////", summary="Indexed message dispatch example") -->
+<!-- { include("../examples/index/message_processing.cpp", scope="////", summary="Indexed message dispatch example") -->
 
 <details>
 <summary>Indexed message dispatch example</summary>
 
 Example code included from
-[../examples/message_processing.cpp](../examples/message_processing.cpp):
+[../examples/index/message_processing.cpp](../examples/index/message_processing.cpp):
 
 ```c++
 // Declare Messages and a wrapper that can hold one of the messages,
@@ -110,8 +111,8 @@ struct ProcessorB : IProcessor {
 
 See:
 
-- [examples/index.cpp](../examples/index.cpp)
-- [examples/message_processing.cpp](../examples/message_processing.cpp)
+- [examples/index/index.cpp](../examples/index/index.cpp)
+- [examples/index/message_processing.cpp](../examples/index/message_processing.cpp)
 - [include/dingo/index.h](../include/dingo/index.h)
 - [include/dingo/index/map.h](../include/dingo/index/map.h)
 - [include/dingo/index/unordered_map.h](../include/dingo/index/unordered_map.h)
@@ -127,8 +128,8 @@ lookup would be the wrong abstraction.
 
 See:
 
-- [test/annotated.cpp](../test/annotated.cpp)
-- [include/dingo/annotated.h](../include/dingo/annotated.h)
+- [test/registration/annotated.cpp](../test/registration/annotated.cpp)
+- [include/dingo/registration/annotated.h](../include/dingo/registration/annotated.h)
 
 ## Static And Dynamic Containers
 
@@ -148,10 +149,10 @@ Static containers make sense when:
 
 See:
 
-- [examples/message_processing.cpp](../examples/message_processing.cpp)
+- [examples/index/message_processing.cpp](../examples/index/message_processing.cpp)
 - [include/dingo/container.h](../include/dingo/container.h)
-- [include/dingo/type_map.h](../include/dingo/type_map.h)
-- [include/dingo/type_cache.h](../include/dingo/type_cache.h)
+- [include/dingo/type/type_map.h](../include/dingo/type/type_map.h)
+- [include/dingo/resolution/type_cache.h](../include/dingo/resolution/type_cache.h)
 
 ## Container Nesting
 
@@ -165,12 +166,13 @@ Nesting is most useful for:
 - test-specific replacements
 - local configuration layered on top of a base application container
 
-<!-- { include("../examples/nesting.cpp", scope="////", summary="Nested container override example") -->
+<!-- { include("../examples/container/nesting.cpp", scope="////", summary="Nested container override example") -->
 
 <details>
 <summary>Nested container override example</summary>
 
-Example code included from [../examples/nesting.cpp](../examples/nesting.cpp):
+Example code included from
+[../examples/container/nesting.cpp](../examples/container/nesting.cpp):
 
 ```c++
 struct A {
@@ -206,8 +208,8 @@ assert(nested_container.resolve<B>().value == 1);
 
 See:
 
-- [examples/nesting.cpp](../examples/nesting.cpp)
-- [test/nesting.cpp](../test/nesting.cpp)
+- [examples/container/nesting.cpp](../examples/container/nesting.cpp)
+- [test/container/nesting.cpp](../test/container/nesting.cpp)
 
 ## Custom RTTI
 
@@ -233,13 +235,13 @@ This affects container bookkeeping, not the ownership model of every resolved
 object. A resolved object may still be externally owned or stored in a standard
 smart pointer, depending on its registration.
 
-<!-- { include("../examples/allocator.cpp", scope="////", summary="Custom allocator example") -->
+<!-- { include("../examples/container/allocator.cpp", scope="////", summary="Custom allocator example") -->
 
 <details>
 <summary>Custom allocator example</summary>
 
 Example code included from
-[../examples/allocator.cpp](../examples/allocator.cpp):
+[../examples/container/allocator.cpp](../examples/container/allocator.cpp):
 
 ```c++
 // Define a container with user-provided allocator type
@@ -253,9 +255,9 @@ container<dingo::dynamic_container_traits, std::allocator<char>>
 
 See:
 
-- [examples/allocator.cpp](../examples/allocator.cpp)
-- [include/dingo/allocator.h](../include/dingo/allocator.h)
-- [include/dingo/arena_allocator.h](../include/dingo/arena_allocator.h)
+- [examples/container/allocator.cpp](../examples/container/allocator.cpp)
+- [include/dingo/memory/allocator.h](../include/dingo/memory/allocator.h)
+- [include/dingo/memory/arena_allocator.h](../include/dingo/memory/arena_allocator.h)
 
 ## Runtime Notes
 
