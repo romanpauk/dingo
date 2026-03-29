@@ -2,7 +2,7 @@ function(add_example source)
     get_filename_component(name ${source} NAME_WE)
     add_executable(dingo_example_${name} ${source})
     target_link_libraries(dingo_example_${name} dingo)
-    add_test(NAME dingo_example_${name} COMMAND dingo_example_${name})
+    add_test(NAME dingo_example_${name} COMMAND $<TARGET_FILE:dingo_example_${name}>)
 
     # Force-include windows.h to each example to make sure it builds with windows.h included
     target_compile_options(dingo_example_${name} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
@@ -28,3 +28,4 @@ add_example(scope_shared.cpp)
 add_example(scope_shared_cyclical.cpp)
 add_example(scope_unique.cpp)
 add_example(service_locator.cpp)
+add_example(variant.cpp)
