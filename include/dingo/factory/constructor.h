@@ -12,15 +12,14 @@
 #include <dingo/factory/class_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/factory/constructor_detection.h>
-
-#include <tuple>
+#include <dingo/type/type_list.h>
 
 namespace dingo {
 
 template <typename...> struct constructor;
 
 template <typename T, typename... Args> struct constructor<T(Args...)> {
-    using arguments = std::tuple<Args...>;
+    using arguments = type_list<Args...>;
     static constexpr size_t arity = sizeof...(Args);
     static constexpr bool valid =
         detail::is_list_initializable_v<T, Args...> ||

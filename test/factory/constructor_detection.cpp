@@ -284,7 +284,7 @@ TEST(constructor_detection_test, shared_arg_rvalue_reference) {
     }
 }
 
-TEST(constructor_detection_test, constructor_arguments_tuple) {
+TEST(constructor_detection_test, constructor_arguments_type_list) {
     struct Explicit {
         Explicit(int, float) {}
     };
@@ -293,7 +293,7 @@ TEST(constructor_detection_test, constructor_arguments_tuple) {
     };
 
     static_assert(std::is_same_v<typename constructor<Explicit(int, float)>::arguments,
-                                 std::tuple<int, float>>);
+                                 type_list<int, float>>);
     static_assert(constructor_detection<Detected>::arity == 2);
 }
 

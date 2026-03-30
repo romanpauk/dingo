@@ -58,41 +58,26 @@ constexpr bool matches_exact_lookup(type_descriptor requested_type) {
 }
 } // namespace detail
 
-template <typename RTTI, typename Factory, typename Context>
-void* resolve_address(Factory&, Context&, type_list<>,
-                      const typename RTTI::type_index&, type_descriptor requested_type,
-                      type_descriptor registered_type) {
-    throw detail::make_type_not_convertible_exception(requested_type,
-                                                      registered_type);
-}
-
-template <typename RTTI, typename Factory, typename Context, typename Head>
-void* resolve_address(Factory& factory, Context& context,
-                      type_list<Head>, const typename RTTI::type_index& type,
+template <typename RTTI, typename Factory, typename Context, typename... Types>
+void* resolve_address(Factory& factory, Context& context, type_list<Types...>,
+                      const typename RTTI::type_index& type,
                       type_descriptor requested_type,
                       type_descriptor registered_type) {
-    if (!(RTTI::template get_type_index<lookup_type_t<Head>>() == type))
-        throw detail::make_type_not_convertible_exception(
-            requested_type, registered_type);
-    return factory.template resolve_address<Head>(context, requested_type,
-                                                  registered_type);
-}
+    void* address = nullptr;
+    const bool matched =
+        ((RTTI::template get_type_index<lookup_type_t<Types>>() == type
+              ? (address = factory.template resolve_address<Types>(
+                     context, requested_type, registered_type),
+                 true)
+              : false) ||
+         ...);
 
-// TODO: instead of StorageTag, rvalue reference can be used to determine
-// move-ability
-template <typename RTTI, typename Factory, typename Context, typename Head,
-          typename Next, typename... Tail>
-void* resolve_address(Factory& factory, Context& context,
-                      type_list<Head, Next, Tail...>, const typename RTTI::type_index& type,
-                      type_descriptor requested_type,
-                      type_descriptor registered_type) {
-    if (RTTI::template get_type_index<lookup_type_t<Head>>() == type) {
-        return factory.template resolve_address<Head>(context, requested_type,
-                                                      registered_type);
-    } else {
-        return resolve_address<RTTI>(factory, context, type_list<Next, Tail...>{},
-                                     type, requested_type, registered_type);
+    if (!matched) {
+        throw detail::make_type_not_convertible_exception(requested_type,
+                                                          registered_type);
     }
+
+    return address;
 }
 
 // TODO: the container here is just for RTTI, but it is needed to get the
