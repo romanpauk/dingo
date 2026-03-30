@@ -212,6 +212,7 @@ if(DINGO_DEVELOPMENT_MODE)
             test/support/class.h
             test/support/containers.h
             test/support/test.h
+            test/type/type_list.cpp
             test/type/type_name.cpp
             test/type/type_traits.cpp
         )
