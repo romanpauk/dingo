@@ -287,14 +287,6 @@ struct wrapper_rebind_leaf<
 template <typename Type, typename U>
 using wrapper_rebind_leaf_t = typename wrapper_rebind_leaf<Type, U>::type;
 
-template <typename Type> struct wrapper_lvalue_reference_type {
-    using type = type_list<Type&>;
-};
-
-template <typename Type> struct wrapper_pointer_type {
-    using type = type_list<Type*>;
-};
-
 template <typename Handle, typename T, typename U, typename = void>
 struct smart_array_pointer_types {
     using type = type_list<U*, Handle*>;
@@ -308,38 +300,38 @@ struct smart_array_pointer_types<
                   Handle*>;
 };
 
-template <typename Type> struct copyable_wrapper_value_type {
-    using type = std::conditional_t<std::is_copy_constructible_v<Type>,
-                                    type_list<Type>, type_list<>>;
+template <typename Handle, typename = void>
+struct wrapper_storage_types_impl {
+    using lvalue_reference_types = type_list<Handle&>;
+    using pointer_types = type_list<Handle*>;
+    using copyable_value_types = std::conditional_t<
+        std::is_copy_constructible_v<Handle>, type_list<Handle>, type_list<>>;
 };
 
-template <template <typename> class TypeBuilder, typename Type, typename = void>
-struct recursive_wrapper_types {
-    using type = typename TypeBuilder<Type>::type;
-};
+template <typename Handle>
+struct wrapper_storage_types_impl<
+    Handle, std::enable_if_t<type_traits<Handle>::enabled &&
+                             type_traits<Handle>::is_pointer_like>> {
+  private:
+    // Walk the wrapper chain once and collect all derived interface types
+    // together instead of recursing over the same chain separately for each
+    // result list.
+    using next =
+        wrapper_storage_types_impl<typename type_traits<Handle>::value_type>;
+    using copyable_handle_types = std::conditional_t<
+        std::is_copy_constructible_v<Handle>, type_list<Handle>, type_list<>>;
 
-template <template <typename> class TypeBuilder, typename Type>
-struct recursive_wrapper_types<
-    TypeBuilder,
-    Type, std::enable_if_t<type_traits<Type>::enabled &&
-                           type_traits<Type>::is_pointer_like>> {
-    using type = type_list_cat_t<
-        typename TypeBuilder<Type>::type,
-        typename recursive_wrapper_types<
-            TypeBuilder,
-            typename type_traits<Type>::value_type>::type>;
-};
-
-template <typename Handle> struct wrapper_storage_types {
+  public:
     using lvalue_reference_types =
-        typename recursive_wrapper_types<wrapper_lvalue_reference_type,
-                                         Handle>::type;
+        type_list_cat_t<type_list<Handle&>, typename next::lvalue_reference_types>;
     using pointer_types =
-        typename recursive_wrapper_types<wrapper_pointer_type, Handle>::type;
-    using copyable_value_types =
-        typename recursive_wrapper_types<copyable_wrapper_value_type,
-                                         Handle>::type;
+        type_list_cat_t<type_list<Handle*>, typename next::pointer_types>;
+    using copyable_value_types = type_list_cat_t<
+        copyable_handle_types, typename next::copyable_value_types>;
 };
+
+template <typename Handle>
+using wrapper_storage_types = wrapper_storage_types_impl<Handle>;
 
 template <typename Array, typename Deleter>
 struct is_array_like_type<
