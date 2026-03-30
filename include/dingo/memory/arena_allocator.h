@@ -114,7 +114,8 @@ public:
 
     template< typename T, std::size_t N > arena(T(&buffer)[N], std::size_t block_size = N * sizeof(T))
         : arena(reinterpret_cast<uint8_t*>(buffer), N * sizeof(T), block_size) {
-        static_assert(std::is_trivial_v<T>);
+        static_assert(std::is_trivially_default_constructible_v<T> &&
+                      std::is_trivially_copyable_v<T>);
     }
 
     template< typename T > arena(T& buffer, std::size_t block_size = sizeof(T))
@@ -238,4 +239,3 @@ bool operator != (const arena_allocator<T, Arena, AlignmentT>& x, const arena_al
 }
 
 }
-

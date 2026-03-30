@@ -287,14 +287,22 @@ Dingo handles variants in two distinct places:
 - `construct<std::variant<A, B>, constructor_detection<A>>()` constructs the
   variant by selecting `A` as the alternative to build
 - `register_type<..., storage<std::variant<A, B>>, factory<...>>()` lets the
-  container store and later resolve the whole variant value
+  container store the variant and later resolve either the whole variant or its
+  currently held alternative
 
 The current rules are narrow on purpose:
 
 - the selected alternative must appear exactly once in the variant type
-- resolution is for the whole variant, not for `A` or `B` directly
-- unique variant storage resolves as the whole variant value or rvalue
-- shared and external variant storage resolve as references to the whole variant
+- the whole variant remains resolvable
+- uniquely occurring alternatives are also resolvable from variant storage
+- if a requested alternative is published but the current instance holds a
+  different alternative, resolution fails as `type_not_convertible_exception`
+- duplicate alternative types are rejected at compile time for direct resolution
+- unique variant storage resolves the whole variant as a value or rvalue, and a
+  held alternative as a value or rvalue
+- shared and external variant storage resolve the whole variant as values,
+  references, or pointers, and a held alternative as values, references, or
+  pointers
 
 <!-- { include("../examples/container/variant.cpp", scope="////", summary="Variant construction and storage example") -->
 
@@ -324,22 +332,27 @@ construct_container.register_type<scope<external>, storage<float>>(3.5f);
     construct_container
         .construct<std::variant<A, B>, constructor_detection<A>>();
 assert(std::holds_alternative<A>(detected));
-assert(std::get<A>(detected).value == 7);
 
 [[maybe_unused]] auto explicit_ctor =
     construct_container.construct<std::variant<A, B>, constructor<B(float)>>();
 assert(std::holds_alternative<B>(explicit_ctor));
-assert(std::get<B>(explicit_ctor).value == 3.5f);
 
 container<> unique_container;
 unique_container.register_type<scope<unique>, storage<int>>();
 unique_container.register_type<scope<unique>, storage<std::variant<A, B>>,
                                factory<constructor_detection<A>>>();
 
-// Resolve the whole variant value from variant storage.
+// Resolve either the whole variant or its currently held alternative.
 [[maybe_unused]] auto value = unique_container.resolve<std::variant<A, B>>();
 assert(std::holds_alternative<A>(value));
-assert(std::get<A>(value).value == 0);
+
+[[maybe_unused]] auto selected = unique_container.resolve<A>();
+
+try {
+    unique_container.resolve<B>();
+    assert(false);
+} catch (const type_not_convertible_exception&) {
+}
 
 std::variant<A, B> existing(std::in_place_type<A>, 9);
 container<> external_container;
@@ -349,7 +362,9 @@ external_container.register_type<scope<external>, storage<std::variant<A, B>&>>(
 [[maybe_unused]] auto& ref = external_container.resolve<std::variant<A, B>&>();
 assert(&ref == &existing);
 assert(std::holds_alternative<A>(ref));
-assert(std::get<A>(ref).value == 9);
+
+[[maybe_unused]] auto& held = external_container.resolve<A&>();
+assert(&held == &std::get<A>(existing));
 ```
 
 </details>

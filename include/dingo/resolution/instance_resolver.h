@@ -284,6 +284,10 @@ struct instance_resolver<RTTI, Type, Storage, unique> {
         return storage.resolve(context, container);
     }
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
     template <typename Target, typename Source, typename Context,
               typename Container, typename Factory>
     void* resolve_address(Context& context, Container& container,
@@ -303,6 +307,9 @@ struct instance_resolver<RTTI, Type, Storage, unique> {
         return ::dingo::get_address(
             context, std::forward<decltype(instance)>(instance));
     }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
   private:
     template <typename T, typename Context, typename... Args>

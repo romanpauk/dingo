@@ -112,7 +112,8 @@ If you are working from a checkout, the top-level CMake project also supports
 - Non-intrusive registration of ordinary C++ types
 - Explicit control over lifetime and stored representation
 - Array support for raw arrays and smart-pointer-backed arrays
-- Explicit variant construction and variant storage resolution
+- Explicit variant construction plus whole-variant or held-alternative
+  resolution
 - Constructor deduction with explicit factory overrides when needed
 - Interface bindings and multibindings
 - Indexed and annotated resolution

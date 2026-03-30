@@ -7,6 +7,7 @@
 
 #include <dingo/container.h>
 #include <dingo/factory/constructor.h>
+#include <dingo/factory/function.h>
 #include <dingo/type/type_conversion_traits.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
@@ -38,7 +39,72 @@ struct pointer_conversion_owner : pointer_conversion_view {
 
     pointer_conversion_view* view_;
 };
+
+struct shared_ptr_variant_a {
+    explicit shared_ptr_variant_a(int init) : value(init) {}
+    int value;
+};
+
+struct shared_ptr_variant_b {
+    explicit shared_ptr_variant_b(float init) : value(init) {}
+    float value;
+};
+
+struct custom_sum_a {
+    explicit custom_sum_a(int init) : value(init) {}
+    int value;
+};
+
+struct custom_sum_b {
+    explicit custom_sum_b(float init) : value(init) {}
+    float value;
+};
+
+using shared_ptr_variant =
+    std::variant<shared_ptr_variant_a, shared_ptr_variant_b>;
+
+struct custom_sum {
+    std::variant<custom_sum_a, custom_sum_b> value;
+};
+
+inline std::shared_ptr<shared_ptr_variant> make_shared_ptr_variant(int value) {
+    return std::make_shared<shared_ptr_variant>(
+        std::in_place_type<shared_ptr_variant_a>, value);
+}
+
+inline std::unique_ptr<shared_ptr_variant> make_unique_ptr_variant(int value) {
+    return std::make_unique<shared_ptr_variant>(
+        std::in_place_type<shared_ptr_variant_a>, value);
+}
+
+inline std::shared_ptr<custom_sum> make_shared_custom_sum(int value) {
+    return std::make_shared<custom_sum>(
+        custom_sum{std::variant<custom_sum_a, custom_sum_b>(
+            std::in_place_type<custom_sum_a>, value)});
+}
 } // namespace
+
+template <> struct alternative_type_traits<custom_sum> {
+    static constexpr bool enabled = true;
+
+    using alternatives = type_list<custom_sum_a, custom_sum_b>;
+
+    template <typename Selected, typename Value>
+    static custom_sum wrap(Value&& value) {
+        return custom_sum{
+            std::variant<custom_sum_a, custom_sum_b>(
+                std::in_place_type<Selected>, std::forward<Value>(value))};
+    }
+
+    template <typename Selected> static Selected* get(custom_sum& value) {
+        return std::get_if<Selected>(&value.value);
+    }
+
+    template <typename Selected>
+    static const Selected* get(const custom_sum& value) {
+        return std::get_if<Selected>(&value.value);
+    }
+};
 
 template <>
 struct type_conversion_traits<pointer_conversion_view*,
@@ -360,9 +426,253 @@ TYPED_TEST(shared_test, variant_factory_selects_alternative) {
         scope<shared>, storage<std::variant<A, B>>,
         factory<constructor_detection<A>>>();
 
+    auto whole = container.template resolve<std::variant<A, B>>();
+    ASSERT_TRUE(std::holds_alternative<A>(whole));
+    EXPECT_EQ(std::get<A>(whole).value, 0);
+
     auto& value = container.template resolve<std::variant<A, B>&>();
     ASSERT_TRUE(std::holds_alternative<A>(value));
     EXPECT_EQ(std::get<A>(value).value, 0);
+
+    auto copy = container.template resolve<A>();
+    EXPECT_EQ(copy.value, 0);
+
+    auto& selected = container.template resolve<A&>();
+    EXPECT_EQ(selected.value, 0);
+    EXPECT_EQ(&selected, &std::get<A>(value));
+
+    auto& selected_const = container.template resolve<const A&>();
+    EXPECT_EQ(selected_const.value, 0);
+    EXPECT_EQ(&selected_const, &std::get<A>(value));
+
+    auto* selected_ptr = container.template resolve<A*>();
+    ASSERT_NE(selected_ptr, nullptr);
+    EXPECT_EQ(selected_ptr, &std::get<A>(value));
+
+    auto* selected_const_ptr = container.template resolve<const A*>();
+    ASSERT_NE(selected_const_ptr, nullptr);
+    EXPECT_EQ(selected_const_ptr, &std::get<A>(value));
+
+    ASSERT_THROW(container.template resolve<B>(), type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<B&>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<B*>(),
+                 type_not_convertible_exception);
+}
+
+TYPED_TEST(shared_test, variant_explicit_interfaces_override_defaults) {
+    using container_type = TypeParam;
+
+    struct A {
+        explicit A(int init) : value(init) {}
+        int value;
+    };
+    struct B {
+        explicit B(float init) : value(init) {}
+        float value;
+    };
+
+    container_type container;
+    container.template register_type<scope<unique>, storage<int>>();
+    container.template register_type<
+        scope<shared>, storage<std::variant<A, B>>,
+        factory<constructor_detection<A>>, interfaces<A>>();
+
+    auto copy = container.template resolve<A>();
+    EXPECT_EQ(copy.value, 0);
+
+    auto& selected = container.template resolve<A&>();
+    EXPECT_EQ(selected.value, 0);
+
+    auto* selected_ptr = container.template resolve<A*>();
+    ASSERT_NE(selected_ptr, nullptr);
+    EXPECT_EQ(selected_ptr->value, 0);
+
+    ASSERT_THROW((container.template resolve<std::variant<A, B>>()),
+                 type_not_found_exception);
+    ASSERT_THROW((container.template resolve<std::variant<A, B>&>()),
+                 type_not_found_exception);
+    ASSERT_THROW((container.template resolve<std::variant<A, B>*>()),
+                 type_not_found_exception);
+    ASSERT_THROW(container.template resolve<B>(), type_not_found_exception);
+}
+
+TYPED_TEST(shared_test, custom_alternative_type_factory_selects_alternative) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<scope<unique>, storage<int>>();
+    container.template register_type<scope<shared>, storage<custom_sum>,
+                                     factory<constructor_detection<custom_sum_a>>>();
+
+    auto whole = container.template resolve<custom_sum>();
+    ASSERT_TRUE(std::holds_alternative<custom_sum_a>(whole.value));
+    EXPECT_EQ(std::get<custom_sum_a>(whole.value).value, 0);
+
+    auto& value = container.template resolve<custom_sum&>();
+    ASSERT_TRUE(std::holds_alternative<custom_sum_a>(value.value));
+    EXPECT_EQ(std::get<custom_sum_a>(value.value).value, 0);
+
+    auto copy = container.template resolve<custom_sum_a>();
+    EXPECT_EQ(copy.value, 0);
+
+    auto& selected = container.template resolve<custom_sum_a&>();
+    EXPECT_EQ(selected.value, 0);
+    EXPECT_EQ(&selected, &std::get<custom_sum_a>(value.value));
+
+    auto* selected_ptr = container.template resolve<custom_sum_a*>();
+    ASSERT_NE(selected_ptr, nullptr);
+    EXPECT_EQ(selected_ptr, &std::get<custom_sum_a>(value.value));
+
+    ASSERT_THROW(container.template resolve<custom_sum_b>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<custom_sum_b&>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<custom_sum_b*>(),
+                 type_not_convertible_exception);
+}
+
+TYPED_TEST(shared_test, shared_ptr_variant_factory_selects_alternative) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<scope<unique>, storage<int>>();
+    container.template register_type<
+        scope<shared>, storage<std::shared_ptr<shared_ptr_variant>>,
+        factory<function<&make_shared_ptr_variant>>>();
+
+    auto whole = container.template resolve<shared_ptr_variant>();
+    ASSERT_TRUE(std::holds_alternative<shared_ptr_variant_a>(whole));
+    EXPECT_EQ(std::get<shared_ptr_variant_a>(whole).value, 0);
+
+    auto& value = container.template resolve<shared_ptr_variant&>();
+    ASSERT_TRUE(std::holds_alternative<shared_ptr_variant_a>(value));
+    EXPECT_EQ(std::get<shared_ptr_variant_a>(value).value, 0);
+
+    auto copy = container.template resolve<shared_ptr_variant_a>();
+    EXPECT_EQ(copy.value, 0);
+
+    auto& selected = container.template resolve<shared_ptr_variant_a&>();
+    EXPECT_EQ(selected.value, 0);
+    EXPECT_EQ(&selected, &std::get<shared_ptr_variant_a>(value));
+
+    auto* selected_ptr = container.template resolve<shared_ptr_variant_a*>();
+    ASSERT_NE(selected_ptr, nullptr);
+    EXPECT_EQ(selected_ptr, &std::get<shared_ptr_variant_a>(value));
+
+    ASSERT_THROW(container.template resolve<shared_ptr_variant_b>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<shared_ptr_variant_b&>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<shared_ptr_variant_b*>(),
+                 type_not_convertible_exception);
+}
+
+TYPED_TEST(shared_test, shared_ptr_custom_sum_factory_selects_alternative) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<scope<unique>, storage<int>>();
+    container.template register_type<scope<shared>, storage<std::shared_ptr<custom_sum>>,
+                                     factory<function<&make_shared_custom_sum>>>();
+
+    auto whole = container.template resolve<custom_sum>();
+    ASSERT_TRUE(std::holds_alternative<custom_sum_a>(whole.value));
+    EXPECT_EQ(std::get<custom_sum_a>(whole.value).value, 0);
+
+    auto& value = container.template resolve<custom_sum&>();
+    ASSERT_TRUE(std::holds_alternative<custom_sum_a>(value.value));
+    EXPECT_EQ(std::get<custom_sum_a>(value.value).value, 0);
+
+    auto copy = container.template resolve<custom_sum_a>();
+    EXPECT_EQ(copy.value, 0);
+
+    auto& selected = container.template resolve<custom_sum_a&>();
+    EXPECT_EQ(selected.value, 0);
+    EXPECT_EQ(&selected, &std::get<custom_sum_a>(value.value));
+
+    auto* selected_ptr = container.template resolve<custom_sum_a*>();
+    ASSERT_NE(selected_ptr, nullptr);
+    EXPECT_EQ(selected_ptr, &std::get<custom_sum_a>(value.value));
+
+    ASSERT_THROW(container.template resolve<custom_sum_b>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<custom_sum_b&>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<custom_sum_b*>(),
+                 type_not_convertible_exception);
+}
+
+TYPED_TEST(shared_test, unique_ptr_variant_factory_selects_alternative) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<scope<unique>, storage<int>>();
+    container.template register_type<
+        scope<shared>, storage<std::unique_ptr<shared_ptr_variant>>,
+        factory<function<&make_unique_ptr_variant>>>();
+
+    auto whole = container.template resolve<shared_ptr_variant>();
+    ASSERT_TRUE(std::holds_alternative<shared_ptr_variant_a>(whole));
+    EXPECT_EQ(std::get<shared_ptr_variant_a>(whole).value, 0);
+
+    auto& value = container.template resolve<shared_ptr_variant&>();
+    ASSERT_TRUE(std::holds_alternative<shared_ptr_variant_a>(value));
+    EXPECT_EQ(std::get<shared_ptr_variant_a>(value).value, 0);
+
+    auto copy = container.template resolve<shared_ptr_variant_a>();
+    EXPECT_EQ(copy.value, 0);
+
+    auto& selected = container.template resolve<shared_ptr_variant_a&>();
+    EXPECT_EQ(selected.value, 0);
+    EXPECT_EQ(&selected, &std::get<shared_ptr_variant_a>(value));
+
+    auto* selected_ptr = container.template resolve<shared_ptr_variant_a*>();
+    ASSERT_NE(selected_ptr, nullptr);
+    EXPECT_EQ(selected_ptr, &std::get<shared_ptr_variant_a>(value));
+
+    ASSERT_THROW(container.template resolve<shared_ptr_variant_b>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<shared_ptr_variant_b&>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<shared_ptr_variant_b*>(),
+                 type_not_convertible_exception);
+}
+
+TYPED_TEST(shared_test, unique_ptr_variant_direct_construction_selects_alternative) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<scope<unique>, storage<int>>();
+    container.template register_type<
+        scope<shared>, storage<std::unique_ptr<shared_ptr_variant>>,
+        factory<constructor_detection<shared_ptr_variant_a>>>();
+
+    auto whole = container.template resolve<shared_ptr_variant>();
+    ASSERT_TRUE(std::holds_alternative<shared_ptr_variant_a>(whole));
+    EXPECT_EQ(std::get<shared_ptr_variant_a>(whole).value, 0);
+
+    auto& value = container.template resolve<shared_ptr_variant&>();
+    ASSERT_TRUE(std::holds_alternative<shared_ptr_variant_a>(value));
+    EXPECT_EQ(std::get<shared_ptr_variant_a>(value).value, 0);
+
+    auto copy = container.template resolve<shared_ptr_variant_a>();
+    EXPECT_EQ(copy.value, 0);
+
+    auto& selected = container.template resolve<shared_ptr_variant_a&>();
+    EXPECT_EQ(selected.value, 0);
+    EXPECT_EQ(&selected, &std::get<shared_ptr_variant_a>(value));
+
+    auto* selected_ptr = container.template resolve<shared_ptr_variant_a*>();
+    ASSERT_NE(selected_ptr, nullptr);
+    EXPECT_EQ(selected_ptr, &std::get<shared_ptr_variant_a>(value));
+
+    ASSERT_THROW(container.template resolve<shared_ptr_variant_b>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<shared_ptr_variant_b&>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<shared_ptr_variant_b*>(),
+                 type_not_convertible_exception);
 }
 
 TYPED_TEST(shared_test, shared_multiple) {

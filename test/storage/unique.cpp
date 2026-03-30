@@ -19,6 +19,44 @@
 #include "support/test.h"
 
 namespace dingo {
+namespace {
+struct custom_sum_a {
+    explicit custom_sum_a(int init) : value(init) {}
+    int value;
+};
+
+struct custom_sum_b {
+    explicit custom_sum_b(float init) : value(init) {}
+    float value;
+};
+
+struct custom_sum {
+    std::variant<custom_sum_a, custom_sum_b> value;
+};
+} // namespace
+
+template <> struct alternative_type_traits<custom_sum> {
+    static constexpr bool enabled = true;
+
+    using alternatives = type_list<custom_sum_a, custom_sum_b>;
+
+    template <typename Selected, typename Value>
+    static custom_sum wrap(Value&& value) {
+        return custom_sum{
+            std::variant<custom_sum_a, custom_sum_b>(
+                std::in_place_type<Selected>, std::forward<Value>(value))};
+    }
+
+    template <typename Selected> static Selected* get(custom_sum& value) {
+        return std::get_if<Selected>(&value.value);
+    }
+
+    template <typename Selected>
+    static const Selected* get(const custom_sum& value) {
+        return std::get_if<Selected>(&value.value);
+    }
+};
+
 template <typename T> struct unique_test : public test<T> {};
 TYPED_TEST_SUITE(unique_test, container_types, );
 
@@ -240,10 +278,79 @@ TYPED_TEST(unique_test, variant_factory_selects_alternative) {
     ASSERT_TRUE(std::holds_alternative<A>(moved));
     EXPECT_EQ(std::get<A>(moved).value, 0);
 
-    AssertTypeNotFound<
-        std::variant<A, B>,
-        type_list<A, A&&, A*, B, B&&, B*>>(
-        container);
+    auto selected = container.template resolve<A>();
+    EXPECT_EQ(selected.value, 0);
+
+    auto selected_const = container.template resolve<const A>();
+    EXPECT_EQ(selected_const.value, 0);
+
+    auto selected_moved = container.template resolve<A&&>();
+    EXPECT_EQ(selected_moved.value, 0);
+
+    auto selected_const_moved = container.template resolve<const A&&>();
+    EXPECT_EQ(selected_const_moved.value, 0);
+
+    ASSERT_THROW(container.template resolve<B>(), type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<B&&>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<A*>(), type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<B*>(), type_not_convertible_exception);
+}
+
+TYPED_TEST(unique_test, variant_explicit_interfaces_override_defaults) {
+    using container_type = TypeParam;
+
+    struct A {
+        explicit A(int init) : value(init) {}
+        int value;
+    };
+    struct B {
+        explicit B(float init) : value(init) {}
+        float value;
+    };
+
+    container_type container;
+    container.template register_type<scope<unique>, storage<int>>();
+    container.template register_type<
+        scope<unique>, storage<std::variant<A, B>>,
+        factory<constructor_detection<A>>, interfaces<A>>();
+
+    auto selected = container.template resolve<A>();
+    EXPECT_EQ(selected.value, 0);
+
+    ASSERT_THROW((container.template resolve<std::variant<A, B>>()),
+                 type_not_found_exception);
+    ASSERT_THROW(container.template resolve<B>(), type_not_found_exception);
+}
+
+TYPED_TEST(unique_test, custom_alternative_type_factory_selects_alternative) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<scope<unique>, storage<int>>();
+    container.template register_type<scope<unique>, storage<custom_sum>,
+                                     factory<constructor_detection<custom_sum_a>>>();
+
+    auto whole = container.template resolve<custom_sum>();
+    ASSERT_TRUE(std::holds_alternative<custom_sum_a>(whole.value));
+    EXPECT_EQ(std::get<custom_sum_a>(whole.value).value, 0);
+
+    auto moved = container.template resolve<custom_sum&&>();
+    ASSERT_TRUE(std::holds_alternative<custom_sum_a>(moved.value));
+    EXPECT_EQ(std::get<custom_sum_a>(moved.value).value, 0);
+
+    auto selected = container.template resolve<custom_sum_a>();
+    EXPECT_EQ(selected.value, 0);
+
+    auto selected_moved = container.template resolve<custom_sum_a&&>();
+    EXPECT_EQ(selected_moved.value, 0);
+
+    ASSERT_THROW(container.template resolve<custom_sum_b>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<custom_sum_b&&>(),
+                 type_not_convertible_exception);
+    ASSERT_THROW(container.template resolve<custom_sum_a*>(),
+                 type_not_convertible_exception);
 }
 
 // TODO: shared_ptr needs to be passed as &&

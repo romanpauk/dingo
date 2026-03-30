@@ -35,7 +35,8 @@ the feature you care about and start there.
 - [examples/storage/array.cpp](../examples/storage/array.cpp): register and
   resolve raw arrays plus smart-array forms
 - [examples/container/variant.cpp](../examples/container/variant.cpp): construct
-  variants and store registrations whose storage is itself a variant
+  variants and resolve either the whole variant or its held alternative from
+  variant storage
 
 ## Interfaces, Collections, And Dispatch
 

@@ -58,28 +58,131 @@ struct construction_traits {
     static constexpr bool enabled = false;
 };
 
+template <typename T, typename = void> struct alternative_type_traits {
+    static constexpr bool enabled = false;
+};
+
+template <typename T>
+inline constexpr bool is_alternative_type_v =
+    alternative_type_traits<std::remove_cv_t<T>>::enabled;
+
 namespace detail {
-template <typename Variant, typename Selected> struct variant_alternative_count;
+template <typename List, typename Selected> struct type_list_count;
 
 template <typename Selected, typename... Alternatives>
-struct variant_alternative_count<std::variant<Alternatives...>, Selected>
+struct type_list_count<type_list<Alternatives...>, Selected>
     : std::integral_constant<size_t,
                              (0u + ... + (std::is_same_v<Selected, Alternatives> ? 1u
                                                                                  : 0u))> {};
+
+template <typename List> struct type_list_has_duplicates;
+
+template <typename... Alternatives>
+struct type_list_has_duplicates<type_list<Alternatives...>>
+    : std::bool_constant<
+          ((type_list_count<type_list<Alternatives...>, Alternatives>::value > 1) ||
+           ...)> {};
+
+template <typename Type, typename = void>
+struct alternative_type_alternatives {};
+
+template <typename Type>
+struct alternative_type_alternatives<
+    Type,
+    std::enable_if_t<alternative_type_traits<std::remove_cv_t<Type>>::enabled>> {
+    using type = typename alternative_type_traits<std::remove_cv_t<Type>>::alternatives;
+
+    static_assert(
+        !type_list_has_duplicates<type>::value,
+        "alternative_type_traits<T>::alternatives must not contain duplicate types");
+};
+
+template <typename Type>
+using alternative_type_alternatives_t =
+    typename alternative_type_alternatives<Type>::type;
+
+template <typename Type, typename Selected, typename = void>
+struct alternative_type_count : std::integral_constant<size_t, 0> {};
+
+template <typename Type, typename Selected>
+struct alternative_type_count<
+    Type, Selected,
+    std::enable_if_t<alternative_type_traits<std::remove_cv_t<Type>>::enabled>>
+    : type_list_count<alternative_type_alternatives_t<Type>,
+                      std::remove_cv_t<Selected>> {};
+
+template <typename Type, typename = void>
+struct alternative_type_interface_types {};
+
+template <typename Type>
+struct alternative_type_interface_types<
+    Type,
+    std::enable_if_t<alternative_type_traits<std::remove_cv_t<Type>>::enabled>> {
+    using type =
+        type_list_cat_t<type_list<std::remove_cv_t<Type>>,
+                        alternative_type_alternatives_t<Type>>;
+};
 } // namespace detail
 
-template <typename... Alternatives, typename Selected>
-struct construction_traits<
-    std::variant<Alternatives...>, Selected,
-    std::enable_if_t<
-        detail::variant_alternative_count<std::variant<Alternatives...>,
-                                          Selected>::value == 1>> {
+template <typename... Alternatives>
+struct alternative_type_traits<std::variant<Alternatives...>> {
     static constexpr bool enabled = true;
 
-    using type = std::variant<Alternatives...>;
+    using alternatives = type_list<Alternatives...>;
+
+    template <typename Selected, typename Value>
+    static std::variant<Alternatives...> wrap(Value&& value) {
+        return std::variant<Alternatives...>(std::in_place_type<Selected>,
+                                             std::forward<Value>(value));
+    }
+
+    template <typename Selected>
+    static Selected* get(std::variant<Alternatives...>& value) {
+        return std::get_if<Selected>(&value);
+    }
+
+    template <typename Selected>
+    static const Selected* get(const std::variant<Alternatives...>& value) {
+        return std::get_if<Selected>(&value);
+    }
+};
+
+template <typename Type, typename Interface>
+inline constexpr bool is_alternative_type_interface_compatible_v =
+    detail::alternative_type_count<std::remove_cv_t<Type>,
+                                   std::remove_cv_t<Interface>>::value == 1;
+
+template <typename Type, typename Selected>
+struct construction_traits<
+    Type, Selected,
+    std::enable_if_t<is_alternative_type_v<Type> &&
+                     (detail::alternative_type_count<Type, Selected>::value ==
+                      1)>> {
+    static constexpr bool enabled = true;
+
+    using type = std::remove_cv_t<Type>;
 
     template <typename Value> static type wrap(Value&& value) {
-        return type(std::in_place_type<Selected>, std::forward<Value>(value));
+        return alternative_type_traits<type>::template wrap<Selected>(
+            std::forward<Value>(value));
+    }
+};
+
+template <typename Type, typename Selected>
+struct construction_traits<
+    Type, Selected,
+    std::enable_if_t<type_traits<Type>::enabled && !std::is_pointer_v<Type> &&
+                     construction_traits<typename type_traits<Type>::value_type,
+                                         Selected>::enabled>> {
+    static constexpr bool enabled = true;
+
+    using value_type = typename type_traits<Type>::value_type;
+    using type = Type;
+
+    template <typename Value> static type wrap(Value&& value) {
+        return type_traits<Type>::make(
+            construction_traits<value_type, Selected>::wrap(
+                std::forward<Value>(value)));
     }
 };
 
@@ -573,6 +676,10 @@ struct type_traits<std::unique_ptr<T, Deleter>,
         if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
             return std::unique_ptr<T, Deleter>(
                 new T(detail::make_nested<T>(std::forward<Args>(args)...)));
+        // Work around direct-initialization in smart-pointer-backed factories.
+        else if constexpr (std::is_constructible_v<T, Args...>)
+            return std::unique_ptr<T, Deleter>(
+                new T(std::forward<Args>(args)...));
         else
             return std::unique_ptr<T, Deleter>(
                 new T{std::forward<Args>(args)...});
@@ -982,15 +1089,18 @@ struct storage_traits<external, std::optional<T>, U> {
     using conversion_types = type_list<>;
 };
 
-template <typename... Ts>
-struct storage_traits<unique, std::variant<Ts...>, std::variant<Ts...>> {
+template <typename Type, typename U>
+struct storage_traits<
+    unique, Type, U,
+    std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type> &&
+                     !std::is_array_v<Type> && is_alternative_type_v<Type>>> {
     static constexpr bool enabled = true;
 
-    using value_types = type_list<std::variant<Ts...>>;
+    using value_types = type_list<U>;
     using lvalue_reference_types = type_list<>;
-    using rvalue_reference_types = type_list<std::variant<Ts...>&&>;
+    using rvalue_reference_types = type_list<U&&>;
     using pointer_types = type_list<>;
-    using conversion_types = type_list<std::variant<Ts...>>;
+    using conversion_types = type_list<>;
 };
 
 namespace detail {

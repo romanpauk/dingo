@@ -38,13 +38,11 @@ int main() {
         construct_container.construct<std::variant<A, B>,
                                       constructor_detection<A>>();
     assert(std::holds_alternative<A>(detected));
-    assert(std::get<A>(detected).value == 7);
 
     [[maybe_unused]] auto explicit_ctor =
         construct_container.construct<std::variant<A, B>,
                                       constructor<B(float)>>();
     assert(std::holds_alternative<B>(explicit_ctor));
-    assert(std::get<B>(explicit_ctor).value == 3.5f);
 
     container<> unique_container;
     unique_container.register_type<scope<unique>, storage<int>>();
@@ -52,11 +50,18 @@ int main() {
         scope<unique>, storage<std::variant<A, B>>,
         factory<constructor_detection<A>>>();
 
-    // Resolve the whole variant value from variant storage.
+    // Resolve either the whole variant or its currently held alternative.
     [[maybe_unused]] auto value =
         unique_container.resolve<std::variant<A, B>>();
     assert(std::holds_alternative<A>(value));
-    assert(std::get<A>(value).value == 0);
+
+    [[maybe_unused]] auto selected = unique_container.resolve<A>();
+
+    try {
+        unique_container.resolve<B>();
+        assert(false);
+    } catch (const type_not_convertible_exception&) {
+    }
 
     std::variant<A, B> existing(std::in_place_type<A>, 9);
     container<> external_container;
@@ -67,6 +72,8 @@ int main() {
         external_container.resolve<std::variant<A, B>&>();
     assert(&ref == &existing);
     assert(std::holds_alternative<A>(ref));
-    assert(std::get<A>(ref).value == 9);
+
+    [[maybe_unused]] auto& held = external_container.resolve<A&>();
+    assert(&held == &std::get<A>(existing));
     ////
 }

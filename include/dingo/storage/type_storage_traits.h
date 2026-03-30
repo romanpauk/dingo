@@ -82,7 +82,7 @@ template <typename Type, typename U>
 struct storage_traits<
     unique, Type, U,
     std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type> &&
-                     !std::is_array_v<Type>>> {
+                     !std::is_array_v<Type> && !is_alternative_type_v<Type>>> {
     static constexpr bool enabled = true;
 
     using value_types = type_list<U>;
@@ -96,7 +96,7 @@ template <typename Type, typename U>
 struct resolution_traits<
     unique, Type, U,
     std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type> &&
-                     !std::is_array_v<Type>>> {
+                     !std::is_array_v<Type> && !is_alternative_type_v<Type>>> {
     using value_types = type_list<std::optional<U>>;
     using lvalue_reference_types = type_list<>;
     using rvalue_reference_types = type_list<std::optional<U>&&>;
