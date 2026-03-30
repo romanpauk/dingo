@@ -15,8 +15,6 @@
 #include <dingo/factory/constructor_typedef.h>
 #include <dingo/type/type_list.h>
 
-#include <tuple>
-
 namespace dingo {
 
 namespace detail {
@@ -231,7 +229,7 @@ template <typename T, typename... Args>
 struct list_initialization : list_initialization_impl<T, void, Args...> {};
 
 template <typename T, typename... Args>
-struct list_initialization<T, std::tuple<Args...>>
+struct list_initialization<T, type_list<Args...>>
     : list_initialization<T, Args...> {};
 
 // Filters out T(T&).
@@ -256,7 +254,7 @@ template <typename T, typename... Args>
 struct direct_initialization : direct_initialization_impl<T, void, Args...> {};
 
 template <typename T, typename... Args>
-struct direct_initialization<T, std::tuple<Args...>>
+struct direct_initialization<T, type_list<Args...>>
     : direct_initialization<T, Args...> {};
 
 // Filters out T(T&).
@@ -274,8 +272,8 @@ struct detection_arguments;
 
 template <typename T, typename Tag, size_t... Is>
 struct detection_arguments<T, Tag, std::index_sequence<Is...>> {
-    using type = std::tuple<std::conditional_t<true, constructor_argument<T, Tag>,
-                                               std::integral_constant<size_t, Is>>...>;
+    using type = type_list<std::conditional_t<true, constructor_argument<T, Tag>,
+                                              std::integral_constant<size_t, Is>>...>;
 };
 
 template <typename T, template <typename...> typename IsConstructible,
@@ -289,29 +287,29 @@ struct detected_constructor_arguments_impl;
 template <typename T, template <typename...> typename IsConstructible,
           typename... Args>
 struct detected_constructor_arguments_impl<T, IsConstructible,
-                                          std::tuple<Args...>, true> {
+                                          type_list<Args...>, true> {
     static constexpr bool valid = true;
-    using type = std::tuple<Args...>;
+    using type = type_list<Args...>;
 };
 
 template <typename T, template <typename...> typename IsConstructible>
-struct detected_constructor_arguments_impl<T, IsConstructible, std::tuple<>, false> {
-    using type = std::tuple<>;
+struct detected_constructor_arguments_impl<T, IsConstructible, type_list<>, false> {
+    using type = type_list<>;
     static constexpr bool valid = false;
 };
 
 template <typename T, template <typename...> typename IsConstructible,
           typename Head, typename... Tail>
 struct detected_constructor_arguments_impl<T, IsConstructible,
-                                          std::tuple<Head, Tail...>, false>
+                                          type_list<Head, Tail...>, false>
     : detected_constructor_arguments_impl<
-          T, IsConstructible, std::tuple<Tail...>,
+          T, IsConstructible, type_list<Tail...>,
           IsConstructible<T, Tail...>::value> {};
 
 template <typename T, template <typename...> typename IsConstructible,
           typename... Args>
-struct detected_constructor_arguments<T, IsConstructible, std::tuple<Args...>>
-    : detected_constructor_arguments_impl<T, IsConstructible, std::tuple<Args...>,
+struct detected_constructor_arguments<T, IsConstructible, type_list<Args...>>
+    : detected_constructor_arguments_impl<T, IsConstructible, type_list<Args...>,
                                           IsConstructible<T, Args...>::value> {
 };
 
@@ -322,8 +320,8 @@ struct constructor_detection;
 
 template <typename T, typename... Args> struct constructor_methods;
 template <typename T, typename... Args>
-struct constructor_methods<T, std::tuple<Args...>> {
-    using arguments = std::tuple<Args...>;
+struct constructor_methods<T, type_list<Args...>> {
+    using arguments = type_list<Args...>;
     static constexpr size_t arity = sizeof...(Args);
     static constexpr bool valid = true;
 
@@ -360,7 +358,7 @@ struct constructor_detection {
     using selected_arguments = typename detection::type;
 
   public:
-    static constexpr size_t arity = std::tuple_size_v<selected_arguments>;
+    static constexpr size_t arity = type_list_size_v<selected_arguments>;
     static constexpr bool valid = detection::valid;
 
     static_assert(!Assert || valid,
@@ -404,8 +402,8 @@ struct constructor_detection<T, reference, IsConstructible, Assert, N> {
 
     template <typename Borrow, typename Value>
     using preferred_arguments = std::conditional_t<
-        (std::tuple_size_v<typename Borrow::type> >=
-         std::tuple_size_v<typename Value::type>),
+        (type_list_size_v<typename Borrow::type> >=
+         type_list_size_v<typename Value::type>),
         typename Borrow::type,
         typename Value::type>;
 
@@ -426,7 +424,7 @@ struct constructor_detection<T, reference, IsConstructible, Assert, N> {
 
         using current_type = preferred_arguments<borrow, value>;
         using type = std::conditional_t<
-            (std::tuple_size_v<current_type> > 0),
+            (type_list_size_v<current_type> > 0),
             current_type,
             typename next::type>;
         static constexpr bool valid =
@@ -441,7 +439,7 @@ struct constructor_detection<T, reference, IsConstructible, Assert, N> {
     using selected_arguments = typename selected::type;
 
   public:
-    static constexpr size_t arity = std::tuple_size_v<selected_arguments>;
+    static constexpr size_t arity = type_list_size_v<selected_arguments>;
     static constexpr bool valid = selected::valid;
 
     static_assert(!Assert || valid,

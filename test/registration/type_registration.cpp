@@ -129,8 +129,8 @@ TEST(type_registration_test, registration_specialization) {
                           storage<std::shared_ptr<std::unique_ptr<A>>>,
                           interfaces<I>>;
     using nested_storage_type = typename nested_registration::storage_type::type;
-    using nested_interface_type = std::tuple_element_t<
-        0, typename nested_registration::interface_type::type_tuple>;
+    using nested_interface_type =
+        type_list_head_t<typename nested_registration::interface_type::type>;
     using nested_stored_type = rebind_leaf_t<
         nested_storage_type,
         std::conditional_t<

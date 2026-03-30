@@ -29,14 +29,12 @@ template <typename T> struct scope {
 
 template <typename... Args> struct interfaces {
     using type = type_list<Args...>;
-    using type_tuple = std::tuple<Args...>;
 
     template <typename U> using rebind_t = interfaces<U>;
 };
 
 template <typename... Args> struct interfaces<type_list<Args...>> {
     using type = type_list<Args...>;
-    using type_tuple = std::tuple<Args...>;
 
     template <typename U> using rebind_t = interfaces<U>;
 };

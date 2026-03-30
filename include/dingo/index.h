@@ -11,56 +11,53 @@
 
 #include <dingo/memory/allocator.h>
 #include <dingo/exceptions.h>
+#include <dingo/type/type_list.h>
 
 #include <tuple>
 #include <type_traits>
 #include <variant>
 
 namespace dingo {
-#if 1
-template <typename Arg, typename... Args> struct index_tag;
-template <typename Arg, typename Head, typename... Tail>
-struct index_tag<Arg, std::tuple<Head, Tail...>> {
-    using type =
-        std::conditional_t<std::is_same_v<std::tuple_element_t<0, Head>, Arg>,
-                           std::tuple_element_t<1, Head>,
-                           typename index_tag<Arg, std::tuple<Tail...>>::type>;
-};
-
-template <typename Arg> struct index_tag<Arg, std::tuple<>> {
-    using type = void;
-};
-#else
-// TODO: measure compile time if using same tuple will be different
-template <typename Arg, size_t N, typename Tuple,
-          bool Enabled = std::is_same_v<
-              Arg, std::tuple_element_t<0, std::tuple_element_t<N, Tuple>>>>
-struct index_tag_impl {
-    using type = std::tuple_element_t<1, std::tuple_element_t<N, Tuple>>;
-};
-
-template <typename Arg, size_t N, typename Tuple>
-struct index_tag_impl<Arg, N, Tuple, false>
-    : index_tag_impl<Arg, N + 1, Tuple> {};
-
-// template <typename Arg, typename Tuple, bool Enabled> struct
-// get_index_tag2_impl<Arg, std::tuple_size_v<Tuple>, Tuple, Enabled> {
-//     static_assert("type not found");
-// };
-
-template <typename Arg, typename... Args> struct index_tag;
-
-template <typename Arg, typename... Args>
-struct index_tag<Arg, std::tuple<Args...>>
-    : index_tag_impl<Arg, 0, std::tuple<Args...>> {};
-#endif
+template <typename Arg, typename Definitions> struct index_tag;
+template <typename Definitions, typename Value, typename Allocator>
+struct index;
 
 template <typename Key, typename Value, typename Allocator, typename Tag>
 struct index_collection;
 
-// TODO: static_allocator does not work with this
-template <typename Value, typename Allocator, typename... Args> struct index {
-    index(Allocator&) {}
+namespace detail {
+template <typename Entry> struct index_entry;
+
+template <typename Key, typename Tag> struct index_entry<type_list<Key, Tag>> {
+    using key = Key;
+    using tag = Tag;
+};
+
+template <typename Arg, typename Definitions> struct index_tag_impl;
+
+template <typename Arg, typename Head, typename... Tail>
+struct index_tag_impl<Arg, type_list<Head, Tail...>> {
+    using type =
+        std::conditional_t<std::is_same_v<typename index_entry<Head>::key, Arg>,
+                           typename index_entry<Head>::tag,
+                           typename index_tag_impl<Arg, type_list<Tail...>>::type>;
+};
+
+template <typename Arg> struct index_tag_impl<Arg, type_list<>> {
+    using type = void;
+};
+
+template <typename Definitions, typename Value, typename Allocator>
+struct index_impl;
+
+template <typename Value, typename Allocator>
+struct index_impl<type_list<>, Value, Allocator> {
+    index_impl(Allocator&) {}
+};
+
+template <typename Value, typename Allocator, typename... Entries>
+struct index_impl<type_list<Entries...>, Value, Allocator> {
+    index_impl(Allocator&) {}
 
     template <typename T> struct index_ptr : allocator_base<Allocator> {
         // TODO: this pattern is already in class_factory_instance_ptr,
@@ -104,7 +101,7 @@ template <typename Value, typename Allocator, typename... Args> struct index {
     template <typename Key> auto& get_index(Allocator& allocator) {
         using index_type = index_collection<
             Key, Value, Allocator,
-            typename index_tag<Key, std::tuple<Args...>>::type>;
+            typename index_tag_impl<Key, type_list<Entries...>>::type>;
 
         if (indexes_.index() == 0) {
             indexes_.template emplace<index_ptr<index_type>>(allocator);
@@ -115,20 +112,23 @@ template <typename Value, typename Allocator, typename... Args> struct index {
 
   private:
     std::variant<std::monostate,
-                 index_ptr<index_collection<std::tuple_element_t<0, Args>,
+                 index_ptr<index_collection<typename index_entry<Entries>::key,
                                             Value, Allocator,
-                                            std::tuple_element_t<1, Args>>>...>
+                                            typename index_entry<Entries>::tag>>...>
         indexes_;
 };
+} // namespace detail
 
-template <typename Value, typename Allocator, typename... Args>
-struct index<std::tuple<Args...>, Value, Allocator>
-    : index<Value, Allocator, Args...> {
-    index(Allocator& allocator) : index<Value, Allocator, Args...>(allocator) {}
-};
+template <typename Arg, typename... Entries>
+struct index_tag<Arg, std::tuple<Entries...>>
+    : detail::index_tag_impl<Arg, type_list<to_type_list_t<Entries>...>> {};
 
-template <typename Value, typename Allocator> struct index<Value, Allocator> {
-    index(Allocator&){};
+template <typename Value, typename Allocator, typename... Entries>
+struct index<std::tuple<Entries...>, Value, Allocator>
+    : detail::index_impl<type_list<to_type_list_t<Entries>...>, Value,
+                         Allocator> {
+    using detail::index_impl<type_list<to_type_list_t<Entries>...>, Value,
+                             Allocator>::index_impl;
 };
 
 } // namespace dingo
