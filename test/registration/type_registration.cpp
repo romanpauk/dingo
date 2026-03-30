@@ -47,6 +47,23 @@ TEST(type_registration_test, registration_basic) {
         std::is_same_v<typename registration::scope_type, scope<int>>);
 }
 
+TEST(type_registration_test, registration_prefers_first_explicit_match) {
+    using registration = type_registration<
+        scope<int>, scope<float>, storage<double>, storage<char>,
+        factory<long>, factory<short>, interfaces<unsigned>, interfaces<bool>,
+        conversions<void*>, conversions<int*>>;
+
+    static_assert(std::is_same_v<typename registration::scope_type, scope<int>>);
+    static_assert(
+        std::is_same_v<typename registration::storage_type, storage<double>>);
+    static_assert(
+        std::is_same_v<typename registration::factory_type, factory<long>>);
+    static_assert(std::is_same_v<typename registration::interface_type,
+                                 interfaces<unsigned>>);
+    static_assert(std::is_same_v<typename registration::conversions_type,
+                                 conversions<void*>>);
+}
+
 TEST(type_registration_test, registration_deduction) {
     static_assert(
         std::is_same_v<
