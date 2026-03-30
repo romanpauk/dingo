@@ -353,6 +353,13 @@ struct type_conversion_traits<test_optional<U>, test_optional<T>> {
     }
 };
 
+TEST(type_traits_test, type_list_has_duplicates) {
+    static_assert(!detail::type_list_has_duplicates<
+                  type_list<int, float, double>>::value);
+    static_assert(detail::type_list_has_duplicates<
+                  type_list<int, float, int>>::value);
+}
+
 static_assert(is_interface_storage_rebindable_v<test_shared<Class>, IClass>);
 static_assert(is_interface_storage_rebindable_v<test_unique<Class>, IClass>);
 

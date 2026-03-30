@@ -14,6 +14,7 @@
 
 #include <memory>
 #include <optional>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -77,11 +78,24 @@ struct type_list_count<type_list<Alternatives...>, Selected>
 
 template <typename List> struct type_list_has_duplicates;
 
+template <typename Tuple, size_t I, size_t... Js>
+struct tuple_element_has_previous_match
+    : std::bool_constant<
+          (... || ((Js < I) &&
+                   std::is_same_v<std::tuple_element_t<I, Tuple>,
+                                  std::tuple_element_t<Js, Tuple>>))> {};
+
+template <typename Tuple, typename Sequence> struct tuple_has_duplicates;
+
+template <typename Tuple, size_t... Is>
+struct tuple_has_duplicates<Tuple, std::index_sequence<Is...>>
+    : std::bool_constant<
+          (... || tuple_element_has_previous_match<Tuple, Is, Is...>::value)> {};
+
 template <typename... Alternatives>
 struct type_list_has_duplicates<type_list<Alternatives...>>
-    : std::bool_constant<
-          ((type_list_count<type_list<Alternatives...>, Alternatives>::value > 1) ||
-           ...)> {};
+    : tuple_has_duplicates<std::tuple<Alternatives...>,
+                           std::index_sequence_for<Alternatives...>> {};
 
 template <typename Type, typename = void>
 struct alternative_type_alternatives {};
