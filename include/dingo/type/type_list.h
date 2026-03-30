@@ -13,7 +13,6 @@
 #include <initializer_list>
 #include <tuple>
 #include <type_traits>
-#include <utility>
 
 namespace dingo {
 template <typename... Types> struct type_list {};
@@ -22,25 +21,22 @@ template <typename T> struct type_list_iterator {
 };
 
 namespace detail {
-template <typename T> struct type_list_as_tuple;
+template <typename Accumulated, typename... Lists> struct type_list_cat_impl;
 
-template <typename... Types>
-struct type_list_as_tuple<type_list<Types...>> {
-    using type = std::tuple<Types...>;
+template <typename... Accumulated>
+struct type_list_cat_impl<type_list<Accumulated...>> {
+    using type = type_list<Accumulated...>;
 };
 
-template <typename T> struct tuple_as_type_list;
-
-template <typename... Types>
-struct tuple_as_type_list<std::tuple<Types...>> {
-    using type = type_list<Types...>;
+template <typename... Accumulated, typename... Head, typename... Tail>
+struct type_list_cat_impl<type_list<Accumulated...>, type_list<Head...>,
+                          Tail...>
+    : type_list_cat_impl<type_list<Accumulated..., Head...>, Tail...> {
 };
 } // namespace detail
 
 template <typename... Lists> struct type_list_cat {
-    using type = typename detail::tuple_as_type_list<
-        decltype(std::tuple_cat(std::declval<typename detail::type_list_as_tuple<
-                                    Lists>::type>()...))>::type;
+    using type = typename detail::type_list_cat_impl<type_list<>, Lists...>::type;
 };
 
 template <typename... Lists>
@@ -75,17 +71,6 @@ template <typename... Types> struct to_type_list<std::tuple<Types...>> {
 
 template <typename T>
 using to_type_list_t = typename to_type_list<T>::type;
-
-template <typename T> struct to_tuple {
-    using type = T;
-};
-
-template <typename... Types> struct to_tuple<type_list<Types...>> {
-    using type = std::tuple<typename to_tuple<Types>::type...>;
-};
-
-template <typename T>
-using to_tuple_t = typename to_tuple<T>::type;
 
 template <typename RTTI, typename Function, typename... Types>
 bool for_type(type_list<Types...>, const typename RTTI::type_index& type,
