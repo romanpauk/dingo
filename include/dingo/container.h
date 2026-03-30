@@ -277,12 +277,11 @@ class container : public allocator_base<Allocator> {
         // temporary object. The code below does the rewrite of storage type
         // into stored type.
         //
-        using interface_type_0 = std::tuple_element_t<
-            0, typename registration::interface_type::type_tuple>;
+        using interface_types = typename registration::interface_type::type;
+        using interface_type_0 = type_list_head_t<interface_types>;
         using registered_storage_type = typename registration::storage_type::type;
         static constexpr bool should_store_interface =
-            std::tuple_size_v<typename registration::interface_type::type_tuple> ==
-                1 &&
+            type_list_size_v<interface_types> == 1 &&
             std::has_virtual_destructor_v<interface_type_0> &&
             is_interface_storage_rebindable_v<registered_storage_type,
                                               interface_type_0>;
@@ -309,11 +308,8 @@ class container : public allocator_base<Allocator> {
         using instance_factory_data_type =
             instance_factory_data<instance_container_type, storage_type>;
 
-        if constexpr (std::tuple_size_v<
-                          typename registration::interface_type::type_tuple> ==
-                      1) {
-            using interface_type = std::tuple_element_t<
-                0, typename registration::interface_type::type_tuple>;
+        if constexpr (type_list_size_v<interface_types> == 1) {
+            using interface_type = type_list_head_t<interface_types>;
 
             using instance_factory_type = instance_factory<
                 container_type, typename annotated_traits<interface_type>::type,
@@ -348,7 +344,7 @@ class container : public allocator_base<Allocator> {
             }
 
             for_each(
-                typename registration::interface_type::type{},
+                interface_types{},
                 [&](auto element) {
                     using interface_type = typename decltype(element)::type;
 
@@ -590,9 +586,10 @@ class container : public allocator_base<Allocator> {
         operator bool() const { return factory != nullptr; }
     };
 
+    using index_definition_list_type = to_type_list_t<index_definition_type>;
     using index_type =
-        index<typename container_traits_type::index_definition_type, index_data,
-              allocator_type>;
+        detail::index_impl<index_definition_list_type, index_data,
+                           allocator_type>;
 
     struct type_factory_data : index_type {
         type_factory_data(allocator_type& allocator)

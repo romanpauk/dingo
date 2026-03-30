@@ -20,6 +20,26 @@ struct type_list_a {};
 struct type_list_b {};
 struct type_list_c {};
 
+TEST(type_list_test, meta_utilities) {
+    using nested_tuple =
+        std::tuple<type_list_a, std::tuple<type_list_b, type_list_c>>;
+    using nested_list =
+        type_list<type_list_a, type_list<type_list_b, type_list_c>>;
+
+    static_assert(std::is_same_v<
+                  type_list_cat_t<type_list<type_list_a>,
+                                  type_list<type_list_b, type_list_c>,
+                                  type_list<>>,
+                  type_list<type_list_a, type_list_b, type_list_c>>);
+    static_assert(type_list_size_v<type_list<>> == 0);
+    static_assert(type_list_size_v<nested_list> == 2);
+    static_assert(std::is_same_v<type_list_head_t<nested_list>, type_list_a>);
+    static_assert(std::is_same_v<to_type_list_t<nested_tuple>, nested_list>);
+    static_assert(std::is_same_v<to_tuple_t<nested_list>, nested_tuple>);
+    static_assert(std::is_same_v<to_tuple_t<to_type_list_t<nested_tuple>>,
+                                 nested_tuple>);
+}
+
 TEST(type_list_test, for_each_visits_types_in_order) {
     std::vector<int> visited;
 

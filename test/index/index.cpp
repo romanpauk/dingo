@@ -118,11 +118,11 @@ TYPED_TEST(index_test, register_indexed_type_shared) {
     using index_type = get_index_type_t<container_type>;
 
     container.template register_indexed_type<
-        scope<shared>, storage<std::shared_ptr<ClassTag<0>>>,
-        interfaces<IClass>>(value<index_type>(0));
+        scope<shared>, storage<std::shared_ptr<ClassTag<0>>>, interfaces<IClass>>(
+        value<index_type>(0));
     container.template register_indexed_type<
-        scope<shared>, storage<std::shared_ptr<ClassTag<1>>>,
-        interfaces<IClass>>(value<index_type>(1));
+        scope<shared>, storage<std::shared_ptr<ClassTag<1>>>, interfaces<IClass>>(
+        value<index_type>(1));
     ASSERT_THROW((container.template register_indexed_type<
                      scope<shared>, storage<std::shared_ptr<ClassTag<1>>>,
                      interfaces<IClass>>(value<index_type>(1))),

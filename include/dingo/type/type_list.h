@@ -21,27 +21,71 @@ template <typename T> struct type_list_iterator {
     using type = T;
 };
 
-template <typename... Lists> struct type_list_cat;
+namespace detail {
+template <typename T> struct type_list_as_tuple;
 
-template <> struct type_list_cat<> {
-    using type = type_list<>;
+template <typename... Types>
+struct type_list_as_tuple<type_list<Types...>> {
+    using type = std::tuple<Types...>;
 };
 
-template <typename... Types> struct type_list_cat<type_list<Types...>> {
+template <typename T> struct tuple_as_type_list;
+
+template <typename... Types>
+struct tuple_as_type_list<std::tuple<Types...>> {
     using type = type_list<Types...>;
 };
+} // namespace detail
 
-template <typename... Left, typename... Right, typename... Tail>
-struct type_list_cat<type_list<Left...>, type_list<Right...>, Tail...>
-    : type_list_cat<type_list<Left..., Right...>, Tail...> {};
+template <typename... Lists> struct type_list_cat {
+    using type = typename detail::tuple_as_type_list<
+        decltype(std::tuple_cat(std::declval<typename detail::type_list_as_tuple<
+                                    Lists>::type>()...))>::type;
+};
 
 template <typename... Lists>
 using type_list_cat_t = typename type_list_cat<Lists...>::type;
 
+template <typename List> struct type_list_size;
+
 template <typename... Types>
-struct type_list_size : std::integral_constant<size_t, sizeof...(Types)> {};
-template <typename... Types>
-static constexpr size_t type_list_size_v = type_list_size<Types...>::value;
+struct type_list_size<type_list<Types...>>
+    : std::integral_constant<size_t, sizeof...(Types)> {};
+
+template <typename List>
+static constexpr size_t type_list_size_v = type_list_size<List>::value;
+
+template <typename List> struct type_list_head;
+
+template <typename Head, typename... Tail>
+struct type_list_head<type_list<Head, Tail...>> {
+    using type = Head;
+};
+
+template <typename List>
+using type_list_head_t = typename type_list_head<List>::type;
+
+template <typename T> struct to_type_list {
+    using type = T;
+};
+
+template <typename... Types> struct to_type_list<std::tuple<Types...>> {
+    using type = type_list<typename to_type_list<Types>::type...>;
+};
+
+template <typename T>
+using to_type_list_t = typename to_type_list<T>::type;
+
+template <typename T> struct to_tuple {
+    using type = T;
+};
+
+template <typename... Types> struct to_tuple<type_list<Types...>> {
+    using type = std::tuple<typename to_tuple<Types>::type...>;
+};
+
+template <typename T>
+using to_tuple_t = typename to_tuple<T>::type;
 
 template <typename RTTI, typename Function, typename... Types>
 bool for_type(type_list<Types...>, const typename RTTI::type_index& type,
@@ -58,24 +102,5 @@ template <typename Function, typename... Types>
 void for_each(type_list<Types...>, Function&& fn) {
     (fn(type_list_iterator<Types>{}), ...);
 }
-
-template <typename Tuple, size_t I, typename Arg, typename Index>
-struct tuple_replace_impl;
-
-template <typename Tuple, size_t I, typename Arg, size_t... Is>
-struct tuple_replace_impl<Tuple, I, Arg, std::index_sequence<Is...>> {
-    static_assert(I < sizeof...(Is));
-    using type = std::tuple<
-        std::conditional_t<Is == I, Arg, std::tuple_element_t<Is, Tuple>>...>;
-};
-
-template <typename Tuple, size_t I, typename Arg> struct tuple_replace;
-
-template <size_t I, typename Arg, typename... Args>
-struct tuple_replace<std::tuple<Args...>, I, Arg> {
-    using type =
-        typename tuple_replace_impl<std::tuple<Args...>, I, Arg,
-                                    std::index_sequence_for<Args...>>::type;
-};
 
 } // namespace dingo
