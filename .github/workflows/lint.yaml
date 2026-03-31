@@ -1,0 +1,53 @@
+name: lint
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+on:
+  schedule:
+    - cron: "0 0 * * *" # Daily
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  lint:
+    name: lint / ${{ matrix.name }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-24.04
+          - name: windows
+            os: windows-2025
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Setup MSVC Developer Command Prompt
+        if: ${{ matrix.name == 'windows' }}
+        uses: TheMrMilchmann/setup-msvc-dev@v4.0.0
+        with:
+          arch: x64
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+      - name: Configure
+        run: |
+            cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON
+      - name: Check Formatting
+        env:
+          PIP_BREAK_SYSTEM_PACKAGES: 1
+        run: |
+            python -m pip install mdformat
+            cmake --build build -t md-verify
+      - name: Upload Failure Artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: lint-failure-${{ matrix.name }}
+          if-no-files-found: ignore
+          path: |
+            build/CMakeFiles/CMakeOutput.log
+            build/CMakeFiles/CMakeError.log
