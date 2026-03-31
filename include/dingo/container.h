@@ -12,7 +12,6 @@
 #include <dingo/memory/allocator.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/resolution/instance_factory.h>
-#include <dingo/resolution/instance_factory_traits.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/exceptions.h>
@@ -20,7 +19,10 @@
 #include <dingo/factory/invoke.h>
 #include <dingo/resolution/interface_storage_traits.h>
 #include <dingo/index.h>
+#include <dingo/index/array.h>
 #include <dingo/resolution/resolving_context.h>
+#include <dingo/resolution/runtime_execution_plan.h>
+#include <dingo/resolution/runtime_plan_format.h>
 #include <dingo/rtti/static_provider.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/memory/static_allocator.h>
@@ -28,10 +30,12 @@
 #include <dingo/type/type_map.h>
 #include <dingo/registration/type_registration.h>
 
+#include <array>
 #include <functional>
 #include <map>
 #include <optional>
 #include <typeindex>
+#include <utility>
 #include <variant>
 
 namespace dingo {
@@ -42,6 +46,22 @@ template <> struct is_none<none_t> : std::bool_constant<true> {};
 template <typename T> static constexpr auto is_none_v = is_none<T>::value;
 
 template <typename T> struct is_auto_constructible : std::is_aggregate<T> {};
+
+namespace detail {
+template <typename Tag> struct index_array_traits {
+    static constexpr bool is_array = false;
+};
+
+template <std::size_t N> struct index_array_traits<index_type::array<N>> {
+    static constexpr bool is_array = true;
+    static constexpr std::size_t value = N;
+};
+} // namespace detail
+} // namespace dingo
+
+#include <dingo/materialization/registration_builder.h>
+
+namespace dingo {
 
 struct dynamic_container_traits {
     template <typename> using rebind_t = dynamic_container_traits;
@@ -84,6 +104,7 @@ template <typename ContainerTraits = dynamic_container_traits,
           typename ParentContainer = void>
 class container : public allocator_base<Allocator> {
     friend class resolving_context;
+    template <typename> friend struct detail::registration_builder;
     template <typename ContainerTraitsT, typename AllocatorT,
               typename ParentContainerT>
     friend class container;
@@ -172,10 +193,7 @@ class container : public allocator_base<Allocator> {
 
     template <typename... TypeArgs> auto& register_type_collection() {
         return register_type_collection<TypeArgs...>(
-            [](auto& collection, auto&& value) {
-                collection_traits<std::decay_t<decltype(collection)>>::add(
-                    collection, std::move(value));
-            });
+            default_collection_aggregator{});
     }
 
     template <typename T, typename IdType = none_t,
@@ -189,22 +207,18 @@ class container : public allocator_base<Allocator> {
             if constexpr (is_none_v<std::decay_t<IdType>>) {
                 void* cache = type_cache_.template get<T>();
                 if (cache) {
-                    return instance_factory_traits<
-                        rtti_type,
-                        typename annotated_traits<T>::type>::convert(cache);
+                    return convert_cached_result<T>(cache);
                 }
             } else {
                 auto data = type_factories_.template get<normalized_type_t<T>>();
                 if (data) {
-                    auto indexed =
-                        data->template get_index<IdType>(get_allocator())
-                            .find(id);
+                    using key_type = std::decay_t<IdType>;
+                    auto* index = data->template try_get_index<key_type>();
+                    auto indexed = index ? index->find(id) : nullptr;
 
                     if (indexed) {
                         if (indexed->cache) {
-                            return instance_factory_traits<
-                                rtti_type, typename annotated_traits<T>::type>::
-                                convert(indexed->cache);
+                            return convert_cached_result<T>(indexed->cache);
                         }
                     }
                 }
@@ -225,16 +239,34 @@ class container : public allocator_base<Allocator> {
     }
 
     template <typename T> T construct_collection() {
-        return construct_collection<T>([](auto& collection, auto&& value) {
-            collection_traits<std::decay_t<decltype(collection)>>::add(
-                collection, std::move(value));
-        });
+        return construct_collection_plan<T, ir::collection_aggregation_kind::standard>(
+            default_collection_aggregator{});
     }
 
     template <typename T, typename Fn> T construct_collection(Fn&& fn) {
+        return construct_collection_plan<T, ir::collection_aggregation_kind::custom>(
+            std::forward<Fn>(fn));
+    }
+
+  private:
+    struct default_collection_aggregator {
+        template <typename Collection, typename Value>
+        void operator()(Collection& collection, Value&& value) const {
+            collection_traits<std::decay_t<decltype(collection)>>::add(
+                collection, std::move(value));
+        }
+    };
+
+    template <typename T, ir::collection_aggregation_kind AggregationKind,
+              typename Fn>
+    T construct_collection_plan(Fn&& fn) {
         using collection_type = collection_traits<T>;
         using resolve_type = typename collection_type::resolve_type;
-        using lookup_type = normalized_type_t<resolve_type>;
+        using plan_type = detail::collection_plan_ir_t<
+            T, detail::request_ir_t<resolve_type>, AggregationKind>;
+        using lookup_type = typename plan_type::element_lookup_type;
+        constexpr auto collection_plan =
+            detail::make_collection_plan_summary<plan_type>();
 
         static_assert(collection_type::is_collection,
                       "missing collection_traits specialization for type T");
@@ -243,17 +275,38 @@ class container : public allocator_base<Allocator> {
         resolving_context context;
         auto data = type_factories_.template get<lookup_type>();
         if (!data)
-            throw detail::make_collection_type_not_found_exception<T,
-                                                                   resolve_type>();
+            throw_collection_type_not_found_with_plan(
+                collection_plan.collection_type,
+                collection_plan.element_request_type, collection_plan);
 
-        collection_type::reserve(results, data->factories.size());
-        for (auto&& p : data->factories) {
-            fn(results, resolve_collection_type<resolve_type>(*p.second,
-                                                              context));
+        collection_type::reserve(results, data->entries.size());
+        for (auto&& p : data->entries) {
+            try {
+                fn(results, resolve_collection_type<resolve_type>(p.second.binding,
+                                                                  context));
+            } catch (const type_not_found_exception& e) {
+                throw_collection_exception_with_plan<type_not_found_exception>(
+                    e, collection_plan, p.second.binding);
+            } catch (const type_not_convertible_exception& e) {
+                throw_collection_exception_with_plan<
+                    type_not_convertible_exception>(e, collection_plan,
+                                                    p.second.binding);
+            } catch (const type_ambiguous_exception& e) {
+                throw_collection_exception_with_plan<type_ambiguous_exception>(
+                    e, collection_plan, p.second.binding);
+            } catch (const type_recursion_exception& e) {
+                throw_collection_exception_with_plan<type_recursion_exception>(
+                    e, collection_plan, p.second.binding);
+            } catch (const type_not_constructed_exception& e) {
+                throw_collection_exception_with_plan<
+                    type_not_constructed_exception>(e, collection_plan,
+                                                    p.second.binding);
+            }
         }
         return results;
     }
 
+  public:
     template< typename Callable > auto invoke(Callable&& callable) {
         resolving_context context;
         return ::dingo::invoke< std::remove_reference_t<Callable> >::construct(
@@ -267,140 +320,23 @@ class container : public allocator_base<Allocator> {
             std::conditional_t<!is_none_v<std::decay_t<Arg>>,
                                type_registration<TypeArgs..., factory<Arg>>,
                                type_registration<TypeArgs...>>;
-        (void)arg;
-        //
-        // An optimization and a feature: if storage type can be only queried by
-        // single interface and the interface allows for proper deletion through
-        // virtual destructor, store the type as the interface so temporaries
-        // don't need to be created and because of that, the stored element
-        // could be referenced in most usages as it will no longer be a
-        // temporary object. The code below does the rewrite of storage type
-        // into stored type.
-        //
-        using interface_types = typename registration::interface_type::type;
-        using interface_type_0 = type_list_head_t<interface_types>;
-        using registered_storage_type = typename registration::storage_type::type;
-        static constexpr bool should_store_interface =
-            type_list_size_v<interface_types> == 1 &&
-            std::has_virtual_destructor_v<interface_type_0> &&
-            is_interface_storage_rebindable_v<registered_storage_type,
-                                              interface_type_0>;
-        using stored_leaf_type =
-            std::conditional_t<should_store_interface, interface_type_0,
-                               leaf_type_t<registered_storage_type>>;
-        using stored_type =
-            rebind_leaf_t<registered_storage_type, stored_leaf_type>;
-
-        using storage_type =
-            detail::storage<typename registration::scope_type::type,
-                            registered_storage_type,
-                            stored_type,
-                            typename registration::factory_type::type,
-                            typename registration::conversions_type::type>;
-
-        using instance_container_type =
-            typename container_type::template rebind_t<
-                typename ContainerTraits::template rebind_t<
-                    type_list<typename ContainerTraits::tag_type,
-                              typename registration::interface_type>>,
-                allocator_type, container_type>;
-
-        using instance_factory_data_type =
-            instance_factory_data<instance_container_type, storage_type>;
-
-        if constexpr (type_list_size_v<interface_types> == 1) {
-            using interface_type = type_list_head_t<interface_types>;
-
-            using instance_factory_type = instance_factory<
-                container_type, typename annotated_traits<interface_type>::type,
-                storage_type, instance_factory_data_type>;
-
-            if constexpr (!is_none_v<std::decay_t<Arg>>) {
-                auto&& [factory, factory_container] =
-                    allocate_factory<instance_factory_type>(
-                        this, std::forward<Arg>(arg));
-                register_type_factory<interface_type, storage_type>(
-                    std::move(factory), std::move(id));
-                return *factory_container;
-            } else {
-                auto&& [factory, factory_container] =
-                    allocate_factory<instance_factory_type>(this);
-                register_type_factory<interface_type, storage_type>(
-                    std::move(factory), std::move(id));
-                return *factory_container;
-            }
-        } else {
-            std::shared_ptr<instance_factory_data_type> data;
-            if constexpr (!is_none_v<std::decay_t<Arg>>) {
-                data = std::allocate_shared<instance_factory_data_type>(
-                    allocator_traits::rebind<instance_factory_data_type>(
-                        get_allocator()),
-                    this, std::forward<Arg>(arg));
-            } else {
-                data = std::allocate_shared<instance_factory_data_type>(
-                    allocator_traits::rebind<instance_factory_data_type>(
-                        get_allocator()),
-                    this);
-            }
-
-            for_each(
-                interface_types{},
-                [&](auto element) {
-                    using interface_type = typename decltype(element)::type;
-
-                    using instance_factory_type = instance_factory<
-                        container_type,
-                        typename annotated_traits<interface_type>::type,
-                        storage_type,
-                        std::shared_ptr<instance_factory_data_type>>;
-
-                    register_type_factory<interface_type, storage_type>(
-                        allocate_factory<instance_factory_type>(data)
-                            .first,
-                        id);
-                });
-            return data->container;
-        }
-    }
-
-    template <typename TypeInterface, typename TypeStorage, typename Factory,
-              typename IdType>
-    void register_type_factory(Factory&& factory, IdType&& id) {
-        // static_allocator returns null in the case an allocation (eg. the
-        // factory can be null) There is no need to throw here as the insertion
-        // will not be done later. This is TODO.
-
-        check_interface_requirements<
-            TypeStorage, typename annotated_traits<TypeInterface>::type,
-            typename TypeStorage::type>();
-
-        // TODO: this very crudely assumes types have different storages
-        // for indexed types.
-        auto factory_ptr = factory.get();
-        auto pb =
-            type_factories_.template insert<TypeInterface>(get_allocator());
-        auto& data = pb.first;
-        if (!data.factories
-                 .template insert<
-                     type_list<TypeInterface, typename TypeStorage::type>>(
-                     std::forward<Factory>(factory))
-                 .second) {
-            throw detail::make_type_already_registered_exception<
-                TypeInterface, typename TypeStorage::type>();
-        }
-
-        if constexpr (!is_none_v<std::decay_t<IdType>>) {
-            if (!data.template get_index<IdType>(get_allocator())
-                     .emplace(std::forward<IdType>(id),
-                              index_data{factory_ptr, nullptr})) {
-                bool erased = data.factories.template erase<
-                    type_list<TypeInterface, typename TypeStorage::type>>();
-                assert(erased);
-                (void)erased;
-                throw detail::make_type_index_already_registered_exception<
-                    TypeInterface, typename TypeStorage::type, IdType>();
-            }
-        }
+        using payload_type =
+            std::conditional_t<is_none_v<std::decay_t<Arg>>, void,
+                               std::decay_t<Arg>>;
+        using index_key_type =
+            std::conditional_t<is_none_v<std::decay_t<IdType>>, void,
+                               std::decay_t<IdType>>;
+        using registration_ir =
+            detail::registration_plan_t<registration, payload_type,
+                                        index_key_type>;
+        auto descriptor =
+            detail::registration_builder<container_type>::template build<
+                registration_ir>(
+                    *this, std::forward<Arg>(arg));
+        auto* result_container = descriptor.container;
+        insert_materialized_registration(std::move(descriptor),
+                                         std::forward<IdType>(id));
+        return *result_container;
     }
 
 #ifdef _MSC_VER
@@ -421,37 +357,38 @@ class container : public allocator_base<Allocator> {
         if constexpr (cache_enabled && CheckCache) {
             void* cache = type_cache_.template get<T>();
             if (cache) {
-                return instance_factory_traits<
-                    rtti_type,
-                    typename annotated_traits<T>::type>::convert(cache);
+                return convert_cached_result<T>(cache);
             }
         }
 
         auto data = type_factories_.template get<Type>();
         if (data) {
             if constexpr (is_none_v<std::decay_t<IdType>>) {
-                if (data->factories.size() == 1) {
-                    auto& factory = data->factories.front();
+                if (data->entries.size() == 1) {
+                    auto& binding = data->entries.front().binding;
                     return resolve<T, typename annotated_traits<T>::type>(
-                        *factory, context);
+                        binding, context);
                 } else {
-                    throw detail::make_type_ambiguous_exception<T>();
+                    throw_type_ambiguous_with_candidates(
+                        describe_type<T>(),
+                        detail::make_lookup_plan_summary<
+                            detail::single_lookup_plan_ir_t<T>>(),
+                        data->entries);
                 }
             } else {
-                auto indexed =
-                    data->template get_index<IdType>(get_allocator()).find(id);
+                using key_type = std::decay_t<IdType>;
+                auto* index = data->template try_get_index<key_type>();
+                auto indexed = index ? index->find(id) : nullptr;
 
                 if (indexed) {
                     if constexpr (cache_enabled && CheckCache) {
                         if (indexed->cache) {
-                            return instance_factory_traits<
-                                rtti_type, typename annotated_traits<T>::type>::
-                                convert(indexed->cache);
+                            return convert_cached_result<T>(indexed->cache);
                         }
                     }
 
                     return resolve<T, typename annotated_traits<T>::type>(
-                        *indexed->factory, context, *indexed);
+                        *indexed->binding, context, *indexed);
                 }
             }
         } else if constexpr (!std::is_same_v<void*, decltype(parent_)>) {
@@ -477,113 +414,411 @@ class container : public allocator_base<Allocator> {
         }
 
         if constexpr (is_none_v<std::decay_t<IdType>>) {
-            throw detail::make_type_not_found_exception<T>();
+            throw_type_not_found_with_lookup_plan(
+                describe_type<T>(),
+                detail::make_lookup_plan_summary<
+                    detail::single_lookup_plan_ir_t<T>>());
         } else {
-            throw detail::make_type_not_found_exception<T, std::decay_t<IdType>>();
+            if (data) {
+                throw_type_not_found_with_candidates(
+                    describe_type<T>(), describe_type<std::decay_t<IdType>>(),
+                    detail::index_value_to_string(id),
+                    detail::make_lookup_plan_summary<
+                        detail::indexed_lookup_plan_ir_t<
+                            T, std::decay_t<IdType>>>(),
+                    data->entries);
+            }
+            throw_type_not_found_with_lookup_plan(
+                describe_type<T>(), describe_type<std::decay_t<IdType>>(),
+                detail::index_value_to_string(id),
+                detail::make_lookup_plan_summary<
+                    detail::indexed_lookup_plan_ir_t<
+                        T, std::decay_t<IdType>>>());
         }
     }
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
 
-    // TODO: two different resolve() calls due to different caches
-    template <typename CachedT, typename T, typename Factory, typename Context>
-    T resolve(Factory& factory, Context& context) {
-        void* ptr = instance_factory_traits<rtti_type, T>::resolve(
-            factory, context);
-        if constexpr (cache_enabled) {
-            if (factory.cacheable)
-                type_cache_.template insert<CachedT>(ptr);
+    template <typename T>
+    using erased_request_plan_t = detail::resolution_plan_for_t<
+        typename annotated_traits<T>::type,
+        instance_factory_interface<container_type>>;
+
+    template <typename T>
+    T convert_cached_result(void* ptr) {
+        using plan_type = erased_request_plan_t<T>;
+        return detail::convert_runtime_plan<rtti_type>(
+            ptr, detail::lower_runtime_conversion_kind<rtti_type>(plan_type{}),
+            plan_type{});
+    }
+
+    template <typename RuntimePlan>
+    [[noreturn]] void throw_type_not_convertible_with_plan(
+        const type_not_convertible_exception& e,
+        const RuntimePlan& runtime_plan) {
+        std::string message = e.what();
+        message += "\nresolution plan: ";
+        detail::append_execution_plan(message, runtime_plan);
+        throw type_not_convertible_exception(std::move(message));
+    }
+
+    template <typename Entries>
+    [[noreturn]] void throw_type_ambiguous_with_candidates(
+        type_descriptor request_type,
+        const detail::lookup_plan_summary& lookup_plan, Entries& entries) {
+        std::string message = "type resolution is ambiguous: ";
+        append_type_name(message, request_type);
+        message += "\nlookup plan: ";
+        detail::append_lookup_plan(message, lookup_plan);
+        append_registration_binding_candidates(message, entries);
+        append_registration_candidates(message, entries);
+        throw type_ambiguous_exception(std::move(message));
+    }
+
+    template <typename Entries>
+    [[noreturn]] void throw_type_not_found_with_candidates(
+        type_descriptor request_type, type_descriptor index_key_type,
+        const std::string& index_value,
+        const detail::lookup_plan_summary& lookup_plan, Entries& entries) {
+        std::string message = "type not found: ";
+        detail::append_text(message, request_type, " (index type: ",
+                            index_key_type, ", index value ", index_value, ")");
+        message += "\nlookup plan: ";
+        detail::append_lookup_plan(message, lookup_plan);
+        append_registration_binding_candidates(message, entries);
+        append_registration_candidates(message, entries);
+        throw type_not_found_exception(std::move(message));
+    }
+
+    [[noreturn]] void throw_type_not_found_with_lookup_plan(
+        type_descriptor request_type,
+        const detail::lookup_plan_summary& lookup_plan) {
+        std::string message = "type not found: ";
+        append_type_name(message, request_type);
+        message += "\nlookup plan: ";
+        detail::append_lookup_plan(message, lookup_plan);
+        throw type_not_found_exception(std::move(message));
+    }
+
+    [[noreturn]] void throw_type_not_found_with_lookup_plan(
+        type_descriptor request_type, type_descriptor index_key_type,
+        const std::string& index_value,
+        const detail::lookup_plan_summary& lookup_plan) {
+        std::string message = "type not found: ";
+        detail::append_text(message, request_type, " (index type: ",
+                            index_key_type, ", index value ", index_value, ")");
+        message += "\nlookup plan: ";
+        detail::append_lookup_plan(message, lookup_plan);
+        throw type_not_found_exception(std::move(message));
+    }
+
+    [[noreturn]] void throw_collection_type_not_found_with_plan(
+        type_descriptor collection_type, type_descriptor element_request_type,
+        const detail::collection_plan_summary& collection_plan) {
+        std::string message = "type not found for collection ";
+        detail::append_text(message, collection_type, " (element type: ",
+                            element_request_type, ")");
+        message += "\ncollection plan: ";
+        detail::append_collection_plan(message, collection_plan);
+        throw type_not_found_exception(std::move(message));
+    }
+
+    template <typename Exception, typename Binding>
+    [[noreturn]] void throw_collection_exception_with_plan(
+        const Exception& e,
+        const detail::collection_plan_summary& collection_plan,
+        const Binding& binding) {
+        std::string message = e.what();
+        if (message.find("\ncollection plan: ") == std::string::npos) {
+            message += "\ncollection plan: ";
+            detail::append_collection_plan(message, collection_plan);
         }
-        return instance_factory_traits<rtti_type, T>::convert(ptr);
+        if (message.find("\ncollection binding: ") == std::string::npos) {
+            message += "\ncollection binding: ";
+            detail::append_runtime_binding_summary(message, binding);
+        }
+        throw Exception(std::move(message));
     }
 
     struct index_data;
 
-    template <typename CachedT, typename T, typename Factory, typename Context>
-    T resolve(Factory& factory, Context& context, index_data& data) {
-        void* ptr = instance_factory_traits<rtti_type, T>::resolve(
-            factory, context);
+    template <typename CachedT, typename Binding>
+    void cache_resolved_result(Binding& binding, void* ptr,
+                               index_data* indexed_cache) {
         if constexpr (cache_enabled) {
-            if (factory.cacheable)
-                data.cache = ptr;
+            if (!binding.cacheable) {
+                return;
+            }
+
+            if (indexed_cache) {
+                indexed_cache->cache = ptr;
+            } else if constexpr (!is_none_v<CachedT>) {
+                type_cache_.template insert<CachedT>(ptr);
+            }
+        } else {
+            (void)binding;
+            (void)ptr;
+            (void)indexed_cache;
         }
-        return instance_factory_traits<rtti_type, T>::convert(ptr);
     }
 
-    template <typename T, typename Factory, typename Context>
-    T resolve_collection_type(Factory& factory, Context& context) {
-        void* ptr = instance_factory_traits<rtti_type, T>::resolve(
-            factory, context);
-        return instance_factory_traits<rtti_type, T>::convert(ptr);
+    template <typename CachedT, typename T, typename Binding, typename Context>
+    T execute_resolve_plan(Binding& binding, Context& context,
+                           index_data* indexed_cache) {
+        using factory_type = std::remove_pointer_t<decltype(binding.factory)>;
+        using plan_type = detail::resolution_plan_for_t<T, factory_type>;
+        auto runtime_plan =
+            detail::lower_runtime_plan<rtti_type>(plan_type{}, binding);
+        try {
+            void* ptr = detail::execute_runtime_plan(context, runtime_plan);
+            cache_resolved_result<CachedT>(binding, ptr, indexed_cache);
+            return detail::convert_runtime_plan<rtti_type>(ptr, runtime_plan,
+                                                           plan_type{});
+        } catch (const type_not_convertible_exception& e) {
+            throw_type_not_convertible_with_plan(e, runtime_plan);
+        }
     }
 
-    template <class Storage, class TypeInterface, class Type>
-    void check_interface_requirements() {
-        using normalized_type = normalized_type_t<Type>;
-        using normalized_interface_type = normalized_type_t<TypeInterface>;
-        constexpr bool is_alternative_type_interface =
-            is_alternative_type_interface_compatible_v<normalized_type,
-                                                       normalized_interface_type>;
+    template <typename CachedT, typename T, typename Binding, typename Context>
+    T resolve(Binding& binding, Context& context) {
+        return execute_resolve_plan<CachedT, T>(binding, context, nullptr);
+    }
 
-        static_assert(!std::is_reference_v<TypeInterface>);
-        if constexpr (detail::is_array_like_type_v<Type>) {
-            if constexpr (std::is_array_v<TypeInterface>) {
-                using exact_interface_type =
-                    detail::array_like_exact_interface_type_t<Type>;
-                static_assert(
-                    std::is_same_v<std::remove_cv_t<TypeInterface>,
-                                   std::remove_cv_t<exact_interface_type>> ||
-                        (std::is_array_v<Type> && (std::rank_v<Type> > 1) &&
-                         std::is_same_v<std::remove_cv_t<TypeInterface>,
-                                        std::remove_cv_t<std::remove_extent_t<Type>>>),
-                    "array registrations require matching array-shape interfaces");
-            } else {
-                static_assert(
-                    std::is_same_v<normalized_type, normalized_interface_type>,
-                    "array registrations require matching element-type interfaces");
+    template <typename CachedT, typename T, typename Binding, typename Context>
+    T resolve(Binding& binding, Context& context, index_data& data) {
+        return execute_resolve_plan<CachedT, T>(binding, context, &data);
+    }
+
+    template <typename T, typename Binding, typename Context>
+    T resolve_collection_type(Binding& binding, Context& context) {
+        return execute_resolve_plan<none_t, T>(binding, context, nullptr);
+    }
+
+    template <typename Descriptor, typename IdType>
+    void insert_materialized_registration(Descriptor&& descriptor, IdType&& id) {
+        validate_materialized_registration(descriptor, id);
+        auto&& index_id = id;
+        insert_materialized_registration_entries(
+            std::move(descriptor.entries), index_id,
+            typename std::remove_reference_t<Descriptor>::interface_types{},
+            type_list<typename std::remove_reference_t<
+                Descriptor>::registered_storage_type>{},
+            std::make_index_sequence<std::tuple_size_v<std::remove_reference_t<
+                decltype(descriptor.entries)>>>{});
+    }
+
+    template <typename InterfaceType, typename RegisteredStorageType,
+              typename Entry, typename IdType>
+    void insert_materialized_entry(Entry&& entry, IdType&& id) {
+        using interface_type = InterfaceType;
+        using registered_storage_type = RegisteredStorageType;
+        using key_type = std::decay_t<IdType>;
+        auto binding_id = next_binding_id_++;
+        entry.binding.id = binding_id;
+        entry.registration.binding_id = binding_id;
+        auto pb = type_factories_.template insert<interface_type>(get_allocator());
+        auto& data = pb.first;
+        auto registration = entry.registration;
+        auto inserted =
+            data.entries
+                .template insert<type_list<interface_type, registered_storage_type>>(
+                    std::move(entry));
+        if (!inserted.second) {
+            throw_type_already_registered(registration);
+        }
+
+        if constexpr (!is_none_v<key_type>) {
+            key_type index_key(std::forward<IdType>(id));
+            if (!data.template get_index<key_type>(get_allocator())
+                     .emplace(std::move(index_key),
+                              index_data{&inserted.first.binding, nullptr})) {
+                bool erased = data.entries.template erase<
+                    type_list<interface_type, registered_storage_type>>();
+                assert(erased);
+                (void)erased;
+                throw_type_index_already_registered(registration);
             }
         }
-        static_assert(
-            std::is_convertible_v<normalized_type*, normalized_interface_type*> ||
-            is_alternative_type_interface,
-            "registered type must be pointer-convertible to the interface");
-        if constexpr (!std::is_same_v<normalized_type,
-                                      normalized_interface_type>) {
-            static_assert(detail::storage_interface_requirements_v<
-                              Storage, normalized_type,
-                              normalized_interface_type>,
-                          "storage requirements not met");
+    }
+
+    template <typename Descriptor, typename IdType>
+    void validate_materialized_registration(Descriptor& descriptor,
+                                            const IdType& id) {
+        constexpr auto entry_count =
+            std::tuple_size_v<std::remove_reference_t<decltype(descriptor.entries)>>;
+        auto validation_entries = std::apply(
+            [](auto&... entries) {
+                return std::array<const detail::registration_metadata*,
+                                  sizeof...(entries)>{
+                    &entries.registration...};
+            },
+            descriptor.entries);
+
+        validate_materialized_registration_entries(
+            descriptor.entries, id, typename Descriptor::interface_types{},
+            type_list<typename Descriptor::registered_storage_type>{},
+            std::make_index_sequence<entry_count>{});
+        for (std::size_t i = 0; i < entry_count; ++i) {
+            for (std::size_t j = i + 1; j < entry_count; ++j) {
+                auto& left = *validation_entries[i];
+                auto& right = *validation_entries[j];
+
+                if (left.interface_type == right.interface_type &&
+                    left.registered_storage_type ==
+                        right.registered_storage_type) {
+                    throw_type_already_registered(left);
+                }
+
+                if constexpr (!is_none_v<std::decay_t<IdType>>) {
+                    if (left.interface_type == right.interface_type) {
+                        throw_type_index_already_registered(left);
+                    }
+                }
+            }
         }
     }
 
-    template <typename U, typename... Args>
-    std::pair<
-        instance_factory_ptr<instance_factory_interface<container_type>>,
-        typename U::container_type*>
-    allocate_factory(Args&&... args) {
-        auto alloc = allocator_traits::rebind<U>(get_allocator());
-        U* instance = allocator_traits::allocate(alloc, 1);
-        if (!instance)
-            return {nullptr, nullptr};
-
-        // TODO: should be nothrow-constructible
-        // static_assert(std::is_nothrow_constructible_v<U, Args...>);
-        allocator_traits::construct(alloc, instance,
-                                    std::forward<Args>(args)...);
-
-        instance->cacheable = U::storage_type::cacheable;
-
-        return {instance, &instance->get_container()};
+    template <typename KeyType>
+    void validate_registration_index_key(const KeyType& id) {
+        using index_tag_type =
+            typename index_tag<KeyType, index_definition_type>::type;
+        if constexpr (detail::index_array_traits<index_tag_type>::is_array) {
+            constexpr std::size_t bound =
+                detail::index_array_traits<index_tag_type>::value;
+            if (id >= bound) {
+                throw detail::make_type_index_out_of_range_exception(id, bound);
+            }
+        }
     }
+
+    template <typename InterfaceType, typename RegisteredStorageType,
+              typename Entry, typename IdType>
+    void validate_materialized_entry(const Entry& entry, const IdType& id) {
+        using interface_type = InterfaceType;
+        using registered_storage_type = RegisteredStorageType;
+        using key_type = std::decay_t<IdType>;
+
+        auto data = type_factories_.template get<interface_type>();
+        if (data && data->entries.template get<
+                        type_list<interface_type, registered_storage_type>>()) {
+            throw_type_already_registered(entry.registration);
+        }
+
+        if constexpr (!is_none_v<key_type>) {
+            validate_registration_index_key<key_type>(id);
+            if (data) {
+                auto* index = data->template try_get_index<key_type>();
+                if (index && index->find(id)) {
+                    throw_type_index_already_registered(entry.registration);
+                }
+            }
+        }
+    }
+
+    template <typename... Entries, typename IdType, typename... Interfaces,
+              typename RegisteredStorageType, std::size_t... I>
+    void insert_materialized_registration_entries(
+        std::tuple<Entries...>&& entries, IdType&& id,
+        type_list<Interfaces...>, type_list<RegisteredStorageType>,
+        std::index_sequence<I...>) {
+        (insert_materialized_entry<type_list_element_t<I, type_list<Interfaces...>>,
+                                   RegisteredStorageType>(
+             std::get<I>(std::move(entries)), id),
+         ...);
+    }
+
+    template <typename Tuple, typename IdType, typename... Interfaces,
+              typename RegisteredStorageType, std::size_t... I>
+    void validate_materialized_registration_entries(
+        Tuple& entries, const IdType& id, type_list<Interfaces...>,
+        type_list<RegisteredStorageType>, std::index_sequence<I...>) {
+        (validate_materialized_entry<
+             type_list_element_t<I, type_list<Interfaces...>>,
+             RegisteredStorageType>(std::get<I>(entries), id),
+         ...);
+    }
+
+    template <typename Registrations>
+    void append_registration_candidates(std::string& message,
+                                        Registrations& registrations) {
+        message += "\nregistered plans:";
+        bool first = true;
+        for (auto&& entry : registrations) {
+            auto& record = entry.second.registration;
+            message += first ? " " : ", ";
+            append_registration_candidate(message, record);
+            first = false;
+        }
+    }
+
+    template <typename Entries>
+    void append_registration_binding_candidates(std::string& message,
+                                                Entries& entries) {
+        message += "\ncandidates:";
+        bool first = true;
+        for (auto&& entry : entries) {
+            message += first ? " " : ", ";
+            detail::append_runtime_binding_summary(message, entry.second.binding);
+            first = false;
+        }
+    }
+
+    [[noreturn]] void throw_type_already_registered(
+        const detail::registration_metadata& registration) {
+        std::string message = "type already registered: interface ";
+        append_registration_identity(message, registration);
+        message += "\nregistration plan: ";
+        registration.append_plan(message);
+        throw type_already_registered_exception(std::move(message));
+    }
+
+    [[noreturn]] void throw_type_index_already_registered(
+        const detail::registration_metadata& registration) {
+        std::string message = "type index already registered: interface ";
+        append_registration_identity(message, registration);
+        message += ", index type ";
+        append_type_name(message, registration.index_key_type);
+        message += "\nregistration plan: ";
+        registration.append_plan(message);
+        throw type_index_already_registered_exception(std::move(message));
+    }
+
+    void append_registration_identity(
+        std::string& message,
+        const detail::registration_metadata& registration) {
+        append_type_name(message, registration.interface_type);
+        message += ", storage ";
+        append_type_name(message, registration.registered_storage_type);
+    }
+
+    void append_registration_candidate(
+        std::string& message,
+        const detail::registration_metadata& registration) {
+        message += "{ binding ";
+        message += std::to_string(registration.binding_id);
+        message += ", interface ";
+        append_type_name(message, registration.interface_type);
+        if (registration.indexed) {
+            message += ", index key ";
+            append_type_name(message, registration.index_key_type);
+        }
+        message += ", plan ";
+        registration.append_plan(message);
+        message += " }";
+    }
+
+    using binding_record = detail::runtime_binding_record<
+        instance_factory_interface<container_type>*,
+        typename rtti_type::type_index>;
 
     parent_container_type* parent_ = nullptr;
 
     struct index_data {
-        instance_factory_interface<container_type>* factory;
+        binding_record* binding;
         void* cache;
 
-        operator bool() const { return factory != nullptr; }
+        operator bool() const { return binding != nullptr; }
     };
 
     using index_definition_list_type = to_type_list_t<index_definition_type>;
@@ -593,13 +828,15 @@ class container : public allocator_base<Allocator> {
 
     struct type_factory_data : index_type {
         type_factory_data(allocator_type& allocator)
-            : index_type(allocator), factories(allocator) {}
+            : index_type(allocator), entries(allocator) {}
 
         typename ContainerTraits::template type_map_type<
-            instance_factory_ptr<
-                instance_factory_interface<container_type>>,
+            detail::registry_entry<
+                binding_record,
+                instance_factory_ptr<
+                    instance_factory_interface<container_type>>>,
             allocator_type>
-            factories;
+            entries;
     };
 
     typename ContainerTraits::template type_map_type<type_factory_data,
@@ -609,5 +846,6 @@ class container : public allocator_base<Allocator> {
     // Due to conversions, there is no 1:1 mapping between cached types and factories
     typename ContainerTraits::template type_cache_type<void*, allocator_type>
         type_cache_;
+    std::size_t next_binding_id_ = 0;
 };
 } // namespace dingo

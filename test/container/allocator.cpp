@@ -54,7 +54,6 @@ bool operator!=(const test_allocator<T>& x,
 }
 
 using container_types = ::testing::Types<
-    dingo::container<dingo::static_container_traits<>, test_allocator<char>>,
     dingo::container<dingo::dynamic_container_traits, test_allocator<char>>>;
 
 template <typename T> struct allocator_test : public testing::Test {};

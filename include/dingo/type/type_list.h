@@ -61,6 +61,16 @@ struct type_list_head<type_list<Head, Tail...>> {
 template <typename List>
 using type_list_head_t = typename type_list_head<List>::type;
 
+template <std::size_t Index, typename List> struct type_list_element;
+
+template <std::size_t Index, typename... Types>
+struct type_list_element<Index, type_list<Types...>> {
+    using type = std::tuple_element_t<Index, std::tuple<Types...>>;
+};
+
+template <std::size_t Index, typename List>
+using type_list_element_t = typename type_list_element<Index, List>::type;
+
 template <typename T> struct to_type_list {
     using type = T;
 };

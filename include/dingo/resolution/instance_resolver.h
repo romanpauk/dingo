@@ -104,8 +104,8 @@ struct shared_instance_resolver<RTTI, Type, Storage, false> {
         return storage.resolve(context, container);
     }
 
-    template <typename Target, typename Source, typename Context,
-              typename Container, typename Factory>
+    template <typename Conversion, typename Context, typename Container,
+              typename Factory>
     void* resolve_address(Context& context, Container& container,
                           Storage& storage, Factory& factory,
                           type_descriptor requested_type,
@@ -121,18 +121,16 @@ struct shared_instance_resolver<RTTI, Type, Storage, false> {
             context.push(&closure_);
             storage.resolve(context, container);
 
-            auto&& instance =
-                type_conversion<typename Storage::tag_type, Target, Source>::
-                    apply(factory, context, requested_type, registered_type);
+            auto&& instance = detail::execute_conversion<Conversion>(
+                factory, context, requested_type, registered_type);
             void* p = ::dingo::get_address(
                 context, std::forward<decltype(instance)>(instance));
             context.pop();
             return p;
         }
 
-        auto&& instance =
-            type_conversion<typename Storage::tag_type, Target, Source>::apply(
-                factory, context, requested_type, registered_type);
+        auto&& instance = detail::execute_conversion<Conversion>(
+            factory, context, requested_type, registered_type);
         return ::dingo::get_address(
             context, std::forward<decltype(instance)>(instance));
     }
@@ -155,8 +153,8 @@ struct shared_instance_resolver<RTTI, Type, Storage, true>
         return storage.resolve(context, container);
     }
 
-    template <typename Target, typename Source, typename Context,
-              typename Container, typename Factory>
+    template <typename Conversion, typename Context, typename Container,
+              typename Factory>
     void* resolve_address(Context& context, Container& container,
                           Storage& storage, Factory& factory,
                           type_descriptor requested_type,
@@ -169,9 +167,8 @@ struct shared_instance_resolver<RTTI, Type, Storage, true>
             context.push(&closure_);
             storage.resolve(context, container);
 
-            auto&& instance =
-                type_conversion<typename Storage::tag_type, Target, Source>::
-                    apply(factory, context, requested_type, registered_type);
+            auto&& instance = detail::execute_conversion<Conversion>(
+                factory, context, requested_type, registered_type);
             initialized_ = true;
 
             void* p = ::dingo::get_address(
@@ -180,9 +177,8 @@ struct shared_instance_resolver<RTTI, Type, Storage, true>
             return p;
         }
 
-        auto&& instance =
-            type_conversion<typename Storage::tag_type, Target, Source>::apply(
-                factory, context, requested_type, registered_type);
+        auto&& instance = detail::execute_conversion<Conversion>(
+            factory, context, requested_type, registered_type);
         return ::dingo::get_address(
             context, std::forward<decltype(instance)>(instance));
     }
@@ -217,14 +213,13 @@ struct external_instance_resolver<RTTI, Type, Storage, false> {
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-    template <typename Target, typename Source, typename Context,
-              typename Container, typename Factory>
+    template <typename Conversion, typename Context, typename Container,
+              typename Factory>
     void* resolve_address(Context& context, Container&, Storage&,
                           Factory& factory, type_descriptor requested_type,
                           type_descriptor registered_type) {
-        auto&& instance =
-            type_conversion<typename Storage::tag_type, Target, Source>::apply(
-                factory, context, requested_type, registered_type);
+        auto&& instance = detail::execute_conversion<Conversion>(
+            factory, context, requested_type, registered_type);
         return ::dingo::get_address(
             context, std::forward<decltype(instance)>(instance));
     }
@@ -249,14 +244,13 @@ struct external_instance_resolver<RTTI, Type, Storage, true>
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-    template <typename Target, typename Source, typename Context,
-              typename Container, typename Factory>
+    template <typename Conversion, typename Context, typename Container,
+              typename Factory>
     void* resolve_address(Context& context, Container&, Storage&,
                           Factory& factory, type_descriptor requested_type,
                           type_descriptor registered_type) {
-        auto&& instance =
-            type_conversion<typename Storage::tag_type, Target, Source>::apply(
-                factory, context, requested_type, registered_type);
+        auto&& instance = detail::execute_conversion<Conversion>(
+            factory, context, requested_type, registered_type);
         return ::dingo::get_address(
             context, std::forward<decltype(instance)>(instance));
     }
@@ -288,8 +282,8 @@ struct instance_resolver<RTTI, Type, Storage, unique> {
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-    template <typename Target, typename Source, typename Context,
-              typename Container, typename Factory>
+    template <typename Conversion, typename Context, typename Container,
+              typename Factory>
     void* resolve_address(Context& context, Container& container,
                           Storage& storage, Factory& factory,
                           type_descriptor requested_type,
@@ -301,9 +295,8 @@ struct instance_resolver<RTTI, Type, Storage, unique> {
 
         [[maybe_unused]] class_recursion_guard<leaf_type_t<typename Storage::type>>
             recursion_guard(context);
-        auto&& instance =
-            type_conversion<typename Storage::tag_type, Target, Source>::apply(
-                factory, context, requested_type, registered_type);
+        auto&& instance = detail::execute_conversion<Conversion>(
+            factory, context, requested_type, registered_type);
         return ::dingo::get_address(
             context, std::forward<decltype(instance)>(instance));
     }

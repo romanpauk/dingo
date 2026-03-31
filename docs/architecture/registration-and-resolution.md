@@ -10,9 +10,9 @@ The public API starts at `container::register_type<...>()` in
 `register_type_impl(...)` does three important things:
 
 1. It builds a complete `type_registration<...>` from the supplied policies.
-2. It computes the stored type, including the interface-storage rewrite
+1. It computes the stored type, including the interface-storage rewrite
    optimization for the single-interface virtual-destructor case.
-3. It allocates one or more factories and inserts them into the container's
+1. It allocates one or more factories and inserts them into the container's
    factory map.
 
 `type_registration<...>` in
@@ -52,21 +52,47 @@ The public `resolve<T>()` path is also in
 The sequence is:
 
 1. Check the cache if container caching is enabled.
-2. Normalize the request type and look up the matching factory set.
-3. Pick the single factory or indexed factory for the request.
-4. Ask `instance_factory_traits` how this request should be serviced.
-5. Resolve through the selected factory and convert the result back to `T`.
+1. Normalize the request type and look up the matching factory set.
+1. Pick the single binding record or indexed binding record for the request.
+1. Build a structural `resolution_plan`.
+1. Lower that plan into a value-level runtime execution plan.
+1. Ask the execution backend to execute that lowered plan.
+1. Resolve through the selected factory and convert the result back to `T`
+   through the shared conversion core in
+   [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h).
 
-[include/dingo/resolution/instance_factory_traits.h](../../include/dingo/resolution/instance_factory_traits.h)
-is the small dispatch layer that maps the requested form to the factory API:
+[include/dingo/resolution/runtime_execution_plan.h](../../include/dingo/resolution/runtime_execution_plan.h)
+is the value-level backend step. It lowers the request portion of the structural
+plan into a compact runtime object and executes that object against the factory API.
+
+That lowered plan now carries:
+
+- request opcode
+
+- common-case conversion opcode
+
+- selected binding metadata
 
 - `T` -> `get_value`
+
 - `T&` / `const T&` -> `get_lvalue_reference`
+
 - `T&&` -> `get_rvalue_reference`
+
 - `T*` -> `get_pointer`
 
 This keeps the container itself from needing to understand every conversion
-shape.
+shape while still making the request semantics structural in
+[include/dingo/resolution/ir.h](../../include/dingo/resolution/ir.h).
+
+Concrete factories in
+[include/dingo/resolution/instance_factory.h](../../include/dingo/resolution/instance_factory.h)
+also expose `plan_for<T>()`, which carries the richer compile-time binding,
+acquisition, invocation, and conversion structure.
+
+The container registry now preserves a small binding record at lookup time, so
+the runtime plan carries binding identity and basic metadata instead of only a
+raw factory pointer.
 
 ## Factory Path
 
@@ -110,5 +136,6 @@ These files are useful while reading this flow:
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 - [include/dingo/resolution/instance_factory.h](../../include/dingo/resolution/instance_factory.h)
-- [include/dingo/resolution/instance_factory_traits.h](../../include/dingo/resolution/instance_factory_traits.h)
+- [include/dingo/resolution/runtime_execution_plan.h](../../include/dingo/resolution/runtime_execution_plan.h)
+- [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)
 - [include/dingo/factory/constructor_detection.h](../../include/dingo/factory/constructor_detection.h)

@@ -11,6 +11,7 @@
 
 #include <gtest/gtest.h>
 
+#include <initializer_list>
 #include <memory>
 #include <string>
 #include <variant>
@@ -22,6 +23,24 @@
 
 namespace dingo {
 namespace {
+template <typename Target, typename Source>
+void expect_type_not_convertible_with_plan(
+    const type_not_convertible_exception& e,
+    std::initializer_list<std::string_view> expected_plan_parts) {
+    std::string message = e.what();
+    std::string expected = "type is not convertible to ";
+    expected += type_name<Target>();
+    expected += " from ";
+    expected += type_name<Source>();
+
+    EXPECT_NE(message.find(expected), std::string::npos);
+    EXPECT_NE(message.find("resolution plan:"), std::string::npos);
+
+    for (auto part : expected_plan_parts) {
+        EXPECT_NE(message.find(part), std::string::npos);
+    }
+}
+
 struct shared_ptr_variant_a {
     explicit shared_ptr_variant_a(int init) : value(init) {}
     int value;
@@ -132,11 +151,10 @@ TYPED_TEST(external_test, exception_message_type_not_convertible_shared_ptr_inte
         (void)container.template resolve<std::unique_ptr<IClass>>();
         FAIL() << "expected type_not_convertible_exception";
     } catch (const type_not_convertible_exception& e) {
-        std::string expected = "type is not convertible to ";
-        expected += type_name<std::unique_ptr<IClass>>();
-        expected += " from ";
-        expected += type_name<std::shared_ptr<Class>>();
-        ASSERT_STREQ(e.what(), expected.c_str());
+        expect_type_not_convertible_with_plan<std::unique_ptr<IClass>,
+                                              std::shared_ptr<Class>>(
+            e, {"request value", "storage external", "shape wrapper",
+                "family handle"});
     }
 }
 
@@ -215,11 +233,9 @@ TYPED_TEST(external_test,
         (void)container.template resolve<std::unique_ptr<IClass>>();
         FAIL() << "expected type_not_convertible_exception";
     } catch (const type_not_convertible_exception& e) {
-        std::string expected = "type is not convertible to ";
-        expected += type_name<std::unique_ptr<IClass>>();
-        expected += " from ";
-        expected += type_name<std::shared_ptr<Class>&>();
-        ASSERT_STREQ(e.what(), expected.c_str());
+        expect_type_not_convertible_with_plan<std::unique_ptr<IClass>,
+                                              std::shared_ptr<Class>&>(
+            e, {"request value", "storage external", "shape plain"});
     }
 }
 
@@ -260,11 +276,10 @@ TYPED_TEST(external_test,
         (void)container.template resolve<std::unique_ptr<IClass>&>();
         FAIL() << "expected type_not_convertible_exception";
     } catch (const type_not_convertible_exception& e) {
-        std::string expected = "type is not convertible to ";
-        expected += type_name<std::unique_ptr<IClass>&>();
-        expected += " from ";
-        expected += type_name<std::unique_ptr<Class>&>();
-        ASSERT_STREQ(e.what(), expected.c_str());
+        expect_type_not_convertible_with_plan<std::unique_ptr<IClass>&,
+                                              std::unique_ptr<Class>&>(
+            e, {"request lvalue_reference", "storage external",
+                "shape plain"});
     }
 }
 
@@ -318,11 +333,9 @@ TYPED_TEST(external_test, exception_message_type_not_convertible_unique_ptr_valu
         (void)container.template resolve<Class>();
         FAIL() << "expected type_not_convertible_exception";
     } catch (const type_not_convertible_exception& e) {
-        std::string expected = "type is not convertible to ";
-        expected += type_name<Class>();
-        expected += " from ";
-        expected += type_name<std::unique_ptr<Class>>();
-        ASSERT_STREQ(e.what(), expected.c_str());
+        expect_type_not_convertible_with_plan<Class, std::unique_ptr<Class>>(
+            e, {"request value", "storage external", "shape wrapper",
+                "family borrow"});
     }
 }
 
@@ -371,11 +384,10 @@ TYPED_TEST(external_test,
         (void)container.template resolve<std::optional<Base>&>();
         FAIL() << "expected type_not_convertible_exception";
     } catch (const type_not_convertible_exception& e) {
-        std::string expected = "type is not convertible to ";
-        expected += type_name<std::optional<Base>&>();
-        expected += " from ";
-        expected += type_name<std::optional<Derived>&>();
-        ASSERT_STREQ(e.what(), expected.c_str());
+        expect_type_not_convertible_with_plan<std::optional<Base>&,
+                                              std::optional<Derived>&>(
+            e, {"request lvalue_reference", "storage external",
+                "shape plain"});
     }
 }
 
@@ -392,11 +404,9 @@ TYPED_TEST(external_test, exception_message_type_not_convertible_optional_value)
         (void)container.template resolve<Class>();
         FAIL() << "expected type_not_convertible_exception";
     } catch (const type_not_convertible_exception& e) {
-        std::string expected = "type is not convertible to ";
-        expected += type_name<Class>();
-        expected += " from ";
-        expected += type_name<std::optional<Class>>();
-        ASSERT_STREQ(e.what(), expected.c_str());
+        expect_type_not_convertible_with_plan<Class, std::optional<Class>>(
+            e, {"request value", "storage external", "shape wrapper",
+                "family borrow"});
     }
 }
 

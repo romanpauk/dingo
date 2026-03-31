@@ -45,26 +45,34 @@ TYPED_TEST(shared_cyclical_test, recursion_exception) {
         (void)container.template resolve<A>();
         FAIL() << "expected type_recursion_exception";
     } catch (const type_recursion_exception& e) {
+        std::string message = e.what();
         std::string expected = "recursive dependency detected: ";
         expected += type_name<A>();
         expected += " -> ";
         expected += type_name<B>();
         expected += " -> ";
         expected += type_name<A>();
-        ASSERT_STREQ(e.what(), expected.c_str());
+        EXPECT_NE(message.find(expected), std::string::npos);
+        EXPECT_NE(message.find("constructor path: "), std::string::npos);
+        EXPECT_NE(message.find(type_name<A>()), std::string::npos);
+        EXPECT_NE(message.find(type_name<B>()), std::string::npos);
     }
 
     try {
         (void)container.template resolve<B>();
         FAIL() << "expected type_recursion_exception";
     } catch (const type_recursion_exception& e) {
+        std::string message = e.what();
         std::string expected = "recursive dependency detected: ";
         expected += type_name<B>();
         expected += " -> ";
         expected += type_name<A>();
         expected += " -> ";
         expected += type_name<B>();
-        ASSERT_STREQ(e.what(), expected.c_str());
+        EXPECT_NE(message.find(expected), std::string::npos);
+        EXPECT_NE(message.find("constructor path: "), std::string::npos);
+        EXPECT_NE(message.find(type_name<A>()), std::string::npos);
+        EXPECT_NE(message.find(type_name<B>()), std::string::npos);
     }
 }
 

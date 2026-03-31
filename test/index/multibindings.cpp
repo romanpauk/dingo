@@ -7,6 +7,7 @@
 
 #include <dingo/container.h>
 #include <dingo/factory/callable.h>
+#include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>
 #include <dingo/storage/unique.h>
@@ -141,6 +142,29 @@ TYPED_TEST(multibindings_test, register_type_collection_shared_value) {
     ASSERT_EQ(classes.size(), 2);
 }
 
+TYPED_TEST(multibindings_test, exception_message_collection_type_not_found) {
+    using container_type = TypeParam;
+
+    container_type container;
+
+    try {
+        (void)container.template construct_collection<std::vector<IClass*>>();
+        FAIL() << "expected type_not_found_exception";
+    } catch (const type_not_found_exception& e) {
+        std::string message = e.what();
+        std::string expected = "type not found for collection ";
+        expected += type_name<std::vector<IClass*>>();
+        expected += " (element type: ";
+        expected += type_name<IClass*>();
+        expected += ")";
+
+        EXPECT_NE(message.find(expected), std::string::npos);
+        EXPECT_NE(message.find("collection plan: "), std::string::npos);
+        EXPECT_NE(message.find("aggregation standard"), std::string::npos);
+        EXPECT_NE(message.find(type_name<IClass>()), std::string::npos);
+    }
+}
+
 TYPED_TEST(multibindings_test, register_type_collection_shared_ptr) {
     using container_type = TypeParam;
 
@@ -223,6 +247,39 @@ TYPED_TEST(multibindings_test, register_type_collection_mapping_unique_ptr) {
         container.template resolve<
             std::map<std::type_index, std::unique_ptr<IClass>>>();
     ASSERT_EQ(classes.size(), 2);
+}
+
+TYPED_TEST(multibindings_test, exception_message_collection_type_not_convertible) {
+    using container_type = TypeParam;
+
+    struct IService {
+        virtual ~IService() = default;
+    };
+    struct Service : IService {};
+
+    Service service;
+    container_type container;
+    container.template register_type<scope<external>, storage<Service&>,
+                                     interfaces<IService>>(service);
+
+    try {
+        (void)container.template construct_collection<
+            std::vector<std::shared_ptr<IService>>>();
+        FAIL() << "expected type_not_convertible_exception";
+    } catch (const type_not_convertible_exception& e) {
+        std::string message = e.what();
+        std::string expected = "type is not convertible to ";
+        expected += type_name<std::shared_ptr<IService>>();
+        expected += " from ";
+        expected += type_name<Service&>();
+
+        EXPECT_NE(message.find(expected), std::string::npos);
+        EXPECT_NE(message.find("collection plan: "), std::string::npos);
+        EXPECT_NE(message.find("aggregation standard"), std::string::npos);
+        EXPECT_NE(message.find("collection binding: "), std::string::npos);
+        EXPECT_NE(message.find(type_name<std::vector<std::shared_ptr<IService>>>()),
+                  std::string::npos);
+    }
 }
 
 } // namespace dingo

@@ -14,6 +14,8 @@
 #include <dingo/type/rebind_type.h>
 #include <dingo/resolution/resolving_context.h>
 
+#include <utility>
+
 namespace dingo {
 // TODO: this is bit convoluted, ideally merge resolver with factory
 
@@ -39,6 +41,11 @@ template <typename T> T& get_instance_factory_data(std::shared_ptr<T>& data) {
 namespace detail {
 template <typename Storage>
 using registered_type_t = typename Storage::type;
+
+template <typename Storage, typename Context, typename Container>
+using storage_resolve_result_t = decltype(
+    std::declval<Storage&>().resolve(std::declval<Context&>(),
+                                     std::declval<Container&>()));
 
 template <typename ExactLookup>
 constexpr bool matches_exact_lookup(type_descriptor requested_type) {
@@ -94,6 +101,12 @@ class instance_factory : public instance_factory_interface<Container> {
     using rtti_type = typename Container::rtti_type;
     using type_index = typename rtti_type::type_index;
 
+    template <typename Request>
+    using request_plan_t = detail::request_ir_t<Request>;
+    using source_type =
+        detail::storage_resolve_result_t<Storage, resolving_context,
+                                         container_type>;
+
   private:
     instance_resolver<rtti_type, Type, Storage> resolver_;
     // `data_` must be destroyed before `resolver_` so shared storage can
@@ -118,6 +131,19 @@ class instance_factory : public instance_factory_interface<Container> {
     template <typename... Args>
     instance_factory(Args&&... args)
         : data_(std::forward<Args>(args)...) {}
+
+    template <typename Request>
+    using plan_type = ir::resolution<
+        request_plan_t<Request>, detail::binding_ir_t<Type, Storage>,
+        detail::acquisition_ir_t<Storage>,
+        detail::factory_invocation_ir_t<typename Storage::factory_type>,
+        detail::selected_request_conversion_ir_t<
+            request_plan_t<Request>, Type, Storage, source_type,
+            typename Storage::conversions>>;
+
+    template <typename Request> static constexpr auto plan_for() -> plan_type<Request> {
+        return {};
+    }
 
     auto& get_container() { return get_instance_factory_data(data_).container; }
     
@@ -170,11 +196,15 @@ class instance_factory : public instance_factory_interface<Container> {
             }
         }
 
-        using Target = std::remove_reference_t<resolved_type_t<T, Type>>;
         using Source = decltype(resolve(context));
+        using request_kind = typename detail::request_kind_ir<
+            resolved_type_t<T, Type>>::type;
+        using conversion =
+            detail::selected_conversion_for_kind_t<request_kind, Type, Storage,
+                                                   Source, T>;
 
-        return resolver_.template resolve_address<Target, Source>(context,
-            get_container(), get_storage(), *this, requested_type,
+        return resolver_.template resolve_address<conversion>(
+            context, get_container(), get_storage(), *this, requested_type,
             registered_type);
     }
 #ifdef _MSC_VER
@@ -201,11 +231,25 @@ class instance_factory : public instance_factory_interface<Container> {
     }
 };
 
+namespace detail {
+template <typename Request, typename Container, typename Type, typename Storage,
+          typename Data>
+constexpr auto plan_for(instance_factory<Container, Type, Storage, Data>&)
+    -> typename instance_factory<Container, Type, Storage, Data>::template plan_type<
+        Request> {
+    return {};
+}
+
+template <typename Request, typename Factory>
+using resolution_plan_for_t =
+    decltype(plan_for<Request>(std::declval<Factory&>()));
+} // namespace detail
+
 // This is much faster than unique_ptr + deleter
 template <typename T> struct instance_factory_ptr {
     instance_factory_ptr(T* ptr) : ptr_(ptr) {}
 
-    instance_factory_ptr(instance_factory_ptr<T>&& other) {
+    instance_factory_ptr(instance_factory_ptr<T>&& other) noexcept : ptr_(nullptr) {
         std::swap(ptr_, other.ptr_);
     }
 

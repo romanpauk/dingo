@@ -33,4 +33,19 @@ template <typename T> struct callable {
     T fn_;
 };
 
+namespace detail {
+template <typename Signature, typename Callable>
+struct callable_invocation_ir;
+
+template <typename R, typename C, typename... Args, typename Callable>
+struct callable_invocation_ir<R (C::*)(Args...) const, Callable> {
+    using type = ir::function_invocation<R, type_list<Args...>,
+                                         callable<Callable>>;
+};
+
+template <typename Callable>
+struct factory_invocation_ir<callable<Callable>>
+    : callable_invocation_ir<decltype(&Callable::operator()), Callable> {};
+} // namespace detail
+
 } // namespace dingo

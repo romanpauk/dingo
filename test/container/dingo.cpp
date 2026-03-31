@@ -178,9 +178,11 @@ TYPED_TEST(dingo_test, shared_unique_reference_exception) {
 TYPED_TEST(dingo_test, exception_message_type_not_found) {
     using container_type = TypeParam;
 
-    struct Dependency {};
+    struct Dependency {
+        explicit Dependency(int) {}
+    };
     struct Missing {
-        explicit Missing(Dependency&) {}
+        Dependency& dependency;
     };
 
     container_type container;
@@ -189,9 +191,43 @@ TYPED_TEST(dingo_test, exception_message_type_not_found) {
         (void)container.template resolve<Missing>();
         FAIL() << "expected type_not_found_exception";
     } catch (const type_not_found_exception& e) {
+        std::string message = e.what();
         std::string expected = "type not found: ";
-        expected += type_name<Missing>();
-        ASSERT_STREQ(e.what(), expected.c_str());
+        expected += type_name<Dependency&>();
+
+        EXPECT_NE(message.find(expected), std::string::npos);
+        EXPECT_NE(message.find("lookup plan: "), std::string::npos);
+        EXPECT_NE(message.find("lookup single"), std::string::npos);
+        EXPECT_NE(message.find("constructor path: "), std::string::npos);
+        EXPECT_NE(message.find(type_name<Missing>()), std::string::npos);
+        EXPECT_NE(message.find("automatic slot 0"), std::string::npos);
+    }
+}
+
+TYPED_TEST(dingo_test, exception_message_explicit_constructor_type_not_found) {
+    using container_type = TypeParam;
+
+    struct Dependency {
+        explicit Dependency(int) {}
+    };
+    struct Missing {
+        explicit Missing(Dependency&) {}
+    };
+
+    container_type container;
+
+    try {
+        (void)container.template construct<Missing, constructor<Missing(Dependency&)>>();
+        FAIL() << "expected type_not_found_exception";
+    } catch (const type_not_found_exception& e) {
+        std::string message = e.what();
+        std::string expected = "type not found: ";
+        expected += type_name<Dependency&>();
+
+        EXPECT_NE(message.find(expected), std::string::npos);
+        EXPECT_NE(message.find("constructor path: "), std::string::npos);
+        EXPECT_NE(message.find(type_name<Missing>()), std::string::npos);
+        EXPECT_NE(message.find(type_name<Dependency&>()), std::string::npos);
     }
 }
 
@@ -214,9 +250,22 @@ TYPED_TEST(dingo_test, exception_message_type_ambiguous) {
         (void)container.template resolve<IValue&>();
         FAIL() << "expected type_ambiguous_exception";
     } catch (const type_ambiguous_exception& e) {
+        std::string message = e.what();
         std::string expected = "type resolution is ambiguous: ";
         expected += type_name<IValue&>();
-        ASSERT_STREQ(e.what(), expected.c_str());
+
+        EXPECT_NE(message.find(expected), std::string::npos);
+        EXPECT_NE(message.find("lookup plan: "), std::string::npos);
+        EXPECT_NE(message.find("lookup single"), std::string::npos);
+        EXPECT_NE(message.find("candidates:"), std::string::npos);
+        EXPECT_NE(message.find("registered plans:"), std::string::npos);
+        EXPECT_NE(message.find("payload default_constructed"),
+                  std::string::npos);
+        EXPECT_NE(message.find("materialization single_interface"),
+                  std::string::npos);
+        EXPECT_NE(message.find("storage shared"), std::string::npos);
+        EXPECT_NE(message.find(type_name<ValueA>()), std::string::npos);
+        EXPECT_NE(message.find(type_name<ValueB>()), std::string::npos);
     }
 }
 
@@ -237,12 +286,69 @@ TYPED_TEST(dingo_test, exception_message_type_already_registered) {
                                          interfaces<IService>>();
         FAIL() << "expected type_already_registered_exception";
     } catch (const type_already_registered_exception& e) {
+        std::string message = e.what();
         std::string expected = "type already registered: interface ";
         expected += type_name<IService>();
         expected += ", storage ";
         expected += type_name<Service>();
-        ASSERT_STREQ(e.what(), expected.c_str());
+
+        EXPECT_NE(message.find(expected), std::string::npos);
+        EXPECT_NE(message.find("registration plan: "), std::string::npos);
+        EXPECT_NE(message.find(std::string("interfaces [") +
+                                   type_name<IService>() + "]"),
+                  std::string::npos);
+        EXPECT_NE(message.find(std::string("scope ") + type_name<shared>()),
+                  std::string::npos);
+        EXPECT_NE(message.find(std::string("registered storage ") +
+                                   type_name<Service>()),
+                  std::string::npos);
+        EXPECT_NE(message.find("payload default_constructed"),
+                  std::string::npos);
+        EXPECT_NE(message.find("materialization single_interface"),
+                  std::string::npos);
     }
+}
+
+TYPED_TEST(dingo_test, multi_interface_registration_is_atomic_on_duplicate) {
+    using container_type = TypeParam;
+
+    struct interface_a {
+        virtual ~interface_a() = default;
+    };
+    struct interface_b {
+        virtual ~interface_b() = default;
+    };
+    struct service : interface_a, interface_b {};
+
+    container_type container;
+    container.template register_type<scope<shared>, storage<service>,
+                                     interfaces<interface_b>>();
+
+    ASSERT_THROW((container.template register_type<
+                      scope<shared>, storage<service>,
+                      interfaces<interface_a, interface_b>>()),
+                 type_already_registered_exception);
+    ASSERT_THROW((container.template resolve<interface_a&>()),
+                 type_not_found_exception);
+    ASSERT_NO_THROW((container.template resolve<interface_b&>()));
+}
+
+TYPED_TEST(dingo_test, multi_interface_registration_rejects_internal_duplicate) {
+    using container_type = TypeParam;
+
+    struct interface_a {
+        virtual ~interface_a() = default;
+    };
+    struct service : interface_a {};
+
+    container_type container;
+
+    ASSERT_THROW((container.template register_type<
+                      scope<shared>, storage<service>,
+                      interfaces<interface_a, interface_a>>()),
+                 type_already_registered_exception);
+    ASSERT_THROW((container.template resolve<interface_a&>()),
+                 type_not_found_exception);
 }
 
 TYPED_TEST(dingo_test, exception_message_type_not_convertible) {
@@ -262,11 +368,85 @@ TYPED_TEST(dingo_test, exception_message_type_not_convertible) {
         (void)container.template resolve<std::shared_ptr<IService>>();
         FAIL() << "expected type_not_convertible_exception";
     } catch (const type_not_convertible_exception& e) {
+        std::string message = e.what();
         std::string expected = "type is not convertible to ";
         expected += type_name<std::shared_ptr<IService>>();
         expected += " from ";
         expected += type_name<Service&>();
-        ASSERT_STREQ(e.what(), expected.c_str());
+
+        EXPECT_NE(message.find(expected), std::string::npos);
+        EXPECT_NE(message.find("resolution plan: request value"),
+                  std::string::npos);
+        EXPECT_NE(message.find("storage external"), std::string::npos);
+        EXPECT_NE(message.find("shape plain"), std::string::npos);
+    }
+}
+
+TYPED_TEST(dingo_test, exception_message_auto_constructor_type_not_convertible) {
+    using container_type = TypeParam;
+
+    struct IService {
+        virtual ~IService() = default;
+    };
+    struct Service : IService {};
+    struct Missing {
+        explicit Missing(std::shared_ptr<IService>) {}
+    };
+
+    Service service;
+    container_type container;
+    container.template register_type<scope<external>, storage<Service&>,
+                                     interfaces<IService>>(service);
+
+    try {
+        (void)container.template construct<Missing>();
+        FAIL() << "expected type_not_convertible_exception";
+    } catch (const type_not_convertible_exception& e) {
+        std::string message = e.what();
+        std::string expected = "type is not convertible to ";
+        expected += type_name<std::shared_ptr<IService>>();
+        expected += " from ";
+        expected += type_name<Service&>();
+
+        EXPECT_NE(message.find(expected), std::string::npos);
+        EXPECT_NE(message.find("constructor path: "), std::string::npos);
+        EXPECT_NE(message.find(type_name<Missing>()), std::string::npos);
+        EXPECT_NE(message.find("automatic slot 0"), std::string::npos);
+    }
+}
+
+TYPED_TEST(dingo_test, exception_message_explicit_constructor_type_not_convertible) {
+    using container_type = TypeParam;
+
+    struct IService {
+        virtual ~IService() = default;
+    };
+    struct Service : IService {};
+    struct Missing {
+        explicit Missing(std::shared_ptr<IService>) {}
+    };
+
+    Service service;
+    container_type container;
+    container.template register_type<scope<external>, storage<Service&>,
+                                     interfaces<IService>>(service);
+
+    try {
+        (void)container.template construct<Missing,
+                                           constructor<Missing(std::shared_ptr<IService>)>>();
+        FAIL() << "expected type_not_convertible_exception";
+    } catch (const type_not_convertible_exception& e) {
+        std::string message = e.what();
+        std::string expected = "type is not convertible to ";
+        expected += type_name<std::shared_ptr<IService>>();
+        expected += " from ";
+        expected += type_name<Service&>();
+
+        EXPECT_NE(message.find(expected), std::string::npos);
+        EXPECT_NE(message.find("constructor path: "), std::string::npos);
+        EXPECT_NE(message.find(type_name<Missing>()), std::string::npos);
+        EXPECT_NE(message.find(type_name<std::shared_ptr<IService>>()),
+                  std::string::npos);
     }
 }
 

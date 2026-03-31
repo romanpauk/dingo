@@ -10,12 +10,14 @@
 // #include <dingo/config.h>
 
 #include <dingo/factory/constructor.h>
+#include <dingo/resolution/interface_storage_traits.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/storage/storage.h>
 #include <dingo/type/type_list.h>
 
 namespace dingo {
 struct unique;
+struct external;
 
 template <typename T> struct storage {
     using type = T;
@@ -101,23 +103,6 @@ using parse_registration_args_t = typename parse_registration_args<
                       ::dingo::conversions<void>>,
     Args...>::type;
 
-template <typename T, typename...> struct get_type;
-template <typename T> struct get_type<T, type_list<>> {
-    using type = T;
-};
-
-template <typename T, typename Head, typename... Tail>
-struct get_type<T, type_list<Head, Tail...>> {
-    using type = std::conditional_t<
-        std::is_same_v<T, typename Head::template rebind_t<void>> &&
-            !std::is_same_v<Head, T>, /* &&... is needed for interface deduction
-                                       */
-        Head, typename get_type<T, type_list<Tail...>>::type>;
-};
-
-template <typename T, typename... Args>
-using get_type_t = typename get_type<T, Args...>::type;
-
 template <typename ParsedArgs>
 using registration_scope_t = typename ParsedArgs::scope_type;
 
@@ -140,6 +125,14 @@ using registration_factory_t = std::conditional_t<
     typename ParsedArgs::factory_type,
     registration_factory_default_t<ParsedArgs>>;
 
+template <typename StorageType>
+using registration_storage_value_t =
+    std::remove_cv_t<std::remove_reference_t<StorageType>>;
+
+template <typename StorageType>
+using registration_storage_leaf_value_t =
+    std::remove_cv_t<leaf_type_t<StorageType>>;
+
 template <typename StorageType, typename ScopeType, typename = void>
 struct deduced_interface_type {
     using type = ::dingo::interfaces<leaf_type_t<StorageType>>;
@@ -149,24 +142,25 @@ template <typename StorageType, typename ScopeType>
 struct deduced_interface_type<
     StorageType, ScopeType,
     std::void_t<typename ::dingo::detail::alternative_type_interface_types<
-        std::remove_cv_t<std::remove_reference_t<StorageType>>>::type>> {
+        registration_storage_value_t<StorageType>>::type>> {
     using type = ::dingo::interfaces<
         typename ::dingo::detail::alternative_type_interface_types<
-            std::remove_cv_t<std::remove_reference_t<StorageType>>>::type>;
+            registration_storage_value_t<StorageType>>::type>;
 };
 
 template <typename StorageType, typename ScopeType>
 struct deduced_interface_type<
     StorageType, ScopeType,
     std::enable_if_t<!std::is_same_v<typename ScopeType::type, unique> &&
-                     type_traits<std::remove_cv_t<
-                         std::remove_reference_t<StorageType>>>::enabled &&
-                     type_traits<std::remove_cv_t<
-                         std::remove_reference_t<StorageType>>>::is_value_borrowable &&
-                     is_alternative_type_v<std::remove_cv_t<leaf_type_t<StorageType>>>>> {
+                     type_traits<registration_storage_value_t<
+                         StorageType>>::enabled &&
+                     type_traits<registration_storage_value_t<
+                         StorageType>>::is_value_borrowable &&
+                     is_alternative_type_v<
+                         registration_storage_leaf_value_t<StorageType>>>> {
     using type = ::dingo::interfaces<
         typename ::dingo::detail::alternative_type_interface_types<
-            std::remove_cv_t<leaf_type_t<StorageType>>>::type>;
+            registration_storage_leaf_value_t<StorageType>>::type>;
 };
 
 template <typename StorageType, typename ScopeType>
@@ -225,6 +219,79 @@ using registration_conversions_t = std::conditional_t<
     ::dingo::conversions<detail::conversions<
         typename registration_scope_t<ParsedArgs>::type,
         typename registration_storage_t<ParsedArgs>::type, runtime_type>>>;
+
+template <typename Registration>
+using registration_interface_types_t =
+    typename Registration::interface_type::type;
+
+template <typename Registration>
+using registration_registered_storage_type_t =
+    typename Registration::storage_type::type;
+
+template <typename Registration>
+static constexpr bool registration_stores_single_interface_v =
+    type_list_size_v<registration_interface_types_t<Registration>> == 1;
+
+template <typename Registration>
+using registration_stored_interface_t =
+    type_list_head_t<registration_interface_types_t<Registration>>;
+
+template <typename Registration>
+static constexpr bool registration_should_store_interface_v =
+    registration_stores_single_interface_v<Registration> &&
+    std::has_virtual_destructor_v<registration_stored_interface_t<Registration>> &&
+    is_interface_storage_rebindable_v<
+        registration_registered_storage_type_t<Registration>,
+        registration_stored_interface_t<Registration>>;
+
+template <typename Registration>
+using registration_stored_leaf_type_t =
+    std::conditional_t<registration_should_store_interface_v<Registration>,
+                       registration_stored_interface_t<Registration>,
+                       leaf_type_t<registration_registered_storage_type_t<
+                           Registration>>>;
+
+template <typename Registration>
+using registration_stored_type_t = rebind_leaf_t<
+    registration_registered_storage_type_t<Registration>,
+    registration_stored_leaf_type_t<Registration>>;
+
+template <typename Registration>
+using registration_runtime_storage_t = ::dingo::detail::storage<
+    typename Registration::scope_type::type,
+    registration_registered_storage_type_t<Registration>,
+    registration_stored_type_t<Registration>,
+    typename Registration::factory_type::type,
+    typename Registration::conversions_type::type>;
+
+template <typename Registration>
+static constexpr auto registration_materialization_kind_v =
+    registration_stores_single_interface_v<Registration>
+        ? ir::registration_materialization_kind::single_interface
+        : ir::registration_materialization_kind::shared_factory_data;
+
+template <typename Registration, typename PayloadType>
+static constexpr auto registration_payload_kind_v =
+    std::is_same_v<PayloadType, void>
+        ? ir::registration_payload_kind::default_constructed
+        : std::is_same_v<typename Registration::scope_type::type, external>
+              ? ir::registration_payload_kind::external_instance
+              : ir::registration_payload_kind::factory_payload;
+
+template <typename Registration, typename PayloadType = void,
+          typename IndexKeyType = void>
+using registration_plan_t = ir::registration<
+    registration_interface_types_t<Registration>,
+    typename Registration::scope_type::type,
+    registration_registered_storage_type_t<Registration>,
+    registration_stored_type_t<Registration>,
+    registration_runtime_storage_t<Registration>,
+    typename Registration::factory_type::type,
+    typename Registration::conversions_type::type,
+    factory_invocation_ir_t<typename Registration::factory_type::type>,
+    IndexKeyType,
+    registration_payload_kind_v<Registration, PayloadType>,
+    registration_materialization_kind_v<Registration>>;
 
 } // namespace detail
 

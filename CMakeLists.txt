@@ -108,11 +108,13 @@ if(DINGO_DEVELOPMENT_MODE)
         registration/constructor.h
         registration/type_registration.h
         resolution/conversion_cache.h
+        resolution/ir.h
         resolution/instance_factory_interface.h
         resolution/instance_factory_traits.h
         resolution/instance_factory.h
         resolution/instance_resolver.h
         resolution/interface_storage_traits.h
+        resolution/runtime_execution_plan.h
         resolution/resolving_context.h
         resolution/type_cache.h
         rtti/static_provider.h
@@ -203,6 +205,7 @@ if(DINGO_DEVELOPMENT_MODE)
             test/index/multibindings.cpp
             test/registration/annotated.cpp
             test/registration/type_registration.cpp
+            test/resolution/ir.cpp
             test/storage/array.cpp
             test/storage/external.cpp
             test/storage/shared.cpp

@@ -7,6 +7,9 @@ and conversions plug in.
 Read these pages in order if you want the full picture:
 
 - [Overview](overview.md): the main data flow and the key owners.
+- [Resolution IR](resolution-ir.md): the structural internal representation
+  that now owns request, binding, acquisition, invocation, and conversion
+  intent.
 - [Registration And Resolution](registration-and-resolution.md): the runtime
   path from `register_type<...>()` to `resolve<T>()`.
 - [Handles, Leaf Types, And Lookup](handles-leaf-types-and-lookup.md): wrapper
@@ -21,12 +24,13 @@ The architecture is centered on one flow:
 
 ```text
 register_type -> type_registration -> storage/factory record
-resolve<T> -> lookup type -> factory traits -> resolver -> conversion -> T
+resolve<T> -> resolution IR -> execution backend -> T
 ```
 
 The code that owns that flow lives mainly in:
 
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
+- [include/dingo/resolution/ir.h](../../include/dingo/resolution/ir.h)
 - [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
 - [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)

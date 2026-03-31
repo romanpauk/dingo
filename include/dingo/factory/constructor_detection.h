@@ -11,6 +11,7 @@
 
 #include <dingo/registration/annotated.h>
 #include <dingo/factory/class_traits.h>
+#include <dingo/resolution/ir.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/factory/constructor_typedef.h>
 
@@ -289,9 +290,10 @@ template <typename T, typename Tag,
           template <typename...> typename IsConstructible, size_t... Arities>
 struct detected_constructor_arity<T, Tag, IsConstructible,
                                   std::index_sequence<Arities...>> {
-        // Constructor detection only needs to know which arity matched. Searching
-        // by integer arity keeps the state small and avoids materializing a fresh
-        // type_list for every suffix that used to be tested.
+        // Constructor detection only needs to know which arity matched while
+        // searching. The richer IR dependency slots are materialized only after
+        // selection so the detector does not instantiate a fresh type_list for
+        // every candidate suffix.
     static constexpr size_t arity = [] {
         constexpr bool matches[] = {
             is_constructible_v<T, Tag, IsConstructible, Arities>...};
@@ -351,9 +353,24 @@ template <typename T, typename Tag, template <typename...> typename IsConstructi
           bool Assert = true, size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS>
 struct constructor_detection;
 
+template <typename T, typename Tag, typename Sequence>
+struct detected_constructor_dependencies;
+
+template <typename T, typename Tag, size_t... Is>
+struct detected_constructor_dependencies<T, Tag, std::index_sequence<Is...>> {
+    using type = type_list<ir::detected_constructor_dependency<T, Tag, Is>...>;
+};
+
+template <typename T, typename Tag, size_t Arity>
+using detected_constructor_dependencies_t =
+    typename detected_constructor_dependencies<T, Tag,
+                                               std::make_index_sequence<Arity>>::type;
+
 template <typename T, typename Tag, size_t Arity> struct constructor_methods {
-    using tag_type = Tag;
-    static constexpr size_t arity = Arity;
+    using plan_type = ir::detected_constructor_invocation<
+        T, Tag, detected_constructor_dependencies_t<T, Tag, Arity>>;
+    using tag_type = typename plan_type::detection_tag;
+    static constexpr size_t arity = plan_type::arity;
     static constexpr bool valid = true;
 
   private:
@@ -380,14 +397,18 @@ template <typename T, typename Tag, size_t Arity> struct constructor_methods {
   public:
     template <typename Type, typename Context, typename Container>
     static auto construct(Context& ctx, Container& container) {
-        return construct_impl<Type>(ctx, container,
-                                    std::make_index_sequence<Arity>{});
+        return ctx.template invoke_constructor<plan_type>([&] {
+            return construct_impl<Type>(ctx, container,
+                                        std::make_index_sequence<Arity>{});
+        });
     }
 
     template <typename Type, typename Context, typename Container>
     static void construct(void* ptr, Context& ctx, Container& container) {
-        construct_impl<Type>(ptr, ctx, container,
-                             std::make_index_sequence<Arity>{});
+        ctx.template invoke_constructor<plan_type>([&] {
+            construct_impl<Type>(ptr, ctx, container,
+                                 std::make_index_sequence<Arity>{});
+        });
     }
 };
 
@@ -398,11 +419,19 @@ struct constructor_detection {
     // The selected result owns the tag-specific policy. Most tags resolve to a
     // single arity scan, while `reference` selects between borrow and exact
     // value detection without duplicating the outer implementation body.
-    // At this point detection is reduced to `{ tag_type, arity, valid }`.
+    // At this point detection is reduced to the selected tag plus arity; the
+    // plan type reifies dependency slots only for the winning shape.
     using detection = constructor_detection_result<T, Tag, IsConstructible, N>;
 
   public:
-    static constexpr size_t arity = detection::valid ? detection::arity : 0;
+    using plan_type = ir::detected_constructor_invocation<
+        T, typename detection::tag_type,
+        detected_constructor_dependencies_t<
+            T, typename detection::tag_type,
+            detection::valid ? detection::arity : 0>>;
+
+  public:
+    static constexpr size_t arity = plan_type::arity;
     static constexpr bool valid = detection::valid;
 
     static_assert(!Assert || valid,
@@ -412,14 +441,16 @@ struct constructor_detection {
     static auto construct(Context& ctx, Container& container) {
         static_assert(valid, "class T construction not detected or ambiguous");
         // The final runtime path expands only the selected arity and tag.
-        return constructor_methods<T, Tag, detection::arity>::template construct<
+        return constructor_methods<T, typename plan_type::detection_tag,
+                                   plan_type::arity>::template construct<
             Type>(ctx, container);
     }
 
     template <typename Type, typename Context, typename Container>
     static void construct(void* ptr, Context& ctx, Container& container) {
         static_assert(valid, "class T construction not detected or ambiguous");
-        constructor_methods<T, Tag, detection::arity>::template construct<Type>(
+        constructor_methods<T, typename plan_type::detection_tag,
+                            plan_type::arity>::template construct<Type>(
             ptr, ctx, container);
     }
 };
@@ -433,5 +464,29 @@ template <typename T, typename DetectionType = detail::automatic> struct constru
         detail::constructor_detection<T, DetectionType, detail::list_initialization>
     >
 {};
+
+namespace detail {
+template <typename T, typename DetectionType, bool = has_constructor_typedef_v<T>>
+struct constructor_detection_invocation_ir;
+
+template <typename T, typename DetectionType>
+struct constructor_detection_invocation_ir<T, DetectionType, true> {
+    using type = factory_invocation_ir_t<typename T::dingo_constructor_type>;
+};
+
+template <typename T, typename DetectionType>
+struct constructor_detection_invocation_ir<T, DetectionType, false> {
+    using detection = ::dingo::constructor_detection<T, DetectionType>;
+    using plan_type = typename detection::plan_type;
+    using type = ir::detected_constructor_invocation<
+        T, typename plan_type::detection_tag, typename plan_type::dependencies>;
+};
+
+template <typename T, typename DetectionType>
+struct factory_invocation_ir<::dingo::constructor_detection<T, DetectionType>> {
+    using type =
+        typename constructor_detection_invocation_ir<T, DetectionType>::type;
+};
+} // namespace detail
 
 } // namespace dingo

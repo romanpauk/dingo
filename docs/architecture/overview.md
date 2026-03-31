@@ -1,9 +1,10 @@
 # Overview
 
-Dingo is easiest to understand if you separate it into four concerns:
+Dingo is easiest to understand if you separate it into five concerns:
 
 - registration deduction
 - lookup shape normalization
+- resolution IR
 - storage and factory ownership
 - runtime conversion
 
@@ -20,7 +21,8 @@ owns:
 - the public registration and resolution entry points
 
 This is the outer orchestration layer. It does not construct objects directly.
-It stores factories and asks them for values, references, or pointers.
+It stores binding records and asks the selected binding's factory for values,
+references, or pointers.
 
 ### Type Registration
 
@@ -34,7 +36,24 @@ reduces a `register_type<...>()` declaration into a complete policy set:
 - `conversions_type`
 
 That deduction step is the boundary between the public registration syntax and
-the internal runtime machinery.
+the internal resolution machinery.
+
+### Resolution IR
+
+[include/dingo/resolution/ir.h](../../include/dingo/resolution/ir.h) is the
+structural layer between the public/container-facing API and the execution
+machinery.
+
+It models:
+
+- request shape
+- selected binding
+- acquisition policy
+- invocation intent
+- conversion intent
+
+The IR is compile-time metadata only. Execution still happens in the existing
+factory, resolver, and conversion code.
 
 ### Factory And Storage
 
@@ -75,13 +94,15 @@ requested target shape.
 At a high level, Dingo runs this sequence:
 
 1. `register_type<...>()` deduces the missing registration policies.
-2. The container creates a storage-backed factory for each exposed interface.
-3. `resolve<T>()` converts `T` into the internal lookup form.
-4. The container finds the matching factory.
-5. `instance_factory_traits` asks the factory for the correct access path for
-   `T`: value, lvalue reference, rvalue reference, or pointer.
-6. The factory asks its resolver to get or build the stored instance.
-7. `type_conversion` converts that stored source shape into the requested `T`.
+1. The container creates a storage-backed factory for each exposed interface.
+1. `resolve<T>()` converts `T` into the internal lookup form.
+1. The container finds the matching factory.
+1. The request is reduced to structural resolution IR.
+1. The runtime path lowers that IR into a compact execution plan.
+1. The execution backend uses that plan to call the factory access path for `T`.
+1. The factory asks its resolver to get or build the stored instance.
+1. The shared conversion core in `type_conversion` converts that stored source
+   shape into the requested `T`.
 
 The pieces above are not independent extension systems. They cooperate in one
 pipeline.
@@ -92,6 +113,7 @@ If you want to follow the core path in source order, start here:
 
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
+- [include/dingo/resolution/ir.h](../../include/dingo/resolution/ir.h)
 - [include/dingo/resolution/instance_factory.h](../../include/dingo/resolution/instance_factory.h)
 - [include/dingo/resolution/instance_resolver.h](../../include/dingo/resolution/instance_resolver.h)
 - [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)

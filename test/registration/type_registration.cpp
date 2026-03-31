@@ -19,17 +19,15 @@
 
 using namespace dingo;
 
-TEST(type_registration_test, get_type) {
+TEST(type_registration_test, parse_registration_args) {
     struct A {};
-    using list = type_list<storage<A>, factory<A>, interfaces<A, A>>;
-    using storage_type = detail::get_type_t<storage<void>, list>;
-    static_assert(std::is_same_v<storage_type, storage<A>>);
+    using parsed =
+        detail::parse_registration_args_t<storage<A>, factory<A>, interfaces<A, A>>;
 
-    using factory_type = detail::get_type_t<factory<void>, list>;
-    static_assert(std::is_same_v<factory_type, factory<A>>);
-
-    using interface_type = detail::get_type_t<interfaces<void>, list>;
-    static_assert(std::is_same_v<interface_type, interfaces<A, A>>);
+    static_assert(std::is_same_v<typename parsed::storage_type, storage<A>>);
+    static_assert(std::is_same_v<typename parsed::factory_type, factory<A>>);
+    static_assert(
+        std::is_same_v<typename parsed::interface_type, interfaces<A, A>>);
 }
 
 TEST(type_registration_test, registration_basic) {
@@ -82,6 +80,109 @@ TEST(type_registration_test, registration_deduction) {
         std::is_same_v<
             typename type_registration<scope<int>, storage<int>>::factory_type,
             factory<constructor_detection<int>>>);
+}
+
+TEST(type_registration_test, registration_plan_preserves_single_interface_shape) {
+    struct service {
+        service() = default;
+    };
+
+    using registration =
+        type_registration<scope<shared>, storage<service>,
+                          factory<constructor<service()>>, interfaces<service>>;
+    using plan = detail::registration_plan_t<registration>;
+
+    static_assert(std::is_same_v<typename plan::interface_types,
+                                 type_list<service>>);
+    static_assert(std::is_same_v<typename plan::scope_tag, shared>);
+    static_assert(
+        std::is_same_v<typename plan::registered_storage_type, service>);
+    static_assert(std::is_same_v<typename plan::stored_type, service>);
+    static_assert(std::is_same_v<typename plan::factory_type,
+                                 constructor<service()>>);
+    static_assert(std::is_same_v<typename plan::invocation_type,
+                                 ir::constructor_invocation<
+                                     service, type_list<>>>);
+    static_assert(std::is_same_v<
+                  typename plan::template key<service>::interface_type,
+                  service>);
+    static_assert(std::is_same_v<
+                  typename plan::template key<service>::registered_storage_type,
+                  service>);
+    static_assert(!plan::template key<service>::indexed);
+    static_assert(plan::payload_kind ==
+                  ir::registration_payload_kind::default_constructed);
+    static_assert(plan::materialization_kind ==
+                  ir::registration_materialization_kind::single_interface);
+}
+
+TEST(type_registration_test, registration_plan_preserves_shared_factory_shape) {
+    struct interface_1 {
+        virtual ~interface_1() = default;
+    };
+    struct interface_2 {
+        virtual ~interface_2() = default;
+    };
+    struct service : interface_1, interface_2 {};
+
+    using registration =
+        type_registration<scope<shared>, storage<service>,
+                          factory<constructor<service()>>,
+                          interfaces<interface_1, interface_2>>;
+    using plan = detail::registration_plan_t<registration>;
+
+    static_assert(std::is_same_v<typename plan::interface_types,
+                                 type_list<interface_1, interface_2>>);
+    static_assert(std::is_same_v<typename plan::registered_storage_type,
+                                 service>);
+    static_assert(std::is_same_v<typename plan::stored_type, service>);
+    static_assert(plan::payload_kind ==
+                  ir::registration_payload_kind::default_constructed);
+    static_assert(plan::materialization_kind ==
+                  ir::registration_materialization_kind::shared_factory_data);
+}
+
+TEST(type_registration_test, registration_plan_marks_external_instance_payload) {
+    using registration = type_registration<scope<external>, storage<int&>>;
+    using plan = detail::registration_plan_t<registration, int>;
+
+    static_assert(plan::payload_kind ==
+                  ir::registration_payload_kind::external_instance);
+    static_assert(plan::materialization_kind ==
+                  ir::registration_materialization_kind::single_interface);
+}
+
+TEST(type_registration_test, registration_plan_marks_factory_payload) {
+    struct service {
+        service() = default;
+    };
+
+    using factory_type = constructor<service()>;
+    using registration =
+        type_registration<scope<shared>, storage<service>, factory<factory_type>>;
+    using plan = detail::registration_plan_t<registration, factory_type>;
+
+    static_assert(plan::payload_kind ==
+                  ir::registration_payload_kind::factory_payload);
+    static_assert(plan::materialization_kind ==
+                  ir::registration_materialization_kind::single_interface);
+}
+
+TEST(type_registration_test, registration_plan_marks_index_key_type) {
+    struct service {
+        service() = default;
+    };
+
+    using registration =
+        type_registration<scope<shared>, storage<service>,
+                          interfaces<service>>;
+    using plan = detail::registration_plan_t<registration, void, long>;
+
+    static_assert(plan::indexed);
+    static_assert(std::is_same_v<typename plan::index_key_type, long>);
+    static_assert(std::is_same_v<typename plan::template key<service>::index_key_type,
+                                 long>);
+    static_assert(plan::template key<service>::indexed);
 }
 
 TEST(type_registration_test, registration_specialization) {

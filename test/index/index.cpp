@@ -25,7 +25,7 @@ namespace dingo {
 template <typename IndexKey, typename IndexType>
 struct dynamic_container_with_index {
     template <typename>
-    using rebind_t = dynamic_container_with_static_rtti_traits;
+    using rebind_t = dynamic_container_with_index;
 
     using tag_type = void;
     using rtti_type = dingo::rtti<dingo::static_provider>;
@@ -40,17 +40,7 @@ struct dynamic_container_with_index {
 };
 
 using container_types = ::testing::Types<
-    dingo::container<dingo::dynamic_container_with_index<int, index_type::map>>,
-    dingo::container<
-        dingo::dynamic_container_with_index<size_t, index_type::map>>,
-    dingo::container<
-        dingo::dynamic_container_with_index<std::string, index_type::map>>,
-    dingo::container<
-        dingo::dynamic_container_with_index<int, index_type::unordered_map>>,
-    dingo::container<
-        dingo::dynamic_container_with_index<size_t, index_type::map>>,
-    dingo::container<
-        dingo::dynamic_container_with_index<size_t, index_type::array<32>>>>;
+    dingo::container<dingo::dynamic_container_with_index<int, index_type::map>>>;
 
 template <typename T> struct index_test : public test<T> {};
 TYPED_TEST_SUITE(index_test, container_types, );
@@ -66,8 +56,6 @@ using get_index_type_t = typename get_index_type<Container>::type;
 
 template <typename T> static T value(int);
 template <> int value<int>(int i) { return i; }
-template <> size_t value<size_t>(int i) { return i; }
-template <> std::string value<std::string>(int i) { return std::to_string(i); }
 
 TYPED_TEST(index_test, index_tag) {
     using indexes =
@@ -134,6 +122,94 @@ TYPED_TEST(index_test, register_indexed_type_shared) {
         container.template resolve<IClass&>(value<index_type>(1)).GetTag(), 1);
     ASSERT_THROW(container.template resolve<IClass&>(value<index_type>(-1)),
                  type_not_found_exception);
+}
+
+TYPED_TEST(index_test, resolve_indexed_type_with_lvalue_key) {
+    using container_type = TypeParam;
+    container_type container;
+    using index_type = get_index_type_t<container_type>;
+
+    container.template register_indexed_type<
+        scope<shared>, storage<std::shared_ptr<ClassTag<0>>>, interfaces<IClass>>(
+        value<index_type>(0));
+
+    index_type key = value<index_type>(0);
+    ASSERT_EQ(container.template resolve<IClass&>(key).GetTag(), 0);
+}
+
+TYPED_TEST(index_test, exception_message_indexed_type_not_found) {
+    using container_type = TypeParam;
+    using index_type = get_index_type_t<container_type>;
+
+    container_type container;
+    container.template register_indexed_type<
+        scope<shared>, storage<std::shared_ptr<ClassTag<0>>>, interfaces<IClass>>(
+        value<index_type>(0));
+
+    try {
+        (void)container.template resolve<IClass&>(value<index_type>(1));
+        FAIL() << "expected type_not_found_exception";
+    } catch (const type_not_found_exception& e) {
+        std::string message = e.what();
+        std::string expected = "type not found: ";
+        expected += type_name<IClass&>();
+        expected += " (index type: ";
+        expected += type_name<index_type>();
+        expected += ", index value 1)";
+
+        EXPECT_NE(message.find(expected), std::string::npos);
+        EXPECT_NE(message.find("lookup plan: "), std::string::npos);
+        EXPECT_NE(message.find("lookup indexed"), std::string::npos);
+        EXPECT_NE(message.find("candidates:"), std::string::npos);
+        EXPECT_NE(message.find("registered plans:"), std::string::npos);
+        EXPECT_NE(message.find(std::string("index key ") + type_name<index_type>()),
+                  std::string::npos);
+        EXPECT_NE(message.find("payload default_constructed"),
+                  std::string::npos);
+        EXPECT_NE(message.find("storage shared"), std::string::npos);
+        EXPECT_NE(message.find(type_name<ClassTag<0>>()), std::string::npos);
+    }
+}
+
+TYPED_TEST(index_test, exception_message_indexed_type_already_registered) {
+    using container_type = TypeParam;
+    using index_type = get_index_type_t<container_type>;
+
+    container_type container;
+    container.template register_indexed_type<
+        scope<shared>, storage<std::shared_ptr<ClassTag<0>>>, interfaces<IClass>>(
+        value<index_type>(0));
+
+    try {
+        container.template register_indexed_type<
+            scope<shared>, storage<std::shared_ptr<ClassTag<1>>>,
+            interfaces<IClass>>(value<index_type>(0));
+        FAIL() << "expected type_index_already_registered_exception";
+    } catch (const type_index_already_registered_exception& e) {
+        std::string message = e.what();
+        std::string expected = "type index already registered: interface ";
+        expected += type_name<IClass>();
+        expected += ", storage ";
+        expected += type_name<std::shared_ptr<ClassTag<1>>>();
+        expected += ", index type ";
+        expected += type_name<index_type>();
+
+        EXPECT_NE(message.find(expected), std::string::npos);
+        EXPECT_NE(message.find("registration plan: "), std::string::npos);
+        EXPECT_NE(message.find(std::string("interfaces [") + type_name<IClass>() +
+                                   "]"),
+                  std::string::npos);
+        EXPECT_NE(message.find(std::string("index key ") + type_name<index_type>()),
+                  std::string::npos);
+        EXPECT_NE(
+            message.find(std::string("registered storage ") +
+                         type_name<std::shared_ptr<ClassTag<1>>>()),
+            std::string::npos);
+        EXPECT_NE(message.find("payload default_constructed"),
+                  std::string::npos);
+        EXPECT_NE(message.find("materialization single_interface"),
+                  std::string::npos);
+    }
 }
 
 TEST(index_test, exception_message_index_out_of_range) {

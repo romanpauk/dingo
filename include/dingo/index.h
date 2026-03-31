@@ -53,6 +53,8 @@ struct index_impl;
 template <typename Value, typename Allocator>
 struct index_impl<type_list<>, Value, Allocator> {
     index_impl(Allocator&) {}
+
+    template <typename Key> auto* try_get_index() { return nullptr; }
 };
 
 template <typename Value, typename Allocator, typename... Entries>
@@ -108,6 +110,15 @@ struct index_impl<type_list<Entries...>, Value, Allocator> {
         }
 
         return *std::get<index_ptr<index_type>>(indexes_);
+    }
+
+    template <typename Key> auto* try_get_index() {
+        using index_type = index_collection<
+            Key, Value, Allocator,
+            typename index_tag_impl<Key, type_list<Entries...>>::type>;
+
+        auto* index = std::get_if<index_ptr<index_type>>(&indexes_);
+        return index ? &(**index) : nullptr;
     }
 
   private:

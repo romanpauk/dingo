@@ -96,10 +96,10 @@ correct ownership and deletion semantics for interface use.
 When adding a new wrapper, answer these questions in order:
 
 1. What is the wrapper's leaf type?
-2. Can the wrapper be rebound to another leaf type?
-3. Is it pointer-like, borrowable, or reference-resolvable?
-4. Which request shapes should each storage scope expose?
-5. Does any wrapper-to-wrapper conversion need a custom implementation?
+1. Can the wrapper be rebound to another leaf type?
+1. Is it pointer-like, borrowable, or reference-resolvable?
+1. Which request shapes should each storage scope expose?
+1. Does any wrapper-to-wrapper conversion need a custom implementation?
 
 If those five answers are clear, the implementation is usually straightforward.
 

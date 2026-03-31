@@ -15,6 +15,8 @@
 #include <dingo/memory/arena_allocator.h>
 #include <dingo/exceptions.h>
 #include <dingo/factory/constructor_detection.h>
+#include <dingo/resolution/constructor_format.h>
+#include <dingo/type/type_list.h>
 
 #include <vector>
 
@@ -51,6 +53,11 @@ class resolving_context {
     struct type_frame {
         const type_frame* parent;
         type_descriptor type;
+    };
+
+    struct constructor_frame {
+        const constructor_frame* parent;
+        void (*append)(std::string&);
     };
 
     resolving_context()
@@ -106,6 +113,44 @@ class resolving_context {
         }
     }
 
+    template <typename Invocation, typename Fn>
+    decltype(auto) invoke_constructor(Fn&& fn) {
+        struct constructor_trace_guard {
+            explicit constructor_trace_guard(resolving_context& context)
+                : context_(&context)
+                , parent_(context.active_constructor_frame_)
+                , frame_{parent_, &detail::append_constructor_invocation<Invocation>} {
+                context_->active_constructor_frame_ = &frame_;
+            }
+
+            ~constructor_trace_guard() {
+                context_->active_constructor_frame_ = parent_;
+            }
+
+            resolving_context* context_;
+            const constructor_frame* parent_;
+            constructor_frame frame_;
+        } trace(*this);
+
+        try {
+            if constexpr (std::is_void_v<decltype(fn())>) {
+                fn();
+            } else {
+                return fn();
+            }
+        } catch (const type_not_found_exception& e) {
+            rethrow_with_constructor_path(e);
+        } catch (const type_not_convertible_exception& e) {
+            rethrow_with_constructor_path(e);
+        } catch (const type_ambiguous_exception& e) {
+            rethrow_with_constructor_path(e);
+        } catch (const type_recursion_exception& e) {
+            rethrow_with_constructor_path(e);
+        } catch (const type_not_constructed_exception& e) {
+            rethrow_with_constructor_path(e);
+        }
+    }
+
     void push(closure* c) {
         closures_.emplace_back(c);
     }
@@ -133,7 +178,37 @@ class resolving_context {
         }
     }
 
+    bool has_constructor_path() const {
+        return active_constructor_frame_ != nullptr;
+    }
+
+    void append_constructor_path(std::string& message) const {
+        std::vector<const constructor_frame*> frames;
+        for (auto* frame = active_constructor_frame_; frame != nullptr;
+             frame = frame->parent) {
+            frames.emplace_back(frame);
+        }
+
+        for (auto it = frames.rbegin(); it != frames.rend(); ++it) {
+            if (it != frames.rbegin()) {
+                message += " -> ";
+            }
+            (*it)->append(message);
+        }
+    }
+
   private:
+    template <typename Exception>
+    [[noreturn]] void rethrow_with_constructor_path(const Exception& e) const {
+        std::string message = e.what();
+        if (has_constructor_path() &&
+            message.find("constructor path: ") == std::string::npos) {
+            message += "; constructor path: ";
+            append_constructor_path(message);
+        }
+        throw Exception(std::move(message));
+    }
+
     template <typename T> void register_destructor(T* instance) {
         static_assert(!std::is_trivially_destructible_v<T>);
         closures_.back()->destructibles_.push_back({instance, &destructor<T>});
@@ -147,6 +222,7 @@ class resolving_context {
     arena<> arena_;
     std::vector<closure*, arena_allocator<closure*>> closures_;
     const type_frame* active_type_frame_ = nullptr;
+    const constructor_frame* active_constructor_frame_ = nullptr;
     closure closure_;
 
     template <typename T, bool DefaultConstructible>

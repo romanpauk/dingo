@@ -253,6 +253,7 @@ class storage<shared_cyclical, Type, StoredType, Factory, Conversions>
     static constexpr bool cacheable = false;
 
     using conversions = Conversions;
+    using factory_type = Factory;
     using type = Type;
     using stored_type = StoredType;
     using tag_type = shared_cyclical;

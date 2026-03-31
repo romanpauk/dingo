@@ -3,22 +3,26 @@
 Dingo resolves requests in two stages:
 
 1. determine whether the requested shape is allowed for the stored instance
-2. convert the stored source shape into the requested target shape
+1. convert the stored source shape into the requested target shape
 
 ## Where The Rules Come From
 
 The full conversion behavior is spread across a few layers:
 
+- `resolution::ir` describes the requested shape, binding, and conversion intent
+- `execution_plan` lowers the common runtime conversion opcode
+- `execution_plan` also carries the binding's source acquisition shape
+  and runtime lookup type for the lowered path
 - `storage_traits` says which target shapes are legal for a storage/scope pair
-- `instance_factory_traits` chooses whether the request is a value, lvalue
-  reference, rvalue reference, or pointer request
-- `type_conversion` performs the runtime conversion
+- `type_conversion` owns final result adaptation and storage-source conversion
+  execution for both request-shaped and runtime-plan execution paths
 - `type_conversion_traits` handles explicit wrapper-to-wrapper conversions
 
 The important source files are:
 
+- [include/dingo/resolution/ir.h](../../include/dingo/resolution/ir.h)
+- [include/dingo/resolution/runtime_execution_plan.h](../../include/dingo/resolution/runtime_execution_plan.h)
 - [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
-- [include/dingo/resolution/instance_factory_traits.h](../../include/dingo/resolution/instance_factory_traits.h)
 - [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)
 - [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
 
@@ -35,23 +39,48 @@ That combined type lists the result forms a stored object may service:
 
 Those lists are the contract between storage policy and runtime conversion.
 
-## Factory Dispatch
+## Request Dispatch
 
 The container itself does not know how to convert every shape. It delegates the
-request form through `instance_factory_traits`:
+request form through the structural plan and the runtime backend:
 
 - `T` uses `get_value`
 - `T&` and `const T&` use `get_lvalue_reference`
 - `T&&` uses `get_rvalue_reference`
 - `T*` uses `get_pointer`
 
-The factory then checks the request against the conversion lists exposed by the
-stored type.
+For the erased runtime path, the selected binding record now preserves the
+source access shape and lookup type, so execution can ask the factory for the
+source form it actually owns and apply the lowered conversion op afterward.
+That is what makes pointer-to-reference/value and reference-to-pointer
+adaptation explicit in the runtime backend.
 
 ## Runtime Conversion
 
 [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)
-implements the actual conversion logic.
+is the shared conversion core. It owns:
+
+- final pointer-to-`T` result adaptation for request-shaped resolution
+- runtime-plan conversion opcode execution
+- storage-source conversion rules for wrapper, borrow, handle, array, and
+  alternative paths
+
+The current runtime backend lowers explicit conversion routes and then calls
+that shared conversion core:
+
+- request-shaped identity conversions
+- pointer-backed bindings resolved as values or references
+- lvalue-reference-backed bindings resolved as pointers
+- lvalue-reference-backed bindings resolved as values
+
+Complex wrapper, borrow, and alternative-type paths still execute through the
+request-shaped factory path, but they now lower to concrete request-shaped
+opcodes rather than an untyped fallback mode.
+
+Bounded array registrations deliberately stay on the request-shaped path. Their
+`Class*` exposure is an element view, not a general "source object pointer", so
+the runtime backend does not reinterpret that path as `Class&` or value
+construction.
 
 Broadly, the rules cover:
 
@@ -86,9 +115,9 @@ If a request fails to resolve in the way you expect, inspect the layers in this
 order:
 
 1. Does `storage_traits` expose the requested result shape?
-2. Does the wrapper define the right borrow/reset/rebind semantics in
+1. Does the wrapper define the right borrow/reset/rebind semantics in
    `type_traits`?
-3. Does `type_conversion` already have a generic rule for this pair?
-4. If not, should `type_conversion_traits` bridge the two wrapper types?
+1. Does `type_conversion` already have a generic rule for this pair?
+1. If not, should `type_conversion_traits` bridge the two wrapper types?
 
 That sequence usually leads to the real missing piece quickly.

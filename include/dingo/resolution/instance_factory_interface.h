@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/config.h>
+#include <dingo/resolution/ir.h>
 #include <dingo/type/type_descriptor.h>
 
 namespace dingo {
@@ -38,4 +39,16 @@ template <typename Container> class instance_factory_interface {
 
     bool cacheable = false; // TODO
 };
+
+namespace detail {
+template <typename Request, typename Container>
+constexpr auto plan_for(instance_factory_interface<Container>&)
+    -> ir::resolution<request_ir_t<Request>, ir::erased_binding,
+                      ir::erased_acquisition,
+                      ir::erased_invocation<
+                          instance_factory_interface<Container>>,
+                      ir::erased_conversion> {
+    return {};
+}
+} // namespace detail
 } // namespace dingo

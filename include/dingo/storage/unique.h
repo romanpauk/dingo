@@ -31,6 +31,7 @@ class storage<unique, Type, StoredType, Factory, Conversions> : Factory {
     static constexpr bool cacheable = false;
 
     using conversions = Conversions;
+    using factory_type = Factory;
     using type = Type;
     using stored_type = StoredType;
     using tag_type = unique;
@@ -56,6 +57,7 @@ class storage<unique, Type[N], StoredType, Factory, Conversions> : Factory {
     static constexpr bool cacheable = false;
 
     using conversions = Conversions;
+    using factory_type = Factory;
     using type = Type[N];
     using stored_type = StoredType;
     using tag_type = unique;
