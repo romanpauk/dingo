@@ -57,6 +57,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.22
         with:
           key: ${{ matrix.os }}-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
+          evict-old-files: job
       - name: Install Compiler
         run: |
             command -v ${{ matrix.compiler.CC }} >/dev/null || sudo apt-get install -y ${{ matrix.compiler.CC }}
@@ -117,6 +118,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.22
         with:
           key: ${{ matrix.os }}-${{ matrix.config.id }}-${{ matrix.std }}
+          evict-old-files: job
       - name: Configure
         run: |
             cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
