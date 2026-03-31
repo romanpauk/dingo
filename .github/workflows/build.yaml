@@ -1,6 +1,8 @@
 name: Build
+permissions:
+  contents: read
 concurrency:
-  group: ${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 on:
   schedule:
@@ -13,8 +15,39 @@ env:
   JOBS: 4
 
 jobs:
+  lint:
+    name: lint / ${{ matrix.name }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-24.04
+          - name: windows
+            os: windows-2025
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Setup MSVC Developer Command Prompt
+        if: ${{ matrix.name == 'windows' }}
+        uses: TheMrMilchmann/setup-msvc-dev@v4.0.0
+        with:
+          arch: x64
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+      - name: Configure
+        run: |
+            cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON
+      - name: Check Formatting
+        env:
+          PIP_BREAK_SYSTEM_PACKAGES: 1
+        run: |
+            python -m pip install mdformat
+            cmake --build build -t md-verify
+
   linux:
-    name: linux / ${{ matrix.config }} / ${{ matrix.compiler.CXX }} / std-${{ matrix.compiler.STD }}
+    name: ${{ matrix.os }} / ${{ matrix.compiler.CXX }} / std-${{ matrix.compiler.STD }} / ${{ matrix.config == 'Debug' && 'debug' || 'release' }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -50,20 +83,16 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.22
         with:
           key: ${{ matrix.os }}-${{ matrix.config }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
+      - name: Install Compiler
+        run: |
+            command -v ${{ matrix.compiler.CC }} >/dev/null || sudo apt-get install -y ${{ matrix.compiler.CC }}
+            command -v ${{ matrix.compiler.CXX }} >/dev/null || sudo apt-get install -y ${{ matrix.compiler.CXX }}
       - name: Configure
         env:
             CXX: ${{ matrix.compiler.CXX }}
             CC: ${{ matrix.compiler.CC }}
         run: |
-            which ${{ matrix.compiler.CC }} || sudo apt install ${{ matrix.compiler.CC }} || true
-            which ${{ matrix.compiler.CXX }} || sudo apt install ${{ matrix.compiler.CXX }} || true
             cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.compiler.STD }}
-      - name: Check Formatting
-        env:
-          PIP_BREAK_SYSTEM_PACKAGES: 1
-        run: |
-            python -m pip install mdformat
-            cmake --build build -t md-verify
       - name: Build
         run: |
             cmake --build build -j ${{ env.JOBS }}
@@ -72,17 +101,14 @@ jobs:
           ASAN_OPTIONS: use_sigaltstack=false
         run: |
             cd build && ctest --verbose
-      - name: Benchmark
-        if: ${{ matrix.config == 'Release' }}
-        run: |
-            cd build && ./dingo_benchmark
       - name: FetchContent
         run: |
             cmake -S test/fetchcontent -B fetchcontent-build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.compiler.STD }}
             cmake --build fetchcontent-build -j ${{ env.JOBS }}
 
   windows:
-    name: windows / ${{ matrix.os }} / ${{ matrix.config }} / std-${{ matrix.std }}
+    name: ${{ matrix.os }} / msvc / std-${{ matrix.std }} / ${{ matrix.config == 'Debug' && 'debug' || 'release' }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -104,20 +130,12 @@ jobs:
       - name: Configure
         run: |
             cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
-      - name: Check Formatting
-        run: |
-            python3 -m pip install mdformat
-            cmake --build build -t md-verify
       - name: Build
         run: |
             cmake --build build --config ${{ matrix.config }} -j ${{ env.JOBS }}
       - name: Test
         run: |
-            build/${{ matrix.config }}/dingo_test
-      - name: Benchmark
-        if: ${{ matrix.config == 'Release' }}
-        run: |
-            build/${{ matrix.config }}/dingo_benchmark
+            cd build && ctest --verbose --output-on-failure -C ${{ matrix.config }}
       - name: FetchContent
         run: |
             cmake -S test/fetchcontent -B fetchcontent-build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
