@@ -14,7 +14,7 @@ on:
 
 jobs:
   lint:
-    name: lint / ${{ matrix.name }}
+    name: ${{ matrix.os }} / lint
     timeout-minutes: 10
     strategy:
       fail-fast: false
