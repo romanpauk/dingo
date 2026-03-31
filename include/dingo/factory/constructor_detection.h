@@ -20,6 +20,21 @@
 namespace dingo {
 
 namespace detail {
+#if defined(_MSC_VER)
+struct reference {};
+struct reference_exact {};
+struct value {};
+
+template <typename DisabledType, typename T>
+using reference_exact_resolvable_t = std::enable_if_t<
+    !std::is_same_v<DisabledType, std::decay_t<T>> &&
+    is_reference_resolvable_v<std::decay_t<T>>>;
+
+template <typename DisabledType, typename T>
+using reference_borrowable_t = std::enable_if_t<
+    !std::is_same_v<DisabledType, std::decay_t<T>>>;
+#endif
+
 struct automatic {};
 
 // Constructor detection is split into two phases:
@@ -32,6 +47,36 @@ struct automatic {};
 // that the runtime resolver can perform.
 
 template <class DisabledType, typename Tag> struct constructor_argument;
+
+#if defined(_MSC_VER)
+template <class DisabledType>
+struct constructor_argument<DisabledType, reference> {
+    using tag_type = reference;
+
+    template <typename T, typename = reference_borrowable_t<DisabledType, T>>
+    operator T&();
+
+    template <typename T, typename = reference_borrowable_t<DisabledType, T>>
+    operator T&&();
+};
+
+template <class DisabledType>
+struct constructor_argument<DisabledType, reference_exact> {
+    using tag_type = reference_exact;
+
+    template <typename T, typename = reference_exact_resolvable_t<DisabledType, T>>
+    operator T();
+};
+
+template <class DisabledType>
+struct constructor_argument<DisabledType, value> {
+    using tag_type = value;
+
+    template <typename T, typename = std::enable_if_t<
+                              !std::is_same_v<DisabledType, std::decay_t<T>>>>
+    operator T();
+};
+#endif
 
 template <class DisabledType>
 struct constructor_argument<DisabledType, automatic> {
@@ -67,6 +112,81 @@ struct constructor_argument<DisabledType, automatic> {
 template <typename DisabledType, typename Context, typename Container,
           typename Tag>
 class constructor_argument_impl;
+
+#if defined(_MSC_VER)
+template <typename DisabledType, typename Context, typename Container>
+class constructor_argument_impl<DisabledType, Context, Container, reference> {
+  public:
+    constructor_argument_impl(Context& context, Container& container)
+        : context_(context), container_(container) {}
+
+    template <typename T, typename = reference_borrowable_t<DisabledType, T>>
+    operator T*() {
+        return context_.template resolve<T*>(container_);
+    }
+
+    template <typename T, typename = reference_borrowable_t<DisabledType, T>>
+    operator T&() {
+        return context_.template resolve<T&>(container_);
+    }
+
+    template <typename T, typename = reference_borrowable_t<DisabledType, T>>
+    operator T&&() {
+        return context_.template resolve<T&&>(container_);
+    }
+
+    template <typename T, typename Tag,
+              typename = std::enable_if_t<
+                  !std::is_same_v<DisabledType, std::decay_t<T>>>>
+    operator annotated<T, Tag>() {
+        return context_.template resolve<annotated<T, Tag>>(container_);
+    }
+
+  private:
+    Context& context_;
+    Container& container_;
+};
+
+template <typename DisabledType, typename Context, typename Container>
+class constructor_argument_impl<DisabledType, Context, Container, reference_exact> {
+  public:
+    constructor_argument_impl(Context& context, Container& container)
+        : context_(context), container_(container) {}
+
+    template <typename T, typename = reference_exact_resolvable_t<DisabledType, T>>
+    operator T() {
+        return context_.template resolve<std::decay_t<T>>(container_);
+    }
+
+  private:
+    Context& context_;
+    Container& container_;
+};
+
+template <typename DisabledType, typename Context, typename Container>
+class constructor_argument_impl<DisabledType, Context, Container, value> {
+  public:
+    constructor_argument_impl(Context& context, Container& container)
+        : context_(context), container_(container) {}
+
+    template <typename T, typename = std::enable_if_t<
+                              !std::is_same_v<DisabledType, std::decay_t<T>>>>
+    operator T() {
+        return context_.template resolve<T>(container_);
+    }
+
+    template <typename T, typename Tag,
+              typename = std::enable_if_t<
+                  !std::is_same_v<DisabledType, std::decay_t<T>>>>
+    operator annotated<T, Tag>() {
+        return context_.template resolve<annotated<T, Tag>>(container_);
+    }
+
+  private:
+    Context& context_;
+    Container& container_;
+};
+#endif
 
 template <typename DisabledType, typename Context, typename Container>
 class constructor_argument_impl<DisabledType, Context, Container, automatic> {
@@ -153,6 +273,40 @@ template <typename T, typename... Args>
 inline constexpr bool is_direct_initializable_v =
     initialization_impl<direct_initialization_expr, T, void, Args...>::value;
 
+#if defined(_MSC_VER)
+template <typename T, typename = void, typename... Args>
+struct list_initialization_impl : std::false_type {};
+
+template <typename T, typename... Args>
+struct list_initialization_impl<
+    T, std::void_t<decltype(T{std::declval<Args>()...})>, Args...>
+    : std::true_type {};
+
+template <typename T, typename... Args>
+struct list_initialization : list_initialization_impl<T, void, Args...> {};
+
+template <typename T, typename Arg>
+struct list_initialization<T, Arg>
+    : std::conjunction<list_initialization_impl<T, void, Arg>,
+                       std::negation<std::is_same<std::decay_t<Arg>, T>>> {};
+
+template <typename T, typename = void, typename... Args>
+struct direct_initialization_impl : std::false_type {};
+
+template <typename T, typename... Args>
+struct direct_initialization_impl<
+    T, std::void_t<decltype(T(std::declval<Args>()...))>, Args...>
+    : std::true_type {};
+
+template <typename T, typename... Args>
+struct direct_initialization : direct_initialization_impl<T, void, Args...> {};
+
+template <typename T, typename Arg>
+struct direct_initialization<T, Arg>
+    : std::conjunction<direct_initialization_impl<T, void, Arg>,
+                       std::negation<std::is_same<std::decay_t<Arg>, T>>> {};
+#endif
+
 inline constexpr size_t invalid_constructor_detection_arity =
     static_cast<size_t>(-1);
 
@@ -208,11 +362,93 @@ struct constructor_detection_tag {
     static constexpr bool valid = arity != invalid_constructor_detection_arity;
 };
 
+#if defined(_MSC_VER)
+template <typename T, typename Tag,
+          template <typename...> typename IsConstructible, typename Sequence>
+struct is_constructible_legacy_msvc;
+
+template <typename T, typename Tag,
+          template <typename...> typename IsConstructible, size_t... Is>
+struct is_constructible_legacy_msvc<T, Tag, IsConstructible,
+                                    std::index_sequence<Is...>>
+    : IsConstructible<
+          T,
+          std::conditional_t<true, constructor_argument<T, Tag>,
+                             std::integral_constant<size_t, Is>>...> {};
+
+template <typename T, typename Tag,
+          template <typename...> typename IsConstructible, size_t Arity>
+inline constexpr bool is_constructible_legacy_msvc_v =
+    is_constructible_legacy_msvc<T, Tag, IsConstructible,
+                                 std::make_index_sequence<Arity>>::value;
+
+template <typename T, typename Tag,
+          template <typename...> typename IsConstructible, typename Sequence>
+struct constructor_arity_detector_msvc;
+
+template <typename T, typename Tag,
+          template <typename...> typename IsConstructible, size_t... Arities>
+struct constructor_arity_detector_msvc<T, Tag, IsConstructible,
+                                       std::index_sequence<Arities...>> {
+    static constexpr size_t value = [] {
+        constexpr bool matches[] = {
+            is_constructible_legacy_msvc_v<T, Tag, IsConstructible,
+                                           Arities>...};
+
+        for (size_t i = sizeof...(Arities); i > 0; --i) {
+            if (matches[i - 1]) {
+                return i - 1;
+            }
+        }
+
+        return invalid_constructor_detection_arity;
+    }();
+
+    static constexpr bool valid = value != invalid_constructor_detection_arity;
+};
+
+template <typename T, typename Tag,
+          template <typename...> typename IsConstructible, size_t N>
+struct constructor_detection_tag_msvc {
+    using tag_type = Tag;
+    static constexpr size_t arity =
+        constructor_arity_detector_msvc<T, Tag, IsConstructible,
+                                        std::make_index_sequence<N + 1>>::value;
+    static constexpr bool valid = arity != invalid_constructor_detection_arity;
+};
+
+template <typename Borrow, typename Value>
+struct constructor_detection_select_msvc
+    : std::conditional_t<
+          !Borrow::valid, Value,
+          std::conditional_t<!Value::valid, Borrow,
+                             std::conditional_t<(Borrow::arity >= Value::arity),
+                                                Borrow, Value>>> {};
+
+template <typename T, typename Tag,
+          template <typename...> typename IsConstructible, size_t N>
+struct constructor_detection_result_msvc
+    : constructor_detection_tag_msvc<T, Tag, IsConstructible, N> {};
+
+template <typename T, template <typename...> typename IsConstructible, size_t N>
+struct constructor_detection_result_msvc<T, reference, IsConstructible, N>
+    : constructor_detection_select_msvc<
+          constructor_detection_tag_msvc<T, reference, IsConstructible, N>,
+          constructor_detection_tag_msvc<T, reference_exact, IsConstructible,
+                                         N>> {};
+#endif
+
 // Searches constructor arity in the inclusive range [0, N].
 template <typename T, typename Tag,
           template <typename, typename...> typename InitExpr,
           bool Assert = true, size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS>
 struct constructor_detection;
+
+#if defined(_MSC_VER)
+template <typename T, typename Tag, template <typename...> typename IsConstructible,
+          bool Assert = true, size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS>
+struct constructor_detection_msvc;
+#endif
 
 template <typename T, typename Tag, size_t Arity> struct constructor_methods {
     static constexpr size_t arity = Arity;
@@ -285,16 +521,51 @@ struct constructor_detection {
     }
 };
 
+#if defined(_MSC_VER)
+template <typename T, typename Tag, template <typename...> typename IsConstructible,
+          bool Assert, size_t N>
+struct constructor_detection_msvc {
+  private:
+    using detection =
+        constructor_detection_result_msvc<T, Tag, IsConstructible, N>;
+
+  public:
+    static constexpr size_t arity = detection::valid ? detection::arity : 0;
+    static constexpr bool valid = detection::valid;
+
+    static_assert(!Assert || valid,
+                  "class T construction not detected or ambiguous");
+
+    template <typename Type, typename Context, typename Container>
+    static auto construct(Context& ctx, Container& container) {
+        static_assert(valid, "class T construction not detected or ambiguous");
+        return constructor_methods<T, Tag, detection::arity>::template construct<
+            Type>(ctx, container);
+    }
+
+    template <typename Type, typename Context, typename Container>
+    static void construct(void* ptr, Context& ctx, Container& container) {
+        static_assert(valid, "class T construction not detected or ambiguous");
+        constructor_methods<T, Tag, detection::arity>::template construct<Type>(
+            ptr, ctx, container);
+    }
+};
+#endif
+
 } // namespace detail
 
 template <typename T, typename DetectionType = detail::automatic> struct constructor_detection
     : std::conditional_t<
         has_constructor_typedef_v<T>,
         constructor_typedef<T>,
+#if defined(_MSC_VER)
+        detail::constructor_detection_msvc<T, DetectionType, detail::list_initialization>
+#else
         // Automatic detection prefers list initialization so aggregates and
         // regular constructors share the same default path. Explicit
         // `constructor<T(...)>` registrations still bypass this detector.
         detail::constructor_detection<T, DetectionType, detail::list_initialization_expr>
+#endif
     >
 {};
 

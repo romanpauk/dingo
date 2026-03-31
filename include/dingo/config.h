@@ -7,10 +7,6 @@
 
 #pragma once
 
-#if !defined(DINGO_CONSTRUCTOR_DETECTION_ARGS)
-#define DINGO_CONSTRUCTOR_DETECTION_ARGS 32
-#endif
-
 #if !defined(DINGO_CLOSURE_ARENA_BUFFER_SIZE)
 #define DINGO_CLOSURE_ARENA_BUFFER_SIZE 128
 #endif
@@ -25,4 +21,8 @@
 #define DINGO_CXX_STANDARD 20
 #elif __cplusplus <= 201703L || (defined(_MSVC_LANG) && _MSVC_LANG == 201703L)
 #define DINGO_CXX_STANDARD 17
+#endif
+
+#if !defined(DINGO_CONSTRUCTOR_DETECTION_ARGS)
+#define DINGO_CONSTRUCTOR_DETECTION_ARGS 32
 #endif
