@@ -13,7 +13,8 @@ env:
   JOBS: 4
 
 jobs:
-  build-unix:
+  linux:
+    name: linux / ${{ matrix.config }} / ${{ matrix.compiler.CXX }} / std-${{ matrix.compiler.STD }}
     strategy:
       fail-fast: false
       matrix:
@@ -80,7 +81,8 @@ jobs:
             cmake -S test/fetchcontent -B fetchcontent-build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.compiler.STD }}
             cmake --build fetchcontent-build -j ${{ env.JOBS }}
 
-  build-windows:
+  windows:
+    name: windows / ${{ matrix.os }} / ${{ matrix.config }} / std-${{ matrix.std }}
     strategy:
       fail-fast: false
       matrix:
