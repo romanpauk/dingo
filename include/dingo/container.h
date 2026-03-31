@@ -471,10 +471,12 @@ class container : public allocator_base<Allocator> {
         ) {
             // And it is constructible
             using type_detection = detail::automatic;
-            using type_constructor = detail::constructor_detection< Type, type_detection, detail::list_initialization, false >;
+            using type_constructor = detail::constructor_detection<
+                Type, type_detection, detail::list_initialization_expr, false>;
             if constexpr(type_constructor::valid) {
                 // Construct temporary through context so it can be referenced
-                return context.template construct_temporary< typename annotated_traits<T>::type, type_detection >(*this);
+                return context.template construct_temporary<
+                    typename annotated_traits<T>::type, type_detection>(*this);
             }
         }
 

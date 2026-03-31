@@ -20,54 +20,25 @@
 namespace dingo {
 
 namespace detail {
-struct reference {};
-struct reference_exact {};
-struct value {};
 struct automatic {};
 
-template <typename DisabledType, typename T>
-using reference_exact_resolvable_t = std::enable_if_t<
-    !std::is_same_v<DisabledType, std::decay_t<T>> &&
-    is_reference_resolvable_v<std::decay_t<T>>>;
-
-template <typename DisabledType, typename T>
-using reference_borrowable_t = std::enable_if_t<
-    !std::is_same_v<DisabledType, std::decay_t<T>>>;
+// Constructor detection is split into two phases:
+// 1. Probe which constructor arity is viable by substituting placeholder
+//    arguments into a chosen initialization form.
+// 2. Re-run the selected arity through the real resolving context at runtime.
+//
+// The code below looks more indirect than a straightforward `is_constructible`
+// check because Dingo needs its detection step to model the same conversions
+// that the runtime resolver can perform.
 
 template <class DisabledType, typename Tag> struct constructor_argument;
 
 template <class DisabledType>
-struct constructor_argument<DisabledType, reference> {
-    using tag_type = reference;
-
-    template <typename T, typename = reference_borrowable_t<DisabledType, T>>
-    operator T&();
-
-    template <typename T, typename = reference_borrowable_t<DisabledType, T>>
-    operator T&&();
-};
-
-template <class DisabledType>
-struct constructor_argument<DisabledType, reference_exact> {
-    using tag_type = reference_exact;
-
-    template <typename T, typename = reference_exact_resolvable_t<DisabledType, T>>
-    operator T();
-};
-
-template <class DisabledType>
-struct constructor_argument<DisabledType, value> {
-    using tag_type = value;
-
-    template <typename T, typename = typename std::enable_if_t<!std::is_same_v<
-                              DisabledType, typename std::decay_t<T>>>>
-    operator T();
-};
-
-template <class DisabledType>
 struct constructor_argument<DisabledType, automatic> {
-    using tag_type = automatic;
-
+    // Detection works by asking "could T be formed from N placeholder
+    // arguments?". The placeholder exposes the same conversion surface as the
+    // runtime resolver so overload resolution during probing matches the final
+    // construction path closely enough to select the same constructor.
     template <
         typename T,
         typename = typename std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>> >
@@ -96,79 +67,6 @@ struct constructor_argument<DisabledType, automatic> {
 template <typename DisabledType, typename Context, typename Container,
           typename Tag>
 class constructor_argument_impl;
-
-template <typename DisabledType, typename Context, typename Container>
-class constructor_argument_impl<DisabledType, Context, Container, reference> {
-  public:
-    constructor_argument_impl(Context& context, Container& container)
-        : context_(context), container_(container) {}
-
-    template <typename T, typename = reference_borrowable_t<DisabledType, T>>
-    operator T*() {
-        return context_.template resolve<T*>(container_);
-    }
-
-    template <typename T, typename = reference_borrowable_t<DisabledType, T>>
-    operator T&() {
-        return context_.template resolve<T&>(container_);
-    }
-
-    template <typename T, typename = reference_borrowable_t<DisabledType, T>>
-    operator T&&() {
-        return context_.template resolve<T&&>(container_);
-    }
-
-    template <typename T, typename Tag,
-              typename = std::enable_if_t<
-                  !std::is_same_v<DisabledType, std::decay_t<T>>>>
-    operator annotated<T, Tag>() {
-        return context_.template resolve<annotated<T, Tag>>(container_);
-    }
-
-  private:
-    Context& context_;
-    Container& container_;
-};
-
-template <typename DisabledType, typename Context, typename Container>
-class constructor_argument_impl<DisabledType, Context, Container, reference_exact> {
-  public:
-    constructor_argument_impl(Context& context, Container& container)
-        : context_(context), container_(container) {}
-
-    template <typename T, typename = reference_exact_resolvable_t<DisabledType, T>>
-    operator T() {
-        return context_.template resolve<std::decay_t<T>>(container_);
-    }
-
-  private:
-    Context& context_;
-    Container& container_;
-};
-
-template <typename DisabledType, typename Context, typename Container>
-class constructor_argument_impl<DisabledType, Context, Container, value> {
-  public:
-    constructor_argument_impl(Context& context, Container& container)
-        : context_(context), container_(container) {}
-
-    template <typename T, typename = std::enable_if_t<
-                              !std::is_same_v<DisabledType, std::decay_t<T>>>>
-    operator T() {
-        return context_.template resolve<T>(container_);
-    }
-
-    template <typename T, typename Tag,
-              typename = std::enable_if_t<
-                  !std::is_same_v<DisabledType, std::decay_t<T>>>>
-    operator annotated<T, Tag>() {
-        return context_.template resolve<annotated<T, Tag>>(container_);
-    }
-
-  private:
-    Context& context_;
-    Container& container_;
-};
 
 template <typename DisabledType, typename Context, typename Container>
 class constructor_argument_impl<DisabledType, Context, Container, automatic> {
@@ -219,140 +117,104 @@ class constructor_argument_impl<DisabledType, Context, Container, automatic> {
     Container& container_;
 };
 
-template <typename T, typename = void, typename... Args>
-struct list_initialization_impl : std::false_type {};
+template <typename T, typename... Args>
+using list_initialization_expr = decltype(T{std::declval<Args>()...});
 
 template <typename T, typename... Args>
-struct list_initialization_impl<
-    T, std::void_t<decltype(T{std::declval<Args>()...})>, Args...>
-    : std::true_type {};
+using direct_initialization_expr = decltype(T(std::declval<Args>()...));
+
+// During detection we are interested in "dependency-taking" constructors, not
+// in trivially matching the type against itself. A single placeholder argument
+// of type `T` would otherwise make copy-construction look like a meaningful
+// injection constructor and pollute arity selection.
+template <typename T, typename... Args>
+inline constexpr bool is_non_copy_constructor_argument_v =
+    sizeof...(Args) != 1 || (!std::is_same_v<T, std::decay_t<Args>> && ...);
+
+// Normalize "is this initialization form well-formed?" into one reusable
+// trait so list/direct initialization share the same substitution path.
+template <template <typename, typename...> typename InitExpr, typename T,
+          typename = void, typename... Args>
+struct initialization_impl : std::false_type {};
+
+template <template <typename, typename...> typename InitExpr, typename T,
+          typename... Args>
+struct initialization_impl<InitExpr, T, std::void_t<InitExpr<T, Args...>>,
+                           Args...>
+    // Filter out the accidental "copy-constructible from itself" case so the
+    // detector does not report `T(T&)` as a meaningful injection constructor.
+    : std::bool_constant<is_non_copy_constructor_argument_v<T, Args...>> {};
 
 template <typename T, typename... Args>
-struct list_initialization : list_initialization_impl<T, void, Args...> {};
-
-// Filters out T(T&).
-// TODO: It should be possible to write all into single class
-template <typename T, typename Arg>
-struct list_initialization<T, Arg>
-    : std::conjunction<list_initialization_impl<T, void, Arg>,
-                       std::negation<std::is_same<std::decay_t<Arg>, T>>> {};
+inline constexpr bool is_list_initializable_v =
+    initialization_impl<list_initialization_expr, T, void, Args...>::value;
 
 template <typename T, typename... Args>
-inline constexpr bool is_list_initializable_v = list_initialization<T, Args...>{};
-
-template <typename T, typename = void, typename... Args>
-struct direct_initialization_impl : std::false_type {};
-
-template <typename T, typename... Args>
-struct direct_initialization_impl<
-    T, std::void_t<decltype(T(std::declval<Args>()...))>, Args...>
-    : std::true_type {};
-
-template <typename T, typename... Args>
-struct direct_initialization : direct_initialization_impl<T, void, Args...> {};
-
-// Filters out T(T&).
-// TODO: It should be possible to write all into single class
-template <typename T, typename Arg>
-struct direct_initialization<T, Arg>
-    : std::conjunction<direct_initialization_impl<T, void, Arg>,
-                       std::negation<std::is_same<std::decay_t<Arg>, T>>> {};
-
-template <typename T, typename... Args>
-inline constexpr bool is_direct_initializable_v = direct_initialization<T, Args...>{};
+inline constexpr bool is_direct_initializable_v =
+    initialization_impl<direct_initialization_expr, T, void, Args...>::value;
 
 inline constexpr size_t invalid_constructor_detection_arity =
     static_cast<size_t>(-1);
 
-template <typename T, typename Tag,
-          template <typename...> typename IsConstructible, typename Sequence>
-struct is_constructible;
+template <typename T, size_t>
+using repeated_type = T;
 
-template <typename T, typename Tag,
-          template <typename...> typename IsConstructible, size_t... Is>
-struct is_constructible<T, Tag, IsConstructible, std::index_sequence<Is...>>
-    : IsConstructible<
-          T,
-          std::conditional_t<true, constructor_argument<T, Tag>,
-                             std::integral_constant<size_t, Is>>...> {};
+template <template <typename, typename...> typename InitExpr, typename T, typename Tag,
+          size_t... Is>
+constexpr bool is_constructible(std::index_sequence<Is...>) {
+    // The integer sequence is only a cheap way to repeat the same placeholder
+    // type `Arity` times without materializing an intermediate type_list.
+    return initialization_impl<InitExpr, T, void,
+                               repeated_type<constructor_argument<T, Tag>, Is>...>::value;
+}
 
-template <typename T, typename Tag,
-          template <typename...> typename IsConstructible, size_t Arity>
+template <template <typename, typename...> typename InitExpr, typename T, typename Tag,
+          size_t Arity>
 inline constexpr bool is_constructible_v =
-    is_constructible<T, Tag, IsConstructible, std::make_index_sequence<Arity>>::value;
+    is_constructible<InitExpr, T, Tag>(std::make_index_sequence<Arity>{});
 
-template <typename T, typename Tag,
-          template <typename...> typename IsConstructible, typename Sequence>
-struct detected_constructor_arity;
+template <template <typename, typename...> typename InitExpr, typename T,
+          typename Tag, size_t Arity>
+struct constructor_arity_detector {
+    // Probe arities one-by-one from high to low. This keeps the compile-time
+    // search equivalent to the previous "highest arity wins" rule, but avoids
+    // instantiating the full [0, N] probe set in one large pack expansion,
+    // which MSVC can overflow on for larger aggregate graphs.
+    static constexpr size_t value =
+        is_constructible_v<InitExpr, T, Tag, Arity>
+            ? Arity
+            : constructor_arity_detector<InitExpr, T, Tag, Arity - 1>::value;
+};
 
-template <typename T, typename Tag,
-          template <typename...> typename IsConstructible, size_t... Arities>
-struct detected_constructor_arity<T, Tag, IsConstructible,
-                                  std::index_sequence<Arities...>> {
-        // Constructor detection only needs to know which arity matched. Searching
-        // by integer arity keeps the state small and avoids materializing a fresh
-        // type_list for every suffix that used to be tested.
-    static constexpr size_t arity = [] {
-        constexpr bool matches[] = {
-            is_constructible_v<T, Tag, IsConstructible, Arities>...};
+template <template <typename, typename...> typename InitExpr, typename T,
+          typename Tag>
+struct constructor_arity_detector<InitExpr, T, Tag, 0> {
+    static constexpr size_t value =
+        is_constructible_v<InitExpr, T, Tag, 0>
+            ? 0
+            : invalid_constructor_detection_arity;
+};
 
-        for (size_t i = sizeof...(Arities); i > 0; --i) {
-            if (matches[i - 1]) {
-                return i - 1;
-            }
-        }
-
-        return invalid_constructor_detection_arity;
-    }();
-
+template <template <typename, typename...> typename InitExpr, typename T,
+          typename Tag, size_t N>
+struct constructor_detection_tag {
+    using tag_type = Tag;
+    // Run the arity scan once for a single detection tag and expose the small
+    // result shape used by the rest of the detector. Keeping this as a tiny
+    // `{tag_type, arity, valid}` carrier makes it easy to experiment with
+    // alternate tag behaviors without changing the outer runtime path.
+    static constexpr size_t arity =
+        constructor_arity_detector<InitExpr, T, Tag, N>::value;
     static constexpr bool valid = arity != invalid_constructor_detection_arity;
 };
 
-template <typename T, typename Tag,
-          template <typename...> typename IsConstructible, size_t N>
-struct constructor_detection_tag {
-  private:
-    // Run the arity scan once for a single detection tag and expose the small
-    // result shape used by the rest of the detector.
-    using detection =
-        detected_constructor_arity<T, Tag, IsConstructible,
-                                   std::make_index_sequence<N + 1>>;
-
-  public:
-    using tag_type = Tag;
-    static constexpr size_t arity = detection::arity;
-    static constexpr bool valid = detection::valid;
-};
-
-template <typename Borrow, typename Value>
-struct constructor_detection_select
-    : std::conditional_t<
-          !Borrow::valid, Value,
-          std::conditional_t<!Value::valid, Borrow,
-                             std::conditional_t<(Borrow::arity >= Value::arity),
-                                                Borrow, Value>>> {};
-
-template <typename T, typename Tag,
-          template <typename...> typename IsConstructible, size_t N>
-struct constructor_detection_result
-    : constructor_detection_tag<T, Tag, IsConstructible, N> {};
-
-template <typename T, template <typename...> typename IsConstructible, size_t N>
-// Borrowed-reference detection has to compete with the exact by-value wrapper
-// path. Both produce the same `{ tag_type, arity, valid }` shape, so the
-// selector can keep the better match without changing the outer detector.
-struct constructor_detection_result<T, reference, IsConstructible, N>
-    : constructor_detection_select<
-          constructor_detection_tag<T, reference, IsConstructible, N>,
-          constructor_detection_tag<T, reference_exact, IsConstructible, N>> {};
-
 // Searches constructor arity in the inclusive range [0, N].
-template <typename T, typename Tag, template <typename...> typename IsConstructible,
+template <typename T, typename Tag,
+          template <typename, typename...> typename InitExpr,
           bool Assert = true, size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS>
 struct constructor_detection;
 
 template <typename T, typename Tag, size_t Arity> struct constructor_methods {
-    using tag_type = Tag;
     static constexpr size_t arity = Arity;
     static constexpr bool valid = true;
 
@@ -391,15 +253,14 @@ template <typename T, typename Tag, size_t Arity> struct constructor_methods {
     }
 };
 
-template <typename T, typename Tag, template <typename...> typename IsConstructible,
+template <typename T, typename Tag,
+          template <typename, typename...> typename InitExpr,
           bool Assert, size_t N>
 struct constructor_detection {
   private:
-    // The selected result owns the tag-specific policy. Most tags resolve to a
-    // single arity scan, while `reference` selects between borrow and exact
-    // value detection without duplicating the outer implementation body.
-    // At this point detection is reduced to `{ tag_type, arity, valid }`.
-    using detection = constructor_detection_result<T, Tag, IsConstructible, N>;
+    // Detection computes the static shape once. Runtime construction below only
+    // instantiates the winning arity instead of replaying all probes.
+    using detection = constructor_detection_tag<InitExpr, T, Tag, N>;
 
   public:
     static constexpr size_t arity = detection::valid ? detection::arity : 0;
@@ -430,7 +291,10 @@ template <typename T, typename DetectionType = detail::automatic> struct constru
     : std::conditional_t<
         has_constructor_typedef_v<T>,
         constructor_typedef<T>,
-        detail::constructor_detection<T, DetectionType, detail::list_initialization>
+        // Automatic detection prefers list initialization so aggregates and
+        // regular constructors share the same default path. Explicit
+        // `constructor<T(...)>` registrations still bypass this detector.
+        detail::constructor_detection<T, DetectionType, detail::list_initialization_expr>
     >
 {};
 

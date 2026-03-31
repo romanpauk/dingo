@@ -135,17 +135,14 @@ TYPED_TEST(nested_resolution_test, value_resolution) {
     container.template register_type<scope<unique>, storage<std::unique_ptr<UniquePtr>>>();
     container.template register_type<scope<shared>, storage<std::shared_ptr<SharedPtr>>>();
 
-    static_assert(dingo::constructor_detection<Inner1, dingo::detail::value>::arity == 2);
-    static_assert(dingo::constructor_detection<Inner1, dingo::detail::reference>::arity == 2);
-    static_assert(dingo::constructor_detection<Outer, dingo::detail::value>::arity == 2);
-    // TODO:
-    //static_assert(dingo::constructor_detection<Outer, dingo::detail::reference>::arity == 2);
+    static_assert(dingo::constructor_detection<Inner1>::arity == 2);
+    static_assert(dingo::constructor_detection<Outer>::arity == 2);
 
-    auto inner = container.template construct<Inner1, dingo::constructor_detection<Inner1, dingo::detail::value> >();
+    auto inner = container.template construct<Inner1>();
     ASSERT_EQ(inner.unique_ptr->value, 11);
     ASSERT_EQ(inner.shared_ptr->value, 11);
 
-    auto outer = container.template construct<Outer, dingo::constructor_detection<Outer, dingo::detail::value> >();
+    auto outer = container.template construct<Outer>();
     ASSERT_EQ(outer.inner1.unique_ptr->value, 11);
     ASSERT_EQ(outer.inner1.shared_ptr->value, 11);
 }
