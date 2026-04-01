@@ -256,6 +256,8 @@ class container : public allocator_base<Allocator> {
 
     template< typename Callable > auto invoke(Callable&& callable) {
         resolving_context context;
+        auto type_guard =
+            context.template track_type<std::remove_reference_t<Callable>>();
         return ::dingo::invoke< std::remove_reference_t<Callable> >::construct(
             context, *this, std::forward<Callable>(callable));
     }
@@ -435,7 +437,7 @@ class container : public allocator_base<Allocator> {
                     return resolve<T, typename annotated_traits<T>::type>(
                         *factory, context);
                 } else {
-                    throw detail::make_type_ambiguous_exception<T>();
+                    throw detail::make_type_ambiguous_exception<T>(context);
                 }
             } else {
                 auto indexed =
@@ -477,9 +479,10 @@ class container : public allocator_base<Allocator> {
         }
 
         if constexpr (is_none_v<std::decay_t<IdType>>) {
-            throw detail::make_type_not_found_exception<T>();
+            throw detail::make_type_not_found_exception<T>(context);
         } else {
-            throw detail::make_type_not_found_exception<T, std::decay_t<IdType>>();
+            throw detail::make_type_not_found_exception<T, std::decay_t<IdType>>(
+                context);
         }
     }
 #ifdef _MSC_VER

@@ -195,6 +195,53 @@ TYPED_TEST(dingo_test, exception_message_type_not_found) {
     }
 }
 
+TYPED_TEST(dingo_test, exception_message_type_not_found_dependency_context) {
+    using container_type = TypeParam;
+
+    struct LeafDependency {};
+    struct Dependency {
+        explicit Dependency(LeafDependency&) {}
+    };
+    struct Missing {
+        explicit Missing(Dependency&) {}
+    };
+
+    container_type container;
+    container.template register_type<scope<unique>, storage<Missing>>();
+
+    try {
+        (void)container.template resolve<Missing>();
+        FAIL() << "expected type_not_found_exception";
+    } catch (const type_not_found_exception& e) {
+        std::string expected = "type not found: ";
+        expected += type_name<Dependency&>();
+        expected += " (required by ";
+        expected += type_name<Missing>();
+        expected += ")";
+
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+}
+
+TYPED_TEST(dingo_test, exception_message_collection_type_not_found) {
+    using container_type = TypeParam;
+
+    container_type container;
+
+    try {
+        (void)container.template construct_collection<std::vector<IClass*>>();
+        FAIL() << "expected type_not_found_exception";
+    } catch (const type_not_found_exception& e) {
+        std::string expected = "type not found for collection ";
+        expected += type_name<std::vector<IClass*>>();
+        expected += " (element type: ";
+        expected += type_name<IClass*>();
+        expected += ")";
+
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+}
+
 TYPED_TEST(dingo_test, exception_message_type_ambiguous) {
     using container_type = TypeParam;
 
@@ -216,6 +263,38 @@ TYPED_TEST(dingo_test, exception_message_type_ambiguous) {
     } catch (const type_ambiguous_exception& e) {
         std::string expected = "type resolution is ambiguous: ";
         expected += type_name<IValue&>();
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+}
+
+TYPED_TEST(dingo_test, exception_type_ambiguous_required_by_type) {
+    using container_type = TypeParam;
+
+    struct IService {
+        virtual ~IService() = default;
+    };
+    struct ServiceA : IService {};
+    struct ServiceB : IService {};
+    struct Consumer {
+        explicit Consumer(IService&) {}
+    };
+
+    container_type container;
+    container.template register_type<scope<shared>, storage<ServiceA>,
+                                     interfaces<IService>>();
+    container.template register_type<scope<shared>, storage<ServiceB>,
+                                     interfaces<IService>>();
+    container.template register_type<scope<unique>, storage<Consumer>>();
+
+    try {
+        (void)container.template resolve<Consumer>();
+        FAIL() << "expected type_ambiguous_exception";
+    } catch (const type_ambiguous_exception& e) {
+        std::string expected = "type resolution is ambiguous: ";
+        expected += type_name<IService&>();
+        expected += " (required by ";
+        expected += type_name<Consumer>();
+        expected += ")";
         ASSERT_STREQ(e.what(), expected.c_str());
     }
 }
@@ -268,6 +347,63 @@ TYPED_TEST(dingo_test, exception_message_type_not_convertible) {
         expected += type_name<Service&>();
         ASSERT_STREQ(e.what(), expected.c_str());
     }
+}
+
+TYPED_TEST(dingo_test, exception_type_not_convertible_required_by_type) {
+    using container_type = TypeParam;
+
+    struct IService {
+        virtual ~IService() = default;
+    };
+    struct Service : IService {};
+    struct Consumer {
+        explicit Consumer(std::shared_ptr<IService>) {}
+    };
+
+    Service service;
+    container_type container;
+    container.template register_type<scope<external>, storage<Service&>,
+                                     interfaces<IService>>(service);
+    container.template register_type<scope<unique>, storage<Consumer>>();
+
+    try {
+        (void)container.template resolve<Consumer>();
+        FAIL() << "expected type_not_convertible_exception";
+    } catch (const type_not_convertible_exception& e) {
+        std::string expected = "type is not convertible to ";
+        expected += type_name<std::shared_ptr<IService>>();
+        expected += " from ";
+        expected += type_name<Service&>();
+        expected += " (required by ";
+        expected += type_name<Consumer>();
+        expected += ")";
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+}
+
+TEST(dingo_exception_test, make_indexed_type_not_found_exception_context) {
+    struct Missing {};
+    struct Consumer {};
+    struct context {
+        bool has_type_path() const { return true; }
+        const type_descriptor* active_type() const { return &type; }
+        void append_type_path(std::string& message) const {
+            message += type_name<Consumer>();
+        }
+        type_descriptor type = describe_type<Consumer>();
+    };
+
+    auto e = detail::make_type_not_found_exception<Missing, int>(context{});
+    std::string expected = "type not found: ";
+    expected += type_name<Missing>();
+    expected += " (index type: ";
+    expected += type_name<int>();
+    expected += ")";
+    expected += " (required by ";
+    expected += type_name<Consumer>();
+    expected += ")";
+
+    ASSERT_STREQ(e.what(), expected.c_str());
 }
 
 } // namespace dingo

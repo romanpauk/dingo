@@ -117,6 +117,7 @@ class cyclical_storage_instance_impl<Type, Factory, false> : Factory {
 
     template <typename Context, typename Container>
     void construct(Context& context, Container& container) {
+        assert(resolved_);
         Factory::template construct<Type*>(&instance_, context, container);
         constructed_ = true;
     }
@@ -154,6 +155,7 @@ class cyclical_storage_instance_impl<Type, Factory, true> : Factory {
 
     template <typename Context, typename Container>
     void construct(Context& context, Container& container) {
+        assert(resolved_);
         Factory::template construct<Type*>(&instance_, context, container);
     }
 

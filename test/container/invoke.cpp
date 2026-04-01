@@ -68,6 +68,82 @@ TYPED_TEST(invoke_test, invoke) {
     }
 }
 
+TYPED_TEST(invoke_test, invoke_exception_required_by_type) {
+    using container_type = TypeParam;
+
+    struct Missing {
+        explicit Missing(int) {}
+    };
+
+    container_type container;
+    auto callable = [](Missing&) {};
+
+    try {
+        container.invoke(callable);
+        FAIL() << "expected type_not_found_exception";
+    } catch (const type_not_found_exception& e) {
+        std::string expected = "type not found: ";
+        expected += type_name<Missing&>();
+        expected += " (required by ";
+        expected += type_name<decltype(callable)>();
+        expected += ")";
+
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
 }
 
+TYPED_TEST(invoke_test, invoke_static_function_exception_required_by_type) {
+    using container_type = TypeParam;
 
+    struct Missing {
+        explicit Missing(int) {}
+    };
+
+    struct functions {
+        static void call(Missing&) {}
+    };
+
+    container_type container;
+
+    try {
+        container.invoke(&functions::call);
+        FAIL() << "expected type_not_found_exception";
+    } catch (const type_not_found_exception& e) {
+        std::string expected = "type not found: ";
+        expected += type_name<Missing&>();
+        expected += " (required by ";
+        expected += type_name<decltype(&functions::call)>();
+        expected += ")";
+
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+}
+
+TYPED_TEST(invoke_test, invoke_functor_exception_required_by_type) {
+    using container_type = TypeParam;
+
+    struct Missing {
+        explicit Missing(int) {}
+    };
+
+    struct callable {
+        void operator()(Missing&) const {}
+    };
+
+    container_type container;
+
+    try {
+        container.invoke(callable{});
+        FAIL() << "expected type_not_found_exception";
+    } catch (const type_not_found_exception& e) {
+        std::string expected = "type not found: ";
+        expected += type_name<Missing&>();
+        expected += " (required by ";
+        expected += type_name<callable>();
+        expected += ")";
+
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+}
+
+}

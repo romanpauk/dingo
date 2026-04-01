@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -16,6 +17,13 @@
 namespace dingo {
 namespace type_name_test_types {
 struct value {};
+struct functions {
+    static void call(value&) {}
+};
+
+struct callable {
+    void operator()(value&) const {}
+};
 } // namespace type_name_test_types
 
 namespace {
@@ -26,6 +34,18 @@ constexpr std::string_view expected_type_name_value() {
 #else
     return "dingo::type_name_test_types::value";
 #endif
+}
+
+void expect_type_name(std::string_view actual,
+                      std::initializer_list<std::string_view> parts) {
+    std::size_t offset = 0;
+
+    for (const auto part : parts) {
+        const auto found = actual.find(part, offset);
+        ASSERT_NE(found, std::string_view::npos)
+            << "actual: " << actual << "\nmissing part: " << part;
+        offset = found + part.size();
+    }
 }
 
 TEST(type_name_test, value_type_name) {
@@ -114,6 +134,40 @@ TEST(type_name_test, optional_type_name_contains_wrapper_and_pointee) {
     const auto name = type_name<std::optional<type_name_test_types::value>>();
     ASSERT_NE(name.find("optional"), std::string_view::npos);
     ASSERT_NE(name.find(expected_type_name_value()), std::string_view::npos);
+}
+
+TEST(type_name_test, function_signature_type_name) {
+    expect_type_name(
+        type_name<void(int, const type_name_test_types::value&)>(),
+        {"void", "int", "const", "dingo::type_name_test_types::value", "&"});
+}
+
+TEST(type_name_test, invoke_style_function_signature_type_name) {
+    expect_type_name(type_name<void(type_name_test_types::value&)>(),
+                     {"void", "dingo::type_name_test_types::value", "&"});
+}
+
+TEST(type_name_test, function_pointer_type_name) {
+    expect_type_name(
+        type_name<int(*)(double, type_name_test_types::value*)>(),
+        {"int", "double", "dingo::type_name_test_types::value", "*", "*"});
+}
+
+TEST(type_name_test, static_function_pointer_type_name) {
+    expect_type_name(
+        type_name<decltype(&type_name_test_types::functions::call)>(),
+        {"void", "dingo::type_name_test_types::value", "&", "*"});
+}
+
+TEST(type_name_test, functor_operator_type_name) {
+    expect_type_name(
+        type_name<decltype(&type_name_test_types::callable::operator())>(),
+        {"void",
+         "dingo::type_name_test_types::callable::",
+         "*",
+         "dingo::type_name_test_types::value",
+         "&",
+         "const"});
 }
 
 static_assert(detail::type_name_find("abcdef", "cd") == 2);

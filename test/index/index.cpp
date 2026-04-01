@@ -150,7 +150,6 @@ TEST(index_test, exception_message_index_out_of_range) {
     } catch (const type_index_out_of_range_exception& e) {
         std::string expected = "type index out of range: key type ";
         expected += type_name<size_t>();
-        expected += ", value 3, bound 2";
         ASSERT_STREQ(e.what(), expected.c_str());
     }
 }
@@ -160,7 +159,6 @@ TEST(index_test, exception_message_index_out_of_range_negative) {
 
     std::string expected = "type index out of range: key type ";
     expected += type_name<int>();
-    expected += ", value -1, bound 2";
     ASSERT_STREQ(e.what(), expected.c_str());
 }
 

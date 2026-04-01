@@ -52,9 +52,10 @@ inline constexpr bool is_handle_conversion_usable_v =
     !std::is_same_v<Target, Source> && is_same_handle_shape_v<Target, Source> &&
     is_handle_rebindable_v<Source, Target>;
 
-template <typename Target, typename Source>
+template <typename Target, typename Source, typename Context>
 Target& borrow_reference(Source& source, type_descriptor requested_type,
-                         type_descriptor registered_type) {
+                         type_descriptor registered_type,
+                         const Context& context) {
     if constexpr (std::is_same_v<Target, Source>) {
         return source;
     } else if constexpr (std::is_convertible_v<Source*, Target*>) {
@@ -62,10 +63,11 @@ Target& borrow_reference(Source& source, type_descriptor requested_type,
     } else if constexpr (type_traits<Source>::enabled &&
                          type_traits<Source>::is_value_borrowable) {
         return borrow_reference<Target>(type_traits<Source>::borrow(source),
-                                        requested_type, registered_type);
+                                        requested_type, registered_type,
+                                        context);
     } else {
         throw make_type_not_convertible_exception(requested_type,
-                                                  registered_type);
+                                                  registered_type, context);
     }
 }
 
@@ -74,7 +76,7 @@ Target& resolve_borrowed_reference(Factory& factory, Context& context,
                                    type_descriptor requested_type,
                                    type_descriptor registered_type) {
     return borrow_reference<Target>(resolve_source(factory, context),
-                                    requested_type, registered_type);
+                                    requested_type, registered_type, context);
 }
 
 template <typename Target, typename Source, typename Factory, typename Context>
@@ -112,9 +114,10 @@ Target* resolve_handle_or_borrow_pointer(Factory& factory, Context& context,
     }
 }
 
-template <typename Target, typename Sum>
+template <typename Target, typename Sum, typename Context>
 Target extract_alternative_type_value(Sum&& sum, type_descriptor requested_type,
-                                      type_descriptor registered_type) {
+                                      type_descriptor registered_type,
+                                      const Context& context) {
     using selected_type = std::remove_const_t<Target>;
     using alternative_type = std::remove_cv_t<std::remove_reference_t<Sum>>;
 
@@ -124,13 +127,15 @@ Target extract_alternative_type_value(Sum&& sum, type_descriptor requested_type,
         return Target(std::move(*value));
     }
 
-    throw make_type_not_convertible_exception(requested_type, registered_type);
+    throw make_type_not_convertible_exception(requested_type, registered_type,
+                                              context);
 }
 
-template <typename Target, typename Sum>
+template <typename Target, typename Sum, typename Context>
 Target& resolve_alternative_type_reference(Sum& sum,
                                            type_descriptor requested_type,
-                                           type_descriptor registered_type) {
+                                           type_descriptor registered_type,
+                                           const Context& context) {
     using selected_type = std::remove_const_t<Target>;
     using alternative_type = std::remove_cv_t<std::remove_reference_t<Sum>>;
 
@@ -140,16 +145,18 @@ Target& resolve_alternative_type_reference(Sum& sum,
         return *value;
     }
 
-    throw make_type_not_convertible_exception(requested_type, registered_type);
+    throw make_type_not_convertible_exception(requested_type, registered_type,
+                                              context);
 }
 
-template <typename Target, typename Sum>
+template <typename Target, typename Sum, typename Context>
 Target* resolve_alternative_type_pointer(Sum& sum,
                                          type_descriptor requested_type,
-                                         type_descriptor registered_type) {
+                                         type_descriptor registered_type,
+                                         const Context& context) {
     return std::addressof(
         resolve_alternative_type_reference<Target>(sum, requested_type,
-                                                   registered_type));
+                                                   registered_type, context));
 }
 
 template <typename Source>
@@ -232,7 +239,7 @@ struct type_conversion<
                         type_descriptor registered_type) {
         auto&& source = detail::resolve_source(factory, context);
         return detail::extract_alternative_type_value<Target>(
-            std::move(source), requested_type, registered_type);
+            std::move(source), requested_type, registered_type, context);
     }
 };
 
@@ -278,10 +285,11 @@ struct type_conversion<unique, std::unique_ptr<Array, Deleter>, Source*,
                                         (std::extent_v<Array, 0> != 0)>> {
     template <typename Factory, typename Context>
     static std::unique_ptr<Array, Deleter>
-    apply(Factory&, Context&, type_descriptor requested_type,
+    apply(Factory&, Context& context, type_descriptor requested_type,
           type_descriptor registered_type) {
         throw detail::make_type_not_convertible_exception(requested_type,
-                                                          registered_type);
+                                                          registered_type,
+                                                          context);
     }
 };
 
@@ -291,10 +299,11 @@ struct type_conversion<unique, std::shared_ptr<Array>, Source*,
                                         (std::extent_v<Array, 0> != 0)>> {
     template <typename Factory, typename Context>
     static std::shared_ptr<Array>
-    apply(Factory&, Context&, type_descriptor requested_type,
+    apply(Factory&, Context& context, type_descriptor requested_type,
           type_descriptor registered_type) {
         throw detail::make_type_not_convertible_exception(requested_type,
-                                                          registered_type);
+                                                          registered_type,
+                                                          context);
     }
 };
 
@@ -313,7 +322,7 @@ struct type_conversion<
                          type_descriptor registered_type) {
         return detail::resolve_alternative_type_reference<Target>(
             detail::resolve_source(factory, context), requested_type,
-            registered_type);
+            registered_type, context);
     }
 };
 
@@ -345,7 +354,7 @@ struct type_conversion<
                          type_descriptor registered_type) {
         return detail::resolve_alternative_type_reference<Target>(
             *detail::resolve_source(factory, context), requested_type,
-            registered_type);
+            registered_type, context);
     }
 };
 
@@ -388,7 +397,7 @@ struct type_conversion<
                          type_descriptor registered_type) {
         return detail::resolve_alternative_type_pointer<Target>(
             detail::resolve_source(factory, context), requested_type,
-            registered_type);
+            registered_type, context);
     }
 };
 
@@ -419,7 +428,7 @@ struct type_conversion<
                          type_descriptor registered_type) {
         return detail::resolve_alternative_type_pointer<Target>(
             *detail::resolve_source(factory, context), requested_type,
-            registered_type);
+            registered_type, context);
     }
 };
 
@@ -451,7 +460,8 @@ struct type_conversion<
             return static_cast<Target&>(detail::resolve_source(factory, context));
         } else {
             throw detail::make_type_not_convertible_exception(requested_type,
-                                                              registered_type);
+                                                              registered_type,
+                                                              context);
         }
     }
 };
@@ -472,7 +482,8 @@ struct type_conversion<
                 static_cast<Target&>(detail::resolve_source(factory, context)));
         } else {
             throw detail::make_type_not_convertible_exception(requested_type,
-                                                              registered_type);
+                                                              registered_type,
+                                                              context);
         }
     }
 };
@@ -503,7 +514,7 @@ struct type_conversion<
         auto& source = detail::resolve_source(factory, context);
         return detail::resolve_alternative_type_reference<Target>(
             type_traits<Source>::borrow(source), requested_type,
-            registered_type);
+            registered_type, context);
     }
 };
 
@@ -563,7 +574,7 @@ struct type_conversion<
         auto& source = detail::resolve_source(factory, context);
         return detail::resolve_alternative_type_pointer<Target>(
             type_traits<Source>::borrow(source), requested_type,
-            registered_type);
+            registered_type, context);
     }
 };
 
@@ -627,7 +638,8 @@ struct type_conversion<
             return type_traits<Source>::get(source);
         } else {
             throw detail::make_type_not_convertible_exception(requested_type,
-                                                              registered_type);
+                                                              registered_type,
+                                                              context);
         }
     }
 };
