@@ -27,7 +27,7 @@ TYPED_TEST_SUITE(class_factory_test, container_types, );
 
 template <typename T>
 using test_class_factory =
-    detail::constructor_detection<T, detail::reference,
+    detail::constructor_detection<T, detail::automatic,
                                   detail::list_initialization,
                                   /*Assert=*/false>;
 

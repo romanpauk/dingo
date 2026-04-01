@@ -68,6 +68,35 @@ TYPED_TEST(invoke_test, invoke) {
     }
 }
 
+TYPED_TEST(invoke_test, invoke_value_wrappers) {
+    using container_type = TypeParam;
+
+    struct SharedValue {
+        explicit SharedValue(int init) : value(init) {}
+        int value;
+    };
+
+    struct UniqueValue {
+        explicit UniqueValue(int init) : value(init) {}
+        int value;
+    };
+
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(7);
+    container.template register_type<scope<shared>,
+                                     storage<std::shared_ptr<SharedValue>>>();
+    container.template register_type<scope<unique>,
+                                     storage<std::unique_ptr<UniqueValue>>>();
+
+    ASSERT_EQ(container.invoke([](std::shared_ptr<SharedValue> value) {
+        return value->value;
+    }), 7);
+
+    ASSERT_EQ(container.invoke([](std::unique_ptr<UniqueValue> value) {
+        return value->value;
+    }), 7);
+}
+
 TYPED_TEST(invoke_test, invoke_exception_required_by_type) {
     using container_type = TypeParam;
 

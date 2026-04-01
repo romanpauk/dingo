@@ -34,20 +34,6 @@ template <typename T, typename = void> struct type_traits {
     static constexpr bool is_handle_rebindable = false;
 };
 
-namespace detail {
-template <typename T, typename = void>
-struct type_traits_reference_resolvability : std::false_type {};
-
-template <typename T>
-struct type_traits_reference_resolvability<
-    T, std::void_t<decltype(type_traits<T>::is_reference_resolvable)>>
-    : std::bool_constant<type_traits<T>::is_reference_resolvable> {};
-} // namespace detail
-
-template <typename T>
-inline constexpr bool is_reference_resolvable_v =
-    detail::type_traits_reference_resolvability<T>::value;
-
 template <typename T>
 inline constexpr bool is_pointer_like_type_v =
     type_traits<T>::enabled && type_traits<T>::is_pointer_like &&
@@ -578,7 +564,6 @@ struct type_traits<
     static constexpr bool enabled = true;
     static constexpr bool is_pointer_like = true;
     static constexpr bool is_value_borrowable = false;
-    static constexpr bool is_reference_resolvable = true;
 
     template <typename Target>
     static constexpr bool is_handle_rebindable =
@@ -634,7 +619,6 @@ struct type_traits<std::unique_ptr<T, Deleter>,
     static constexpr bool enabled = true;
     static constexpr bool is_pointer_like = true;
     static constexpr bool is_value_borrowable = true;
-    static constexpr bool is_reference_resolvable = true;
 
     template <typename Target>
     static constexpr bool is_handle_rebindable =
@@ -808,7 +792,6 @@ struct type_traits<
     static constexpr bool enabled = true;
     static constexpr bool is_pointer_like = true;
     static constexpr bool is_value_borrowable = false;
-    static constexpr bool is_reference_resolvable = true;
 
     template <typename Target>
     static constexpr bool is_handle_rebindable =
@@ -851,7 +834,6 @@ struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>> {
     static constexpr bool enabled = true;
     static constexpr bool is_pointer_like = true;
     static constexpr bool is_value_borrowable = true;
-    static constexpr bool is_reference_resolvable = true;
 
     template <typename Target>
     static constexpr bool is_handle_rebindable =

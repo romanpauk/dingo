@@ -142,7 +142,6 @@ template <typename T> struct type_traits<test_unique<T>> {
     static constexpr bool enabled = true;
     static constexpr bool is_pointer_like = true;
     static constexpr bool is_value_borrowable = true;
-    static constexpr bool is_reference_resolvable = true;
 
     template <typename>
     static constexpr bool is_handle_rebindable = true;
