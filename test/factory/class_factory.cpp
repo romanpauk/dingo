@@ -98,6 +98,30 @@ TEST(class_factory_test, constructor) {
                   constructor<A(int, float)>::arity);
 }
 
+#if defined(_MSC_VER)
+TEST(class_factory_test, windows_automatic_detection_prefers_higher_value_arity) {
+    struct A {
+        A(std::shared_ptr<int>&) {}
+        A(std::shared_ptr<int>, int) {}
+    };
+
+    static_assert(constructor_detection<A>::arity == 2);
+    static_assert(
+        std::is_same_v<typename constructor_detection<A>::tag_type, detail::value>);
+}
+
+TEST(class_factory_test, windows_automatic_detection_prefers_borrow_on_tie) {
+    struct A {
+        A(std::shared_ptr<int>&) {}
+        A(std::shared_ptr<int>) {}
+    };
+
+    static_assert(constructor_detection<A>::arity == 1);
+    static_assert(std::is_same_v<typename constructor_detection<A>::tag_type,
+                                 detail::reference>);
+}
+#endif
+
 TYPED_TEST(class_factory_test, ambiguous_construct) {
     struct A {
         A(int) : index(0) {}

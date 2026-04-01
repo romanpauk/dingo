@@ -383,28 +383,22 @@ inline constexpr bool is_constructible_legacy_msvc_v =
                                  std::make_index_sequence<Arity>>::value;
 
 template <typename T, typename Tag,
-          template <typename...> typename IsConstructible, typename Sequence>
-struct constructor_arity_detector_msvc;
+          template <typename...> typename IsConstructible, size_t Arity>
+struct constructor_arity_detector_msvc {
+    static constexpr size_t value =
+        is_constructible_legacy_msvc_v<T, Tag, IsConstructible, Arity>
+            ? Arity
+            : constructor_arity_detector_msvc<T, Tag, IsConstructible,
+                                              Arity - 1>::value;
+};
 
 template <typename T, typename Tag,
-          template <typename...> typename IsConstructible, size_t... Arities>
-struct constructor_arity_detector_msvc<T, Tag, IsConstructible,
-                                       std::index_sequence<Arities...>> {
-    static constexpr size_t value = [] {
-        constexpr bool matches[] = {
-            is_constructible_legacy_msvc_v<T, Tag, IsConstructible,
-                                           Arities>...};
-
-        for (size_t i = sizeof...(Arities); i > 0; --i) {
-            if (matches[i - 1]) {
-                return i - 1;
-            }
-        }
-
-        return invalid_constructor_detection_arity;
-    }();
-
-    static constexpr bool valid = value != invalid_constructor_detection_arity;
+          template <typename...> typename IsConstructible>
+struct constructor_arity_detector_msvc<T, Tag, IsConstructible, 0> {
+    static constexpr size_t value =
+        is_constructible_legacy_msvc_v<T, Tag, IsConstructible, 0>
+            ? 0
+            : invalid_constructor_detection_arity;
 };
 
 template <typename T, typename Tag,
@@ -412,8 +406,7 @@ template <typename T, typename Tag,
 struct constructor_detection_tag_msvc {
     using tag_type = Tag;
     static constexpr size_t arity =
-        constructor_arity_detector_msvc<T, Tag, IsConstructible,
-                                        std::make_index_sequence<N + 1>>::value;
+        constructor_arity_detector_msvc<T, Tag, IsConstructible, N>::value;
     static constexpr bool valid = arity != invalid_constructor_detection_arity;
 };
 
@@ -436,6 +429,12 @@ struct constructor_detection_result_msvc<T, reference, IsConstructible, N>
           constructor_detection_tag_msvc<T, reference, IsConstructible, N>,
           constructor_detection_tag_msvc<T, reference_exact, IsConstructible,
                                          N>> {};
+
+template <typename T, template <typename...> typename IsConstructible, size_t N>
+struct constructor_detection_result_msvc<T, automatic, IsConstructible, N>
+    : constructor_detection_select_msvc<
+          constructor_detection_result_msvc<T, reference, IsConstructible, N>,
+          constructor_detection_tag_msvc<T, value, IsConstructible, N>> {};
 #endif
 
 // Searches constructor arity in the inclusive range [0, N].
@@ -489,6 +488,32 @@ template <typename T, typename Tag, size_t Arity> struct constructor_methods {
     }
 };
 
+template <typename T, typename Detection, bool Assert>
+struct detected_constructor {
+    using tag_type = typename Detection::tag_type;
+    static constexpr size_t arity = Detection::valid ? Detection::arity : 0;
+    static constexpr bool valid = Detection::valid;
+
+    static_assert(!Assert || valid,
+                  "class T construction not detected or ambiguous");
+
+    template <typename Type, typename Context, typename Container>
+    static auto construct(Context& ctx, Container& container) {
+        static_assert(valid, "class T construction not detected or ambiguous");
+        return constructor_methods<T, typename Detection::tag_type,
+                                   Detection::arity>::template construct<Type>(
+            ctx, container);
+    }
+
+    template <typename Type, typename Context, typename Container>
+    static void construct(void* ptr, Context& ctx, Container& container) {
+        static_assert(valid, "class T construction not detected or ambiguous");
+        constructor_methods<T, typename Detection::tag_type,
+                            Detection::arity>::template construct<Type>(
+            ptr, ctx, container);
+    }
+};
+
 template <typename T, typename Tag,
           template <typename, typename...> typename InitExpr,
           bool Assert, size_t N>
@@ -499,25 +524,20 @@ struct constructor_detection {
     using detection = constructor_detection_tag<InitExpr, T, Tag, N>;
 
   public:
-    static constexpr size_t arity = detection::valid ? detection::arity : 0;
-    static constexpr bool valid = detection::valid;
-
-    static_assert(!Assert || valid,
-                  "class T construction not detected or ambiguous");
+    using type = detected_constructor<T, detection, Assert>;
+    using tag_type = typename type::tag_type;
+    static constexpr size_t arity = type::arity;
+    static constexpr bool valid = type::valid;
 
     template <typename Type, typename Context, typename Container>
     static auto construct(Context& ctx, Container& container) {
-        static_assert(valid, "class T construction not detected or ambiguous");
         // The final runtime path expands only the selected arity and tag.
-        return constructor_methods<T, Tag, detection::arity>::template construct<
-            Type>(ctx, container);
+        return type::template construct<Type>(ctx, container);
     }
 
     template <typename Type, typename Context, typename Container>
     static void construct(void* ptr, Context& ctx, Container& container) {
-        static_assert(valid, "class T construction not detected or ambiguous");
-        constructor_methods<T, Tag, detection::arity>::template construct<Type>(
-            ptr, ctx, container);
+        type::template construct<Type>(ptr, ctx, container);
     }
 };
 
@@ -530,24 +550,19 @@ struct constructor_detection_msvc {
         constructor_detection_result_msvc<T, Tag, IsConstructible, N>;
 
   public:
-    static constexpr size_t arity = detection::valid ? detection::arity : 0;
-    static constexpr bool valid = detection::valid;
-
-    static_assert(!Assert || valid,
-                  "class T construction not detected or ambiguous");
+    using type = detected_constructor<T, detection, Assert>;
+    using tag_type = typename type::tag_type;
+    static constexpr size_t arity = type::arity;
+    static constexpr bool valid = type::valid;
 
     template <typename Type, typename Context, typename Container>
     static auto construct(Context& ctx, Container& container) {
-        static_assert(valid, "class T construction not detected or ambiguous");
-        return constructor_methods<T, Tag, detection::arity>::template construct<
-            Type>(ctx, container);
+        return type::template construct<Type>(ctx, container);
     }
 
     template <typename Type, typename Context, typename Container>
     static void construct(void* ptr, Context& ctx, Container& container) {
-        static_assert(valid, "class T construction not detected or ambiguous");
-        constructor_methods<T, Tag, detection::arity>::template construct<Type>(
-            ptr, ctx, container);
+        type::template construct<Type>(ptr, ctx, container);
     }
 };
 #endif
