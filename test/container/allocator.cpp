@@ -53,9 +53,14 @@ bool operator!=(const test_allocator<T>& x,
     return !(x == y);
 }
 
+#if defined(DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION)
+using container_types = ::testing::Types<
+    dingo::container<dingo::dynamic_container_traits, test_allocator<char>>>;
+#else
 using container_types = ::testing::Types<
     dingo::container<dingo::static_container_traits<>, test_allocator<char>>,
     dingo::container<dingo::dynamic_container_traits, test_allocator<char>>>;
+#endif
 
 template <typename T> struct allocator_test : public testing::Test {};
 TYPED_TEST_SUITE(allocator_test, container_types, );

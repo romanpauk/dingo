@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 
 #include <string>
+#include <type_traits>
 
 #include "support/assert.h"
 #include "support/class.h"
@@ -39,6 +40,11 @@ struct dynamic_container_with_index {
     static constexpr bool cache_enabled = true;
 };
 
+#if defined(DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION)
+using container_types =
+    ::testing::Types<dingo::container<
+        dingo::dynamic_container_with_index<int, index_type::map>>>;
+#else
 using container_types = ::testing::Types<
     dingo::container<dingo::dynamic_container_with_index<int, index_type::map>>,
     dingo::container<
@@ -51,6 +57,7 @@ using container_types = ::testing::Types<
         dingo::dynamic_container_with_index<size_t, index_type::map>>,
     dingo::container<
         dingo::dynamic_container_with_index<size_t, index_type::array<32>>>>;
+#endif
 
 template <typename T> struct index_test : public test<T> {};
 TYPED_TEST_SUITE(index_test, container_types, );
@@ -64,10 +71,13 @@ template <typename Container> struct get_index_type {
 template <typename Container>
 using get_index_type_t = typename get_index_type<Container>::type;
 
-template <typename T> static T value(int);
-template <> int value<int>(int i) { return i; }
-template <> size_t value<size_t>(int i) { return i; }
-template <> std::string value<std::string>(int i) { return std::to_string(i); }
+template <typename T> static T value(int i) {
+    if constexpr (std::is_same_v<T, std::string>) {
+        return std::to_string(i);
+    } else {
+        return static_cast<T>(i);
+    }
+}
 
 TYPED_TEST(index_test, index_tag) {
     using indexes =

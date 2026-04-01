@@ -66,6 +66,8 @@ if(DINGO_DEVELOPMENT_MODE)
     option(DINGO_BENCHMARK_ENABLED "enable benchmarking through googlebenchmark" ON)
     option(DINGO_BENCHMARK_FRUIT_ENABLED "enable fetching of google::fruit for benchmarks" OFF)
     option(DINGO_EXAMPLES_ENABLED "enable building of dingo examples" ON)
+    option(DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION
+        "Run tests with a single representative dynamic container configuration." OFF)
     option(DINGO_TREAT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors." ON)
 
     sanitizers_init(DINGO)
@@ -219,6 +221,10 @@ if(DINGO_DEVELOPMENT_MODE)
         add_test(NAME dingo_test COMMAND dingo_test)
         target_link_libraries(dingo_test dingo::dingo gtest_main)
         target_include_directories(dingo_test PRIVATE test)
+        target_compile_definitions(dingo_test PRIVATE
+            $<$<BOOL:${DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION}>:
+                DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION=1>
+        )
 
         target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
 
