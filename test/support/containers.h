@@ -57,6 +57,10 @@ struct dynamic_container_without_cache : dingo::dynamic_container_traits {
     static constexpr bool cache_enabled = true;
 };
 
+#if defined(DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION)
+using container_types =
+    ::testing::Types<dingo::container<dingo::dynamic_container_traits>>;
+#else
 using container_types = ::testing::Types<
     dingo::container<dingo::static_container_traits<>>,
     dingo::container<dingo::dynamic_container_traits>,
@@ -64,3 +68,4 @@ using container_types = ::testing::Types<
     dingo::container<static_container_without_cache<>>,
     dingo::container<dynamic_container_with_static_rtti_traits>,
     dingo::container<dynamic_container_without_cache>>;
+#endif
