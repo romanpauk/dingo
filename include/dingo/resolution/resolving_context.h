@@ -53,6 +53,42 @@ class resolving_context {
         type_descriptor type;
     };
 
+    class resolving_frame {
+      public:
+        resolving_frame(resolving_context& context, type_descriptor type)
+            : context_(&context)
+            , parent_(context.active_type_frame_)
+            , frame_{parent_, type} {
+            context_->active_type_frame_ = &frame_;
+        }
+
+        resolving_frame(const resolving_frame&) = delete;
+        resolving_frame& operator=(const resolving_frame&) = delete;
+
+        resolving_frame(resolving_frame&& other) noexcept
+            : context_(other.context_)
+            , parent_(other.parent_)
+            , frame_(other.frame_) {
+            if (context_) {
+                context_->active_type_frame_ = &frame_;
+            }
+            other.context_ = nullptr;
+        }
+
+        resolving_frame& operator=(resolving_frame&&) = delete;
+
+        ~resolving_frame() {
+            if (context_) {
+                context_->active_type_frame_ = parent_;
+            }
+        }
+
+      private:
+        resolving_context* context_;
+        const type_frame* parent_;
+        type_frame frame_;
+    };
+
     resolving_context()
         : arena_(arena_buffer_)
         , closures_(arena_)
@@ -67,6 +103,10 @@ class resolving_context {
 
     template <typename T, typename Container> T resolve(Container& container) {
         return container.template resolve<T, false>(*this);
+    }
+
+    template <typename T> resolving_frame track_type() {
+        return resolving_frame(*this, describe_type<T>());
     }
 
     template <typename T, typename... Args> T& construct(Args&&... args) {
@@ -118,6 +158,17 @@ class resolving_context {
 
     bool has_type_path() const { return active_type_frame_ != nullptr; }
 
+    const type_descriptor* active_type() const {
+        return active_type_frame_ != nullptr ? &active_type_frame_->type
+                                             : nullptr;
+    }
+
+    const type_descriptor* parent_type() const {
+        return active_type_frame_ != nullptr && active_type_frame_->parent != nullptr
+                   ? &active_type_frame_->parent->type
+                   : nullptr;
+    }
+
     void append_type_path(std::string& message) const {
         std::vector<type_descriptor> names;
         for (auto* frame = active_type_frame_; frame != nullptr;
@@ -149,8 +200,6 @@ class resolving_context {
     const type_frame* active_type_frame_ = nullptr;
     closure closure_;
 
-    template <typename T, bool DefaultConstructible>
-    friend struct class_recursion_guard;
 };
 
 } // namespace dingo

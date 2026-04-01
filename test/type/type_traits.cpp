@@ -177,7 +177,8 @@ template <typename T> struct type_traits<test_unique<T>> {
             return factory.resolve(context);
         else
             throw detail::make_type_not_convertible_exception(requested_type,
-                                                              registered_type);
+                                                              registered_type,
+                                                              context);
     }
 };
 
@@ -221,7 +222,8 @@ template <typename T> struct type_traits<test_optional<T>> {
             return factory.resolve(context);
         else
             throw detail::make_type_not_convertible_exception(requested_type,
-                                                              registered_type);
+                                                              registered_type,
+                                                              context);
     }
 };
 

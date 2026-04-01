@@ -30,27 +30,17 @@ struct shared_cyclical;
 template <typename T, bool DefaultConstructible = std::is_default_constructible_v<T>>
 struct class_recursion_guard {
     explicit class_recursion_guard(resolving_context& context)
-        : context_(&context)
-        , parent_(context.active_type_frame_)
-        , frame_{parent_, describe_type<T>()} {
-        context_->active_type_frame_ = &frame_;
+        : frame_guard_(context.template track_type<T>()) {
         if (visited_) {
-            auto exception = detail::make_type_recursion_exception<T>(context);
-            context_->active_type_frame_ = parent_;
-            throw exception;
+            throw detail::make_type_recursion_exception<T>(context);
         }
         visited_ = true;
     }
 
-    ~class_recursion_guard() {
-        visited_ = false;
-        context_->active_type_frame_ = parent_;
-    }
+    ~class_recursion_guard() { visited_ = false; }
 
   private:
-    resolving_context* context_;
-    const typename resolving_context::type_frame* parent_;
-    typename resolving_context::type_frame frame_;
+    typename resolving_context::resolving_frame frame_guard_;
     static thread_local bool visited_;
 };
 

@@ -74,7 +74,8 @@ void* resolve_address(Factory& factory, Context& context, type_list<Types...>,
 
     if (!matched) {
         throw detail::make_type_not_convertible_exception(requested_type,
-                                                          registered_type);
+                                                          registered_type,
+                                                          context);
     }
 
     return address;
@@ -166,7 +167,7 @@ class instance_factory : public instance_factory_interface<Container> {
             if (!detail::matches_exact_lookup<
                     resolved_type_t<T, Type>>(requested_type)) {
                 throw detail::make_type_not_convertible_exception(
-                    requested_type, registered_type);
+                    requested_type, registered_type, context);
             }
         }
 

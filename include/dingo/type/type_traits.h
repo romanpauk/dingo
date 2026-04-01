@@ -504,7 +504,8 @@ template <typename T> struct type_traits<T*> {
             return factory.resolve(context);
         else
             throw detail::make_type_not_convertible_exception(requested_type,
-                                                              registered_type);
+                                                              registered_type,
+                                                              context);
     }
 };
 
@@ -534,7 +535,8 @@ template <> struct type_traits<void*> {
             return factory.resolve(context);
         else
             throw detail::make_type_not_convertible_exception(requested_type,
-                                                              registered_type);
+                                                              registered_type,
+                                                              context);
     }
 };
 
@@ -564,7 +566,8 @@ template <> struct type_traits<const void*> {
             return factory.resolve(context);
         else
             throw detail::make_type_not_convertible_exception(requested_type,
-                                                              registered_type);
+                                                              registered_type,
+                                                              context);
     }
 };
 
@@ -620,7 +623,8 @@ struct type_traits<
             return factory.resolve(context);
         else
             throw detail::make_type_not_convertible_exception(requested_type,
-                                                              registered_type);
+                                                              registered_type,
+                                                              context);
     }
 };
 
@@ -689,7 +693,8 @@ struct type_traits<std::unique_ptr<T, Deleter>,
             return factory.resolve(context);
         else
             throw detail::make_type_not_convertible_exception(requested_type,
-                                                              registered_type);
+                                                              registered_type,
+                                                              context);
     }
 };
 
@@ -1042,7 +1047,8 @@ template <typename T> struct type_traits<std::optional<T>> {
             return factory.resolve(context);
         else
             throw detail::make_type_not_convertible_exception(requested_type,
-                                                              registered_type);
+                                                              registered_type,
+                                                              context);
     }
 };
 
