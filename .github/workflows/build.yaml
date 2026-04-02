@@ -92,8 +92,8 @@ jobs:
             fetchcontent-build/CMakeFiles/CMakeOutput.log
             fetchcontent-build/CMakeFiles/CMakeError.log
 
-  windows:
-    name: ${{ matrix.os }} / msvc / std-${{ matrix.std }} / ${{ matrix.config.label }}
+  windows-x64:
+    name: ${{ matrix.vs.label }} / x64 / std-${{ matrix.std }} / ${{ matrix.config.label }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -103,9 +103,15 @@ jobs:
             label: debug
           - id: Release
             label: release
-        os: [windows-2022, windows-2025]
         std: [17, 20, 23]
-    runs-on: ${{ matrix.os }}
+        vs:
+          - label: vs2022
+            runner: windows-2022
+            generator: Visual Studio 17 2022
+          - label: vs2026
+            runner: windows-2025-vs2026
+            generator: Visual Studio 18 2026
+    runs-on: ${{ matrix.vs.runner }}
     steps:
       - name: Setup MSVC Developer Command Prompt
         uses: TheMrMilchmann/setup-msvc-dev@v4.0.0
@@ -116,11 +122,11 @@ jobs:
       - name: CCache
         uses: hendrikmuhs/ccache-action@v1.2.22
         with:
-          key: ${{ matrix.os }}-${{ matrix.config.id }}-${{ matrix.std }}
+          key: ${{ matrix.vs.label }}-x64-${{ matrix.config.id }}-${{ matrix.std }}
           evict-old-files: job
       - name: Configure
         run: |
-            cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+            cmake -S . -B build -G "${{ matrix.vs.generator }}" -A x64 -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
       - name: Build
         run: |
             cmake --build build --config ${{ matrix.config.id }} -j ${{ env.BUILD_JOBS }}
@@ -129,13 +135,13 @@ jobs:
             cd build && ctest --verbose --output-on-failure -C ${{ matrix.config.id }}
       - name: FetchContent
         run: |
-            cmake -S test/fetchcontent -B fetchcontent-build -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
-            cmake --build fetchcontent-build -j ${{ env.BUILD_JOBS }}
+            cmake -S test/fetchcontent -B fetchcontent-build -G "${{ matrix.vs.generator }}" -A x64 -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+            cmake --build fetchcontent-build --config ${{ matrix.config.id }} -j ${{ env.BUILD_JOBS }}
       - name: Upload Failure Artifacts
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: failure-${{ matrix.os }}-msvc-std-${{ matrix.std }}-${{ matrix.config.label }}
+          name: failure-${{ matrix.vs.label }}-x64-msvc-std-${{ matrix.std }}-${{ matrix.config.label }}
           if-no-files-found: ignore
           path: |
             build/CMakeFiles/CMakeOutput.log
@@ -143,3 +149,72 @@ jobs:
             build/Testing/Temporary
             fetchcontent-build/CMakeFiles/CMakeOutput.log
             fetchcontent-build/CMakeFiles/CMakeError.log
+
+  windows-arm64-vs2026:
+    name: vs2026 / arm64 / std-${{ matrix.std }} / ${{ matrix.config.label }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - id: Debug
+            label: debug
+          - id: Release
+            label: release
+        std: [17, 20, 23]
+    runs-on: windows-2025-vs2026
+    steps:
+      - name: Setup MSVC Developer Command Prompt
+        uses: TheMrMilchmann/setup-msvc-dev@v4.0.0
+        with:
+          arch: amd64_arm64
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+      - name: CCache
+        uses: hendrikmuhs/ccache-action@v1.2.22
+        with:
+          key: vs2026-arm64-${{ matrix.config.id }}-${{ matrix.std }}
+          evict-old-files: job
+      - name: Configure
+        run: |
+            cmake -S . -B build -G "Visual Studio 18 2026" -A ARM64 -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+      - name: Build
+        run: |
+            cmake --build build --config ${{ matrix.config.id }} -j ${{ env.BUILD_JOBS }}
+      - name: FetchContent
+        run: |
+            cmake -S test/fetchcontent -B fetchcontent-build -G "Visual Studio 18 2026" -A ARM64 -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }} -DDINGO_EXAMPLES_ENABLED=OFF
+            cmake --build fetchcontent-build --config ${{ matrix.config.id }} -j ${{ env.BUILD_JOBS }}
+      - name: Upload Failure Artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: failure-vs2026-arm64-msvc-std-${{ matrix.std }}-${{ matrix.config.label }}
+          if-no-files-found: ignore
+          path: |
+            build/CMakeFiles/CMakeOutput.log
+            build/CMakeFiles/CMakeError.log
+            build/Testing/Temporary
+            fetchcontent-build/CMakeFiles/CMakeOutput.log
+            fetchcontent-build/CMakeFiles/CMakeError.log
+
+  windows-arm64-vs2022:
+    name: vs2022 / arm64 / std-${{ matrix.std }} / ${{ matrix.config.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - id: Debug
+            label: debug
+          - id: Release
+            label: release
+        std: [17, 20, 23]
+    uses: ./.github/workflows/windows-arm64-leg.yaml
+    with:
+      vs_label: vs2022
+      cross_runner: windows-2022
+      cross_generator: Visual Studio 17 2022
+      native_generator: Visual Studio 17 2022
+      config_id: ${{ matrix.config.id }}
+      config_label: ${{ matrix.config.label }}
+      std: ${{ matrix.std }}

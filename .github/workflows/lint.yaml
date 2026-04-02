@@ -22,12 +22,12 @@ jobs:
         include:
           - name: linux
             os: ubuntu-24.04
-          - name: windows
-            os: windows-2025
+          - name: windows-vs2026
+            os: windows-2025-vs2026
     runs-on: ${{ matrix.os }}
     steps:
       - name: Setup MSVC Developer Command Prompt
-        if: ${{ matrix.name == 'windows' }}
+        if: ${{ startsWith(matrix.name, 'windows') }}
         uses: TheMrMilchmann/setup-msvc-dev@v4.0.0
         with:
           arch: x64
