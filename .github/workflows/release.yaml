@@ -1,0 +1,224 @@
+name: release
+permissions:
+  contents: write
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.source_ref }}
+  cancel-in-progress: false
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic version in x.y.z form
+        required: true
+        type: string
+      source_ref:
+        description: master for a new release line or releases/x.y for a patch release
+        required: true
+        default: master
+        type: string
+      release_line:
+        description: Optional explicit release line in x.y form
+        required: false
+        type: string
+      dry_run:
+        description: Validate and verify without pushing branches, tags, or GitHub Releases
+        required: true
+        default: true
+        type: boolean
+env:
+  BUILD_JOBS: ${{ vars.DINGO_BUILD_JOBS || '4' }}
+
+jobs:
+  release:
+    name: release / ${{ inputs.version }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout source ref
+        uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.source_ref }}
+
+      - name: Fetch remote refs and tags
+        run: |
+          git fetch --force --prune --tags origin '+refs/heads/*:refs/remotes/origin/*'
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Plan release metadata
+        id: plan
+        env:
+          RELEASE_LINE_INPUT: ${{ inputs.release_line }}
+        run: |
+          args=(
+            --version "${{ inputs.version }}"
+            --source-ref "${{ inputs.source_ref }}"
+          )
+
+          if [ -n "$RELEASE_LINE_INPUT" ]; then
+              args+=(--release-line "$RELEASE_LINE_INPUT")
+          fi
+
+          python tools/release_flow.py plan "${args[@]}" >> "$GITHUB_OUTPUT"
+
+      - name: Materialize release branch and version commit
+        id: release_commit
+        env:
+          RELEASE_BRANCH_EXISTS: ${{ steps.plan.outputs.release_branch_exists }}
+          RELEASE_BRANCH: ${{ steps.plan.outputs.release_branch }}
+          SOURCE_KIND: ${{ steps.plan.outputs.source_kind }}
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          if [ "$SOURCE_KIND" = "master" ]; then
+              if [ "$RELEASE_BRANCH_EXISTS" = "true" ]; then
+                  git switch -C "$RELEASE_BRANCH" "refs/remotes/origin/$RELEASE_BRANCH"
+              else
+                  git switch -c "$RELEASE_BRANCH"
+              fi
+          else
+              git switch -C "$RELEASE_BRANCH" "refs/remotes/origin/$RELEASE_BRANCH"
+          fi
+
+          python tools/release_flow.py set-version --file CMakeLists.txt --version "$VERSION"
+
+          if git diff --quiet -- CMakeLists.txt; then
+              echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+              echo "commit_created=false" >> "$GITHUB_OUTPUT"
+              exit 0
+          fi
+
+          git add CMakeLists.txt
+          git commit -m "Release v$VERSION"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "commit_created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify formatting
+        env:
+          PIP_BREAK_SYSTEM_PACKAGES: 1
+        run: |
+          python -m pip install mdformat
+          cmake -S . -B build-lint -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_TESTING_ENABLED=OFF -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF
+          cmake --build build-lint -t md-verify
+
+      - name: Verify release build
+        env:
+          ASAN_OPTIONS: use_sigaltstack=false
+        run: |
+          cmake -S . -B build-release -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DDINGO_SANITIZER=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=23
+          cmake --build build-release -j "$BUILD_JOBS"
+          (cd build-release && ctest --verbose --output-on-failure)
+          cmake -S test/fetchcontent -B fetchcontent-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=23
+          cmake --build fetchcontent-build -j "$BUILD_JOBS"
+
+      - name: Publish release refs
+        if: ${{ !inputs.dry_run }}
+        env:
+          EXPECTED_COMMIT: ${{ steps.release_commit.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: ${{ steps.plan.outputs.release_branch }}
+          TAG: ${{ steps.plan.outputs.tag }}
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          retry() {
+              attempts=$1
+              delay=$2
+              shift 2
+              count=1
+              while true; do
+                  if "$@"; then
+                      return 0
+                  fi
+                  if [ "$count" -ge "$attempts" ]; then
+                      return 1
+                  fi
+                  sleep "$delay"
+                  count=$((count + 1))
+                  delay=$((delay * 2))
+              done
+          }
+
+          remote_branch_commit() {
+              git ls-remote --heads origin "refs/heads/$RELEASE_BRANCH" | awk 'NR==1 {print $1}'
+          }
+
+          remote_tag_commit() {
+              tag_commit=$(git ls-remote --tags origin "refs/tags/$TAG^{}" | awk 'NR==1 {print $1}')
+              if [ -n "$tag_commit" ]; then
+                  printf '%s\n' "$tag_commit"
+                  return 0
+              fi
+              git ls-remote --tags origin "refs/tags/$TAG" | awk 'NR==1 {print $1}'
+          }
+
+          branch_commit=$(remote_branch_commit)
+          if [ -n "$branch_commit" ] && [ "$branch_commit" != "$EXPECTED_COMMIT" ]; then
+              echo "::error::Release branch '$RELEASE_BRANCH' already exists at $branch_commit, expected $EXPECTED_COMMIT. Refusing automatic recovery."
+              exit 1
+          fi
+          if [ -z "$branch_commit" ]; then
+              if ! retry 3 2 git push origin "HEAD:refs/heads/$RELEASE_BRANCH"; then
+                  echo "::error::Failed to push release branch '$RELEASE_BRANCH' after retries."
+                  exit 1
+              fi
+              branch_commit=$(remote_branch_commit)
+          fi
+          if [ "$branch_commit" != "$EXPECTED_COMMIT" ]; then
+              echo "::error::Release branch '$RELEASE_BRANCH' did not settle on expected commit $EXPECTED_COMMIT."
+              exit 1
+          fi
+
+          tag_commit=$(remote_tag_commit)
+          if [ -n "$tag_commit" ] && [ "$tag_commit" != "$EXPECTED_COMMIT" ]; then
+              echo "::error::Tag '$TAG' already exists at $tag_commit, expected $EXPECTED_COMMIT. Refusing automatic recovery."
+              exit 1
+          fi
+          if [ -z "$tag_commit" ]; then
+              if ! git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null; then
+                  git tag -a "$TAG" -m "Release $TAG"
+              fi
+              if ! retry 3 2 git push origin "refs/tags/$TAG"; then
+                  echo "::error::Tag push failed after retries. Recovery: rerun after fixing permissions/state."
+                  exit 1
+              fi
+              tag_commit=$(remote_tag_commit)
+          fi
+          if [ "$tag_commit" != "$EXPECTED_COMMIT" ]; then
+              echo "::error::Tag '$TAG' did not settle on expected commit $EXPECTED_COMMIT."
+              exit 1
+          fi
+
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+              if ! retry 3 2 gh release create "$TAG" --title "$TAG" --notes "Release $TAG"; then
+                  if ! gh release view "$TAG" >/dev/null 2>&1; then
+                      echo "::error::GitHub Release creation failed after retries. Recovery: rerun after resolving the GitHub API/token issue."
+                      exit 1
+                  fi
+              fi
+          fi
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+              echo "::error::GitHub Release '$TAG' is still missing after recovery attempts."
+              exit 1
+          fi
+
+      - name: Summarize release plan
+        env:
+          RELEASE_BRANCH: ${{ steps.plan.outputs.release_branch }}
+          RELEASE_LINE: ${{ steps.plan.outputs.release_line }}
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          RELEASE_COMMIT_SHA=$(git rev-parse HEAD)
+          {
+              echo "## Release summary"
+              echo
+              echo "- version: \`${{ inputs.version }}\`"
+              echo "- source_ref: \`${{ inputs.source_ref }}\`"
+              echo "- release_line: \`$RELEASE_LINE\`"
+              echo "- release_branch: \`$RELEASE_BRANCH\`"
+              echo "- release_commit_sha: \`$RELEASE_COMMIT_SHA\`"
+              echo "- tag: \`$TAG\`"
+              echo "- dry_run: \`${{ inputs.dry_run }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
