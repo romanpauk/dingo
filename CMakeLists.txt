@@ -12,7 +12,7 @@ else()
     cmake_minimum_required(VERSION 3.21)
 endif()
 
-project(dingo)
+project(dingo VERSION 0.1.2)
 
 add_library(dingo INTERFACE)
 add_library(dingo::dingo ALIAS dingo)
