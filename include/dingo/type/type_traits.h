@@ -32,8 +32,10 @@ template <typename T, typename = void> struct type_traits {
 
     template <typename>
     static constexpr bool is_handle_rebindable = false;
-};
 
+    template <typename>
+    static constexpr bool is_rebindable = false;
+};
 template <typename T>
 inline constexpr bool is_pointer_like_type_v =
     type_traits<T>::enabled && type_traits<T>::is_pointer_like &&
@@ -175,6 +177,7 @@ struct construction_traits<
 template <typename StorageTag, typename Type, typename U, typename = void>
 struct storage_traits {
     static constexpr bool enabled = false;
+    static constexpr bool is_stable = false;
 
     using value_types = type_list<>;
     using lvalue_reference_types = type_list<>;
@@ -346,6 +349,7 @@ struct array_like_exact_interface_type<
 template <typename Type, typename U>
 struct storage_traits<shared, Type*, U> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using value_types = type_list<>;
     using lvalue_reference_types = type_list<U&>;
@@ -357,6 +361,7 @@ struct storage_traits<shared, Type*, U> {
 template <typename Type, typename U>
 struct storage_traits<external, Type*, U> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using value_types = type_list<U>;
     using lvalue_reference_types = type_list<U&>;
@@ -368,6 +373,7 @@ struct storage_traits<external, Type*, U> {
 template <typename Type, typename U>
 struct storage_traits<unique, Type*, U> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = false;
 
     using value_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
     using lvalue_reference_types = type_list<>;
@@ -380,6 +386,7 @@ struct storage_traits<unique, Type*, U> {
 template <typename T, typename U>
 struct storage_traits<unique, T[], U> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = false;
 
     using rebound_unique_handle = detail::wrapper_rebind_leaf_t<std::unique_ptr<T[]>, U>;
     using rebound_shared_handle = detail::wrapper_rebind_leaf_t<std::shared_ptr<T[]>, U>;
@@ -397,6 +404,7 @@ struct storage_traits<unique, T[], U> {
 template <typename T, size_t N, typename U>
 struct storage_traits<unique, T[N], U> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = false;
 
     using rebound_unique_handle = detail::wrapper_rebind_leaf_t<std::unique_ptr<T[]>, U>;
     using rebound_shared_handle = detail::wrapper_rebind_leaf_t<std::shared_ptr<T[]>, U>;
@@ -416,6 +424,7 @@ struct storage_traits<unique, T[N], U> {
 template <typename T, typename U>
 struct storage_traits<shared, T[], U> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using value_types = type_list<>;
     using lvalue_reference_types = type_list<>;
@@ -427,6 +436,7 @@ struct storage_traits<shared, T[], U> {
 template <typename T, size_t N, typename U>
 struct storage_traits<shared, T[N], U> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using rebound_row_type = typename detail::wrapper_rebind_leaf<T, U>::type;
     using rebound_exact_type = typename detail::wrapper_rebind_leaf<T[N], U>::type;
@@ -441,6 +451,7 @@ struct storage_traits<shared, T[N], U> {
 template <typename T, typename U>
 struct storage_traits<external, T[], U> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using value_types = type_list<>;
     using lvalue_reference_types = type_list<>;
@@ -452,6 +463,7 @@ struct storage_traits<external, T[], U> {
 template <typename T, size_t N, typename U>
 struct storage_traits<external, T[N], U> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using rebound_row_type = typename detail::wrapper_rebind_leaf<T, U>::type;
     using rebound_exact_type = typename detail::wrapper_rebind_leaf<T[N], U>::type;
@@ -475,6 +487,9 @@ template <typename T> struct type_traits<T*> {
     using value_type = T;
 
     template <typename U> using rebind_t = U*;
+
+    template <typename Target>
+    static constexpr bool is_rebindable = std::is_same_v<Target, rebind_t<T>>;
 
     static T* get(T* ptr) { return ptr; }
     static T& borrow(T* ptr) { return *ptr; }
@@ -508,6 +523,10 @@ template <> struct type_traits<void*> {
 
     template <typename U> using rebind_t = U*;
 
+    template <typename Target>
+    static constexpr bool is_rebindable =
+        std::is_same_v<Target, rebind_t<void>>;
+
     static void* get(void* ptr) { return ptr; }
     static bool empty(void* ptr) { return ptr == nullptr; }
     static void reset(void*& ptr) { ptr = nullptr; }
@@ -538,6 +557,10 @@ template <> struct type_traits<const void*> {
     using value_type = const void;
 
     template <typename U> using rebind_t = U*;
+
+    template <typename Target>
+    static constexpr bool is_rebindable =
+        std::is_same_v<Target, rebind_t<const void>>;
 
     static const void* get(const void* ptr) { return ptr; }
     static bool empty(const void* ptr) { return ptr == nullptr; }
@@ -573,6 +596,10 @@ struct type_traits<
 
     template <typename U>
     using rebind_t = std::unique_ptr<U[], std::default_delete<U[]>>;
+
+    template <typename Target>
+    static constexpr bool is_rebindable =
+        std::is_same_v<Target, rebind_t<value_type>>;
 
     static value_type* get(std::unique_ptr<Array, Deleter>& wrapper) {
         return wrapper.get();
@@ -628,6 +655,10 @@ struct type_traits<std::unique_ptr<T, Deleter>,
 
     template <typename U>
     using rebind_t = std::unique_ptr<U, std::default_delete<U>>;
+
+    template <typename Target>
+    static constexpr bool is_rebindable =
+        std::is_same_v<Target, rebind_t<T>>;
 
     static T* get(std::unique_ptr<T, Deleter>& wrapper) {
         return wrapper.get();
@@ -687,6 +718,7 @@ struct storage_traits<
     unique, std::unique_ptr<Array, Deleter>, U,
     std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = false;
 
     using rebound_handle =
         detail::wrapper_rebind_leaf_t<std::unique_ptr<Array, Deleter>, U>;
@@ -705,6 +737,7 @@ struct storage_traits<
     shared, std::unique_ptr<Array, Deleter>, U,
     std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using handle_type =
         detail::wrapper_rebind_leaf_t<std::unique_ptr<Array, Deleter>, U>;
@@ -723,6 +756,7 @@ struct storage_traits<
     external, std::unique_ptr<Array, Deleter>, U,
     std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using handle_type =
         detail::wrapper_rebind_leaf_t<std::unique_ptr<Array, Deleter>, U>;
@@ -740,6 +774,7 @@ template <typename T, typename Deleter, typename U>
 struct storage_traits<unique, std::unique_ptr<T, Deleter>, U,
                       std::enable_if_t<!std::is_array_v<T>>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = false;
 
     using rebound_handle =
         detail::wrapper_rebind_leaf_t<std::unique_ptr<T, Deleter>, U>;
@@ -757,6 +792,7 @@ template <typename T, typename Deleter, typename U>
 struct storage_traits<shared, std::unique_ptr<T, Deleter>, U,
                       std::enable_if_t<!std::is_array_v<T>>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using handle_type =
         detail::wrapper_rebind_leaf_t<std::unique_ptr<T, Deleter>, U>;
@@ -773,6 +809,7 @@ template <typename T, typename Deleter, typename U>
 struct storage_traits<external, std::unique_ptr<T, Deleter>, U,
                       std::enable_if_t<!std::is_array_v<T>>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using handle_type =
         detail::wrapper_rebind_leaf_t<std::unique_ptr<T, Deleter>, U>;
@@ -800,6 +837,10 @@ struct type_traits<
     using value_type = std::remove_extent_t<Array>;
 
     template <typename U> using rebind_t = std::shared_ptr<U[]>;
+
+    template <typename Target>
+    static constexpr bool is_rebindable =
+        std::is_constructible_v<std::remove_cv_t<Target>, std::shared_ptr<Array>>;
 
     static value_type* get(std::shared_ptr<Array>& wrapper) { return wrapper.get(); }
 
@@ -842,6 +883,10 @@ struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>> {
     using value_type = T;
 
     template <typename U> using rebind_t = std::shared_ptr<U>;
+
+    template <typename Target>
+    static constexpr bool is_rebindable =
+        std::is_constructible_v<std::remove_cv_t<Target>, std::shared_ptr<T>>;
 
     static T* get(std::shared_ptr<T>& wrapper) { return wrapper.get(); }
 
@@ -888,6 +933,7 @@ struct storage_traits<
     unique, std::shared_ptr<Array>, U,
     std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = false;
 
     using rebound_handle = detail::wrapper_rebind_leaf_t<std::shared_ptr<Array>, U>;
 
@@ -903,6 +949,7 @@ struct storage_traits<
     shared, std::shared_ptr<Array>, U,
     std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using handle_type = detail::wrapper_rebind_leaf_t<std::shared_ptr<Array>, U>;
     using pointer_types =
@@ -920,6 +967,7 @@ struct storage_traits<
     external, std::shared_ptr<Array>, U,
     std::enable_if_t<std::is_array_v<Array> && (std::extent_v<Array, 0> == 0)>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using handle_type = detail::wrapper_rebind_leaf_t<std::shared_ptr<Array>, U>;
     using pointer_types =
@@ -936,6 +984,7 @@ template <typename T, typename U>
 struct storage_traits<unique, std::shared_ptr<T>, U,
                       std::enable_if_t<!std::is_array_v<T>>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = false;
 
     using rebound_handle = detail::wrapper_rebind_leaf_t<std::shared_ptr<T>, U>;
 
@@ -950,6 +999,7 @@ template <typename T, typename U>
 struct storage_traits<shared, std::shared_ptr<T>, U,
                       std::enable_if_t<!std::is_array_v<T>>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using handle_type = detail::wrapper_rebind_leaf_t<std::shared_ptr<T>, U>;
     using types = detail::wrapper_storage_types<handle_type>;
@@ -966,6 +1016,7 @@ template <typename T, typename U>
 struct storage_traits<external, std::shared_ptr<T>, U,
                       std::enable_if_t<!std::is_array_v<T>>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using handle_type = detail::wrapper_rebind_leaf_t<std::shared_ptr<T>, U>;
     using types = detail::wrapper_storage_types<handle_type>;
@@ -988,6 +1039,10 @@ template <typename T> struct type_traits<std::optional<T>> {
     using value_type = T;
 
     template <typename U> using rebind_t = std::optional<U>;
+
+    template <typename Target>
+    static constexpr bool is_rebindable =
+        std::is_same_v<Target, rebind_t<T>>;
 
     static T* get(std::optional<T>& wrapper) {
         return wrapper ? std::addressof(wrapper.value()) : nullptr;
@@ -1037,6 +1092,7 @@ template <typename T> struct type_traits<std::optional<T>> {
 template <typename T, typename U>
 struct storage_traits<unique, std::optional<T>, U> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = false;
 
     using value_types = type_list<std::optional<U>>;
     using lvalue_reference_types = type_list<>;
@@ -1048,6 +1104,7 @@ struct storage_traits<unique, std::optional<T>, U> {
 template <typename T, typename U>
 struct storage_traits<shared, std::optional<T>, U> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using value_types = type_list<>;
     using lvalue_reference_types =
@@ -1060,6 +1117,7 @@ struct storage_traits<shared, std::optional<T>, U> {
 template <typename T, typename U>
 struct storage_traits<external, std::optional<T>, U> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using value_types = type_list<>;
     using lvalue_reference_types =
@@ -1075,6 +1133,7 @@ struct storage_traits<
     std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type> &&
                      !std::is_array_v<Type> && is_alternative_type_v<Type>>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = false;
 
     using value_types = type_list<U>;
     using lvalue_reference_types = type_list<>;

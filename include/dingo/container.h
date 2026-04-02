@@ -12,7 +12,6 @@
 #include <dingo/memory/allocator.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/resolution/instance_factory.h>
-#include <dingo/resolution/instance_factory_traits.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/exceptions.h>
@@ -35,6 +34,28 @@
 #include <variant>
 
 namespace dingo {
+namespace detail {
+template <typename T, typename = void>
+struct resolved_type_traits {
+    static constexpr bool copy_on_resolve = std::is_copy_constructible_v<T>;
+};
+
+template <typename T>
+struct resolved_type_traits<
+    T, std::void_t<decltype(type_traits<T>::copy_on_resolve)>> {
+    static constexpr bool copy_on_resolve = type_traits<T>::copy_on_resolve;
+};
+
+template <typename T>
+struct resolved_type_traits<T, std::enable_if_t<collection_traits<T>::is_collection>> {
+    static constexpr bool copy_on_resolve =
+        resolved_type_traits<typename collection_traits<T>::resolve_type>::copy_on_resolve;
+};
+
+template <typename T>
+inline constexpr bool copy_on_resolve_v =
+    resolved_type_traits<T>::copy_on_resolve;
+} // namespace detail
 
 struct none_t {};
 template <typename T> struct is_none : std::bool_constant<false> {};
@@ -189,9 +210,8 @@ class container : public allocator_base<Allocator> {
             if constexpr (is_none_v<std::decay_t<IdType>>) {
                 void* cache = type_cache_.template get<T>();
                 if (cache) {
-                    return instance_factory_traits<
-                        rtti_type,
-                        typename annotated_traits<T>::type>::convert(cache);
+                    return convert<typename annotated_traits<T>::type>(
+                        cache);
                 }
             } else {
                 auto data = type_factories_.template get<normalized_type_t<T>>();
@@ -202,9 +222,9 @@ class container : public allocator_base<Allocator> {
 
                     if (indexed) {
                         if (indexed->cache) {
-                            return instance_factory_traits<
-                                rtti_type, typename annotated_traits<T>::type>::
-                                convert(indexed->cache);
+                            return convert<
+                                typename annotated_traits<T>::type>(
+                                indexed->cache);
                         }
                     }
                 }
@@ -263,6 +283,49 @@ class container : public allocator_base<Allocator> {
     }
 
   private:
+    template <typename T> static T convert(void* ptr) {
+        using result_type = std::remove_reference_t<T>;
+
+        if constexpr (std::is_lvalue_reference_v<T>) {
+            return *static_cast<result_type*>(ptr);
+        } else if constexpr (std::is_rvalue_reference_v<T>) {
+            return std::move(*static_cast<result_type*>(ptr));
+        } else if constexpr (std::is_pointer_v<T>) {
+            return static_cast<T>(ptr);
+        } else if constexpr (detail::copy_on_resolve_v<T>) {
+            return *static_cast<T*>(ptr);
+        } else {
+            return std::move(*static_cast<T*>(ptr));
+        }
+    }
+
+    template <typename CachedT>
+    static void store_type_cache(void* context, void* ptr) {
+        static_cast<container*>(context)->type_cache_.template insert<CachedT>(
+            ptr);
+    }
+
+    static void store_index_cache(void* context, void* ptr) {
+        static_cast<index_data*>(context)->cache = ptr;
+    }
+
+    template <typename T, typename Factory, typename Context>
+    static void* resolve(Factory& factory, Context& context,
+                         instance_cache_sink cache = {}) {
+        const instance_request<rtti_type> request{
+            rtti_type::template get_type_index<request_lookup_type_t<T>>(),
+            describe_type<T>()};
+        if constexpr (std::is_pointer_v<T>) {
+            return factory.get_pointer(context, request, cache);
+        } else if constexpr (std::is_lvalue_reference_v<T>) {
+            return factory.get_lvalue_reference(context, request, cache);
+        } else if constexpr (std::is_rvalue_reference_v<T>) {
+            return factory.get_rvalue_reference(context, request, cache);
+        } else {
+            return factory.get_value(context, request, cache);
+        }
+    }
+
     template <typename... TypeArgs, typename Arg, typename IdType>
     auto& register_type_impl(Arg&& arg, IdType&& id) {
         using registration =
@@ -423,9 +486,8 @@ class container : public allocator_base<Allocator> {
         if constexpr (cache_enabled && CheckCache) {
             void* cache = type_cache_.template get<T>();
             if (cache) {
-                return instance_factory_traits<
-                    rtti_type,
-                    typename annotated_traits<T>::type>::convert(cache);
+                return convert<typename annotated_traits<T>::type>(
+                    cache);
             }
         }
 
@@ -446,9 +508,9 @@ class container : public allocator_base<Allocator> {
                 if (indexed) {
                     if constexpr (cache_enabled && CheckCache) {
                         if (indexed->cache) {
-                            return instance_factory_traits<
-                                rtti_type, typename annotated_traits<T>::type>::
-                                convert(indexed->cache);
+                            return convert<
+                                typename annotated_traits<T>::type>(
+                                indexed->cache);
                         }
                     }
 
@@ -497,33 +559,29 @@ class container : public allocator_base<Allocator> {
     // TODO: two different resolve() calls due to different caches
     template <typename CachedT, typename T, typename Factory, typename Context>
     T resolve(Factory& factory, Context& context) {
-        void* ptr = instance_factory_traits<rtti_type, T>::resolve(
-            factory, context);
-        if constexpr (cache_enabled) {
-            if (factory.cacheable)
-                type_cache_.template insert<CachedT>(ptr);
-        }
-        return instance_factory_traits<rtti_type, T>::convert(ptr);
+        void* ptr = resolve<T>(
+            factory, context,
+            cache_enabled
+                ? instance_cache_sink{this, &container::store_type_cache<CachedT>}
+                : instance_cache_sink{});
+        return convert<T>(ptr);
     }
 
     struct index_data;
 
     template <typename CachedT, typename T, typename Factory, typename Context>
     T resolve(Factory& factory, Context& context, index_data& data) {
-        void* ptr = instance_factory_traits<rtti_type, T>::resolve(
-            factory, context);
-        if constexpr (cache_enabled) {
-            if (factory.cacheable)
-                data.cache = ptr;
-        }
-        return instance_factory_traits<rtti_type, T>::convert(ptr);
+        void* ptr = resolve<T>(
+            factory, context,
+            cache_enabled ? instance_cache_sink{&data, &container::store_index_cache}
+                          : instance_cache_sink{});
+        return convert<T>(ptr);
     }
 
     template <typename T, typename Factory, typename Context>
     T resolve_collection_type(Factory& factory, Context& context) {
-        void* ptr = instance_factory_traits<rtti_type, T>::resolve(
-            factory, context);
-        return instance_factory_traits<rtti_type, T>::convert(ptr);
+        void* ptr = resolve<T>(factory, context);
+        return convert<T>(ptr);
     }
 
     template <class Storage, class TypeInterface, class Type>
@@ -579,8 +637,6 @@ class container : public allocator_base<Allocator> {
         // static_assert(std::is_nothrow_constructible_v<U, Args...>);
         allocator_traits::construct(alloc, instance,
                                     std::forward<Args>(args)...);
-
-        instance->cacheable = U::storage_type::cacheable;
 
         return {instance, &instance->get_container()};
     }

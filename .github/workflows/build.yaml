@@ -12,8 +12,7 @@ on:
     branches:
       - master
 env:
-  JOBS: 4
-
+  BUILD_JOBS: ${{ vars.DINGO_BUILD_JOBS || '4' }}
 jobs:
   linux:
     name: ${{ matrix.os }} / ${{ matrix.compiler.CXX }} / std-${{ matrix.compiler.STD }} / ${{ matrix.config.label }}
@@ -28,26 +27,26 @@ jobs:
             label: release
         os: [ubuntu-24.04]
         compiler: [
-          { CC: gcc-12, CXX: g++-12, STD: 17 },
-          { CC: gcc-12, CXX: g++-12, STD: 20 },
-          { CC: gcc-12, CXX: g++-12, STD: 23 },
-          { CC: gcc-13, CXX: g++-13, STD: 17 },
-          { CC: gcc-13, CXX: g++-13, STD: 20 },
-          { CC: gcc-13, CXX: g++-13, STD: 23 },
-          { CC: gcc-14, CXX: g++-14, STD: 17 },
-          { CC: gcc-14, CXX: g++-14, STD: 20 },
-          { CC: gcc-14, CXX: g++-14, STD: 23 },
-          { CC: gcc-14, CXX: g++-14, STD: 26 },
-          { CC: clang-17, CXX: clang++-17, STD: 17 },
-          { CC: clang-17, CXX: clang++-17, STD: 20 },
-          #{ CC: clang-17, CXX: clang++-17, STD: 23 },
-          { CC: clang-18, CXX: clang++-18, STD: 17 },
-          { CC: clang-18, CXX: clang++-18, STD: 20 },
-          { CC: clang-18, CXX: clang++-18, STD: 23 },
-          { CC: clang-19, CXX: clang++-19, STD: 17 },
-          { CC: clang-19, CXX: clang++-19, STD: 20 },
-          { CC: clang-19, CXX: clang++-19, STD: 23 },
-          { CC: clang-19, CXX: clang++-19, STD: 26 }
+          { CC: gcc-12, CXX: g++-12, STD: 17, SANITIZER: OFF },
+          { CC: gcc-12, CXX: g++-12, STD: 20, SANITIZER: OFF },
+          { CC: gcc-12, CXX: g++-12, STD: 23, SANITIZER: OFF },
+          { CC: gcc-13, CXX: g++-13, STD: 17, SANITIZER: ON },
+          { CC: gcc-13, CXX: g++-13, STD: 20, SANITIZER: ON },
+          { CC: gcc-13, CXX: g++-13, STD: 23, SANITIZER: ON },
+          { CC: gcc-14, CXX: g++-14, STD: 17, SANITIZER: ON },
+          { CC: gcc-14, CXX: g++-14, STD: 20, SANITIZER: ON },
+          { CC: gcc-14, CXX: g++-14, STD: 23, SANITIZER: ON },
+          { CC: gcc-14, CXX: g++-14, STD: 26, SANITIZER: ON },
+          { CC: clang-17, CXX: clang++-17, STD: 17, SANITIZER: ON },
+          { CC: clang-17, CXX: clang++-17, STD: 20, SANITIZER: ON },
+          #{ CC: clang-17, CXX: clang++-17, STD: 23, SANITIZER: ON },
+          { CC: clang-18, CXX: clang++-18, STD: 17, SANITIZER: ON },
+          { CC: clang-18, CXX: clang++-18, STD: 20, SANITIZER: ON },
+          { CC: clang-18, CXX: clang++-18, STD: 23, SANITIZER: ON },
+          { CC: clang-19, CXX: clang++-19, STD: 17, SANITIZER: ON },
+          { CC: clang-19, CXX: clang++-19, STD: 20, SANITIZER: ON },
+          { CC: clang-19, CXX: clang++-19, STD: 23, SANITIZER: ON },
+          { CC: clang-19, CXX: clang++-19, STD: 26, SANITIZER: ON }
         ]
     runs-on: ${{ matrix.os }}
     steps:
@@ -67,10 +66,10 @@ jobs:
             CXX: ${{ matrix.compiler.CXX }}
             CC: ${{ matrix.compiler.CC }}
         run: |
-            cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.compiler.STD }}
+            cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DDINGO_SANITIZER=${{ matrix.compiler.SANITIZER }} -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.compiler.STD }}
       - name: Build
         run: |
-            cmake --build build -j ${{ env.JOBS }}
+            cmake --build build -j ${{ env.BUILD_JOBS }}
       - name: Test
         env:
           ASAN_OPTIONS: use_sigaltstack=false
@@ -79,7 +78,7 @@ jobs:
       - name: FetchContent
         run: |
             cmake -S test/fetchcontent -B fetchcontent-build -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.compiler.STD }}
-            cmake --build fetchcontent-build -j ${{ env.JOBS }}
+            cmake --build fetchcontent-build -j ${{ env.BUILD_JOBS }}
       - name: Upload Failure Artifacts
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4.6.2
@@ -124,14 +123,14 @@ jobs:
             cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
       - name: Build
         run: |
-            cmake --build build --config ${{ matrix.config.id }} -j ${{ env.JOBS }}
+            cmake --build build --config ${{ matrix.config.id }} -j ${{ env.BUILD_JOBS }}
       - name: Test
         run: |
             cd build && ctest --verbose --output-on-failure -C ${{ matrix.config.id }}
       - name: FetchContent
         run: |
             cmake -S test/fetchcontent -B fetchcontent-build -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
-            cmake --build fetchcontent-build -j ${{ env.JOBS }}
+            cmake --build fetchcontent-build -j ${{ env.BUILD_JOBS }}
       - name: Upload Failure Artifacts
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4.6.2

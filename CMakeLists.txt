@@ -111,9 +111,7 @@ if(DINGO_DEVELOPMENT_MODE)
         registration/type_registration.h
         resolution/conversion_cache.h
         resolution/instance_factory_interface.h
-        resolution/instance_factory_traits.h
         resolution/instance_factory.h
-        resolution/instance_resolver.h
         resolution/interface_storage_traits.h
         resolution/resolving_context.h
         resolution/type_cache.h
@@ -121,6 +119,7 @@ if(DINGO_DEVELOPMENT_MODE)
         rtti/rtti.h
         rtti/typeid_provider.h
         storage/external.h
+        storage/materialized_source.h
         storage/resettable.h
         storage/shared_cyclical.h
         storage/shared.h
@@ -208,7 +207,9 @@ if(DINGO_DEVELOPMENT_MODE)
             test/storage/array.cpp
             test/storage/external.cpp
             test/storage/shared.cpp
+            test/storage/shared_cyclical_regressions.cpp
             test/storage/shared_cyclical.cpp
+            test/storage/shared_type_conversion.cpp
             test/storage/unique.cpp
             test/support/assert.h
             test/support/class.h

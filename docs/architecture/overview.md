@@ -44,10 +44,11 @@ dependencies.
 
 The factory owns the conversion-facing interface:
 
-- `get_value`
-- `get_lvalue_reference`
-- `get_rvalue_reference`
-- `get_pointer`
+- `get_value(instance_request)`
+- `get_lvalue_reference(instance_request)`
+- `get_rvalue_reference(instance_request)`
+- `get_pointer(instance_request)`
+- scope-specific materialization support
 
 The storage classes under [include/dingo/storage/](../../include/dingo/storage)
 own lifetime policy:
@@ -57,13 +58,13 @@ own lifetime policy:
 - `external`: refer to an existing object
 - `shared_cyclical`: shared storage with cycle support
 
-### Resolver And Conversion Path
+### Resolution And Conversion Path
 
-[include/dingo/resolution/instance_resolver.h](../../include/dingo/resolution/instance_resolver.h)
-bridges storage and resolution. It is responsible for:
+[include/dingo/resolution/instance_factory.h](../../include/dingo/resolution/instance_factory.h)
+now owns the conversion-facing resolution flow. It is responsible for:
 
-- driving the storage's `resolve(...)`
-- preserving temporaries in the resolving context when needed
+- asking storage to `resolve(...)` its native source shape
+- applying guard and closure scope through `storage_materialization_traits`
 - constructing cached conversion objects for shared and external cases
 
 [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)
@@ -78,9 +79,11 @@ At a high level, Dingo runs this sequence:
 2. The container creates a storage-backed factory for each exposed interface.
 3. `resolve<T>()` converts `T` into the internal lookup form.
 4. The container finds the matching factory.
-5. `instance_factory_traits` asks the factory for the correct access path for
-   `T`: value, lvalue reference, rvalue reference, or pointer.
-6. The factory asks its resolver to get or build the stored instance.
+5. The container builds an `instance_request` with the lookup type and requested
+   descriptor, then calls the matching factory method for value, lvalue
+   reference, rvalue reference, or pointer resolution.
+6. The factory gets or builds the stored instance using its internal
+   scope-specific state.
 7. `type_conversion` converts that stored source shape into the requested `T`.
 
 The pieces above are not independent extension systems. They cooperate in one
@@ -93,5 +96,4 @@ If you want to follow the core path in source order, start here:
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 - [include/dingo/resolution/instance_factory.h](../../include/dingo/resolution/instance_factory.h)
-- [include/dingo/resolution/instance_resolver.h](../../include/dingo/resolution/instance_resolver.h)
 - [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)

@@ -6,7 +6,6 @@
 //
 
 #include <dingo/resolution/conversion_cache.h>
-#include <dingo/resolution/instance_resolver.h>
 #include <dingo/container.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>

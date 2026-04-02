@@ -14,10 +14,13 @@
 #include <dingo/storage/resettable.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
+#include <dingo/type/type_descriptor.h>
 #include <dingo/type/normalized_type.h>
 
 #include <atomic>
+#include <exception>
 #include <memory>
+#include <vector>
 
 namespace dingo {
 struct shared_cyclical {};
@@ -28,6 +31,7 @@ struct storage_traits<
     std::enable_if_t<!type_traits<Type>::enabled && !std::is_pointer_v<Type> &&
                      !std::is_reference_v<Type>>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = false;
 
     using value_types = type_list<>;
     using lvalue_reference_types = type_list<U&>;
@@ -39,6 +43,7 @@ struct storage_traits<
 template <typename Type, typename U>
 struct storage_traits<shared_cyclical, Type*, U> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = false;
 
     using value_types = type_list<>;
     using lvalue_reference_types = type_list<U&>;
@@ -50,6 +55,7 @@ struct storage_traits<shared_cyclical, Type*, U> {
 template <typename Type, typename U>
 struct storage_traits<shared_cyclical, std::shared_ptr<Type>, U> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = false;
 
     using value_types = type_list<std::shared_ptr<U>>;
     using lvalue_reference_types = type_list<U&, std::shared_ptr<U>&>;
@@ -234,25 +240,39 @@ template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
 class storage<shared_cyclical, Type, StoredType, Factory, Conversions>
     : public resettable {
-    storage_instance<shared_cyclical, Type, StoredType, Factory> instance_;
+    struct conversion_entry {
+        explicit conversion_entry(type_descriptor key) : descriptor(key) {}
+        virtual ~conversion_entry() = default;
 
-    template <typename T> struct rollback {
-        rollback(T* instance) : instance_(instance) {}
+        type_descriptor descriptor;
+    };
+
+    template <typename T> struct typed_conversion_entry : conversion_entry {
+        template <typename Source>
+        explicit typed_conversion_entry(Source&& source)
+            : conversion_entry(describe_type<T>()),
+              value(std::forward<Source>(source)) {}
+
+        T value;
+    };
+
+    storage_instance<shared_cyclical, Type, StoredType, Factory> instance_;
+    std::vector<std::unique_ptr<conversion_entry>> conversions_;
+
+    struct rollback {
+        explicit rollback(storage* storage) : storage_(storage) {}
         ~rollback() {
             if (std::uncaught_exceptions())
-                instance_->reset();
+                storage_->reset();
         }
 
       private:
-        T* instance_;
+        storage* storage_;
     };
 
   public:
     template <typename... Args>
     storage(Args&&... args) : instance_(std::forward<Args>(args)...) {}
-
-    // TODO: there is a problem with cache rollback for cyclical storage
-    static constexpr bool cacheable = false;
 
     using conversions = Conversions;
     using type = Type;
@@ -260,22 +280,46 @@ class storage<shared_cyclical, Type, StoredType, Factory, Conversions>
     using tag_type = shared_cyclical;
 
     template <typename Context, typename Container>
-    auto resolve(Context& context, Container& container)
-        -> decltype(instance_.get()) {
+    decltype(auto) resolve(Context& context, Container& container) {
         if (instance_.empty()) {
-            context.template construct<rollback<decltype(instance_)>>(
-                &instance_);
+            // shared_cyclical publishes its owning handle before the pointee
+            // is fully constructed so the graph can close over a stable
+            // address. Rebound shared_ptr interface handles therefore belong
+            // to the storage too and must roll back with the instance if the
+            // first resolve throws.
+            context.template construct<rollback>(this);
 
-            auto&& instance = instance_.resolve(context);
+            instance_.resolve(context);
             instance_.construct(context, container);
-            return instance;
+            return instance_.get();
         }
         return instance_.get();
     }
 
+    template <typename T, typename Context, typename Source>
+    T& resolve_conversion(Context&, Source&& source) {
+        for (auto& entry : conversions_) {
+            if (entry->descriptor == describe_type<T>()) {
+                return static_cast<typed_conversion_entry<T>&>(*entry).value;
+            }
+        }
+
+        conversions_.push_back(
+            std::make_unique<typed_conversion_entry<T>>(
+                std::forward<Source>(source)));
+        return static_cast<typed_conversion_entry<T>&>(*conversions_.back())
+            .value;
+    }
+
     bool is_resolved() const { return !instance_.empty(); }
 
-    void reset() override { instance_.reset(); }
+    void reset() override {
+        // Graph objects can keep references to rebound shared_ptr interface
+        // handles stored in `conversions_`. Destroy the object graph first so
+        // those references stay valid for any destructor work.
+        instance_.reset();
+        conversions_.clear();
+    }
 };
 } // namespace detail
 } // namespace dingo

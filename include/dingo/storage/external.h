@@ -107,8 +107,6 @@ class storage<external, Type, StoredType, Factory, Conversions>
     storage_instance<external, Type, StoredType, void> instance_;
 
   public:
-    static constexpr bool cacheable = true;
-
     using conversions = Conversions;
     using type = Type;
     using stored_type = StoredType;
@@ -118,7 +116,7 @@ class storage<external, Type, StoredType, Factory, Conversions>
     storage(T&& instance) : instance_(std::forward<T>(instance)) {}
 
     template <typename Context, typename Container>
-    auto resolve(Context&, Container&) -> decltype(instance_.get()) {
+    decltype(auto) resolve(Context&, Container&) {
         return instance_.get();
     }
     constexpr bool is_resolved() const { return true; }
