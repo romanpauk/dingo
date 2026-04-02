@@ -126,6 +126,17 @@ If you are working from a checkout, the top-level CMake project also supports
 Development builds can enable tests, benchmarks, and runnable examples through
 `DINGO_DEVELOPMENT_MODE=ON`. The library itself remains header-only.
 
+Container images:
+
+- `dingo-toolchains:ubuntu-25.04` for GCC/Clang builds on Ubuntu 25.04
+- `dingo-toolchains:ubuntu-25.04-msvc-wine` for MSVC-style builds through
+  `msvc-wine`
+
+For now, these are local or private CI images.
+
+See the container setup in
+[docker/ubuntu25-toolchains/README.md](docker/ubuntu25-toolchains/README.md).
+
 If you are comparing DI libraries, also take a look at:
 
 - [qlibs/di](https://github.com/qlibs/di)

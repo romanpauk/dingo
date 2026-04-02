@@ -1,0 +1,38 @@
+name: toolchains-image
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/toolchains-image.yaml
+      - docker/ubuntu25-toolchains/**
+  pull_request:
+    paths:
+      - .github/workflows/toolchains-image.yaml
+      - docker/ubuntu25-toolchains/**
+
+jobs:
+  build:
+    name: build ubuntu-25.04 toolchains image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.11.1
+
+      - name: Build image
+        uses: docker/build-push-action@v6.18.0
+        with:
+          context: docker/ubuntu25-toolchains
+          file: docker/ubuntu25-toolchains/Containerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

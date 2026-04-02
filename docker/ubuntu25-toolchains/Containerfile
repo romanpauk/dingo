@@ -1,0 +1,103 @@
+FROM ubuntu:25.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        bash-completion \
+        build-essential \
+        ca-certificates \
+        ccache \
+        clang \
+        clang-14 \
+        clang-15 \
+        clang-17 \
+        clang-18 \
+        clang-19 \
+        clang-20 \
+        clang-format \
+        clang-format-14 \
+        clang-format-15 \
+        clang-format-17 \
+        clang-format-18 \
+        clang-format-19 \
+        clang-format-20 \
+        clang-tidy \
+        clang-tidy-14 \
+        clang-tidy-15 \
+        clang-tidy-17 \
+        clang-tidy-18 \
+        clang-tidy-19 \
+        clang-tidy-20 \
+        clangd \
+        clangd-14 \
+        clangd-15 \
+        clangd-17 \
+        clangd-18 \
+        clangd-19 \
+        clangd-20 \
+        cmake \
+        cpp-11 \
+        cpp-12 \
+        cpp-13 \
+        cpp-14 \
+        cpp-15 \
+        curl \
+        file \
+        g++ \
+        g++-11 \
+        g++-12 \
+        g++-13 \
+        g++-14 \
+        g++-15 \
+        gcc \
+        gcc-11 \
+        gcc-12 \
+        gcc-13 \
+        gcc-14 \
+        gcc-15 \
+        gdb \
+        git \
+        git-lfs \
+        jq \
+        less \
+        lld \
+        lld-14 \
+        lld-15 \
+        lld-17 \
+        lld-18 \
+        lld-19 \
+        lld-20 \
+        lldb \
+        locales \
+        make \
+        ninja-build \
+        pkg-config \
+        python3 \
+        python3-pip \
+        python3-venv \
+        rsync \
+        software-properties-common \
+        tzdata \
+        unzip \
+        xz-utils \
+        zip && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN locale-gen en_US.UTF-8 && \
+    update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+
+RUN python3 -m pip install --break-system-packages --no-cache-dir mdformat
+
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+RUN mkdir -p /usr/local/share/dingo-toolchains
+
+COPY print-toolchains.sh /usr/local/bin/dingo-print-toolchains
+RUN chmod +x /usr/local/bin/dingo-print-toolchains
+
+WORKDIR /workspace
+
+CMD ["/bin/bash"]
