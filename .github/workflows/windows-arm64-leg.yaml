@@ -1,0 +1,105 @@
+name: windows-arm64-leg
+on:
+  workflow_call:
+    inputs:
+      vs_label:
+        required: true
+        type: string
+      cross_runner:
+        required: true
+        type: string
+      cross_generator:
+        required: true
+        type: string
+      native_generator:
+        required: true
+        type: string
+      config_id:
+        required: true
+        type: string
+      config_label:
+        required: true
+        type: string
+      std:
+        required: true
+        type: number
+
+env:
+  BUILD_JOBS: ${{ vars.DINGO_BUILD_JOBS || '4' }}
+
+jobs:
+  cross:
+    name: cross-build
+    timeout-minutes: 30
+    runs-on: ${{ inputs.cross_runner }}
+    steps:
+      - name: Setup MSVC Developer Command Prompt
+        uses: TheMrMilchmann/setup-msvc-dev@v4.0.0
+        with:
+          arch: amd64_arm64
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+      - name: CCache
+        uses: hendrikmuhs/ccache-action@v1.2.22
+        with:
+          key: ${{ inputs.vs_label }}-arm64-${{ inputs.config_id }}-${{ inputs.std }}
+          evict-old-files: job
+      - name: Configure
+        run: |
+            cmake -S . -B build -G "${{ inputs.cross_generator }}" -A ARM64 -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ inputs.config_id }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
+      - name: Build
+        run: |
+            cmake --build build --config ${{ inputs.config_id }} -j ${{ env.BUILD_JOBS }}
+      - name: Upload ARM64 Test Binaries
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: native-test-${{ inputs.vs_label }}-arm64-std-${{ inputs.std }}-${{ inputs.config_label }}
+          if-no-files-found: error
+          path: |
+            build/${{ inputs.config_id }}
+      - name: FetchContent
+        run: |
+            cmake -S test/fetchcontent -B fetchcontent-build -G "${{ inputs.cross_generator }}" -A ARM64 -DCMAKE_BUILD_TYPE=${{ inputs.config_id }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
+            cmake --build fetchcontent-build --config ${{ inputs.config_id }} -j ${{ env.BUILD_JOBS }}
+      - name: Upload Failure Artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: failure-${{ inputs.vs_label }}-arm64-cross-msvc-std-${{ inputs.std }}-${{ inputs.config_label }}
+          if-no-files-found: ignore
+          path: |
+            build/CMakeFiles/CMakeOutput.log
+            build/CMakeFiles/CMakeError.log
+            build/Testing/Temporary
+            fetchcontent-build/CMakeFiles/CMakeOutput.log
+            fetchcontent-build/CMakeFiles/CMakeError.log
+
+  native-test:
+    name: native-ctest
+    timeout-minutes: 45
+    needs: cross
+    runs-on: windows-11-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+      - name: Configure Native CTest Metadata
+        run: |
+            cmake -S . -B build -G "${{ inputs.native_generator }}" -A ARM64 -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ inputs.config_id }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
+      - name: Download ARM64 Test Binaries
+        uses: actions/download-artifact@v5.0.0
+        with:
+          name: native-test-${{ inputs.vs_label }}-arm64-std-${{ inputs.std }}-${{ inputs.config_label }}
+          path: build/${{ inputs.config_id }}
+      - name: Test
+        run: |
+            ctest --test-dir build --verbose --output-on-failure -C ${{ inputs.config_id }}
+      - name: Upload Failure Artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: failure-${{ inputs.vs_label }}-arm64-native-std-${{ inputs.std }}-${{ inputs.config_label }}
+          if-no-files-found: ignore
+          path: |
+            build/CMakeFiles/CMakeOutput.log
+            build/CMakeFiles/CMakeError.log
+            build/Testing/Temporary
