@@ -9,15 +9,132 @@
 
 #include <dingo/config.h>
 
+#include <dingo/resolution/recursion_guard.h>
+#include <dingo/storage/materialized_source.h>
 #include <dingo/type/type_list.h>
 #include <dingo/type/type_traits.h>
-
-#include <optional>
 
 namespace dingo {
 struct unique;
 struct shared;
 struct external;
+struct shared_cyclical;
+
+template <typename...>
+inline constexpr bool always_false_v = false;
+
+namespace detail {
+struct no_materialization_scope {
+    no_materialization_scope() = default;
+
+    template <typename... Args>
+    explicit no_materialization_scope(Args&&...) {}
+};
+} // namespace detail
+
+template <typename StorageTag, typename Type> struct storage_materialization_traits {
+    template <typename Leaf, typename Context, typename Storage>
+    static auto make_guard(Context&, const Storage&) {
+        static_assert(always_false_v<StorageTag, Type>,
+                      "storage_materialization_traits must be specialized for this storage tag");
+    }
+
+    template <typename Storage>
+    static bool preserves_closure(const Storage&) {
+        static_assert(always_false_v<StorageTag, Type>,
+                      "storage_materialization_traits must be specialized for this storage tag");
+        return false;
+    }
+
+    template <typename Context, typename Storage, typename Container>
+    static auto materialize_source(Context&, Storage&, Container&) {
+        static_assert(always_false_v<StorageTag, Type>,
+                      "storage_materialization_traits must be specialized for this storage tag");
+    }
+};
+
+template <typename Type> struct storage_materialization_traits<unique, Type> {
+    template <typename Leaf, typename Context, typename Storage>
+    static auto make_guard(Context& context, const Storage&) {
+        return detail::recursion_guard<Leaf>(context);
+    }
+
+    template <typename Storage>
+    static bool preserves_closure(const Storage&) {
+        return false;
+    }
+
+    template <typename Context, typename Storage, typename Container>
+    static auto materialize_source(Context& context, Storage& storage,
+                                   Container& container) {
+        using source_type = std::remove_cv_t<std::remove_reference_t<
+            decltype(storage.resolve(context, container))>>;
+        return detail::make_rvalue_source<source_type>(
+            std::in_place, [&](void* ptr) {
+                new (ptr) source_type(storage.resolve(context, container));
+            });
+    }
+};
+
+template <typename Type> struct storage_materialization_traits<shared, Type> {
+    template <typename Leaf, typename Context, typename Storage>
+    static auto make_guard(Context& context, const Storage& storage) {
+        return detail::recursion_guard_wrapper<Leaf>(
+            context, !storage.is_resolved());
+    }
+
+    template <typename Storage>
+    static bool preserves_closure(const Storage& storage) {
+        // Only unresolved shared storage needs the factory closure to stay on
+        // the resolving_context stack while address-based conversions are
+        // materialized. Once the instance is resolved, there are no temporary
+        // construction artifacts left to preserve.
+        return !storage.is_resolved();
+    }
+
+    template <typename Context, typename Storage, typename Container>
+    static auto materialize_source(Context& context, Storage& storage,
+                                   Container& container) {
+        return detail::make_resolved_source(storage.resolve(context, container));
+    }
+};
+
+template <typename Type> struct storage_materialization_traits<external, Type> {
+    template <typename Leaf, typename Context, typename Storage>
+    static auto make_guard(Context&, const Storage&) {
+        return detail::no_materialization_scope();
+    }
+
+    template <typename Storage>
+    static bool preserves_closure(const Storage&) {
+        return false;
+    }
+
+    template <typename Context, typename Storage, typename Container>
+    static auto materialize_source(Context& context, Storage& storage,
+                                   Container& container) {
+        return detail::make_resolved_source(storage.resolve(context, container));
+    }
+};
+
+template <typename Type>
+struct storage_materialization_traits<shared_cyclical, Type> {
+    template <typename Leaf, typename Context, typename Storage>
+    static auto make_guard(Context&, const Storage&) {
+        return detail::no_materialization_scope();
+    }
+
+    template <typename Storage>
+    static bool preserves_closure(const Storage&) {
+        return false;
+    }
+
+    template <typename Context, typename Storage, typename Container>
+    static auto materialize_source(Context& context, Storage& storage,
+                                   Container& container) {
+        return detail::make_resolved_source(storage.resolve(context, container));
+    }
+};
 
 template <typename StorageTag, typename Type, typename U, typename = void>
 struct resolution_traits {
@@ -53,6 +170,7 @@ struct storage_traits<
     std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type> &&
                      !std::is_array_v<Type>>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using value_types = type_list<U>;
     using lvalue_reference_types = type_list<U&>;
@@ -67,6 +185,7 @@ struct storage_traits<
     std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type> &&
                      !std::is_array_v<Type>>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = true;
 
     using value_types = type_list<U>;
     using lvalue_reference_types = type_list<U&>;
@@ -84,6 +203,7 @@ struct storage_traits<
     std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type> &&
                      !std::is_array_v<Type> && !is_alternative_type_v<Type>>> {
     static constexpr bool enabled = true;
+    static constexpr bool is_stable = false;
 
     using value_types = type_list<U>;
     using lvalue_reference_types = type_list<U&>;
@@ -113,5 +233,8 @@ struct type_storage_traits<
     std::enable_if_t<storage_traits<StorageTag, Type, U>::enabled>>
     : detail::combined_storage_types<
           storage_traits<StorageTag, Type, U>,
-          resolution_traits<StorageTag, Type, U>> {};
+          resolution_traits<StorageTag, Type, U>> {
+    static constexpr bool is_stable =
+        storage_traits<StorageTag, Type, U>::is_stable;
+};
 } // namespace dingo

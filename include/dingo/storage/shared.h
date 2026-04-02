@@ -245,16 +245,13 @@ class storage<shared, Type, StoredType, Factory, Conversions>
     template <typename... Args>
     storage(Args&&... args) : instance_(std::forward<Args>(args)...) {}
 
-    static constexpr bool cacheable = true;
-
     using conversions = Conversions;
     using type = Type;
     using stored_type = StoredType;
     using tag_type = shared;
 
     template <typename Context, typename Container>
-    auto resolve(Context& context, Container& container)
-        -> decltype(instance_.get()) {
+    decltype(auto) resolve(Context& context, Container& container) {
         if (instance_.empty())
             instance_.construct(context, container);
         return instance_.get();

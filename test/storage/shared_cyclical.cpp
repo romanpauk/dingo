@@ -238,6 +238,7 @@ TEST(shared_cyclical_test, storage_traits) {
 
     using shared_requests =
         type_storage_traits<shared_cyclical, std::shared_ptr<Class>, IClass1>;
+    static_assert(!shared_requests::is_stable);
     static_assert(std::is_same_v<typename shared_requests::value_types,
                                  type_list<std::shared_ptr<IClass1>>>);
     static_assert(std::is_same_v<

@@ -10,15 +10,14 @@ Dingo resolves requests in two stages:
 The full conversion behavior is spread across a few layers:
 
 - `storage_traits` says which target shapes are legal for a storage/scope pair
-- `instance_factory_traits` chooses whether the request is a value, lvalue
-  reference, rvalue reference, or pointer request
+- `instance_request` carries the lookup type and requested descriptor
 - `type_conversion` performs the runtime conversion
 - `type_conversion_traits` handles explicit wrapper-to-wrapper conversions
 
 The important source files are:
 
 - [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
-- [include/dingo/resolution/instance_factory_traits.h](../../include/dingo/resolution/instance_factory_traits.h)
+- [include/dingo/resolution/instance_factory_interface.h](../../include/dingo/resolution/instance_factory_interface.h)
 - [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)
 - [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
 
@@ -37,16 +36,16 @@ Those lists are the contract between storage policy and runtime conversion.
 
 ## Factory Dispatch
 
-The container itself does not know how to convert every shape. It delegates the
-request form through `instance_factory_traits`:
+The container builds an `instance_request` and calls the matching factory
+method:
 
-- `T` uses `get_value`
-- `T&` and `const T&` use `get_lvalue_reference`
-- `T&&` uses `get_rvalue_reference`
-- `T*` uses `get_pointer`
+- `T` uses `get_value(...)`
+- `T&` and `const T&` use `get_lvalue_reference(...)`
+- `T&&` uses `get_rvalue_reference(...)`
+- `T*` uses `get_pointer(...)`
 
-The factory then checks the request against the conversion lists exposed by the
-stored type.
+Each factory entry point then checks the request against the corresponding
+conversion list exposed by the stored type.
 
 ## Runtime Conversion
 
@@ -68,7 +67,7 @@ final execution layer, not as a place to duplicate rule-by-rule prose.
 ## Conversion Cache
 
 Shared and external resolution can preserve conversion objects through
-[include/dingo/resolution/instance_resolver.h](../../include/dingo/resolution/instance_resolver.h)
+[include/dingo/resolution/instance_factory.h](../../include/dingo/resolution/instance_factory.h)
 and
 [include/dingo/resolution/conversion_cache.h](../../include/dingo/resolution/conversion_cache.h).
 

@@ -13,6 +13,7 @@
 #include <dingo/memory/aligned_storage.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/memory/arena_allocator.h>
+#include <dingo/resolution/resolving_frame_fwd.h>
 #include <dingo/exceptions.h>
 #include <dingo/factory/constructor_detection.h>
 
@@ -28,13 +29,21 @@ class resolving_context {
             , destructibles_(arena_)
         {}
 
+        ~closure() { reset(); }
+
         void reset() {
             if (!destructibles_.empty()) {
                 for (auto it = destructibles_.rbegin(); it != destructibles_.rend(); ++it)
                     it->dtor(it->instance);
-                destructibles_.clear();
             }
+            destructibles_.clear();
+            // `destructibles_` stores its capacity inside `arena_`. Rebuild the
+            // vector before rewinding the arena so the vector destructor never
+            // observes capacity backed by invalidated storage.
+            using destructibles_type = decltype(destructibles_);
+            destructibles_.~destructibles_type();
             arena_.reset();
+            new (&destructibles_) destructibles_type(arena_);
         }
 
         aligned_storage_t<DINGO_CLOSURE_ARENA_BUFFER_SIZE, alignof(std::max_align_t)> arena_buffer_;
@@ -46,47 +55,6 @@ class resolving_context {
         };
 
         std::vector<destructible, arena_allocator<destructible>> destructibles_;
-    };
-
-    struct type_frame {
-        const type_frame* parent;
-        type_descriptor type;
-    };
-
-    class resolving_frame {
-      public:
-        resolving_frame(resolving_context& context, type_descriptor type)
-            : context_(&context)
-            , parent_(context.active_type_frame_)
-            , frame_{parent_, type} {
-            context_->active_type_frame_ = &frame_;
-        }
-
-        resolving_frame(const resolving_frame&) = delete;
-        resolving_frame& operator=(const resolving_frame&) = delete;
-
-        resolving_frame(resolving_frame&& other) noexcept
-            : context_(other.context_)
-            , parent_(other.parent_)
-            , frame_(other.frame_) {
-            if (context_) {
-                context_->active_type_frame_ = &frame_;
-            }
-            other.context_ = nullptr;
-        }
-
-        resolving_frame& operator=(resolving_frame&&) = delete;
-
-        ~resolving_frame() {
-            if (context_) {
-                context_->active_type_frame_ = parent_;
-            }
-        }
-
-      private:
-        resolving_context* context_;
-        const type_frame* parent_;
-        type_frame frame_;
     };
 
     resolving_context()
@@ -105,9 +73,7 @@ class resolving_context {
         return container.template resolve<T, false>(*this);
     }
 
-    template <typename T> resolving_frame track_type() {
-        return resolving_frame(*this, describe_type<T>());
-    }
+    template <typename T> detail::resolving_frame track_type();
 
     template <typename T, typename... Args> T& construct(Args&&... args) {
         arena_allocator<void> alloc(closures_.back()->arena_);
@@ -147,6 +113,10 @@ class resolving_context {
     }
 
     void push(closure* c) {
+        // A closure represents one owner of preserved temporaries. Recursive
+        // shared resolution must be stopped by the type guard before the same
+        // factory tries to reactivate its closure while it is already active.
+        assert(!contains(c));
         closures_.emplace_back(c);
     }
 
@@ -156,35 +126,26 @@ class resolving_context {
 
     std::size_t closures_size() const { return closures_.size(); }
 
-    bool has_type_path() const { return active_type_frame_ != nullptr; }
-
-    const type_descriptor* active_type() const {
-        return active_type_frame_ != nullptr ? &active_type_frame_->type
-                                             : nullptr;
-    }
-
-    const type_descriptor* parent_type() const {
-        return active_type_frame_ != nullptr && active_type_frame_->parent != nullptr
-                   ? &active_type_frame_->parent->type
-                   : nullptr;
-    }
-
-    void append_type_path(std::string& message) const {
-        std::vector<type_descriptor> names;
-        for (auto* frame = active_type_frame_; frame != nullptr;
-             frame = frame->parent) {
-            names.emplace_back(frame->type);
-        }
-
-        for (auto it = names.rbegin(); it != names.rend(); ++it) {
-            if (it != names.rbegin()) {
-                message += " -> ";
+    bool contains(const closure* candidate) const {
+        for (auto* active : closures_) {
+            if (active == candidate) {
+                return true;
             }
-            append_type_name(message, *it);
         }
+        return false;
     }
+
+    bool has_type_path() const;
+
+    const type_descriptor* active_type() const;
+
+    const type_descriptor* parent_type() const;
+
+    void append_type_path(std::string& message) const;
 
   private:
+    friend class detail::resolving_frame;
+
     template <typename T> void register_destructor(T* instance) {
         static_assert(!std::is_trivially_destructible_v<T>);
         closures_.back()->destructibles_.push_back({instance, &destructor<T>});
@@ -197,9 +158,83 @@ class resolving_context {
     aligned_storage_t<DINGO_CONTEXT_ARENA_BUFFER_SIZE, alignof(std::max_align_t)> arena_buffer_;
     arena<> arena_;
     std::vector<closure*, arena_allocator<closure*>> closures_;
-    const type_frame* active_type_frame_ = nullptr;
+    detail::resolving_frame* active_resolving_frame_ = nullptr;
     closure closure_;
-
 };
+
+} // namespace dingo
+
+#include <dingo/resolution/resolving_frame.h>
+
+namespace dingo {
+
+namespace detail {
+
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
+inline resolving_frame::resolving_frame(resolving_context& context,
+                                        type_descriptor type)
+    : context_(&context)
+    , parent_(context.active_resolving_frame_)
+    , type_(type) {
+    // The frame object itself is the linked stack node for the active
+    // resolution path, so entering the scope just makes this the new head.
+    // GCC can warn here when the frame lives inside a stack RAII guard even
+    // though the destructor restores parent_ before that guard leaves scope.
+    context_->active_resolving_frame_ = this;
+}
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+
+inline resolving_frame::~resolving_frame() {
+    if (context_) {
+        // Frames unwind strictly LIFO; restoring parent_ pops this node from
+        // the active type path without touching any arena-backed state.
+        assert(context_->active_resolving_frame_ == this);
+        context_->active_resolving_frame_ = parent_;
+    }
+}
+
+} // namespace detail
+
+inline bool resolving_context::has_type_path() const {
+    return active_resolving_frame_ != nullptr;
+}
+
+inline const type_descriptor* resolving_context::active_type() const {
+    return active_resolving_frame_ != nullptr
+               ? &active_resolving_frame_->type_
+               : nullptr;
+}
+
+inline const type_descriptor* resolving_context::parent_type() const {
+    return active_resolving_frame_ != nullptr &&
+                   active_resolving_frame_->parent_ != nullptr
+               ? &active_resolving_frame_->parent_->type_
+               : nullptr;
+}
+
+inline void resolving_context::append_type_path(std::string& message) const {
+    std::vector<type_descriptor> names;
+    for (auto* frame = active_resolving_frame_; frame != nullptr;
+         frame = frame->parent_) {
+        names.emplace_back(frame->type_);
+    }
+
+    for (auto it = names.rbegin(); it != names.rend(); ++it) {
+        if (it != names.rbegin()) {
+            message += " -> ";
+        }
+        append_type_name(message, *it);
+    }
+}
+
+template <typename T>
+detail::resolving_frame resolving_context::track_type() {
+    return detail::resolving_frame(*this, describe_type<T>());
+}
 
 } // namespace dingo

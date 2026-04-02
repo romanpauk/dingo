@@ -54,19 +54,23 @@ The sequence is:
 1. Check the cache if container caching is enabled.
 2. Normalize the request type and look up the matching factory set.
 3. Pick the single factory or indexed factory for the request.
-4. Ask `instance_factory_traits` how this request should be serviced.
-5. Resolve through the selected factory and convert the result back to `T`.
+4. Build an `instance_request` for the requested lookup type and descriptor.
+5. Call the matching factory entry point for the requested form and convert the
+   result back to `T`.
 
-[include/dingo/resolution/instance_factory_traits.h](../../include/dingo/resolution/instance_factory_traits.h)
-is the small dispatch layer that maps the requested form to the factory API:
+[include/dingo/resolution/instance_factory_interface.h](../../include/dingo/resolution/instance_factory_interface.h)
+defines the request object the container passes to the factory. The object
+stores:
 
-- `T` -> `get_value`
-- `T&` / `const T&` -> `get_lvalue_reference`
-- `T&&` -> `get_rvalue_reference`
-- `T*` -> `get_pointer`
+- the lookup type index
+- the requested type descriptor
 
-This keeps the container itself from needing to understand every conversion
-shape.
+The container then chooses the appropriate factory entry point:
+
+- `get_value(...)`
+- `get_lvalue_reference(...)`
+- `get_rvalue_reference(...)`
+- `get_pointer(...)`
 
 ## Factory Path
 
@@ -76,13 +80,13 @@ owns:
 
 - a storage object
 - a child container for constructor injection
-- a resolver specialized for the stored type and scope
+- scope-specific materialization and cached-conversion state
 
-When the factory receives a request, it selects the appropriate list of possible
-conversion shapes from `Storage::conversions` and tries to match the requested
-lookup type against that list.
+When the factory receives one of those calls, it selects the appropriate list of
+possible conversion shapes from `Storage::conversions` and tries to match the
+requested lookup type against that list.
 
-If a match is found, the resolver produces the source object and
+If a match is found, the factory produces the source object and
 [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)
 converts it to the requested shape.
 
@@ -110,5 +114,5 @@ These files are useful while reading this flow:
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 - [include/dingo/resolution/instance_factory.h](../../include/dingo/resolution/instance_factory.h)
-- [include/dingo/resolution/instance_factory_traits.h](../../include/dingo/resolution/instance_factory_traits.h)
+- [include/dingo/resolution/instance_factory_interface.h](../../include/dingo/resolution/instance_factory_interface.h)
 - [include/dingo/factory/constructor_detection.h](../../include/dingo/factory/constructor_detection.h)

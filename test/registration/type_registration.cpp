@@ -6,7 +6,7 @@
 //
 
 #include <dingo/resolution/conversion_cache.h>
-#include <dingo/resolution/instance_resolver.h>
+#include <dingo/resolution/instance_factory.h>
 #include <dingo/resolution/interface_storage_traits.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/rtti/rtti.h>
@@ -89,6 +89,19 @@ TEST(type_registration_test, registration_specialization) {
         virtual ~I() = default;
     };
     struct A : I {};
+    struct test_container {
+        using rtti_type = rtti<typeid_provider>;
+        using allocator_type = std::allocator<char>;
+
+        explicit test_container(test_container*,
+                                allocator_type allocator = allocator_type())
+            : allocator_(allocator) {}
+
+        allocator_type& get_allocator() { return allocator_; }
+
+      private:
+        allocator_type allocator_;
+    };
 
     using shared_registration = type_registration<scope<shared>, storage<A>>;
     using shared_storage = detail::storage<
@@ -99,8 +112,10 @@ TEST(type_registration_test, registration_specialization) {
                           typename shared_registration::storage_type::type>>,
         typename shared_registration::factory_type::type,
         typename shared_registration::conversions_type::type>;
-    using shared_resolver =
-        instance_resolver<rtti<typeid_provider>, A, shared_storage>;
+    using shared_factory_data =
+        instance_factory_data<test_container, shared_storage>;
+    using shared_factory = instance_factory<test_container, A, shared_storage,
+                                            shared_factory_data>;
 
     using shared_ptr_registration =
         type_registration<scope<shared>, storage<std::shared_ptr<A>>>;
@@ -112,8 +127,11 @@ TEST(type_registration_test, registration_specialization) {
                                             storage_type::type>>,
         typename shared_ptr_registration::factory_type::type,
         typename shared_ptr_registration::conversions_type::type>;
-    using shared_ptr_resolver =
-        instance_resolver<rtti<typeid_provider>, A, shared_ptr_storage>;
+    using shared_ptr_factory_data =
+        instance_factory_data<test_container, shared_ptr_storage>;
+    using shared_ptr_factory =
+        instance_factory<test_container, A, shared_ptr_storage,
+                         shared_ptr_factory_data>;
 
     using external_registration =
         type_registration<scope<external>, storage<A&>>;
@@ -125,8 +143,11 @@ TEST(type_registration_test, registration_specialization) {
                                             storage_type::type>>,
         typename external_registration::factory_type::type,
         typename external_registration::conversions_type::type>;
-    using external_resolver =
-        instance_resolver<rtti<typeid_provider>, A, external_storage>;
+    using external_factory_data =
+        instance_factory_data<test_container, external_storage>;
+    using external_factory =
+        instance_factory<test_container, A, external_storage,
+                         external_factory_data>;
 
     using external_shared_registration =
         type_registration<scope<external>, storage<std::shared_ptr<A>>>;
@@ -138,8 +159,11 @@ TEST(type_registration_test, registration_specialization) {
                                             storage_type::type>>,
         typename external_shared_registration::factory_type::type,
         typename external_shared_registration::conversions_type::type>;
-    using external_shared_resolver = instance_resolver<
-        rtti<typeid_provider>, A, external_shared_storage>;
+    using external_shared_factory_data =
+        instance_factory_data<test_container, external_shared_storage>;
+    using external_shared_factory =
+        instance_factory<test_container, A, external_shared_storage,
+                         external_shared_factory_data>;
 
     using nested_registration =
         type_registration<scope<shared>,
@@ -174,8 +198,8 @@ TEST(type_registration_test, registration_specialization) {
     static_assert(std::is_empty_v<conversion_cache<type_list<>>>);
     static_assert(
         std::is_trivially_destructible_v<conversion_cache<type_list<>>>);
-    static_assert(sizeof(shared_resolver) <= sizeof(shared_ptr_resolver));
-    static_assert(sizeof(external_resolver) <= sizeof(external_shared_resolver));
+    static_assert(sizeof(shared_factory) <= sizeof(shared_ptr_factory));
+    static_assert(sizeof(external_factory) <= sizeof(external_shared_factory));
 }
 
 TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
