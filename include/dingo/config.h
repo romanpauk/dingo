@@ -19,7 +19,9 @@
 #define DINGO_CONTEXT_ARENA_BUFFER_SIZE 128
 #endif
 
-#if __cplusplus > 202002L || (defined(_MSVC_LANG) && _MSVC_LANG > 202002L)
+#if __cplusplus > 202302L || (defined(_MSVC_LANG) && _MSVC_LANG > 202302L)
+#define DINGO_CXX_STANDARD 26
+#elif __cplusplus > 202002L || (defined(_MSVC_LANG) && _MSVC_LANG > 202002L)
 #define DINGO_CXX_STANDARD 23
 #elif (__cplusplus > 201703L && __cplusplus <= 202002L) || (defined(_MSVC_LANG) && _MSVC_LANG == 202002L)
 #define DINGO_CXX_STANDARD 20

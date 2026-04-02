@@ -33,7 +33,7 @@ env:
 
 jobs:
   cross:
-    name: cross-build
+    name: compile
     timeout-minutes: 30
     runs-on: ${{ inputs.cross_runner }}
     steps:
@@ -99,7 +99,7 @@ jobs:
             fetchcontent-build/CMakeFiles/CMakeError.log
 
   native-test:
-    name: native-ctest
+    name: test
     timeout-minutes: 45
     needs: cross
     runs-on: windows-11-arm

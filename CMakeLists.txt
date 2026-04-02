@@ -54,12 +54,22 @@ if(DINGO_DEVELOPMENT_MODE)
     include(cmake/sanitizers.cmake)
 
     set(CMAKE_CXX_STANDARD 17 CACHE STRING "c++ standard")
+    set(DINGO_REQUESTED_CXX_STANDARD "${CMAKE_CXX_STANDARD}")
+    if(MSVC AND DINGO_REQUESTED_CXX_STANDARD STREQUAL "26")
+        # CMake 3.31 still maps MSVC up to C++23, so request the latest draft mode
+        # explicitly while keeping the project-level requested standard at C++26.
+        set(CMAKE_CXX_STANDARD 23)
+    endif()
     set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
     set(CMAKE_CXX_EXTENSIONS OFF)
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-    if (NOT CMAKE_CXX_STANDARD MATCHES "17|20|23|26")
-        message(FATAL_ERROR "unsupported c++ standard version: ${CMAKE_CXX_STANDARD}")
+    if (NOT DINGO_REQUESTED_CXX_STANDARD MATCHES "17|20|23|26")
+        message(FATAL_ERROR "unsupported c++ standard version: ${DINGO_REQUESTED_CXX_STANDARD}")
+    endif()
+
+    if(MSVC AND DINGO_REQUESTED_CXX_STANDARD STREQUAL "26")
+        add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/std:c++latest>)
     endif()
 
     option(DINGO_TESTING_ENABLED "enable testing through googletest" ON)

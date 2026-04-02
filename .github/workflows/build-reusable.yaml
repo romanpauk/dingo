@@ -98,6 +98,12 @@ jobs:
           - label: vs2026
             runner: windows-2025-vs2026
             generator: Visual Studio 18 2026
+        include:
+          - std: 26
+            vs:
+              label: vs2026
+              runner: windows-2025-vs2026
+              generator: Visual Studio 18 2026
     runs-on: ${{ matrix.vs.runner }}
     steps:
       - name: Setup MSVC Developer Command Prompt
@@ -138,7 +144,7 @@ jobs:
           std: ${{ matrix.std }}
 
   windows-arm64-vs2026:
-    name: vs2026 / arm64 / std-${{ matrix.std }} / ${{ matrix.config.label }}
+    name: vs2026 / arm64 / std-${{ matrix.std }} / ${{ matrix.config.label }} / compile
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -148,7 +154,7 @@ jobs:
             label: debug
           - id: Release
             label: release
-        std: [17, 20, 23]
+        std: [17, 20, 23, 26]
     runs-on: windows-2025-vs2026
     steps:
       - name: Setup MSVC Developer Command Prompt
