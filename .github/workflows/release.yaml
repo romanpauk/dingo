@@ -25,14 +25,21 @@ on:
         required: true
         default: true
         type: boolean
+
 env:
   BUILD_JOBS: ${{ vars.DINGO_BUILD_JOBS || '4' }}
 
 jobs:
-  release:
-    name: release / ${{ inputs.version }}
+  prepare:
+    name: prepare / ${{ inputs.version }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 20
+    outputs:
+      release_branch: ${{ steps.plan.outputs.release_branch }}
+      release_commit_sha: ${{ steps.release_commit.outputs.sha }}
+      release_line: ${{ steps.plan.outputs.release_line }}
+      tag: ${{ steps.plan.outputs.tag }}
+      version: ${{ steps.plan.outputs.version }}
     steps:
       - name: Checkout source ref
         uses: actions/checkout@v6.0.2
@@ -96,32 +103,81 @@ jobs:
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "commit_created=true" >> "$GITHUB_OUTPUT"
 
-      - name: Verify formatting
-        env:
-          PIP_BREAK_SYSTEM_PACKAGES: 1
+      - name: Archive release source and git bundle
         run: |
-          python -m pip install mdformat
-          cmake -S . -B build-lint -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_TESTING_ENABLED=OFF -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF
-          cmake --build build-lint -t md-verify
+          mkdir -p release-artifacts
+          git archive HEAD | gzip -n > release-artifacts/release-source.tar.gz
+          git bundle create release-artifacts/release.bundle HEAD
 
-      - name: Verify release build
-        env:
-          ASAN_OPTIONS: use_sigaltstack=false
+      - name: Upload release source
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: release-source-${{ inputs.version }}
+          if-no-files-found: error
+          path: release-artifacts/release-source.tar.gz
+
+      - name: Upload release bundle
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: release-bundle-${{ inputs.version }}
+          if-no-files-found: error
+          path: release-artifacts/release.bundle
+
+  lint:
+    needs: prepare
+    uses: ./.github/workflows/lint-reusable.yaml
+    with:
+      source_artifact_name: release-source-${{ inputs.version }}
+
+  build:
+    needs: prepare
+    uses: ./.github/workflows/build-reusable.yaml
+    with:
+      source_artifact_name: release-source-${{ inputs.version }}
+
+  publish:
+    name: publish / ${{ inputs.version }}
+    if: ${{ !inputs.dry_run }}
+    needs:
+      - prepare
+      - lint
+      - build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPECTED_COMMIT: ${{ needs.prepare.outputs.release_commit_sha }}
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_BRANCH: ${{ needs.prepare.outputs.release_branch }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Checkout source ref
+        uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.source_ref }}
+
+      - name: Fetch remote refs and tags
         run: |
-          cmake -S . -B build-release -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DDINGO_SANITIZER=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=23
-          cmake --build build-release -j "$BUILD_JOBS"
-          (cd build-release && ctest --verbose --output-on-failure)
-          cmake -S test/fetchcontent -B fetchcontent-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=23
-          cmake --build fetchcontent-build -j "$BUILD_JOBS"
+          git fetch --force --prune --tags origin '+refs/heads/*:refs/remotes/origin/*'
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Download release bundle
+        uses: actions/download-artifact@v5.0.0
+        with:
+          name: release-bundle-${{ inputs.version }}
+          path: release-artifacts
+
+      - name: Materialize verified release commit
+        run: |
+          git fetch release-artifacts/release.bundle HEAD
+          git checkout --detach FETCH_HEAD
 
       - name: Publish release refs
-        if: ${{ !inputs.dry_run }}
-        env:
-          EXPECTED_COMMIT: ${{ steps.release_commit.outputs.sha }}
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_BRANCH: ${{ steps.plan.outputs.release_branch }}
-          TAG: ${{ steps.plan.outputs.tag }}
-          VERSION: ${{ steps.plan.outputs.version }}
         run: |
           retry() {
               attempts=$1
@@ -204,21 +260,28 @@ jobs:
               exit 1
           fi
 
+  summarize:
+    name: summarize / ${{ inputs.version }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.lint.result == 'success' && needs.build.result == 'success' && (inputs.dry_run || needs.publish.result == 'success') }}
+    needs:
+      - prepare
+      - lint
+      - build
+      - publish
+    runs-on: ubuntu-24.04
+    steps:
       - name: Summarize release plan
-        env:
-          RELEASE_BRANCH: ${{ steps.plan.outputs.release_branch }}
-          RELEASE_LINE: ${{ steps.plan.outputs.release_line }}
-          TAG: ${{ steps.plan.outputs.tag }}
         run: |
-          RELEASE_COMMIT_SHA=$(git rev-parse HEAD)
           {
               echo "## Release summary"
               echo
               echo "- version: \`${{ inputs.version }}\`"
               echo "- source_ref: \`${{ inputs.source_ref }}\`"
-              echo "- release_line: \`$RELEASE_LINE\`"
-              echo "- release_branch: \`$RELEASE_BRANCH\`"
-              echo "- release_commit_sha: \`$RELEASE_COMMIT_SHA\`"
-              echo "- tag: \`$TAG\`"
+              echo "- release_line: \`${{ needs.prepare.outputs.release_line }}\`"
+              echo "- release_branch: \`${{ needs.prepare.outputs.release_branch }}\`"
+              echo "- release_commit_sha: \`${{ needs.prepare.outputs.release_commit_sha }}\`"
+              echo "- tag: \`${{ needs.prepare.outputs.tag }}\`"
               echo "- dry_run: \`${{ inputs.dry_run }}\`"
+              echo "- lint workflow: lint-reusable"
+              echo "- build workflow: build-reusable"
           } >> "$GITHUB_STEP_SUMMARY"

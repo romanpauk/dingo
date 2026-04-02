@@ -1,0 +1,237 @@
+name: build-reusable
+on:
+  workflow_call:
+    inputs:
+      source_artifact_name:
+        required: false
+        type: string
+        default: ''
+
+env:
+  BUILD_JOBS: ${{ vars.DINGO_BUILD_JOBS || '4' }}
+
+jobs:
+  linux:
+    name: ubuntu-24.04 / ${{ matrix.compiler.CXX }} / std-${{ matrix.compiler.STD }} / ${{ matrix.config.label }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - id: Debug
+            label: debug
+          - id: Release
+            label: release
+        compiler:
+          - { CC: gcc-12, CXX: g++-12, STD: 17, SANITIZER: OFF }
+          - { CC: gcc-12, CXX: g++-12, STD: 20, SANITIZER: OFF }
+          - { CC: gcc-12, CXX: g++-12, STD: 23, SANITIZER: OFF }
+          - { CC: gcc-13, CXX: g++-13, STD: 17, SANITIZER: ON }
+          - { CC: gcc-13, CXX: g++-13, STD: 20, SANITIZER: ON }
+          - { CC: gcc-13, CXX: g++-13, STD: 23, SANITIZER: ON }
+          - { CC: gcc-14, CXX: g++-14, STD: 17, SANITIZER: ON }
+          - { CC: gcc-14, CXX: g++-14, STD: 20, SANITIZER: ON }
+          - { CC: gcc-14, CXX: g++-14, STD: 23, SANITIZER: ON }
+          - { CC: gcc-14, CXX: g++-14, STD: 26, SANITIZER: ON }
+          - { CC: clang-17, CXX: clang++-17, STD: 17, SANITIZER: ON }
+          - { CC: clang-17, CXX: clang++-17, STD: 20, SANITIZER: ON }
+          # - { CC: clang-17, CXX: clang++-17, STD: 23, SANITIZER: ON }
+          - { CC: clang-18, CXX: clang++-18, STD: 17, SANITIZER: ON }
+          - { CC: clang-18, CXX: clang++-18, STD: 20, SANITIZER: ON }
+          - { CC: clang-18, CXX: clang++-18, STD: 23, SANITIZER: ON }
+          - { CC: clang-19, CXX: clang++-19, STD: 17, SANITIZER: ON }
+          - { CC: clang-19, CXX: clang++-19, STD: 20, SANITIZER: ON }
+          - { CC: clang-19, CXX: clang++-19, STD: 23, SANITIZER: ON }
+          - { CC: clang-19, CXX: clang++-19, STD: 26, SANITIZER: ON }
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout workflow repo
+        uses: actions/checkout@v6.0.2
+
+      - name: Initialize source dir
+        shell: bash
+        run: |
+          echo "SOURCE_DIR=." >> "$GITHUB_ENV"
+
+      - name: Download release source
+        if: ${{ inputs.source_artifact_name != '' }}
+        uses: actions/download-artifact@v5.0.0
+        with:
+          name: ${{ inputs.source_artifact_name }}
+          path: release-artifacts
+
+      - name: Extract release source
+        if: ${{ inputs.source_artifact_name != '' }}
+        shell: bash
+        run: |
+          mkdir -p release-src
+          tar -xzf release-artifacts/release-source.tar.gz -C release-src
+          echo "SOURCE_DIR=release-src" >> "$GITHUB_ENV"
+
+      - name: Run Linux build
+        uses: ./.github/actions/linux-build
+        with:
+          build_type: ${{ matrix.config.id }}
+          ccache_key: ubuntu-24.04-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
+          compiler_cc: ${{ matrix.compiler.CC }}
+          compiler_cxx: ${{ matrix.compiler.CXX }}
+          sanitizer: ${{ matrix.compiler.SANITIZER }}
+          source_dir: ${{ env.SOURCE_DIR }}
+          std: ${{ matrix.compiler.STD }}
+
+  windows-x64:
+    name: ${{ matrix.vs.label }} / x64 / std-${{ matrix.std }} / ${{ matrix.config.label }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - id: Debug
+            label: debug
+          - id: Release
+            label: release
+        std: [17, 20, 23]
+        vs:
+          - label: vs2022
+            runner: windows-2022
+            generator: Visual Studio 17 2022
+          - label: vs2026
+            runner: windows-2025-vs2026
+            generator: Visual Studio 18 2026
+    runs-on: ${{ matrix.vs.runner }}
+    steps:
+      - name: Setup MSVC Developer Command Prompt
+        uses: TheMrMilchmann/setup-msvc-dev@v4.0.0
+        with:
+          arch: x64
+
+      - name: Checkout workflow repo
+        uses: actions/checkout@v6.0.2
+
+      - name: Initialize source dir
+        shell: bash
+        run: |
+          echo "SOURCE_DIR=." >> "$GITHUB_ENV"
+
+      - name: Download release source
+        if: ${{ inputs.source_artifact_name != '' }}
+        uses: actions/download-artifact@v5.0.0
+        with:
+          name: ${{ inputs.source_artifact_name }}
+          path: release-artifacts
+
+      - name: Extract release source
+        if: ${{ inputs.source_artifact_name != '' }}
+        shell: bash
+        run: |
+          mkdir -p release-src
+          tar -xzf release-artifacts/release-source.tar.gz -C release-src
+          echo "SOURCE_DIR=release-src" >> "$GITHUB_ENV"
+
+      - name: Run Windows build
+        uses: ./.github/actions/windows-build
+        with:
+          ccache_key: ${{ matrix.vs.label }}-x64-${{ matrix.config.id }}-${{ matrix.std }}
+          config_id: ${{ matrix.config.id }}
+          generator: ${{ matrix.vs.generator }}
+          source_dir: ${{ env.SOURCE_DIR }}
+          std: ${{ matrix.std }}
+
+  windows-arm64-vs2026:
+    name: vs2026 / arm64 / std-${{ matrix.std }} / ${{ matrix.config.label }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - id: Debug
+            label: debug
+          - id: Release
+            label: release
+        std: [17, 20, 23]
+    runs-on: windows-2025-vs2026
+    steps:
+      - name: Setup MSVC Developer Command Prompt
+        uses: TheMrMilchmann/setup-msvc-dev@v4.0.0
+        with:
+          arch: amd64_arm64
+
+      - name: Checkout workflow repo
+        uses: actions/checkout@v6.0.2
+
+      - name: Initialize source dir
+        shell: bash
+        run: |
+          echo "SOURCE_DIR=." >> "$GITHUB_ENV"
+
+      - name: Download release source
+        if: ${{ inputs.source_artifact_name != '' }}
+        uses: actions/download-artifact@v5.0.0
+        with:
+          name: ${{ inputs.source_artifact_name }}
+          path: release-artifacts
+
+      - name: Extract release source
+        if: ${{ inputs.source_artifact_name != '' }}
+        shell: bash
+        run: |
+          mkdir -p release-src
+          tar -xzf release-artifacts/release-source.tar.gz -C release-src
+          echo "SOURCE_DIR=release-src" >> "$GITHUB_ENV"
+
+      - name: CCache
+        uses: hendrikmuhs/ccache-action@v1.2.22
+        with:
+          key: vs2026-arm64-${{ matrix.config.id }}-${{ matrix.std }}
+          evict-old-files: job
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S "${{ env.SOURCE_DIR }}" -B build -G "Visual Studio 18 2026" -A ARM64 -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+
+      - name: Build
+        shell: pwsh
+        run: |
+          cmake --build build --config ${{ matrix.config.id }} -j $env:BUILD_JOBS
+
+      - name: FetchContent
+        shell: pwsh
+        run: |
+          cmake -S "${{ env.SOURCE_DIR }}/test/fetchcontent" -B fetchcontent-build -G "Visual Studio 18 2026" -A ARM64 -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }} -DDINGO_EXAMPLES_ENABLED=OFF
+          cmake --build fetchcontent-build --config ${{ matrix.config.id }} -j $env:BUILD_JOBS
+
+      - name: Upload Failure Artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: failure-vs2026-arm64-msvc-std-${{ matrix.std }}-${{ matrix.config.label }}
+          if-no-files-found: ignore
+          path: |
+            build/CMakeFiles/CMakeOutput.log
+            build/CMakeFiles/CMakeError.log
+            build/Testing/Temporary
+            fetchcontent-build/CMakeFiles/CMakeOutput.log
+            fetchcontent-build/CMakeFiles/CMakeError.log
+
+  windows-arm64-vs2022:
+    name: vs2022 / arm64 / std-${{ matrix.std }} / ${{ matrix.config.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - id: Debug
+            label: debug
+          - id: Release
+            label: release
+        std: [17, 20, 23]
+    uses: ./.github/workflows/windows-arm64-leg.yaml
+    with:
+      source_artifact_name: ${{ inputs.source_artifact_name }}
+      vs_label: vs2022
+      cross_runner: windows-2022
+      cross_generator: Visual Studio 17 2022
+      native_generator: Visual Studio 17 2022
+      config_id: ${{ matrix.config.id }}
+      config_label: ${{ matrix.config.label }}
+      std: ${{ matrix.std }}

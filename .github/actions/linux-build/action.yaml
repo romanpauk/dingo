@@ -1,0 +1,80 @@
+name: linux-build
+description: Configure, build, test, and FetchContent-verify a Linux CMake build
+inputs:
+  build_dir:
+    description: Main CMake build directory
+    required: false
+    default: build
+  build_type:
+    description: CMake build type
+    required: true
+  ccache_key:
+    description: Cache key for ccache-action
+    required: true
+  compiler_cc:
+    description: C compiler binary
+    required: true
+  compiler_cxx:
+    description: C++ compiler binary
+    required: true
+  fetchcontent_dir:
+    description: FetchContent build directory
+    required: false
+    default: fetchcontent-build
+  sanitizer:
+    description: DINGO_SANITIZER value
+    required: true
+  source_dir:
+    description: Source directory to configure/build
+    required: false
+    default: .
+  std:
+    description: C++ standard
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: CCache
+      uses: hendrikmuhs/ccache-action@v1.2.22
+      with:
+        key: ${{ inputs.ccache_key }}
+        evict-old-files: job
+    - name: Install Compiler
+      shell: bash
+      run: |
+        command -v ${{ inputs.compiler_cc }} >/dev/null || sudo apt-get install -y ${{ inputs.compiler_cc }}
+        command -v ${{ inputs.compiler_cxx }} >/dev/null || sudo apt-get install -y ${{ inputs.compiler_cxx }}
+    - name: Configure
+      shell: bash
+      env:
+        CC: ${{ inputs.compiler_cc }}
+        CXX: ${{ inputs.compiler_cxx }}
+      run: |
+        cmake -S "${{ inputs.source_dir }}" -B "${{ inputs.build_dir }}" -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DDINGO_SANITIZER=${{ inputs.sanitizer }} -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
+    - name: Build
+      shell: bash
+      run: |
+        cmake --build "${{ inputs.build_dir }}" -j "$BUILD_JOBS"
+    - name: Test
+      shell: bash
+      env:
+        ASAN_OPTIONS: use_sigaltstack=false
+      run: |
+        cd "${{ inputs.build_dir }}" && ctest --verbose --output-on-failure
+    - name: FetchContent
+      shell: bash
+      run: |
+        cmake -S "${{ inputs.source_dir }}/test/fetchcontent" -B "${{ inputs.fetchcontent_dir }}" -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
+        cmake --build "${{ inputs.fetchcontent_dir }}" -j "$BUILD_JOBS"
+    - name: Upload Failure Artifacts
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v4.6.2
+      with:
+        name: failure-${{ inputs.ccache_key }}
+        if-no-files-found: ignore
+        path: |
+          ${{ inputs.build_dir }}/CMakeFiles/CMakeOutput.log
+          ${{ inputs.build_dir }}/CMakeFiles/CMakeError.log
+          ${{ inputs.build_dir }}/Testing/Temporary
+          ${{ inputs.fetchcontent_dir }}/CMakeFiles/CMakeOutput.log
+          ${{ inputs.fetchcontent_dir }}/CMakeFiles/CMakeError.log
