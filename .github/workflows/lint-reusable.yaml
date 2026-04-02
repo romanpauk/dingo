@@ -1,0 +1,54 @@
+name: lint-reusable
+on:
+  workflow_call:
+    inputs:
+      source_artifact_name:
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  lint:
+    name: ${{ matrix.os }} / lint
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-24.04
+            setup_msvc: 'false'
+          - name: windows-vs2026
+            os: windows-2025-vs2026
+            setup_msvc: 'true'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout workflow repo
+        uses: actions/checkout@v6.0.2
+
+      - name: Initialize source dir
+        shell: bash
+        run: |
+          echo "SOURCE_DIR=." >> "$GITHUB_ENV"
+
+      - name: Download release source
+        if: ${{ inputs.source_artifact_name != '' }}
+        uses: actions/download-artifact@v5.0.0
+        with:
+          name: ${{ inputs.source_artifact_name }}
+          path: release-artifacts
+
+      - name: Extract release source
+        if: ${{ inputs.source_artifact_name != '' }}
+        shell: bash
+        run: |
+          mkdir -p release-src
+          tar -xzf release-artifacts/release-source.tar.gz -C release-src
+          echo "SOURCE_DIR=release-src" >> "$GITHUB_ENV"
+
+      - name: Check formatting
+        uses: ./.github/actions/lint-check
+        with:
+          artifact_name: lint-failure-${{ matrix.name }}
+          setup_msvc: ${{ matrix.setup_msvc }}
+          source_dir: ${{ env.SOURCE_DIR }}

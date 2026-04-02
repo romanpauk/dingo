@@ -1,0 +1,64 @@
+name: windows-build
+description: Configure, build, test, and FetchContent-verify a Windows x64 CMake build
+inputs:
+  build_dir:
+    description: Main CMake build directory
+    required: false
+    default: build
+  ccache_key:
+    description: Cache key for ccache-action
+    required: true
+  config_id:
+    description: Visual Studio configuration id
+    required: true
+  fetchcontent_dir:
+    description: FetchContent build directory
+    required: false
+    default: fetchcontent-build
+  generator:
+    description: CMake generator
+    required: true
+  source_dir:
+    description: Source directory to configure/build
+    required: false
+    default: .
+  std:
+    description: C++ standard
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: CCache
+      uses: hendrikmuhs/ccache-action@v1.2.22
+      with:
+        key: ${{ inputs.ccache_key }}
+        evict-old-files: job
+    - name: Configure
+      shell: pwsh
+      run: |
+        cmake -S "${{ inputs.source_dir }}" -B "${{ inputs.build_dir }}" -G "${{ inputs.generator }}" -A x64 -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ inputs.config_id }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
+    - name: Build
+      shell: pwsh
+      run: |
+        cmake --build "${{ inputs.build_dir }}" --config ${{ inputs.config_id }} -j $env:BUILD_JOBS
+    - name: Test
+      shell: pwsh
+      run: |
+        ctest --test-dir "${{ inputs.build_dir }}" --verbose --output-on-failure -C ${{ inputs.config_id }}
+    - name: FetchContent
+      shell: pwsh
+      run: |
+        cmake -S "${{ inputs.source_dir }}/test/fetchcontent" -B "${{ inputs.fetchcontent_dir }}" -G "${{ inputs.generator }}" -A x64 -DCMAKE_BUILD_TYPE=${{ inputs.config_id }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
+        cmake --build "${{ inputs.fetchcontent_dir }}" --config ${{ inputs.config_id }} -j $env:BUILD_JOBS
+    - name: Upload Failure Artifacts
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v4.6.2
+      with:
+        name: failure-${{ inputs.ccache_key }}
+        if-no-files-found: ignore
+        path: |
+          ${{ inputs.build_dir }}/CMakeFiles/CMakeOutput.log
+          ${{ inputs.build_dir }}/CMakeFiles/CMakeError.log
+          ${{ inputs.build_dir }}/Testing/Temporary
+          ${{ inputs.fetchcontent_dir }}/CMakeFiles/CMakeOutput.log
+          ${{ inputs.fetchcontent_dir }}/CMakeFiles/CMakeError.log
