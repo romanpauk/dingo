@@ -100,14 +100,14 @@ podman run --rm dingo-toolchains:ubuntu-25.04-msvc-wine bash -lc 'cl /?'
 ## Build in the Linux image
 
 ```bash
-cmake -S . -B build-gcc12 -G Ninja \
-  -DCMAKE_C_COMPILER=gcc-12 \
-  -DCMAKE_CXX_COMPILER=g++-12 \
+cmake -S . -B build-gcc14 -G Ninja \
+  -DCMAKE_C_COMPILER=gcc-14 \
+  -DCMAKE_CXX_COMPILER=g++-14 \
   -DDINGO_DEVELOPMENT_MODE=ON \
   -DDINGO_BENCHMARK_ENABLED=OFF
 
-cmake --build build-gcc12 -j"$(nproc)"
-ctest --test-dir build-gcc12 --output-on-failure
+cmake --build build-gcc14 -j"$(nproc)"
+ctest --test-dir build-gcc14 --output-on-failure
 ```
 
 Clang example:
@@ -128,8 +128,8 @@ podman run --rm \
   -w /workspace \
   dingo-toolchains:ubuntu-25.04 \
   bash -lc 'cmake -S . -B build -G Ninja \
-    -DCMAKE_C_COMPILER=gcc-12 \
-    -DCMAKE_CXX_COMPILER=g++-12 \
+    -DCMAKE_C_COMPILER=gcc-14 \
+    -DCMAKE_CXX_COMPILER=g++-14 \
     -DDINGO_DEVELOPMENT_MODE=ON \
     -DDINGO_BENCHMARK_ENABLED=OFF && \
     cmake --build build -j"$(nproc)" && \
@@ -176,8 +176,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: cmake -S . -B build -G Ninja \
-          -DCMAKE_C_COMPILER=gcc-12 \
-          -DCMAKE_CXX_COMPILER=g++-12 \
+          -DCMAKE_C_COMPILER=gcc-14 \
+          -DCMAKE_CXX_COMPILER=g++-14 \
           -DDINGO_DEVELOPMENT_MODE=ON \
           -DDINGO_BENCHMARK_ENABLED=OFF
       - run: cmake --build build -j4
