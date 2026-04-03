@@ -63,6 +63,7 @@ RUN chmod +x /usr/local/bin/install-msvc-wine /usr/local/bin/dingo-print-toolcha
                 gdb \
                 "clang-${toolchain_version}" \
                 "clang-format-${toolchain_version}" \
+                "libclang-rt-${toolchain_version}-dev" \
                 "clang-tidy-${toolchain_version}" \
                 "clangd-${toolchain_version}" \
                 "lld-${toolchain_version}" \
