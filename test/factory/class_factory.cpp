@@ -18,6 +18,8 @@
 
 #include <gtest/gtest.h>
 
+#include <functional>
+
 #include "support/containers.h"
 #include "support/test.h"
 
@@ -266,6 +268,148 @@ TYPED_TEST(class_factory_test, callable_resolve_shared_cyclical) {
     auto b = container.template resolve<B&>();
     ASSERT_EQ(b.v, 16);
 }
+
+TYPED_TEST(class_factory_test, callable_construct_mutable_lambda) {
+    struct B {
+        int v;
+    };
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(4);
+
+    auto fn = [factor = 1](int v) mutable {
+        factor += v;
+        return B{factor};
+    };
+
+    auto first = container.template construct<B>(callable(fn));
+    auto second = container.template construct<B>(callable(fn));
+    ASSERT_EQ(first.v, 5);
+    ASSERT_EQ(second.v, 5);
+}
+
+#if defined(__cpp_lib_move_only_function)
+TYPED_TEST(class_factory_test, callable_construct_move_only_function) {
+    struct B {
+        int v;
+    };
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(4);
+
+    std::move_only_function<B(int)> fn = [](int v) { return B{v * v}; };
+    auto b = container.template construct<B>(callable(std::move(fn)));
+    ASSERT_EQ(b.v, 16);
+}
+
+TYPED_TEST(class_factory_test, callable_resolve_unique_move_only_function) {
+    struct B {
+        int v;
+    };
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(4);
+    container.template register_type<scope<unique>, storage<B>>(
+        callable(std::move_only_function<B(int)>(
+            [](int v) { return B{v * 2}; })));
+
+    ASSERT_EQ(container.template resolve<B>().v, 8);
+    ASSERT_EQ(container.template resolve<B>().v, 8);
+}
+#endif
+
+#if defined(__cpp_lib_copyable_function)
+TYPED_TEST(class_factory_test, callable_construct_copyable_function) {
+    struct B {
+        int v;
+    };
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(4);
+
+    std::copyable_function<B(int)> fn = [](int v) { return B{v + 3}; };
+    auto b = container.template construct<B>(callable(fn));
+    ASSERT_EQ(b.v, 7);
+}
+#endif
+
+TYPED_TEST(class_factory_test, callable_construct_explicit_signature_overloaded_functor) {
+    struct B {
+        int v;
+    };
+
+    struct overloaded {
+        B operator()(int value) const { return B{value + 10}; }
+        B operator()(float value) const { return B{static_cast<int>(value) + 100}; }
+    };
+
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(7);
+    container.template register_type<scope<external>, storage<float>>(1.5f);
+
+    auto from_int =
+        container.template construct<B>(callable<B(int)>(overloaded{}));
+    auto from_float =
+        container.template construct<B>(callable<B(float)>(overloaded{}));
+
+    ASSERT_EQ(from_int.v, 17);
+    ASSERT_EQ(from_float.v, 101);
+}
+
+TYPED_TEST(class_factory_test, callable_resolve_unique_explicit_signature_overloaded_functor) {
+    struct B {
+        int v;
+    };
+
+    struct overloaded {
+        B operator()(int value) const { return B{value + 10}; }
+        B operator()(float value) const { return B{static_cast<int>(value) + 100}; }
+    };
+
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(7);
+    container.template register_type<scope<unique>, storage<B>>(
+        callable<B(int)>(overloaded{}));
+
+    ASSERT_EQ(container.template resolve<B>().v, 17);
+    ASSERT_EQ(container.template resolve<B>().v, 17);
+}
+
+#if DINGO_CXX_STANDARD >= 20
+TYPED_TEST(class_factory_test, callable_construct_explicit_signature_generic_lambda) {
+    struct B {
+        int v;
+    };
+
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(6);
+
+    auto fn = []<typename T>(T value) { return B{value * 2}; };
+
+    auto b = container.template construct<B>(callable<B(int)>(fn));
+    ASSERT_EQ(b.v, 12);
+}
+
+TYPED_TEST(class_factory_test, callable_resolve_unique_explicit_signature_generic_lambda) {
+    struct B {
+        int v;
+    };
+
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(6);
+
+    auto fn = []<typename T>(T value) { return B{value * 2}; };
+
+    container.template register_type<scope<unique>, storage<B>>(
+        callable<B(int)>(fn));
+    ASSERT_EQ(container.template resolve<B>().v, 12);
+    ASSERT_EQ(container.template resolve<B>().v, 12);
+}
+#endif
 
 TYPED_TEST(class_factory_test, constructor_type) {
     struct B {
