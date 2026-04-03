@@ -1,6 +1,8 @@
 set(MARKDOWN_FILES README.md)
 file(GLOB_RECURSE DOC_MARKDOWN_FILES docs/*.md)
+file(GLOB_RECURSE CONTAINER_MARKDOWN_FILES docker/*.md)
 list(APPEND MARKDOWN_FILES ${DOC_MARKDOWN_FILES})
+list(APPEND MARKDOWN_FILES ${CONTAINER_MARKDOWN_FILES})
 list(SORT MARKDOWN_FILES)
 
 # TODO: need to figure out how to force cmake to find the same python version

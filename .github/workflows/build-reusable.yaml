@@ -23,9 +23,6 @@ jobs:
           - id: Release
             label: release
         compiler:
-          - { CC: gcc-12, CXX: g++-12, STD: 17, SANITIZER: OFF }
-          - { CC: gcc-12, CXX: g++-12, STD: 20, SANITIZER: OFF }
-          - { CC: gcc-12, CXX: g++-12, STD: 23, SANITIZER: OFF }
           - { CC: gcc-13, CXX: g++-13, STD: 17, SANITIZER: ON }
           - { CC: gcc-13, CXX: g++-13, STD: 20, SANITIZER: ON }
           - { CC: gcc-13, CXX: g++-13, STD: 23, SANITIZER: ON }
@@ -33,9 +30,6 @@ jobs:
           - { CC: gcc-14, CXX: g++-14, STD: 20, SANITIZER: ON }
           - { CC: gcc-14, CXX: g++-14, STD: 23, SANITIZER: ON }
           - { CC: gcc-14, CXX: g++-14, STD: 26, SANITIZER: ON }
-          - { CC: clang-17, CXX: clang++-17, STD: 17, SANITIZER: ON }
-          - { CC: clang-17, CXX: clang++-17, STD: 20, SANITIZER: ON }
-          # - { CC: clang-17, CXX: clang++-17, STD: 23, SANITIZER: ON }
           - { CC: clang-18, CXX: clang++-18, STD: 17, SANITIZER: ON }
           - { CC: clang-18, CXX: clang++-18, STD: 20, SANITIZER: ON }
           - { CC: clang-18, CXX: clang++-18, STD: 23, SANITIZER: ON }
@@ -73,6 +67,121 @@ jobs:
         with:
           build_type: ${{ matrix.config.id }}
           ccache_key: ubuntu-24.04-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
+          compiler_cc: ${{ matrix.compiler.CC }}
+          compiler_cxx: ${{ matrix.compiler.CXX }}
+          sanitizer: ${{ matrix.compiler.SANITIZER }}
+          source_dir: ${{ env.SOURCE_DIR }}
+          std: ${{ matrix.compiler.STD }}
+
+  linux-toolchain-image:
+    name: ubuntu-25.04 / ${{ matrix.compiler.TOOLCHAIN }} / std-${{ matrix.compiler.STD }} / ${{ matrix.config.label }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - id: Debug
+            label: debug
+          - id: Release
+            label: release
+        compiler:
+          - { TOOLCHAIN: gcc-15, CC: gcc-15, CXX: g++-15, STD: 23, SANITIZER: ON }
+          - { TOOLCHAIN: gcc-15, CC: gcc-15, CXX: g++-15, STD: 26, SANITIZER: ON }
+          - { TOOLCHAIN: clang-20, CC: clang-20, CXX: clang++-20, STD: 23, SANITIZER: ON }
+          - { TOOLCHAIN: clang-20, CC: clang-20, CXX: clang++-20, STD: 26, SANITIZER: ON }
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout workflow repo
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.11.1
+
+      - name: Build selected toolchain image
+        uses: docker/build-push-action@v6.18.0
+        with:
+          context: docker/ubuntu25-toolchains
+          file: docker/ubuntu25-toolchains/Containerfile
+          build-args: TOOLCHAIN=${{ matrix.compiler.TOOLCHAIN }}
+          load: true
+          tags: dingo-toolchains:ubuntu-25.04-${{ matrix.compiler.TOOLCHAIN }}
+          cache-from: type=gha,scope=toolchain-${{ matrix.compiler.TOOLCHAIN }}
+          cache-to: type=gha,mode=max,scope=toolchain-${{ matrix.compiler.TOOLCHAIN }}
+
+      - name: Initialize source dir
+        shell: bash
+        run: |
+          echo "SOURCE_DIR=." >> "$GITHUB_ENV"
+
+      - name: Download release source
+        if: ${{ inputs.source_artifact_name != '' }}
+        uses: actions/download-artifact@v5.0.0
+        with:
+          name: ${{ inputs.source_artifact_name }}
+          path: release-artifacts
+
+      - name: Extract release source
+        if: ${{ inputs.source_artifact_name != '' }}
+        shell: bash
+        run: |
+          mkdir -p release-src
+          tar -xzf release-artifacts/release-source.tar.gz -C release-src
+          echo "SOURCE_DIR=release-src" >> "$GITHUB_ENV"
+
+      - name: Run Linux image-backed build
+        uses: ./.github/actions/linux-build
+        with:
+          build_type: ${{ matrix.config.id }}
+          ccache_key: ubuntu-25.04-image-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
+          container_image: dingo-toolchains:ubuntu-25.04-${{ matrix.compiler.TOOLCHAIN }}
+          compiler_cc: ${{ matrix.compiler.CC }}
+          compiler_cxx: ${{ matrix.compiler.CXX }}
+          sanitizer: ${{ matrix.compiler.SANITIZER }}
+          source_dir: ${{ env.SOURCE_DIR }}
+          std: ${{ matrix.compiler.STD }}
+
+  linux-arm64:
+    name: ubuntu-24.04-arm / ${{ matrix.compiler.CXX }} / std-${{ matrix.compiler.STD }} / ${{ matrix.config.label }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - id: Release
+            label: release
+        compiler:
+          - { CC: gcc-14, CXX: g++-14, STD: 23, SANITIZER: ON }
+          - { CC: clang-18, CXX: clang++-18, STD: 23, SANITIZER: ON }
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout workflow repo
+        uses: actions/checkout@v6.0.2
+
+      - name: Initialize source dir
+        shell: bash
+        run: |
+          echo "SOURCE_DIR=." >> "$GITHUB_ENV"
+
+      - name: Download release source
+        if: ${{ inputs.source_artifact_name != '' }}
+        uses: actions/download-artifact@v5.0.0
+        with:
+          name: ${{ inputs.source_artifact_name }}
+          path: release-artifacts
+
+      - name: Extract release source
+        if: ${{ inputs.source_artifact_name != '' }}
+        shell: bash
+        run: |
+          mkdir -p release-src
+          tar -xzf release-artifacts/release-source.tar.gz -C release-src
+          echo "SOURCE_DIR=release-src" >> "$GITHUB_ENV"
+
+      - name: Run Linux arm64 build
+        uses: ./.github/actions/linux-build
+        with:
+          build_type: ${{ matrix.config.id }}
+          ccache_key: ubuntu-24.04-arm-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
           compiler_cc: ${{ matrix.compiler.CC }}
           compiler_cxx: ${{ matrix.compiler.CXX }}
           sanitizer: ${{ matrix.compiler.SANITIZER }}

@@ -9,9 +9,9 @@ base classes.
 Tested with:
 
 - C++17, C++20, C++23, C++26
-- GCC 12-14
-- Clang 17-19
-- Visual Studio 2019, 2022
+- GCC 13-15
+- Clang 18-20
+- Visual Studio 2022, 2026
 
 [![Build](https://github.com/romanpauk/dingo/actions/workflows/build.yaml/badge.svg?branch=master)](https://github.com/romanpauk/dingo/actions?query=branch%3Amaster++)
 
@@ -125,6 +125,18 @@ If you are working from a checkout, the top-level CMake project also supports
 
 Development builds can enable tests, benchmarks, and runnable examples through
 `DINGO_DEVELOPMENT_MODE=ON`. The library itself remains header-only.
+
+Container images:
+
+- `dingo-toolchains:ubuntu-25.04-gcc-15` for GCC 15 builds on Ubuntu 25.04
+- `dingo-toolchains:ubuntu-25.04-clang-20` for Clang 20 builds on Ubuntu 25.04
+- `dingo-toolchains:ubuntu-25.04-msvc-wine` for MSVC-style builds through
+  `msvc-wine`
+
+For now, these are local or private CI images.
+
+See the container setup in
+[docker/ubuntu25-toolchains/README.md](docker/ubuntu25-toolchains/README.md).
 
 If you are comparing DI libraries, also take a look at:
 

@@ -11,6 +11,10 @@ inputs:
   ccache_key:
     description: Cache key for ccache-action
     required: true
+  container_image:
+    description: Optional local container image to run the Linux build inside
+    required: false
+    default: ''
   compiler_cc:
     description: C compiler binary
     required: true
@@ -40,11 +44,13 @@ runs:
         key: ${{ inputs.ccache_key }}
         evict-old-files: job
     - name: Install Compiler
+      if: ${{ inputs.container_image == '' }}
       shell: bash
       run: |
         command -v ${{ inputs.compiler_cc }} >/dev/null || sudo apt-get install -y ${{ inputs.compiler_cc }}
         command -v ${{ inputs.compiler_cxx }} >/dev/null || sudo apt-get install -y ${{ inputs.compiler_cxx }}
     - name: Configure
+      if: ${{ inputs.container_image == '' }}
       shell: bash
       env:
         CC: ${{ inputs.compiler_cc }}
@@ -52,20 +58,68 @@ runs:
       run: |
         cmake -S "${{ inputs.source_dir }}" -B "${{ inputs.build_dir }}" -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DDINGO_SANITIZER=${{ inputs.sanitizer }} -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
     - name: Build
+      if: ${{ inputs.container_image == '' }}
       shell: bash
       run: |
         cmake --build "${{ inputs.build_dir }}" -j "$BUILD_JOBS"
     - name: Test
+      if: ${{ inputs.container_image == '' }}
       shell: bash
       env:
         ASAN_OPTIONS: use_sigaltstack=false
       run: |
         cd "${{ inputs.build_dir }}" && ctest --verbose --output-on-failure
     - name: FetchContent
+      if: ${{ inputs.container_image == '' }}
       shell: bash
       run: |
         cmake -S "${{ inputs.source_dir }}/test/fetchcontent" -B "${{ inputs.fetchcontent_dir }}" -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
         cmake --build "${{ inputs.fetchcontent_dir }}" -j "$BUILD_JOBS"
+    - name: Configure, build, test, and FetchContent in container
+      if: ${{ inputs.container_image != '' }}
+      shell: bash
+      env:
+        CONTAINER_IMAGE: ${{ inputs.container_image }}
+      run: |
+        set -euo pipefail
+
+        mkdir -p "$HOME/.ccache"
+
+        docker run --rm \
+          --user "$(id -u):$(id -g)" \
+          -e BUILD_JOBS="${BUILD_JOBS}" \
+          -e CCACHE_DIR=/ccache \
+          -e CC="${{ inputs.compiler_cc }}" \
+          -e CXX="${{ inputs.compiler_cxx }}" \
+          -v "$GITHUB_WORKSPACE:/workspace" \
+          -v "$HOME/.ccache:/ccache" \
+          -w /workspace \
+          "${CONTAINER_IMAGE}" \
+          bash -lc '
+            set -euo pipefail
+
+            cmake -S "/workspace/${{ inputs.source_dir }}" \
+              -B "/workspace/${{ inputs.build_dir }}" \
+              -DDINGO_DEVELOPMENT_MODE=ON \
+              -DDINGO_BENCHMARK_ENABLED=OFF \
+              -DDINGO_CCACHE=ON \
+              -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON \
+              -DDINGO_SANITIZER=${{ inputs.sanitizer }} \
+              -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} \
+              -DCMAKE_CXX_STANDARD=${{ inputs.std }}
+
+            cmake --build "/workspace/${{ inputs.build_dir }}" -j "$BUILD_JOBS"
+
+            cd "/workspace/${{ inputs.build_dir }}"
+            ASAN_OPTIONS=use_sigaltstack=false ctest --verbose --output-on-failure
+
+            cmake -S "/workspace/${{ inputs.source_dir }}/test/fetchcontent" \
+              -B "/workspace/${{ inputs.fetchcontent_dir }}" \
+              -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} \
+              -DCMAKE_CXX_STANDARD=${{ inputs.std }}
+
+            cmake --build "/workspace/${{ inputs.fetchcontent_dir }}" -j "$BUILD_JOBS"
+          '
     - name: Upload Failure Artifacts
       if: ${{ failure() }}
       uses: actions/upload-artifact@v4.6.2
