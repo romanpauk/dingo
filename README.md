@@ -1,6 +1,6 @@
 # Dingo
 
-Header-only dependency injection container for C++.
+Dependency Injection Container for C++, with DI, next-gen and an 'o' in a name.
 
 Dingo builds object graphs from ordinary C++ types. Scopes and storage policies
 control ownership explicitly, and user types stay free of framework macros or
@@ -128,15 +128,16 @@ Development builds can enable tests, benchmarks, and runnable examples through
 
 Container images:
 
-- `dingo-toolchains:ubuntu-25.04-gcc-15` for GCC 15 builds on Ubuntu 25.04
-- `dingo-toolchains:ubuntu-25.04-clang-20` for Clang 20 builds on Ubuntu 25.04
-- `dingo-toolchains:ubuntu-25.04-msvc-wine` for MSVC-style builds through
-  `msvc-wine`
+- Linux image examples:
+  - `dingo-toolchains:ubuntu-25.04-gcc-15` for GCC 15 builds on Ubuntu 25.04
+  - `dingo-toolchains:ubuntu-25.04-clang-20` for Clang 20 builds on Ubuntu 25.04
+- MSVC local workflow:
+  - build a local image from `docker/ubuntu25-toolchains/Containerfile` with
+    `TOOLCHAIN=msvc-wine` when you need an MSVC-style environment
 
-For now, these are local or private CI images.
-
-See the container setup in
-[docker/ubuntu25-toolchains/README.md](docker/ubuntu25-toolchains/README.md).
+See [docker/ubuntu25-toolchains/README.md](docker/ubuntu25-toolchains/README.md)
+for the Linux CI-backed tags, the local MSVC build/run/test flow, and the
+broader `Containerfile` toolchain support.
 
 If you are comparing DI libraries, also take a look at:
 
