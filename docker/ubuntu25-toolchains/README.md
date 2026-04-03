@@ -1,50 +1,38 @@
-# Ubuntu 25.04 toolchains images
+# Ubuntu 25.04 toolchain images
 
 Container images for local development and CI.
 
-## Images
+`Containerfile` is parameterized: each build installs exactly one selected
+toolchain plus common development tools. That keeps each image smaller while
+still using a single build recipe.
 
-The Linux image built from `Containerfile` is:
+Supported `TOOLCHAIN` values:
 
-- `dingo-toolchains:ubuntu-25.04`
-
-The MSVC image built from `Containerfile.msvc-wine` is:
-
-- `dingo-toolchains:ubuntu-25.04-msvc-wine`
-
-For now, both images are for local or private CI use.
-
-## Linux image
-
-## Included compilers
-
-The main image installs the GCC versions Canonical documents for Ubuntu 25.04:
-
-- `g++-11`
-- `g++-12`
-- `g++-13`
-- `g++-14`
-- `g++-15`
-
-It also installs the LLVM/Clang versions Canonical documents for Ubuntu 25.04:
-
+- `gcc-11`
+- `gcc-12`
+- `gcc-13`
+- `gcc-14`
+- `gcc-15`
 - `clang-14`
 - `clang-15`
 - `clang-17`
 - `clang-18`
 - `clang-19`
 - `clang-20`
+- `msvc-wine`
 
-Plus common development tools:
+The built image tag is up to you. The examples below use:
+
+- `dingo-toolchains:ubuntu-25.04-gcc-14`
+- `dingo-toolchains:ubuntu-25.04-clang-19`
+- `dingo-toolchains:ubuntu-25.04-msvc-wine`
+
+Every image includes the shared build/runtime baseline:
 
 - `cmake`
 - `ninja`
 - `ccache`
-- `gdb`
-- `lldb`
-- `clang-format`
-- `clang-tidy`
-- `clangd`
+- `git`
 - `python3`
 - `mdformat`
 
@@ -53,7 +41,18 @@ Plus common development tools:
 ```bash
 podman build \
   -f docker/ubuntu25-toolchains/Containerfile \
-  -t dingo-toolchains:ubuntu-25.04 \
+  --build-arg TOOLCHAIN=gcc-14 \
+  -t dingo-toolchains:ubuntu-25.04-gcc-14 \
+  docker/ubuntu25-toolchains
+```
+
+Clang image:
+
+```bash
+podman build \
+  -f docker/ubuntu25-toolchains/Containerfile \
+  --build-arg TOOLCHAIN=clang-19 \
+  -t dingo-toolchains:ubuntu-25.04-clang-19 \
   docker/ubuntu25-toolchains
 ```
 
@@ -61,8 +60,8 @@ MSVC image:
 
 ```bash
 podman build \
-  -f docker/ubuntu25-toolchains/Containerfile.msvc-wine \
-  --build-arg ENABLE_MSVC_WINE=1 \
+  -f docker/ubuntu25-toolchains/Containerfile \
+  --build-arg TOOLCHAIN=msvc-wine \
   -t dingo-toolchains:ubuntu-25.04-msvc-wine \
   docker/ubuntu25-toolchains
 ```
@@ -73,7 +72,16 @@ podman build \
 podman run --rm -it \
   -v "$PWD:/workspace:Z" \
   -w /workspace \
-  dingo-toolchains:ubuntu-25.04
+  dingo-toolchains:ubuntu-25.04-gcc-14
+```
+
+Clang image:
+
+```bash
+podman run --rm -it \
+  -v "$PWD:/workspace:Z" \
+  -w /workspace \
+  dingo-toolchains:ubuntu-25.04-clang-19
 ```
 
 MSVC image:
@@ -88,7 +96,13 @@ podman run --rm -it \
 ## Inspect
 
 ```bash
-podman run --rm dingo-toolchains:ubuntu-25.04 dingo-print-toolchains
+podman run --rm dingo-toolchains:ubuntu-25.04-gcc-14 dingo-print-toolchains
+```
+
+Clang image:
+
+```bash
+podman run --rm dingo-toolchains:ubuntu-25.04-clang-19 dingo-print-toolchains
 ```
 
 MSVC image:
@@ -126,7 +140,7 @@ One-shot form:
 podman run --rm \
   -v "$PWD:/workspace:Z" \
   -w /workspace \
-  dingo-toolchains:ubuntu-25.04 \
+  dingo-toolchains:ubuntu-25.04-gcc-14 \
   bash -lc 'cmake -S . -B build -G Ninja \
     -DCMAKE_C_COMPILER=gcc-14 \
     -DCMAKE_CXX_COMPILER=g++-14 \
@@ -165,14 +179,14 @@ podman run --rm \
 
 ## GitHub Actions
 
-If the Linux image is already available on the runner:
+If the selected image is already available on the runner:
 
 ```yaml
 jobs:
   linux:
     runs-on: ubuntu-24.04
     container:
-      image: dingo-toolchains:ubuntu-25.04
+      image: dingo-toolchains:ubuntu-25.04-gcc-14
     steps:
       - uses: actions/checkout@v6
       - run: cmake -S . -B build -G Ninja \

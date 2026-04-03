@@ -128,7 +128,8 @@ Development builds can enable tests, benchmarks, and runnable examples through
 
 Container images:
 
-- `dingo-toolchains:ubuntu-25.04` for GCC/Clang builds on Ubuntu 25.04
+- `dingo-toolchains:ubuntu-25.04-gcc-14` for GCC 14 builds on Ubuntu 25.04
+- `dingo-toolchains:ubuntu-25.04-clang-19` for Clang 19 builds on Ubuntu 25.04
 - `dingo-toolchains:ubuntu-25.04-msvc-wine` for MSVC-style builds through
   `msvc-wine`
 

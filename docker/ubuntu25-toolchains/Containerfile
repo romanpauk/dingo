@@ -1,75 +1,36 @@
 FROM ubuntu:25.04
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG TOOLCHAIN=gcc-14
+ARG MSVC_WINE_DEST=/opt/msvc
+ARG MSVC_WINE_REPO_REF=a99ef92104b066f3ccc5937a65608961459f3a48
+
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV WINEDEBUG=-all
+ENV WINEPREFIX=/opt/msvc-wine-prefix
+ENV PATH=/opt/msvc/bin/x64:${PATH}
+ENV DINGO_TOOLCHAIN=${TOOLCHAIN}
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+COPY install-msvc-wine.sh /usr/local/bin/install-msvc-wine
+COPY print-toolchains.sh /usr/local/bin/dingo-print-toolchains
+
+RUN chmod +x /usr/local/bin/install-msvc-wine /usr/local/bin/dingo-print-toolchains && \
+    set -eux && \
+    common_packages=( \
         bash-completion \
-        build-essential \
         ca-certificates \
         ccache \
-        clang \
-        clang-14 \
-        clang-15 \
-        clang-17 \
-        clang-18 \
-        clang-19 \
-        clang-20 \
-        clang-format \
-        clang-format-14 \
-        clang-format-15 \
-        clang-format-17 \
-        clang-format-18 \
-        clang-format-19 \
-        clang-format-20 \
-        clang-tidy \
-        clang-tidy-14 \
-        clang-tidy-15 \
-        clang-tidy-17 \
-        clang-tidy-18 \
-        clang-tidy-19 \
-        clang-tidy-20 \
-        clangd \
-        clangd-14 \
-        clangd-15 \
-        clangd-17 \
-        clangd-18 \
-        clangd-19 \
-        clangd-20 \
         cmake \
-        cpp-11 \
-        cpp-12 \
-        cpp-13 \
-        cpp-14 \
-        cpp-15 \
         curl \
         file \
-        g++ \
-        g++-11 \
-        g++-12 \
-        g++-13 \
-        g++-14 \
-        g++-15 \
-        gcc \
-        gcc-11 \
-        gcc-12 \
-        gcc-13 \
-        gcc-14 \
-        gcc-15 \
-        gdb \
         git \
         git-lfs \
         jq \
         less \
-        lld \
-        lld-14 \
-        lld-15 \
-        lld-17 \
-        lld-18 \
-        lld-19 \
-        lld-20 \
-        lldb \
         locales \
         make \
         ninja-build \
@@ -82,21 +43,71 @@ RUN apt-get update && \
         tzdata \
         unzip \
         xz-utils \
-        zip && \
-    rm -rf /var/lib/apt/lists/*
+        zip \
+    ) && \
+    case "${TOOLCHAIN}" in \
+        gcc-*) \
+            toolchain_version="${TOOLCHAIN#gcc-}" && \
+            apt_packages=( \
+                "${common_packages[@]}" \
+                gdb \
+                "cpp-${toolchain_version}" \
+                "gcc-${toolchain_version}" \
+                "g++-${toolchain_version}" \
+            ) \
+            ;; \
+        clang-*) \
+            toolchain_version="${TOOLCHAIN#clang-}" && \
+            apt_packages=( \
+                "${common_packages[@]}" \
+                gdb \
+                "clang-${toolchain_version}" \
+                "clang-format-${toolchain_version}" \
+                "clang-tidy-${toolchain_version}" \
+                "clangd-${toolchain_version}" \
+                "lld-${toolchain_version}" \
+                "lldb-${toolchain_version}" \
+            ) \
+            ;; \
+        msvc|msvc-wine) \
+            dpkg --add-architecture i386 && \
+            apt_packages=( \
+                "${common_packages[@]}" \
+                msitools \
+                winbind \
+                wine64 \
+            ) \
+            ;; \
+        *) \
+            echo "Unsupported TOOLCHAIN=${TOOLCHAIN}" >&2 && \
+            echo "Expected gcc-<version>, clang-<version>, or msvc-wine." >&2 && \
+            exit 1 \
+            ;; \
+    esac && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends "${apt_packages[@]}" && \
+    rm -rf /var/lib/apt/lists/* && \
+    case "${TOOLCHAIN}" in \
+        gcc-*|clang-*) \
+            : \
+            ;; \
+        msvc|msvc-wine) \
+            ln -sf /usr/lib/wine/wine64 /usr/local/bin/wine64 && \
+            ln -sf /usr/lib/wine/wine64 /usr/local/bin/wine && \
+            /usr/lib/wine/wine64 wineboot --init && \
+            while pgrep wineserver > /dev/null; do sleep 1; done && \
+            /usr/local/bin/install-msvc-wine \
+                --dest "${MSVC_WINE_DEST}" \
+                --repo-ref "${MSVC_WINE_REPO_REF}" \
+            ;; \
+    esac
 
 RUN locale-gen en_US.UTF-8 && \
     update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 RUN python3 -m pip install --break-system-packages --no-cache-dir mdformat
 
-ENV LANG=en_US.UTF-8
-ENV LC_ALL=en_US.UTF-8
-
 RUN mkdir -p /usr/local/share/dingo-toolchains
-
-COPY print-toolchains.sh /usr/local/bin/dingo-print-toolchains
-RUN chmod +x /usr/local/bin/dingo-print-toolchains
 
 WORKDIR /workspace
 

@@ -5,6 +5,12 @@ permissions:
 
 on:
   workflow_dispatch:
+    inputs:
+      toolchain:
+        description: Toolchain selector for docker/ubuntu25-toolchains/Containerfile
+        required: false
+        default: gcc-14
+        type: string
   push:
     branches:
       - master
@@ -18,9 +24,11 @@ on:
 
 jobs:
   build:
-    name: build ubuntu-25.04 toolchains image
+    name: build ${{ inputs.toolchain || 'gcc-14' }} toolchains image
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      TOOLCHAIN: ${{ inputs.toolchain || 'gcc-14' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
@@ -33,6 +41,8 @@ jobs:
         with:
           context: docker/ubuntu25-toolchains
           file: docker/ubuntu25-toolchains/Containerfile
+          build-args: TOOLCHAIN=${{ env.TOOLCHAIN }}
           push: false
+          tags: dingo-toolchains:ubuntu-25.04-${{ env.TOOLCHAIN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
