@@ -12,6 +12,8 @@
 
 #include <gtest/gtest.h>
 
+#include <functional>
+
 #include "support/containers.h"
 #include "support/test.h"
 
@@ -97,6 +99,104 @@ TYPED_TEST(invoke_test, invoke_value_wrappers) {
     }), 7);
 }
 
+TYPED_TEST(invoke_test, invoke_mutable_lambda) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(3);
+
+    auto fn = [factor = 2](int arg) mutable {
+        factor += arg;
+        return factor;
+    };
+
+    ASSERT_EQ(container.invoke(fn), 5);
+    ASSERT_EQ(container.invoke(fn), 8);
+}
+
+#if defined(__cpp_lib_move_only_function)
+TYPED_TEST(invoke_test, invoke_move_only_function) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(4);
+
+    std::move_only_function<int(int)> fn = [](int arg) { return arg * 3; };
+    ASSERT_EQ(container.invoke(std::move(fn)), 12);
+}
+#endif
+
+#if defined(__cpp_lib_copyable_function)
+TYPED_TEST(invoke_test, invoke_copyable_function) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(5);
+
+    std::copyable_function<int(int)> fn = [](int arg) { return arg * 4; };
+    ASSERT_EQ(container.invoke(fn), 20);
+}
+#endif
+
+#if DINGO_CXX_STANDARD >= 20
+TYPED_TEST(invoke_test, invoke_explicit_signature_generic_lambda) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(6);
+
+    auto fn = []<typename T>(T arg) { return arg * 2; };
+
+    ASSERT_EQ((container.template invoke<int(int)>(fn)), 12);
+}
+
+#endif
+
+TYPED_TEST(invoke_test, invoke_explicit_signature_overloaded_functor) {
+    using container_type = TypeParam;
+
+    struct overloaded {
+        int operator()(int arg) const { return arg + 10; }
+        float operator()(float arg) const { return arg + 100.0f; }
+    };
+
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(7);
+    container.template register_type<scope<external>, storage<float>>(1.5f);
+
+    ASSERT_EQ((container.template invoke<int(int)>(overloaded{})), 17);
+    ASSERT_FLOAT_EQ((container.template invoke<float(float)>(overloaded{})),
+                    101.5f);
+}
+
+TYPED_TEST(invoke_test, invoke_explicit_signature_missing_dependency_reports_signature) {
+    using container_type = TypeParam;
+
+    struct Missing {
+        explicit Missing(int) {}
+    };
+
+    struct overloaded_missing {
+        void operator()(Missing&) const {}
+        void operator()(int) const {}
+    };
+
+    container_type container;
+
+    try {
+        container.template invoke<void(Missing&)>(overloaded_missing{});
+        FAIL() << "expected type_not_found_exception";
+    } catch (const type_not_found_exception& e) {
+        std::string expected = "type not found: ";
+        expected += type_name<Missing&>();
+        expected += " (required by ";
+        expected += type_name<overloaded_missing>();
+        expected += ")";
+
+        ASSERT_STREQ(e.what(), expected.c_str());
+    }
+}
+
 TYPED_TEST(invoke_test, invoke_exception_required_by_type) {
     using container_type = TypeParam;
 
@@ -155,20 +255,20 @@ TYPED_TEST(invoke_test, invoke_functor_exception_required_by_type) {
         explicit Missing(int) {}
     };
 
-    struct callable {
+    struct functor {
         void operator()(Missing&) const {}
     };
 
     container_type container;
 
     try {
-        container.invoke(callable{});
+        container.invoke(functor{});
         FAIL() << "expected type_not_found_exception";
     } catch (const type_not_found_exception& e) {
         std::string expected = "type not found: ";
         expected += type_name<Missing&>();
         expected += " (required by ";
-        expected += type_name<callable>();
+        expected += type_name<functor>();
         expected += ")";
 
         ASSERT_STREQ(e.what(), expected.c_str());

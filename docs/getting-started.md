@@ -117,7 +117,10 @@ Not every type needs to be registered.
 
 - `construct<T>()` creates an unmanaged object and injects its dependencies from
   the container.
-- `invoke(fn)` calls a callable and resolves its arguments from the container.
+- `invoke(fn)` calls an unambiguous callable and resolves its arguments from the
+  container.
+- `invoke<Signature>(fn)` lets you pick a specific overload when deduction is
+  ambiguous.
 
 These two APIs are useful at application boundaries where you want dependency
 injection without turning every transient object into container state.
@@ -163,10 +166,17 @@ struct B {
     A& a;
     static B factory(A& a) { return B{a}; }
 };
+
+struct overloaded_factory {
+    B operator()(A& a) const { return B{a}; }
+    int operator()(int value) const { return value * 2; }
+};
 // Construct instance of B, injecting shared instance of A
 /*B b1 =*/container.invoke([&](A& a) { return B{a}; });
 /*B b2 =*/container.invoke(std::function<B(A&)>([](auto& a) { return B{a}; }));
 /*B b3 =*/container.invoke(B::factory);
+// Use an explicit signature to disambiguate overloaded call operators.
+/*B b4 =*/container.invoke<B(A&)>(overloaded_factory{});
 ```
 
 </details>

@@ -274,12 +274,16 @@ class container : public allocator_base<Allocator> {
         return results;
     }
 
-    template< typename Callable > auto invoke(Callable&& callable) {
+    template< typename Signature = void, typename Callable >
+    auto invoke(Callable&& callable) {
+        using callable_type = std::remove_cv_t<std::remove_reference_t<Callable>>;
+        using dispatch_signature =
+            detail::callable_dispatch_signature_t<Signature, callable_type>;
+
         resolving_context context;
-        auto type_guard =
-            context.template track_type<std::remove_reference_t<Callable>>();
-        return ::dingo::invoke< std::remove_reference_t<Callable> >::construct(
-            context, *this, std::forward<Callable>(callable));
+        auto type_guard = context.template track_type<callable_type>();
+        return detail::callable_invoke<dispatch_signature>::construct(
+            std::forward<Callable>(callable), context, *this);
     }
 
   private:
