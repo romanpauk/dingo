@@ -24,16 +24,25 @@ runs:
       uses: TheMrMilchmann/setup-msvc-dev@v4.0.0
       with:
         arch: x64
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v8.0.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          ${{ inputs.source_dir }}/pyproject.toml
+          ${{ inputs.source_dir }}/uv.lock
+    - name: Run Python tool tests
+      shell: bash
+      run: |
+        cd "${{ inputs.source_dir }}"
+        uv run --locked python tools/release_flow_test.py
     - name: Configure
       shell: bash
       run: |
         cmake -S "${{ inputs.source_dir }}" -B "${{ inputs.build_dir }}" -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_TESTING_ENABLED=OFF -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF
     - name: Check Formatting
       shell: bash
-      env:
-        PIP_BREAK_SYSTEM_PACKAGES: 1
       run: |
-        python -m pip install mdformat
         cmake --build "${{ inputs.build_dir }}" -t md-verify
     - name: Upload Failure Artifacts
       if: ${{ failure() }}

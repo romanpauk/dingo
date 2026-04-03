@@ -51,4 +51,4 @@ print_group "MSVC toolchains" \
     cl
 
 print_group "Build tools" \
-    cmake ninja ccache gdb lldb clang-format clang-tidy clangd python3 mdformat
+    cmake ninja ccache gdb lldb clang-format clang-tidy clangd python3 uv

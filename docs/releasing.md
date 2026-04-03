@@ -30,6 +30,8 @@ The workflow:
 - creates `releases/x.y` for a new release line if needed
 - updates `CMakeLists.txt` to the release version
 - creates the release commit if the version changed
+- runs the repo Python helper via `uv` using the locked `pyproject.toml` /
+  `uv.lock` environment
 - verifies Markdown formatting and the release build before publishing
 - pushes the release branch and tag
 - creates the GitHub Release

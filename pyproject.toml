@@ -1,0 +1,12 @@
+[project]
+name = "dingo-dev-tools"
+version = "0.0.0"
+requires-python = ">=3.11"
+
+[dependency-groups]
+dev = [
+    "mdformat",
+]
+
+[tool.uv]
+package = false
