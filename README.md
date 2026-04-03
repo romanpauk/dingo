@@ -126,6 +126,21 @@ If you are working from a checkout, the top-level CMake project also supports
 Development builds can enable tests, benchmarks, and runnable examples through
 `DINGO_DEVELOPMENT_MODE=ON`. The library itself remains header-only.
 
+Python helper tooling for development is declared in `pyproject.toml` and locked
+in `uv.lock`. `uv` is the required entry point for repo-owned Python tooling.
+
+For the Markdown CMake targets (`md-update` / `md-verify`), you do not need to
+run `uv sync` first: CMake invokes `uv run --locked ...` directly.
+
+If you prefer, you can still prepare the environment ahead of time:
+
+```bash
+uv sync
+cmake --build build -t md-verify
+```
+
+CI uses the same locked `uv` environment.
+
 Container images:
 
 - Linux image examples:

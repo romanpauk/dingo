@@ -5,27 +5,29 @@ list(APPEND MARKDOWN_FILES ${DOC_MARKDOWN_FILES})
 list(APPEND MARKDOWN_FILES ${CONTAINER_MARKDOWN_FILES})
 list(SORT MARKDOWN_FILES)
 
-# TODO: need to figure out how to force cmake to find the same python version
-# as is in github actions path.
+find_program(UV_EXECUTABLE "uv")
 
-#find_package (Python COMPONENTS Interpreter)
-#if (NOT Python_Interpreter_FOUND)
-#    message(FATAL_ERROR "python is required to process .md documentation")
-#endif()
-
-find_program(PYTHON "python3")
-if (NOT PYTHON)
-    message(FATAL_ERROR "python3 is required to process .md documentation")
+if (NOT UV_EXECUTABLE)
+    message(FATAL_ERROR "uv is required to process .md documentation")
 endif()
+
+set(MD_TOOL_COMMAND
+    ${UV_EXECUTABLE}
+    run
+    --locked
+    --project
+    ${PROJECT_SOURCE_DIR}
+    ${PROJECT_SOURCE_DIR}/tools/md.py
+)
 
 add_custom_target(md-update
     COMMENT "Formatting .md files"
-    COMMAND ${PYTHON} ${PROJECT_SOURCE_DIR}/tools/md.py --mode=update ${MARKDOWN_FILES}
+    COMMAND ${MD_TOOL_COMMAND} --mode=update ${MARKDOWN_FILES}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
 )
 
 add_custom_target(md-verify
     COMMENT "Verifying .md files are up-to-date"
-    COMMAND ${PYTHON} ${PROJECT_SOURCE_DIR}/tools/md.py --mode=verify ${MARKDOWN_FILES}
+    COMMAND ${MD_TOOL_COMMAND} --mode=verify ${MARKDOWN_FILES}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
 )

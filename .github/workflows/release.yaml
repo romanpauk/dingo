@@ -47,6 +47,14 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.source_ref }}
 
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v8.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
       - name: Fetch remote refs and tags
         run: |
           git fetch --force --prune --tags origin '+refs/heads/*:refs/remotes/origin/*'
@@ -70,7 +78,7 @@ jobs:
               args+=(--release-line "$RELEASE_LINE_INPUT")
           fi
 
-          python tools/release_flow.py plan "${args[@]}" >> "$GITHUB_OUTPUT"
+          uv run --locked python tools/release_flow.py plan "${args[@]}" >> "$GITHUB_OUTPUT"
 
       - name: Materialize release branch and version commit
         id: release_commit
@@ -90,7 +98,7 @@ jobs:
               git switch -C "$RELEASE_BRANCH" "refs/remotes/origin/$RELEASE_BRANCH"
           fi
 
-          python tools/release_flow.py set-version --file CMakeLists.txt --version "$VERSION"
+          uv run --locked python tools/release_flow.py set-version --file CMakeLists.txt --version "$VERSION"
 
           if git diff --quiet -- CMakeLists.txt; then
               echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"

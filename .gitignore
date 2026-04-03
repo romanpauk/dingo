@@ -2,3 +2,5 @@ build
 build*/
 .vscode
 .cache
+.venv
+__pycache__

@@ -22,7 +22,11 @@ Every image includes the shared build/runtime baseline:
 - `ccache`
 - `git`
 - `python3`
-- `mdformat`
+- `uv`
+
+Python development tooling for this repository is resolved from the checked-in
+`pyproject.toml` / `uv.lock`, so Markdown verification and other helper scripts
+should be run through `uv run ...` instead of a globally installed `mdformat`.
 
 ## GCC image
 
