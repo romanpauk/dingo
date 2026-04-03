@@ -80,7 +80,7 @@ jobs:
           std: ${{ matrix.compiler.STD }}
 
   linux-toolchain-image:
-    name: ubuntu-24.04 image / ${{ matrix.compiler.TOOLCHAIN }} / std-${{ matrix.compiler.STD }} / ${{ matrix.config.label }}
+    name: ubuntu-25.04 / ${{ matrix.compiler.TOOLCHAIN }} / std-${{ matrix.compiler.STD }} / ${{ matrix.config.label }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -138,7 +138,7 @@ jobs:
         uses: ./.github/actions/linux-build
         with:
           build_type: ${{ matrix.config.id }}
-          ccache_key: ubuntu-24.04-image-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
+          ccache_key: ubuntu-25.04-image-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
           container_image: dingo-toolchains:ubuntu-25.04-${{ matrix.compiler.TOOLCHAIN }}
           compiler_cc: ${{ matrix.compiler.CC }}
           compiler_cxx: ${{ matrix.compiler.CXX }}
