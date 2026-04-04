@@ -1,6 +1,6 @@
 # Overview
 
-Dingo is easiest to understand if you separate it into four concerns:
+Dingo is easiest to understand when separated into four concerns:
 
 - registration deduction
 - lookup shape normalization
@@ -91,7 +91,7 @@ pipeline.
 
 ## Reading The Code
 
-If you want to follow the core path in source order, start here:
+For the core path in source order, start here:
 
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)

@@ -4,14 +4,14 @@ This page covers the parts of Dingo that shape runtime behavior: registration,
 lifetimes, stored forms, arrays, variants, factories, and interface-oriented
 resolution.
 
-If you want the internal model behind these features, start with the
+For the internal model behind these features, start with the
 [architecture docs](architecture/README.md).
 
 ## Registration Model
 
 Dingo does not require managed types to inherit from a framework base class or
-to expose special metadata. You describe how a type should be handled at the
-registration site.
+to expose special metadata. Registration describes how a type should be handled
+at the registration site.
 
 Common registration policies:
 
@@ -72,7 +72,7 @@ The stored type can be a value, raw pointer, `std::unique_ptr`,
 respects the usual semantics of that form when creating or passing instances
 around.
 
-What you can inject depends on both:
+The injectable result depends on both:
 
 - the chosen scope
 
@@ -216,7 +216,7 @@ Dingo supports raw C++ arrays, `std::unique_ptr<T[]>`, and
 
 In practice:
 
-- register the exact array shape you want to store
+- register the exact array shape to store
 - resolve either the exact shape or the supported borrowed/owning array view for
   that scope
 - keep shape in mind, because nested arrays do not flatten to `T*`
@@ -382,7 +382,8 @@ See:
 ## Factories
 
 By default, Dingo tries to select a usable constructor automatically. That keeps
-the common case concise, but you can override construction when needed.
+the common case concise, but explicit construction overrides are available when
+needed.
 
 Factory styles in the repo:
 
@@ -395,8 +396,8 @@ Factory styles in the repo:
 
 The default registration path uses `constructor_detection<T>` from
 [include/dingo/factory/constructor_detection.h](../include/dingo/factory/constructor_detection.h).
-When you register a type without an explicit `factory<...>`, Dingo tries to pick
-a constructor automatically.
+When a type is registered without an explicit `factory<...>`, Dingo tries to
+pick a constructor automatically.
 
 In practice, the default path is:
 
@@ -411,9 +412,9 @@ In practice, the default path is:
 Constructor deduction is intentionally useful, not magical. The main limits are:
 
 - detection is based on compile-time constructibility checks, not on every
-  overload-resolution nuance you might expect from handwritten code
+  overload-resolution nuance that handwritten code might express
 - the detector prefers the highest-arity constructible shape, which is not
-  always the overload you want to commit to in public code
+  always the overload to commit to in public code
 - constructor templates and other generic catch-all constructor shapes are
   rejected from auto-detection; those types must use `factory<constructor<...>>`
 - ambiguous or unsupported cases should be resolved explicitly with
@@ -438,7 +439,7 @@ Reach for an explicit factory when:
 - the type exposes a templated or forwarding constructor
 - the type should be built through a named factory function
 - construction depends on extra callable state
-- you want to select a specific alternative for variant construction or storage
+- selecting a specific alternative for variant construction or storage matters
 
 <!-- { include("../examples/factory/factory_constructor_deduction.cpp", scope="////", summary="Automatically deduced constructor factory") -->
 
