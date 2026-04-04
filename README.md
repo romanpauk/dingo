@@ -89,7 +89,7 @@ target_link_libraries(dingo_fetchcontent_test PRIVATE dingo::dingo)
 
 <!-- } -->
 
-If you are working from a checkout, the top-level CMake project also supports
+When working from a checkout, the top-level CMake project also supports
 `add_subdirectory(...)`.
 
 ## Documentation
@@ -129,10 +129,10 @@ Development builds can enable tests, benchmarks, and runnable examples through
 Python helper tooling for development is declared in `pyproject.toml` and locked
 in `uv.lock`. `uv` is the required entry point for repo-owned Python tooling.
 
-For the Markdown CMake targets (`md-update` / `md-verify`), you do not need to
-run `uv sync` first: CMake invokes `uv run --locked ...` directly.
+For the Markdown CMake targets (`md-update` / `md-verify`), `uv sync` is not
+required first: CMake invokes `uv run --locked ...` directly.
 
-If you prefer, you can still prepare the environment ahead of time:
+Preparing the environment ahead of time is still optional:
 
 ```bash
 uv sync
@@ -148,13 +148,13 @@ Container images:
   - `dingo-toolchains:ubuntu-25.04-clang-20` for Clang 20 builds on Ubuntu 25.04
 - MSVC local workflow:
   - build a local image from `docker/ubuntu25-toolchains/Containerfile` with
-    `TOOLCHAIN=msvc-wine` when you need an MSVC-style environment
+    `TOOLCHAIN=msvc-wine` for an MSVC-style environment
 
 See [docker/ubuntu25-toolchains/README.md](docker/ubuntu25-toolchains/README.md)
 for the Linux CI-backed tags, the local MSVC build/run/test flow, and the
 broader `Containerfile` toolchain support.
 
-If you are comparing DI libraries, also take a look at:
+For DI library comparisons, also take a look at:
 
 - [qlibs/di](https://github.com/qlibs/di)
 - [boost-ex/di](https://github.com/boost-ext/di)

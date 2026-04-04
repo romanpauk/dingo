@@ -2,7 +2,7 @@
 
 The repository ships runnable examples under [`examples/`](../examples). This
 index is meant for quick entry points: find the smallest program that matches
-the feature you care about and start there.
+the relevant feature and start there.
 
 ## Start Here
 

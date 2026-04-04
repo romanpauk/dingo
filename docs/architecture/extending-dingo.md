@@ -1,7 +1,7 @@
 # Extending Dingo
 
 Dingo's extensibility is mostly trait-driven. The key is to specialize the trait
-that matches the problem you are actually solving.
+that matches the problem actually being solved.
 
 ## The Three Main Extension Seams
 
@@ -9,7 +9,7 @@ that matches the problem you are actually solving.
 
 Specialize `type_traits` in
 [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h) when
-you are introducing a new wrapper or handle type.
+introducing a new wrapper or handle type.
 
 `type_traits` defines wrapper semantics:
 
@@ -21,16 +21,15 @@ you are introducing a new wrapper or handle type.
 - whether Dingo may resolve references through it
 - how wrapper-shaped resolution should behave for that type
 
-If Dingo needs to understand the shape of your wrapper, start here.
+If Dingo needs to understand a wrapper's shape, start here.
 
 ### 2. `storage_traits`
 
 Specialize `storage_traits` in
 [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
-when you need to say which result forms a given storage/scope combination can
-expose.
+when defining which result forms a given storage/scope combination can expose.
 
-This is where you define whether a registration can service requests such as:
+This trait defines whether a registration can service requests such as:
 
 - value
 - lvalue reference
@@ -52,13 +51,13 @@ This is the last-mile "build target wrapper from source wrapper" hook.
 
 ## Quick Decision Guide
 
-- If Dingo does not understand your wrapper's shape, start with `type_traits`.
-- If your wrapper should resolve differently in `shared` and `unique` storage,
-  use `storage_traits`.
+- If Dingo does not understand a wrapper's shape, start with `type_traits`.
+- If a wrapper should resolve differently in `shared` and `unique` storage, use
+  `storage_traits`.
 - If two wrappers need an explicit conversion implementation, use
   `type_conversion_traits`.
-- If you want interface storage rebinding to be possible, make the wrapper
-  rebindable and compatible with interface-storage rebinding.
+- If interface storage rebinding should be possible, make the wrapper rebindable
+  and compatible with interface-storage rebinding.
 
 ## Worked Example
 
@@ -88,7 +87,7 @@ The container uses it to decide whether a storage handle can be rebound from a
 concrete leaf type to an interface leaf type. That is the mechanism behind the
 single-interface storage rewrite in registration.
 
-In practice this means your wrapper must be rebindable in a way that preserves
+In practice this means the wrapper must be rebindable in a way that preserves
 correct ownership and deletion semantics for interface use.
 
 ## A Useful Mental Model

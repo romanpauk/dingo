@@ -4,7 +4,7 @@ This section documents Dingo's internal model: how registrations are reduced to
 factories, how requests are matched to stored types, and where custom wrappers
 and conversions plug in.
 
-Read these pages in order if you want the full picture:
+Read these pages in order for the full picture:
 
 - [Overview](overview.md): the main data flow and the key owners.
 - [Registration And Resolution](registration-and-resolution.md): the runtime

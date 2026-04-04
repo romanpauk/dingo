@@ -120,7 +120,7 @@ See:
 
 ## Annotated Types
 
-Annotations let you register multiple implementations for the same interface and
+Annotations support multiple implementations for the same interface and
 disambiguate them with a tag type.
 
 Use annotations when type-based registration is not enough but runtime key
@@ -144,7 +144,7 @@ container internals, not to compile-time object construction.
 Static containers make sense when:
 
 - the participating types are known and stable
-- you can manage distinct container tags correctly
+- distinct container tags can be managed correctly
 - the performance tradeoff is worth the extra rigidity
 
 See:
@@ -268,5 +268,5 @@ Two runtime details are easy to miss:
 - `shared_cyclical` supports cycles through two-phase construction and should be
   treated as a constrained escape hatch rather than the default model
 
-If you are new to the project, read [Getting Started](getting-started.md) and
-[Core Concepts](core-concepts.md) first.
+For a first pass through the project, read [Getting Started](getting-started.md)
+and [Core Concepts](core-concepts.md) first.

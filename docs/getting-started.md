@@ -4,7 +4,7 @@ This guide covers the shortest path to a working container: add the library,
 register a few types, resolve them, and then use `construct()` or `invoke()` for
 unmanaged code.
 
-## Add Dingo To Your Build
+## Add Dingo To The Build
 
 For CMake projects, use `FetchContent` and link against `dingo::dingo`.
 
@@ -100,8 +100,8 @@ The scope determines instance lifetime:
 - `scope<shared_cyclical>`: allow cyclic graphs with two-phase construction
 
 Start with `unique` or `shared`. Use `external` when ownership lives elsewhere.
-Use `shared_cyclical` only when you actually need cyclic construction and can
-accept its extra constraints.
+Use `shared_cyclical` only when cyclic construction is actually needed and its
+extra constraints are acceptable.
 
 See:
 
@@ -119,11 +119,11 @@ Not every type needs to be registered.
   the container.
 - `invoke(fn)` calls an unambiguous callable and resolves its arguments from the
   container.
-- `invoke<Signature>(fn)` lets you pick a specific overload when deduction is
+- `invoke<Signature>(fn)` selects a specific overload when deduction is
   ambiguous.
 
-These two APIs are useful at application boundaries where you want dependency
-injection without turning every transient object into container state.
+These two APIs are useful at application boundaries where dependency injection
+is needed without turning every transient object into container state.
 
 <!-- { include("../examples/container/construct.cpp", scope="////", summary="Construct an unmanaged type") -->
 
@@ -189,8 +189,8 @@ See:
 
 ## What To Read Next
 
-- [Core Concepts](core-concepts.md) if you want to understand how registration
-  policies interact.
-- [Advanced Topics](advanced-topics.md) if you need indexed lookup, nesting, or
-  custom traits.
-- [Examples](examples.md) if you prefer learning from runnable programs.
+- [Core Concepts](core-concepts.md) for understanding how registration policies
+  interact.
+- [Advanced Topics](advanced-topics.md) for indexed lookup, nesting, or custom
+  traits.
+- [Examples](examples.md) for learning from runnable programs.

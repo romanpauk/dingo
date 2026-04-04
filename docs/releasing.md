@@ -43,14 +43,14 @@ The workflow does not:
 - generate changelogs
 - manage support policy
 
-## Before you run it
+## Before Running It
 
 Make sure:
 
 1. the code to release is already merged
-2. the target branch already contains the fixes you want
-3. you know whether this is a new release line or a patch release
-4. you are starting with `dry_run=true`
+2. the target branch already contains the intended fixes
+3. the release type is known: new release line or patch release
+4. the process starts with `dry_run=true`
 
 ## New release line
 
@@ -89,7 +89,7 @@ Use:
 
 Process:
 
-1. Make sure `releases/0.3` already contains the fixes you want.
+1. Make sure `releases/0.3` already contains the intended fixes.
 2. Run the `release` workflow with the inputs above.
 3. If the dry run passes, run it again with `dry_run=false`.
 
@@ -111,15 +111,15 @@ If a fix lands on `master` and should also ship in `0.3.x`:
 3. push `releases/0.3`
 4. run the release workflow for `0.3.1`
 
-The workflow makes releases. You decide what belongs on each maintained release
-branch.
+The workflow makes releases. Release contents are still chosen separately for
+each maintained release branch.
 
 ## Dry runs and reruns
 
 Use `dry_run=true` when:
 
 - creating a new release line
-- releasing from a branch you just updated
+- releasing from a recently updated branch
 - checking that the version and branch match
 - retrying after a partial failure
 

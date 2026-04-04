@@ -81,8 +81,7 @@ conversion graph.
 
 ## Typical Customization Flow
 
-If a request fails to resolve in the way you expect, inspect the layers in this
-order:
+If a request fails to resolve unexpectedly, inspect the layers in this order:
 
 1. Does `storage_traits` expose the requested result shape?
 2. Does the wrapper define the right borrow/reset/rebind semantics in
