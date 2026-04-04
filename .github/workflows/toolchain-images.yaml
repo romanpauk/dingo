@@ -67,6 +67,8 @@ jobs:
             -w /workspace \
             dingo-toolchains:ubuntu-25.04-${{ matrix.compiler.toolchain }} \
             bash -lc 'set -euxo pipefail
+              command -v uv
+              uv --version
               export NINJA_STATUS="[%f/%t %es] "
               cmake -S /workspace -B /workspace/${{ matrix.compiler.build_dir }} -G Ninja \
               -DCMAKE_C_COMPILER=${{ matrix.compiler.cc }} \
@@ -108,6 +110,22 @@ jobs:
           tags: dingo-toolchains:ubuntu-25.04-msvc-wine
           cache-from: type=gha,scope=toolchain-smoke-msvc-wine
           cache-to: type=gha,mode=max,scope=toolchain-smoke-msvc-wine
+
+      - name: Verify msvc-wine image baseline tools
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            dingo-toolchains:ubuntu-25.04-msvc-wine \
+            bash -lc 'set -euxo pipefail
+              command -v uv
+              uv --version
+              command -v cmake
+              cmake --version
+              command -v cl
+            '
 
       # Temporarily disabled: the GitHub-hosted ubuntu runner + containerized
       # msvc-wine path currently hangs before it produces useful compiler output.

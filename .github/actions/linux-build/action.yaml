@@ -105,6 +105,9 @@ runs:
           bash -lc '
             set -euo pipefail
 
+            command -v uv
+            uv --version
+
             cmake -S "/workspace/${{ inputs.source_dir }}" \
               -B "/workspace/${{ inputs.build_dir }}" \
               -DDINGO_DEVELOPMENT_MODE=ON \
