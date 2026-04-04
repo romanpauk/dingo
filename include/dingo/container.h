@@ -541,9 +541,9 @@ class container : public allocator_base<Allocator> {
                 Type,
                 type_detection,
                 detail::list_initialization,
-                false,
                 constructor_detection_traits<Type>::max_arity>;
-            if constexpr(type_constructor::valid) {
+            if constexpr (type_constructor::kind ==
+                          detail::constructor_kind::concrete) {
                 // Construct temporary through context so it can be referenced
                 return context.template construct_temporary< typename annotated_traits<T>::type, type_detection >(*this);
             }

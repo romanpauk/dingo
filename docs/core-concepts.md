@@ -414,6 +414,8 @@ Constructor deduction is intentionally useful, not magical. The main limits are:
   overload-resolution nuance you might expect from handwritten code
 - the detector prefers the highest-arity constructible shape, which is not
   always the overload you want to commit to in public code
+- constructor templates and other generic catch-all constructor shapes are
+  rejected from auto-detection; those types must use `factory<constructor<...>>`
 - ambiguous or unsupported cases should be resolved explicitly with
   `factory<constructor<...>>`, `factory<function<...>>`, `callable(...)`, or
   `callable<Signature>(...)`
@@ -433,6 +435,7 @@ is part of the type's contract.
 Reach for an explicit factory when:
 
 - constructor deduction is ambiguous
+- the type exposes a templated or forwarding constructor
 - the type should be built through a named factory function
 - construction depends on extra callable state
 - you want to select a specific alternative for variant construction or storage
@@ -489,6 +492,21 @@ container.register_type<scope<unique>, storage<A>,
 
 </details>
 <!-- } -->
+
+Templated constructors are supported when the type is registered with an
+explicit constructor signature:
+
+```c++
+struct Generic {
+    template <class First, class Second>
+    Generic(First, Second) {}
+};
+
+container.register_type<scope<external>, storage<int>>(7);
+container.register_type<scope<external>, storage<float>>(3.5f);
+container.register_type<scope<unique>, storage<Generic>,
+                        factory<constructor<Generic(int, float)>>>();
+```
 
 <!-- { include("../examples/factory/factory_function.cpp", scope="////", summary="Static factory-function example") -->
 

@@ -27,6 +27,7 @@ namespace detail {
 struct automatic {};
 
 template <class DisabledType, typename Tag> struct constructor_argument;
+template <class DisabledType, typename Tag> struct opaque_constructor_argument;
 
 template <class DisabledType>
 struct constructor_argument<DisabledType, automatic> {
@@ -53,6 +54,17 @@ struct constructor_argument<DisabledType, automatic> {
         typename = typename std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>> >
     >
     operator T();
+};
+
+template <class DisabledType>
+struct opaque_constructor_argument<DisabledType, automatic> {
+    opaque_constructor_argument() = default;
+    opaque_constructor_argument(const opaque_constructor_argument&) = default;
+    opaque_constructor_argument(opaque_constructor_argument&&) = default;
+    opaque_constructor_argument& operator=(const opaque_constructor_argument&) =
+        default;
+    opaque_constructor_argument& operator=(opaque_constructor_argument&&) =
+        default;
 };
 
 template <typename DisabledType, typename Context, typename Container,
@@ -196,35 +208,42 @@ using repeated_type = T;
 // needs the older type-based form to preserve behavior.
 #if defined(_MSC_VER)
 template <typename T, typename Tag,
+          template <class, class> class ConstructorArg,
           template <typename...> typename IsConstructible, typename Sequence>
 struct constructor_probe_msvc;
 
 template <typename T, typename Tag,
+          template <class, class> class ConstructorArg,
           template <typename...> typename IsConstructible, size_t... Is>
-struct constructor_probe_msvc<T, Tag, IsConstructible, std::index_sequence<Is...>>
+struct constructor_probe_msvc<T, Tag, ConstructorArg, IsConstructible,
+                              std::index_sequence<Is...>>
     : IsConstructible<
           T,
-          std::conditional_t<true, constructor_argument<T, Tag>,
+          std::conditional_t<true, ConstructorArg<T, Tag>,
                              std::integral_constant<size_t, Is>>...> {};
 
 template <typename T, typename Tag,
+          template <class, class> class ConstructorArg,
           template <typename...> typename IsConstructible, size_t Arity>
 inline constexpr bool constructor_probe_v =
-    constructor_probe_msvc<T, Tag, IsConstructible,
+    constructor_probe_msvc<T, Tag, ConstructorArg, IsConstructible,
                            std::make_index_sequence<Arity>>::value;
 #else
 template <typename T, typename Tag,
+          template <class, class> class ConstructorArg,
           template <typename...> typename IsConstructible, size_t... Is>
 constexpr bool constructor_probe(std::index_sequence<Is...>) {
     // Non-MSVC compilers handle the lighter repeated-type placeholder probe
     // well, which avoids an extra wrapper class per arity check.
-    return IsConstructible<T, repeated_type<constructor_argument<T, Tag>, Is>...>::value;
+    return IsConstructible<T, repeated_type<ConstructorArg<T, Tag>, Is>...>::value;
 }
 
 template <typename T, typename Tag,
+          template <class, class> class ConstructorArg,
           template <typename...> typename IsConstructible, size_t Arity>
 inline constexpr bool constructor_probe_v =
-    constructor_probe<T, Tag, IsConstructible>(std::make_index_sequence<Arity>{});
+    constructor_probe<T, Tag, ConstructorArg, IsConstructible>(
+        std::make_index_sequence<Arity>{});
 #endif
 
 // Everything above feeds the same high-to-low arity search below, so the
@@ -232,7 +251,8 @@ inline constexpr bool constructor_probe_v =
 // by compiler.
 template <typename T, typename Tag,
           template <typename...> typename IsConstructible, size_t Arity,
-          bool Match = constructor_probe_v<T, Tag, IsConstructible, Arity>>
+          bool Match = constructor_probe_v<T, Tag, constructor_argument,
+                                           IsConstructible, Arity>>
 struct constructor_arity_detector_impl
     : constructor_arity_detector_impl<T, Tag, IsConstructible, Arity - 1> {};
 
@@ -258,7 +278,7 @@ using constructor_arity_detector =
 
 // Searches constructor arity in the inclusive range [0, N].
 template <typename T, typename Tag, template <typename...> typename IsConstructible,
-          bool Assert = true, size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS>
+          size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS>
 struct constructor_detection;
 
 template <typename T, typename Tag, size_t Arity> struct constructor_methods {
@@ -298,7 +318,7 @@ template <typename T, typename Tag, size_t Arity> struct constructor_methods {
 };
 
 template <typename T, typename Tag, template <typename...> typename IsConstructible,
-          bool Assert, size_t N>
+          size_t N>
 struct constructor_detection {
     // The detector owns policy: pick the highest matching arity once, then let
     // the runtime path instantiate only that winning constructor shape.
@@ -306,16 +326,35 @@ struct constructor_detection {
     // arity without materializing the full `[0, N]` probe set up front.
     static constexpr size_t detected_arity =
         constructor_arity_detector<T, Tag, IsConstructible, N>::value;
-    static constexpr bool valid =
+    static constexpr bool detected =
         detected_arity != invalid_constructor_detection_arity;
-    static constexpr size_t arity = valid ? detected_arity : 0;
+    static constexpr bool requires_explicit_factory = [] {
+        if constexpr (!detected || detected_arity == 0) {
+            return false;
+        } else {
+            return constructor_probe_v<T, Tag, opaque_constructor_argument,
+                                       IsConstructible, detected_arity>;
+        }
+    }();
+    static constexpr constructor_kind kind =
+        !detected ? constructor_kind::invalid
+                  : requires_explicit_factory ? constructor_kind::generic
+                                              : constructor_kind::concrete;
+    static constexpr size_t arity = detected ? detected_arity : 0;
 
-    static_assert(!Assert || valid,
-                  "class T construction not detected or ambiguous");
+  private:
+    static constexpr void assert_auto_factory_kind() {
+        static_assert(kind != constructor_kind::generic,
+                      "generic constructor detected; use explicit "
+                      "factory<constructor<...>>");
+        static_assert(kind != constructor_kind::invalid,
+                      "class T construction not detected or ambiguous");
+    }
 
+  public:
     template <typename Type, typename Context, typename Container>
     static auto construct(Context& ctx, Container& container) {
-        static_assert(valid, "class T construction not detected or ambiguous");
+        static_assert((assert_auto_factory_kind(), true));
         // The final runtime path expands only the selected arity.
         return constructor_methods<T, Tag, detected_arity>::template construct<
             Type>(ctx, container);
@@ -323,7 +362,7 @@ struct constructor_detection {
 
     template <typename Type, typename Context, typename Container>
     static void construct(void* ptr, Context& ctx, Container& container) {
-        static_assert(valid, "class T construction not detected or ambiguous");
+        static_assert((assert_auto_factory_kind(), true));
         constructor_methods<T, Tag, detected_arity>::template construct<Type>(
             ptr, ctx, container);
     }
@@ -331,17 +370,15 @@ struct constructor_detection {
 
 } // namespace detail
 
-template <typename T, typename DetectionType = detail::automatic> struct constructor_detection
+template <typename T, typename DetectionType = detail::automatic>
+struct constructor_detection
     : std::conditional_t<
-        has_constructor_typedef_v<T>,
-        constructor_typedef<T>,
-        detail::constructor_detection<
-            T,
-            DetectionType,
-            detail::list_initialization,
-            true,
-            constructor_detection_traits<normalized_type_t<T>>::max_arity>
-    >
-{};
+          has_constructor_typedef_v<T>, constructor_typedef<T>,
+          detail::constructor_detection<
+              T,
+              DetectionType,
+              detail::list_initialization,
+              constructor_detection_traits<normalized_type_t<T>>::max_arity>> {
+};
 
 } // namespace dingo

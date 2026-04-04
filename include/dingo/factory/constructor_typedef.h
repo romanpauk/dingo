@@ -26,6 +26,8 @@ static constexpr bool has_constructor_typedef_v =
     has_constructor_typedef<T>{};
 
 namespace detail {
+enum class constructor_kind { concrete, generic, invalid };
+
 template <typename T, bool = has_constructor_typedef_v<T>>
 struct constructor_typedef_impl : T::dingo_constructor_type {};
 
@@ -37,9 +39,11 @@ struct constructor_typedef_impl<T, false> {
 }
 
 template <typename T>
-struct constructor_typedef : detail::constructor_typedef_impl<T> {};
+struct constructor_typedef : detail::constructor_typedef_impl<T> {
+    static constexpr detail::constructor_kind kind =
+        detail::constructor_kind::concrete;
+};
 
 }
-
 
 

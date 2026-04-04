@@ -26,19 +26,41 @@
 namespace dingo {
 template <typename T> struct class_factory_test : public test<T> {};
 TYPED_TEST_SUITE(class_factory_test, container_types, );
+using constructor_kind = detail::constructor_kind;
 
 template <typename T>
 using test_class_factory =
     detail::constructor_detection<T, detail::automatic,
-                                  detail::list_initialization,
-                                  /*Assert=*/false>;
+                                  detail::list_initialization>;
+
+struct generic_constructor_factory_test_type {
+    template <class U, class V> generic_constructor_factory_test_type(U, V) {}
+};
+
+struct mixed_constructor_factory_test_type {
+    mixed_constructor_factory_test_type(int) {}
+
+    template <class U, class V> mixed_constructor_factory_test_type(U, V) {}
+};
+
+struct explicit_generic_constructor_factory_test_type {
+    template <class U, class V>
+    explicit_generic_constructor_factory_test_type(U, V) {
+        index = std::is_same_v<std::decay_t<U>, int> &&
+                        std::is_same_v<std::decay_t<V>, float>
+                    ? 0
+                    : -1;
+    }
+
+    int index = -1;
+};
 
 TEST(class_factory_test, default_constructor) {
     struct A {
         A() = default;
     };
     static_assert(test_class_factory<A>::arity == 0 &&
-                  test_class_factory<A>::valid == true);
+                  test_class_factory<A>::kind == constructor_kind::concrete);
 }
 
 TEST(class_factory_test, default_constructor_delete) {
@@ -48,9 +70,9 @@ TEST(class_factory_test, default_constructor_delete) {
 #if DINGO_CXX_STANDARD <= 17
     [[maybe_unused]] A a{};
     static_assert(test_class_factory<A>::arity == 0 &&
-                  test_class_factory<A>::valid == true);
+                  test_class_factory<A>::kind == constructor_kind::concrete);
 #else
-    static_assert(test_class_factory<A>::valid == false);
+    static_assert(test_class_factory<A>::kind == constructor_kind::invalid);
 #endif
 }
 
@@ -68,7 +90,7 @@ TEST(class_factory_test, aggregate) {
         int b;
     };
     static_assert(test_class_factory<A>::arity == 2 &&
-                  test_class_factory<A>::valid == true);
+                  test_class_factory<A>::kind == constructor_kind::concrete);
 
     struct A1 {
         A1(int) {}
@@ -76,7 +98,7 @@ TEST(class_factory_test, aggregate) {
         int b;
     };
     static_assert(test_class_factory<A1>::arity == 1 &&
-                  test_class_factory<A1>::valid == true);
+                  test_class_factory<A1>::kind == constructor_kind::concrete);
 }
 
 // This case is skipped in constructability detection
@@ -86,7 +108,7 @@ TEST(class_factory_test, unconstructible) {
         A& a;
     };
 
-    static_assert(test_class_factory<A>::valid == false);
+    static_assert(test_class_factory<A>::kind == constructor_kind::invalid);
 }
 
 TEST(class_factory_test, constructor) {
@@ -100,6 +122,25 @@ TEST(class_factory_test, constructor) {
                   constructor<A(int, float)>::arity);
 }
 
+TEST(class_factory_test, generic_constructor_requires_explicit_factory) {
+    static_assert(test_class_factory<generic_constructor_factory_test_type>::arity ==
+                  2);
+    static_assert(test_class_factory<generic_constructor_factory_test_type>::kind ==
+                  constructor_kind::generic);
+    static_assert(
+        constructor<generic_constructor_factory_test_type, int, float>::valid);
+}
+
+TEST(class_factory_test, mixed_constructor_requires_explicit_factory) {
+    static_assert(test_class_factory<mixed_constructor_factory_test_type>::arity ==
+                  2);
+    static_assert(test_class_factory<mixed_constructor_factory_test_type>::kind ==
+                  constructor_kind::generic);
+    static_assert(constructor<mixed_constructor_factory_test_type, int>::valid);
+    static_assert(
+        constructor<mixed_constructor_factory_test_type, int, float>::valid);
+}
+
 TYPED_TEST(class_factory_test, ambiguous_construct) {
     struct A {
         A(int) : index(0) {}
@@ -111,7 +152,7 @@ TYPED_TEST(class_factory_test, ambiguous_construct) {
     };
 
     static_assert(constructor<A, double>::valid == false);
-    static_assert(test_class_factory<A>::valid == false);
+    static_assert(test_class_factory<A>::kind == constructor_kind::invalid);
 
     using container_type = TypeParam;
     container_type container;
@@ -149,6 +190,26 @@ TYPED_TEST(class_factory_test, ambiguous_construct) {
         auto a = container.template construct<A>(constructor<A, float, int>());
         ASSERT_EQ(a.index, 3);
     }
+}
+
+TYPED_TEST(class_factory_test, explicit_factory_constructs_generic_constructor) {
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(4);
+    container.template register_type<scope<external>, storage<float>>(1.5f);
+    container.template register_type<
+        scope<unique>, storage<explicit_generic_constructor_factory_test_type>,
+        factory<constructor<explicit_generic_constructor_factory_test_type(
+            int, float)>>>();
+
+    auto a =
+        container.template resolve<explicit_generic_constructor_factory_test_type>();
+    ASSERT_EQ(a.index, 0);
+
+    auto direct = container.template construct<
+        explicit_generic_constructor_factory_test_type,
+        constructor<explicit_generic_constructor_factory_test_type(int, float)>>();
+    ASSERT_EQ(direct.index, 0);
 }
 
 #if defined(__GNUC__)
@@ -418,6 +479,8 @@ TYPED_TEST(class_factory_test, constructor_type) {
         B(int, int, int) : index(2) {}
         int index = 0;
     };
+    static_assert(constructor_detection<B>::kind ==
+                  constructor_kind::concrete);
     using container_type = TypeParam;
     container_type container;
     container.template register_type<scope<unique>, storage<int>>();
