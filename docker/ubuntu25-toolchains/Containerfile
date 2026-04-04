@@ -104,7 +104,10 @@ esac"]
 RUN locale-gen en_US.UTF-8 && \
     update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
-RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_UNMANAGED_INSTALL=/usr/local/bin sh
+COPY --from=ghcr.io/astral-sh/uv:0.11.3 /uv /uvx /usr/local/bin/
+
+RUN command -v uv && \
+    uv --version
 
 RUN mkdir -p /usr/local/share/dingo-toolchains
 
