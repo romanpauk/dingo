@@ -31,6 +31,7 @@
 #include <map>
 #include <optional>
 #include <typeindex>
+#include <type_traits>
 #include <variant>
 
 namespace dingo {
@@ -62,7 +63,21 @@ template <typename T> struct is_none : std::bool_constant<false> {};
 template <> struct is_none<none_t> : std::bool_constant<true> {};
 template <typename T> static constexpr auto is_none_v = is_none<T>::value;
 
-template <typename T> struct is_auto_constructible : std::is_aggregate<T> {};
+template <typename T, typename = void> struct is_complete : std::false_type {};
+template <typename T>
+struct is_complete<T, std::void_t<decltype(sizeof(T))>> : std::true_type {};
+
+namespace detail {
+template <typename T, bool = is_complete<T>::value>
+struct default_auto_constructible : std::false_type {};
+
+template <typename T>
+struct default_auto_constructible<T, true>
+    : std::bool_constant<std::is_aggregate_v<T>> {};
+} // namespace detail
+
+template <typename T>
+struct is_auto_constructible : detail::default_auto_constructible<T> {};
 
 struct dynamic_container_traits {
     template <typename> using rebind_t = dynamic_container_traits;
@@ -233,7 +248,8 @@ class container : public allocator_base<Allocator> {
 
         // TODO: this destructor is really slowing things down
         resolving_context context;
-        return resolve<T, true, false>(context, std::forward<IdType>(id));
+        return resolve_impl<T, true, false, false>(context,
+                                                   std::forward<IdType>(id));
     }
 
     template <typename T,
@@ -476,14 +492,15 @@ class container : public allocator_base<Allocator> {
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-    template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
+    template <typename T, bool RemoveRvalueReferences,
+              bool MayAutoConstruct, bool CheckCache = true,
               typename IdType = none_t,
               typename R = std::conditional_t<
                   RemoveRvalueReferences,
                   std::conditional_t<std::is_rvalue_reference_v<T>,
                                      std::remove_reference_t<T>, T>,
                   T>>
-    R resolve(resolving_context& context, IdType&& id = IdType()) {
+    R resolve_impl(resolving_context& context, IdType&& id = IdType()) {
         using Type = normalized_type_t<T>;
         static_assert(!std::is_const_v<Type>);
 
@@ -524,28 +541,29 @@ class container : public allocator_base<Allocator> {
             }
         } else if constexpr (!std::is_same_v<void*, decltype(parent_)>) {
             if (parent_) {
-                return parent_->template resolve<T, RemoveRvalueReferences>(
-                    context, std::forward<IdType>(id));
+                return parent_
+                    ->template resolve_impl<T, RemoveRvalueReferences,
+                                            MayAutoConstruct>(
+                        context, std::forward<IdType>(id));
             }
         }
 
-        // If we are trying to construct T and it is not wrapped in any way
-        // and it is marked as auto-constructible. Aggregates are enabled by
-        // default, while user types can opt in by specializing the trait.
-        if constexpr (std::is_same_v< Type, std::decay_t<T> > &&
-            is_auto_constructible< std::decay_t<T> >::value
-        ) {
-            // And it is constructible
-            using type_detection = detail::automatic;
-            using type_constructor = detail::constructor_detection<
-                Type,
-                type_detection,
-                detail::list_initialization,
-                constructor_detection_traits<Type>::max_arity>;
-            if constexpr (type_constructor::kind ==
-                          detail::constructor_kind::concrete) {
-                // Construct temporary through context so it can be referenced
-                return context.template construct_temporary< typename annotated_traits<T>::type, type_detection >(*this);
+        // Forward-declared dependencies are allowed to flow through lookup-only
+        // resolution. Keep the auto-construction fallback nested behind
+        // `MayAutoConstruct` so T* / T& requests never instantiate
+        // completeness-sensitive constructor detection for an incomplete type.
+        if constexpr (MayAutoConstruct) {
+            if constexpr (is_auto_constructible<std::decay_t<T>>::value) {
+                using type_detection = detail::automatic;
+                using type_constructor = detail::constructor_detection<
+                    Type,
+                    type_detection,
+                    detail::list_initialization,
+                    constructor_detection_traits<Type>::max_arity>;
+                if constexpr (type_constructor::kind ==
+                              detail::constructor_kind::concrete) {
+                    return auto_construct<T>(context);
+                }
             }
         }
 
@@ -555,6 +573,42 @@ class container : public allocator_base<Allocator> {
             throw detail::make_type_not_found_exception<T, std::decay_t<IdType>>(
                 context);
         }
+    }
+
+    template <typename T>
+    decltype(auto) auto_construct(resolving_context& context) {
+        using Type = normalized_type_t<T>;
+
+        static_assert(is_complete<Type>::value,
+                      "auto-construction requires a complete type");
+
+        using type_detection = detail::automatic;
+        return context.template construct_temporary<
+            typename annotated_traits<T>::type,
+            type_detection>(*this);
+    }
+
+    template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
+              typename IdType = none_t,
+              typename R = std::conditional_t<
+                  RemoveRvalueReferences,
+                  std::conditional_t<std::is_rvalue_reference_v<T>,
+                                     std::remove_reference_t<T>, T>,
+                  T>>
+    R resolve(resolving_context& context, IdType&& id = IdType()) {
+        // Internal resolution chooses between an incomplete-safe lookup path
+        // and a materializing path. Plain value requests may auto-construct a
+        // missing type. Borrowed lookups such as T* and T& must stay lookup-
+        // only. `const T&` is the one intentional exception: auto-constructible
+        // helper bundles may be materialized as temporaries and then borrowed.
+        return resolve_impl<
+            T, RemoveRvalueReferences,
+            std::is_same_v<normalized_type_t<T>, std::decay_t<T>> &&
+                (!std::is_reference_v<T> ||
+                 (std::is_lvalue_reference_v<T> &&
+                  std::is_const_v<std::remove_reference_t<T>> &&
+                  is_auto_constructible<std::decay_t<T>>::value)),
+            CheckCache>(context, std::forward<IdType>(id));
     }
 #ifdef _MSC_VER
 #pragma warning(pop)
