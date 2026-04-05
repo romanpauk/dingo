@@ -195,6 +195,8 @@ if(DINGO_DEVELOPMENT_MODE)
             test/container/allocator.cpp
             test/container/construct.cpp
             test/container/dingo.cpp
+            test/container/incomplete_resolve.cpp
+            test/container/incomplete_resolve_fixture.cpp
             test/container/invoke.cpp
             test/container/nested_resolution.cpp
             test/container/nesting.cpp

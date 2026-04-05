@@ -26,17 +26,30 @@ template <typename T> struct constructor_detection_traits {
 namespace detail {
 struct automatic {};
 
+template <typename T, typename = void> struct is_complete : std::false_type {};
+
+template <typename T>
+struct is_complete<T, std::void_t<decltype(sizeof(T))>> : std::true_type {};
+
 template <class DisabledType, typename Tag> struct constructor_argument;
 template <class DisabledType, typename Tag> struct opaque_constructor_argument;
 
 template <class DisabledType>
 struct constructor_argument<DisabledType, automatic> {
+    // Value and rvalue probes imply materialization, so they must not
+    // participate for forward declarations. Otherwise constructor deduction
+    // would pull incomplete dependencies into class-trait inspection.
     template <
         typename T,
-        typename = typename std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>> >
+        typename = typename std::enable_if_t<
+            !std::is_same_v<DisabledType, std::decay_t<T>> &&
+            is_complete<std::decay_t<T>>::value>
     >
     operator T&&() const;
 
+    // Lvalue-reference probes stay available for incomplete types. They model
+    // borrowed dependencies that can be satisfied by lookup without trying to
+    // construct the forward-declared type.
     template <
         typename T,
         typename = typename std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>> >
@@ -51,7 +64,9 @@ struct constructor_argument<DisabledType, automatic> {
 
     template <
         typename T,
-        typename = typename std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>> >
+        typename = typename std::enable_if_t<
+            !std::is_same_v<DisabledType, std::decay_t<T>> &&
+            is_complete<std::decay_t<T>>::value>
     >
     operator T();
 };
@@ -77,9 +92,13 @@ class constructor_argument_impl<DisabledType, Context, Container, automatic> {
     constructor_argument_impl(Context& context, Container& container)
         : context_(context), container_(container) {}
 
+    // Runtime value/rvalue conversion follows the same rule as the detection
+    // probes above: only complete types may be materialized here.
     template <
         typename T,
-        typename = typename std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>> >
+        typename = typename std::enable_if_t<
+            !std::is_same_v<DisabledType, std::decay_t<T>> &&
+            is_complete<std::decay_t<T>>::value>
     >
     operator T&&() const {
         return context_.template resolve<T&&>(container_);
@@ -103,7 +122,9 @@ class constructor_argument_impl<DisabledType, Context, Container, automatic> {
 
     template <
         typename T,
-        typename = typename std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>> >
+        typename = typename std::enable_if_t<
+            !std::is_same_v<DisabledType, std::decay_t<T>> &&
+            is_complete<std::decay_t<T>>::value>
     >
     operator T() {
         return context_.template resolve<T>(container_);

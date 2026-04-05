@@ -424,6 +424,11 @@ Constructor deduction is intentionally useful, not magical. The main limits are:
   `resolve<T>()` only auto-constructs plain types when they are aggregates or
   explicitly opted in through `is_auto_constructible<T>`
 - opting a type into auto-construction does not bypass ambiguity checks
+- auto-construction requires `T` to be complete
+- borrowed lookups such as `resolve<T&>()` and `resolve<T*>()` can use a
+  forward-declared `T` as long as the type is already registered
+- constructing another type can still depend on a forward-declared `T&` or `T*`;
+  the dependency is looked up, not auto-constructed
 - reference-style wrapper values only participate in the reference-based
   deduction path when the wrapper opts in through
   `type_traits<T>::is_reference_resolvable`
