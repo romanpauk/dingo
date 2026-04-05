@@ -9,7 +9,7 @@
 #include <dingo/container.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
-#include <dingo/resolution/interface_storage_traits.h>
+#include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/rtti/rtti.h>
 #include <dingo/rtti/typeid_provider.h>

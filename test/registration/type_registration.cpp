@@ -7,7 +7,7 @@
 
 #include <dingo/resolution/conversion_cache.h>
 #include <dingo/resolution/instance_factory.h>
-#include <dingo/resolution/interface_storage_traits.h>
+#include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/rtti/rtti.h>
 #include <dingo/rtti/typeid_provider.h>
@@ -82,6 +82,26 @@ TEST(type_registration_test, registration_deduction) {
         std::is_same_v<
             typename type_registration<scope<int>, storage<int>>::factory_type,
             factory<constructor_detection<int>>>);
+}
+
+TEST(type_registration_test, registration_default_interface_and_conversions) {
+    using registration_from_factory = type_registration<scope<shared>, factory<int>>;
+    static_assert(std::is_same_v<typename registration_from_factory::storage_type,
+                                 storage<int>>);
+    static_assert(
+        std::is_same_v<typename registration_from_factory::interface_type,
+                       interfaces<int>>);
+    static_assert(
+        std::is_same_v<typename registration_from_factory::conversions_type,
+                       conversions<detail::conversions<shared, int, runtime_type>>>);
+
+    using registration_from_storage = type_registration<scope<shared>, storage<int>>;
+    static_assert(
+        std::is_same_v<typename registration_from_storage::interface_type,
+                       interfaces<int>>);
+    static_assert(
+        std::is_same_v<typename registration_from_storage::conversions_type,
+                       conversions<detail::conversions<shared, int, runtime_type>>>);
 }
 
 TEST(type_registration_test, registration_specialization) {

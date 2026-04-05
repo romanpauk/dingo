@@ -81,6 +81,10 @@ jobs:
         shell: pwsh
         run: |
           cmake --build build --config ${{ inputs.config_id }} -j $env:BUILD_JOBS
+      - name: Run Compile-Only Tests
+        shell: pwsh
+        run: |
+          ctest --test-dir build --verbose --output-on-failure -C ${{ inputs.config_id }} -L compile-only
       - name: Upload ARM64 Test Binaries
         uses: actions/upload-artifact@v4.6.2
         with:
@@ -151,7 +155,7 @@ jobs:
       - name: Test
         shell: pwsh
         run: |
-          ctest --test-dir build --verbose --output-on-failure -C ${{ inputs.config_id }}
+          ctest --test-dir build --verbose --output-on-failure -C ${{ inputs.config_id }} -LE compile-only
       - name: Upload Failure Artifacts
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4.6.2

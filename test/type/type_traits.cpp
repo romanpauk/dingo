@@ -6,6 +6,10 @@
 //
 
 #include <dingo/container.h>
+#include <dingo/storage/external.h>
+#include <dingo/storage/shared.h>
+#include <dingo/storage/shared_cyclical.h>
+#include <dingo/storage/unique.h>
 #include <dingo/type/type_conversion_traits.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>

@@ -81,7 +81,7 @@ That file is worth treating as executable documentation.
 ## Interface Storage Rebinding
 
 One extra extension point is
-[include/dingo/resolution/interface_storage_traits.h](../../include/dingo/resolution/interface_storage_traits.h).
+[include/dingo/storage/interface_storage_traits.h](../../include/dingo/storage/interface_storage_traits.h).
 
 The container uses it to decide whether a storage handle can be rebound from a
 concrete leaf type to an interface leaf type. That is the mechanism behind the

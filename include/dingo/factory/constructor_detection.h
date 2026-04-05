@@ -11,6 +11,7 @@
 
 #include <dingo/registration/annotated.h>
 #include <dingo/factory/class_traits.h>
+#include <dingo/type/complete_type.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/factory/constructor_typedef.h>
 
@@ -25,11 +26,6 @@ template <typename T> struct constructor_detection_traits {
 
 namespace detail {
 struct automatic {};
-
-template <typename T, typename = void> struct is_complete : std::false_type {};
-
-template <typename T>
-struct is_complete<T, std::void_t<decltype(sizeof(T))>> : std::true_type {};
 
 template <class DisabledType, typename Tag> struct constructor_argument;
 template <class DisabledType, typename Tag> struct opaque_constructor_argument;
@@ -221,6 +217,9 @@ inline constexpr bool is_direct_initializable_v =
 inline constexpr size_t invalid_constructor_detection_arity =
     static_cast<size_t>(-1);
 
+template <typename...>
+inline constexpr bool always_false_v = false;
+
 template <typename T, size_t>
 using repeated_type = T;
 
@@ -338,6 +337,61 @@ template <typename T, typename Tag, size_t Arity> struct constructor_methods {
     }
 };
 
+template <typename T, typename Tag, size_t Arity, constructor_kind Kind>
+struct constructor_detection_dispatch;
+
+template <typename T, typename Tag, size_t Arity>
+struct constructor_detection_dispatch<T, Tag, Arity,
+                                      constructor_kind::concrete> {
+    template <typename Type, typename Context, typename Container>
+    static auto construct(Context& ctx, Container& container) {
+        return constructor_methods<T, Tag, Arity>::template construct<Type>(
+            ctx, container);
+    }
+
+    template <typename Type, typename Context, typename Container>
+    static void construct(void* ptr, Context& ctx, Container& container) {
+        constructor_methods<T, Tag, Arity>::template construct<Type>(
+            ptr, ctx, container);
+    }
+};
+
+template <typename T, typename Tag, size_t Arity>
+struct constructor_detection_dispatch<T, Tag, Arity,
+                                      constructor_kind::generic> {
+    template <typename Type, typename Context, typename Container>
+    static Type construct(Context&, Container&) {
+        static_assert(
+            always_false_v<Type>,
+            "generic constructor detected; use explicit "
+            "factory<constructor<...>>");
+    }
+
+    template <typename Type, typename Context, typename Container>
+    static void construct(void*, Context&, Container&) {
+        static_assert(
+            always_false_v<Type>,
+            "generic constructor detected; use explicit "
+            "factory<constructor<...>>");
+    }
+};
+
+template <typename T, typename Tag, size_t Arity>
+struct constructor_detection_dispatch<T, Tag, Arity,
+                                      constructor_kind::invalid> {
+    template <typename Type, typename Context, typename Container>
+    static Type construct(Context&, Container&) {
+        static_assert(always_false_v<Type>,
+                      "class T construction not detected or ambiguous");
+    }
+
+    template <typename Type, typename Context, typename Container>
+    static void construct(void*, Context&, Container&) {
+        static_assert(always_false_v<Type>,
+                      "class T construction not detected or ambiguous");
+    }
+};
+
 template <typename T, typename Tag, template <typename...> typename IsConstructible,
           size_t N>
 struct constructor_detection {
@@ -362,30 +416,17 @@ struct constructor_detection {
                   : requires_explicit_factory ? constructor_kind::generic
                                               : constructor_kind::concrete;
     static constexpr size_t arity = detected ? detected_arity : 0;
-
-  private:
-    static constexpr void assert_auto_factory_kind() {
-        static_assert(kind != constructor_kind::generic,
-                      "generic constructor detected; use explicit "
-                      "factory<constructor<...>>");
-        static_assert(kind != constructor_kind::invalid,
-                      "class T construction not detected or ambiguous");
-    }
+    using dispatch = constructor_detection_dispatch<T, Tag, arity, kind>;
 
   public:
     template <typename Type, typename Context, typename Container>
     static auto construct(Context& ctx, Container& container) {
-        static_assert((assert_auto_factory_kind(), true));
-        // The final runtime path expands only the selected arity.
-        return constructor_methods<T, Tag, detected_arity>::template construct<
-            Type>(ctx, container);
+        return dispatch::template construct<Type>(ctx, container);
     }
 
     template <typename Type, typename Context, typename Container>
     static void construct(void* ptr, Context& ctx, Container& container) {
-        static_assert((assert_auto_factory_kind(), true));
-        constructor_methods<T, Tag, detected_arity>::template construct<Type>(
-            ptr, ctx, container);
+        dispatch::template construct<Type>(ptr, ctx, container);
     }
 };
 
