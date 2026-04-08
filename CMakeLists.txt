@@ -112,7 +112,7 @@ if(DINGO_DEVELOPMENT_MODE)
         resolution/conversion_cache.h
         resolution/instance_factory_interface.h
         resolution/instance_factory.h
-        resolution/interface_storage_traits.h
+        storage/interface_storage_traits.h
         resolution/resolving_context.h
         resolution/type_cache.h
         rtti/static_provider.h
@@ -222,6 +222,7 @@ if(DINGO_DEVELOPMENT_MODE)
             test/type/type_traits.cpp
         )
         add_test(NAME dingo_test COMMAND dingo_test)
+        set_tests_properties(dingo_test PROPERTIES LABELS "runtime")
         target_link_libraries(dingo_test dingo::dingo gtest_main)
         target_include_directories(dingo_test PRIVATE test)
         target_compile_definitions(dingo_test PRIVATE
@@ -235,6 +236,32 @@ if(DINGO_DEVELOPMENT_MODE)
         target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
 
         target_sanitize(DINGO dingo_test)
+
+        option(DINGO_LIT_TESTS_ENABLED "Enable lit-based tests for static assertions and diagnostics." ON)
+        if(DINGO_LIT_TESTS_ENABLED)
+            find_program(LIT_EXECUTABLE NAMES lit)
+            find_program(UV_EXECUTABLE NAMES uv)
+
+            if(UV_EXECUTABLE)
+                add_test(NAME dingo_lit_tests
+                    COMMAND ${CMAKE_COMMAND} -E env
+                        CXX=${CMAKE_CXX_COMPILER}
+                        UV_CACHE_DIR=${CMAKE_CURRENT_BINARY_DIR}/.uv-cache
+                        ${UV_EXECUTABLE} run --locked lit -sv ${CMAKE_CURRENT_SOURCE_DIR}/test/lit)
+            elseif(LIT_EXECUTABLE)
+                add_test(NAME dingo_lit_tests
+                    COMMAND ${CMAKE_COMMAND} -E env
+                        CXX=${CMAKE_CXX_COMPILER}
+                        ${LIT_EXECUTABLE} -sv ${CMAKE_CURRENT_SOURCE_DIR}/test/lit)
+            else()
+                message(WARNING "Skipping lit tests: neither lit nor uv was found. "
+                                "Enable by installing lit (or uv) and setting "
+                                "DINGO_LIT_TESTS_ENABLED=ON.")
+            endif()
+            if(TEST dingo_lit_tests)
+                set_tests_properties(dingo_lit_tests PROPERTIES LABELS "compile-only")
+            endif()
+        endif()
     endif()
 
     if(DINGO_BENCHMARK_ENABLED)

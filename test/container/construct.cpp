@@ -137,7 +137,20 @@ TEST(construct_test, class_traits) {
     };
 
     static_assert(construction_traits<std::variant<A, B>, A>::enabled);
+    static_assert(construction_traits<const std::variant<A, B>, B>::enabled);
     static_assert(!construction_traits<std::variant<A, B>, int>::enabled);
+    static_assert(std::is_same_v<detail::alternative_type_alternatives_t<
+                                     std::variant<A, B>>,
+                                 type_list<A, B>>);
+    static_assert(
+        !detail::type_list_has_duplicates<detail::alternative_type_alternatives_t<
+            std::variant<A, B>>>::value);
+    static_assert(detail::alternative_type_count<std::variant<A, B>, A>::value == 1);
+    static_assert(detail::alternative_type_count<std::variant<A, B>, B>::value == 1);
+    static_assert(detail::alternative_type_count<std::variant<A, B>, int>::value == 0);
+    static_assert(is_alternative_type_interface_compatible_v<std::variant<A, B>, A>);
+    static_assert(is_alternative_type_interface_compatible_v<std::variant<A, B>, B>);
+    static_assert(!is_alternative_type_interface_compatible_v<std::variant<A, B>, int>);
 
     class_traits<A>::construct();
     class_traits<B>::construct(nullptr);
@@ -145,6 +158,21 @@ TEST(construct_test, class_traits) {
     class_traits<std::unique_ptr<B>>::construct(nullptr);
     class_traits<std::shared_ptr<B>>::construct(nullptr);
     class_traits<std::optional<B>>::construct(nullptr);
+}
+
+TEST(construct_test, auto_constructible_trait_defaults_and_opt_in) {
+    static_assert(std::is_aggregate_v<issue_43::aggregate_dependencies<
+                      std::shared_ptr<issue_43::A>,
+                      std::shared_ptr<issue_43::B>>>);
+    static_assert(is_auto_constructible<
+                  issue_43::aggregate_dependencies<std::shared_ptr<issue_43::A>,
+                                                   std::shared_ptr<issue_43::B>>>::value);
+    static_assert(!is_auto_constructible<issue_43::dependencies<
+                  std::shared_ptr<issue_43::A>,
+                  std::shared_ptr<issue_43::B>>>::value);
+    static_assert(is_auto_constructible<issue_43::auto_dependencies<
+                  std::shared_ptr<issue_43::A>,
+                  std::shared_ptr<issue_43::B>>>::value);
 }
 
 TYPED_TEST(construct_test, plain) {

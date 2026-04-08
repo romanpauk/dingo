@@ -11,21 +11,23 @@
 
 #include <dingo/memory/allocator.h>
 #include <dingo/registration/annotated.h>
+#include <dingo/registration/requirements.h>
 #include <dingo/resolution/instance_factory.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/exceptions.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/invoke.h>
-#include <dingo/resolution/interface_storage_traits.h>
 #include <dingo/index.h>
 #include <dingo/resolution/resolving_context.h>
 #include <dingo/rtti/static_provider.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/memory/static_allocator.h>
 #include <dingo/resolution/type_cache.h>
+#include <dingo/type/complete_type.h>
 #include <dingo/type/type_map.h>
 #include <dingo/registration/type_registration.h>
+#include <dingo/storage/interface_storage_traits.h>
 
 #include <functional>
 #include <map>
@@ -35,6 +37,11 @@
 #include <variant>
 
 namespace dingo {
+struct unique;
+struct shared;
+struct external;
+struct shared_cyclical;
+
 namespace detail {
 template <typename T, typename = void>
 struct resolved_type_traits {
@@ -56,16 +63,13 @@ struct resolved_type_traits<T, std::enable_if_t<collection_traits<T>::is_collect
 template <typename T>
 inline constexpr bool copy_on_resolve_v =
     resolved_type_traits<T>::copy_on_resolve;
+
 } // namespace detail
 
 struct none_t {};
 template <typename T> struct is_none : std::bool_constant<false> {};
 template <> struct is_none<none_t> : std::bool_constant<true> {};
 template <typename T> static constexpr auto is_none_v = is_none<T>::value;
-
-template <typename T, typename = void> struct is_complete : std::false_type {};
-template <typename T>
-struct is_complete<T, std::void_t<decltype(sizeof(T))>> : std::true_type {};
 
 namespace detail {
 template <typename T, bool = is_complete<T>::value>
@@ -129,6 +133,12 @@ class container : public allocator_base<Allocator> {
     using rebind_t = container<ContainerTraitsT, AllocatorT, ParentContainerT>;
     using container_type =
         container<ContainerTraits, Allocator, ParentContainer>;
+    template <typename Registration>
+    using registration_container_type = typename container_type::template rebind_t<
+        typename ContainerTraits::template rebind_t<
+            type_list<typename ContainerTraits::tag_type,
+                      typename Registration::interface_type>>,
+        Allocator, container_type>;
     using parent_container_type =
         std::conditional_t<std::is_same_v<void, ParentContainer>,
                            container_type, ParentContainer>;
@@ -346,12 +356,19 @@ class container : public allocator_base<Allocator> {
         }
     }
 
+    template <typename T>
+    static T& invalid_registration_return();
+
     template <typename... TypeArgs, typename Arg, typename IdType>
     auto& register_type_impl(Arg&& arg, IdType&& id) {
+        static_assert(!detail::has_explicit_void_interface_v<TypeArgs...>,
+                      "interfaces<void> is not a valid registration target");
         using registration =
             std::conditional_t<!is_none_v<std::decay_t<Arg>>,
                                type_registration<TypeArgs..., factory<Arg>>,
                                type_registration<TypeArgs...>>;
+        using instance_container_type =
+            registration_container_type<registration>;
         (void)arg;
         //
         // An optimization and a feature: if storage type can be only queried by
@@ -363,88 +380,103 @@ class container : public allocator_base<Allocator> {
         // into stored type.
         //
         using interface_types = typename registration::interface_type::type;
-        using interface_type_0 = type_list_head_t<interface_types>;
         using registered_storage_type = typename registration::storage_type::type;
-        static constexpr bool should_store_interface =
-            type_list_size_v<interface_types> == 1 &&
-            std::has_virtual_destructor_v<interface_type_0> &&
-            is_interface_storage_rebindable_v<registered_storage_type,
-                                              interface_type_0>;
-        using stored_leaf_type =
-            std::conditional_t<should_store_interface, interface_type_0,
-                               leaf_type_t<registered_storage_type>>;
-        using stored_type =
-            rebind_leaf_t<registered_storage_type, stored_leaf_type>;
+        using storage_tag = typename registration::scope_type::type;
+        static constexpr bool storage_tag_is_complete =
+            !detail::requires_complete_type_v<storage_tag> ||
+            detail::is_complete_v<storage_tag>;
+        static_assert(
+            storage_tag_is_complete,
+            "selected storage tag must be complete; include the corresponding "
+            "dingo/storage header");
+        if constexpr (storage_tag_is_complete) {
+            static constexpr bool use_interface_as_stored_leaf =
+                detail::use_interface_as_stored_leaf_v<registered_storage_type,
+                                                       interface_types>;
+            using stored_leaf_type =
+                std::conditional_t<use_interface_as_stored_leaf,
+                                   type_list_head_t<interface_types>,
+                                   leaf_type_t<registered_storage_type>>;
+            using stored_type =
+                rebind_leaf_t<registered_storage_type, stored_leaf_type>;
 
-        using storage_type =
-            detail::storage<typename registration::scope_type::type,
-                            registered_storage_type,
-                            stored_type,
-                            typename registration::factory_type::type,
-                            typename registration::conversions_type::type>;
+            using storage_type =
+                detail::storage<storage_tag,
+                                registered_storage_type,
+                                stored_type,
+                                typename registration::factory_type::type,
+                                typename registration::conversions_type::type>;
+            using registration_requirements =
+                detail::registration_requirements<storage_type, interface_types,
+                                                 typename storage_type::type>;
 
-        using instance_container_type =
-            typename container_type::template rebind_t<
-                typename ContainerTraits::template rebind_t<
-                    type_list<typename ContainerTraits::tag_type,
-                              typename registration::interface_type>>,
-                allocator_type, container_type>;
+            registration_requirements::assert_valid();
 
-        using instance_factory_data_type =
-            instance_factory_data<instance_container_type, storage_type>;
+            using instance_factory_data_type =
+                instance_factory_data<instance_container_type, storage_type>;
 
-        if constexpr (type_list_size_v<interface_types> == 1) {
-            using interface_type = type_list_head_t<interface_types>;
+            if constexpr (registration_requirements::valid &&
+                          type_list_size_v<interface_types> == 1) {
+                using interface_type = type_list_head_t<interface_types>;
 
-            using instance_factory_type = instance_factory<
-                container_type, typename annotated_traits<interface_type>::type,
-                storage_type, instance_factory_data_type>;
+                using instance_factory_type = instance_factory<
+                    container_type,
+                    typename annotated_traits<interface_type>::type,
+                    storage_type,
+                    instance_factory_data_type>;
 
-            if constexpr (!is_none_v<std::decay_t<Arg>>) {
-                auto&& [factory, factory_container] =
-                    allocate_factory<instance_factory_type>(
-                        this, std::forward<Arg>(arg));
-                register_type_factory<interface_type, storage_type>(
-                    std::move(factory), std::move(id));
-                return *factory_container;
+                if constexpr (!is_none_v<std::decay_t<Arg>>) {
+                    auto&& [factory, factory_container] =
+                        allocate_factory<instance_factory_type>(
+                            this, std::forward<Arg>(arg));
+                    register_type_factory<interface_type, storage_type>(
+                        std::move(factory), std::move(id));
+                    return *factory_container;
+                } else {
+                    auto&& [factory, factory_container] =
+                        allocate_factory<instance_factory_type>(this);
+                    register_type_factory<interface_type, storage_type>(
+                        std::move(factory), std::move(id));
+                    return *factory_container;
+                }
             } else {
-                auto&& [factory, factory_container] =
-                    allocate_factory<instance_factory_type>(this);
-                register_type_factory<interface_type, storage_type>(
-                    std::move(factory), std::move(id));
-                return *factory_container;
+                if constexpr (registration_requirements::valid) {
+                    std::shared_ptr<instance_factory_data_type> data;
+                    if constexpr (!is_none_v<std::decay_t<Arg>>) {
+                        data = std::allocate_shared<instance_factory_data_type>(
+                            allocator_traits::rebind<instance_factory_data_type>(
+                                get_allocator()),
+                            this, std::forward<Arg>(arg));
+                    } else {
+                        data = std::allocate_shared<instance_factory_data_type>(
+                            allocator_traits::rebind<instance_factory_data_type>(
+                                get_allocator()),
+                            this);
+                    }
+
+                    for_each(
+                        interface_types{},
+                        [&](auto element) {
+                            using interface_type = typename decltype(element)::type;
+
+                            using instance_factory_type = instance_factory<
+                                container_type,
+                                typename annotated_traits<interface_type>::type,
+                                storage_type,
+                                std::shared_ptr<instance_factory_data_type>>;
+
+                            register_type_factory<interface_type, storage_type>(
+                                allocate_factory<instance_factory_type>(data)
+                                    .first,
+                                id);
+                        });
+                    return data->container;
+                } else {
+                    return invalid_registration_return<instance_container_type>();
+                }
             }
         } else {
-            std::shared_ptr<instance_factory_data_type> data;
-            if constexpr (!is_none_v<std::decay_t<Arg>>) {
-                data = std::allocate_shared<instance_factory_data_type>(
-                    allocator_traits::rebind<instance_factory_data_type>(
-                        get_allocator()),
-                    this, std::forward<Arg>(arg));
-            } else {
-                data = std::allocate_shared<instance_factory_data_type>(
-                    allocator_traits::rebind<instance_factory_data_type>(
-                        get_allocator()),
-                    this);
-            }
-
-            for_each(
-                interface_types{},
-                [&](auto element) {
-                    using interface_type = typename decltype(element)::type;
-
-                    using instance_factory_type = instance_factory<
-                        container_type,
-                        typename annotated_traits<interface_type>::type,
-                        storage_type,
-                        std::shared_ptr<instance_factory_data_type>>;
-
-                    register_type_factory<interface_type, storage_type>(
-                        allocate_factory<instance_factory_type>(data)
-                            .first,
-                        id);
-                });
-            return data->container;
+            return invalid_registration_return<instance_container_type>();
         }
     }
 
@@ -644,41 +676,8 @@ class container : public allocator_base<Allocator> {
 
     template <class Storage, class TypeInterface, class Type>
     void check_interface_requirements() {
-        using normalized_type = normalized_type_t<Type>;
-        using normalized_interface_type = normalized_type_t<TypeInterface>;
-        constexpr bool is_alternative_type_interface =
-            is_alternative_type_interface_compatible_v<normalized_type,
-                                                       normalized_interface_type>;
-
-        static_assert(!std::is_reference_v<TypeInterface>);
-        if constexpr (detail::is_array_like_type_v<Type>) {
-            if constexpr (std::is_array_v<TypeInterface>) {
-                using exact_interface_type =
-                    detail::array_like_exact_interface_type_t<Type>;
-                static_assert(
-                    std::is_same_v<std::remove_cv_t<TypeInterface>,
-                                   std::remove_cv_t<exact_interface_type>> ||
-                        (std::is_array_v<Type> && (std::rank_v<Type> > 1) &&
-                         std::is_same_v<std::remove_cv_t<TypeInterface>,
-                                        std::remove_cv_t<std::remove_extent_t<Type>>>),
-                    "array registrations require matching array-shape interfaces");
-            } else {
-                static_assert(
-                    std::is_same_v<normalized_type, normalized_interface_type>,
-                    "array registrations require matching element-type interfaces");
-            }
-        }
-        static_assert(
-            std::is_convertible_v<normalized_type*, normalized_interface_type*> ||
-            is_alternative_type_interface,
-            "registered type must be pointer-convertible to the interface");
-        if constexpr (!std::is_same_v<normalized_type,
-                                      normalized_interface_type>) {
-            static_assert(detail::storage_interface_requirements_v<
-                              Storage, normalized_type,
-                              normalized_interface_type>,
-                          "storage requirements not met");
-        }
+        detail::interface_registration_requirements<Storage, TypeInterface,
+                                                    Type>::assert_valid();
     }
 
     template <typename U, typename... Args>
