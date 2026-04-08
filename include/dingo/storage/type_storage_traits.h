@@ -195,9 +195,6 @@ struct storage_traits<
 };
 
 template <typename Type, typename U>
-struct storage_traits<external, Type&, U> : storage_traits<external, Type, U> {};
-
-template <typename Type, typename U>
 struct storage_traits<
     unique, Type, U,
     std::enable_if_t<!type_traits<Type>::enabled && !std::is_reference_v<Type> &&
