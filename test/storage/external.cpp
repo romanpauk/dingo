@@ -61,11 +61,16 @@ TYPED_TEST(external_test, value) {
 
 TYPED_TEST(external_test, ref) {
     using container_type = TypeParam;
+    struct Mutable {
+        int value;
+    };
     Class c;
+    Mutable object{1};
 
     container_type container;
     container.template register_type<scope<external>, storage<Class&>,
                                      interfaces<Class, IClass>>(c);
+    container.template register_type<scope<external>, storage<Mutable&>>(object);
 
     ASSERT_EQ(container.template resolve<Class*>(), &c);
     AssertClass(*container.template resolve<Class*>());
@@ -76,6 +81,16 @@ TYPED_TEST(external_test, ref) {
     AssertClass(container.template resolve<const IClass&>());
     AssertClass(container.template resolve<IClass*>());
     AssertClass(container.template resolve<const IClass*>());
+
+    auto& injected = container.template resolve<Mutable&>();
+    ASSERT_EQ(&injected, &object);
+    EXPECT_EQ(injected.value, 1);
+
+    object.value = 2;
+    EXPECT_EQ(injected.value, 2);
+
+    injected.value = 3;
+    EXPECT_EQ(object.value, 3);
 }
 
 TYPED_TEST(external_test, ptr) {
