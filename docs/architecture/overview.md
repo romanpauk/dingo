@@ -64,7 +64,8 @@ own lifetime policy:
 now owns the conversion-facing resolution flow. It is responsible for:
 
 - asking storage to `resolve(...)` its native source shape
-- applying guard and closure scope through `storage_materialization_traits`
+- applying optional guard, closure, and source materialization hooks from
+  `storage_traits`
 - constructing cached conversion objects for shared and external cases
 
 [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)

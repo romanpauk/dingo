@@ -11,15 +11,16 @@
 
 #include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
-#include <dingo/storage/resettable.h>
-#include <dingo/storage/storage.h>
-#include <dingo/storage/type_storage_traits.h>
+#include <dingo/storage/detail/resettable.h>
+#include <dingo/storage/detail/storage.h>
+#include <dingo/storage/storage_traits.h>
 #include <dingo/type/type_descriptor.h>
 #include <dingo/type/normalized_type.h>
 
 #include <atomic>
 #include <exception>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 namespace dingo {
@@ -90,7 +91,7 @@ static constexpr bool is_virtual_base_of_v =
 
 namespace detail {
 template <typename Type, typename U> struct conversions<shared_cyclical, Type, U>
-    : type_storage_traits<shared_cyclical, Type, U> {};
+    : storage_traits<shared_cyclical, Type, U> {};
 
 // Disallow virtual bases as interfaces as in cyclical storage, we can't
 // properly calculate the cast when the object is not constructed

@@ -10,8 +10,8 @@
 #include <dingo/config.h>
 
 #include <dingo/registration/annotated.h>
-#include <dingo/storage/interface_storage_traits.h>
-#include <dingo/storage/storage.h>
+#include <dingo/storage/detail/interface_storage_traits.h>
+#include <dingo/storage/detail/storage.h>
 #include <dingo/type/complete_type.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/type_list.h>

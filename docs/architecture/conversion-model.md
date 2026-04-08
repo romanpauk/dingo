@@ -10,21 +10,25 @@ Dingo resolves requests in two stages:
 The full conversion behavior is spread across a few layers:
 
 - `storage_traits` says which target shapes are legal for a storage/scope pair
+  and, when needed, how the source should be guarded or materialized
 - `instance_request` carries the lookup type and requested descriptor
 - `type_conversion` performs the runtime conversion
 - `type_conversion_traits` handles explicit wrapper-to-wrapper conversions
 
 The important source files are:
 
-- [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
+- [include/dingo/storage/storage_traits.h](../../include/dingo/storage/storage_traits.h)
+- [include/dingo/storage/unique.h](../../include/dingo/storage/unique.h)
+- [include/dingo/storage/shared.h](../../include/dingo/storage/shared.h)
+- [include/dingo/storage/external.h](../../include/dingo/storage/external.h)
+- [include/dingo/storage/shared_cyclical.h](../../include/dingo/storage/shared_cyclical.h)
 - [include/dingo/resolution/instance_factory_interface.h](../../include/dingo/resolution/instance_factory_interface.h)
 - [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)
 - [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
 
 ## Storage Exposure
 
-`storage_traits` and `resolution_traits` combine into `type_storage_traits`.
-That combined type lists the result forms a stored object may service:
+`storage_traits` lists the result forms a stored object may service:
 
 - `value_types`
 - `lvalue_reference_types`

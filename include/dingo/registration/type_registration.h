@@ -11,7 +11,7 @@
 
 #include <dingo/factory/constructor.h>
 #include <dingo/type/rebind_type.h>
-#include <dingo/storage/storage.h>
+#include <dingo/storage/detail/storage.h>
 #include <dingo/type/type_list.h>
 
 namespace dingo {

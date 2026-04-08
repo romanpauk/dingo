@@ -12,7 +12,7 @@
 #include <dingo/resolution/conversion_cache.h>
 #include <dingo/resolution/instance_factory_interface.h>
 #include <dingo/resolution/type_conversion.h>
-#include <dingo/storage/type_storage_traits.h>
+#include <dingo/storage/storage_traits.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/resolution/resolving_context.h>
 
@@ -161,8 +161,8 @@ class instance_factory
     static constexpr bool uses_cached_conversions =
         Storage::conversions::is_stable && has_conversion_cache;
     using materialization_traits =
-        storage_materialization_traits<typename Storage::tag_type,
-                                       typename Storage::type>;
+        detail::storage_materialization<typename Storage::tag_type,
+                                        typename Storage::conversions>;
     using conversion_cache_base =
         detail::instance_factory_conversion_cache_base<
             uses_cached_conversions, conversion_types>;

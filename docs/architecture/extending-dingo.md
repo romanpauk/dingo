@@ -25,8 +25,8 @@ If Dingo needs to understand a wrapper's shape, start here.
 
 ### 2. `storage_traits`
 
-Specialize `storage_traits` in
-[include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
+Specialize `storage_traits` after including
+[include/dingo/storage/storage_traits.h](../../include/dingo/storage/storage_traits.h)
 when defining which result forms a given storage/scope combination can expose.
 
 This trait defines whether a registration can service requests such as:
@@ -36,6 +36,8 @@ This trait defines whether a registration can service requests such as:
 - rvalue reference
 - pointer
 - wrapper-to-wrapper conversion
+- and, when needed, custom guard / closure / source-materialization hooks for
+  the storage tag
 
 The same wrapper may have different exposure rules under `unique`, `shared`, or
 `external` storage.
@@ -80,8 +82,8 @@ That file is worth treating as executable documentation.
 
 ## Interface Storage Rebinding
 
-One extra extension point is
-[include/dingo/storage/interface_storage_traits.h](../../include/dingo/storage/interface_storage_traits.h).
+The internal storage-rebinding check lives in
+[include/dingo/storage/detail/interface_storage_traits.h](../../include/dingo/storage/detail/interface_storage_traits.h).
 
 The container uses it to decide whether a storage handle can be rebound from a
 concrete leaf type to an interface leaf type. That is the mechanism behind the
@@ -105,6 +107,10 @@ If those five answers are clear, the implementation is usually straightforward.
 ## Good Source Companions
 
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
-- [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
+- [include/dingo/storage/storage_traits.h](../../include/dingo/storage/storage_traits.h)
+- [include/dingo/storage/unique.h](../../include/dingo/storage/unique.h)
+- [include/dingo/storage/shared.h](../../include/dingo/storage/shared.h)
+- [include/dingo/storage/external.h](../../include/dingo/storage/external.h)
+- [include/dingo/storage/shared_cyclical.h](../../include/dingo/storage/shared_cyclical.h)
 - [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
 - [test/type/type_traits.cpp](../../test/type/type_traits.cpp)

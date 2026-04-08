@@ -7,7 +7,7 @@
 
 #include <dingo/resolution/conversion_cache.h>
 #include <dingo/resolution/instance_factory.h>
-#include <dingo/storage/interface_storage_traits.h>
+#include <dingo/storage/detail/interface_storage_traits.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/rtti/rtti.h>
 #include <dingo/rtti/typeid_provider.h>
@@ -196,21 +196,23 @@ TEST(type_registration_test, registration_specialization) {
         nested_storage_type,
         std::conditional_t<
             std::has_virtual_destructor_v<nested_interface_type> &&
-                is_interface_storage_rebindable_v<nested_storage_type,
-                                                  nested_interface_type>,
+                detail::is_interface_storage_rebindable_v<
+                    nested_storage_type, nested_interface_type>,
             nested_interface_type, leaf_type_t<nested_storage_type>>>;
 
     // Nested wrapper requests can still borrow to the leaf interface, but
     // built-in smart handles only rebind when C++ itself has the direct handle
     // conversion.
-    static_assert(is_interface_storage_rebindable_v<std::shared_ptr<A>, I>);
-    static_assert(is_interface_storage_rebindable_v<std::unique_ptr<A>, I>);
     static_assert(
-        !is_interface_storage_rebindable_v<std::shared_ptr<std::unique_ptr<A>>,
-                                           I>);
+        detail::is_interface_storage_rebindable_v<std::shared_ptr<A>, I>);
     static_assert(
-        !is_interface_storage_rebindable_v<std::unique_ptr<std::shared_ptr<A>>,
-                                           I>);
+        detail::is_interface_storage_rebindable_v<std::unique_ptr<A>, I>);
+    static_assert(
+        !detail::is_interface_storage_rebindable_v<
+            std::shared_ptr<std::unique_ptr<A>>, I>);
+    static_assert(
+        !detail::is_interface_storage_rebindable_v<
+            std::unique_ptr<std::shared_ptr<A>>, I>);
 
     static_assert(
         std::is_same_v<nested_stored_type, std::shared_ptr<std::unique_ptr<A>>>);

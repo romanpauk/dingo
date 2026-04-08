@@ -14,7 +14,7 @@
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
-#include <dingo/storage/type_storage_traits.h>
+#include <dingo/storage/storage_traits.h>
 #include <dingo/type/type_traits.h>
 
 #include <gtest/gtest.h>
@@ -264,6 +264,27 @@ struct storage_traits<unique, test_shared<T>, U> {
     static constexpr bool enabled = true;
     static constexpr bool is_stable = false;
 
+    template <typename Leaf, typename Context, typename Storage>
+    static auto make_guard(Context& context, const Storage&) {
+        return detail::recursion_guard<Leaf>(context);
+    }
+
+    template <typename Storage>
+    static bool preserves_closure(const Storage&) {
+        return false;
+    }
+
+    template <typename Context, typename Storage, typename Container>
+    static auto materialize_source(Context& context, Storage& storage,
+                                   Container& container) {
+        using source_type = std::remove_cv_t<std::remove_reference_t<
+            decltype(storage.resolve(context, container))>>;
+        return detail::make_rvalue_source<source_type>(
+            std::in_place, [&](void* ptr) {
+                new (ptr) source_type(storage.resolve(context, container));
+            });
+    }
+
     using value_types = type_list<test_shared<U>>;
     using lvalue_reference_types = type_list<>;
     using rvalue_reference_types = type_list<test_shared<U>&&>;
@@ -275,6 +296,23 @@ template <typename T, typename U>
 struct storage_traits<shared, test_shared<T>, U> {
     static constexpr bool enabled = true;
     static constexpr bool is_stable = true;
+
+    template <typename Leaf, typename Context, typename Storage>
+    static auto make_guard(Context& context, const Storage& storage) {
+        return detail::recursion_guard_wrapper<Leaf>(context,
+                                                     !storage.is_resolved());
+    }
+
+    template <typename Storage>
+    static bool preserves_closure(const Storage& storage) {
+        return !storage.is_resolved();
+    }
+
+    template <typename Context, typename Storage, typename Container>
+    static auto materialize_source(Context& context, Storage& storage,
+                                   Container& container) {
+        return detail::make_resolved_source(storage.resolve(context, container));
+    }
 
     using value_types = type_list<U, test_shared<U>>;
     using lvalue_reference_types = type_list<U&, test_shared<U>&>;
@@ -300,6 +338,27 @@ struct storage_traits<unique, test_unique<T>, U> {
     static constexpr bool enabled = true;
     static constexpr bool is_stable = false;
 
+    template <typename Leaf, typename Context, typename Storage>
+    static auto make_guard(Context& context, const Storage&) {
+        return detail::recursion_guard<Leaf>(context);
+    }
+
+    template <typename Storage>
+    static bool preserves_closure(const Storage&) {
+        return false;
+    }
+
+    template <typename Context, typename Storage, typename Container>
+    static auto materialize_source(Context& context, Storage& storage,
+                                   Container& container) {
+        using source_type = std::remove_cv_t<std::remove_reference_t<
+            decltype(storage.resolve(context, container))>>;
+        return detail::make_rvalue_source<source_type>(
+            std::in_place, [&](void* ptr) {
+                new (ptr) source_type(storage.resolve(context, container));
+            });
+    }
+
     using value_types = type_list<test_unique<U>, test_shared<U>>;
     using lvalue_reference_types = type_list<>;
     using rvalue_reference_types =
@@ -312,6 +371,23 @@ template <typename T, typename U>
 struct storage_traits<shared, test_unique<T>, U> {
     static constexpr bool enabled = true;
     static constexpr bool is_stable = true;
+
+    template <typename Leaf, typename Context, typename Storage>
+    static auto make_guard(Context& context, const Storage& storage) {
+        return detail::recursion_guard_wrapper<Leaf>(context,
+                                                     !storage.is_resolved());
+    }
+
+    template <typename Storage>
+    static bool preserves_closure(const Storage& storage) {
+        return !storage.is_resolved();
+    }
+
+    template <typename Context, typename Storage, typename Container>
+    static auto materialize_source(Context& context, Storage& storage,
+                                   Container& container) {
+        return detail::make_resolved_source(storage.resolve(context, container));
+    }
 
     using value_types = type_list<U>;
     using lvalue_reference_types = type_list<U&, test_unique<U>&>;
@@ -337,6 +413,27 @@ struct storage_traits<unique, test_optional<T>, U> {
     static constexpr bool enabled = true;
     static constexpr bool is_stable = false;
 
+    template <typename Leaf, typename Context, typename Storage>
+    static auto make_guard(Context& context, const Storage&) {
+        return detail::recursion_guard<Leaf>(context);
+    }
+
+    template <typename Storage>
+    static bool preserves_closure(const Storage&) {
+        return false;
+    }
+
+    template <typename Context, typename Storage, typename Container>
+    static auto materialize_source(Context& context, Storage& storage,
+                                   Container& container) {
+        using source_type = std::remove_cv_t<std::remove_reference_t<
+            decltype(storage.resolve(context, container))>>;
+        return detail::make_rvalue_source<source_type>(
+            std::in_place, [&](void* ptr) {
+                new (ptr) source_type(storage.resolve(context, container));
+            });
+    }
+
     using value_types = type_list<test_optional<U>>;
     using lvalue_reference_types = type_list<>;
     using rvalue_reference_types = type_list<test_optional<U>&&>;
@@ -348,6 +445,23 @@ template <typename T, typename U>
 struct storage_traits<shared, test_optional<T>, U> {
     static constexpr bool enabled = true;
     static constexpr bool is_stable = true;
+
+    template <typename Leaf, typename Context, typename Storage>
+    static auto make_guard(Context& context, const Storage& storage) {
+        return detail::recursion_guard_wrapper<Leaf>(context,
+                                                     !storage.is_resolved());
+    }
+
+    template <typename Storage>
+    static bool preserves_closure(const Storage& storage) {
+        return !storage.is_resolved();
+    }
+
+    template <typename Context, typename Storage, typename Container>
+    static auto materialize_source(Context& context, Storage& storage,
+                                   Container& container) {
+        return detail::make_resolved_source(storage.resolve(context, container));
+    }
 
     using value_types = type_list<>;
     using lvalue_reference_types = type_list<U&, exact_lookup<test_optional<T>>&>;
@@ -396,8 +510,10 @@ struct type_conversion_traits<test_optional<U>, test_optional<T>> {
     }
 };
 
-static_assert(is_interface_storage_rebindable_v<test_shared<Class>, IClass>);
-static_assert(is_interface_storage_rebindable_v<test_unique<Class>, IClass>);
+static_assert(
+    detail::is_interface_storage_rebindable_v<test_shared<Class>, IClass>);
+static_assert(
+    detail::is_interface_storage_rebindable_v<test_unique<Class>, IClass>);
 static_assert(detail::copy_on_resolve_v<test_shared<Class>>);
 static_assert(!detail::copy_on_resolve_v<test_unique<Class>>);
 static_assert(detail::copy_on_resolve_v<test_optional<Class>>);

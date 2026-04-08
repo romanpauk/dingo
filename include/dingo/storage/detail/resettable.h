@@ -10,9 +10,11 @@
 #include <dingo/config.h>
 
 namespace dingo {
+namespace detail {
 class resettable {
   public:
     virtual ~resettable() = default;
     virtual void reset() = 0;
 };
+} // namespace detail
 } // namespace dingo

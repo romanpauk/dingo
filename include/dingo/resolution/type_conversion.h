@@ -10,7 +10,7 @@
 #include <dingo/config.h>
 
 #include <dingo/exceptions.h>
-#include <dingo/storage/materialized_source.h>
+#include <dingo/storage/detail/materialized_source.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_list.h>

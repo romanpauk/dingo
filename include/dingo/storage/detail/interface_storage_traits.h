@@ -23,14 +23,11 @@ template <typename Source, typename Target>
 inline constexpr bool is_handle_rebindable_v =
     type_traits<Source>::enabled && type_traits<Source>::is_pointer_like &&
     type_traits<Source>::template is_handle_rebindable<Target>;
-} // namespace detail
 
 template <typename Storage, typename Interface>
 inline constexpr bool is_interface_storage_rebindable_v =
-    detail::is_handle_rebindable_v<Storage,
-                                   rebind_leaf_t<Storage, Interface>>;
+    is_handle_rebindable_v<Storage, rebind_leaf_t<Storage, Interface>>;
 
-namespace detail {
 template <typename Storage, typename InterfaceList>
 struct use_interface_as_stored_leaf;
 

@@ -27,7 +27,7 @@
 #include <dingo/type/complete_type.h>
 #include <dingo/type/type_map.h>
 #include <dingo/registration/type_registration.h>
-#include <dingo/storage/interface_storage_traits.h>
+#include <dingo/storage/detail/interface_storage_traits.h>
 
 #include <functional>
 #include <map>

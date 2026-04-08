@@ -112,19 +112,19 @@ if(DINGO_DEVELOPMENT_MODE)
         resolution/conversion_cache.h
         resolution/instance_factory_interface.h
         resolution/instance_factory.h
-        storage/interface_storage_traits.h
+        storage/detail/interface_storage_traits.h
+        storage/detail/materialized_source.h
+        storage/detail/resettable.h
+        storage/detail/storage.h
         resolution/resolving_context.h
         resolution/type_cache.h
         rtti/static_provider.h
         rtti/rtti.h
         rtti/typeid_provider.h
         storage/external.h
-        storage/materialized_source.h
-        storage/resettable.h
         storage/shared_cyclical.h
         storage/shared.h
-        storage/storage.h
-        storage/type_storage_traits.h
+        storage/storage_traits.h
         storage/unique.h
         type/normalized_type.h
         type/rebind_type.h
