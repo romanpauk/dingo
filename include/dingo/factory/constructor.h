@@ -9,7 +9,7 @@
 
 #include <dingo/config.h>
 
-#include <dingo/factory/class_traits.h>
+#include <dingo/factory/constructor_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/factory/constructor_detection.h>
 #include <dingo/type/type_list.h>
@@ -17,6 +17,8 @@
 namespace dingo {
 
 template <typename...> struct constructor;
+
+template <typename T> struct constructor<T> : constructor_detection<T> {};
 
 template <typename T, typename... Args> struct constructor<T(Args...)> {
     using arguments = type_list<Args...>;
@@ -37,8 +39,5 @@ template <typename T, typename... Args> struct constructor<T(Args...)> {
             ptr, ctx.template resolve<Args>(container)...);
     }
 };
-
-template <typename T, typename... Args>
-struct constructor<T, Args...> : constructor<T(Args...)> {};
 
 } // namespace dingo

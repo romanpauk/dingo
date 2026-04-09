@@ -91,7 +91,7 @@ if(DINGO_DEVELOPMENT_MODE)
         container.h
         exceptions.h
         factory/callable.h
-        factory/class_traits.h
+        factory/constructor_traits.h
         factory/constructor_detection.h
         factory/constructor_typedef.h
         factory/constructor.h
@@ -200,7 +200,7 @@ if(DINGO_DEVELOPMENT_MODE)
             test/container/invoke.cpp
             test/container/nested_resolution.cpp
             test/container/nesting.cpp
-            test/factory/class_factory.cpp
+            test/factory/constructor.cpp
             test/factory/constructor_detection.cpp
             test/index/index.cpp
             test/index/multibindings.cpp

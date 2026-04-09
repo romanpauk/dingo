@@ -18,7 +18,8 @@ int main() {
         // Registration of a struct A
         container.register_type<
             scope<unique>,               // using unique scope
-            factory<constructor<A>>,     // using constructor-detecting factory
+            factory<constructor<A>>,
+                                         // using constructor detection
             storage<std::unique_ptr<A>>, // stored as unique_ptr<A>
             interfaces<A>                // resolvable as A
             >();

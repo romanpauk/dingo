@@ -25,6 +25,6 @@ int main() {
     // Constructor with a highest arity will be used (factory<> is deduced
     // automatically)
     container.register_type<scope<unique>,
-                            storage<A> /*, factory<constructor_deduction<A>> */>();
+                            storage<A> /*, factory<constructor<A>> */>();
     ////
 }

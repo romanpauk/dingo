@@ -13,6 +13,9 @@
 
 namespace dingo {
 
+// Keep typedef detection in this header lightweight so opt-in construction
+// annotations can include it without pulling in the heavier construction
+// backend machinery from constructor_traits.h.
 template <typename T, typename = void>
 struct has_constructor_typedef : std::false_type {};
 
@@ -31,12 +34,8 @@ enum class constructor_kind { concrete, generic, invalid };
 template <typename T, bool = has_constructor_typedef_v<T>>
 struct constructor_typedef_impl : T::dingo_constructor_type {};
 
-template <typename T>
-struct constructor_typedef_impl<T, false> {
-    //static_assert(false, "constructor typedef not detected");
-};
-
-}
+template <typename T> struct constructor_typedef_impl<T, false> {};
+} // namespace detail
 
 template <typename T>
 struct constructor_typedef : detail::constructor_typedef_impl<T> {
@@ -44,6 +43,4 @@ struct constructor_typedef : detail::constructor_typedef_impl<T> {
         detail::constructor_kind::concrete;
 };
 
-}
-
-
+} // namespace dingo

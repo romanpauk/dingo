@@ -130,7 +130,7 @@ struct is_auto_constructible<issue_43::ambiguous_auto_dependencies>
 template <typename T> struct construct_test : public test<T> {};
 TYPED_TEST_SUITE(construct_test, container_types, );
 
-TEST(construct_test, class_traits) {
+TEST(construct_test, constructor_traits) {
     struct A {};
     struct B {
         B(std::shared_ptr<A>) {}
@@ -152,12 +152,12 @@ TEST(construct_test, class_traits) {
     static_assert(is_alternative_type_interface_compatible_v<std::variant<A, B>, B>);
     static_assert(!is_alternative_type_interface_compatible_v<std::variant<A, B>, int>);
 
-    class_traits<A>::construct();
-    class_traits<B>::construct(nullptr);
-    delete class_traits<B*>::construct(nullptr);
-    class_traits<std::unique_ptr<B>>::construct(nullptr);
-    class_traits<std::shared_ptr<B>>::construct(nullptr);
-    class_traits<std::optional<B>>::construct(nullptr);
+    constructor_traits<A>::construct();
+    constructor_traits<B>::construct(nullptr);
+    delete constructor_traits<B*>::construct(nullptr);
+    constructor_traits<std::unique_ptr<B>>::construct(nullptr);
+    constructor_traits<std::shared_ptr<B>>::construct(nullptr);
+    constructor_traits<std::optional<B>>::construct(nullptr);
 }
 
 TEST(construct_test, auto_constructible_trait_defaults_and_opt_in) {
@@ -329,8 +329,7 @@ TYPED_TEST(construct_test, variant_selected_alternative) {
     container.template register_type<scope<external>, storage<float>>(3.5f);
 
     auto detected =
-        container.template construct<std::variant<A, B>,
-                                     constructor_detection<A>>();
+        container.template construct<std::variant<A, B>, constructor<A>>();
     ASSERT_TRUE(std::holds_alternative<A>(detected));
     EXPECT_EQ(std::get<A>(detected).value, 7);
 
