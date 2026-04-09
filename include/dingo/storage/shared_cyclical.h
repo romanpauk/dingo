@@ -25,6 +25,25 @@
 namespace dingo {
 struct shared_cyclical {};
 
+template <typename Type>
+struct storage_materialization_traits<shared_cyclical, Type> {
+    template <typename Leaf, typename Context, typename Storage>
+    static auto make_guard(Context&, const Storage&) {
+        return detail::no_materialization_scope();
+    }
+
+    template <typename Storage>
+    static bool preserves_closure(const Storage&) {
+        return false;
+    }
+
+    template <typename Context, typename Storage, typename Container>
+    static auto materialize_source(Context& context, Storage& storage,
+                                   Container& container) {
+        return detail::make_resolved_source(storage.resolve(context, container));
+    }
+};
+
 template <typename Type, typename U>
 struct storage_traits<
     shared_cyclical, Type, U,
