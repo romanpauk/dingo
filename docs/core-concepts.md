@@ -34,9 +34,9 @@ Example code included from
 ```c++
 container<> container;
 // Registration of a struct A
-container.register_type<scope<unique>,           // using unique scope
-                        factory<constructor<A>>, // using constructor-detecting
-                                                 // factory
+container.register_type<scope<unique>, // using unique scope
+                        factory<constructor<A>>,
+                        // using constructor detection
                         storage<std::unique_ptr<A>>, // stored as unique_ptr<A>
                         interfaces<A>                // resolvable as A
                         >();
@@ -284,8 +284,8 @@ See:
 
 Dingo handles variants in two distinct places:
 
-- `construct<std::variant<A, B>, constructor_detection<A>>()` constructs the
-  variant by selecting `A` as the alternative to build
+- `construct<std::variant<A, B>, constructor<A>>()` constructs the variant by
+  selecting `A` as the alternative to build
 - `register_type<..., storage<std::variant<A, B>>, factory<...>>()` lets the
   container store the variant and later resolve either the whole variant or its
   currently held alternative
@@ -329,8 +329,7 @@ construct_container.register_type<scope<external>, storage<float>>(3.5f);
 
 // Construct a variant by selecting which alternative should be built.
 [[maybe_unused]] auto detected =
-    construct_container
-        .construct<std::variant<A, B>, constructor_detection<A>>();
+    construct_container.construct<std::variant<A, B>, constructor<A>>();
 assert(std::holds_alternative<A>(detected));
 
 [[maybe_unused]] auto explicit_ctor =
@@ -340,7 +339,7 @@ assert(std::holds_alternative<B>(explicit_ctor));
 container<> unique_container;
 unique_container.register_type<scope<unique>, storage<int>>();
 unique_container.register_type<scope<unique>, storage<std::variant<A, B>>,
-                               factory<constructor_detection<A>>>();
+                               factory<constructor<A>>>();
 
 // Resolve either the whole variant or its currently held alternative.
 [[maybe_unused]] auto value = unique_container.resolve<std::variant<A, B>>();
@@ -394,7 +393,10 @@ Factory styles in the repo:
 
 ### Constructor Deduction
 
-The default registration path uses `constructor_detection<T>` from
+The default registration path uses `constructor<T>` from
+[include/dingo/factory/constructor.h](../include/dingo/factory/constructor.h).
+That public shorthand delegates to the lower-level `constructor_detection<T>`
+machinery in
 [include/dingo/factory/constructor_detection.h](../include/dingo/factory/constructor_detection.h).
 When a type is registered without an explicit `factory<...>`, Dingo tries to
 pick a constructor automatically.
@@ -465,8 +467,8 @@ container.register_type<scope<external>, storage<double>>(1.1);
 
 // Constructor with a highest arity will be used (factory<> is deduced
 // automatically)
-container.register_type<scope<unique>,
-                        storage<A> /*, factory<constructor_deduction<A>> */>();
+container
+    .register_type<scope<unique>, storage<A> /*, factory<constructor<A>> */>();
 ```
 
 </details>
@@ -489,9 +491,8 @@ struct A {
 container<> container;
 container.register_type<scope<external>, storage<double>>(1.1);
 
-// Register class A that will be constructed using manually selected
-// A(double) constructor. Manually disambiguation is required to avoid
-// compile time assertion
+// Register A with the explicitly selected A(double) constructor.
+// Manual disambiguation is required to avoid a compile-time assertion.
 container.register_type<scope<unique>, storage<A>,
                         factory<constructor<A(double)>>>();
 ```

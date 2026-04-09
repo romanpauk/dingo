@@ -10,10 +10,10 @@
 #include <dingo/config.h>
 
 #include <dingo/registration/annotated.h>
-#include <dingo/factory/class_traits.h>
+#include <dingo/factory/constructor_traits.h>
+#include <dingo/factory/constructor_typedef.h>
 #include <dingo/type/complete_type.h>
 #include <dingo/type/normalized_type.h>
-#include <dingo/factory/constructor_typedef.h>
 
 #include <type_traits>
 #include <utility>
@@ -301,6 +301,12 @@ template <typename T, typename Tag, template <typename...> typename IsConstructi
           size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS>
 struct constructor_detection;
 
+template <typename T, typename Tag = automatic>
+using default_constructor_detection =
+    constructor_detection<T, Tag, list_initialization,
+                          constructor_detection_traits<
+                              normalized_type_t<T>>::max_arity>;
+
 template <typename T, typename Tag, size_t Arity> struct constructor_methods {
   private:
     template <typename Type, typename Context, typename Container, size_t... Is>
@@ -436,11 +442,7 @@ template <typename T, typename DetectionType = detail::automatic>
 struct constructor_detection
     : std::conditional_t<
           has_constructor_typedef_v<T>, constructor_typedef<T>,
-          detail::constructor_detection<
-              T,
-              DetectionType,
-              detail::list_initialization,
-              constructor_detection_traits<normalized_type_t<T>>::max_arity>> {
+          detail::default_constructor_detection<T, DetectionType>> {
 };
 
 } // namespace dingo

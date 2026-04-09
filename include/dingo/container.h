@@ -263,7 +263,7 @@ class container : public allocator_base<Allocator> {
     }
 
     template <typename T,
-              typename Factory = constructor_detection<normalized_type_t<T>>>
+              typename Factory = constructor<normalized_type_t<T>>>
     T construct(Factory factory = Factory()) {
         // TODO: nothrow constructuble
         resolving_context context;
@@ -586,12 +586,7 @@ class container : public allocator_base<Allocator> {
         // completeness-sensitive constructor detection for an incomplete type.
         if constexpr (MayAutoConstruct) {
             if constexpr (is_auto_constructible<std::decay_t<T>>::value) {
-                using type_detection = detail::automatic;
-                using type_constructor = detail::constructor_detection<
-                    Type,
-                    type_detection,
-                    detail::list_initialization,
-                    constructor_detection_traits<Type>::max_arity>;
+                using type_constructor = constructor<Type>;
                 if constexpr (type_constructor::kind ==
                               detail::constructor_kind::concrete) {
                     return auto_construct<T>(context);

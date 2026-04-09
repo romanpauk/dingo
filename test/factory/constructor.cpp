@@ -24,28 +24,26 @@
 #include "support/test.h"
 
 namespace dingo {
-template <typename T> struct class_factory_test : public test<T> {};
-TYPED_TEST_SUITE(class_factory_test, container_types, );
+template <typename T> struct constructor_test : public test<T> {};
+TYPED_TEST_SUITE(constructor_test, container_types, );
 using constructor_kind = detail::constructor_kind;
 
 template <typename T>
-using test_class_factory =
-    detail::constructor_detection<T, detail::automatic,
-                                  detail::list_initialization>;
+using detected_constructor = constructor<T>;
 
-struct generic_constructor_factory_test_type {
-    template <class U, class V> generic_constructor_factory_test_type(U, V) {}
+struct generic_constructor_test_type {
+    template <class U, class V> generic_constructor_test_type(U, V) {}
 };
 
-struct mixed_constructor_factory_test_type {
-    mixed_constructor_factory_test_type(int) {}
+struct mixed_constructor_test_type {
+    mixed_constructor_test_type(int) {}
 
-    template <class U, class V> mixed_constructor_factory_test_type(U, V) {}
+    template <class U, class V> mixed_constructor_test_type(U, V) {}
 };
 
-struct explicit_generic_constructor_factory_test_type {
+struct explicit_generic_constructor_test_type {
     template <class U, class V>
-    explicit_generic_constructor_factory_test_type(U, V) {
+    explicit_generic_constructor_test_type(U, V) {
         index = std::is_same_v<std::decay_t<U>, int> &&
                         std::is_same_v<std::decay_t<V>, float>
                     ? 0
@@ -55,93 +53,104 @@ struct explicit_generic_constructor_factory_test_type {
     int index = -1;
 };
 
-TEST(class_factory_test, default_constructor) {
+TEST(constructor_test, default_constructor) {
     struct A {
         A() = default;
     };
-    static_assert(test_class_factory<A>::arity == 0 &&
-                  test_class_factory<A>::kind == constructor_kind::concrete);
+    static_assert(detected_constructor<A>::arity == 0 &&
+                  detected_constructor<A>::kind == constructor_kind::concrete);
 }
 
-TEST(class_factory_test, default_constructor_delete) {
+TEST(constructor_test, default_constructor_delete) {
     struct A {
         A() = delete;
     };
 #if DINGO_CXX_STANDARD <= 17
     [[maybe_unused]] A a{};
-    static_assert(test_class_factory<A>::arity == 0 &&
-                  test_class_factory<A>::kind == constructor_kind::concrete);
+    static_assert(detected_constructor<A>::arity == 0 &&
+                  detected_constructor<A>::kind == constructor_kind::concrete);
 #else
-    static_assert(test_class_factory<A>::kind == constructor_kind::invalid);
+    static_assert(detected_constructor<A>::kind == constructor_kind::invalid);
 #endif
 }
 
-TEST(class_factory_test, constructor_ambiguous) {
+TEST(constructor_test, constructor_ambiguous) {
     struct A {
         A() {}
         A(const int) {}
     };
-    static_assert(test_class_factory<A>::arity == 1);
+    static_assert(detected_constructor<A>::arity == 1);
 }
 
-TEST(class_factory_test, aggregate) {
+TEST(constructor_test, aggregate) {
     struct A {
         int a;
         int b;
     };
-    static_assert(test_class_factory<A>::arity == 2 &&
-                  test_class_factory<A>::kind == constructor_kind::concrete);
+    static_assert(detected_constructor<A>::arity == 2 &&
+                  detected_constructor<A>::kind == constructor_kind::concrete);
 
     struct A1 {
         A1(int) {}
         int a;
         int b;
     };
-    static_assert(test_class_factory<A1>::arity == 1 &&
-                  test_class_factory<A1>::kind == constructor_kind::concrete);
+    static_assert(detected_constructor<A1>::arity == 1 &&
+                  detected_constructor<A1>::kind == constructor_kind::concrete);
 }
 
 // This case is skipped in constructability detection
 // as copy constructor needs to be skipped.
-TEST(class_factory_test, unconstructible) {
+TEST(constructor_test, unconstructible) {
     struct A {
         A& a;
     };
 
-    static_assert(test_class_factory<A>::kind == constructor_kind::invalid);
+    static_assert(detected_constructor<A>::kind == constructor_kind::invalid);
 }
 
-TEST(class_factory_test, constructor) {
+TYPED_TEST(constructor_test, constructor_shorthand_uses_detection) {
     struct A {
-        A(int, float);
+        A() : index(0) {}
+        A(int) : index(1) {}
+
+        int index;
     };
 
-    static_assert(constructor<A, int, float>::valid ==
-                  constructor<A(int, float)>::valid);
-    static_assert(constructor<A, int, float>::arity ==
-                  constructor<A(int, float)>::arity);
+    static_assert(detected_constructor<A>::arity == 1);
+    static_assert(constructor<A()>::arity == 0);
+
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_type<scope<unique>, storage<int>>();
+
+    auto detected = container.template construct<A, constructor<A>>();
+    EXPECT_EQ(detected.index, 1);
+
+    auto explicit_zero = container.template construct<A, constructor<A()>>();
+    EXPECT_EQ(explicit_zero.index, 0);
 }
 
-TEST(class_factory_test, generic_constructor_requires_explicit_factory) {
-    static_assert(test_class_factory<generic_constructor_factory_test_type>::arity ==
+TEST(constructor_test, generic_constructor_requires_explicit_factory) {
+    static_assert(detected_constructor<generic_constructor_test_type>::arity ==
                   2);
-    static_assert(test_class_factory<generic_constructor_factory_test_type>::kind ==
+    static_assert(detected_constructor<generic_constructor_test_type>::kind ==
                   constructor_kind::generic);
     static_assert(
-        constructor<generic_constructor_factory_test_type, int, float>::valid);
+        constructor<generic_constructor_test_type(int, float)>::valid);
 }
 
-TEST(class_factory_test, mixed_constructor_requires_explicit_factory) {
-    static_assert(test_class_factory<mixed_constructor_factory_test_type>::arity ==
+TEST(constructor_test, mixed_constructor_requires_explicit_factory) {
+    static_assert(detected_constructor<mixed_constructor_test_type>::arity ==
                   2);
-    static_assert(test_class_factory<mixed_constructor_factory_test_type>::kind ==
+    static_assert(detected_constructor<mixed_constructor_test_type>::kind ==
                   constructor_kind::generic);
-    static_assert(constructor<mixed_constructor_factory_test_type, int>::valid);
+    static_assert(constructor<mixed_constructor_test_type(int)>::valid);
     static_assert(
-        constructor<mixed_constructor_factory_test_type, int, float>::valid);
+        constructor<mixed_constructor_test_type(int, float)>::valid);
 }
 
-TYPED_TEST(class_factory_test, ambiguous_construct) {
+TYPED_TEST(constructor_test, ambiguous_construct) {
     struct A {
         A(int) : index(0) {}
         A(float) : index(1) {}
@@ -151,8 +160,8 @@ TYPED_TEST(class_factory_test, ambiguous_construct) {
         int index;
     };
 
-    static_assert(constructor<A, double>::valid == false);
-    static_assert(test_class_factory<A>::kind == constructor_kind::invalid);
+    static_assert(constructor<A(double)>::valid == false);
+    static_assert(detected_constructor<A>::kind == constructor_kind::invalid);
 
     using container_type = TypeParam;
     container_type container;
@@ -160,55 +169,55 @@ TYPED_TEST(class_factory_test, ambiguous_construct) {
     container.template register_type<scope<unique>, storage<float>>();
 
     {
-        static_assert(constructor<A, int>::arity == 1 &&
-                      constructor<A, int>::valid == true);
+        static_assert(constructor<A(int)>::arity == 1 &&
+                      constructor<A(int)>::valid == true);
         auto a = container.template construct<A, constructor<A(int)>>();
         ASSERT_EQ(a.index, 0);
     }
 
     {
-        static_assert(constructor<A, float>::arity == 1 &&
-                      constructor<A, float>::valid == true);
-        auto a = container.template construct<A, constructor<A, float>>();
+        static_assert(constructor<A(float)>::arity == 1 &&
+                      constructor<A(float)>::valid == true);
+        auto a = container.template construct<A, constructor<A(float)>>();
         ASSERT_EQ(a.index, 1);
     }
 
     {
-        static_assert(constructor<A, int, float>::arity == 2 &&
-                      constructor<A, int, float>::valid == true);
-        auto a = container.template construct<A, constructor<A, int, float>>();
+        static_assert(constructor<A(int, float)>::arity == 2 &&
+                      constructor<A(int, float)>::valid == true);
+        auto a = container.template construct<A, constructor<A(int, float)>>();
         ASSERT_EQ(a.index, 2);
     }
 
     {
-        static_assert(constructor<A, int, float>::arity == 2 &&
-                      constructor<A, float, int>::valid == true);
-        auto a = container.template construct<A, constructor<A, float, int>>();
+        static_assert(constructor<A(float, int)>::arity == 2 &&
+                      constructor<A(float, int)>::valid == true);
+        auto a = container.template construct<A, constructor<A(float, int)>>();
         ASSERT_EQ(a.index, 3);
     }
     {
-        auto a = container.template construct<A>(constructor<A, float, int>());
+        auto a = container.template construct<A>(constructor<A(float, int)>());
         ASSERT_EQ(a.index, 3);
     }
 }
 
-TYPED_TEST(class_factory_test, explicit_factory_constructs_generic_constructor) {
+TYPED_TEST(constructor_test, explicit_factory_constructs_generic_constructor) {
     using container_type = TypeParam;
     container_type container;
     container.template register_type<scope<external>, storage<int>>(4);
     container.template register_type<scope<external>, storage<float>>(1.5f);
     container.template register_type<
-        scope<unique>, storage<explicit_generic_constructor_factory_test_type>,
-        factory<constructor<explicit_generic_constructor_factory_test_type(
+        scope<unique>, storage<explicit_generic_constructor_test_type>,
+        factory<constructor<explicit_generic_constructor_test_type(
             int, float)>>>();
 
     auto a =
-        container.template resolve<explicit_generic_constructor_factory_test_type>();
+        container.template resolve<explicit_generic_constructor_test_type>();
     ASSERT_EQ(a.index, 0);
 
     auto direct = container.template construct<
-        explicit_generic_constructor_factory_test_type,
-        constructor<explicit_generic_constructor_factory_test_type(int, float)>>();
+        explicit_generic_constructor_test_type,
+        constructor<explicit_generic_constructor_test_type(int, float)>>();
     ASSERT_EQ(direct.index, 0);
 }
 
@@ -227,7 +236,7 @@ struct A {
 };
 #endif
 
-TYPED_TEST(class_factory_test, function_construct) {
+TYPED_TEST(constructor_test, function_construct) {
 #if !defined(__GNUC__)
     struct A {
         static A createInt(int v) { return A(v); }
@@ -279,7 +288,7 @@ TYPED_TEST(class_factory_test, function_construct) {
 #endif
 }
 
-TYPED_TEST(class_factory_test, callable_construct) {
+TYPED_TEST(constructor_test, callable_construct) {
     struct B {
         int v;
     };
@@ -291,7 +300,7 @@ TYPED_TEST(class_factory_test, callable_construct) {
     ASSERT_EQ(b.v, 16);
 }
 
-TYPED_TEST(class_factory_test, callable_resolve_unique) {
+TYPED_TEST(constructor_test, callable_resolve_unique) {
     struct B {
         int v;
     };
@@ -304,7 +313,7 @@ TYPED_TEST(class_factory_test, callable_resolve_unique) {
     ASSERT_EQ(b.v, 16);
 }
 
-TYPED_TEST(class_factory_test, callable_resolve_shared) {
+TYPED_TEST(constructor_test, callable_resolve_shared) {
     struct B {
         int v;
     };
@@ -317,7 +326,7 @@ TYPED_TEST(class_factory_test, callable_resolve_shared) {
     ASSERT_EQ(b.v, 16);
 }
 
-TYPED_TEST(class_factory_test, callable_resolve_shared_cyclical) {
+TYPED_TEST(constructor_test, callable_resolve_shared_cyclical) {
     struct B {
         int v;
     };
@@ -330,7 +339,7 @@ TYPED_TEST(class_factory_test, callable_resolve_shared_cyclical) {
     ASSERT_EQ(b.v, 16);
 }
 
-TYPED_TEST(class_factory_test, callable_construct_mutable_lambda) {
+TYPED_TEST(constructor_test, callable_construct_mutable_lambda) {
     struct B {
         int v;
     };
@@ -350,7 +359,7 @@ TYPED_TEST(class_factory_test, callable_construct_mutable_lambda) {
 }
 
 #if defined(__cpp_lib_move_only_function)
-TYPED_TEST(class_factory_test, callable_construct_move_only_function) {
+TYPED_TEST(constructor_test, callable_construct_move_only_function) {
     struct B {
         int v;
     };
@@ -363,7 +372,7 @@ TYPED_TEST(class_factory_test, callable_construct_move_only_function) {
     ASSERT_EQ(b.v, 16);
 }
 
-TYPED_TEST(class_factory_test, callable_resolve_unique_move_only_function) {
+TYPED_TEST(constructor_test, callable_resolve_unique_move_only_function) {
     struct B {
         int v;
     };
@@ -380,7 +389,7 @@ TYPED_TEST(class_factory_test, callable_resolve_unique_move_only_function) {
 #endif
 
 #if defined(__cpp_lib_copyable_function)
-TYPED_TEST(class_factory_test, callable_construct_copyable_function) {
+TYPED_TEST(constructor_test, callable_construct_copyable_function) {
     struct B {
         int v;
     };
@@ -394,7 +403,7 @@ TYPED_TEST(class_factory_test, callable_construct_copyable_function) {
 }
 #endif
 
-TYPED_TEST(class_factory_test, callable_construct_explicit_signature_overloaded_functor) {
+TYPED_TEST(constructor_test, callable_construct_explicit_signature_overloaded_functor) {
     struct B {
         int v;
     };
@@ -418,7 +427,7 @@ TYPED_TEST(class_factory_test, callable_construct_explicit_signature_overloaded_
     ASSERT_EQ(from_float.v, 101);
 }
 
-TYPED_TEST(class_factory_test, callable_resolve_unique_explicit_signature_overloaded_functor) {
+TYPED_TEST(constructor_test, callable_resolve_unique_explicit_signature_overloaded_functor) {
     struct B {
         int v;
     };
@@ -439,7 +448,7 @@ TYPED_TEST(class_factory_test, callable_resolve_unique_explicit_signature_overlo
 }
 
 #if DINGO_CXX_STANDARD >= 20
-TYPED_TEST(class_factory_test, callable_construct_explicit_signature_generic_lambda) {
+TYPED_TEST(constructor_test, callable_construct_explicit_signature_generic_lambda) {
     struct B {
         int v;
     };
@@ -454,7 +463,7 @@ TYPED_TEST(class_factory_test, callable_construct_explicit_signature_generic_lam
     ASSERT_EQ(b.v, 12);
 }
 
-TYPED_TEST(class_factory_test, callable_resolve_unique_explicit_signature_generic_lambda) {
+TYPED_TEST(constructor_test, callable_resolve_unique_explicit_signature_generic_lambda) {
     struct B {
         int v;
     };
@@ -472,20 +481,39 @@ TYPED_TEST(class_factory_test, callable_resolve_unique_explicit_signature_generi
 }
 #endif
 
-TYPED_TEST(class_factory_test, constructor_type) {
+TYPED_TEST(constructor_test, constructor_type) {
     struct B {
         B(int) : index(0) {}
         DINGO_CONSTRUCTOR(B(int, int)) : index(1) {}
         B(int, int, int) : index(2) {}
         int index = 0;
     };
-    static_assert(constructor_detection<B>::kind ==
+    static_assert(constructor<B>::kind ==
                   constructor_kind::concrete);
     using container_type = TypeParam;
     container_type container;
     container.template register_type<scope<unique>, storage<int>>();
     container.template register_type<scope<unique>, storage<B>>();
     ASSERT_EQ(container.template resolve<B>().index, 1);
+}
+
+TYPED_TEST(constructor_test, constructor_type_guides_auto_construct) {
+    struct B {
+        B(int) : index(0) {}
+        DINGO_CONSTRUCTOR(B(int, int)) : index(1) {}
+
+        int index = -1;
+    };
+
+    static_assert(detected_constructor<B>::arity == 2);
+    static_assert(detected_constructor<B>::kind ==
+                  constructor_kind::concrete);
+
+    using container_type = TypeParam;
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(7);
+
+    ASSERT_EQ(container.template construct<B>().index, 1);
 }
 
 } // namespace dingo

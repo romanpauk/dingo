@@ -130,7 +130,7 @@ using registration_storage_t = std::conditional_t<
 
 template <typename ParsedArgs>
 using registration_factory_default_t =
-    ::dingo::factory<::dingo::constructor_detection<
+    ::dingo::factory<::dingo::constructor<
         leaf_type_t<typename registration_storage_t<ParsedArgs>::type>>>;
 
 template <typename ParsedArgs>

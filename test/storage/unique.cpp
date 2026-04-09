@@ -268,7 +268,7 @@ TYPED_TEST(unique_test, variant_factory_selects_alternative) {
     container.template register_type<scope<unique>, storage<int>>();
     container.template register_type<
         scope<unique>, storage<std::variant<A, B>>,
-        factory<constructor_detection<A>>>();
+        factory<constructor<A>>>();
 
     auto value = container.template resolve<std::variant<A, B>>();
     ASSERT_TRUE(std::holds_alternative<A>(value));
@@ -313,7 +313,7 @@ TYPED_TEST(unique_test, variant_explicit_interfaces_override_defaults) {
     container.template register_type<scope<unique>, storage<int>>();
     container.template register_type<
         scope<unique>, storage<std::variant<A, B>>,
-        factory<constructor_detection<A>>, interfaces<A>>();
+        factory<constructor<A>>, interfaces<A>>();
 
     auto selected = container.template resolve<A>();
     EXPECT_EQ(selected.value, 0);
@@ -329,7 +329,7 @@ TYPED_TEST(unique_test, custom_alternative_type_factory_selects_alternative) {
     container_type container;
     container.template register_type<scope<unique>, storage<int>>();
     container.template register_type<scope<unique>, storage<custom_sum>,
-                                     factory<constructor_detection<custom_sum_a>>>();
+                                     factory<constructor<custom_sum_a>>>();
 
     auto whole = container.template resolve<custom_sum>();
     ASSERT_TRUE(std::holds_alternative<custom_sum_a>(whole.value));
@@ -397,17 +397,16 @@ TYPED_TEST(unique_test, ambiguous_resolve) {
     container.template register_type<scope<unique>, storage<float>>();
     container.template register_type<scope<unique>, storage<int>>();
 
-    ASSERT_EQ((container.template construct<A, constructor<A>>().index), 0);
     ASSERT_EQ((container.template construct<A, constructor<A()>>().index), 0);
     ASSERT_EQ((container.template construct<A, constructor<A(int)>>().index),
               1);
     ASSERT_EQ((container.template construct<A, constructor<A(float)>>().index),
               2);
     ASSERT_EQ(
-        (container.template construct<A, constructor<A, int, float>>().index),
+        (container.template construct<A, constructor<A(int, float)>>().index),
         3);
     ASSERT_EQ(
-        (container.template construct<A, constructor<A, float, int>>().index),
+        (container.template construct<A, constructor<A(float, int)>>().index),
         4);
 }
 

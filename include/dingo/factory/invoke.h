@@ -8,7 +8,7 @@
 #pragma once
 
 #include <dingo/config.h>
-#include <dingo/factory/function.h>
+#include <dingo/factory/callable.h>
 
 #include <utility>
 
@@ -18,8 +18,8 @@ template <typename T> struct invoke {
     template <typename Context, typename Container, typename Callable>
     static decltype(auto) construct(Context& ctx, Container& container,
                                     Callable&& callable) {
-        return detail::callable_invoke<detail::callable_signature_t<T>>::construct(
-            std::forward<Callable>(callable), ctx, container);
+        return detail::callable_invoke<detail::callable_signature_t<T>>::
+            construct(std::forward<Callable>(callable), ctx, container);
     }
 };
 

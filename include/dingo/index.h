@@ -60,8 +60,8 @@ struct index_impl<type_list<Entries...>, Value, Allocator> {
     index_impl(Allocator&) {}
 
     template <typename T> struct index_ptr : allocator_base<Allocator> {
-        // TODO: this pattern is already in class_factory_instance_ptr,
-        // try to merge those
+        // TODO: this pattern already exists in the constructor-backed
+        // instance holder; try to merge them.
         index_ptr(Allocator& al) : allocator_base<Allocator>(al) {
             auto alloc = allocator_traits::rebind<T>(this->get_allocator());
             try {

@@ -11,10 +11,11 @@
 #include <dingo/type/type_traits.h>
 
 #include <type_traits>
+#include <utility>
 
 namespace dingo {
 
-template <typename T, typename = void> struct class_traits {
+template <typename T, typename = void> struct constructor_traits {
     template <typename... Args> static T construct(Args&&... args) {
         return T{std::forward<Args>(args)...};
     }
@@ -25,7 +26,7 @@ template <typename T, typename = void> struct class_traits {
     }
 };
 
-template <typename T> struct class_traits<T*> {
+template <typename T> struct constructor_traits<T*> {
     template <typename... Args> static T* construct(Args&&... args) {
         return new T{std::forward<Args>(args)...};
     }
@@ -36,7 +37,7 @@ template <typename T> struct class_traits<T*> {
     }
 };
 
-template <typename T, size_t N> struct class_traits<T[N]> {
+template <typename T, size_t N> struct constructor_traits<T[N]> {
     template <typename... Args> static T* construct(Args&&... args) {
         return detail::make_bounded_array<T, N>(std::forward<Args>(args)...);
     }
@@ -48,14 +49,14 @@ template <typename T, size_t N> struct class_traits<T[N]> {
     }
 };
 
-template <typename T> struct class_traits<T&> {
+template <typename T> struct constructor_traits<T&> {
     template <typename... Args> static T& construct(Args&&...) {
         static_assert(true, "references cannot be constructed");
     }
 };
 
 template <typename T>
-struct class_traits<
+struct constructor_traits<
     T, std::enable_if_t<type_traits<T>::enabled && !std::is_pointer_v<T>>> {
     template <typename... Args> static T construct(Args&&... args) {
         return type_traits<T>::make(std::forward<Args>(args)...);
@@ -77,12 +78,12 @@ namespace detail {
 template <typename Type, typename Selected, typename = void>
 struct construction_dispatch {
     template <typename... Args> static auto construct(Args&&... args) {
-        return class_traits<Type>::construct(std::forward<Args>(args)...);
+        return constructor_traits<Type>::construct(std::forward<Args>(args)...);
     }
 
     template <typename... Args>
     static void construct(void* ptr, Args&&... args) {
-        class_traits<Type>::construct(ptr, std::forward<Args>(args)...);
+        constructor_traits<Type>::construct(ptr, std::forward<Args>(args)...);
     }
 };
 
@@ -94,13 +95,13 @@ struct construction_dispatch<
 
     template <typename... Args> static auto construct(Args&&... args) {
         return construction_traits<Type, Selected>::wrap(
-            class_traits<Selected>::construct(std::forward<Args>(args)...));
+            constructor_traits<Selected>::construct(std::forward<Args>(args)...));
     }
 
     template <typename... Args>
     static void construct(void* ptr, Args&&... args) {
         new (ptr) type(construction_traits<Type, Selected>::wrap(
-            class_traits<Selected>::construct(std::forward<Args>(args)...)));
+            constructor_traits<Selected>::construct(std::forward<Args>(args)...)));
     }
 };
 
@@ -112,13 +113,13 @@ struct construction_dispatch<
 
     template <typename... Args> static auto construct(Args&&... args) {
         return new type(construction_traits<Type, Selected>::wrap(
-            class_traits<Selected>::construct(std::forward<Args>(args)...)));
+            constructor_traits<Selected>::construct(std::forward<Args>(args)...)));
     }
 
     template <typename... Args>
     static void construct(void* ptr, Args&&... args) {
         new (ptr) type(construction_traits<Type, Selected>::wrap(
-            class_traits<Selected>::construct(std::forward<Args>(args)...)));
+            constructor_traits<Selected>::construct(std::forward<Args>(args)...)));
     }
 };
 } // namespace detail

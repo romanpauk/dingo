@@ -424,7 +424,7 @@ TYPED_TEST(shared_test, variant_factory_selects_alternative) {
     container.template register_type<scope<unique>, storage<int>>();
     container.template register_type<
         scope<shared>, storage<std::variant<A, B>>,
-        factory<constructor_detection<A>>>();
+        factory<constructor<A>>>();
 
     auto whole = container.template resolve<std::variant<A, B>>();
     ASSERT_TRUE(std::holds_alternative<A>(whole));
@@ -476,7 +476,7 @@ TYPED_TEST(shared_test, variant_explicit_interfaces_override_defaults) {
     container.template register_type<scope<unique>, storage<int>>();
     container.template register_type<
         scope<shared>, storage<std::variant<A, B>>,
-        factory<constructor_detection<A>>, interfaces<A>>();
+        factory<constructor<A>>, interfaces<A>>();
 
     auto copy = container.template resolve<A>();
     EXPECT_EQ(copy.value, 0);
@@ -503,7 +503,7 @@ TYPED_TEST(shared_test, custom_alternative_type_factory_selects_alternative) {
     container_type container;
     container.template register_type<scope<unique>, storage<int>>();
     container.template register_type<scope<shared>, storage<custom_sum>,
-                                     factory<constructor_detection<custom_sum_a>>>();
+                                     factory<constructor<custom_sum_a>>>();
 
     auto whole = container.template resolve<custom_sum>();
     ASSERT_TRUE(std::holds_alternative<custom_sum_a>(whole.value));
@@ -646,7 +646,7 @@ TYPED_TEST(shared_test, unique_ptr_variant_direct_construction_selects_alternati
     container.template register_type<scope<unique>, storage<int>>();
     container.template register_type<
         scope<shared>, storage<std::unique_ptr<shared_ptr_variant>>,
-        factory<constructor_detection<shared_ptr_variant_a>>>();
+        factory<constructor<shared_ptr_variant_a>>>();
 
     auto whole = container.template resolve<shared_ptr_variant>();
     ASSERT_TRUE(std::holds_alternative<shared_ptr_variant_a>(whole));
@@ -800,21 +800,20 @@ TYPED_TEST(shared_test, ambiguous_resolve) {
     container_type container;
 
     container.template register_type<scope<shared>, storage<A>,
-                                     factory<constructor<A, float, int>>>();
+                                     factory<constructor<A(float, int)>>>();
     container.template register_type<scope<shared>, storage<float>>();
     container.template register_type<scope<shared>, storage<int>>();
 
-    ASSERT_EQ((container.template construct<A, constructor<A>>().index), 0);
     ASSERT_EQ((container.template construct<A, constructor<A()>>().index), 0);
     ASSERT_EQ((container.template construct<A, constructor<A(int)>>().index),
               1);
     ASSERT_EQ((container.template construct<A, constructor<A(float)>>().index),
               2);
     ASSERT_EQ(
-        (container.template construct<A, constructor<A, int, float>>().index),
+        (container.template construct<A, constructor<A(int, float)>>().index),
         3);
     ASSERT_EQ(
-        (container.template construct<A, constructor<A, float, int>>().index),
+        (container.template construct<A, constructor<A(float, int)>>().index),
         4);
 }
 

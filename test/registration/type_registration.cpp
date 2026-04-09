@@ -81,7 +81,7 @@ TEST(type_registration_test, registration_deduction) {
     static_assert(
         std::is_same_v<
             typename type_registration<scope<int>, storage<int>>::factory_type,
-            factory<constructor_detection<int>>>);
+            factory<constructor<int>>>);
 }
 
 TEST(type_registration_test, registration_default_interface_and_conversions) {

@@ -35,8 +35,7 @@ int main() {
 
     // Construct a variant by selecting which alternative should be built.
     [[maybe_unused]] auto detected =
-        construct_container.construct<std::variant<A, B>,
-                                      constructor_detection<A>>();
+        construct_container.construct<std::variant<A, B>, constructor<A>>();
     assert(std::holds_alternative<A>(detected));
 
     [[maybe_unused]] auto explicit_ctor =
@@ -48,7 +47,7 @@ int main() {
     unique_container.register_type<scope<unique>, storage<int>>();
     unique_container.register_type<
         scope<unique>, storage<std::variant<A, B>>,
-        factory<constructor_detection<A>>>();
+        factory<constructor<A>>>();
 
     // Resolve either the whole variant or its currently held alternative.
     [[maybe_unused]] auto value =
