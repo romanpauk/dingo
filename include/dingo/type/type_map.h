@@ -9,10 +9,11 @@
 
 #include <dingo/config.h>
 
+#include <cassert>
 #include <map>
+#include <memory>
 #include <optional>
 // #include <unordered_map>
-#include <memory>
 
 namespace dingo {
 template <typename Value, typename RTTI, typename Allocator>
@@ -118,7 +119,18 @@ struct static_type_map {
         auto& node = node_factory<Key>::node;
         if (!node.value)
             return false;
+        assert(node.owner == this);
+
+        auto current = &nodes_;
+        while (*current && *current != &node) {
+            current = &(*current)->next;
+        }
+        assert(*current == &node);
+        *current = node.next;
+
         node.value.reset();
+        node.next = nullptr;
+        --size_;
 #if !defined(NDEBUG)
         node.owner = nullptr;
 #endif
