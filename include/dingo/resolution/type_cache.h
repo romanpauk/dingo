@@ -8,16 +8,17 @@
 #pragma once
 
 #include <dingo/config.h>
+#include <dingo/type/type_map.h>
 
+#include <cassert>
 #include <map>
-#include <optional>
-// #include <unordered_map>
 #include <memory>
+#include <optional>
 
 namespace dingo {
 template <typename Value, typename RTTI, typename Allocator>
-struct dynamic_type_cache {
-    dynamic_type_cache(Allocator& allocator) : values_(allocator) {}
+struct map_type_cache {
+    map_type_cache(Allocator& allocator) : values_(allocator) {}
 
     template <typename Key, typename ValueT>
     void insert(ValueT&& value) {
@@ -49,7 +50,37 @@ struct dynamic_type_cache {
 };
 
 template <typename Value, typename RTTI, typename Allocator>
-Value dynamic_type_cache<Value, RTTI, Allocator>::empty_;
+Value map_type_cache<Value, RTTI, Allocator>::empty_;
+
+template <typename Value, typename RTTI, typename Allocator>
+struct sorted_vector_type_cache {
+    sorted_vector_type_cache(Allocator& allocator) : values_(allocator) {}
+
+    template <typename Key, typename ValueT>
+    void insert(ValueT&& value) {
+        auto pb = values_.template insert<Key>(std::forward<ValueT>(value));
+        (void)pb;
+        assert(pb.second);
+    }
+
+    template <typename Key> const Value& get() {
+        if (auto* value = values_.template get<Key>()) {
+            return *value;
+        }
+        return empty_;
+    }
+
+  private:
+    sorted_vector_type_map<Value, RTTI, Allocator> values_;
+
+    static Value empty_;
+};
+
+template <typename Value, typename RTTI, typename Allocator>
+Value sorted_vector_type_cache<Value, RTTI, Allocator>::empty_;
+
+template <typename Value, typename RTTI, typename Allocator>
+using dynamic_type_cache = sorted_vector_type_cache<Value, RTTI, Allocator>;
 
 template <typename Value, typename Tag> struct static_type_cache_node {
     Value value;

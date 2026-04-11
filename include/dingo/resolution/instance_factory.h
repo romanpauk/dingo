@@ -16,6 +16,8 @@
 #include <dingo/type/rebind_type.h>
 #include <dingo/resolution/resolving_context.h>
 
+#include <utility>
+
 namespace dingo {
 // TODO: this is bit convoluted, ideally merge resolver with factory
 
@@ -357,13 +359,25 @@ class instance_factory
 template <typename T> struct instance_factory_ptr {
     instance_factory_ptr(T* ptr) : ptr_(ptr) {}
 
-    instance_factory_ptr(instance_factory_ptr<T>&& other) {
-        std::swap(ptr_, other.ptr_);
+    instance_factory_ptr(instance_factory_ptr<T>&& other) noexcept
+        : ptr_(std::exchange(other.ptr_, nullptr)) {}
+
+    instance_factory_ptr& operator=(instance_factory_ptr<T>&& other) noexcept {
+        if (this != &other) {
+            reset();
+            ptr_ = std::exchange(other.ptr_, nullptr);
+        }
+        return *this;
     }
 
     ~instance_factory_ptr() {
+        reset();
+    }
+
+    void reset() {
         if (ptr_)
             ptr_->destroy();
+        ptr_ = nullptr;
     }
 
     T& operator*() {
