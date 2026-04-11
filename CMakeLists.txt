@@ -217,6 +217,7 @@ if(DINGO_DEVELOPMENT_MODE)
             test/support/class.h
             test/support/containers.h
             test/support/test.h
+            test/type/type_map.cpp
             test/type/type_list.cpp
             test/type/type_map.cpp
             test/type/type_name.cpp
@@ -269,6 +270,7 @@ if(DINGO_DEVELOPMENT_MODE)
         add_executable(dingo_benchmark
             benchmark/container/basic.cpp
             benchmark/container/dingo.cpp
+            benchmark/container/type_map.cpp
             benchmark/index/index.cpp
         )
 

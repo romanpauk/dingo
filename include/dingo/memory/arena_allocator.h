@@ -186,6 +186,11 @@ template <
     static_assert((Alignment & (Alignment - 1)) == 0);
 
     template <typename U, typename ArenaU, std::size_t AlignmentU> friend class arena_allocator;
+    template <typename T1, std::size_t AlignmentT1, typename U1,
+              std::size_t AlignmentU1, typename Arena1>
+    friend bool operator==(const arena_allocator<T1, Arena1, AlignmentT1>& lhs,
+                           const arena_allocator<U1, Arena1, AlignmentU1>& rhs)
+        noexcept;
     Arena* arena_ = nullptr;
 
 public:
@@ -215,6 +220,11 @@ public:
 
 template < typename Arena, std::size_t Alignment > class arena_allocator<void, Arena, Alignment> {
     template <typename U, typename ArenaU, std::size_t AlignmentU> friend class arena_allocator;
+    template <typename T1, std::size_t AlignmentT1, typename U1,
+              std::size_t AlignmentU1, typename Arena1>
+    friend bool operator==(const arena_allocator<T1, Arena1, AlignmentT1>& lhs,
+                           const arena_allocator<U1, Arena1, AlignmentU1>& rhs)
+        noexcept;
     Arena* arena_ = nullptr;
 
 public:
