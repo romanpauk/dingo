@@ -7,9 +7,9 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
-#include <dingo/exceptions.h>
+#include <dingo/core/exceptions.h>
 #include <dingo/storage/materialized_source.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/type/type_conversion_traits.h>
@@ -50,6 +50,22 @@ template <typename SourceCapability>
 using source_value_type_t =
     typename materialized_source_traits_t<SourceCapability>::value_type;
 
+template <typename SourceCapability>
+decltype(auto) materialized_value(SourceCapability&& source) {
+    return materialized_source_traits_t<SourceCapability>::value(
+        std::forward<SourceCapability>(source));
+}
+
+template <typename SourceCapability>
+decltype(auto) materialized_reference(SourceCapability&& source) {
+    return materialized_source_traits_t<SourceCapability>::reference(source);
+}
+
+template <typename SourceCapability>
+decltype(auto) materialized_pointer(SourceCapability&& source) {
+    return materialized_source_traits_t<SourceCapability>::pointer(source);
+}
+
 template <typename Target, typename Source>
 Target& borrow_reference(Source& source, type_descriptor requested_type,
                          type_descriptor registered_type) {
@@ -73,15 +89,66 @@ Target& resolve_handle_or_borrow(Factory& factory, Context& context,
                                  SourceCapability&& source,
                                  type_descriptor requested_type,
                                  type_descriptor registered_type) {
-    if constexpr (is_rebindable_handle_v<Target, Source>) {
+    using materialized_reference_type =
+        decltype(materialized_reference(std::declval<SourceCapability>()));
+    if constexpr (std::is_constructible_v<Target,
+                                          materialized_reference_type>) {
+        return factory.template resolve_conversion<Target>(
+            context, materialized_reference(source));
+    } else if constexpr (is_rebindable_handle_v<Target, Source>) {
         return type_traits<Source>::template resolve_type<Target>(
             factory, context, requested_type, registered_type);
     } else {
-        return borrow_reference<Target>(
-            materialized_source_traits_t<SourceCapability>::value(
-                std::forward<SourceCapability>(source)),
-            requested_type, registered_type);
+        return borrow_reference<Target>(materialized_value(
+                                            std::forward<SourceCapability>(
+                                                source)),
+                                        requested_type, registered_type);
     }
+}
+
+template <typename Target, typename SourceCapability>
+Target& resolve_materialized_convertible_reference(
+    SourceCapability&& source, type_descriptor requested_type,
+    type_descriptor registered_type) {
+    using source_type = source_value_type_t<SourceCapability>;
+    if constexpr (std::is_convertible_v<source_type*, Target*>) {
+        return static_cast<Target&>(materialized_reference(source));
+    } else {
+        throw make_type_not_convertible_exception(requested_type,
+                                                  registered_type);
+    }
+}
+
+template <typename Target, typename SourceCapability>
+Target* resolve_materialized_convertible_pointer(
+    SourceCapability&& source, type_descriptor requested_type,
+    type_descriptor registered_type) {
+    return std::addressof(resolve_materialized_convertible_reference<Target>(
+        std::forward<SourceCapability>(source), requested_type,
+        registered_type));
+}
+
+template <typename Target, typename SourceCapability>
+Target resolve_materialized_handle_from_pointer(SourceCapability&& source) {
+    return type_traits<Target>::from_pointer(
+        materialized_value(std::forward<SourceCapability>(source)));
+}
+
+template <typename Target, typename SourceCapability>
+Target& resolve_borrowed_materialized_reference(
+    SourceCapability&& source, type_descriptor requested_type,
+    type_descriptor registered_type) {
+    return borrow_reference<Target>(materialized_reference(source),
+                                    requested_type, registered_type);
+}
+
+template <typename Target, typename SourceCapability>
+Target* resolve_borrowed_materialized_pointer(
+    SourceCapability&& source, type_descriptor requested_type,
+    type_descriptor registered_type) {
+    return std::addressof(resolve_borrowed_materialized_reference<Target>(
+        std::forward<SourceCapability>(source), requested_type,
+        registered_type));
 }
 
 template <typename Target, typename Source, typename Factory, typename Context,
@@ -90,15 +157,34 @@ Target* resolve_handle_or_borrow_pointer(Factory& factory, Context& context,
                                          SourceCapability&& source,
                                          type_descriptor requested_type,
                                          type_descriptor registered_type) {
-    if constexpr (is_rebindable_handle_v<Target, Source>) {
+    using materialized_reference_type =
+        decltype(materialized_reference(std::declval<SourceCapability>()));
+    if constexpr (std::is_constructible_v<Target,
+                                          materialized_reference_type>) {
+        return std::addressof(factory.template resolve_conversion<Target>(
+            context, materialized_reference(source)));
+    } else if constexpr (is_rebindable_handle_v<Target, Source>) {
         return std::addressof(
             type_traits<Source>::template resolve_type<Target>(
                 factory, context, requested_type, registered_type));
     } else {
         return std::addressof(borrow_reference<Target>(
-            materialized_source_traits_t<SourceCapability>::value(
-                std::forward<SourceCapability>(source)),
+            materialized_value(std::forward<SourceCapability>(source)),
             requested_type, registered_type));
+    }
+}
+
+template <typename Target, typename Source, typename SourceCapability>
+Target* resolve_materialized_get_pointer(SourceCapability&& source,
+                                         type_descriptor requested_type,
+                                         type_descriptor registered_type) {
+    auto& value = materialized_reference(source);
+    if constexpr (std::is_convertible_v<decltype(type_traits<Source>::get(value)),
+                                        Target*>) {
+        return type_traits<Source>::get(value);
+    } else {
+        throw make_type_not_convertible_exception(requested_type,
+                                                  registered_type);
     }
 }
 
@@ -142,6 +228,32 @@ Target* resolve_alternative_type_pointer(Sum& sum,
                                                    registered_type));
 }
 
+template <typename Target, typename SourceCapability>
+Target resolve_materialized_alternative_value(
+    SourceCapability&& source, type_descriptor requested_type,
+    type_descriptor registered_type) {
+    auto&& value = materialized_value(std::forward<SourceCapability>(source));
+    return extract_alternative_type_value<Target>(std::move(value),
+                                                  requested_type,
+                                                  registered_type);
+}
+
+template <typename Target, typename SourceCapability>
+Target& resolve_materialized_alternative_reference(
+    SourceCapability&& source, type_descriptor requested_type,
+    type_descriptor registered_type) {
+    return resolve_alternative_type_reference<Target>(
+        materialized_reference(source), requested_type, registered_type);
+}
+
+template <typename Target, typename SourceCapability>
+Target* resolve_materialized_alternative_pointer(
+    SourceCapability&& source, type_descriptor requested_type,
+    type_descriptor registered_type) {
+    return resolve_alternative_type_pointer<Target>(
+        materialized_reference(source), requested_type, registered_type);
+}
+
 template <typename Source>
 using borrowed_value_type_t = std::remove_cv_t<std::remove_reference_t<
     decltype(type_traits<Source>::borrow(std::declval<Source&>()))>>;
@@ -180,6 +292,41 @@ inline constexpr bool is_borrowed_alternative_type_v =
 template <typename Source, typename Target>
 inline constexpr bool is_borrowed_alternative_type_alternative_v =
     is_borrowed_alternative_type_alternative<Source, Target>::value;
+
+template <typename SourceCapability>
+decltype(auto) resolve_borrowed_materialized_value(SourceCapability&& source) {
+    using source_type = source_value_type_t<SourceCapability>;
+    auto& value = materialized_reference(source);
+    return type_traits<source_type>::borrow(value);
+}
+
+template <typename Target, typename SourceCapability>
+Target* resolve_borrowed_materialized_value_pointer(
+    SourceCapability&& source) {
+    return std::addressof(static_cast<Target&>(
+        resolve_borrowed_materialized_value(
+            std::forward<SourceCapability>(source))));
+}
+
+template <typename Target, typename SourceCapability>
+Target& resolve_borrowed_materialized_alternative_reference(
+    SourceCapability&& source, type_descriptor requested_type,
+    type_descriptor registered_type) {
+    return resolve_alternative_type_reference<Target>(
+        resolve_borrowed_materialized_value(
+            std::forward<SourceCapability>(source)),
+        requested_type, registered_type);
+}
+
+template <typename Target, typename SourceCapability>
+Target* resolve_borrowed_materialized_alternative_pointer(
+    SourceCapability&& source, type_descriptor requested_type,
+    type_descriptor registered_type) {
+    return resolve_alternative_type_pointer<Target>(
+        resolve_borrowed_materialized_value(
+            std::forward<SourceCapability>(source)),
+        requested_type, registered_type);
+}
 } // namespace detail
 
 // TODO: this file is really terrible, I need to look at how to deduplicate it
@@ -216,11 +363,9 @@ struct type_conversion<
     static Target apply(Factory&, Context&, SourceCapability&& source,
                         type_descriptor requested_type,
                         type_descriptor registered_type) {
-        auto&& value =
-            detail::materialized_source_traits_t<SourceCapability>::value(
-                std::forward<SourceCapability>(source));
-        return detail::extract_alternative_type_value<Target>(
-            std::move(value), requested_type, registered_type);
+        return detail::resolve_materialized_alternative_value<Target>(
+            std::forward<SourceCapability>(source), requested_type,
+            registered_type);
     }
 };
 
@@ -264,8 +409,7 @@ struct type_conversion<
     template <typename Factory, typename Context, typename SourceCapability>
     static Target* apply(Factory&, Context&, SourceCapability&& source,
                          type_descriptor, type_descriptor) {
-        return detail::materialized_source_traits_t<SourceCapability>::value(
-            std::forward<SourceCapability>(source));
+        return detail::materialized_value(std::forward<SourceCapability>(source));
     }
 };
 
@@ -278,8 +422,7 @@ struct type_conversion<
     static Target (*apply(Factory&, Context&, SourceCapability&& source,
                           type_descriptor, type_descriptor))[N] {
         return reinterpret_cast<Target(*)[N]>(
-            detail::materialized_source_traits_t<SourceCapability>::value(
-                std::forward<SourceCapability>(source)));
+            detail::materialized_value(std::forward<SourceCapability>(source)));
     }
 };
 
@@ -289,8 +432,7 @@ struct type_conversion<Target*, detail::rvalue_source<Source*>,
     template <typename Factory, typename Context, typename SourceCapability>
     static Target* apply(Factory&, Context&, SourceCapability&& source,
                          type_descriptor, type_descriptor) {
-        return detail::materialized_source_traits_t<SourceCapability>::value(
-            std::forward<SourceCapability>(source));
+        return detail::materialized_value(std::forward<SourceCapability>(source));
     }
 };
 
@@ -302,9 +444,8 @@ struct type_conversion<
     template <typename Factory, typename Context, typename SourceCapability>
     static Target apply(Factory&, Context&, SourceCapability&& source,
                         type_descriptor, type_descriptor) {
-        return type_traits<Target>::from_pointer(
-            detail::materialized_source_traits_t<SourceCapability>::value(
-                std::forward<SourceCapability>(source)));
+        return detail::resolve_materialized_handle_from_pointer<Target>(
+            std::forward<SourceCapability>(source));
     }
 };
 
@@ -352,8 +493,8 @@ struct type_conversion<
     static Target& apply(Factory&, Context&, Capability&& source,
                          type_descriptor requested_type,
                          type_descriptor registered_type) {
-        return detail::resolve_alternative_type_reference<Target>(
-            detail::materialized_source_traits_t<Capability>::reference(source),
+        return detail::resolve_materialized_alternative_reference<Target>(
+            std::forward<Capability>(source),
             requested_type, registered_type);
     }
 };
@@ -370,7 +511,7 @@ struct type_conversion<
     template <typename Factory, typename Context, typename Capability>
     static Target& apply(Factory&, Context&, Capability&& source,
                          type_descriptor, type_descriptor) {
-        return detail::materialized_source_traits_t<Capability>::reference(source);
+        return detail::materialized_reference(source);
     }
 };
 
@@ -404,8 +545,7 @@ struct type_conversion<
     template <typename Factory, typename Context, typename SourceCapability>
     static Target& apply(Factory&, Context&, SourceCapability&& source,
                          type_descriptor, type_descriptor) {
-        return detail::materialized_source_traits_t<SourceCapability>::reference(
-            source);
+        return detail::materialized_reference(source);
     }
 };
 
@@ -425,8 +565,8 @@ struct type_conversion<
     static Target* apply(Factory&, Context&, Capability&& source,
                          type_descriptor requested_type,
                          type_descriptor registered_type) {
-        return detail::resolve_alternative_type_pointer<Target>(
-            detail::materialized_source_traits_t<Capability>::reference(source),
+        return detail::resolve_materialized_alternative_pointer<Target>(
+            std::forward<Capability>(source),
             requested_type, registered_type);
     }
 };
@@ -444,7 +584,7 @@ struct type_conversion<
     static Target* apply(Factory&, Context&, Capability&& source,
                          type_descriptor, type_descriptor) {
         return std::addressof(
-            detail::materialized_source_traits_t<Capability>::reference(source));
+            detail::materialized_reference(source));
     }
 };
 
@@ -472,6 +612,47 @@ struct type_conversion<
 template <typename Target, typename Source>
 struct type_conversion<
     Target, detail::lvalue_source<Source>,
+    std::enable_if_t<
+        std::is_lvalue_reference_v<Target> &&
+        is_pointer_like_type_v<
+            std::remove_cv_t<std::remove_reference_t<Target>>> &&
+        std::is_same_v<
+            std::remove_cv_t<std::remove_reference_t<Target>>,
+            Source>>> {
+    template <typename Factory, typename Context, typename SourceCapability>
+    static Target apply(Factory&, Context&, SourceCapability&& source,
+                        type_descriptor, type_descriptor) {
+        return detail::materialized_reference(source);
+    }
+};
+
+template <typename Target, typename Source>
+struct type_conversion<
+    Target, detail::lvalue_source<Source>,
+    std::enable_if_t<
+        std::is_lvalue_reference_v<Target> &&
+        is_pointer_like_type_v<
+            std::remove_cv_t<std::remove_reference_t<Target>>> &&
+        is_pointer_like_type_v<Source> &&
+        !std::is_same_v<
+            std::remove_cv_t<std::remove_reference_t<Target>>,
+            Source>>> {
+    template <typename Factory, typename Context, typename SourceCapability>
+    static Target apply(Factory& factory, Context& context,
+                        SourceCapability&& source,
+                        type_descriptor requested_type,
+                        type_descriptor registered_type) {
+        using target_handle =
+            std::remove_cv_t<std::remove_reference_t<Target>>;
+        return detail::resolve_handle_or_borrow<target_handle, Source>(
+            factory, context, std::forward<SourceCapability>(source),
+            requested_type, registered_type);
+    }
+};
+
+template <typename Target, typename Source>
+struct type_conversion<
+    Target, detail::lvalue_source<Source>,
     std::enable_if_t<type_traits<Target>::enabled &&
                      type_traits<Source>::enabled &&
                      !is_pointer_like_type_v<Target> &&
@@ -480,14 +661,9 @@ struct type_conversion<
     static Target& apply(Factory&, Context&, SourceCapability&& source,
                          [[maybe_unused]] type_descriptor requested_type,
                          [[maybe_unused]] type_descriptor registered_type) {
-        if constexpr (std::is_convertible_v<Source*, Target*>) {
-            return static_cast<Target&>(
-                detail::materialized_source_traits_t<SourceCapability>::reference(
-                    source));
-        } else {
-            throw detail::make_type_not_convertible_exception(requested_type,
-                                                              registered_type);
-        }
+        return detail::resolve_materialized_convertible_reference<Target>(
+            std::forward<SourceCapability>(source), requested_type,
+            registered_type);
     }
 };
 
@@ -502,14 +678,9 @@ struct type_conversion<
     static Target* apply(Factory&, Context&, SourceCapability&& source,
                          [[maybe_unused]] type_descriptor requested_type,
                          [[maybe_unused]] type_descriptor registered_type) {
-        if constexpr (std::is_convertible_v<Source*, Target*>) {
-            return std::addressof(static_cast<Target&>(
-                detail::materialized_source_traits_t<SourceCapability>::reference(
-                    source)));
-        } else {
-            throw detail::make_type_not_convertible_exception(requested_type,
-                                                              registered_type);
-        }
+        return detail::resolve_materialized_convertible_pointer<Target>(
+            std::forward<SourceCapability>(source), requested_type,
+            registered_type);
     }
 };
 
@@ -521,10 +692,8 @@ struct type_conversion<
     template <typename Factory, typename Context, typename SourceCapability>
     static Target& apply(Factory&, Context&, SourceCapability&& source,
                          type_descriptor, type_descriptor) {
-        auto& value =
-            detail::materialized_source_traits_t<SourceCapability>::reference(
-                source);
-        return type_traits<Source>::borrow(value);
+        return detail::resolve_borrowed_materialized_value(
+            std::forward<SourceCapability>(source));
     }
 };
 
@@ -538,11 +707,9 @@ struct type_conversion<
     static Target& apply(Factory&, Context&, SourceCapability&& source,
                          type_descriptor requested_type,
                          type_descriptor registered_type) {
-        auto& value =
-            detail::materialized_source_traits_t<SourceCapability>::reference(
-                source);
-        return detail::resolve_alternative_type_reference<Target>(
-            type_traits<Source>::borrow(value), requested_type, registered_type);
+        return detail::resolve_borrowed_materialized_alternative_reference<
+            Target>(std::forward<SourceCapability>(source), requested_type,
+                    registered_type);
     }
 };
 
@@ -560,10 +727,8 @@ struct type_conversion<
                          SourceCapability&& source,
                          type_descriptor requested_type,
                          type_descriptor registered_type) {
-        return detail::borrow_reference<Target>(
-            detail::materialized_source_traits_t<SourceCapability>::reference(
-                source),
-            requested_type,
+        return detail::resolve_borrowed_materialized_reference<Target>(
+            std::forward<SourceCapability>(source), requested_type,
             registered_type);
     }
 };
@@ -577,7 +742,7 @@ struct type_conversion<
     static Target (&apply(Factory&, Context&, SourceCapability&& source,
                           type_descriptor, type_descriptor))[N] {
         return *reinterpret_cast<Target(*)[N]>(
-            detail::materialized_source_traits_t<SourceCapability>::pointer(source));
+            detail::materialized_pointer(source));
     }
 };
 
@@ -588,10 +753,8 @@ struct type_conversion<
     template <typename Factory, typename Context, typename SourceCapability>
     static Target* apply(Factory&, Context&, SourceCapability&& source,
                          type_descriptor, type_descriptor) {
-        auto& value =
-            detail::materialized_source_traits_t<SourceCapability>::reference(
-                source);
-        return std::addressof(static_cast<Target&>(type_traits<Source>::borrow(value)));
+        return detail::resolve_borrowed_materialized_value_pointer<Target>(
+            std::forward<SourceCapability>(source));
     }
 };
 
@@ -604,11 +767,9 @@ struct type_conversion<
     static Target* apply(Factory&, Context&, SourceCapability&& source,
                          type_descriptor requested_type,
                          type_descriptor registered_type) {
-        auto& value =
-            detail::materialized_source_traits_t<SourceCapability>::reference(
-                source);
-        return detail::resolve_alternative_type_pointer<Target>(
-            type_traits<Source>::borrow(value), requested_type, registered_type);
+        return detail::resolve_borrowed_materialized_alternative_pointer<Target>(
+            std::forward<SourceCapability>(source), requested_type,
+            registered_type);
     }
 };
 
@@ -626,11 +787,9 @@ struct type_conversion<
                          SourceCapability&& source,
                          type_descriptor requested_type,
                          type_descriptor registered_type) {
-        return std::addressof(detail::borrow_reference<Target>(
-            detail::materialized_source_traits_t<SourceCapability>::reference(
-                source),
-            requested_type,
-            registered_type));
+        return detail::resolve_borrowed_materialized_pointer<Target>(
+            std::forward<SourceCapability>(source), requested_type,
+            registered_type);
     }
 };
 
@@ -643,8 +802,7 @@ struct type_conversion<
     template <typename Factory, typename Context, typename SourceCapability>
     static Target* apply(Factory&, Context&, SourceCapability&& source,
                          type_descriptor, type_descriptor) {
-        return detail::materialized_source_traits_t<SourceCapability>::pointer(
-            source);
+        return detail::materialized_pointer(source);
     }
 };
 
@@ -657,8 +815,7 @@ struct type_conversion<
     static Target (*apply(Factory&, Context&, SourceCapability&& source,
                           type_descriptor, type_descriptor))[N] {
         return reinterpret_cast<Target(*)[N]>(
-            detail::materialized_source_traits_t<SourceCapability>::pointer(
-                source));
+            detail::materialized_pointer(source));
     }
 };
 
@@ -672,16 +829,9 @@ struct type_conversion<
     static Target* apply(Factory&, Context&, SourceCapability&& source,
                          [[maybe_unused]] type_descriptor requested_type,
                          [[maybe_unused]] type_descriptor registered_type) {
-        auto& value =
-            detail::materialized_source_traits_t<SourceCapability>::reference(
-                source);
-        if constexpr (std::is_convertible_v<decltype(type_traits<Source>::get(value)),
-                                            Target*>) {
-            return type_traits<Source>::get(value);
-        } else {
-            throw detail::make_type_not_convertible_exception(requested_type,
-                                                              registered_type);
-        }
+        return detail::resolve_materialized_get_pointer<Target, Source>(
+            std::forward<SourceCapability>(source), requested_type,
+            registered_type);
     }
 };
 
@@ -689,7 +839,32 @@ template <typename Target, typename Source>
 struct type_conversion<
     Target, detail::lvalue_source<Source>,
     std::enable_if_t<is_pointer_like_type_v<Target> &&
-                     is_pointer_like_type_v<Source>>> {
+                     std::is_same_v<Target, Source>>> {
+    template <typename Factory, typename Context, typename SourceCapability>
+    static Target& apply(Factory&, Context&, SourceCapability&& source,
+                         type_descriptor, type_descriptor) {
+        return detail::materialized_reference(source);
+    }
+};
+
+template <typename Target, typename Source>
+struct type_conversion<
+    Target*, detail::lvalue_source<Source>,
+    std::enable_if_t<is_pointer_like_type_v<Target> &&
+                     std::is_same_v<Target, Source>>> {
+    template <typename Factory, typename Context, typename SourceCapability>
+    static Target* apply(Factory&, Context&, SourceCapability&& source,
+                         type_descriptor, type_descriptor) {
+        return std::addressof(detail::materialized_reference(source));
+    }
+};
+
+template <typename Target, typename Source>
+struct type_conversion<
+    Target, detail::lvalue_source<Source>,
+    std::enable_if_t<is_pointer_like_type_v<Target> &&
+                     is_pointer_like_type_v<Source> &&
+                     !std::is_same_v<Target, Source>>> {
     template <typename Factory, typename Context, typename SourceCapability>
     static Target& apply(Factory& factory, Context& context,
                          SourceCapability&& source,
@@ -705,7 +880,8 @@ template <typename Target, typename Source>
 struct type_conversion<
     Target*, detail::lvalue_source<Source>,
     std::enable_if_t<is_pointer_like_type_v<Target> &&
-                     is_pointer_like_type_v<Source>>> {
+                     is_pointer_like_type_v<Source> &&
+                     !std::is_same_v<Target, Source>>> {
     template <typename Factory, typename Context, typename SourceCapability>
     static Target* apply(Factory& factory, Context& context,
                          SourceCapability&& source,
@@ -725,8 +901,7 @@ struct type_conversion<
     template <typename Factory, typename Context, typename SourceCapability>
     static Target* apply(Factory&, Context&, SourceCapability&& source,
                          type_descriptor, type_descriptor) {
-        return detail::materialized_source_traits_t<SourceCapability>::pointer(
-            source);
+        return detail::materialized_pointer(source);
     }
 };
 
@@ -739,8 +914,7 @@ struct type_conversion<
     template <typename Factory, typename Context, typename SourceCapability>
     static Target& apply(Factory&, Context&, SourceCapability&& source,
                          type_descriptor, type_descriptor) {
-        return detail::materialized_source_traits_t<SourceCapability>::reference(
-            source);
+        return detail::materialized_reference(source);
     }
 };
 
@@ -753,8 +927,7 @@ struct type_conversion<
     template <typename Factory, typename Context, typename SourceCapability>
     static Target* apply(Factory&, Context&, SourceCapability&& source,
                          type_descriptor, type_descriptor) {
-        return detail::materialized_source_traits_t<SourceCapability>::pointer(
-            source);
+        return detail::materialized_pointer(source);
     }
 };
 } // namespace dingo

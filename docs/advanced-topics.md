@@ -113,7 +113,7 @@ See:
 
 - [examples/index/index.cpp](../examples/index/index.cpp)
 - [examples/index/message_processing.cpp](../examples/index/message_processing.cpp)
-- [include/dingo/index.h](../include/dingo/index.h)
+- [include/dingo/index/index.h](../include/dingo/index/index.h)
 - [include/dingo/index/map.h](../include/dingo/index/map.h)
 - [include/dingo/index/unordered_map.h](../include/dingo/index/unordered_map.h)
 - [include/dingo/index/array.h](../include/dingo/index/array.h)

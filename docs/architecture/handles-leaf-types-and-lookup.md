@@ -74,7 +74,7 @@ leaf-based lookup would be too permissive.
 It is defined in
 [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h) and
 enforced by the matching logic in
-[include/dingo/resolution/instance_factory.h](../../include/dingo/resolution/instance_factory.h).
+[include/dingo/resolution/runtime_binding.h](../../include/dingo/resolution/runtime_binding.h).
 
 Use it when the caller must request a specific wrapper spelling instead of "any
 request with this leaf type."
@@ -95,4 +95,4 @@ The rebinding utilities are what allow those three layers to compose.
 
 - [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
-- [include/dingo/resolution/instance_factory.h](../../include/dingo/resolution/instance_factory.h)
+- [include/dingo/resolution/runtime_binding.h](../../include/dingo/resolution/runtime_binding.h)

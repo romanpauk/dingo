@@ -7,4 +7,4 @@ int main() {
     container.register_type<dingo::scope<dingo::unique>, dingo::storage<int>>();
 }
 
-// CHECK: selected storage tag must be complete
+// CHECK: registered storage tag must be complete

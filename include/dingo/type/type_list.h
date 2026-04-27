@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
 #include <cstddef>
 #include <initializer_list>

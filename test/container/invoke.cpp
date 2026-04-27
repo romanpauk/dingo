@@ -12,7 +12,9 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <functional>
+#include <vector>
 
 #include "support/containers.h"
 #include "support/test.h"
@@ -112,6 +114,96 @@ TYPED_TEST(invoke_test, invoke_mutable_lambda) {
 
     ASSERT_EQ(container.invoke(fn), 5);
     ASSERT_EQ(container.invoke(fn), 8);
+}
+
+TYPED_TEST(invoke_test,
+           invoke_registered_services_use_local_bindings_over_host_bindings) {
+    using container_type = TypeParam;
+
+    struct service {
+        explicit service(int& resolved_value) : value(resolved_value) {}
+
+        int value;
+    };
+
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(5);
+    container.template register_type<
+        scope<shared>, storage<service>,
+        bindings<bind<scope<shared>, storage<int>,
+                      factory<constructor<int()>>>>>();
+
+    ASSERT_EQ(container.invoke([](service resolved) {
+        return resolved.value;
+    }), 0);
+}
+
+TYPED_TEST(invoke_test, invoke_keyed_dependencies_use_runtime_keyed_registrations) {
+    using container_type = TypeParam;
+
+    struct first_key : std::integral_constant<int, 0> {};
+    struct second_key : std::integral_constant<int, 1> {};
+
+    container_type container;
+    container.template register_type<scope<external>, storage<int>, key<first_key>>(3);
+    container.template register_type<scope<external>, storage<int>, key<second_key>>(4);
+
+    ASSERT_EQ(container.template resolve<int>(key<first_key>{}), 3);
+    ASSERT_EQ(container.template resolve<int>(key<second_key>{}), 4);
+
+    ASSERT_EQ(container.invoke([](keyed<int&, first_key> first,
+                                  keyed<int&, second_key> second) {
+        return static_cast<int&>(first) * static_cast<int&>(second);
+    }), 12);
+}
+
+TYPED_TEST(invoke_test, invoke_keyed_collection_dependencies_use_runtime_keyed_registrations) {
+    using container_type = TypeParam;
+
+    struct first_key : std::integral_constant<int, 0> {};
+
+    container_type container;
+    container.template register_type<scope<shared>,
+                                     storage<std::shared_ptr<ClassTag<0>>>,
+                                     interfaces<IClass>, key<first_key>>();
+    container.template register_type<scope<shared>,
+                                     storage<std::shared_ptr<ClassTag<1>>>,
+                                     interfaces<IClass>, key<first_key>>();
+
+    auto first = container.template resolve<std::vector<std::shared_ptr<IClass>>>(
+        key<first_key>{});
+
+    ASSERT_EQ(first.size(), 2);
+    std::vector<size_t> first_tags{first[0]->GetTag(), first[1]->GetTag()};
+    std::sort(first_tags.begin(), first_tags.end());
+    ASSERT_EQ(first_tags, (std::vector<size_t>{0, 1}));
+    ASSERT_THROW(
+        (container.template resolve<std::shared_ptr<IClass>>(key<first_key>{})),
+        type_ambiguous_exception);
+
+    ASSERT_EQ(container.invoke([](keyed<std::vector<std::shared_ptr<IClass>>, first_key> classes) {
+        auto resolved = static_cast<std::vector<std::shared_ptr<IClass>>>(classes);
+        return resolved[0]->GetTag() + resolved[1]->GetTag();
+    }), 1);
+}
+
+TYPED_TEST(invoke_test, runtime_injector_facade_invokes_and_constructs_collections) {
+    using container_type = TypeParam;
+
+    container_type container;
+    container.template register_type<scope<external>, storage<int>>(9);
+    container.template register_type<scope<shared>,
+                                     storage<std::shared_ptr<ClassTag<0>>>,
+                                     interfaces<IClass>>();
+    container.template register_type<scope<shared>,
+                                     storage<std::shared_ptr<ClassTag<1>>>,
+                                     interfaces<IClass>>();
+
+    auto injector = container.injector();
+    auto classes = injector.template construct_collection<std::vector<std::shared_ptr<IClass>>>();
+
+    ASSERT_EQ(classes.size(), 2);
+    ASSERT_EQ(injector.invoke([](int value) { return value * 2; }), 18);
 }
 
 #if defined(__cpp_lib_move_only_function)

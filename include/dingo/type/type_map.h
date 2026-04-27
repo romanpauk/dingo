@@ -7,12 +7,13 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
 #include <cassert>
 #include <map>
 #include <memory>
 #include <optional>
+#include <tuple>
 // #include <unordered_map>
 
 namespace dingo {
@@ -20,9 +21,12 @@ template <typename Value, typename RTTI, typename Allocator>
 struct dynamic_type_map {
     dynamic_type_map(Allocator& allocator) : values_(allocator) {}
 
-    template <typename Key> std::pair<Value&, bool> insert(Value&& value) {
-        auto pb = values_.emplace(RTTI::template get_type_index<Key>(),
-                                  std::forward<Value>(value));
+    template <typename Key, typename... Args>
+    std::pair<Value&, bool> insert(Args&&... args) {
+        auto pb = values_.emplace(
+            std::piecewise_construct,
+            std::forward_as_tuple(RTTI::template get_type_index<Key>()),
+            std::forward_as_tuple(std::forward<Args>(args)...));
         return {pb.first->second, pb.second};
     }
 

@@ -7,9 +7,9 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
-#include <dingo/index.h>
+#include <dingo/index/index.h>
 
 #include <unordered_map>
 
