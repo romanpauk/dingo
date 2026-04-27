@@ -64,8 +64,7 @@ struct has_runtime_binding_resolution_container_member<
     T, std::void_t<decltype(std::declval<T&>().resolution_container)>>
     : std::true_type {};
 
-template <typename T>
-auto& get_runtime_binding_resolution_container(T& data) {
+template <typename T> auto& get_runtime_binding_resolution_container(T& data) {
     auto& binding_data = get_runtime_binding_data(data);
     if constexpr (has_runtime_binding_resolution_container_member<
                       std::remove_reference_t<decltype(binding_data)>>::value) {
@@ -76,8 +75,7 @@ auto& get_runtime_binding_resolution_container(T& data) {
 }
 
 namespace detail {
-template <typename Storage>
-using registered_type_t = typename Storage::type;
+template <typename Storage> using registered_type_t = typename Storage::type;
 
 template <typename Type, typename Storage>
 using runtime_binding_conversion_types_t =
@@ -92,8 +90,7 @@ static constexpr bool runtime_binding_has_conversion_cache_v =
 // TODO: the container here is just for RTTI, but it is needed to get the
 // inner container type and that is very hard. Perhaps pass RTTI and inner
 // container directly?
-template <typename Container, typename Type, typename Storage,
-          typename Data>
+template <typename Container, typename Type, typename Storage, typename Data>
 class runtime_binding
     : public runtime_binding_interface<Container>,
       private detail::binding_conversion_cache_base<
@@ -119,8 +116,8 @@ class runtime_binding
         storage_materialization_traits<typename Storage::tag_type,
                                        typename Storage::type>;
     using conversion_cache_base =
-        detail::binding_conversion_cache_base<
-            uses_cached_conversions, conversion_types>;
+        detail::binding_conversion_cache_base<uses_cached_conversions,
+                                              conversion_types>;
 
   private:
     using conversion_cache_base::construct_conversion;
@@ -188,8 +185,7 @@ class runtime_binding
 
   public:
     template <typename... Args>
-    runtime_binding(Args&&... args)
-        : data_(std::forward<Args>(args)...) {}
+    runtime_binding(Args&&... args) : data_(std::forward<Args>(args)...) {}
 
     auto& get_container() { return get_runtime_binding_data(data_).container; }
 
@@ -213,8 +209,7 @@ class runtime_binding
             context, request, cache);
     }
 
-    void* get_pointer(runtime_context& context,
-                      const request_type& request,
+    void* get_pointer(runtime_context& context, const request_type& request,
                       instance_cache_sink cache) override {
         return convert<typename Storage::conversions::pointer_types>(
             context, request, cache);
@@ -228,8 +223,8 @@ class runtime_binding
     void* resolve_address(Context& context, type_descriptor requested_type,
                           type_descriptor registered_type) {
         if constexpr (is_exact_lookup_v<T>) {
-            if (!detail::matches_exact_lookup<
-                    resolved_type_t<T, Type>>(requested_type)) {
+            if (!detail::matches_exact_lookup<resolved_type_t<T, Type>>(
+                    requested_type)) {
                 throw detail::make_type_not_convertible_exception(
                     requested_type, registered_type, context);
             }
@@ -249,20 +244,22 @@ class runtime_binding
 #endif
 
     template <typename Context> decltype(auto) resolve(Context& context) {
-        return detail::materialize_binding_source(
+        return detail::materialize_tracked_binding_source(
             context, get_storage(), get_resolution_container(),
             [](auto&& source) -> decltype(auto) {
                 return std::forward<decltype(source)>(source).get();
             });
     }
 
-    template <typename T, typename Context> decltype(auto) resolve(Context& context) {
+    template <typename T, typename Context>
+    decltype(auto) resolve(Context& context) {
         binding_activation activation{*this};
-        return detail::materialize_binding_source(
+        return detail::materialize_tracked_binding_source(
             context, get_storage(), get_resolution_container(),
             [&](auto&& source) -> decltype(auto) {
-                return detail::resolve_materialized_binding_value<T>(
-                    activation, context, std::forward<decltype(source)>(source));
+                return detail::resolve_binding_value<T>(
+                    activation, context,
+                    std::forward<decltype(source)>(source));
             });
     }
 
@@ -299,9 +296,7 @@ template <typename T> struct runtime_binding_ptr {
         return *this;
     }
 
-    ~runtime_binding_ptr() {
-        reset();
-    }
+    ~runtime_binding_ptr() { reset(); }
 
     T& operator*() {
         assert(ptr_);

@@ -8,13 +8,6 @@
 #pragma once
 
 #include <dingo/core/binding_selection.h>
-#include <dingo/core/exceptions.h>
-#include <dingo/registration/collection_traits.h>
-#include <dingo/type/normalized_type.h>
-#include <dingo/type/type_list.h>
-
-#include <cstddef>
-#include <utility>
 
 namespace dingo::detail {
 
@@ -30,16 +23,15 @@ enum class binding_result {
     ambiguous,
 };
 
-constexpr binding_result
-resolve_binding(binding_selection_status primary,
-                binding_selection_status secondary,
-                binding_resolution_policy policy) {
+constexpr binding_result resolve_binding(binding_selection_status primary,
+                                         binding_selection_status secondary,
+                                         binding_resolution_policy policy) {
     if (policy == binding_resolution_policy::prefer_primary) {
         if (primary == binding_selection_status::ambiguous) {
             return binding_result::ambiguous;
         }
 
-        if (primary == binding_selection_status::selected) {
+        if (primary == binding_selection_status::found) {
             return binding_result::primary;
         }
 
@@ -47,7 +39,7 @@ resolve_binding(binding_selection_status primary,
             return binding_result::ambiguous;
         }
 
-        if (secondary == binding_selection_status::selected) {
+        if (secondary == binding_selection_status::found) {
             return binding_result::secondary;
         }
 
@@ -56,28 +48,27 @@ resolve_binding(binding_selection_status primary,
 
     if (primary == binding_selection_status::ambiguous ||
         secondary == binding_selection_status::ambiguous ||
-        (primary == binding_selection_status::selected &&
-         secondary == binding_selection_status::selected)) {
+        (primary == binding_selection_status::found &&
+         secondary == binding_selection_status::found)) {
         return binding_result::ambiguous;
     }
 
-    if (primary == binding_selection_status::selected) {
+    if (primary == binding_selection_status::found) {
         return binding_result::primary;
     }
 
-    if (secondary == binding_selection_status::selected) {
+    if (secondary == binding_selection_status::found) {
         return binding_result::secondary;
     }
 
     return binding_result::missing;
 }
 
-constexpr binding_selection_status
-binding_status(binding_result resolution) {
+constexpr binding_selection_status binding_status(binding_result resolution) {
     switch (resolution) {
     case binding_result::primary:
     case binding_result::secondary:
-        return binding_selection_status::selected;
+        return binding_selection_status::found;
     case binding_result::ambiguous:
         return binding_selection_status::ambiguous;
     case binding_result::missing:
@@ -90,59 +81,7 @@ template <binding_selection_status SecondaryStatus>
 constexpr binding_selection_status
 resolve_binding_status(binding_selection_status primary,
                        binding_resolution_policy policy) {
-    return binding_status(
-        resolve_binding(primary, SecondaryStatus, policy));
-}
-
-template <typename StaticRegistry, typename T, typename Key = void>
-constexpr std::size_t static_collection_binding_count() {
-    return type_list_size_v<typename StaticRegistry::template bindings<
-        normalized_type_t<typename collection_traits<T>::resolve_type>, Key>>;
-}
-
-template <typename T, typename RuntimeCountFn>
-std::size_t count_binding_collection(RuntimeCountFn&& runtime_count,
-                                     std::size_t static_count) {
-    return std::forward<RuntimeCountFn>(runtime_count)() + static_count;
-}
-
-template <typename T, typename RuntimeAppendFn, typename StaticAppendFn,
-          typename Fn>
-std::size_t append_binding_collection(T& results,
-                                      RuntimeAppendFn&& runtime_append,
-                                      StaticAppendFn&& static_append,
-                                      Fn&& fn) {
-    std::size_t count = 0;
-    count += std::forward<RuntimeAppendFn>(runtime_append)(results, fn);
-    count += std::forward<StaticAppendFn>(static_append)(results, fn);
-    return count;
-}
-
-template <typename T, typename PrimaryCountFn, typename SecondaryCountFn,
-          typename PrimaryAppendFn, typename SecondaryAppendFn, typename Fn>
-T construct_binding_collection(PrimaryCountFn&& primary_count,
-                               SecondaryCountFn&& secondary_count,
-                               PrimaryAppendFn&& primary_append,
-                               SecondaryAppendFn&& secondary_append, Fn&& fn) {
-    using collection_type = collection_traits<T>;
-    using resolve_type = typename collection_type::resolve_type;
-
-    static_assert(collection_type::is_collection,
-                  "missing collection_traits specialization for type T");
-
-    const std::size_t total = std::forward<PrimaryCountFn>(primary_count)() +
-                              std::forward<SecondaryCountFn>(secondary_count)();
-    if (total == 0) {
-        throw detail::make_collection_type_not_found_exception<T, resolve_type>();
-    }
-
-    T results;
-    collection_type::reserve(results, total);
-
-    auto&& append = fn;
-    std::forward<PrimaryAppendFn>(primary_append)(results, append);
-    std::forward<SecondaryAppendFn>(secondary_append)(results, append);
-    return results;
+    return binding_status(resolve_binding(primary, SecondaryStatus, policy));
 }
 
 } // namespace dingo::detail

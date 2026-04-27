@@ -27,13 +27,10 @@ struct config {
     int value;
 };
 
-config make_config() {
-    return {7};
-}
+config make_config() { return {7}; }
 
 struct service {
-    explicit service(config& cfg)
-        : value(cfg.value) {}
+    explicit service(config& cfg) : value(cfg.value) {}
 
     int read() const { return value; }
 
@@ -55,69 +52,60 @@ struct iface {
     virtual int read() const = 0;
 };
 
-template <int Value>
-struct iface_impl : iface {
+template <int Value> struct iface_impl : iface {
     int read() const override { return Value; }
 };
 
-using static_interface_source = bindings<
-    bind<scope<shared>, storage<std::shared_ptr<iface_impl<11>>>,
-         interfaces<iface>>>;
+using static_interface_source =
+    bindings<bind<scope<shared>, storage<std::shared_ptr<iface_impl<11>>>,
+                  interfaces<iface>>>;
 
-using static_collection_source = bindings<
-    bind<scope<shared>, storage<std::shared_ptr<iface_impl<3>>>,
-         interfaces<iface>>,
-    bind<scope<shared>, storage<std::shared_ptr<iface_impl<5>>>,
-         interfaces<iface>>>;
+using static_collection_source =
+    bindings<bind<scope<shared>, storage<std::shared_ptr<iface_impl<3>>>,
+                  interfaces<iface>>,
+             bind<scope<shared>, storage<std::shared_ptr<iface_impl<5>>>,
+                  interfaces<iface>>>;
 
 struct external_config {
     int value;
 };
 
-external_config make_external_config() {
-    return {13};
-}
+external_config make_external_config() { return {13}; }
 
 template <typename Container>
 void register_runtime_bindings(Container& container) {
-    container
-        .template register_type<scope<shared>, storage<config>,
-                                factory<function<make_config>>>();
+    container.template register_type<scope<shared>, storage<config>,
+                                     factory<function<make_config>>>();
     container.template register_type<scope<shared>, storage<service>>();
 }
 
 template <typename Container>
 void register_runtime_wrapper_binding(Container& container) {
-    container
-        .template register_type<scope<shared>, storage<config>,
-                                factory<function<make_config>>>();
+    container.template register_type<scope<shared>, storage<config>,
+                                     factory<function<make_config>>>();
 }
 
 template <typename Container>
 void register_runtime_unique_binding(Container& container) {
-    container
-        .template register_type<scope<unique>, storage<config>,
-                                factory<function<make_config>>>();
+    container.template register_type<scope<unique>, storage<config>,
+                                     factory<function<make_config>>>();
 }
 
 template <typename Container>
 void register_runtime_interface_binding(Container& container) {
-    container
-        .template register_type<scope<shared>,
-                                storage<std::shared_ptr<iface_impl<11>>>,
-                                interfaces<iface>>();
+    container.template register_type<scope<shared>,
+                                     storage<std::shared_ptr<iface_impl<11>>>,
+                                     interfaces<iface>>();
 }
 
 template <typename Container>
 void register_runtime_collection_bindings(Container& container) {
-    container
-        .template register_type<scope<shared>,
-                                storage<std::shared_ptr<iface_impl<3>>>,
-                                interfaces<iface>>();
-    container
-        .template register_type<scope<shared>,
-                                storage<std::shared_ptr<iface_impl<5>>>,
-                                interfaces<iface>>();
+    container.template register_type<scope<shared>,
+                                     storage<std::shared_ptr<iface_impl<3>>>,
+                                     interfaces<iface>>();
+    container.template register_type<scope<shared>,
+                                     storage<std::shared_ptr<iface_impl<5>>>,
+                                     interfaces<iface>>();
 }
 
 template <typename Container>
@@ -149,10 +137,9 @@ using shared_config_selection = detail::static_binding_t<
 using shared_config_binding = typename shared_config_selection::binding_type;
 
 static_assert(
-    !detail::publication_supports_request_v<config&&,
+    !detail::binding_supports_request_v<config&&, shared_config_binding>);
+static_assert(!detail::binding_supports_request_v<std::shared_ptr<config>&&,
                                                   shared_config_binding>);
-static_assert(!detail::publication_supports_request_v<
-              std::shared_ptr<config>&&, shared_config_binding>);
 
 } // namespace
 

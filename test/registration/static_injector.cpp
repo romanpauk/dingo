@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: MIT
 //
 
+#include <dingo/container.h>
 #include <dingo/static/injector.h>
 #include <dingo/static_container.h>
-#include <dingo/container.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
@@ -33,13 +33,9 @@ struct injector_config {
     int value;
 };
 
-injector_config make_config() {
-    return {7};
-}
+injector_config make_config() { return {7}; }
 
-injector_config make_other_config() {
-    return {11};
-}
+injector_config make_other_config() { return {11}; }
 
 struct injector_service_interface {
     virtual ~injector_service_interface() = default;
@@ -47,8 +43,7 @@ struct injector_service_interface {
 };
 
 struct injector_service : injector_service_interface {
-    explicit injector_service(injector_config& config)
-        : config_(&config) {}
+    explicit injector_service(injector_config& config) : config_(&config) {}
 
     int read() const override { return config_->value; }
 
@@ -66,9 +61,7 @@ struct shared_counter {
     int value = 0;
 };
 
-shared_counter make_counter() {
-    return {5};
-}
+shared_counter make_counter() { return {5}; }
 
 struct inferred_service {
     inferred_service(injector_config& config, shared_counter& counter)
@@ -97,24 +90,23 @@ struct keyed_service {
 struct keyed_collection_consumer {
     explicit keyed_collection_consumer(
         keyed<std::vector<std::shared_ptr<IClass>>, first_key> classes)
-        : classes_(static_cast<std::vector<std::shared_ptr<IClass>>>(classes)) {}
+        : classes_(static_cast<std::vector<std::shared_ptr<IClass>>>(classes)) {
+    }
 
     std::vector<std::shared_ptr<IClass>> classes_;
 };
 
-std::shared_ptr<Class> make_shared_class() {
-    return std::make_shared<Class>();
-}
+std::shared_ptr<Class> make_shared_class() { return std::make_shared<Class>(); }
 
 } // namespace
 
 TEST(static_injector_test, resolves_shared_interfaces_and_function_factories) {
-    using source = dingo::bindings<
-        dingo::bind<scope<shared>, storage<injector_config>,
-             factory<function<make_config>>>,
-        dingo::bind<scope<shared>, storage<injector_service>,
-             interfaces<injector_service_interface>,
-             dependencies<injector_config&>>>;
+    using source =
+        dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
+                                    factory<function<make_config>>>,
+                        dingo::bind<scope<shared>, storage<injector_service>,
+                                    interfaces<injector_service_interface>,
+                                    dependencies<injector_config&>>>;
 
     static_injector<source> injector;
 
@@ -128,9 +120,9 @@ TEST(static_injector_test, resolves_shared_interfaces_and_function_factories) {
 }
 
 TEST(static_injector_test, shared_bindings_preserve_identity_across_resolves) {
-    using source = dingo::bindings<
-        dingo::bind<scope<shared>, storage<shared_counter>,
-             factory<constructor<shared_counter()>>>>;
+    using source =
+        dingo::bindings<dingo::bind<scope<shared>, storage<shared_counter>,
+                                    factory<constructor<shared_counter()>>>>;
 
     static_injector<source> injector;
 
@@ -143,24 +135,24 @@ TEST(static_injector_test, shared_bindings_preserve_identity_across_resolves) {
 }
 
 TEST(static_injector_test, construct_and_invoke_use_binding_dependencies) {
-    using source = dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
-                             factory<function<make_config>>>>;
+    using source =
+        dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
+                                    factory<function<make_config>>>>;
 
     static_injector<source> injector;
 
     auto value = injector.construct<constructed_consumer>();
 
     ASSERT_EQ(value.value, 7);
-    ASSERT_EQ(injector.invoke([](injector_config& config) {
-                  return config.value * 2;
-              }),
+    ASSERT_EQ(injector.invoke(
+                  [](injector_config& config) { return config.value * 2; }),
               14);
 }
 
 TEST(static_injector_test, resolves_unique_rvalue_requests) {
-    using source = dingo::bindings<
-        dingo::bind<scope<unique>, storage<injector_config>,
-             factory<function<make_config>>>>;
+    using source =
+        dingo::bindings<dingo::bind<scope<unique>, storage<injector_config>,
+                                    factory<function<make_config>>>>;
 
     static_injector<source> injector;
 
@@ -169,10 +161,11 @@ TEST(static_injector_test, resolves_unique_rvalue_requests) {
     ASSERT_EQ(moved.value, 7);
 }
 
-TEST(static_injector_test, hybrid_container_resolves_unique_rvalue_requests_from_static_bindings) {
-    using source = dingo::bindings<
-        dingo::bind<scope<unique>, storage<injector_config>,
-             factory<function<make_config>>>>;
+TEST(static_injector_test,
+     hybrid_container_resolves_unique_rvalue_requests_from_static_bindings) {
+    using source =
+        dingo::bindings<dingo::bind<scope<unique>, storage<injector_config>,
+                                    factory<function<make_config>>>>;
 
     container<source> hybrid;
 
@@ -182,9 +175,9 @@ TEST(static_injector_test, hybrid_container_resolves_unique_rvalue_requests_from
 }
 
 TEST(static_injector_test, constructs_unique_rvalue_requests) {
-    using source = dingo::bindings<
-        dingo::bind<scope<unique>, storage<injector_config>,
-             factory<function<make_config>>>>;
+    using source =
+        dingo::bindings<dingo::bind<scope<unique>, storage<injector_config>,
+                                    factory<function<make_config>>>>;
 
     static_injector<source> injector;
 
@@ -193,10 +186,11 @@ TEST(static_injector_test, constructs_unique_rvalue_requests) {
     ASSERT_EQ(moved.value, 7);
 }
 
-TEST(static_injector_test, hybrid_container_constructs_unique_rvalue_requests_from_static_bindings) {
-    using source = dingo::bindings<
-        dingo::bind<scope<unique>, storage<injector_config>,
-             factory<function<make_config>>>>;
+TEST(static_injector_test,
+     hybrid_container_constructs_unique_rvalue_requests_from_static_bindings) {
+    using source =
+        dingo::bindings<dingo::bind<scope<unique>, storage<injector_config>,
+                                    factory<function<make_config>>>>;
 
     container<source> hybrid;
 
@@ -206,9 +200,8 @@ TEST(static_injector_test, hybrid_container_constructs_unique_rvalue_requests_fr
 }
 
 TEST(static_injector_test, resolves_unique_wrapper_rvalue_requests) {
-    using source = dingo::bindings<
-        dingo::bind<scope<unique>, storage<std::unique_ptr<Class>>,
-             interfaces<IClass>>>;
+    using source = dingo::bindings<dingo::bind<
+        scope<unique>, storage<std::unique_ptr<Class>>, interfaces<IClass>>>;
 
     static_injector<source> injector;
 
@@ -218,9 +211,8 @@ TEST(static_injector_test, resolves_unique_wrapper_rvalue_requests) {
 }
 
 TEST(static_injector_test, constructs_unique_wrapper_rvalue_requests) {
-    using source = dingo::bindings<
-        dingo::bind<scope<unique>, storage<std::unique_ptr<Class>>,
-             interfaces<IClass>>>;
+    using source = dingo::bindings<dingo::bind<
+        scope<unique>, storage<std::unique_ptr<Class>>, interfaces<IClass>>>;
 
     static_injector<source> injector;
 
@@ -230,20 +222,20 @@ TEST(static_injector_test, constructs_unique_wrapper_rvalue_requests) {
 }
 
 namespace {
-using shared_config_source = dingo::bindings<
-    dingo::bind<scope<shared>, storage<injector_config>,
-         factory<function<make_config>>>>;
+using shared_config_source =
+    dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
+                                factory<function<make_config>>>>;
 using shared_interface_wrapper_source = dingo::bindings<
     dingo::bind<scope<shared>, storage<std::shared_ptr<Class>>,
-         interfaces<IClass>, factory<function<make_shared_class>>>>;
-using non_matching_static_source = dingo::bindings<
-    dingo::bind<scope<shared>, storage<shared_counter>,
-         factory<function<make_counter>>>>;
+                interfaces<IClass>, factory<function<make_shared_class>>>>;
+using non_matching_static_source =
+    dingo::bindings<dingo::bind<scope<shared>, storage<shared_counter>,
+                                factory<function<make_counter>>>>;
 using shared_config_static_source =
     static_bindings_source_t<shared_config_source>;
-using shared_config_selection = detail::static_binding_t<
-    typename shared_config_static_source::template bindings<
-        injector_config, void>>;
+using shared_config_selection =
+    detail::static_binding_t<typename shared_config_static_source::
+                                 template bindings<injector_config, void>>;
 using shared_config_binding = typename shared_config_selection::binding_type;
 using shared_interface_wrapper_static_source =
     static_bindings_source_t<shared_interface_wrapper_source>;
@@ -254,16 +246,16 @@ using shared_interface_wrapper_binding =
     typename shared_interface_wrapper_selection::binding_type;
 } // namespace
 
-static_assert(
-    !detail::publication_supports_request_v<injector_config&&,
+static_assert(!detail::binding_supports_request_v<injector_config&&,
                                                   shared_config_binding>);
-static_assert(!detail::publication_supports_request_v<
+static_assert(!detail::binding_supports_request_v<
               std::shared_ptr<injector_config>&&, shared_config_binding>);
-static_assert(!detail::publication_supports_request_v<
+static_assert(!detail::binding_supports_request_v<
               std::shared_ptr<IClass>&&, shared_interface_wrapper_binding>);
 
-TEST(static_injector_test,
-     static_injector_rejects_shared_wrapper_rvalue_construction_from_static_bindings) {
+TEST(
+    static_injector_test,
+    static_injector_rejects_shared_wrapper_rvalue_construction_from_static_bindings) {
     static_injector<shared_config_source> injector;
 
     ASSERT_THROW((injector.construct<std::shared_ptr<injector_config>&&>()),
@@ -300,19 +292,19 @@ TEST(static_injector_test, runtime_container_rejects_shared_rvalue_resolution) {
 TEST(static_injector_test,
      runtime_container_rejects_shared_interface_wrapper_rvalue_resolution) {
     container<> runtime;
-    runtime.template register_type<scope<shared>, storage<std::shared_ptr<Class>>,
-                                   interfaces<IClass>,
-                                   factory<function<make_shared_class>>>();
+    runtime.template register_type<
+        scope<shared>, storage<std::shared_ptr<Class>>, interfaces<IClass>,
+        factory<function<make_shared_class>>>();
 
     ASSERT_THROW((runtime.resolve<std::shared_ptr<IClass>&&>()),
                  type_not_convertible_exception);
 }
 
-TEST(static_injector_test,
-     hybrid_container_resolves_unique_wrapper_rvalue_requests_from_static_bindings) {
-    using source = dingo::bindings<
-        dingo::bind<scope<unique>, storage<std::unique_ptr<Class>>,
-             interfaces<IClass>>>;
+TEST(
+    static_injector_test,
+    hybrid_container_resolves_unique_wrapper_rvalue_requests_from_static_bindings) {
+    using source = dingo::bindings<dingo::bind<
+        scope<unique>, storage<std::unique_ptr<Class>>, interfaces<IClass>>>;
 
     container<source> hybrid;
 
@@ -321,11 +313,11 @@ TEST(static_injector_test,
     AssertClass(*unique);
 }
 
-TEST(static_injector_test,
-     hybrid_container_constructs_unique_wrapper_rvalue_requests_from_static_bindings) {
-    using source = dingo::bindings<
-        dingo::bind<scope<unique>, storage<std::unique_ptr<Class>>,
-             interfaces<IClass>>>;
+TEST(
+    static_injector_test,
+    hybrid_container_constructs_unique_wrapper_rvalue_requests_from_static_bindings) {
+    using source = dingo::bindings<dingo::bind<
+        scope<unique>, storage<std::unique_ptr<Class>>, interfaces<IClass>>>;
 
     container<source> hybrid;
 
@@ -334,8 +326,9 @@ TEST(static_injector_test,
     AssertClass(*unique);
 }
 
-TEST(static_injector_test,
-     hybrid_container_rejects_shared_wrapper_rvalue_construction_from_static_bindings) {
+TEST(
+    static_injector_test,
+    hybrid_container_rejects_shared_wrapper_rvalue_construction_from_static_bindings) {
     container<shared_config_source> hybrid;
 
     ASSERT_THROW((hybrid.construct<std::shared_ptr<injector_config>&&>()),
@@ -380,7 +373,8 @@ TEST(static_injector_test,
                  type_not_convertible_exception);
 }
 
-TEST(static_injector_test, runtime_container_rejects_shared_rvalue_construction) {
+TEST(static_injector_test,
+     runtime_container_rejects_shared_rvalue_construction) {
     container<> runtime;
     runtime.template register_type<scope<shared>, storage<injector_config>,
                                    factory<function<make_config>>>();
@@ -392,9 +386,9 @@ TEST(static_injector_test, runtime_container_rejects_shared_rvalue_construction)
 TEST(static_injector_test,
      runtime_container_rejects_shared_interface_wrapper_rvalue_construction) {
     container<> runtime;
-    runtime.template register_type<scope<shared>, storage<std::shared_ptr<Class>>,
-                                   interfaces<IClass>,
-                                   factory<function<make_shared_class>>>();
+    runtime.template register_type<
+        scope<shared>, storage<std::shared_ptr<Class>>, interfaces<IClass>,
+        factory<function<make_shared_class>>>();
 
     ASSERT_THROW((runtime.construct<std::shared_ptr<IClass>&&>()),
                  type_not_convertible_exception);
@@ -422,7 +416,8 @@ TEST(static_injector_test,
                  type_not_convertible_exception);
 }
 
-TEST(static_injector_test, runtime_container_rejects_external_rvalue_construction) {
+TEST(static_injector_test,
+     runtime_container_rejects_external_rvalue_construction) {
     container<> runtime;
     auto config = make_config();
     runtime.template register_type<scope<external>, storage<injector_config>>(
@@ -432,7 +427,8 @@ TEST(static_injector_test, runtime_container_rejects_external_rvalue_constructio
                  type_not_convertible_exception);
 }
 
-TEST(static_injector_test, hybrid_container_rejects_external_rvalue_construction) {
+TEST(static_injector_test,
+     hybrid_container_rejects_external_rvalue_construction) {
     container<shared_config_source> hybrid;
     auto config = make_config();
     hybrid.template register_type<scope<external>, storage<injector_config>>(
@@ -464,7 +460,8 @@ TEST(static_injector_test,
                  type_not_convertible_exception);
 }
 
-TEST(static_injector_test, runtime_container_rejects_external_rvalue_resolution) {
+TEST(static_injector_test,
+     runtime_container_rejects_external_rvalue_resolution) {
     container<> runtime;
     auto config = make_config();
     runtime.template register_type<scope<external>, storage<injector_config>>(
@@ -486,8 +483,9 @@ TEST(static_injector_test,
 }
 
 TEST(static_injector_test, wrapper_construction_reuses_registered_bindings) {
-    using source = dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
-                             factory<function<make_config>>>>;
+    using source =
+        dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
+                                    factory<function<make_config>>>>;
 
     static_injector<source> injector;
 
@@ -502,13 +500,14 @@ TEST(static_injector_test, wrapper_construction_reuses_registered_bindings) {
     ASSERT_EQ(optional->value, 7);
 }
 
-TEST(static_injector_test, resolves_registered_services_with_inferred_binding_dependencies) {
-    using source = dingo::bindings<
-        dingo::bind<scope<shared>, storage<injector_config>,
-             factory<function<make_config>>>,
-        dingo::bind<scope<shared>, storage<shared_counter>,
-             factory<function<make_counter>>>,
-        dingo::bind<scope<shared>, storage<inferred_service>>>;
+TEST(static_injector_test,
+     resolves_registered_services_with_inferred_binding_dependencies) {
+    using source =
+        dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
+                                    factory<function<make_config>>>,
+                        dingo::bind<scope<shared>, storage<shared_counter>,
+                                    factory<function<make_counter>>>,
+                        dingo::bind<scope<shared>, storage<inferred_service>>>;
 
     static_injector<source> injector;
 
@@ -519,30 +518,32 @@ TEST(static_injector_test, resolves_registered_services_with_inferred_binding_de
 }
 
 TEST(static_injector_test, static_container_wraps_compile_time_sources) {
-    using source = dingo::bindings<
-        dingo::bind<scope<shared>, storage<injector_config>,
-             factory<function<make_config>>>>;
+    using source =
+        dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
+                                    factory<function<make_config>>>>;
 
     static_container<source> binding_container;
     container<source> source_container;
-    container<dingo::bindings<
-        dingo::bind<scope<shared>, storage<injector_config>,
-             factory<function<make_config>>>>> direct_container;
+    container<
+        dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
+                                    factory<function<make_config>>>>>
+        equivalent_container;
 
     ASSERT_EQ(binding_container.resolve<injector_config&>().value, 7);
     ASSERT_EQ(binding_container.construct<constructed_consumer>().value, 7);
-    ASSERT_EQ(binding_container.injector().resolve<injector_config&>().value, 7);
+    ASSERT_EQ(binding_container.injector().resolve<injector_config&>().value,
+              7);
     ASSERT_EQ(source_container.resolve<injector_config&>().value, 7);
     ASSERT_EQ(source_container.construct<constructed_consumer>().value, 7);
-    ASSERT_EQ(direct_container.resolve<injector_config&>().value, 7);
-    ASSERT_EQ(direct_container.construct<constructed_consumer>().value, 7);
+    ASSERT_EQ(equivalent_container.resolve<injector_config&>().value, 7);
+    ASSERT_EQ(equivalent_container.construct<constructed_consumer>().value, 7);
 }
 
 TEST(static_injector_test,
      hybrid_container_runtime_and_static_singular_conflicts_are_ambiguous) {
-    using source = dingo::bindings<
-        dingo::bind<scope<shared>, storage<injector_config>,
-             factory<function<make_config>>>>;
+    using source =
+        dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
+                                    factory<function<make_config>>>>;
 
     container<source> hybrid;
     hybrid.template register_type<scope<shared>, storage<injector_config>,
@@ -558,7 +559,7 @@ TEST(static_injector_test,
      hybrid_container_merges_runtime_and_static_collection_bindings) {
     using source = dingo::bindings<
         dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<0>>>,
-             interfaces<IClass>>>;
+                    interfaces<IClass>>>;
 
     container<source> hybrid;
     hybrid.template register_type<scope<shared>,
@@ -576,9 +577,9 @@ TEST(static_injector_test,
 
 TEST(static_injector_test,
      hybrid_container_runtime_bindings_can_depend_on_static_bindings) {
-    using source = dingo::bindings<
-        dingo::bind<scope<shared>, storage<injector_config>,
-             factory<function<make_config>>>>;
+    using source =
+        dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
+                                    factory<function<make_config>>>>;
 
     container<source> hybrid;
     hybrid.template register_type<scope<shared>, storage<injector_service>,
@@ -591,10 +592,10 @@ TEST(static_injector_test,
 
 TEST(static_injector_test,
      hybrid_container_static_bindings_can_depend_on_runtime_bindings) {
-    using source = dingo::bindings<
-        dingo::bind<scope<shared>, storage<injector_service>,
-             interfaces<injector_service_interface>,
-             dependencies<injector_config&>>>;
+    using source =
+        dingo::bindings<dingo::bind<scope<shared>, storage<injector_service>,
+                                    interfaces<injector_service_interface>,
+                                    dependencies<injector_config&>>>;
 
     container<source> hybrid;
     hybrid.template register_type<scope<shared>, storage<injector_config>,
@@ -606,110 +607,112 @@ TEST(static_injector_test,
 }
 
 TEST(static_injector_test,
-     hybrid_container_local_bindings_can_fall_back_to_static_host_bindings) {
-    struct local_helper {
-        local_helper() : value(5) {}
+     hybrid_container_runtime_bindings_can_use_static_host_bindings) {
+    struct helper {
+        helper() : value(5) {}
 
         int value;
     };
 
-    struct local_service {
-        local_service(injector_config& config, local_helper& helper)
+    struct service {
+        service(injector_config& config, helper& helper)
             : value(config.value + helper.value) {}
 
         int value;
     };
 
-    using static_bindings = dingo::bindings<
-        dingo::bind<scope<shared>, storage<injector_config>,
-             factory<function<make_config>>>>;
+    using static_bindings =
+        dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
+                                    factory<function<make_config>>>>;
 
     container<static_bindings> hybrid;
     hybrid.template register_type<
-        scope<shared>, storage<local_service>,
-        dingo::bindings<dingo::bind<scope<shared>, storage<local_helper>>>>();
+        scope<shared>, storage<service>,
+        dingo::bindings<dingo::bind<scope<shared>, storage<helper>>>>();
 
-    auto& service = hybrid.resolve<local_service&>();
+    auto& resolved = hybrid.resolve<service&>();
 
-    ASSERT_EQ(service.value, 12);
+    ASSERT_EQ(resolved.value, 12);
 }
 
-TEST(static_injector_test,
-     hybrid_container_local_bindings_override_conflicting_static_host_bindings) {
-    struct local_helper {
-        local_helper() : value(5) {}
+TEST(
+    static_injector_test,
+    hybrid_container_runtime_bindings_override_conflicting_static_host_bindings) {
+    struct helper {
+        helper() : value(5) {}
 
         int value;
     };
 
-    struct local_service {
-        local_service(injector_config& config, local_helper& helper)
+    struct service {
+        service(injector_config& config, helper& helper)
             : value(config.value + helper.value) {}
 
         int value;
     };
 
-    using source = dingo::bindings<
-        dingo::bind<scope<shared>, storage<injector_config>,
-             factory<function<make_config>>>>;
+    using source =
+        dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
+                                    factory<function<make_config>>>>;
 
     container<source> hybrid;
     hybrid.template register_type<
-        scope<shared>, storage<local_service>,
-        dingo::bindings<
-            dingo::bind<scope<shared>, storage<injector_config>,
-                 factory<function<make_other_config>>>,
-            dingo::bind<scope<shared>, storage<local_helper>>>>();
+        scope<shared>, storage<service>,
+        dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
+                                    factory<function<make_other_config>>>,
+                        dingo::bind<scope<shared>, storage<helper>>>>();
 
-    ASSERT_EQ(hybrid.resolve<local_service&>().value, 16);
-    ASSERT_EQ(hybrid.construct<local_service>().value, 16);
-    ASSERT_EQ(hybrid.construct<std::unique_ptr<local_service>>()->value, 16);
-    ASSERT_EQ(hybrid.construct<std::shared_ptr<local_service>>()->value, 16);
-    ASSERT_EQ(hybrid.invoke([](local_service resolved_service) {
+    ASSERT_EQ(hybrid.resolve<service&>().value, 16);
+    ASSERT_EQ(hybrid.construct<service>().value, 16);
+    ASSERT_EQ(hybrid.construct<std::unique_ptr<service>>()->value, 16);
+    ASSERT_EQ(hybrid.construct<std::shared_ptr<service>>()->value, 16);
+    ASSERT_EQ(hybrid.invoke([](service resolved_service) {
         return resolved_service.value;
-    }), 16);
+    }),
+              16);
 }
 
-TEST(static_injector_test,
-     hybrid_container_local_bindings_override_ambiguous_runtime_and_static_host_bindings) {
-    struct local_helper {
-        local_helper() : value(5) {}
+TEST(
+    static_injector_test,
+    hybrid_container_runtime_bindings_override_ambiguous_runtime_and_static_host_bindings) {
+    struct helper {
+        helper() : value(5) {}
 
         int value;
     };
 
-    struct local_service {
-        local_service(injector_config& config, local_helper& helper)
+    struct service {
+        service(injector_config& config, helper& helper)
             : value(config.value + helper.value) {}
 
         int value;
     };
 
-    using source = dingo::bindings<
-        dingo::bind<scope<shared>, storage<injector_config>,
-             factory<function<make_config>>>>;
+    using source =
+        dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
+                                    factory<function<make_config>>>>;
 
     container<source> hybrid;
     hybrid.template register_type<scope<shared>, storage<injector_config>,
                                   factory<function<make_other_config>>>();
     hybrid.template register_type<
-        scope<shared>, storage<local_service>,
-        dingo::bindings<
-            dingo::bind<scope<shared>, storage<injector_config>,
-                 factory<constructor<injector_config()>>>,
-            dingo::bind<scope<shared>, storage<local_helper>>>>();
+        scope<shared>, storage<service>,
+        dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
+                                    factory<constructor<injector_config()>>>,
+                        dingo::bind<scope<shared>, storage<helper>>>>();
 
-    ASSERT_EQ(hybrid.resolve<local_service&>().value, 5);
-    ASSERT_EQ(hybrid.construct<local_service>().value, 5);
-    ASSERT_EQ(hybrid.invoke([](local_service resolved_service) {
+    ASSERT_EQ(hybrid.resolve<service&>().value, 5);
+    ASSERT_EQ(hybrid.construct<service>().value, 5);
+    ASSERT_EQ(hybrid.invoke([](service resolved_service) {
         return resolved_service.value;
-    }), 5);
+    }),
+              5);
 }
 
 TEST(static_injector_test, shared_handle_conversions_are_cached_per_binding) {
     using source = dingo::bindings<
         dingo::bind<scope<shared>, storage<std::shared_ptr<Class>>,
-             interfaces<IClass>, factory<function<make_shared_class>>>>;
+                    interfaces<IClass>, factory<function<make_shared_class>>>>;
 
     static_injector<source> injector;
 
@@ -728,7 +731,7 @@ TEST(static_injector_test,
      construct_exact_interface_wrapper_bindings_preserves_binding_identity) {
     using source = dingo::bindings<
         dingo::bind<scope<shared>, storage<std::shared_ptr<Class>>,
-             interfaces<IClass>, factory<function<make_shared_class>>>>;
+                    interfaces<IClass>, factory<function<make_shared_class>>>>;
 
     static_injector<source> injector;
 
@@ -743,9 +746,9 @@ TEST(static_injector_test,
 TEST(static_injector_test, matches_runtime_container_resolution_behavior) {
     using source = dingo::bindings<
         dingo::bind<scope<shared>, storage<injector_config>,
-             factory<function<make_config>>>,
+                    factory<function<make_config>>>,
         dingo::bind<scope<shared>, storage<std::shared_ptr<Class>>,
-             interfaces<IClass>, factory<function<make_shared_class>>>>;
+                    interfaces<IClass>, factory<function<make_shared_class>>>>;
 
     static_injector<source> injector;
     container<> runtime;
@@ -771,27 +774,27 @@ TEST(static_injector_test, matches_runtime_container_resolution_behavior) {
 
     ASSERT_EQ(static_consumer.value, 7);
     ASSERT_EQ(runtime_consumer.value, 7);
-    ASSERT_EQ(injector.invoke([](injector_config& config) {
-                  return config.value * 3;
-              }),
-              runtime.invoke([](injector_config& config) {
-                  return config.value * 3;
-              }));
+    ASSERT_EQ(injector.invoke(
+                  [](injector_config& config) { return config.value * 3; }),
+              runtime.invoke(
+                  [](injector_config& config) { return config.value * 3; }));
 }
 
 TEST(static_injector_test, resolves_indexed_multibindings_with_typed_keys) {
     struct first_key : std::integral_constant<int, 0> {};
     struct second_key : std::integral_constant<int, 1> {};
 
-    using source = dingo::bindings<dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<0>>>,
-                          interfaces<IClass>, key<first_key>>,
-                    dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<1>>>,
-                          interfaces<IClass>, key<second_key>>>;
+    using source = dingo::bindings<
+        dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<0>>>,
+                    interfaces<IClass>, key<first_key>>,
+        dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<1>>>,
+                    interfaces<IClass>, key<second_key>>>;
 
     static_injector<source> injector;
 
     auto& first = injector.resolve<std::shared_ptr<IClass>&>(key<first_key>{});
-    auto& second = injector.resolve<std::shared_ptr<IClass>&>(key<second_key>{});
+    auto& second =
+        injector.resolve<std::shared_ptr<IClass>&>(key<second_key>{});
 
     ASSERT_EQ(first->GetTag(), 0);
     ASSERT_EQ(second->GetTag(), 1);
@@ -800,10 +803,11 @@ TEST(static_injector_test, resolves_indexed_multibindings_with_typed_keys) {
 }
 
 TEST(static_injector_test, constructs_multibinding_collections) {
-    using source = dingo::bindings<dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<0>>>,
-                          interfaces<IClass>>,
-                    dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<1>>>,
-                          interfaces<IClass>>>;
+    using source = dingo::bindings<
+        dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<0>>>,
+                    interfaces<IClass>>,
+        dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<1>>>,
+                    interfaces<IClass>>>;
 
     static_injector<source> injector;
 
@@ -820,20 +824,22 @@ TEST(static_injector_test, constructs_multibinding_collections) {
     ASSERT_EQ(mapped.size(), 2);
 }
 
-TEST(static_injector_test, resolves_keyed_collections_and_supports_keyed_collection_dependencies) {
-    using source = dingo::bindings<dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<0>>>,
-                          interfaces<IClass>, key<first_key>>,
-                    dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<1>>>,
-                          interfaces<IClass>, key<first_key>>,
-                    dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<2>>>,
-                          interfaces<IClass>, key<second_key>>>;
+TEST(static_injector_test,
+     resolves_keyed_collections_and_supports_keyed_collection_dependencies) {
+    using source = dingo::bindings<
+        dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<0>>>,
+                    interfaces<IClass>, key<first_key>>,
+        dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<1>>>,
+                    interfaces<IClass>, key<first_key>>,
+        dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<2>>>,
+                    interfaces<IClass>, key<second_key>>>;
 
     static_injector<source> injector;
 
-    auto first =
-        injector.resolve<std::vector<std::shared_ptr<IClass>>>(key<first_key>{});
-    auto second =
-        injector.resolve<std::vector<std::shared_ptr<IClass>>>(key<second_key>{});
+    auto first = injector.resolve<std::vector<std::shared_ptr<IClass>>>(
+        key<first_key>{});
+    auto second = injector.resolve<std::vector<std::shared_ptr<IClass>>>(
+        key<second_key>{});
 
     ASSERT_EQ(first.size(), 2);
     ASSERT_EQ(second.size(), 1);
@@ -846,21 +852,25 @@ TEST(static_injector_test, resolves_keyed_collections_and_supports_keyed_collect
     ASSERT_EQ(consumer.classes_[0]->GetTag(), 0);
     ASSERT_EQ(consumer.classes_[1]->GetTag(), 1);
 
-    ASSERT_EQ(
-        injector.invoke([](keyed<std::vector<std::shared_ptr<IClass>>, second_key> classes) {
-            auto resolved = static_cast<std::vector<std::shared_ptr<IClass>>>(classes);
-            return resolved.front()->GetTag();
-        }),
-        2);
+    ASSERT_EQ(injector.invoke(
+                  [](keyed<std::vector<std::shared_ptr<IClass>>, second_key>
+                         classes) {
+                      auto resolved =
+                          static_cast<std::vector<std::shared_ptr<IClass>>>(
+                              classes);
+                      return resolved.front()->GetTag();
+                  }),
+              2);
 }
 
 TEST(static_injector_test, constructs_keyed_mapping_collections) {
-    using source = dingo::bindings<dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<0>>>,
-                          interfaces<IClass>, key<first_key>>,
-                    dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<1>>>,
-                          interfaces<IClass>, key<first_key>>,
-                    dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<2>>>,
-                          interfaces<IClass>, key<second_key>>>;
+    using source = dingo::bindings<
+        dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<0>>>,
+                    interfaces<IClass>, key<first_key>>,
+        dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<1>>>,
+                    interfaces<IClass>, key<first_key>>,
+        dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<2>>>,
+                    interfaces<IClass>, key<second_key>>>;
 
     static_injector<source> injector;
 
@@ -884,11 +894,13 @@ TEST(static_injector_test, constructs_keyed_mapping_collections) {
     ASSERT_EQ(second.at(typeid(ClassTag<2>))->GetTag(), 2);
 }
 
-TEST(static_injector_test, construct_and_invoke_support_keyed_binding_dependencies) {
-    using source = dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
-                         factory<function<make_config>>, key<first_key>>,
-                    dingo::bind<scope<shared>, storage<injector_config>,
-                         factory<function<make_other_config>>, key<second_key>>>;
+TEST(static_injector_test,
+     construct_and_invoke_support_keyed_binding_dependencies) {
+    using source = dingo::bindings<
+        dingo::bind<scope<shared>, storage<injector_config>,
+                    factory<function<make_config>>, key<first_key>>,
+        dingo::bind<scope<shared>, storage<injector_config>,
+                    factory<function<make_other_config>>, key<second_key>>>;
 
     static_injector<source> injector;
 
@@ -896,18 +908,20 @@ TEST(static_injector_test, construct_and_invoke_support_keyed_binding_dependenci
 
     ASSERT_EQ(consumer.value, 7);
     ASSERT_EQ(injector.invoke([](keyed<injector_config&, second_key> config) {
-                  return static_cast<injector_config&>(config).value;
-              }),
+        return static_cast<injector_config&>(config).value;
+    }),
               11);
 }
 
-TEST(static_injector_test, resolves_registered_services_with_keyed_constructor_dependencies) {
-    using source = dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
-                         factory<function<make_config>>, key<first_key>>,
-                    dingo::bind<scope<shared>, storage<injector_config>,
-                         factory<function<make_other_config>>, key<second_key>>,
-                    dingo::bind<scope<shared>, storage<keyed_service>,
-                         dependencies<keyed<injector_config&, first_key>>>>;
+TEST(static_injector_test,
+     resolves_registered_services_with_keyed_constructor_dependencies) {
+    using source = dingo::bindings<
+        dingo::bind<scope<shared>, storage<injector_config>,
+                    factory<function<make_config>>, key<first_key>>,
+        dingo::bind<scope<shared>, storage<injector_config>,
+                    factory<function<make_other_config>>, key<second_key>>,
+        dingo::bind<scope<shared>, storage<keyed_service>,
+                    dependencies<keyed<injector_config&, first_key>>>>;
 
     static_injector<source> injector;
 
