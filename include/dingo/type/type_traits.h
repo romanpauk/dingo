@@ -7,9 +7,9 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
-#include <dingo/exceptions.h>
+#include <dingo/core/exceptions.h>
 #include <dingo/type/type_list.h>
 
 #include <memory>

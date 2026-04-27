@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
 #include <dingo/rtti/rtti.h>
 

@@ -87,9 +87,20 @@ if(DINGO_DEVELOPMENT_MODE)
     )
 
     set(DINGO_SOURCE_FILES
-        config.h
+        core/config.h
+        static/graph.h
+        static/registry.h
         container.h
-        exceptions.h
+        core/binding_model.h
+        core/binding_resolution.h
+        core/binding_resolution_context.h
+        core/binding_resolution_status.h
+        core/binding_selection.h
+        core/container_common.h
+        core/factory_traits.h
+        core/keyed.h
+        core/static_activation_set.h
+        core/exceptions.h
         factory/callable.h
         factory/constructor_traits.h
         factory/constructor_detection.h
@@ -97,7 +108,7 @@ if(DINGO_DEVELOPMENT_MODE)
         factory/constructor.h
         factory/function.h
         factory/invoke.h
-        index.h
+        index/index.h
         index/array.h
         index/map.h
         index/unordered_map.h
@@ -109,11 +120,18 @@ if(DINGO_DEVELOPMENT_MODE)
         registration/collection_traits.h
         registration/constructor.h
         registration/type_registration.h
+        runtime_container.h
+        runtime/injector.h
+        runtime/registry.h
+        static_container.h
         resolution/conversion_cache.h
-        resolution/instance_factory_interface.h
-        resolution/instance_factory.h
+        resolution/runtime_binding_interface.h
+        resolution/runtime_binding.h
+        static/injector.h
         storage/interface_storage_traits.h
-        resolution/resolving_context.h
+        core/context_base.h
+        runtime/context.h
+        static/context.h
         resolution/type_cache.h
         rtti/static_provider.h
         rtti/rtti.h
@@ -205,6 +223,9 @@ if(DINGO_DEVELOPMENT_MODE)
             test/index/index.cpp
             test/index/multibindings.cpp
             test/registration/annotated.cpp
+            test/registration/binding_graph.cpp
+            test/registration/static_bindings_source.cpp
+            test/registration/static_injector.cpp
             test/registration/type_registration.cpp
             test/storage/array.cpp
             test/storage/external.cpp
@@ -236,6 +257,20 @@ if(DINGO_DEVELOPMENT_MODE)
         # Force-include windows.h to each test to make sure library builds with windows.h included
         target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
 
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+            # The monolithic template-heavy test binary can exceed AArch64's
+            # branch range in GCC Release builds. Keep the full typed test
+            # matrix on other jobs and use the existing reduced dynamic matrix
+            # here to keep this runner's executable linkable.
+            target_compile_definitions(dingo_test PRIVATE
+                $<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Release>>:
+                    DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION=1>
+            )
+            target_compile_options(dingo_test PRIVATE
+                $<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Release>>:-Os>
+            )
+        endif()
+
         target_sanitize(DINGO dingo_test)
 
         option(DINGO_LIT_TESTS_ENABLED "Enable lit-based tests for static assertions and diagnostics." ON)
@@ -247,12 +282,14 @@ if(DINGO_DEVELOPMENT_MODE)
                 add_test(NAME dingo_lit_tests
                     COMMAND ${CMAKE_COMMAND} -E env
                         CXX=${CMAKE_CXX_COMPILER}
+                        DINGO_CXX_STD=${CMAKE_CXX_STANDARD}
                         UV_CACHE_DIR=${CMAKE_CURRENT_BINARY_DIR}/.uv-cache
                         ${UV_EXECUTABLE} run --locked lit -sv ${CMAKE_CURRENT_SOURCE_DIR}/test/lit)
             elseif(LIT_EXECUTABLE)
                 add_test(NAME dingo_lit_tests
                     COMMAND ${CMAKE_COMMAND} -E env
                         CXX=${CMAKE_CXX_COMPILER}
+                        DINGO_CXX_STD=${CMAKE_CXX_STANDARD}
                         ${LIT_EXECUTABLE} -sv ${CMAKE_CURRENT_SOURCE_DIR}/test/lit)
             else()
                 message(WARNING "Skipping lit tests: neither lit nor uv was found. "

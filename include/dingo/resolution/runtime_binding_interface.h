@@ -7,12 +7,12 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/type/type_descriptor.h>
 
 namespace dingo {
-class resolving_context;
+class runtime_context;
 
 template <typename RTTI> struct instance_request {
     using type_index = typename RTTI::type_index;
@@ -50,24 +50,24 @@ struct instance_cache_sink {
 #endif
 };
 
-template <typename Container> class instance_factory_interface {
+template <typename Container> class runtime_binding_interface {
   public:
-    virtual ~instance_factory_interface() = default;
+    virtual ~runtime_binding_interface() = default;
 
     virtual void* get_value(
-        resolving_context&,
+        runtime_context&,
         const instance_request<typename Container::rtti_type>& request,
         instance_cache_sink) = 0;
     virtual void* get_lvalue_reference(
-        resolving_context&,
+        runtime_context&,
         const instance_request<typename Container::rtti_type>& request,
         instance_cache_sink) = 0;
     virtual void* get_rvalue_reference(
-        resolving_context&,
+        runtime_context&,
         const instance_request<typename Container::rtti_type>& request,
         instance_cache_sink) = 0;
     virtual void* get_pointer(
-        resolving_context&,
+        runtime_context&,
         const instance_request<typename Container::rtti_type>& request,
         instance_cache_sink) = 0;
 

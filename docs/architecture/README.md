@@ -6,6 +6,8 @@ and conversions plug in.
 
 Read these pages in order for the full picture:
 
+- [Containers](containers.md): the public entry points, include layout, and how
+  runtime, static, and hybrid containers relate.
 - [Overview](overview.md): the main data flow and the key owners.
 - [Registration And Resolution](registration-and-resolution.md): the runtime
   path from `register_type<...>()` to `resolve<T>()`.
@@ -17,16 +19,41 @@ Read these pages in order for the full picture:
 - [Conversion Model](conversion-model.md): how Dingo chooses value, reference,
   pointer, and wrapper conversions at resolution time.
 
-The architecture is centered on one flow:
+The public surface is centered on three container entry points:
+
+```text
+include/dingo/container.h          -> unified public container
+include/dingo/runtime_container.h  -> runtime-only facade
+include/dingo/static_container.h   -> static-only facade
+```
+
+Under that surface, the architecture is centered on one flow:
 
 ```text
 register_type -> type_registration -> storage/factory record
 resolve<T> -> lookup type -> factory traits -> resolver -> conversion -> T
 ```
 
-The code that owns that flow lives mainly in:
+The shared kernel for that flow lives under `include/dingo/core/`.
+
+The lane-specific code now sits under:
+
+- `include/dingo/runtime/` for runtime registry and injector internals
+- `include/dingo/static/` for static registry, graph, and injector internals
+
+The main owners for the current architecture are:
 
 - [include/dingo/container.h](../../include/dingo/container.h)
+- [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h)
+- [include/dingo/static_container.h](../../include/dingo/static_container.h)
+- [include/dingo/core/binding_model.h](../../include/dingo/core/binding_model.h)
+- [include/dingo/core/binding_resolution.h](../../include/dingo/core/binding_resolution.h)
+- [include/dingo/core/factory_traits.h](../../include/dingo/core/factory_traits.h)
+- [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
+- [include/dingo/runtime/injector.h](../../include/dingo/runtime/injector.h)
+- [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
+- [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
+- [include/dingo/static/injector.h](../../include/dingo/static/injector.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 - [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
 - [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)

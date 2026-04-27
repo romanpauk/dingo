@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
 #include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
@@ -20,6 +20,7 @@
 #include <atomic>
 #include <exception>
 #include <memory>
+#include <new>
 #include <vector>
 
 namespace dingo {
@@ -138,7 +139,7 @@ class cyclical_storage_instance_impl<Type, Factory, false> : Factory {
         return get();
     }
 
-    Type* get() { return reinterpret_cast<Type*>(&instance_); }
+    Type* get() { return std::launder(reinterpret_cast<Type*>(&instance_)); }
 
     template <typename Context, typename Container>
     void construct(Context& context, Container& container) {
@@ -153,7 +154,7 @@ class cyclical_storage_instance_impl<Type, Factory, false> : Factory {
         resolved_ = false;
         if (constructed_) {
             constructed_ = false;
-            reinterpret_cast<Type*>(&instance_)->~Type();
+            std::launder(reinterpret_cast<Type*>(&instance_))->~Type();
         }
     }
 
@@ -176,7 +177,7 @@ class cyclical_storage_instance_impl<Type, Factory, true> : Factory {
         return get();
     }
 
-    Type* get() { return reinterpret_cast<Type*>(&instance_); }
+    Type* get() { return std::launder(reinterpret_cast<Type*>(&instance_)); }
 
     template <typename Context, typename Container>
     void construct(Context& context, Container& container) {

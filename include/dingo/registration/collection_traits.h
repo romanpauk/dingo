@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
 #include <dingo/type/normalized_type.h>
 
@@ -20,24 +20,35 @@ namespace dingo {
 namespace detail {
 template <class T> struct collection_traits {
     static const bool is_collection = false;
+    static const bool has_fixed_size_construct = false;
 };
 
 template <class T, class Allocator>
 struct collection_traits<std::vector<T, Allocator>> {
     static const bool is_collection = true;
+    static const bool has_fixed_size_construct = true;
     using resolve_type = T;
     static void reserve(std::vector<T, Allocator>& collection, size_t size) {
         collection.reserve(size);
     }
+    static std::vector<T, Allocator> make_fixed_size(size_t size) {
+        return std::vector<T, Allocator>(size);
+    }
     template <typename U>
     static void add(std::vector<T, Allocator>& collection, U&& value) {
         collection.emplace_back(std::forward<U>(value));
+    }
+    template <typename U>
+    static void set(std::vector<T, Allocator>& collection, size_t index,
+                    U&& value) {
+        collection[index] = std::forward<U>(value);
     }
 };
 
 template <class T, class Allocator>
 struct collection_traits<std::list<T, Allocator>> {
     static const bool is_collection = true;
+    static const bool has_fixed_size_construct = false;
     using resolve_type = T;
     static void reserve(std::list<T, Allocator>&, size_t) {}
     template <typename U>
@@ -49,6 +60,7 @@ struct collection_traits<std::list<T, Allocator>> {
 template <class T, class Compare, class Allocator>
 struct collection_traits<std::set<T, Compare, Allocator>> {
     static const bool is_collection = true;
+    static const bool has_fixed_size_construct = false;
     using resolve_type = T;
     static void reserve(std::set<T, Compare, Allocator>&, size_t) {}
     template <typename U>
@@ -60,6 +72,7 @@ struct collection_traits<std::set<T, Compare, Allocator>> {
 template <class Key, class Value, class Compare, class Allocator>
 struct collection_traits<std::map<Key, Value, Compare, Allocator>> {
     static const bool is_collection = true;
+    static const bool has_fixed_size_construct = false;
     using resolve_type = Value;
     static void reserve(std::map<Key, Value, Compare, Allocator>&, size_t) {}
     template <typename U>

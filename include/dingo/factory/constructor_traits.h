@@ -7,11 +7,16 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 #include <dingo/type/type_traits.h>
 
 #include <type_traits>
 #include <utility>
+
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
 
 namespace dingo {
 
@@ -125,3 +130,7 @@ struct construction_dispatch<
 } // namespace detail
 
 } // namespace dingo
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif

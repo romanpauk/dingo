@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
 #include <dingo/registration/annotated.h>
 #include <dingo/storage/interface_storage_traits.h>

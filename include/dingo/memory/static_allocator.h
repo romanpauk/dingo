@@ -8,7 +8,7 @@
 #pragma once
 
 #include <dingo/memory/aligned_storage.h>
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
 #include <cassert>
 
