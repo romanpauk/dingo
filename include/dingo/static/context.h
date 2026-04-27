@@ -17,18 +17,18 @@
 
 namespace dingo {
 
-template <typename StaticRegistry, bool PartialDependencies>
+template <typename StaticRegistry, bool RuntimeDependencies>
 class basic_static_context;
 
 namespace detail {
 
-template <typename StaticRegistry, bool PartialDependencies>
+template <typename StaticRegistry, bool RuntimeDependencies>
 struct static_context_closure_selector;
 
 template <typename StaticRegistry>
 struct static_context_closure_selector<StaticRegistry, false> {
-    using execution_traits = detail::basic_static_execution_traits<
-        StaticRegistry, false>;
+    using execution_traits =
+        detail::basic_static_execution_traits<StaticRegistry, false>;
     using type = detail::static_context_closure<
         execution_traits::max_destructible_slots,
         execution_traits::max_temporary_slots,
@@ -42,8 +42,8 @@ struct static_context_closure_selector<StaticRegistry, false> {
 
 template <typename StaticRegistry>
 struct static_context_closure_selector<StaticRegistry, true> {
-    using execution_traits = detail::basic_static_execution_traits<
-        StaticRegistry, true>;
+    using execution_traits =
+        detail::basic_static_execution_traits<StaticRegistry, true>;
     using type = detail::fixed_context_closure<
         execution_traits::max_destructible_slots,
         execution_traits::max_temporary_slots,
@@ -60,11 +60,11 @@ using binding_context = basic_static_context<StaticRegistry, true>;
 
 } // namespace detail
 
-template <typename StaticRegistry, bool PartialDependencies = false>
+template <typename StaticRegistry, bool RuntimeDependencies = false>
 class basic_static_context : public detail::context_path_state {
     using execution_traits =
         detail::basic_static_execution_traits<StaticRegistry,
-                                             PartialDependencies>;
+                                              RuntimeDependencies>;
     static constexpr std::size_t closure_capacity_ =
         execution_traits::max_preserved_closure_depth + 1;
     static constexpr std::size_t destructible_capacity_ =
@@ -80,7 +80,7 @@ class basic_static_context : public detail::context_path_state {
             ? alignof(std::max_align_t)
             : execution_traits::max_temporary_align;
     using closure_type = typename detail::static_context_closure_selector<
-        StaticRegistry, PartialDependencies>::type;
+        StaticRegistry, RuntimeDependencies>::type;
 
   public:
     basic_static_context() { closures_[0] = &closure_; }
@@ -91,8 +91,7 @@ class basic_static_context : public detail::context_path_state {
         }
     }
 
-    template <typename T, typename Container>
-    T resolve(Container& container) {
+    template <typename T, typename Container> T resolve(Container& container) {
         if constexpr (is_keyed_v<T>) {
             using request_type = keyed_type_t<T>;
             using key_type = keyed_key_t<T>;
@@ -121,8 +120,7 @@ class basic_static_context : public detail::context_path_state {
         }
     }
 
-    template <typename T, typename... Args>
-    T& construct(Args&&... args) {
+    template <typename T, typename... Args> T& construct(Args&&... args) {
         auto* instance = allocate_temporary_storage<T>();
         new (instance) T(std::forward<Args>(args)...);
         if constexpr (!std::is_trivially_destructible_v<T>) {
@@ -131,8 +129,7 @@ class basic_static_context : public detail::context_path_state {
         return *instance;
     }
 
-    template <typename T>
-    T* allocate() {
+    template <typename T> T* allocate() {
         return allocate_temporary_storage<T>();
     }
 
@@ -157,8 +154,7 @@ class basic_static_context : public detail::context_path_state {
     }
 
   private:
-    template <typename T>
-    T* allocate_temporary_storage() {
+    template <typename T> T* allocate_temporary_storage() {
         static_assert(sizeof(T) <= temporary_slot_size_,
                       "static_context temporary size must fit the compile-time "
                       "temporary slot bound");
@@ -179,14 +175,12 @@ class basic_static_context : public detail::context_path_state {
         return *closures_[closure_count_ - 1];
     }
 
-    template <typename T>
-    void register_destructor(T* instance) {
+    template <typename T> void register_destructor(T* instance) {
         static_assert(!std::is_trivially_destructible_v<T>);
         active_closure().add_destructor(instance, &destructor<T>);
     }
 
-    template <typename T>
-    static void destructor(void* ptr) {
+    template <typename T> static void destructor(void* ptr) {
         reinterpret_cast<T*>(ptr)->~T();
     }
 

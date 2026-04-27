@@ -17,7 +17,7 @@ namespace dingo {
 namespace detail {
 
 enum class binding_selection_status {
-    selected,
+    found,
     not_found,
     ambiguous,
 };
@@ -25,13 +25,13 @@ enum class binding_selection_status {
 template <binding_selection_status Status, typename Binding = void>
 struct binding_choice {
     static constexpr binding_selection_status status = Status;
-    static constexpr bool found = Status == binding_selection_status::selected;
+    static constexpr bool found = Status == binding_selection_status::found;
     using binding_type = Binding;
 };
 
 template <typename Binding>
-using selected_binding_choice_t =
-    binding_choice<binding_selection_status::selected, Binding>;
+using found_binding_choice_t =
+    binding_choice<binding_selection_status::found, Binding>;
 
 using missing_binding_choice_t =
     binding_choice<binding_selection_status::not_found>;
@@ -41,14 +41,12 @@ using ambiguous_binding_choice_t =
 
 template <typename Bindings> struct static_binding;
 
-template <>
-struct static_binding<type_list<>> {
+template <> struct static_binding<type_list<>> {
     using type = missing_binding_choice_t;
 };
 
-template <typename Binding>
-struct static_binding<type_list<Binding>> {
-    using type = selected_binding_choice_t<Binding>;
+template <typename Binding> struct static_binding<type_list<Binding>> {
+    using type = found_binding_choice_t<Binding>;
 };
 
 template <typename Binding0, typename Binding1, typename... Bindings>
@@ -66,7 +64,7 @@ struct runtime_binding_route {
     State state = nullptr;
 
     constexpr bool found() const {
-        return status == binding_selection_status::selected;
+        return status == binding_selection_status::found;
     }
 
     constexpr bool ambiguous() const {
@@ -75,12 +73,10 @@ struct runtime_binding_route {
 
     static constexpr runtime_binding_route found(Binding& binding,
                                                  State state = nullptr) {
-        return {binding_selection_status::selected, &binding, state};
+        return {binding_selection_status::found, &binding, state};
     }
 
-    static constexpr runtime_binding_route miss() {
-        return {};
-    }
+    static constexpr runtime_binding_route miss() { return {}; }
 
     static constexpr runtime_binding_route ambiguity() {
         return {binding_selection_status::ambiguous, nullptr, nullptr};
@@ -90,9 +86,9 @@ struct runtime_binding_route {
 template <typename Binding, typename State = std::nullptr_t>
 constexpr runtime_binding_route<Binding, State>
 make_runtime_route(Binding* binding, State state = nullptr) {
-    return binding ? runtime_binding_route<Binding, State>::found(*binding,
-                                                                  state)
-                   : runtime_binding_route<Binding, State>::miss();
+    return binding
+               ? runtime_binding_route<Binding, State>::found(*binding, state)
+               : runtime_binding_route<Binding, State>::miss();
 }
 
 template <typename Binding, typename State = std::nullptr_t, typename Visitor>

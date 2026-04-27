@@ -42,15 +42,14 @@ TEST(static_graph_test, exposes_dependency_nodes_and_topological_order) {
     using static_traits = detail::static_execution_traits<typename source::type>;
 
     static_assert(graph::acyclic);
+    static_assert(std::is_same_v<typename graph::dependency_nodes<config>,
+                                 type_list<>>);
     static_assert(
-        std::is_same_v<typename graph::dependency_nodes_for<config>,
-                       type_list<>>);
+        std::is_same_v<typename graph::dependency_nodes<service_interface>,
+                       type_list<typename graph::node<config>>>);
     static_assert(
-        std::is_same_v<typename graph::dependency_nodes_for<service_interface>,
-                       type_list<typename graph::node_for<config>>>);
-    static_assert(
-        std::is_same_v<typename graph::dependency_nodes_for<controller>,
-                       type_list<typename graph::node_for<service_interface>>>);
+        std::is_same_v<typename graph::dependency_nodes<controller>,
+                       type_list<typename graph::node<service_interface>>>);
     static_assert(std::is_same_v<
                   typename graph::topological_bindings,
                   type_list<typename graph::template binding<config>,
@@ -58,9 +57,9 @@ TEST(static_graph_test, exposes_dependency_nodes_and_topological_order) {
                             typename graph::template binding<controller>>>);
     static_assert(std::is_same_v<
                   typename graph::topological_nodes,
-                  type_list<typename graph::node_for<config>,
-                            typename graph::node_for<service_interface>,
-                            typename graph::node_for<controller>>>);
+                  type_list<typename graph::node<config>,
+                            typename graph::node<service_interface>,
+                            typename graph::node<controller>>>);
     static_assert(static_traits::max_preserved_closure_depth == 2);
     static_assert(static_traits::max_destructible_slots == 0);
 }
@@ -328,6 +327,6 @@ TEST(static_graph_test, annotated_bindings_reuse_compile_time_bindings_lookup) {
     static_assert(graph::acyclic);
     static_assert(
         std::is_same_v<
-            typename graph::dependency_nodes_for<annotated<service, service_tag>>,
-            type_list<typename graph::node_for<annotated<config, config_tag>>>>);
+            typename graph::dependency_nodes<annotated<service, service_tag>>,
+            type_list<typename graph::node<annotated<config, config_tag>>>>);
 }

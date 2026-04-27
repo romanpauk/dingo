@@ -7,13 +7,14 @@
 
 #pragma once
 
-#include <dingo/static/graph.h>
-#include <dingo/core/keyed.h>
+#include <dingo/core/binding_collection.h>
 #include <dingo/core/binding_resolution_status.h>
-#include <dingo/core/static_activation_set.h>
 #include <dingo/core/exceptions.h>
+#include <dingo/core/keyed.h>
+#include <dingo/core/static_activation_set.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/runtime/context.h>
+#include <dingo/static/graph.h>
 #include <dingo/static/registry.h>
 
 #include <type_traits>
@@ -36,8 +37,8 @@ class binding_resolution<Host, static_registry<Registrations...>>
         typename static_registry_type::template bindings<T, Key>>;
 
     template <typename Request, typename Key>
-    typename annotated_traits<Request>::type resolve_binding(
-        runtime_context& context) {
+    typename annotated_traits<Request>::type
+    resolve_binding(runtime_context& context) {
         using binding = binding_t<Request, Key>;
         using interface_binding = typename binding::binding_type;
         auto route = this->template make_route<interface_binding>(*this);
@@ -72,20 +73,21 @@ class binding_resolution<Host, static_registry<Registrations...>>
     using allocator_type = typename Host::allocator_type;
 
     static_assert(static_registry_type::valid,
-                  "register_type bindings<...> requires a valid compile-time bindings source");
-    static_assert(
-        detail::graph_analysis<static_registry_type, true>::acyclic,
-        "register_type bindings<...> requires an acyclic compile-time binding graph");
-    static_assert(
-        (detail::binding_factory_is_default_constructible<
-             detail::binding_model<Registrations>>::value &&
-         ...),
-        "register_type bindings<...> requires default-constructible local factories");
-    static_assert(
-        (detail::binding_storage_is_default_constructible<
-             detail::binding_model<Registrations>>::value &&
-         ...),
-        "register_type bindings<...> requires default-constructible local storage objects");
+                  "register_type bindings<...> requires a valid compile-time "
+                  "bindings source");
+    static_assert(detail::graph_analysis<static_registry_type, true>::acyclic,
+                  "register_type bindings<...> requires an acyclic "
+                  "compile-time binding graph");
+    static_assert((detail::binding_factory_is_default_constructible<
+                       detail::binding_model<Registrations>>::value &&
+                   ...),
+                  "register_type bindings<...> requires default-constructible "
+                  "local factories");
+    static_assert((detail::binding_storage_is_default_constructible<
+                       detail::binding_model<Registrations>>::value &&
+                   ...),
+                  "register_type bindings<...> requires default-constructible "
+                  "local storage objects");
 
     template <typename Allocator>
     binding_resolution(Host* host, Allocator&&) : host_(host) {}
@@ -118,7 +120,7 @@ class binding_resolution<Host, static_registry<Registrations...>>
             }
 
             if constexpr (binding::status ==
-                          detail::binding_selection_status::selected) {
+                          detail::binding_selection_status::found) {
                 if (merged == detail::binding_result::primary) {
                     return resolve_binding<request_type, Key>(context);
                 }
@@ -129,8 +131,9 @@ class binding_resolution<Host, static_registry<Registrations...>>
                 }
             }
 
-            return host_->template resolve_request<
-                T, RemoveRvalueReferences, Key>(context);
+            return host_
+                ->template resolve_request<T, RemoveRvalueReferences, Key>(
+                    context);
         }
     }
 
