@@ -88,7 +88,7 @@ GCC14_EXPECTED_MAX = {
     **GCC_HYBRID_PROBE_EXPECTED_MAX,
     "probe_hybrid_service_read": 0x280,
     "probe_hybrid_interface_handle": 0x360,
-    "probe_hybrid_external_value_storage": 0x5c0,
+    "probe_hybrid_external_value_storage": 0x5d0,
     "probe_hybrid_external_reference_storage": 0x5c0,
     "probe_hybrid_external_wrapper_storage": 0x620,
 }
