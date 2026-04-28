@@ -9,6 +9,7 @@
 
 #include <dingo/core/binding_collection.h>
 #include <dingo/core/binding_model.h>
+#include <dingo/core/config.h>
 #include <dingo/core/binding_resolution_context.h>
 #include <dingo/core/binding_resolution_status.h>
 #include <dingo/core/binding_selection.h>
@@ -56,7 +57,7 @@ class hybrid_container<static_registry<Registrations...>>
           dynamic_container_traits,
           typename dynamic_container_traits::allocator_type, void,
           hybrid_container<static_registry<Registrations...>>>,
-      private detail::binding_scope<Registrations...> {
+      private detail::static_storage_state<Registrations...> {
     friend class runtime_context;
 
     using static_registry_type_ = static_registry<Registrations...>;
@@ -65,9 +66,11 @@ class hybrid_container<static_registry<Registrations...>>
         runtime_registry<dynamic_container_traits,
                          typename dynamic_container_traits::allocator_type,
                          void, self_type>;
-    using static_state = detail::binding_scope<Registrations...>;
+    using static_state = detail::static_storage_state<Registrations...>;
     using static_resolution_ref =
         detail::static_binding_scope_ref<static_state, Registrations...>;
+    using binding_resolution_ref =
+        detail::binding_scope_ref<static_state, Registrations...>;
     using static_context_type = static_context<static_registry_type_>;
 
     template <typename T, typename Key>
@@ -245,14 +248,14 @@ class hybrid_container<static_registry<Registrations...>>
                   std::conditional_t<std::is_rvalue_reference_v<T>,
                                      std::remove_reference_t<T>, T>>::type,
               std::enable_if_t<std::is_rvalue_reference_v<T>, int> = 0>
-    R resolve_static() {
+    DINGO_ALWAYS_INLINE R resolve_static() {
         static_context_type static_context;
         return resolve_static<T, RemoveRvalueReferences, Key>(static_context);
     }
 
     template <typename T, bool RemoveRvalueReferences, typename Key = void,
               std::enable_if_t<!std::is_rvalue_reference_v<T>, int> = 0>
-    decltype(auto) resolve_static() {
+    DINGO_ALWAYS_INLINE decltype(auto) resolve_static() {
         static_context_type static_context;
         return resolve_static<T, RemoveRvalueReferences, Key>(static_context);
     }
@@ -261,7 +264,7 @@ class hybrid_container<static_registry<Registrations...>>
               typename R = typename annotated_traits<
                   std::conditional_t<std::is_rvalue_reference_v<T>,
                                      std::remove_reference_t<T>, T>>::type>
-    R construct_static() {
+    DINGO_ALWAYS_INLINE R construct_static() {
         using request_type = typename annotated_traits<T>::type;
         using normalized_request_type = normalized_type_t<T>;
         constexpr bool has_exact_static_binding =
@@ -322,7 +325,8 @@ class hybrid_container<static_registry<Registrations...>>
     T construct_collection(runtime_context& context, Fn&& fn, key<Key>) {
         using collection_type = collection_traits<T>;
         using resolve_type = typename collection_type::resolve_type;
-        auto& static_state_ref = static_cast<static_state&>(*this);
+        binding_resolution_ref static_state_ref(
+            static_cast<static_state&>(*this));
 
         constexpr std::size_t static_count =
             type_list_size_v<typename static_registry_type_::template bindings<
@@ -350,7 +354,8 @@ class hybrid_container<static_registry<Registrations...>>
     T construct_collection(runtime_context& context, Fn&& fn, none_t) {
         using collection_type = collection_traits<T>;
         using resolve_type = typename collection_type::resolve_type;
-        auto& static_state_ref = static_cast<static_state&>(*this);
+        binding_resolution_ref static_state_ref(
+            static_cast<static_state&>(*this));
 
         constexpr std::size_t static_count =
             type_list_size_v<typename static_registry_type_::template bindings<
@@ -375,7 +380,7 @@ class hybrid_container<static_registry<Registrations...>>
     }
 
     template <typename Request, typename Key, typename Context>
-    typename annotated_traits<Request>::type
+    DINGO_ALWAYS_INLINE typename annotated_traits<Request>::type
     resolve_static_selection(Context& context) {
         using selection = static_selection_t<Request, Key>;
         using interface_binding = typename selection::binding_type;
@@ -400,7 +405,8 @@ class hybrid_container<static_registry<Registrations...>>
                       detail::binding_selection_status::found) {
             throw detail::make_type_not_found_exception<Request>(context);
         } else {
-            auto& static_state_ref = static_cast<static_state&>(*this);
+            binding_resolution_ref static_state_ref(
+                static_cast<static_state&>(*this));
             auto route =
                 static_state_ref.template make_route<interface_binding>(*this);
             return route.template resolve<Request>(context);
@@ -414,7 +420,7 @@ class hybrid_container<static_registry<Registrations...>>
                   std::conditional_t<std::is_rvalue_reference_v<T>,
                                      std::remove_reference_t<T>, T>,
                   T>>::type>
-    R resolve_static(Context& context) {
+    DINGO_ALWAYS_INLINE R resolve_static(Context& context) {
         if constexpr (collection_traits<R>::is_collection) {
             return construct_static_collection<R>(
                 context,
@@ -489,7 +495,7 @@ class hybrid_container<static_registry<Registrations...>>
               typename R = typename annotated_traits<
                   std::conditional_t<std::is_rvalue_reference_v<T>,
                                      std::remove_reference_t<T>, T>>::type>
-    R resolve(IdType&& id = IdType()) {
+    DINGO_ALWAYS_INLINE R resolve(IdType&& id = IdType()) {
         if constexpr (detail::is_typed_key_v<IdType>) {
             using key_type = typename std::decay_t<IdType>::type;
             if constexpr (collection_traits<R>::is_collection) {
@@ -527,7 +533,7 @@ class hybrid_container<static_registry<Registrations...>>
               typename R = typename annotated_traits<
                   std::conditional_t<std::is_rvalue_reference_v<T>,
                                      std::remove_reference_t<T>, T>>::type>
-    R construct(Factory factory = Factory()) {
+    DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
         using request_type = typename annotated_traits<T>::type;
         using normalized_request_type = normalized_type_t<T>;
         if constexpr (std::is_same_v<Factory,
@@ -728,7 +734,8 @@ class hybrid_container<static_registry<Registrations...>>
     template <typename T, typename Key = void, typename Fn>
     std::size_t append_collection(T& results, runtime_context& context,
                                   Fn&& fn) {
-        auto& static_state_ref = static_cast<static_state&>(*this);
+        binding_resolution_ref static_state_ref(
+            static_cast<static_state&>(*this));
         if constexpr (std::is_void_v<Key>) {
             return detail::append_binding_collection(
                 results,

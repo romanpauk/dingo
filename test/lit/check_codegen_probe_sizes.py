@@ -9,23 +9,23 @@ from pathlib import Path
 
 EXPECTED_MAX = {
     "probe_static_service_read": 0x10,
-    "probe_hybrid_service_read": 0x250,
+    "probe_hybrid_service_read": 0x50,
     "probe_static_shared_config": 0x90,
-    "probe_hybrid_shared_config": 0x220,
+    "probe_hybrid_shared_config": 0x120,
     "probe_static_shared_value_config": 0x10,
-    "probe_hybrid_shared_value_config": 0x1e0,
+    "probe_hybrid_shared_value_config": 0x10,
     "probe_static_shared_reference_config": 0x10,
-    "probe_hybrid_shared_reference_config": 0x1d0,
+    "probe_hybrid_shared_reference_config": 0x10,
     "probe_static_optional_config": 0x60,
-    "probe_hybrid_optional_config": 0x1e0,
+    "probe_hybrid_optional_config": 0x10,
     "probe_static_unique_value_config": 0x10,
     "probe_static_unique_rvalue_config": 0x10,
-    "probe_hybrid_unique_value_config": 0x1c0,
-    "probe_hybrid_unique_rvalue_config": 0x140,
+    "probe_hybrid_unique_value_config": 0x10,
+    "probe_hybrid_unique_rvalue_config": 0x10,
     "probe_static_unique_wrapper_config": 0x10,
-    "probe_hybrid_unique_wrapper_config": 0x1c0,
+    "probe_hybrid_unique_wrapper_config": 0x10,
     "probe_static_interface_handle": 0x180,
-    "probe_hybrid_interface_handle": 0x320,
+    "probe_hybrid_interface_handle": 0x200,
     "probe_static_collection_sum": 0x500,
     "probe_hybrid_collection_sum": 0x800,
     "probe_runtime_external_value_storage": 0x280,
@@ -70,24 +70,12 @@ GCC_ARM64_EXPECTED_MAX = {
     "probe_runtime_external_wrapper_storage": 0x480,
 }
 
-GCC_HYBRID_PROBE_EXPECTED_MAX = {
-    # GCC's symbol sizes include version-specific layout and padding noise.
-    # The static tiny-probe caps and static-vs-runtime checks still guard the
-    # optimized path; these limits only keep hybrid probes portable across GCC.
-    "probe_hybrid_shared_reference_config": 0x1e0,
-    "probe_hybrid_unique_rvalue_config": 0x160,
-}
-
 GCC13_EXPECTED_MAX = {
     **GCC_TINY_PROBE_EXPECTED_MAX,
-    **GCC_HYBRID_PROBE_EXPECTED_MAX,
 }
 
 GCC14_EXPECTED_MAX = {
     **GCC_TINY_PROBE_EXPECTED_MAX,
-    **GCC_HYBRID_PROBE_EXPECTED_MAX,
-    "probe_hybrid_service_read": 0x280,
-    "probe_hybrid_interface_handle": 0x360,
     "probe_hybrid_external_value_storage": 0x5d0,
     "probe_hybrid_external_reference_storage": 0x5c0,
     "probe_hybrid_external_wrapper_storage": 0x620,
@@ -95,8 +83,6 @@ GCC14_EXPECTED_MAX = {
 
 GCC15_EXPECTED_MAX = {
     **GCC_TINY_PROBE_EXPECTED_MAX,
-    **GCC_HYBRID_PROBE_EXPECTED_MAX,
-    "probe_hybrid_service_read": 0x280,
     "probe_hybrid_external_value_storage": 0x580,
     "probe_hybrid_external_reference_storage": 0x560,
     "probe_hybrid_external_wrapper_storage": 0x5c0,
