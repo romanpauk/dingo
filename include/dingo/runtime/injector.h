@@ -12,6 +12,7 @@
 #include <dingo/factory/constructor.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/type/normalized_type.h>
+#include <dingo/type/request_traits.h>
 
 #include <type_traits>
 #include <utility>
@@ -27,9 +28,7 @@ class runtime_injector {
         : registry_(&registry) {}
 
     template <typename T, typename IdType = none_t,
-              typename R = typename annotated_traits<
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>>::type>
+              typename R = request_result_t<T>>
     R resolve(IdType&& id = IdType()) {
         return registry_->template resolve_runtime_request<T>(
             std::forward<IdType>(id));
@@ -37,9 +36,7 @@ class runtime_injector {
 
     template <typename T,
               typename Factory = constructor<normalized_type_t<T>>,
-              typename R = typename annotated_traits<std::conditional_t<
-                  std::is_rvalue_reference_v<T>, std::remove_reference_t<T>,
-                  T>>::type>
+              typename R = request_result_t<T>>
     R construct(Factory factory = Factory()) {
         return registry_->template construct_runtime_request<T>(
             std::move(factory));

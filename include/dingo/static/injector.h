@@ -17,6 +17,7 @@
 #include <dingo/static/context.h>
 #include <dingo/static/graph.h>
 #include <dingo/static/registry.h>
+#include <dingo/type/request_traits.h>
 #include <type_traits>
 #include <utility>
 
@@ -84,9 +85,7 @@ struct binding_factory<Selection, Request, true> {
 };
 
 template <typename Request, typename Selection, typename ResolveNormalized>
-typename annotated_traits<
-    std::conditional_t<std::is_rvalue_reference_v<Request>,
-                       std::remove_reference_t<Request>, Request>>::type
+request_result_t<Request>
 construct_static_binding_value(ResolveNormalized&& resolve_normalized) {
     if constexpr (binding_factory<Selection, Request>::enabled) {
         // Zero-dependency normalized bindings can build their value without
@@ -142,9 +141,7 @@ class static_injector<static_registry<Registrations...>, void>
         "static_injector requires default-constructible storage objects");
 
     template <typename T, typename Key = void,
-              typename R = typename annotated_traits<
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>>::type>
+              typename R = request_result_t<T>>
     R resolve(key<Key> = {}) {
         if constexpr (!collection_traits<R>::is_collection) {
             using request_type = R;
@@ -181,12 +178,10 @@ class static_injector<static_registry<Registrations...>, void>
     }
 
     template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-              typename R = typename annotated_traits<
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>>::type>
+              typename R = request_result_t<T>>
     R construct(Factory factory = Factory()) {
-        using normalized_request_type = normalized_type_t<T>;
-        using request_type = typename annotated_traits<T>::type;
+        using normalized_request_type = request_value_t<T>;
+        using request_type = request_interface_t<T>;
         if constexpr (std::is_same_v<Factory,
                                      constructor<normalized_type_t<T>>>) {
             using selection = detail::static_binding_t<
@@ -281,11 +276,7 @@ class static_injector<static_registry<Registrations...>, void>
     }
 
     template <typename T, bool RemoveRvalueReferences, typename Key = void,
-              typename R = typename annotated_traits<std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>::type>
+              typename R = resolve_result_t<T, RemoveRvalueReferences>>
     R resolve(context_type& context) {
         if constexpr (collection_traits<R>::is_collection) {
             return this->template construct_static_collection<
@@ -310,11 +301,7 @@ class static_injector<static_registry<Registrations...>, void>
     }
 
     template <typename T, bool RemoveRvalueReferences, typename Key,
-              typename R = std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve(context_type& context, key<Key>) {
         return resolve<T, RemoveRvalueReferences, Key>(context);
     }

@@ -9,6 +9,7 @@
 
 #include <dingo/container.h>
 #include <dingo/static/injector.h>
+#include <dingo/type/request_traits.h>
 
 namespace dingo {
 
@@ -23,27 +24,19 @@ class static_container {
 
     const injector_type& injector() const { return injector_; }
 
-    template <typename T,
-              typename R = typename annotated_traits<
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>>::type>
+    template <typename T, typename R = request_result_t<T>>
     R resolve() {
         return injector_.template resolve<T>();
     }
 
-    template <typename T, typename Key,
-              typename R = typename annotated_traits<
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>>::type>
+    template <typename T, typename Key, typename R = request_result_t<T>>
     R resolve(key<Key>) {
         return injector_.template resolve<T>(key<Key>{});
     }
 
     template <typename T,
               typename Factory = constructor<normalized_type_t<T>>,
-              typename R = typename annotated_traits<std::conditional_t<
-                  std::is_rvalue_reference_v<T>, std::remove_reference_t<T>,
-                  T>>::type>
+              typename R = request_result_t<T>>
     R construct(Factory factory = Factory()) {
         return injector_.template construct<T>(std::move(factory));
     }

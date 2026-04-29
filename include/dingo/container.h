@@ -35,6 +35,7 @@
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/complete_type.h>
 #include <dingo/type/normalized_type.h>
+#include <dingo/type/request_traits.h>
 #include <dingo/type/type_map.h>
 
 #include <algorithm>
@@ -79,7 +80,7 @@ class hybrid_container<static_registry<Registrations...>>
 
     template <typename T>
     static constexpr bool runtime_auto_constructible_v =
-        std::is_same_v<normalized_type_t<T>, std::decay_t<T>> &&
+        std::is_same_v<request_value_t<T>, std::decay_t<T>> &&
         (!std::is_reference_v<T> ||
          (std::is_lvalue_reference_v<T> &&
           std::is_const_v<std::remove_reference_t<T>> &&
@@ -156,8 +157,8 @@ class hybrid_container<static_registry<Registrations...>>
 
     template <typename T>
     static constexpr bool has_static_construct_request_v = [] {
-        using request_type = typename annotated_traits<T>::type;
-        using normalized_request_type = normalized_type_t<T>;
+        using request_type = request_interface_t<T>;
+        using normalized_request_type = request_value_t<T>;
         constexpr bool has_exact_static_binding =
             static_binding_satisfies_request_v<request_type>;
         constexpr bool has_normalized_static_binding =
@@ -173,8 +174,8 @@ class hybrid_container<static_registry<Registrations...>>
     }();
 
     template <typename T> bool select_static_construct() {
-        using request_type = typename annotated_traits<T>::type;
-        using normalized_request_type = normalized_type_t<T>;
+        using request_type = request_interface_t<T>;
+        using normalized_request_type = request_value_t<T>;
 
         if constexpr (!has_static_construct_request_v<T>) {
             return false;
@@ -244,9 +245,7 @@ class hybrid_container<static_registry<Registrations...>>
     }
 
     template <typename T, bool RemoveRvalueReferences, typename Key = void,
-              typename R = typename annotated_traits<
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>>::type,
+              typename R = request_result_t<T>,
               std::enable_if_t<std::is_rvalue_reference_v<T>, int> = 0>
     DINGO_ALWAYS_INLINE R resolve_static() {
         static_context_type static_context;
@@ -261,12 +260,10 @@ class hybrid_container<static_registry<Registrations...>>
     }
 
     template <typename T,
-              typename R = typename annotated_traits<
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>>::type>
+              typename R = request_result_t<T>>
     DINGO_ALWAYS_INLINE R construct_static() {
-        using request_type = typename annotated_traits<T>::type;
-        using normalized_request_type = normalized_type_t<T>;
+        using request_type = request_interface_t<T>;
+        using normalized_request_type = request_value_t<T>;
         constexpr bool has_exact_static_binding =
             static_binding_satisfies_request_v<request_type>;
         constexpr bool has_normalized_static_binding =
@@ -380,7 +377,7 @@ class hybrid_container<static_registry<Registrations...>>
     }
 
     template <typename Request, typename Key, typename Context>
-    DINGO_ALWAYS_INLINE typename annotated_traits<Request>::type
+    DINGO_ALWAYS_INLINE request_interface_t<Request>
     resolve_static_selection(Context& context) {
         using selection = static_selection_t<Request, Key>;
         using interface_binding = typename selection::binding_type;
@@ -397,7 +394,7 @@ class hybrid_container<static_registry<Registrations...>>
     }
 
     template <typename Request, typename Key, typename Context>
-    typename annotated_traits<Request>::type
+    request_interface_t<Request>
     resolve_binding_selection(Context& context) {
         using selection = static_selection_t<Request, Key>;
         using interface_binding = typename selection::binding_type;
@@ -415,11 +412,7 @@ class hybrid_container<static_registry<Registrations...>>
 
     template <typename T, bool RemoveRvalueReferences, typename Key = void,
               typename Context,
-              typename R = typename annotated_traits<std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>::type>
+              typename R = resolve_result_t<T, RemoveRvalueReferences>>
     DINGO_ALWAYS_INLINE R resolve_static(Context& context) {
         if constexpr (collection_traits<R>::is_collection) {
             return construct_static_collection<R>(
@@ -492,9 +485,7 @@ class hybrid_container<static_registry<Registrations...>>
     const self_type& container() const { return *this; }
 
     template <typename T, typename IdType = none_t,
-              typename R = typename annotated_traits<
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>>::type>
+              typename R = request_result_t<T>>
     DINGO_ALWAYS_INLINE R resolve(IdType&& id = IdType()) {
         if constexpr (detail::is_typed_key_v<IdType>) {
             using key_type = typename std::decay_t<IdType>::type;
@@ -530,12 +521,10 @@ class hybrid_container<static_registry<Registrations...>>
     }
 
     template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-              typename R = typename annotated_traits<
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>>::type>
+              typename R = request_result_t<T>>
     DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
-        using request_type = typename annotated_traits<T>::type;
-        using normalized_request_type = normalized_type_t<T>;
+        using request_type = request_interface_t<T>;
+        using normalized_request_type = request_value_t<T>;
         if constexpr (std::is_same_v<Factory,
                                      constructor<normalized_type_t<T>>>) {
             if constexpr (has_static_construct_request_v<T>) {
@@ -681,17 +670,13 @@ class hybrid_container<static_registry<Registrations...>>
     }
 
     template <typename T, typename IdType = none_t,
-              typename R = typename annotated_traits<
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>>::type>
+              typename R = request_result_t<T>>
     R resolve_runtime_request(IdType&& id = IdType()) {
         return resolve<T>(std::forward<IdType>(id));
     }
 
     template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-              typename R = typename annotated_traits<
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>>::type>
+              typename R = request_result_t<T>>
     R construct_runtime_request(Factory factory = Factory()) {
         return construct<T>(std::move(factory));
     }
@@ -722,7 +707,7 @@ class hybrid_container<static_registry<Registrations...>>
 
     template <typename Request, typename Key = void>
     detail::binding_selection_status binding_status() {
-        using request_type = typename annotated_traits<Request>::type;
+        using request_type = request_interface_t<Request>;
         using static_selection = static_selection_t<request_type, Key>;
         const auto runtime_status =
             runtime_base::template binding_status<request_type, Key>();
@@ -789,11 +774,7 @@ class hybrid_container<static_registry<Registrations...>>
     }
 
     template <typename T, bool RemoveRvalueReferences, typename Key = void,
-              typename R = std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve_request(runtime_context& context) {
         if constexpr (std::is_void_v<Key>) {
             return resolve<T, RemoveRvalueReferences>(context);
@@ -803,54 +784,34 @@ class hybrid_container<static_registry<Registrations...>>
     }
 
     template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
-              typename R = typename annotated_traits<std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>::type>
+              typename R = resolve_result_t<T, RemoveRvalueReferences>>
     R resolve(static_context_type& context, none_t) {
         return resolve_static<T, RemoveRvalueReferences>(context);
     }
 
     template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
               typename Key = void,
-              typename R = typename annotated_traits<std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>::type>
+              typename R = resolve_result_t<T, RemoveRvalueReferences>>
     R resolve(static_context_type& context) {
         return resolve_static<T, RemoveRvalueReferences, Key>(context);
     }
 
     template <typename T, bool RemoveRvalueReferences, bool CheckCache,
               typename Key,
-              typename R = std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve(static_context_type& context, key<Key>) {
         return resolve_static<T, RemoveRvalueReferences, Key>(context);
     }
 
     template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
-              typename R = typename annotated_traits<std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>::type>
+              typename R = resolve_result_t<T, RemoveRvalueReferences>>
     R resolve(runtime_context& context, none_t) {
         return resolve<T, RemoveRvalueReferences, CheckCache>(context);
     }
 
     template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
               typename Key = void,
-              typename R = typename annotated_traits<std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>::type>
+              typename R = resolve_result_t<T, RemoveRvalueReferences>>
     R resolve(runtime_context& context) {
         if constexpr (collection_traits<R>::is_collection) {
             if constexpr (std::is_void_v<Key>) {
@@ -903,11 +864,7 @@ class hybrid_container<static_registry<Registrations...>>
 
     template <typename T, bool RemoveRvalueReferences, bool CheckCache,
               typename Key,
-              typename R = std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve(runtime_context& context, key<Key>) {
         return resolve<T, RemoveRvalueReferences, CheckCache, Key>(context);
     }

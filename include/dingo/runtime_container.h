@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/runtime/registry.h>
+#include <dingo/type/request_traits.h>
 
 namespace dingo {
 
@@ -67,18 +68,14 @@ class runtime_container
     runtime_injector_type injector() { return registry().injector(); }
 
     template <typename T, typename IdType = none_t,
-              typename R = typename annotated_traits<
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>>::type>
+              typename R = request_result_t<T>>
     R resolve(IdType&& id = IdType()) {
         return injector().template resolve<T>(std::forward<IdType>(id));
     }
 
     template <typename T,
               typename Factory = constructor<normalized_type_t<T>>,
-              typename R = typename annotated_traits<std::conditional_t<
-                  std::is_rvalue_reference_v<T>, std::remove_reference_t<T>,
-                  T>>::type>
+              typename R = request_result_t<T>>
     R construct(Factory factory = Factory()) {
         return injector().template construct<T>(std::move(factory));
     }
