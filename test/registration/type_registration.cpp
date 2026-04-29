@@ -5,8 +5,11 @@
 // SPDX-License-Identifier: MIT
 //
 
+#include <dingo/core/factory_traits.h>
+#include <dingo/registration/constructor.h>
 #include <dingo/resolution/conversion_cache.h>
-#include <dingo/resolution/instance_factory.h>
+#include <dingo/resolution/runtime_binding.h>
+#include <dingo/core/binding_model.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/rtti/rtti.h>
@@ -18,6 +21,10 @@
 #include <gtest/gtest.h>
 
 using namespace dingo;
+
+namespace {
+int build_from_double_and_cstr(double, const char*) { return 0; }
+}
 
 TEST(type_registration_test, get_type) {
     struct A {};
@@ -51,7 +58,8 @@ TEST(type_registration_test, registration_prefers_first_explicit_match) {
     using registration = type_registration<
         scope<int>, scope<float>, storage<double>, storage<char>,
         factory<long>, factory<short>, interfaces<unsigned>, interfaces<bool>,
-        conversions<void*>, conversions<int*>>;
+        conversions<void*>, conversions<int*>, dependencies<long>,
+        dependencies<short>>;
 
     static_assert(std::is_same_v<typename registration::scope_type, scope<int>>);
     static_assert(
@@ -62,6 +70,8 @@ TEST(type_registration_test, registration_prefers_first_explicit_match) {
                                  interfaces<unsigned>>);
     static_assert(std::is_same_v<typename registration::conversions_type,
                                  conversions<void*>>);
+    static_assert(std::is_same_v<typename registration::dependencies_type,
+                                 dependencies<long>>);
 }
 
 TEST(type_registration_test, registration_deduction) {
@@ -104,6 +114,112 @@ TEST(type_registration_test, registration_default_interface_and_conversions) {
                        conversions<detail::conversions<shared, int, runtime_type>>>);
 }
 
+TEST(type_registration_test, registration_dependencies_default_from_factory_traits) {
+    struct service {
+        explicit service(int, float) {}
+    };
+    struct selected_service {
+        DINGO_CONSTRUCTOR(selected_service(int, float)) {}
+    };
+
+    using ctor_registration =
+        type_registration<scope<unique>, storage<service>,
+                          factory<constructor<service(int, float)>>>;
+    static_assert(std::is_same_v<typename ctor_registration::dependencies_type,
+                                 dependencies<int, float>>);
+
+    using detected_registration =
+        type_registration<scope<unique>, storage<selected_service>>;
+    static_assert(
+        std::is_same_v<typename detected_registration::dependencies_type,
+                       dependencies<int, float>>);
+
+    using function_registration =
+        type_registration<scope<unique>, storage<int>,
+                          factory<function<build_from_double_and_cstr>>>;
+    static_assert(
+        std::is_same_v<typename function_registration::dependencies_type,
+                       dependencies<double, const char*>>);
+}
+
+TEST(type_registration_test, registration_dependencies_prefer_explicit_metadata) {
+    struct service {
+        explicit service(int) {}
+    };
+
+    using registration =
+        type_registration<scope<unique>, storage<service>,
+                          factory<constructor<service(int)>>,
+                          dependencies<float, bool>>;
+    static_assert(std::is_same_v<typename registration::dependencies_type,
+                                 dependencies<float, bool>>);
+}
+
+TEST(type_registration_test,
+     registration_explicit_dependencies_shape_default_constructor_factory) {
+    struct service {
+        service(int, float) {}
+        service(double, bool) {}
+    };
+
+    using registration =
+        type_registration<scope<unique>, storage<service>,
+                          dependencies<double, bool>>;
+
+    static_assert(std::is_same_v<typename registration::factory_type,
+                                 factory<constructor<service(double, bool)>>>);
+    static_assert(std::is_same_v<typename registration::dependencies_type,
+                                 dependencies<double, bool>>);
+}
+
+TEST(type_registration_test, factory_traits_report_dependencies) {
+    struct service {
+        explicit service(int, float) {}
+    };
+    struct selected_service {
+        DINGO_CONSTRUCTOR(selected_service(int, float)) {}
+    };
+    struct defaulted_service {};
+
+    using constructor_factory = constructor<service(int, float)>;
+    static_assert(std::is_same_v<typename factory_traits<
+                                     constructor_factory>::dependencies,
+                                 type_list<int, float>>);
+    static_assert(factory_traits<constructor_factory>::has_explicit_dependencies);
+    static_assert(factory_traits<constructor_factory>::is_compile_time_bindable);
+
+    using detected_factory = constructor<selected_service>;
+    static_assert(std::is_same_v<typename factory_traits<
+                                     detected_factory>::dependencies,
+                                 type_list<int, float>>);
+    static_assert(!factory_traits<detected_factory>::has_explicit_dependencies);
+    static_assert(factory_traits<detected_factory>::is_compile_time_bindable);
+
+    using defaulted_factory = constructor<defaulted_service>;
+    static_assert(std::is_same_v<typename factory_traits<
+                                     defaulted_factory>::dependencies,
+                                 type_list<>>);
+    static_assert(!factory_traits<defaulted_factory>::has_explicit_dependencies);
+    static_assert(factory_traits<defaulted_factory>::is_compile_time_bindable);
+
+    using function_factory = function<build_from_double_and_cstr>;
+    static_assert(std::is_same_v<typename factory_traits<
+                                     function_factory>::dependencies,
+                                 type_list<double, const char*>>);
+    static_assert(factory_traits<function_factory>::has_explicit_dependencies);
+    static_assert(factory_traits<function_factory>::is_compile_time_bindable);
+
+    auto callable_factory = callable<int(short, long)>([](short, long) {
+        return 0;
+    });
+    using callable_factory_type = decltype(callable_factory);
+    static_assert(std::is_same_v<typename factory_traits<
+                                     callable_factory_type>::dependencies,
+                                 type_list<short, long>>);
+    static_assert(factory_traits<callable_factory_type>::has_explicit_dependencies);
+    static_assert(!factory_traits<callable_factory_type>::is_compile_time_bindable);
+}
+
 TEST(type_registration_test, registration_specialization) {
     struct I {
         virtual ~I() = default;
@@ -132,10 +248,10 @@ TEST(type_registration_test, registration_specialization) {
                           typename shared_registration::storage_type::type>>,
         typename shared_registration::factory_type::type,
         typename shared_registration::conversions_type::type>;
-    using shared_factory_data =
-        instance_factory_data<test_container, shared_storage>;
-    using shared_factory = instance_factory<test_container, A, shared_storage,
-                                            shared_factory_data>;
+    using shared_binding_data =
+        runtime_binding_data<test_container, shared_storage>;
+    using shared_binding = runtime_binding<test_container, A, shared_storage,
+                                            shared_binding_data>;
 
     using shared_ptr_registration =
         type_registration<scope<shared>, storage<std::shared_ptr<A>>>;
@@ -147,11 +263,11 @@ TEST(type_registration_test, registration_specialization) {
                                             storage_type::type>>,
         typename shared_ptr_registration::factory_type::type,
         typename shared_ptr_registration::conversions_type::type>;
-    using shared_ptr_factory_data =
-        instance_factory_data<test_container, shared_ptr_storage>;
-    using shared_ptr_factory =
-        instance_factory<test_container, A, shared_ptr_storage,
-                         shared_ptr_factory_data>;
+    using shared_ptr_binding_data =
+        runtime_binding_data<test_container, shared_ptr_storage>;
+    using shared_ptr_binding =
+        runtime_binding<test_container, A, shared_ptr_storage,
+                         shared_ptr_binding_data>;
 
     using external_registration =
         type_registration<scope<external>, storage<A&>>;
@@ -163,11 +279,11 @@ TEST(type_registration_test, registration_specialization) {
                                             storage_type::type>>,
         typename external_registration::factory_type::type,
         typename external_registration::conversions_type::type>;
-    using external_factory_data =
-        instance_factory_data<test_container, external_storage>;
-    using external_factory =
-        instance_factory<test_container, A, external_storage,
-                         external_factory_data>;
+    using external_binding_data =
+        runtime_binding_data<test_container, external_storage>;
+    using external_binding =
+        runtime_binding<test_container, A, external_storage,
+                         external_binding_data>;
 
     using external_shared_registration =
         type_registration<scope<external>, storage<std::shared_ptr<A>>>;
@@ -179,11 +295,11 @@ TEST(type_registration_test, registration_specialization) {
                                             storage_type::type>>,
         typename external_shared_registration::factory_type::type,
         typename external_shared_registration::conversions_type::type>;
-    using external_shared_factory_data =
-        instance_factory_data<test_container, external_shared_storage>;
-    using external_shared_factory =
-        instance_factory<test_container, A, external_shared_storage,
-                         external_shared_factory_data>;
+    using external_shared_binding_data =
+        runtime_binding_data<test_container, external_shared_storage>;
+    using external_shared_binding =
+        runtime_binding<test_container, A, external_shared_storage,
+                         external_shared_binding_data>;
 
     using nested_registration =
         type_registration<scope<shared>,
@@ -218,8 +334,56 @@ TEST(type_registration_test, registration_specialization) {
     static_assert(std::is_empty_v<conversion_cache<type_list<>>>);
     static_assert(
         std::is_trivially_destructible_v<conversion_cache<type_list<>>>);
-    static_assert(sizeof(shared_factory) <= sizeof(shared_ptr_factory));
-    static_assert(sizeof(external_factory) <= sizeof(external_shared_factory));
+    static_assert(sizeof(shared_binding) <= sizeof(shared_ptr_binding));
+    static_assert(sizeof(external_binding) <= sizeof(external_shared_binding));
+}
+
+TEST(type_registration_test, binding_model_rewrites_single_interface_storage_leaf) {
+    struct I {
+        virtual ~I() = default;
+    };
+    struct A : I {};
+
+    using registration =
+        type_registration<scope<shared>, storage<std::shared_ptr<A>>,
+                          interfaces<I>>;
+    using model = detail::binding_model<registration>;
+
+    static_assert(model::storage_tag_is_complete);
+    static_assert(model::use_interface_as_stored_leaf);
+    static_assert(std::is_same_v<typename model::stored_leaf_type, I>);
+    static_assert(std::is_same_v<typename model::stored_type,
+                                 std::shared_ptr<I>>);
+    static_assert(std::is_same_v<typename model::storage_type::stored_type,
+                                 std::shared_ptr<I>>);
+    static_assert(model::valid);
+}
+
+TEST(type_registration_test, binding_model_preserves_storage_for_multi_interface_registration) {
+    struct I {
+        virtual ~I() = default;
+    };
+    struct J {
+        virtual ~J() = default;
+    };
+    struct A : I, J {};
+
+    using registration =
+        type_registration<scope<shared>, storage<std::shared_ptr<A>>,
+                          interfaces<I, J>>;
+    using model = detail::binding_model<registration>;
+    using expansion = detail::binding_expansion<model>;
+
+    static_assert(model::storage_tag_is_complete);
+    static_assert(!model::use_interface_as_stored_leaf);
+    static_assert(std::is_same_v<typename model::stored_leaf_type, A>);
+    static_assert(std::is_same_v<typename model::stored_type,
+                                 std::shared_ptr<A>>);
+    static_assert(std::is_same_v<typename expansion::interface_bindings,
+                                 type_list<
+                                     detail::interface_binding<I, model>,
+                                     detail::interface_binding<J, model>>>);
+    static_assert(model::valid);
 }
 
 TEST(type_registration_test, recursive_leaf_and_rebind_traits) {

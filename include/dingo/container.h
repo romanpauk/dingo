@@ -7,723 +7,975 @@
 
 #pragma once
 
-#include <dingo/config.h>
-
-#include <dingo/memory/allocator.h>
-#include <dingo/registration/annotated.h>
-#include <dingo/registration/requirements.h>
-#include <dingo/resolution/instance_factory.h>
-#include <dingo/registration/collection_traits.h>
-#include <dingo/type/normalized_type.h>
-#include <dingo/exceptions.h>
+#include <dingo/core/binding_collection.h>
+#include <dingo/core/binding_model.h>
+#include <dingo/core/config.h>
+#include <dingo/core/binding_resolution_context.h>
+#include <dingo/core/binding_resolution_status.h>
+#include <dingo/core/binding_selection.h>
+#include <dingo/core/container_common.h>
+#include <dingo/core/exceptions.h>
+#include <dingo/core/keyed.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/invoke.h>
-#include <dingo/index.h>
-#include <dingo/resolution/resolving_context.h>
+#include <dingo/index/index.h>
+#include <dingo/memory/allocator.h>
+#include <dingo/memory/static_allocator.h>
+#include <dingo/registration/annotated.h>
+#include <dingo/registration/collection_traits.h>
+#include <dingo/registration/requirements.h>
+#include <dingo/registration/type_registration.h>
+#include <dingo/resolution/runtime_binding.h>
+#include <dingo/resolution/type_cache.h>
 #include <dingo/rtti/static_provider.h>
 #include <dingo/rtti/typeid_provider.h>
-#include <dingo/memory/static_allocator.h>
-#include <dingo/resolution/type_cache.h>
-#include <dingo/type/complete_type.h>
-#include <dingo/type/type_map.h>
-#include <dingo/registration/type_registration.h>
+#include <dingo/runtime/context.h>
+#include <dingo/runtime_container.h>
+#include <dingo/static/injector.h>
 #include <dingo/storage/interface_storage_traits.h>
+#include <dingo/type/complete_type.h>
+#include <dingo/type/normalized_type.h>
+#include <dingo/type/request_traits.h>
+#include <dingo/type/type_map.h>
 
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <optional>
-#include <typeindex>
 #include <type_traits>
+#include <typeindex>
 #include <variant>
-
-namespace dingo {
-struct unique;
-struct shared;
-struct external;
-struct shared_cyclical;
-
-namespace detail {
-template <typename T, typename = void>
-struct resolved_type_traits {
-    static constexpr bool copy_on_resolve = std::is_copy_constructible_v<T>;
-};
-
-template <typename T>
-struct resolved_type_traits<
-    T, std::void_t<decltype(type_traits<T>::copy_on_resolve)>> {
-    static constexpr bool copy_on_resolve = type_traits<T>::copy_on_resolve;
-};
-
-template <typename T>
-struct resolved_type_traits<T, std::enable_if_t<collection_traits<T>::is_collection>> {
-    static constexpr bool copy_on_resolve =
-        resolved_type_traits<typename collection_traits<T>::resolve_type>::copy_on_resolve;
-};
-
-template <typename T>
-inline constexpr bool copy_on_resolve_v =
-    resolved_type_traits<T>::copy_on_resolve;
-
-} // namespace detail
-
-struct none_t {};
-template <typename T> struct is_none : std::bool_constant<false> {};
-template <> struct is_none<none_t> : std::bool_constant<true> {};
-template <typename T> static constexpr auto is_none_v = is_none<T>::value;
-
-namespace detail {
-template <typename T, bool = is_complete<T>::value>
-struct default_auto_constructible : std::false_type {};
-
-template <typename T>
-struct default_auto_constructible<T, true>
-    : std::bool_constant<std::is_aggregate_v<T>> {};
-} // namespace detail
-
-template <typename T>
-struct is_auto_constructible : detail::default_auto_constructible<T> {};
-
-struct dynamic_container_traits {
-    template <typename> using rebind_t = dynamic_container_traits;
-
-    using tag_type = none_t;
-    using rtti_type = rtti<typeid_provider>;
-    template <typename Value, typename Allocator>
-    using type_map_type = dynamic_type_map<Value, rtti_type, Allocator>;
-    template <typename Value, typename Allocator>
-    using type_cache_type = dynamic_type_cache<Value, rtti_type, Allocator>;
-    using allocator_type = std::allocator<char>;
-    using index_definition_type = std::tuple<>;
-    static constexpr bool cache_enabled = true;
-};
-
-template <typename Tag = void> struct static_container_traits {
-    template <typename TagT> using rebind_t = static_container_traits<TagT>;
-
-    using tag_type = Tag;
-    using rtti_type = rtti<static_provider>;
-    template <typename Value, typename Allocator>
-    using type_map_type = static_type_map<Value, Tag, Allocator>;
-    template <typename Value, typename Allocator>
-    using type_cache_type = static_type_cache<void*, Tag, Allocator>;
-    using allocator_type = static_allocator<char, Tag>;
-    using index_definition_type = std::tuple<>;
-    static constexpr bool cache_enabled = true;
-};
-
-// TODO: could this use is_none_v?
-template <typename Traits>
-static constexpr bool is_tagged_container_v =
-    !std::is_same_v<typename Traits::template rebind_t<
-                        type_list<typename Traits::tag_type, void>>,
-                    Traits>;
-
-// TODO wrt. multi-bindings, is this like map/multimap?
-template <typename ContainerTraits = dynamic_container_traits,
-          typename Allocator = typename ContainerTraits::allocator_type,
-          typename ParentContainer = void>
-class container : public allocator_base<Allocator> {
-    friend class resolving_context;
-    template <typename ContainerTraitsT, typename AllocatorT,
-              typename ParentContainerT>
-    friend class container;
-
-    template <typename ContainerTraitsT, typename AllocatorT,
-              typename ParentContainerT>
-    using rebind_t = container<ContainerTraitsT, AllocatorT, ParentContainerT>;
-    using container_type =
-        container<ContainerTraits, Allocator, ParentContainer>;
-    template <typename Registration>
-    using registration_container_type = typename container_type::template rebind_t<
-        typename ContainerTraits::template rebind_t<
-            type_list<typename ContainerTraits::tag_type,
-                      typename Registration::interface_type>>,
-        Allocator, container_type>;
-    using parent_container_type =
-        std::conditional_t<std::is_same_v<void, ParentContainer>,
-                           container_type, ParentContainer>;
-
-    static constexpr bool cache_enabled = ContainerTraits::cache_enabled;
-
-  public:
-    using container_traits_type = ContainerTraits;
-    using allocator_type = Allocator;
-    using rtti_type = typename ContainerTraits::rtti_type;
-    using index_definition_type =
-        typename ContainerTraits::index_definition_type;
-
-    template <typename Tag>
-    using child_container_type =
-        container<typename container_traits_type::template rebind_t<
-                      type_list<typename container_traits_type::tag_type, Tag>>,
-                  Allocator, container_type>;
-
-    container()
-        : allocator_base<allocator_type>(allocator_type()),
-          type_factories_(get_allocator()), type_cache_(get_allocator()) {}
-
-    container(allocator_type alloc)
-        : allocator_base<allocator_type>(alloc),
-          type_factories_(get_allocator()), type_cache_(get_allocator()) {}
-
-    container(parent_container_type* parent,
-              allocator_type alloc = allocator_type())
-        : allocator_base<allocator_type>(alloc), parent_(parent),
-          type_factories_(get_allocator()), type_cache_(get_allocator()) {
-
-        static_assert(
-            !is_tagged_container_v<container_traits_type> ||
-                !std::is_same_v<typename container_traits_type::tag_type,
-                                typename parent_container_type::
-                                    container_traits_type::tag_type>,
-            "static typemap based containers require parent and child "
-            "container tags to be different");
-    }
-
-    allocator_type& get_allocator() {
-        return allocator_base<allocator_type>::get_allocator();
-    }
-
-    // TODO: how to do this better?
-    template <typename... TypeArgs> auto& register_type() {
-        return register_type_impl<TypeArgs...>(none_t(), none_t());
-    }
-
-    template <typename... TypeArgs, typename Arg>
-    auto& register_type(Arg&& arg) {
-        return register_type_impl<TypeArgs...>(std::forward<Arg>(arg),
-                                               none_t());
-    }
-
-    template <typename... TypeArgs, typename IdType>
-    auto& register_indexed_type(IdType&& id) {
-        return register_type_impl<TypeArgs...>(none_t(),
-                                               std::forward<IdType>(id));
-    }
-
-    template <typename... TypeArgs, typename Arg, typename IdType>
-    auto& register_indexed_type(Arg&& arg, IdType&& id) {
-        return register_type_impl<TypeArgs...>(std::forward<Arg>(arg),
-                                               std::forward<IdType>(id));
-    }
-
-    template <typename... TypeArgs, typename Fn>
-    auto& register_type_collection(Fn&& fn) {
-        using registration = type_registration<TypeArgs...>;
-        return register_type<TypeArgs...>(callable([&] {
-            return construct_collection<
-                typename registration::storage_type::type>(fn);
-        }));
-    }
-
-    template <typename... TypeArgs> auto& register_type_collection() {
-        return register_type_collection<TypeArgs...>(
-            [](auto& collection, auto&& value) {
-                collection_traits<std::decay_t<decltype(collection)>>::add(
-                    collection, std::move(value));
-            });
-    }
-
-    template <typename T, typename IdType = none_t,
-              typename R = typename annotated_traits<
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>>::type>
-    R resolve(IdType&& id = IdType()) {
-        // TODO: a crude way to check cache before context gets placed on the
-        // stack
-        if constexpr (cache_enabled) {
-            if constexpr (is_none_v<std::decay_t<IdType>>) {
-                void* cache = type_cache_.template get<T>();
-                if (cache) {
-                    return convert<typename annotated_traits<T>::type>(
-                        cache);
-                }
-            } else {
-                auto data = type_factories_.template get<normalized_type_t<T>>();
-                if (data) {
-                    auto indexed =
-                        data->template get_index<IdType>(get_allocator())
-                            .find(id);
-
-                    if (indexed) {
-                        if (indexed->cache) {
-                            return convert<
-                                typename annotated_traits<T>::type>(
-                                indexed->cache);
-                        }
-                    }
-                }
-            }
-        }
-
-        // TODO: this destructor is really slowing things down
-        resolving_context context;
-        return resolve_impl<T, true, false, false>(context,
-                                                   std::forward<IdType>(id));
-    }
-
-    template <typename T,
-              typename Factory = constructor<normalized_type_t<T>>>
-    T construct(Factory factory = Factory()) {
-        // TODO: nothrow constructuble
-        resolving_context context;
-        return factory.template construct<T>(context, *this);
-    }
-
-    template <typename T> T construct_collection() {
-        return construct_collection<T>([](auto& collection, auto&& value) {
-            collection_traits<std::decay_t<decltype(collection)>>::add(
-                collection, std::move(value));
-        });
-    }
-
-    template <typename T, typename Fn> T construct_collection(Fn&& fn) {
-        using collection_type = collection_traits<T>;
-        using resolve_type = typename collection_type::resolve_type;
-        using lookup_type = normalized_type_t<resolve_type>;
-
-        static_assert(collection_type::is_collection,
-                      "missing collection_traits specialization for type T");
-
-        T results;
-        resolving_context context;
-        auto data = type_factories_.template get<lookup_type>();
-        if (!data)
-            throw detail::make_collection_type_not_found_exception<T,
-                                                                   resolve_type>();
-
-        collection_type::reserve(results, data->factories.size());
-        for (auto&& p : data->factories) {
-            fn(results, resolve_collection_type<resolve_type>(*p.second,
-                                                              context));
-        }
-        return results;
-    }
-
-    template< typename Signature = void, typename Callable >
-    auto invoke(Callable&& callable) {
-        using callable_type = std::remove_cv_t<std::remove_reference_t<Callable>>;
-        using dispatch_signature =
-            detail::callable_dispatch_signature_t<Signature, callable_type>;
-
-        resolving_context context;
-        auto type_guard = context.template track_type<callable_type>();
-        return detail::callable_invoke<dispatch_signature>::construct(
-            std::forward<Callable>(callable), context, *this);
-    }
-
-  private:
-    template <typename T> static T convert(void* ptr) {
-        using result_type = std::remove_reference_t<T>;
-
-        if constexpr (std::is_lvalue_reference_v<T>) {
-            return *static_cast<result_type*>(ptr);
-        } else if constexpr (std::is_rvalue_reference_v<T>) {
-            return std::move(*static_cast<result_type*>(ptr));
-        } else if constexpr (std::is_pointer_v<T>) {
-            return static_cast<T>(ptr);
-        } else if constexpr (detail::copy_on_resolve_v<T>) {
-            return *static_cast<T*>(ptr);
-        } else {
-            return std::move(*static_cast<T*>(ptr));
-        }
-    }
-
-    template <typename CachedT>
-    static void store_type_cache(void* context, void* ptr) {
-        static_cast<container*>(context)->type_cache_.template insert<CachedT>(
-            ptr);
-    }
-
-    static void store_index_cache(void* context, void* ptr) {
-        static_cast<index_data*>(context)->cache = ptr;
-    }
-
-    template <typename T, typename Factory, typename Context>
-    static void* resolve(Factory& factory, Context& context,
-                         instance_cache_sink cache = {}) {
-        const instance_request<rtti_type> request{
-            rtti_type::template get_type_index<request_lookup_type_t<T>>(),
-            describe_type<T>()};
-        if constexpr (std::is_pointer_v<T>) {
-            return factory.get_pointer(context, request, cache);
-        } else if constexpr (std::is_lvalue_reference_v<T>) {
-            return factory.get_lvalue_reference(context, request, cache);
-        } else if constexpr (std::is_rvalue_reference_v<T>) {
-            return factory.get_rvalue_reference(context, request, cache);
-        } else {
-            return factory.get_value(context, request, cache);
-        }
-    }
-
-    template <typename T>
-    static T& invalid_registration_return();
-
-    template <typename... TypeArgs, typename Arg, typename IdType>
-    auto& register_type_impl(Arg&& arg, IdType&& id) {
-        static_assert(!detail::has_explicit_void_interface_v<TypeArgs...>,
-                      "interfaces<void> is not a valid registration target");
-        using registration =
-            std::conditional_t<!is_none_v<std::decay_t<Arg>>,
-                               type_registration<TypeArgs..., factory<Arg>>,
-                               type_registration<TypeArgs...>>;
-        using instance_container_type =
-            registration_container_type<registration>;
-        (void)arg;
-        //
-        // An optimization and a feature: if storage type can be only queried by
-        // single interface and the interface allows for proper deletion through
-        // virtual destructor, store the type as the interface so temporaries
-        // don't need to be created and because of that, the stored element
-        // could be referenced in most usages as it will no longer be a
-        // temporary object. The code below does the rewrite of storage type
-        // into stored type.
-        //
-        using interface_types = typename registration::interface_type::type;
-        using registered_storage_type = typename registration::storage_type::type;
-        using storage_tag = typename registration::scope_type::type;
-        static constexpr bool storage_tag_is_complete =
-            !detail::requires_complete_type_v<storage_tag> ||
-            detail::is_complete_v<storage_tag>;
-        static_assert(
-            storage_tag_is_complete,
-            "selected storage tag must be complete; include the corresponding "
-            "dingo/storage header");
-        if constexpr (storage_tag_is_complete) {
-            static constexpr bool use_interface_as_stored_leaf =
-                detail::use_interface_as_stored_leaf_v<registered_storage_type,
-                                                       interface_types>;
-            using stored_leaf_type =
-                std::conditional_t<use_interface_as_stored_leaf,
-                                   type_list_head_t<interface_types>,
-                                   leaf_type_t<registered_storage_type>>;
-            using stored_type =
-                rebind_leaf_t<registered_storage_type, stored_leaf_type>;
-
-            using storage_type =
-                detail::storage<storage_tag,
-                                registered_storage_type,
-                                stored_type,
-                                typename registration::factory_type::type,
-                                typename registration::conversions_type::type>;
-            using registration_requirements =
-                detail::registration_requirements<storage_type, interface_types,
-                                                 typename storage_type::type>;
-
-            registration_requirements::assert_valid();
-
-            using instance_factory_data_type =
-                instance_factory_data<instance_container_type, storage_type>;
-
-            if constexpr (registration_requirements::valid &&
-                          type_list_size_v<interface_types> == 1) {
-                using interface_type = type_list_head_t<interface_types>;
-
-                using instance_factory_type = instance_factory<
-                    container_type,
-                    typename annotated_traits<interface_type>::type,
-                    storage_type,
-                    instance_factory_data_type>;
-
-                if constexpr (!is_none_v<std::decay_t<Arg>>) {
-                    auto&& [factory, factory_container] =
-                        allocate_factory<instance_factory_type>(
-                            this, std::forward<Arg>(arg));
-                    register_type_factory<interface_type, storage_type>(
-                        std::move(factory), std::move(id));
-                    return *factory_container;
-                } else {
-                    auto&& [factory, factory_container] =
-                        allocate_factory<instance_factory_type>(this);
-                    register_type_factory<interface_type, storage_type>(
-                        std::move(factory), std::move(id));
-                    return *factory_container;
-                }
-            } else {
-                if constexpr (registration_requirements::valid) {
-                    std::shared_ptr<instance_factory_data_type> data;
-                    if constexpr (!is_none_v<std::decay_t<Arg>>) {
-                        data = std::allocate_shared<instance_factory_data_type>(
-                            allocator_traits::rebind<instance_factory_data_type>(
-                                get_allocator()),
-                            this, std::forward<Arg>(arg));
-                    } else {
-                        data = std::allocate_shared<instance_factory_data_type>(
-                            allocator_traits::rebind<instance_factory_data_type>(
-                                get_allocator()),
-                            this);
-                    }
-
-                    for_each(
-                        interface_types{},
-                        [&](auto element) {
-                            using interface_type = typename decltype(element)::type;
-
-                            using instance_factory_type = instance_factory<
-                                container_type,
-                                typename annotated_traits<interface_type>::type,
-                                storage_type,
-                                std::shared_ptr<instance_factory_data_type>>;
-
-                            register_type_factory<interface_type, storage_type>(
-                                allocate_factory<instance_factory_type>(data)
-                                    .first,
-                                id);
-                        });
-                    return data->container;
-                } else {
-                    return invalid_registration_return<instance_container_type>();
-                }
-            }
-        } else {
-            return invalid_registration_return<instance_container_type>();
-        }
-    }
-
-    template <typename TypeInterface, typename TypeStorage, typename Factory,
-              typename IdType>
-    void register_type_factory(Factory&& factory, IdType&& id) {
-        // static_allocator returns null in the case an allocation (eg. the
-        // factory can be null) There is no need to throw here as the insertion
-        // will not be done later. This is TODO.
-
-        check_interface_requirements<
-            TypeStorage, typename annotated_traits<TypeInterface>::type,
-            typename TypeStorage::type>();
-
-        // TODO: this very crudely assumes types have different storages
-        // for indexed types.
-        auto factory_ptr = factory.get();
-        auto pb =
-            type_factories_.template insert<TypeInterface>(get_allocator());
-        auto& data = pb.first;
-        if (!data.factories
-                 .template insert<
-                     type_list<TypeInterface, typename TypeStorage::type>>(
-                     std::forward<Factory>(factory))
-                 .second) {
-            throw detail::make_type_already_registered_exception<
-                TypeInterface, typename TypeStorage::type>();
-        }
-
-        if constexpr (!is_none_v<std::decay_t<IdType>>) {
-            if (!data.template get_index<IdType>(get_allocator())
-                     .emplace(std::forward<IdType>(id),
-                              index_data{factory_ptr, nullptr})) {
-                bool erased = data.factories.template erase<
-                    type_list<TypeInterface, typename TypeStorage::type>>();
-                assert(erased);
-                (void)erased;
-                throw detail::make_type_index_already_registered_exception<
-                    TypeInterface, typename TypeStorage::type, IdType>();
-            }
-        }
-    }
 
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-    template <typename T, bool RemoveRvalueReferences,
-              bool MayAutoConstruct, bool CheckCache = true,
-              typename IdType = none_t,
-              typename R = std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>
-    R resolve_impl(resolving_context& context, IdType&& id = IdType()) {
-        using Type = normalized_type_t<T>;
-        static_assert(!std::is_const_v<Type>);
 
-        if constexpr (cache_enabled && CheckCache) {
-            void* cache = type_cache_.template get<T>();
-            if (cache) {
-                return convert<typename annotated_traits<T>::type>(
-                    cache);
-            }
+namespace dingo {
+template <typename... Registrations>
+class hybrid_container<static_registry<Registrations...>>
+    : public runtime_registry<
+          dynamic_container_traits,
+          typename dynamic_container_traits::allocator_type, void,
+          hybrid_container<static_registry<Registrations...>>>,
+      private detail::static_storage_state<Registrations...> {
+    friend class runtime_context;
+
+    using static_registry_type_ = static_registry<Registrations...>;
+    using self_type = hybrid_container<static_registry_type_>;
+    using runtime_base =
+        runtime_registry<dynamic_container_traits,
+                         typename dynamic_container_traits::allocator_type,
+                         void, self_type>;
+    using static_state = detail::static_storage_state<Registrations...>;
+    using static_resolution_ref =
+        detail::static_binding_scope_ref<static_state, Registrations...>;
+    using binding_resolution_ref =
+        detail::binding_scope_ref<static_state, Registrations...>;
+    using static_context_type = static_context<static_registry_type_>;
+
+    template <typename T, typename Key>
+    using static_selection_t = detail::static_binding_t<
+        typename static_registry_type_::template bindings<T, Key>>;
+
+    template <typename T>
+    static constexpr bool runtime_auto_constructible_v =
+        std::is_same_v<request_value_t<T>, std::decay_t<T>> &&
+        (!std::is_reference_v<T> ||
+         (std::is_lvalue_reference_v<T> &&
+          std::is_const_v<std::remove_reference_t<T>> &&
+          is_auto_constructible<std::decay_t<T>>::value));
+
+    template <typename Request, typename Key = void>
+    bool has_runtime_binding() {
+        if (!runtime_base::has_runtime_registrations()) {
+            return false;
         }
+        return runtime_base::template binding_status<Request, Key>() !=
+               detail::binding_selection_status::not_found;
+    }
 
-        auto data = type_factories_.template get<Type>();
-        if (data) {
-            if constexpr (is_none_v<std::decay_t<IdType>>) {
-                if (data->factories.size() == 1) {
-                    auto& factory = data->factories.front();
-                    return resolve<T, typename annotated_traits<T>::type>(
-                        *factory, context);
-                } else {
-                    throw detail::make_type_ambiguous_exception<T>(context);
-                }
-            } else {
-                auto indexed =
-                    data->template get_index<IdType>(get_allocator()).find(id);
-
-                if (indexed) {
-                    if constexpr (cache_enabled && CheckCache) {
-                        if (indexed->cache) {
-                            return convert<
-                                typename annotated_traits<T>::type>(
-                                indexed->cache);
-                        }
-                    }
-
-                    return resolve<T, typename annotated_traits<T>::type>(
-                        *indexed->factory, context, *indexed);
-                }
-            }
-        } else if constexpr (!std::is_same_v<void*, decltype(parent_)>) {
-            if (parent_) {
-                return parent_
-                    ->template resolve_impl<T, RemoveRvalueReferences,
-                                            MayAutoConstruct>(
-                        context, std::forward<IdType>(id));
-            }
+    template <typename T, typename Key = void> bool has_runtime_collection() {
+        if (!runtime_base::has_runtime_registrations()) {
+            return false;
         }
-
-        // Forward-declared dependencies are allowed to flow through lookup-only
-        // resolution. Keep the auto-construction fallback nested behind
-        // `MayAutoConstruct` so T* / T& requests never instantiate
-        // completeness-sensitive constructor detection for an incomplete type.
-        if constexpr (MayAutoConstruct) {
-            if constexpr (is_auto_constructible<std::decay_t<T>>::value) {
-                using type_constructor = constructor<Type>;
-                if constexpr (type_constructor::kind ==
-                              detail::constructor_kind::concrete) {
-                    return auto_construct<T>(context);
-                }
-            }
-        }
-
-        if constexpr (is_none_v<std::decay_t<IdType>>) {
-            throw detail::make_type_not_found_exception<T>(context);
+        if constexpr (std::is_void_v<Key>) {
+            return this->template count_runtime_collection<T>(none_t{}) != 0;
         } else {
-            throw detail::make_type_not_found_exception<T, std::decay_t<IdType>>(
-                context);
+            return this->template count_runtime_collection<T>(key<Key>{}) != 0;
+        }
+    }
+
+    bool has_runtime_registrations() const {
+        return runtime_base::has_runtime_registrations();
+    }
+
+    template <typename Request, typename Key = void>
+    static constexpr bool has_static_binding_v =
+        static_selection_t<Request, Key>::status ==
+        detail::binding_selection_status::found;
+
+    template <typename Request, typename Key = void,
+              bool Selected = has_static_binding_v<Request, Key>>
+    struct static_binding_satisfies_request : std::false_type {};
+
+    template <typename Request, typename Key>
+    struct static_binding_satisfies_request<Request, Key, true>
+        : std::bool_constant<
+              detail::static_binding_resolvable_v<
+                  typename static_selection_t<Request, Key>::binding_type,
+                  static_registry_type_> &&
+              detail::binding_supports_request_v<
+                  Request,
+                  typename static_selection_t<Request, Key>::binding_type>> {};
+
+    template <typename Request, typename Key = void>
+    static constexpr bool static_binding_satisfies_request_v =
+        static_binding_satisfies_request<Request, Key>::value;
+
+    template <typename Request, typename Key = void>
+    bool select_static_resolve() {
+        if constexpr (!static_binding_satisfies_request_v<Request, Key>) {
+            return false;
+        } else if (!has_runtime_registrations()) {
+            return true;
+        } else {
+            return !has_runtime_binding<Request, Key>();
+        }
+    }
+
+    template <typename Collection, typename Key = void>
+    bool select_static_collection() {
+        if constexpr (!has_static_collection_v<Collection, Key>) {
+            return false;
+        } else if (!has_runtime_registrations()) {
+            return true;
+        } else {
+            return !has_runtime_collection<Collection, Key>();
         }
     }
 
     template <typename T>
-    decltype(auto) auto_construct(resolving_context& context) {
-        using Type = normalized_type_t<T>;
+    static constexpr bool has_static_construct_request_v = [] {
+        using request_type = request_interface_t<T>;
+        using normalized_request_type = request_value_t<T>;
+        constexpr bool has_exact_static_binding =
+            static_binding_satisfies_request_v<request_type>;
+        constexpr bool has_normalized_static_binding =
+            static_selection_t<normalized_request_type, void>::status ==
+                detail::binding_selection_status::found &&
+            detail::static_binding_resolvable_v<
+                typename static_selection_t<normalized_request_type,
+                                            void>::binding_type,
+                static_registry_type_>;
 
-        static_assert(is_complete<Type>::value,
-                      "auto-construction requires a complete type");
+        return has_exact_static_binding || (has_normalized_static_binding &&
+                                            construct_normalized_request_v<T>);
+    }();
 
-        using type_detection = detail::automatic;
-        return context.template construct_temporary<
-            typename annotated_traits<T>::type,
-            type_detection>(*this);
+    template <typename T> bool select_static_construct() {
+        using request_type = request_interface_t<T>;
+        using normalized_request_type = request_value_t<T>;
+
+        if constexpr (!has_static_construct_request_v<T>) {
+            return false;
+        } else if (!has_runtime_registrations()) {
+            return true;
+        } else {
+            return !has_runtime_binding<request_type>() &&
+                   !has_runtime_binding<normalized_request_type>();
+        }
+    }
+
+    template <typename T, typename Key = void>
+    bool select_static_collection_construct() {
+        constexpr bool has_static_collection_bindings =
+            detail::static_collection_binding_count<static_registry_type_, T,
+                                                    Key>() != 0;
+        if constexpr (!has_static_collection_bindings) {
+            return false;
+        } else if (!has_runtime_registrations()) {
+            return true;
+        } else {
+            return !has_runtime_collection<T, Key>();
+        }
+    }
+
+    template <typename Collection, typename Key = void>
+    static constexpr bool has_static_collection_v =
+        detail::static_bindings_resolvable_v<
+            typename static_registry_type_::template bindings<
+                normalized_type_t<
+                    typename collection_traits<Collection>::resolve_type>,
+                Key>,
+            static_registry_type_>;
+
+    template <typename T, typename Key, typename Fn, typename Context>
+    T construct_static_collection(Context& context, Fn&& fn, key<Key>) {
+        static_resolution_ref static_state_ref(
+            static_cast<static_state&>(*this));
+        return static_state_ref.template construct_static_collection<
+            T, Key, static_registry_type_>(*this, context,
+                                           std::forward<Fn>(fn));
+    }
+
+    template <typename T, typename Fn, typename Context>
+    T construct_static_collection(Context& context, Fn&& fn, none_t) {
+        static_resolution_ref static_state_ref(
+            static_cast<static_state&>(*this));
+        return static_state_ref.template construct_static_collection<
+            T, void, static_registry_type_>(*this, context,
+                                            std::forward<Fn>(fn));
+    }
+
+    template <typename T, typename Key, typename Context>
+    T construct_static_collection(Context& context, key<Key>) {
+        static_resolution_ref static_state_ref(
+            static_cast<static_state&>(*this));
+        return static_state_ref.template construct_static_collection<
+            T, Key, static_registry_type_>(*this, context);
+    }
+
+    template <typename T, typename Context>
+    T construct_static_collection(Context& context, none_t) {
+        static_resolution_ref static_state_ref(
+            static_cast<static_state&>(*this));
+        return static_state_ref.template construct_static_collection<
+            T, void, static_registry_type_>(*this, context);
+    }
+
+    template <typename T, bool RemoveRvalueReferences, typename Key = void,
+              typename R = request_result_t<T>,
+              std::enable_if_t<std::is_rvalue_reference_v<T>, int> = 0>
+    DINGO_ALWAYS_INLINE R resolve_static() {
+        static_context_type static_context;
+        return resolve_static<T, RemoveRvalueReferences, Key>(static_context);
+    }
+
+    template <typename T, bool RemoveRvalueReferences, typename Key = void,
+              std::enable_if_t<!std::is_rvalue_reference_v<T>, int> = 0>
+    DINGO_ALWAYS_INLINE decltype(auto) resolve_static() {
+        static_context_type static_context;
+        return resolve_static<T, RemoveRvalueReferences, Key>(static_context);
+    }
+
+    template <typename T,
+              typename R = request_result_t<T>>
+    DINGO_ALWAYS_INLINE R construct_static() {
+        using request_type = request_interface_t<T>;
+        using normalized_request_type = request_value_t<T>;
+        constexpr bool has_exact_static_binding =
+            static_binding_satisfies_request_v<request_type>;
+        constexpr bool has_normalized_static_binding =
+            static_binding_satisfies_request_v<normalized_request_type>;
+        if constexpr (has_exact_static_binding) {
+            using interface_binding =
+                typename static_selection_t<request_type, void>::binding_type;
+            if constexpr (detail::binding_supports_request_v<
+                              T, interface_binding>) {
+                static_context_type static_context;
+                return resolve_static<T, false>(static_context);
+            }
+        }
+
+        if constexpr (has_normalized_static_binding &&
+                      construct_normalized_request_v<T>) {
+            using normalized_selection =
+                static_selection_t<normalized_request_type, void>;
+            return detail::construct_static_binding_value<T,
+                                                          normalized_selection>(
+                [&]() {
+                    return resolve_static<normalized_request_type, false>();
+                });
+        } else {
+            static_context_type static_context;
+            return resolve_static<T, false>(static_context);
+        }
+    }
+
+    template <typename T, typename Fn>
+    T construct_static_collection(Fn&& fn, none_t) {
+        static_context_type static_context;
+        return construct_static_collection<T>(static_context,
+                                              std::forward<Fn>(fn), none_t{});
+    }
+
+    template <typename T> T construct_static_collection(none_t) {
+        static_context_type static_context;
+        return construct_static_collection<T>(static_context, none_t{});
+    }
+
+    template <typename T, typename Fn, typename Key>
+    T construct_static_collection(Fn&& fn, key<Key>) {
+        static_context_type static_context;
+        return construct_static_collection<T>(static_context,
+                                              std::forward<Fn>(fn), key<Key>{});
+    }
+
+    template <typename T, typename Key>
+    T construct_static_collection(key<Key>) {
+        static_context_type static_context;
+        return construct_static_collection<T>(static_context, key<Key>{});
+    }
+
+    template <typename T, typename Key, typename Fn>
+    T construct_collection(runtime_context& context, Fn&& fn, key<Key>) {
+        using collection_type = collection_traits<T>;
+        using resolve_type = typename collection_type::resolve_type;
+        binding_resolution_ref static_state_ref(
+            static_cast<static_state&>(*this));
+
+        constexpr std::size_t static_count =
+            type_list_size_v<typename static_registry_type_::template bindings<
+                normalized_type_t<resolve_type>, Key>>;
+        return detail::construct_binding_collection<T>(
+            [&] {
+                return this->template count_runtime_collection<T>(key<Key>{});
+            },
+            [&] { return static_count; },
+            [&](auto& results, auto&& append) {
+                this->append_runtime_collection(
+                    results, context, std::forward<decltype(append)>(append),
+                    key<Key>{});
+            },
+            [&](auto& results, auto&& append) {
+                static_state_ref.template append_static_collection<
+                    T, Key, static_registry_type_>(
+                    results, *this, context,
+                    std::forward<decltype(append)>(append));
+            },
+            std::forward<Fn>(fn));
+    }
+
+    template <typename T, typename Fn>
+    T construct_collection(runtime_context& context, Fn&& fn, none_t) {
+        using collection_type = collection_traits<T>;
+        using resolve_type = typename collection_type::resolve_type;
+        binding_resolution_ref static_state_ref(
+            static_cast<static_state&>(*this));
+
+        constexpr std::size_t static_count =
+            type_list_size_v<typename static_registry_type_::template bindings<
+                normalized_type_t<resolve_type>, void>>;
+        return detail::construct_binding_collection<T>(
+            [&] {
+                return this->template count_runtime_collection<T>(none_t{});
+            },
+            [&] { return static_count; },
+            [&](auto& results, auto&& append) {
+                this->append_runtime_collection(
+                    results, context, std::forward<decltype(append)>(append),
+                    none_t{});
+            },
+            [&](auto& results, auto&& append) {
+                static_state_ref.template append_static_collection<
+                    T, void, static_registry_type_>(
+                    results, *this, context,
+                    std::forward<decltype(append)>(append));
+            },
+            std::forward<Fn>(fn));
+    }
+
+    template <typename Request, typename Key, typename Context>
+    DINGO_ALWAYS_INLINE request_interface_t<Request>
+    resolve_static_selection(Context& context) {
+        using selection = static_selection_t<Request, Key>;
+        using interface_binding = typename selection::binding_type;
+        if constexpr (selection::status !=
+                      detail::binding_selection_status::found) {
+            throw detail::make_type_not_found_exception<Request>(context);
+        } else {
+            static_resolution_ref static_state_ref(
+                static_cast<static_state&>(*this));
+            auto route =
+                static_state_ref.template make_route<interface_binding>(*this);
+            return route.template resolve<Request>(context);
+        }
+    }
+
+    template <typename Request, typename Key, typename Context>
+    request_interface_t<Request>
+    resolve_binding_selection(Context& context) {
+        using selection = static_selection_t<Request, Key>;
+        using interface_binding = typename selection::binding_type;
+        if constexpr (selection::status !=
+                      detail::binding_selection_status::found) {
+            throw detail::make_type_not_found_exception<Request>(context);
+        } else {
+            binding_resolution_ref static_state_ref(
+                static_cast<static_state&>(*this));
+            auto route =
+                static_state_ref.template make_route<interface_binding>(*this);
+            return route.template resolve<Request>(context);
+        }
+    }
+
+    template <typename T, bool RemoveRvalueReferences, typename Key = void,
+              typename Context,
+              typename R = resolve_result_t<T, RemoveRvalueReferences>>
+    DINGO_ALWAYS_INLINE R resolve_static(Context& context) {
+        if constexpr (collection_traits<R>::is_collection) {
+            return construct_static_collection<R>(
+                context,
+                std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>{});
+        } else {
+            using request_type = R;
+            return resolve_static_selection<request_type, Key>(context);
+        }
+    }
+
+    template <typename T, typename Fn>
+#if defined(__GNUC__) && !defined(__clang__)
+    __attribute__((noinline))
+#endif
+    T construct_collection_with_runtime_context(Fn&& fn, none_t) {
+        runtime_context context;
+        return construct_collection<T>(context, std::forward<Fn>(fn), none_t{});
+    }
+
+    template <typename T, typename Fn, typename Key>
+#if defined(__GNUC__) && !defined(__clang__)
+    __attribute__((noinline))
+#endif
+    T construct_collection_with_runtime_context(Fn&& fn, key<Key>) {
+        runtime_context context;
+        return construct_collection<T>(context, std::forward<Fn>(fn),
+                                       key<Key>{});
+    }
+
+  public:
+    using container_traits_type = typename runtime_base::container_traits_type;
+    using allocator_type = typename runtime_base::allocator_type;
+    using rtti_type = typename runtime_base::rtti_type;
+    using runtime_injector_type = runtime_injector<self_type>;
+    using static_source_type = static_registry_type_;
+
+    using runtime_base::get_allocator;
+    using runtime_base::register_indexed_type;
+    using runtime_base::register_type;
+    using runtime_base::register_type_collection;
+
+    static_assert(static_source_type::valid,
+                  "container requires a valid compile-time bindings source");
+    static_assert(detail::graph_analysis<static_source_type, true>::acyclic,
+                  "container requires an acyclic compile-time binding graph");
+    static_assert(
+        (detail::binding_factory_is_default_constructible<
+             detail::binding_model<Registrations>>::value &&
+         ...),
+        "container requires default-constructible compile-time factories");
+    static_assert((detail::binding_storage_is_default_constructible<
+                       detail::binding_model<Registrations>>::value &&
+                   ...),
+                  "container requires default-constructible compile-time "
+                  "storage objects");
+
+    hybrid_container() = default;
+
+    explicit hybrid_container(allocator_type alloc) : runtime_base(alloc) {}
+
+    runtime_injector_type injector() { return runtime_injector_type(*this); }
+
+    self_type& registry() { return *this; }
+
+    const self_type& registry() const { return *this; }
+
+    self_type& container() { return *this; }
+
+    const self_type& container() const { return *this; }
+
+    template <typename T, typename IdType = none_t,
+              typename R = request_result_t<T>>
+    DINGO_ALWAYS_INLINE R resolve(IdType&& id = IdType()) {
+        if constexpr (detail::is_typed_key_v<IdType>) {
+            using key_type = typename std::decay_t<IdType>::type;
+            if constexpr (collection_traits<R>::is_collection) {
+                if (select_static_collection<R, key_type>()) {
+                    return resolve_static<T, false, key_type>();
+                }
+            } else {
+                if (select_static_resolve<R, key_type>()) {
+                    return resolve_static<T, false, key_type>();
+                }
+            }
+            runtime_context context;
+            return resolve<T, false, true, key_type>(context);
+        } else if constexpr (!is_none_v<std::decay_t<IdType>>) {
+            runtime_context context;
+            return this->template resolve_impl<
+                T, false, runtime_auto_constructible_v<T>, true>(
+                context, std::forward<IdType>(id));
+        } else {
+            if constexpr (collection_traits<R>::is_collection) {
+                if (select_static_collection<R>()) {
+                    return resolve_static<T, false>();
+                }
+            } else {
+                if (select_static_resolve<R>()) {
+                    return resolve_static<T, false>();
+                }
+            }
+            runtime_context context;
+            return resolve<T, false>(context);
+        }
+    }
+
+    template <typename T, typename Factory = constructor<normalized_type_t<T>>,
+              typename R = request_result_t<T>>
+    DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
+        using request_type = request_interface_t<T>;
+        using normalized_request_type = request_value_t<T>;
+        if constexpr (std::is_same_v<Factory,
+                                     constructor<normalized_type_t<T>>>) {
+            if constexpr (has_static_construct_request_v<T>) {
+                if (!has_runtime_registrations()) {
+                    return construct_static<T>();
+                }
+            }
+            if constexpr (::dingo::
+                              rvalue_request_requires_explicit_conversion_v<
+                                  T>) {
+                constexpr bool has_static_normalized_binding =
+                    static_selection_t<normalized_request_type, void>::status !=
+                        detail::binding_selection_status::not_found &&
+                    detail::static_binding_resolvable_v<
+                        typename static_selection_t<normalized_request_type,
+                                                    void>::binding_type,
+                        static_registry_type_>;
+
+                if constexpr (has_static_construct_request_v<T>) {
+                    if (binding_status<request_type>() !=
+                            detail::binding_selection_status::not_found &&
+                        select_static_construct<T>()) {
+                        return construct_static<T>();
+                    }
+                }
+
+                if (has_runtime_binding<request_type>() ||
+                    has_runtime_binding<normalized_request_type>()) {
+                    return runtime_base::template construct_runtime_request<T>(
+                        std::move(factory));
+                }
+
+                if constexpr (has_static_normalized_binding) {
+                    ::dingo::throw_missing_rvalue_conversion<T>(true);
+                }
+
+                return runtime_base::template construct_runtime_request<T>(
+                    std::move(factory));
+            } else if constexpr (has_static_construct_request_v<T>) {
+                if (binding_status<request_type>() !=
+                        detail::binding_selection_status::not_found &&
+                    select_static_construct<T>()) {
+                    return construct_static<T>();
+                }
+            } else {
+                return runtime_base::template construct_runtime_request<T>(
+                    std::move(factory));
+            }
+        }
+        runtime_context context;
+        if constexpr (std::is_same_v<Factory,
+                                     constructor<normalized_type_t<T>>>) {
+            if (binding_status<T>() !=
+                detail::binding_selection_status::not_found) {
+                if constexpr (construct_normalized_request_v<T>) {
+                    return ::dingo::construct_request_or_wrap_normalized<T>(
+                        [&]() { return resolve<T, false>(context); },
+                        [&]() {
+                            return resolve<normalized_type_t<T>, false>(
+                                context);
+                        });
+                } else {
+                    return resolve<T, false>(context);
+                }
+            } else if (binding_status<normalized_type_t<T>>() !=
+                       detail::binding_selection_status::not_found) {
+                if constexpr (construct_normalized_request_v<T>) {
+                    return type_traits<std::decay_t<T>>::make(
+                        resolve<normalized_type_t<T>, false>(context));
+                } else {
+                    return resolve<T, false>(context);
+                }
+            }
+        }
+
+        if constexpr (construct_factory_request_v<T>) {
+            auto type_guard =
+                context.template track_type<normalized_type_t<T>>();
+            return factory.template construct<R>(context, *this);
+        } else {
+            return resolve<T, false>(context);
+        }
+    }
+
+    template <typename T> T construct_collection() {
+        if (select_static_collection_construct<T>()) {
+            return construct_static_collection<T>(none_t{});
+        }
+
+        return construct_collection_with_runtime_context<T>(
+            [](auto& collection, auto&& value) {
+                collection_traits<std::decay_t<decltype(collection)>>::add(
+                    collection, std::move(value));
+            },
+            none_t{});
+    }
+
+    template <typename T, typename Fn> T construct_collection(Fn&& fn) {
+        if (select_static_collection_construct<T>()) {
+            return construct_static_collection<T>(std::forward<Fn>(fn),
+                                                  none_t{});
+        }
+
+        return construct_collection_with_runtime_context<T>(
+            std::forward<Fn>(fn), none_t{});
+    }
+
+    template <typename T, typename Key> T construct_collection(key<Key>) {
+        if (select_static_collection_construct<T, Key>()) {
+            return construct_static_collection<T>(key<Key>{});
+        }
+
+        return construct_collection_with_runtime_context<T>(
+            [](auto& collection, auto&& value) {
+                collection_traits<std::decay_t<decltype(collection)>>::add(
+                    collection, std::move(value));
+            },
+            key<Key>{});
+    }
+
+    template <typename T, typename Fn, typename Key>
+    T construct_collection(Fn&& fn, key<Key>) {
+        if (select_static_collection_construct<T, Key>()) {
+            return construct_static_collection<T>(std::forward<Fn>(fn),
+                                                  key<Key>{});
+        }
+
+        return construct_collection_with_runtime_context<T>(
+            std::forward<Fn>(fn), key<Key>{});
+    }
+
+    template <typename Signature = void, typename Callable>
+    auto invoke(Callable&& callable) {
+        using callable_type =
+            std::remove_cv_t<std::remove_reference_t<Callable>>;
+        using dispatch_signature =
+            detail::callable_dispatch_signature_t<Signature, callable_type>;
+
+        runtime_context context;
+        auto type_guard = context.template track_type<callable_type>();
+        return detail::callable_invoke<dispatch_signature>::construct(
+            std::forward<Callable>(callable), context, *this);
+    }
+
+    template <typename T, typename IdType = none_t,
+              typename R = request_result_t<T>>
+    R resolve_runtime_request(IdType&& id = IdType()) {
+        return resolve<T>(std::forward<IdType>(id));
+    }
+
+    template <typename T, typename Factory = constructor<normalized_type_t<T>>,
+              typename R = request_result_t<T>>
+    R construct_runtime_request(Factory factory = Factory()) {
+        return construct<T>(std::move(factory));
+    }
+
+    template <typename T> T construct_collection_runtime_request() {
+        return construct_collection<T>();
+    }
+
+    template <typename T, typename Fn>
+    T construct_collection_runtime_request(Fn&& fn) {
+        return construct_collection<T>(std::forward<Fn>(fn));
+    }
+
+    template <typename T, typename Key>
+    T construct_collection_runtime_request(key<Key>) {
+        return construct_collection<T>(key<Key>{});
+    }
+
+    template <typename T, typename Fn, typename Key>
+    T construct_collection_runtime_request(Fn&& fn, key<Key>) {
+        return construct_collection<T>(std::forward<Fn>(fn), key<Key>{});
+    }
+
+    template <typename Signature = void, typename Callable>
+    auto invoke_runtime_request(Callable&& callable) {
+        return invoke<Signature>(std::forward<Callable>(callable));
+    }
+
+    template <typename Request, typename Key = void>
+    detail::binding_selection_status binding_status() {
+        using request_type = request_interface_t<Request>;
+        using static_selection = static_selection_t<request_type, Key>;
+        const auto runtime_status =
+            runtime_base::template binding_status<request_type, Key>();
+        return detail::resolve_binding_status<static_selection::status>(
+            runtime_status,
+            detail::binding_resolution_policy::ambiguous_on_conflict);
+    }
+
+    template <typename T, typename Key = void, typename Fn>
+    std::size_t append_collection(T& results, runtime_context& context,
+                                  Fn&& fn) {
+        binding_resolution_ref static_state_ref(
+            static_cast<static_state&>(*this));
+        if constexpr (std::is_void_v<Key>) {
+            return detail::append_binding_collection(
+                results,
+                [&](auto& collection, auto&& append) {
+                    return this->append_runtime_collection(
+                        collection, context,
+                        std::forward<decltype(append)>(append), none_t{});
+                },
+                [&](auto& collection, auto&& append) {
+                    return static_state_ref.template append_static_collection<
+                        T, void, static_registry_type_>(
+                        collection, *this, context,
+                        std::forward<decltype(append)>(append));
+                },
+                std::forward<Fn>(fn));
+        } else {
+            return detail::append_binding_collection(
+                results,
+                [&](auto& collection, auto&& append) {
+                    return this->append_runtime_collection(
+                        collection, context,
+                        std::forward<decltype(append)>(append), key<Key>{});
+                },
+                [&](auto& collection, auto&& append) {
+                    return static_state_ref.template append_static_collection<
+                        T, Key, static_registry_type_>(
+                        collection, *this, context,
+                        std::forward<decltype(append)>(append));
+                },
+                std::forward<Fn>(fn));
+        }
+    }
+
+    template <typename T, typename Key = void> std::size_t count_collection() {
+        if constexpr (std::is_void_v<Key>) {
+            return detail::count_binding_collection<T>(
+                [&] {
+                    return this->template count_runtime_collection<T>(none_t{});
+                },
+                detail::static_collection_binding_count<static_registry_type_,
+                                                        T, void>());
+        } else {
+            return detail::count_binding_collection<T>(
+                [&] {
+                    return this->template count_runtime_collection<T>(
+                        key<Key>{});
+                },
+                detail::static_collection_binding_count<static_registry_type_,
+                                                        T, Key>());
+        }
+    }
+
+    template <typename T, bool RemoveRvalueReferences, typename Key = void,
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
+    R resolve_request(runtime_context& context) {
+        if constexpr (std::is_void_v<Key>) {
+            return resolve<T, RemoveRvalueReferences>(context);
+        } else {
+            return resolve<T, RemoveRvalueReferences, true, Key>(context);
+        }
     }
 
     template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
-              typename IdType = none_t,
-              typename R = std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>
-    R resolve(resolving_context& context, IdType&& id = IdType()) {
-        // Internal resolution chooses between an incomplete-safe lookup path
-        // and a materializing path. Plain value requests may auto-construct a
-        // missing type. Borrowed lookups such as T* and T& must stay lookup-
-        // only. `const T&` is the one intentional exception: auto-constructible
-        // helper bundles may be materialized as temporaries and then borrowed.
-        return resolve_impl<
-            T, RemoveRvalueReferences,
-            std::is_same_v<normalized_type_t<T>, std::decay_t<T>> &&
-                (!std::is_reference_v<T> ||
-                 (std::is_lvalue_reference_v<T> &&
-                  std::is_const_v<std::remove_reference_t<T>> &&
-                  is_auto_constructible<std::decay_t<T>>::value)),
-            CheckCache>(context, std::forward<IdType>(id));
+              typename R = resolve_result_t<T, RemoveRvalueReferences>>
+    R resolve(static_context_type& context, none_t) {
+        return resolve_static<T, RemoveRvalueReferences>(context);
     }
+
+    template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
+              typename Key = void,
+              typename R = resolve_result_t<T, RemoveRvalueReferences>>
+    R resolve(static_context_type& context) {
+        return resolve_static<T, RemoveRvalueReferences, Key>(context);
+    }
+
+    template <typename T, bool RemoveRvalueReferences, bool CheckCache,
+              typename Key,
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
+    R resolve(static_context_type& context, key<Key>) {
+        return resolve_static<T, RemoveRvalueReferences, Key>(context);
+    }
+
+    template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
+              typename R = resolve_result_t<T, RemoveRvalueReferences>>
+    R resolve(runtime_context& context, none_t) {
+        return resolve<T, RemoveRvalueReferences, CheckCache>(context);
+    }
+
+    template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
+              typename Key = void,
+              typename R = resolve_result_t<T, RemoveRvalueReferences>>
+    R resolve(runtime_context& context) {
+        if constexpr (collection_traits<R>::is_collection) {
+            if constexpr (std::is_void_v<Key>) {
+                return construct_collection<R>(
+                    context,
+                    [](auto& collection, auto&& value) {
+                        collection_traits<std::decay_t<decltype(collection)>>::
+                            add(collection, std::move(value));
+                    },
+                    none_t{});
+            } else {
+                return construct_collection<R>(
+                    context,
+                    [](auto& collection, auto&& value) {
+                        collection_traits<std::decay_t<decltype(collection)>>::
+                            add(collection, std::move(value));
+                    },
+                    key<Key>{});
+            }
+        } else {
+            using request_type = R;
+            using static_selection = static_selection_t<request_type, Key>;
+            const auto runtime_status =
+                runtime_base::template binding_status<request_type, Key>();
+            const auto resolution = detail::resolve_binding(
+                runtime_status, static_selection::status,
+                detail::binding_resolution_policy::ambiguous_on_conflict);
+
+            if (resolution == detail::binding_result::ambiguous) {
+                throw detail::make_type_ambiguous_exception<T>(context);
+            }
+
+            if (resolution == detail::binding_result::primary) {
+                return runtime_base::template resolve_request<
+                    T, RemoveRvalueReferences, Key>(context);
+            }
+
+            if constexpr (static_selection::status ==
+                          detail::binding_selection_status::found) {
+                if (resolution == detail::binding_result::secondary) {
+                    return resolve_binding_selection<request_type, Key>(
+                        context);
+                }
+            }
+
+            return runtime_base::template resolve_request<
+                T, RemoveRvalueReferences, Key>(context);
+        }
+    }
+
+    template <typename T, bool RemoveRvalueReferences, bool CheckCache,
+              typename Key,
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
+    R resolve(runtime_context& context, key<Key>) {
+        return resolve<T, RemoveRvalueReferences, CheckCache, Key>(context);
+    }
+};
+
+namespace detail {
+
+template <typename... Params> struct container_base;
+template <typename Param, typename Enable = void> struct container_base_one;
+template <typename First, typename Second, typename Enable = void>
+struct container_base_two;
+template <typename First, typename Second, typename Third,
+          typename Enable = void>
+struct container_base_three;
+
+template <> struct container_base<> {
+    using type = runtime_container<dynamic_container_traits>;
+};
+
+template <typename Param> struct container_base<Param> {
+    using type = typename container_base_one<Param>::type;
+};
+
+template <typename First, typename Second>
+struct container_base<First, Second> {
+    using type = typename container_base_two<First, Second>::type;
+};
+
+template <typename First, typename Second, typename Third>
+struct container_base<First, Second, Third> {
+    using type = typename container_base_three<First, Second, Third>::type;
+};
+
+template <typename First, typename Second, typename Third, typename... Rest>
+struct container_base<First, Second, Third, Rest...> {
+    static_assert(container_dependent_false_v<First, Second, Third, Rest...>,
+                  "container<...> expects runtime traits or a single static "
+                  "bindings source");
+};
+
+template <typename... Params>
+using container_base_t = typename container_base<Params...>::type;
+
+template <typename Param, typename Enable> struct container_base_one {
+    static_assert(container_dependent_false_v<Param>,
+                  "container<T> requires runtime container traits or "
+                  "compile-time bindings<...>");
+};
+
+template <typename Param>
+struct container_base_one<
+    Param, std::enable_if_t<is_runtime_container_traits_v<Param>>> {
+    using type = runtime_container<Param, typename Param::allocator_type, void>;
+};
+
+template <typename Param>
+struct container_base_one<Param,
+                          std::enable_if_t<is_static_registry_v<Param>>> {
+    using type = hybrid_container<Param>;
+};
+
+template <typename Param>
+struct container_base_one<Param,
+                          std::enable_if_t<is_bindings_wrapper_v<Param>>> {
+    using static_registry_type = bindings_wrapper_registry_t<Param>;
+
+    static_assert(is_static_registry_v<static_registry_type>,
+                  "container<bindings<...>> requires a valid compile-time "
+                  "bindings source");
+
+    using type = hybrid_container<static_registry_type>;
+};
+template <typename First, typename Second, typename Enable>
+struct container_base_two {
+    static_assert(container_dependent_false_v<First, Second>,
+                  "container<T, U> requires runtime traits + allocator");
+};
+
+template <typename First, typename Second>
+struct container_base_two<
+    First, Second, std::enable_if_t<is_runtime_container_traits_v<First>>> {
+    using type = runtime_container<First, Second, void>;
+};
+
+template <typename First, typename Second, typename Third, typename Enable>
+struct container_base_three {
+    static_assert(
+        container_dependent_false_v<First, Second, Third>,
+        "container<T, U, V> requires runtime traits + allocator + parent");
+};
+
+template <typename First, typename Second, typename Third>
+struct container_base_three<
+    First, Second, Third,
+    std::enable_if_t<is_runtime_container_traits_v<First>>> {
+    using type = runtime_container<First, Second, Third>;
+};
+
+} // namespace detail
+
+template <typename... Params>
+class container : public detail::container_base_t<Params...> {
+    using base_type = detail::container_base_t<Params...>;
+
+  public:
+    using base_type::base_type;
+};
+} // namespace dingo
+
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
 
-    // TODO: two different resolve() calls due to different caches
-    template <typename CachedT, typename T, typename Factory, typename Context>
-    T resolve(Factory& factory, Context& context) {
-        void* ptr = resolve<T>(
-            factory, context,
-            cache_enabled
-                ? instance_cache_sink{this, &container::store_type_cache<CachedT>}
-                : instance_cache_sink{});
-        return convert<T>(ptr);
-    }
-
-    struct index_data;
-
-    template <typename CachedT, typename T, typename Factory, typename Context>
-    T resolve(Factory& factory, Context& context, index_data& data) {
-        void* ptr = resolve<T>(
-            factory, context,
-            cache_enabled ? instance_cache_sink{&data, &container::store_index_cache}
-                          : instance_cache_sink{});
-        return convert<T>(ptr);
-    }
-
-    template <typename T, typename Factory, typename Context>
-    T resolve_collection_type(Factory& factory, Context& context) {
-        void* ptr = resolve<T>(factory, context);
-        return convert<T>(ptr);
-    }
-
-    template <class Storage, class TypeInterface, class Type>
-    void check_interface_requirements() {
-        detail::interface_registration_requirements<Storage, TypeInterface,
-                                                    Type>::assert_valid();
-    }
-
-    template <typename U, typename... Args>
-    std::pair<
-        instance_factory_ptr<instance_factory_interface<container_type>>,
-        typename U::container_type*>
-    allocate_factory(Args&&... args) {
-        auto alloc = allocator_traits::rebind<U>(get_allocator());
-        U* instance = allocator_traits::allocate(alloc, 1);
-        if (!instance)
-            return {nullptr, nullptr};
-
-        // TODO: should be nothrow-constructible
-        // static_assert(std::is_nothrow_constructible_v<U, Args...>);
-        allocator_traits::construct(alloc, instance,
-                                    std::forward<Args>(args)...);
-
-        return {instance, &instance->get_container()};
-    }
-
-    parent_container_type* parent_ = nullptr;
-
-    struct index_data {
-        instance_factory_interface<container_type>* factory;
-        void* cache;
-
-        operator bool() const { return factory != nullptr; }
-    };
-
-    using index_definition_list_type = to_type_list_t<index_definition_type>;
-    using index_type =
-        detail::index_impl<index_definition_list_type, index_data,
-                           allocator_type>;
-
-    struct type_factory_data : index_type {
-        type_factory_data(allocator_type& allocator)
-            : index_type(allocator), factories(allocator) {}
-
-        typename ContainerTraits::template type_map_type<
-            instance_factory_ptr<
-                instance_factory_interface<container_type>>,
-            allocator_type>
-            factories;
-    };
-
-    typename ContainerTraits::template type_map_type<type_factory_data,
-                                                     allocator_type>
-        type_factories_;
-
-    // Due to conversions, there is no 1:1 mapping between cached types and factories
-    typename ContainerTraits::template type_cache_type<void*, allocator_type>
-        type_cache_;
-};
-} // namespace dingo
+#include <dingo/static_container.h>

@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
 #include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
@@ -16,6 +16,8 @@
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/type_conversion_traits.h>
+
+#include <new>
 
 namespace dingo {
 struct shared {};
@@ -30,7 +32,7 @@ template <typename Type> struct storage_materialization_traits<shared, Type> {
     template <typename Storage>
     static bool preserves_closure(const Storage& storage) {
         // Only unresolved shared storage needs the factory closure to stay on
-        // the resolving_context stack while address-based conversions are
+        // the active context stack while address-based conversions are
         // materialized. Once the instance is resolved, there are no temporary
         // construction artifacts left to preserve.
         return !storage.is_resolved();
@@ -204,7 +206,9 @@ struct storage_instance_base : Factory {
     storage_instance_base(Args&&... args)
         : Factory(std::forward<Args>(args)...) {}
 
-    Type* get() const { return reinterpret_cast<Type*>(&instance_); }
+    Type* get() const {
+        return std::launder(reinterpret_cast<Type*>(&instance_));
+    }
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -304,7 +308,7 @@ class shared_storage_instance_impl<
 
   private:
     StoredType* get_ptr() const {
-        return reinterpret_cast<StoredType*>(&instance_);
+        return std::launder(reinterpret_cast<StoredType*>(&instance_));
     }
 
     mutable aligned_storage_t<sizeof(StoredType), alignof(StoredType)> instance_;
@@ -360,7 +364,7 @@ class storage_instance<shared, Type[N], StoredType, Factory>
 
   private:
     Type (*get_array() const)[N] {
-        return reinterpret_cast<Type(*)[N]>(&instance_);
+        return std::launder(reinterpret_cast<Type(*)[N]>(&instance_));
     }
 
     mutable aligned_storage_t<sizeof(Type[N]), alignof(Type[N])> instance_;

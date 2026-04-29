@@ -396,11 +396,27 @@ struct type_conversion_traits<test_optional<U>, test_optional<T>> {
     }
 };
 
+struct move_only_copy_on_resolve_override {
+    static constexpr bool copy_on_resolve = false;
+
+    move_only_copy_on_resolve_override() = default;
+    move_only_copy_on_resolve_override(
+        move_only_copy_on_resolve_override&&) = default;
+    move_only_copy_on_resolve_override&
+    operator=(move_only_copy_on_resolve_override&&) = default;
+
+    move_only_copy_on_resolve_override(
+        const move_only_copy_on_resolve_override&) = delete;
+    move_only_copy_on_resolve_override&
+    operator=(const move_only_copy_on_resolve_override&) = delete;
+};
+
 static_assert(is_interface_storage_rebindable_v<test_shared<Class>, IClass>);
 static_assert(is_interface_storage_rebindable_v<test_unique<Class>, IClass>);
 static_assert(detail::copy_on_resolve_v<test_shared<Class>>);
 static_assert(!detail::copy_on_resolve_v<test_unique<Class>>);
 static_assert(detail::copy_on_resolve_v<test_optional<Class>>);
+static_assert(!detail::copy_on_resolve_v<move_only_copy_on_resolve_override>);
 
 TEST(type_traits_test, shared_storage_uses_custom_shared_wrapper) {
     container<> container;

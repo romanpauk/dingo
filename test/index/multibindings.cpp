@@ -225,4 +225,41 @@ TYPED_TEST(multibindings_test, register_type_collection_mapping_unique_ptr) {
     ASSERT_EQ(classes.size(), 2);
 }
 
+TYPED_TEST(multibindings_test, keyed_construct_collection_mapping_shared_ptr) {
+    using container_type = TypeParam;
+
+    struct first_key : std::integral_constant<int, 0> {};
+    struct second_key : std::integral_constant<int, 1> {};
+
+    container_type container;
+    container.template register_type<scope<shared>,
+                                     storage<std::shared_ptr<ClassTag<0>>>,
+                                     interfaces<IClass>, key<first_key>>();
+    container.template register_type<scope<shared>,
+                                     storage<std::shared_ptr<ClassTag<1>>>,
+                                     interfaces<IClass>, key<first_key>>();
+    container.template register_type<scope<shared>,
+                                     storage<std::shared_ptr<ClassTag<2>>>,
+                                     interfaces<IClass>, key<second_key>>();
+
+    auto first = container.template construct_collection<
+        std::map<std::type_index, std::shared_ptr<IClass>>>(
+        [](auto& collection, auto&& value) {
+            collection.emplace(typeid(*value.get()), std::move(value));
+        },
+        key<first_key>{});
+    auto second = container.template construct_collection<
+        std::map<std::type_index, std::shared_ptr<IClass>>>(
+        [](auto& collection, auto&& value) {
+            collection.emplace(typeid(*value.get()), std::move(value));
+        },
+        key<second_key>{});
+
+    ASSERT_EQ(first.size(), 2);
+    ASSERT_EQ(second.size(), 1);
+    ASSERT_EQ(first.at(typeid(ClassTag<0>))->GetTag(), 0);
+    ASSERT_EQ(first.at(typeid(ClassTag<1>))->GetTag(), 1);
+    ASSERT_EQ(second.at(typeid(ClassTag<2>))->GetTag(), 2);
+}
+
 } // namespace dingo

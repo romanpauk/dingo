@@ -7,10 +7,11 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
 #include <cstddef>
 #include <memory>
+#include <new>
 #include <type_traits>
 #include <utility>
 
@@ -58,12 +59,14 @@ template <typename Source> class rvalue_source {
         }
     }
 
-    Source* get_ptr() { return reinterpret_cast<Source*>(&storage_); }
+    Source* get_ptr() {
+        return std::launder(reinterpret_cast<Source*>(&storage_));
+    }
     const Source* get_ptr() const {
-        return reinterpret_cast<const Source*>(&storage_);
+        return std::launder(reinterpret_cast<const Source*>(&storage_));
     }
 
-    Source& get() & { return *reinterpret_cast<Source*>(&storage_); }
+    Source& get() & { return *get_ptr(); }
     const Source& get() const & { return *get_ptr(); }
     Source get() && { return std::move(*get_ptr()); }
 

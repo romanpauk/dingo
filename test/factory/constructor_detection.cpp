@@ -6,6 +6,7 @@
 //
 
 #include <dingo/container.h>
+#include <dingo/registration/constructor.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>
@@ -195,12 +196,24 @@ TEST(constructor_detection_test, constructor_arguments_type_list) {
     struct Detected {
         Detected(int, float) {}
     };
+    struct SelectedByTypedef {
+        DINGO_CONSTRUCTOR(SelectedByTypedef(int, float)) {}
+    };
+    struct Defaulted {};
 
     static_assert(std::is_same_v<typename constructor<Explicit(int, float)>::arguments,
                                  type_list<int, float>>);
     static_assert(constructor_detection<Detected>::arity == 2);
     static_assert(constructor_detection<Detected>::kind ==
                   detail::constructor_kind::concrete);
+    static_assert(
+        std::is_same_v<typename constructor_detection<Detected>::arguments, void>);
+    static_assert(
+        std::is_same_v<typename constructor_detection<SelectedByTypedef>::arguments,
+                       type_list<int, float>>);
+    static_assert(
+        std::is_same_v<typename constructor_detection<Defaulted>::arguments,
+                       type_list<>>);
 }
 
 TEST(constructor_detection_test, constructor_detection_traits_limit_public_search) {

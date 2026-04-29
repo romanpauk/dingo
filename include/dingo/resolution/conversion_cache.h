@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
 #include <dingo/memory/aligned_storage.h>
 #include <dingo/memory/arena_allocator.h>

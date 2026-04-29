@@ -295,7 +295,7 @@ The current rules are narrow on purpose:
 - the selected alternative must appear exactly once in the variant type
 - the whole variant remains resolvable
 - uniquely occurring alternatives are also resolvable from variant storage
-- if a requested alternative is published but the current instance holds a
+- if a requested alternative is available but the current instance holds a
   different alternative, resolution fails as `type_not_convertible_exception`
 - duplicate alternative types are rejected at compile time for direct resolution
 - unique variant storage resolves the whole variant as a value or rvalue, and a
@@ -712,6 +712,10 @@ struct VectorIntProcessor : Processor<std::vector<int>, VectorIntProcessor> {
 };
 
 struct Dispatcher {
+    // `std::is_copy_constructible_v` is too optimistic for this map shape on
+    // libstdc++, so resolve-by-value must treat Dispatcher as move-only.
+    static constexpr bool copy_on_resolve = false;
+
     Dispatcher(
         std::map<std::type_index, std::unique_ptr<ProcessorBase>>&& processors)
         : processors_(std::move(processors)) {}

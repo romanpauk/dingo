@@ -38,6 +38,10 @@ struct VectorIntProcessor : Processor<std::vector<int>, VectorIntProcessor> {
 };
 
 struct Dispatcher {
+    // `std::is_copy_constructible_v` is too optimistic for this map shape on
+    // libstdc++, so resolve-by-value must treat Dispatcher as move-only.
+    static constexpr bool copy_on_resolve = false;
+
     Dispatcher(
         std::map<std::type_index, std::unique_ptr<ProcessorBase>>&& processors)
         : processors_(std::move(processors)) {}
