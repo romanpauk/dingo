@@ -25,6 +25,7 @@
 #include <dingo/runtime/injector.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/normalized_type.h>
+#include <dingo/type/request_traits.h>
 
 #include <algorithm>
 #include <functional>
@@ -183,9 +184,7 @@ class runtime_registry : public allocator_base<Allocator> {
 
   protected:
     template <typename T, typename IdType = none_t,
-              typename R = typename annotated_traits<
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>>::type>
+              typename R = request_result_t<T>>
     R resolve_runtime_request(IdType&& id = IdType()) {
         if constexpr (detail::is_typed_key_v<IdType> &&
                       collection_traits<R>::is_collection) {
@@ -198,7 +197,7 @@ class runtime_registry : public allocator_base<Allocator> {
                         void* cache = state->type_cache.template get<T>();
                         if (cache) {
                             return detail::convert_resolved_binding<
-                                typename annotated_traits<T>::type>(cache);
+                                request_interface_t<T>>(cache);
                         }
                     }
                 } else {
@@ -226,8 +225,7 @@ class runtime_registry : public allocator_base<Allocator> {
 
                                 if (candidate && candidate->cache) {
                                     return detail::convert_resolved_binding<
-                                        typename annotated_traits<T>::type>(
-                                        candidate->cache);
+                                        request_interface_t<T>>(candidate->cache);
                                 }
                             } else {
                                 auto indexed = data->template get_index<IdType>(
@@ -237,7 +235,7 @@ class runtime_registry : public allocator_base<Allocator> {
                                 if (indexed) {
                                     if (indexed->cache) {
                                         return detail::convert_resolved_binding<
-                                            typename annotated_traits<T>::type>(
+                                            request_interface_t<T>>(
                                             indexed->cache);
                                     }
                                 }
@@ -254,9 +252,7 @@ class runtime_registry : public allocator_base<Allocator> {
     }
 
     template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-              typename R = typename annotated_traits<
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>>::type>
+              typename R = request_result_t<T>>
     R construct_runtime_request(Factory factory = Factory()) {
         runtime_context context;
         if constexpr (std::is_same_v<Factory,
@@ -418,11 +414,7 @@ class runtime_registry : public allocator_base<Allocator> {
     }
 
     template <typename T, bool RemoveRvalueReferences, typename Key = void,
-              typename R = std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve_request(runtime_context& context) {
         if constexpr (std::is_void_v<Key>) {
             return resolve<T, RemoveRvalueReferences>(context, none_t{});
@@ -667,30 +659,25 @@ class runtime_registry : public allocator_base<Allocator> {
 
     template <typename T, bool CheckCache, typename IdType>
     auto resolve_runtime_route(runtime_route route, runtime_context& context,
-                               IdType&&) -> typename annotated_traits<T>::type {
+                               IdType&&) -> request_interface_t<T> {
         if constexpr (is_none_v<std::decay_t<IdType>>) {
-            return resolve<T, typename annotated_traits<T>::type>(
-                *route.binding, context);
+            return resolve<T, request_interface_t<T>>(*route.binding, context);
         } else {
             if constexpr (cache_enabled && CheckCache) {
                 if (route.state->cache) {
                     return detail::convert_resolved_binding<
-                        typename annotated_traits<T>::type>(route.state->cache);
+                        request_interface_t<T>>(route.state->cache);
                 }
             }
 
-            return resolve<T, typename annotated_traits<T>::type>(
+            return resolve<T, request_interface_t<T>>(
                 *route.binding, context, *route.state);
         }
     }
 
     template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
               typename IdType,
-              typename R = std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve_missing_binding(runtime_context& context, IdType&& id) {
         using Type = normalized_type_t<T>;
 
@@ -912,11 +899,7 @@ class runtime_registry : public allocator_base<Allocator> {
 #endif
     template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
               bool CheckCache = true, typename IdType = none_t,
-              typename R = std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve_impl(runtime_context& context, IdType&& id = IdType()) {
         using Type = normalized_type_t<T>;
         static_assert(!std::is_const_v<Type>);
@@ -926,7 +909,7 @@ class runtime_registry : public allocator_base<Allocator> {
                 void* cache = state->type_cache.template get<T>();
                 if (cache) {
                     return detail::convert_resolved_binding<
-                        typename annotated_traits<T>::type>(cache);
+                        request_interface_t<T>>(cache);
                 }
             }
         }
@@ -956,20 +939,16 @@ class runtime_registry : public allocator_base<Allocator> {
 
         using type_detection = detail::automatic;
         return context.template construct_temporary<
-            typename annotated_traits<T>::type, type_detection>(
+            request_interface_t<T>, type_detection>(
             *resolve_root());
     }
 
     template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
               typename IdType = none_t,
-              typename R = std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve(runtime_context& context, IdType&& id = IdType()) {
         return resolve_impl < T, RemoveRvalueReferences,
-               std::is_same_v<normalized_type_t<T>, std::decay_t<T>> &&
+               std::is_same_v<request_value_t<T>, std::decay_t<T>> &&
                    (!std::is_reference_v<T> ||
                     (std::is_lvalue_reference_v<T> &&
                      std::is_const_v<std::remove_reference_t<T>> &&

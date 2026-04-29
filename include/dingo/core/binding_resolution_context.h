@@ -16,6 +16,7 @@
 #include <dingo/runtime/context.h>
 #include <dingo/static/graph.h>
 #include <dingo/static/registry.h>
+#include <dingo/type/request_traits.h>
 
 #include <type_traits>
 #include <utility>
@@ -95,11 +96,7 @@ class binding_resolution<Host, static_registry<Registrations...>>
     allocator_type& get_allocator() { return host_->get_allocator(); }
 
     template <typename T, bool RemoveRvalueReferences, typename Key = void,
-              typename R = typename annotated_traits<std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>::type>
+              typename R = resolve_result_t<T, RemoveRvalueReferences>>
     R resolve(runtime_context& context) {
         if constexpr (collection_traits<R>::is_collection) {
             return construct_collection<R, Key>(
@@ -138,11 +135,7 @@ class binding_resolution<Host, static_registry<Registrations...>>
     }
 
     template <typename T, bool RemoveRvalueReferences, typename Key,
-              typename R = std::conditional_t<
-                  RemoveRvalueReferences,
-                  std::conditional_t<std::is_rvalue_reference_v<T>,
-                                     std::remove_reference_t<T>, T>,
-                  T>>
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve(runtime_context& context, key<Key>) {
         return resolve<T, RemoveRvalueReferences, Key>(context);
     }

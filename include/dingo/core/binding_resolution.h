@@ -16,6 +16,7 @@
 #include <dingo/resolution/type_conversion.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
+#include <dingo/type/request_traits.h>
 #include <dingo/type/type_descriptor.h>
 #include <dingo/type/type_traits.h>
 
@@ -507,11 +508,7 @@ inline constexpr bool construct_normalized_request_v =
     std::is_object_v<normalized_type_t<Request>> &&
     !std::is_abstract_v<normalized_type_t<Request>>;
 
-template <typename Request,
-          typename ResolvedRequest =
-              typename annotated_traits<std::conditional_t<
-                  rvalue_request_requires_explicit_conversion_v<Request>,
-                  std::remove_reference_t<Request>, Request>>::type>
+template <typename Request, typename ResolvedRequest = request_result_t<Request>>
 inline constexpr bool construct_factory_request_v =
     !rvalue_request_requires_explicit_conversion_v<Request> &&
     std::is_object_v<normalized_type_t<Request>> &&
@@ -567,9 +564,7 @@ template <typename Request>
 }
 
 template <typename Request, typename ResolveExact, typename ResolveNormalized>
-typename annotated_traits<
-    std::conditional_t<std::is_rvalue_reference_v<Request>,
-                       std::remove_reference_t<Request>, Request>>::type
+request_result_t<Request>
 construct_request_or_wrap_normalized(ResolveExact&& resolve_exact,
                                      ResolveNormalized&& resolve_normalized) {
     try {
