@@ -40,9 +40,9 @@ class binding_resolution<Host, static_registry<Registrations...>>
     template <typename Request, typename Key>
     typename annotated_traits<Request>::type
     resolve_binding(runtime_context& context) {
-        using binding = binding_t<Request, Key>;
-        using interface_binding = typename binding::binding_type;
-        auto route = this->template make_route<interface_binding>(*this);
+        using selection = binding_t<Request, Key>;
+        using binding = typename selection::binding_type;
+        auto route = this->template make_route<binding>(*this);
         return route.template resolve<Request>(context);
     }
 

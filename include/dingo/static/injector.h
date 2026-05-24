@@ -150,11 +150,11 @@ class static_injector<static_registry<Registrations...>, void>
                                                                Key>>;
             if constexpr (selection::status ==
                           detail::binding_selection_status::found) {
-                using interface_binding = typename selection::binding_type;
+                using binding = typename selection::binding_type;
                 using binding_model_type =
-                    typename interface_binding::binding_model_type;
+                    typename binding::binding_model_type;
                 if constexpr (detail::binding_supports_request_v<
-                                  request_type, interface_binding> &&
+                                  request_type, binding> &&
                               (std::is_reference_v<request_type> ||
                                std::is_pointer_v<request_type>) &&
                               detail::stored_request_identity_v<
@@ -167,8 +167,7 @@ class static_injector<static_registry<Registrations...>, void>
                     // materialization path so copies/moves are derived from the
                     // interface binding semantics.
                     detail::no_dependency_context context;
-                    auto route =
-                        this->template make_route<interface_binding>(*this);
+                    auto route = this->template make_route<binding>(*this);
                     return route.template resolve<request_type>(context);
                 }
             }
@@ -198,9 +197,8 @@ class static_injector<static_registry<Registrations...>, void>
                 normalized_selection::status !=
                 detail::binding_selection_status::not_found;
             if constexpr (has_exact_binding) {
-                using interface_binding = typename selection::binding_type;
-                if constexpr (detail::binding_supports_request_v<
-                                  T, interface_binding>) {
+                using binding = typename selection::binding_type;
+                if constexpr (detail::binding_supports_request_v<T, binding>) {
                     return resolve<T>();
                 }
             }
@@ -293,9 +291,9 @@ class static_injector<static_registry<Registrations...>, void>
                 selection::status !=
                     detail::binding_selection_status::ambiguous,
                 "static_injector cannot resolve an ambiguously bound type");
-            using interface_binding = typename selection::binding_type;
+            using binding = typename selection::binding_type;
 
-            auto route = this->template make_route<interface_binding>(*this);
+            auto route = this->template make_route<binding>(*this);
             return route.template resolve<request_type>(context);
         }
     }

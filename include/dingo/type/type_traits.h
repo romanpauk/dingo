@@ -24,6 +24,7 @@ struct shared;
 struct external;
 
 template <class T> struct exact_lookup;
+template <class T> struct collection_traits;
 
 template <typename T, typename = void> struct type_traits {
     static constexpr bool enabled = false;
@@ -40,6 +41,48 @@ template <typename T>
 inline constexpr bool is_pointer_like_type_v =
     type_traits<T>::enabled && type_traits<T>::is_pointer_like &&
     !std::is_pointer_v<T>;
+
+namespace detail {
+template <typename T, typename = void>
+struct has_type_copy_on_resolve : std::false_type {};
+
+template <typename T>
+struct has_type_copy_on_resolve<T, std::void_t<decltype(T::copy_on_resolve)>>
+    : std::true_type {};
+
+template <typename T, typename = void>
+struct has_traits_copy_on_resolve : std::false_type {};
+
+template <typename T>
+struct has_traits_copy_on_resolve<
+    T, std::void_t<decltype(type_traits<T>::copy_on_resolve)>>
+    : std::true_type {};
+
+template <typename T> constexpr bool type_copy_on_resolve() {
+    if constexpr (has_type_copy_on_resolve<T>::value) {
+        return T::copy_on_resolve;
+    } else if constexpr (has_traits_copy_on_resolve<T>::value) {
+        return type_traits<T>::copy_on_resolve;
+    } else {
+        return std::is_copy_constructible_v<T>;
+    }
+}
+
+template <typename T, typename = void> struct copy_on_resolve_traits {
+    static constexpr bool value = type_copy_on_resolve<T>();
+};
+
+template <typename T>
+struct copy_on_resolve_traits<
+    T, std::enable_if_t<collection_traits<T>::is_collection>> {
+    static constexpr bool value =
+        copy_on_resolve_traits<typename collection_traits<T>::resolve_type>::value;
+};
+} // namespace detail
+
+template <typename T>
+inline constexpr bool copy_on_resolve_v =
+    detail::copy_on_resolve_traits<T>::value;
 
 template <typename Type, typename Selected, typename = void>
 struct construction_traits {

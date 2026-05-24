@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 
 #include <optional>
+#include <vector>
 
 #include "support/class.h"
 
@@ -413,10 +414,12 @@ struct move_only_copy_on_resolve_override {
 
 static_assert(is_interface_storage_rebindable_v<test_shared<Class>, IClass>);
 static_assert(is_interface_storage_rebindable_v<test_unique<Class>, IClass>);
-static_assert(detail::copy_on_resolve_v<test_shared<Class>>);
-static_assert(!detail::copy_on_resolve_v<test_unique<Class>>);
-static_assert(detail::copy_on_resolve_v<test_optional<Class>>);
-static_assert(!detail::copy_on_resolve_v<move_only_copy_on_resolve_override>);
+static_assert(copy_on_resolve_v<test_shared<Class>>);
+static_assert(!copy_on_resolve_v<test_unique<Class>>);
+static_assert(copy_on_resolve_v<test_optional<Class>>);
+static_assert(!copy_on_resolve_v<move_only_copy_on_resolve_override>);
+static_assert(copy_on_resolve_v<std::vector<test_shared<Class>>>);
+static_assert(!copy_on_resolve_v<std::vector<test_unique<Class>>>);
 
 TEST(type_traits_test, shared_storage_uses_custom_shared_wrapper) {
     container<> container;

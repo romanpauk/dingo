@@ -21,8 +21,7 @@
 namespace dingo {
 namespace detail {
 
-template <typename Interface, typename BindingModel>
-struct interface_binding {
+template <typename Interface, typename BindingModel> struct binding {
     using interface_type = Interface;
     using binding_model_type = BindingModel;
     using storage_type = typename BindingModel::storage_type;
@@ -96,7 +95,7 @@ struct binding_expansion_impl;
 template <typename BindingModel, typename... Interfaces>
 struct binding_expansion_impl<BindingModel, type_list<Interfaces...>> {
     using interface_bindings =
-        type_list<interface_binding<Interfaces, BindingModel>...>;
+        type_list<binding<Interfaces, BindingModel>...>;
 };
 
 template <typename BindingModel>

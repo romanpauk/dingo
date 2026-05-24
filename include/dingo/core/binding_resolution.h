@@ -76,44 +76,6 @@ template <typename Context> struct preserve_closure_scope {
     int exceptions_;
 };
 
-template <typename T, typename = void>
-struct has_type_copy_on_resolve : std::false_type {};
-
-template <typename T>
-struct has_type_copy_on_resolve<T, std::void_t<decltype(T::copy_on_resolve)>>
-    : std::true_type {};
-
-template <typename T, typename = void>
-struct has_wrapper_copy_on_resolve : std::false_type {};
-
-template <typename T>
-struct has_wrapper_copy_on_resolve<
-    T, std::void_t<decltype(type_traits<T>::copy_on_resolve)>>
-    : std::true_type {};
-
-template <typename T, typename = void> struct resolved_type_traits {
-    static constexpr bool copy_on_resolve = [] {
-        if constexpr (has_type_copy_on_resolve<T>::value) {
-            return T::copy_on_resolve;
-        } else if constexpr (has_wrapper_copy_on_resolve<T>::value) {
-            return type_traits<T>::copy_on_resolve;
-        } else {
-            return std::is_copy_constructible_v<T>;
-        }
-    }();
-};
-
-template <typename T>
-struct resolved_type_traits<
-    T, std::enable_if_t<collection_traits<T>::is_collection>> {
-    static constexpr bool copy_on_resolve = resolved_type_traits<
-        typename collection_traits<T>::resolve_type>::copy_on_resolve;
-};
-
-template <typename T>
-inline constexpr bool copy_on_resolve_v =
-    resolved_type_traits<T>::copy_on_resolve;
-
 enum class binding_request_kind {
     value,
     lvalue_reference,

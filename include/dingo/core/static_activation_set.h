@@ -463,8 +463,8 @@ std::size_t append_static_collection_impl(State& state, T& results, Host& host,
     constexpr std::size_t count = type_list_size_v<interface_bindings>;
     if constexpr (count != 0) {
         dingo::for_each(interface_bindings{}, [&](auto binding_iterator) {
-            using interface_binding = typename decltype(binding_iterator)::type;
-            auto route = make_static_route<interface_binding>(state, host);
+            using binding = typename decltype(binding_iterator)::type;
+            auto route = make_static_route<binding>(state, host);
             if constexpr (copy_on_resolve_v<resolve_type> &&
                           !std::is_reference_v<resolve_type>) {
                 route.template consume<resolve_type>(

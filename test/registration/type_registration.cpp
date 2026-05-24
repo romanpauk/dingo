@@ -381,8 +381,8 @@ TEST(type_registration_test, binding_model_preserves_storage_for_multi_interface
                                  std::shared_ptr<A>>);
     static_assert(std::is_same_v<typename expansion::interface_bindings,
                                  type_list<
-                                     detail::interface_binding<I, model>,
-                                     detail::interface_binding<J, model>>>);
+                                     detail::binding<I, model>,
+                                     detail::binding<J, model>>>);
     static_assert(model::valid);
 }
 

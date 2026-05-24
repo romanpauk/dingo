@@ -113,10 +113,10 @@ using binding_request_interface_t = normalized_type_t<keyed_type_t<Request>>;
 
 template <typename Request> using binding_request_key_t = keyed_key_t<Request>;
 
-template <typename InterfaceBinding> struct interface_binding_request_types {
+template <typename Binding> struct binding_request_types {
   private:
-    using interface_type = typename InterfaceBinding::interface_type;
-    using binding_model_type = typename InterfaceBinding::binding_model_type;
+    using interface_type = typename Binding::interface_type;
+    using binding_model_type = typename Binding::binding_model_type;
     using raw_interface_type = typename annotated_traits<interface_type>::type;
     using storage_conversions =
         typename binding_model_type::storage_type::conversions;
@@ -132,7 +132,7 @@ template <typename InterfaceBinding> struct interface_binding_request_types {
 
   public:
     using type = type_list_unique_t<typename keyed_request_types<
-        typename InterfaceBinding::key_type,
+        typename Binding::key_type,
         typename annotated_request_types<interface_type,
                                          base_types>::type>::type>;
 };
@@ -160,28 +160,28 @@ struct binding_tuple_constructible<Implementation,
     : std::bool_constant<
           is_list_initializable_v<Implementation,
                                   binding_argument_placeholder_t<
-                                      typename interface_binding_request_types<
+                                      typename binding_request_types<
                                           InterfaceBindings>::type>...> ||
           is_direct_initializable_v<
               Implementation, binding_argument_placeholder_t<
-                                  typename interface_binding_request_types<
+                                  typename binding_request_types<
                                       InterfaceBindings>::type>...>> {};
 
 template <typename InterfaceBindings, size_t Arity, typename = void>
-struct interface_binding_tuples;
+struct binding_tuples;
 
 template <typename InterfaceBindings>
-struct interface_binding_tuples<InterfaceBindings, 0, void> {
+struct binding_tuples<InterfaceBindings, 0, void> {
     using type = type_list<type_list<>>;
 };
 
 template <typename... InterfaceBindings, size_t Arity>
-struct interface_binding_tuples<type_list<InterfaceBindings...>, Arity,
-                                std::enable_if_t<(Arity > 0)>> {
+struct binding_tuples<type_list<InterfaceBindings...>, Arity,
+                      std::enable_if_t<(Arity > 0)>> {
   private:
     using tail_tuples =
-        typename interface_binding_tuples<type_list<InterfaceBindings...>,
-                                          Arity - 1>::type;
+        typename binding_tuples<type_list<InterfaceBindings...>,
+                                Arity - 1>::type;
 
   public:
     using type = type_list_cat_t<typename prepend_binding_to_tuples<
@@ -237,8 +237,7 @@ struct inferred_binding_dependencies<
     using implementation_type =
         typename constructor_factory_target<factory_type>::type;
     using candidate_tuples =
-        typename interface_binding_tuples<InterfaceBindings,
-                                          factory_type::arity>::type;
+        typename binding_tuples<InterfaceBindings, factory_type::arity>::type;
     using selection = unique_constructible_binding_tuple<implementation_type,
                                                          candidate_tuples>;
 
@@ -348,28 +347,27 @@ struct single_binding<type_list<Head, Tail...>, true> {
 };
 
 template <typename Interface, typename Key, typename InterfaceBindings>
-struct binding {
+struct binding_lookup {
     using type = typename single_binding<
         bindings_t<Interface, Key, InterfaceBindings>>::type;
 };
 
 template <typename Interface, typename Key, typename InterfaceBindings>
-using binding_t = typename binding<Interface, Key, InterfaceBindings>::type;
+using binding_t =
+    typename binding_lookup<Interface, Key, InterfaceBindings>::type;
 
-template <typename InterfaceBindings>
-struct keyed_interface_bindings_are_unique;
+template <typename InterfaceBindings> struct keyed_bindings_are_unique;
 
-template <>
-struct keyed_interface_bindings_are_unique<type_list<>> : std::true_type {};
+template <> struct keyed_bindings_are_unique<type_list<>> : std::true_type {};
 
 template <typename Head, typename... Tail>
-struct keyed_interface_bindings_are_unique<type_list<Head, Tail...>>
+struct keyed_bindings_are_unique<type_list<Head, Tail...>>
     : std::bool_constant<
           (std::is_void_v<typename Head::key_type> ||
            binding_count_v<typename Head::interface_type,
                            typename Head::key_type, type_list<Head, Tail...>> ==
                1) &&
-          keyed_interface_bindings_are_unique<type_list<Tail...>>::value> {};
+          keyed_bindings_are_unique<type_list<Tail...>>::value> {};
 
 template <typename DependencyList, typename InterfaceBindings>
 struct dependencies_registered;
@@ -667,7 +665,7 @@ struct binding_factory_is_compile_time_bindable
           typename BindingModel::factory_type>::is_compile_time_bindable> {};
 
 template <typename... Registrations>
-using static_registry_interface_bindings_t =
+using static_registry_bindings_t =
     type_list_cat_t<typename binding_expansion<
         binding_model<Registrations>>::interface_bindings...>;
 
@@ -689,7 +687,7 @@ template <typename... Registrations> struct static_registry {
     using registration_types = type_list<Registrations...>;
     using binding_models = type_list<detail::binding_model<Registrations>...>;
     using interface_bindings =
-        detail::static_registry_interface_bindings_t<Registrations...>;
+        detail::static_registry_bindings_t<Registrations...>;
 
     static constexpr bool registrations_valid =
         (detail::binding_model<Registrations>::valid && ...);

@@ -269,10 +269,10 @@ class hybrid_container<static_registry<Registrations...>>
         constexpr bool has_normalized_static_binding =
             static_binding_satisfies_request_v<normalized_request_type>;
         if constexpr (has_exact_static_binding) {
-            using interface_binding =
+            using binding =
                 typename static_selection_t<request_type, void>::binding_type;
             if constexpr (detail::binding_supports_request_v<
-                              T, interface_binding>) {
+                              T, binding>) {
                 static_context_type static_context;
                 return resolve_static<T, false>(static_context);
             }
@@ -380,7 +380,7 @@ class hybrid_container<static_registry<Registrations...>>
     DINGO_ALWAYS_INLINE request_interface_t<Request>
     resolve_static_selection(Context& context) {
         using selection = static_selection_t<Request, Key>;
-        using interface_binding = typename selection::binding_type;
+        using binding = typename selection::binding_type;
         if constexpr (selection::status !=
                       detail::binding_selection_status::found) {
             throw detail::make_type_not_found_exception<Request>(context);
@@ -388,7 +388,7 @@ class hybrid_container<static_registry<Registrations...>>
             static_resolution_ref static_state_ref(
                 static_cast<static_state&>(*this));
             auto route =
-                static_state_ref.template make_route<interface_binding>(*this);
+                static_state_ref.template make_route<binding>(*this);
             return route.template resolve<Request>(context);
         }
     }
@@ -397,7 +397,7 @@ class hybrid_container<static_registry<Registrations...>>
     request_interface_t<Request>
     resolve_binding_selection(Context& context) {
         using selection = static_selection_t<Request, Key>;
-        using interface_binding = typename selection::binding_type;
+        using binding = typename selection::binding_type;
         if constexpr (selection::status !=
                       detail::binding_selection_status::found) {
             throw detail::make_type_not_found_exception<Request>(context);
@@ -405,7 +405,7 @@ class hybrid_container<static_registry<Registrations...>>
             binding_resolution_ref static_state_ref(
                 static_cast<static_state&>(*this));
             auto route =
-                static_state_ref.template make_route<interface_binding>(*this);
+                static_state_ref.template make_route<binding>(*this);
             return route.template resolve<Request>(context);
         }
     }
