@@ -83,6 +83,7 @@ if(DINGO_DEVELOPMENT_MODE)
 
     set(DINGO_WARNINGS_MSVC
         /W4
+        /wd4714
         $<$<BOOL:${DINGO_TREAT_WARNINGS_AS_ERRORS}>:/WX>
     )
 
