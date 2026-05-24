@@ -65,6 +65,11 @@ GCC_ARM64_TINY_PROBE_EXPECTED_MAX = {
 
 GCC_ARM64_EXPECTED_MAX = {
     **GCC_ARM64_TINY_PROBE_EXPECTED_MAX,
+    "probe_hybrid_service_read": 0x60,
+    "probe_hybrid_shared_value_config": 0x60,
+    "probe_hybrid_shared_reference_config": 0x60,
+    "probe_hybrid_unique_value_config": 0x60,
+    "probe_hybrid_unique_rvalue_config": 0x60,
     "probe_hybrid_interface_handle": 0x360,
     "probe_hybrid_external_value_storage": 0x560,
     "probe_runtime_external_wrapper_storage": 0x480,
