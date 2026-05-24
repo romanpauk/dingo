@@ -36,7 +36,7 @@ function(target_sanitize NS TARGET)
             set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "ProgramDatabase")
             foreach(arg ${${NS}_SANITIZER_OPTIONS})
 		# TODO: sanitizer needs to be enabled for all code that gets linked into the binary
-		target_compile_options(${TARGET} PRIVATE /fsanitize=${arg} /D_DISABLE_VECTOR_ANNOTATION /D_DISABLE_STRING_ANNOTATION)
+		target_compile_options(${TARGET} PRIVATE /fsanitize=${arg} /D_DISABLE_VECTOR_ANNOTATION /D_DISABLE_STRING_ANNOTATION /D_DISABLE_OPTIONAL_ANNOTATION)
             endforeach()
         else()
             message(FATAL_ERROR "sanitizers are not supported for ${CMAKE_CXX_COMPILER_ID}")
