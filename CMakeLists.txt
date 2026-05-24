@@ -70,7 +70,7 @@ if(DINGO_DEVELOPMENT_MODE)
         "Run tests with a single representative dynamic container configuration." OFF)
     option(DINGO_TREAT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors." ON)
 
-    sanitizers_init(DINGO)
+    enable_sanitizers(DINGO)
 
     # TODO: g++ -Wall -Wextra -Wpedantic -Q --help=warning | grep disabled
     set(DINGO_WARNINGS_GCC
@@ -178,6 +178,7 @@ if(DINGO_DEVELOPMENT_MODE)
             GIT_TAG v1.8.3)
 
         set(BENCHMARK_ENABLE_TESTING off)
+        set(BENCHMARK_ENABLE_WERROR OFF)
         FetchContent_MakeAvailable(googlebenchmark)
 
         if(DINGO_BENCHMARK_FRUIT_ENABLED)
@@ -235,8 +236,6 @@ if(DINGO_DEVELOPMENT_MODE)
 
         # Force-include windows.h to each test to make sure library builds with windows.h included
         target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
-
-        target_sanitize(DINGO dingo_test)
 
         option(DINGO_LIT_TESTS_ENABLED "Enable lit-based tests for static assertions and diagnostics." ON)
         if(DINGO_LIT_TESTS_ENABLED)
