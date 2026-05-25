@@ -99,7 +99,8 @@ When working from a checkout, the top-level CMake project also supports
 - [Core Concepts](docs/core-concepts.md): scopes, storage, arrays, variants,
   factories, interfaces, and multibindings.
 - [Advanced Topics](docs/advanced-topics.md): indexed resolution, annotations,
-  static vs dynamic containers, nesting, RTTI, allocation, and runtime notes.
+  runtime and compile-time registration modes, nesting, RTTI, allocation, and
+  runtime notes.
 - [Architecture](docs/architecture/README.md): registration flow, lookup shape,
   extension traits, and conversion rules.
 - [Examples](docs/examples.md): a guided index of runnable examples in
@@ -119,7 +120,7 @@ When working from a checkout, the top-level CMake project also supports
 - Constructor deduction with explicit factory overrides when needed
 - Interface bindings and multibindings
 - Indexed and annotated resolution
-- Static and dynamic container configurations
+- Runtime and compile-time registration modes
 - Parent-child container nesting
 - Custom RTTI and allocator hooks
 
