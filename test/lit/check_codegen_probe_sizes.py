@@ -86,6 +86,8 @@ GCC_ARM64_EXPECTED_MAX = {
 GCC13_EXPECTED_MAX = {
     **GCC_TINY_PROBE_EXPECTED_MAX,
     **GCC_HYBRID_TINY_PROBE_EXPECTED_MAX,
+    "probe_hybrid_shared_reference_config": 0x90,
+    "probe_hybrid_unique_rvalue_config": 0x90,
 }
 
 GCC14_EXPECTED_MAX = {
