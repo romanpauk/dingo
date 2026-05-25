@@ -104,6 +104,8 @@ When working from a checkout, the top-level CMake project also supports
   extension traits, and conversion rules.
 - [Examples](docs/examples.md): a guided index of runnable examples in
   [`examples/`](examples).
+- [Development](docs/development.md): local development builds, repo tooling,
+  Markdown verification, and CI container notes.
 - [Motivation and History](docs/history.md): background on how the library
   evolved.
 
@@ -121,38 +123,7 @@ When working from a checkout, the top-level CMake project also supports
 - Parent-child container nesting
 - Custom RTTI and allocator hooks
 
-## Project Notes
-
-Development builds can enable tests, benchmarks, and runnable examples through
-`DINGO_DEVELOPMENT_MODE=ON`. The library itself remains header-only.
-
-Python helper tooling for development is declared in `pyproject.toml` and locked
-in `uv.lock`. `uv` is the required entry point for repo-owned Python tooling.
-
-For the Markdown CMake targets (`md-update` / `md-verify`), `uv sync` is not
-required first: CMake invokes `uv run --locked ...` directly.
-
-Preparing the environment ahead of time is still optional:
-
-```bash
-uv sync
-cmake --build build -t md-verify
-```
-
-CI uses the same locked `uv` environment.
-
-Container images:
-
-- Linux image examples:
-  - `dingo-toolchains:ubuntu-25.04-gcc-15` for GCC 15 builds on Ubuntu 25.04
-  - `dingo-toolchains:ubuntu-25.04-clang-20` for Clang 20 builds on Ubuntu 25.04
-- MSVC local workflow:
-  - build a local image from `docker/ubuntu25-toolchains/Containerfile` with
-    `TOOLCHAIN=msvc-wine` for an MSVC-style environment
-
-See [docker/ubuntu25-toolchains/README.md](docker/ubuntu25-toolchains/README.md)
-for the Linux CI-backed tags, the local MSVC build/run/test flow, and the
-broader `Containerfile` toolchain support.
+## Related Projects
 
 For DI library comparisons, also take a look at:
 
