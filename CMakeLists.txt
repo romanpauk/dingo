@@ -214,6 +214,8 @@ if(DINGO_DEVELOPMENT_MODE)
         add_executable(dingo_test
             test/container/allocator.cpp
             test/container/construct.cpp
+            test/container/construct_dependency.cpp
+            test/container/construct_local.cpp
             test/container/dingo.cpp
             test/container/incomplete_resolve.cpp
             test/container/incomplete_resolve_fixture.cpp
@@ -231,11 +233,19 @@ if(DINGO_DEVELOPMENT_MODE)
             test/registration/type_registration.cpp
             test/storage/array.cpp
             test/storage/external.cpp
+            test/storage/external_misc.cpp
+            test/storage/external_unique.cpp
+            test/storage/external_variant.cpp
             test/storage/shared.cpp
             test/storage/shared_cyclical_regressions.cpp
             test/storage/shared_cyclical.cpp
+            test/storage/shared_hierarchy.cpp
             test/storage/shared_type_conversion.cpp
+            test/storage/shared_variant.cpp
             test/storage/unique.cpp
+            test/container/construct_common.h
+            test/storage/external_common.h
+            test/storage/shared_common.h
             test/support/assert.h
             test/support/class.h
             test/support/containers.h
