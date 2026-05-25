@@ -385,8 +385,10 @@ class detail::static_runtime_container<static_registry<Registrations...>>
         } else {
             static_resolution_ref static_state_ref(
                 static_cast<static_state&>(*this));
-            auto route = static_state_ref.template make_route<binding>(*this);
-            return route.template resolve<Request>(context);
+            auto resolver =
+                static_state_ref.template make_binding_resolver<binding>(
+                    *this);
+            return resolver.template resolve<Request>(context);
         }
     }
 
@@ -400,8 +402,10 @@ class detail::static_runtime_container<static_registry<Registrations...>>
         } else {
             binding_resolution_ref static_state_ref(
                 static_cast<static_state&>(*this));
-            auto route = static_state_ref.template make_route<binding>(*this);
-            return route.template resolve<Request>(context);
+            auto resolver =
+                static_state_ref.template make_binding_resolver<binding>(
+                    *this);
+            return resolver.template resolve<Request>(context);
         }
     }
 

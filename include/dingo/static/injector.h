@@ -167,8 +167,9 @@ class static_injector<static_registry<Registrations...>, void>
                     // materialization path so copies/moves are derived from the
                     // interface binding semantics.
                     detail::no_dependency_context context;
-                    auto route = this->template make_route<binding>(*this);
-                    return route.template resolve<request_type>(context);
+                    auto resolver =
+                        this->template make_binding_resolver<binding>(*this);
+                    return resolver.template resolve<request_type>(context);
                 }
             }
         }
@@ -293,8 +294,9 @@ class static_injector<static_registry<Registrations...>, void>
                 "static_injector cannot resolve an ambiguously bound type");
             using binding = typename selection::binding_type;
 
-            auto route = this->template make_route<binding>(*this);
-            return route.template resolve<request_type>(context);
+            auto resolver =
+                this->template make_binding_resolver<binding>(*this);
+            return resolver.template resolve<request_type>(context);
         }
     }
 

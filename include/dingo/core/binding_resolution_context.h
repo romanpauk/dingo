@@ -42,8 +42,8 @@ class binding_resolution<Host, static_registry<Registrations...>>
     resolve_binding(runtime_context& context) {
         using selection = binding_t<Request, Key>;
         using binding = typename selection::binding_type;
-        auto route = this->template make_route<binding>(*this);
-        return route.template resolve<Request>(context);
+        auto resolver = this->template make_binding_resolver<binding>(*this);
+        return resolver.template resolve<Request>(context);
     }
 
     template <typename T, typename Key, typename Fn>

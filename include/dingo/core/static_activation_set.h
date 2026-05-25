@@ -267,7 +267,7 @@ inline constexpr bool binding_supports_request_v =
     binding_supports_request<Request, InterfaceBinding>::value;
 
 template <typename State, typename Host, typename InterfaceBinding>
-struct static_route {
+struct static_binding_resolver {
     using binding_model_type = typename InterfaceBinding::binding_model_type;
     using interface_type = typename InterfaceBinding::interface_type;
     using storage_type = typename binding_model_type::storage_type;
@@ -444,8 +444,8 @@ decltype(auto) evaluate_static_binding(State& state, Host& host,
 }
 
 template <typename InterfaceBinding, typename State, typename Host>
-auto make_static_route(State& state, Host& host) {
-    return static_route<State, Host, InterfaceBinding>{state, host};
+auto make_static_binding_resolver(State& state, Host& host) {
+    return static_binding_resolver<State, Host, InterfaceBinding>{state, host};
 }
 
 template <typename T, typename Key, typename StaticRegistryType, typename State,
@@ -464,15 +464,17 @@ std::size_t append_static_collection_impl(State& state, T& results, Host& host,
     if constexpr (count != 0) {
         dingo::for_each(interface_bindings{}, [&](auto binding_iterator) {
             using binding = typename decltype(binding_iterator)::type;
-            auto route = make_static_route<binding>(state, host);
+            auto resolver =
+                make_static_binding_resolver<binding>(state, host);
             if constexpr (copy_on_resolve_v<resolve_type> &&
                           !std::is_reference_v<resolve_type>) {
-                route.template consume<resolve_type>(
+                resolver.template consume<resolve_type>(
                     context, [&](auto&& value) {
                         fn(results, std::forward<decltype(value)>(value));
                     });
             } else {
-                fn(results, route.template resolve<resolve_type>(context));
+                fn(results,
+                   resolver.template resolve<resolve_type>(context));
             }
         });
     }
@@ -571,8 +573,9 @@ class basic_static_activation_set_base
     }
 
     template <typename InterfaceBinding, typename Host>
-    auto make_route(Host& host) {
-        return detail::make_static_route<InterfaceBinding>(derived(), host);
+    auto make_binding_resolver(Host& host) {
+        return detail::make_static_binding_resolver<InterfaceBinding>(
+            derived(), host);
     }
 
     template <typename T, typename Key, typename StaticRegistryType,
