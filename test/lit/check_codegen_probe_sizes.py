@@ -89,6 +89,10 @@ GCC14_EXPECTED_MAX = {
 
 GCC15_EXPECTED_MAX = {
     **GCC_TINY_PROBE_EXPECTED_MAX,
+    "probe_hybrid_shared_value_config": 0x50,
+    "probe_hybrid_shared_reference_config": 0x50,
+    "probe_hybrid_unique_value_config": 0x50,
+    "probe_hybrid_unique_rvalue_config": 0x50,
     "probe_hybrid_external_value_storage": 0x580,
     "probe_hybrid_external_reference_storage": 0x560,
     "probe_hybrid_external_wrapper_storage": 0x5c0,
