@@ -23,7 +23,8 @@ The public entry points are:
 `container` is the primary public surface. It supports:
 
 - `container<>` for runtime-only registrations
-- `container<bindings<...>>` for hybrid static-plus-runtime usage
+- `container<bindings<...>>` for compile-time bindings with optional runtime
+  registrations
 
 Under that surface, the runtime-backed path owns:
 
@@ -124,7 +125,7 @@ At a high level, Dingo runs this sequence:
    using its scope-specific state.
 7. `type_conversion` converts that stored source shape into the requested `T`.
 
-For hybrid `container<bindings<...>>`:
+For `container<bindings<...>>`:
 
 - singular runtime/static conflicts are ambiguous
 - collection requests merge runtime and static results

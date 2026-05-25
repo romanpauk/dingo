@@ -163,7 +163,7 @@ TEST(static_injector_test, resolves_unique_rvalue_requests) {
 
 TEST(
     static_injector_test,
-    static_runtime_container_resolves_unique_rvalue_requests_from_static_bindings) {
+    container_with_static_bindings_resolves_unique_rvalue_requests_from_static_bindings) {
     using source =
         dingo::bindings<dingo::bind<scope<unique>, storage<injector_config>,
                                     factory<function<make_config>>>>;
@@ -189,7 +189,7 @@ TEST(static_injector_test, constructs_unique_rvalue_requests) {
 
 TEST(
     static_injector_test,
-    static_runtime_container_constructs_unique_rvalue_requests_from_static_bindings) {
+    container_with_static_bindings_constructs_unique_rvalue_requests_from_static_bindings) {
     using source =
         dingo::bindings<dingo::bind<scope<unique>, storage<injector_config>,
                                     factory<function<make_config>>>>;
@@ -304,7 +304,7 @@ TEST(static_injector_test,
 
 TEST(
     static_injector_test,
-    static_runtime_container_resolves_unique_wrapper_rvalue_requests_from_static_bindings) {
+    container_with_static_bindings_resolves_unique_wrapper_rvalue_requests_from_static_bindings) {
     using source = dingo::bindings<dingo::bind<
         scope<unique>, storage<std::unique_ptr<Class>>, interfaces<IClass>>>;
 
@@ -317,7 +317,7 @@ TEST(
 
 TEST(
     static_injector_test,
-    static_runtime_container_constructs_unique_wrapper_rvalue_requests_from_static_bindings) {
+    container_with_static_bindings_constructs_unique_wrapper_rvalue_requests_from_static_bindings) {
     using source = dingo::bindings<dingo::bind<
         scope<unique>, storage<std::unique_ptr<Class>>, interfaces<IClass>>>;
 
@@ -330,7 +330,7 @@ TEST(
 
 TEST(
     static_injector_test,
-    static_runtime_container_rejects_shared_wrapper_rvalue_construction_from_static_bindings) {
+    container_with_static_bindings_rejects_shared_wrapper_rvalue_construction_from_static_bindings) {
     container<shared_config_source> mixed;
 
     ASSERT_THROW((mixed.construct<std::shared_ptr<injector_config>&&>()),
@@ -339,7 +339,7 @@ TEST(
 
 TEST(
     static_injector_test,
-    static_runtime_container_rejects_shared_rvalue_construction_from_static_bindings) {
+    container_with_static_bindings_rejects_shared_rvalue_construction_from_static_bindings) {
     container<shared_config_source> mixed;
 
     ASSERT_THROW((mixed.construct<injector_config&&>()),
@@ -348,7 +348,7 @@ TEST(
 
 TEST(
     static_injector_test,
-    static_runtime_container_rejects_runtime_shared_wrapper_rvalue_resolution) {
+    container_with_static_bindings_rejects_runtime_shared_wrapper_rvalue_resolution) {
     container<non_matching_static_source> mixed;
     mixed.template register_type<scope<shared>, storage<injector_config>,
                                  factory<function<make_config>>>();
@@ -358,7 +358,7 @@ TEST(
 }
 
 TEST(static_injector_test,
-     static_runtime_container_rejects_runtime_shared_rvalue_resolution) {
+     container_with_static_bindings_rejects_runtime_shared_rvalue_resolution) {
     container<non_matching_static_source> mixed;
     mixed.template register_type<scope<shared>, storage<injector_config>,
                                  factory<function<make_config>>>();
@@ -410,7 +410,7 @@ TEST(static_injector_test,
 }
 
 TEST(static_injector_test,
-     static_runtime_container_rejects_external_wrapper_rvalue_construction) {
+     container_with_static_bindings_rejects_external_wrapper_rvalue_construction) {
     container<shared_config_source> mixed;
     mixed.template register_type<scope<external>,
                                  storage<std::shared_ptr<injector_config>>>(
@@ -432,7 +432,7 @@ TEST(static_injector_test,
 }
 
 TEST(static_injector_test,
-     static_runtime_container_rejects_external_rvalue_construction) {
+     container_with_static_bindings_rejects_external_rvalue_construction) {
     container<shared_config_source> mixed;
     auto config = make_config();
     mixed.template register_type<scope<external>, storage<injector_config>>(
@@ -455,7 +455,7 @@ TEST(static_injector_test,
 
 TEST(
     static_injector_test,
-    static_runtime_container_rejects_runtime_external_wrapper_rvalue_resolution) {
+    container_with_static_bindings_rejects_runtime_external_wrapper_rvalue_resolution) {
     container<non_matching_static_source> mixed;
     mixed.template register_type<scope<external>,
                                  storage<std::shared_ptr<injector_config>>>(
@@ -477,7 +477,7 @@ TEST(static_injector_test,
 }
 
 TEST(static_injector_test,
-     static_runtime_container_rejects_runtime_external_rvalue_resolution) {
+     container_with_static_bindings_rejects_runtime_external_rvalue_resolution) {
     container<non_matching_static_source> mixed;
     auto config = make_config();
     mixed.template register_type<scope<external>, storage<injector_config>>(
@@ -546,7 +546,7 @@ TEST(static_injector_test, static_container_wraps_compile_time_sources) {
 
 TEST(
     static_injector_test,
-    static_runtime_container_runtime_and_static_singular_conflicts_are_ambiguous) {
+    container_with_static_bindings_runtime_and_static_singular_conflicts_are_ambiguous) {
     using source =
         dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
                                     factory<function<make_config>>>>;
@@ -561,7 +561,7 @@ TEST(
 }
 
 TEST(static_injector_test,
-     static_runtime_container_merges_runtime_and_static_collection_bindings) {
+     container_with_static_bindings_merges_runtime_and_static_collection_bindings) {
     using source = dingo::bindings<
         dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<0>>>,
                     interfaces<IClass>>>;
@@ -581,7 +581,7 @@ TEST(static_injector_test,
 }
 
 TEST(static_injector_test,
-     static_runtime_container_runtime_bindings_can_depend_on_static_bindings) {
+     container_with_static_bindings_runtime_bindings_can_depend_on_static_bindings) {
     using source =
         dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
                                     factory<function<make_config>>>>;
@@ -596,7 +596,7 @@ TEST(static_injector_test,
 }
 
 TEST(static_injector_test,
-     static_runtime_container_static_bindings_can_depend_on_runtime_bindings) {
+     container_with_static_bindings_static_bindings_can_depend_on_runtime_bindings) {
     using source =
         dingo::bindings<dingo::bind<scope<shared>, storage<injector_service>,
                                     interfaces<injector_service_interface>,
@@ -612,7 +612,7 @@ TEST(static_injector_test,
 }
 
 TEST(static_injector_test,
-     static_runtime_container_runtime_bindings_can_use_static_host_bindings) {
+     container_with_static_bindings_runtime_bindings_can_use_static_host_bindings) {
     struct helper {
         helper() : value(5) {}
 
@@ -642,7 +642,7 @@ TEST(static_injector_test,
 
 TEST(
     static_injector_test,
-    static_runtime_container_runtime_bindings_override_conflicting_static_host_bindings) {
+    container_with_static_bindings_runtime_bindings_override_conflicting_static_host_bindings) {
     struct helper {
         helper() : value(5) {}
 
@@ -679,7 +679,7 @@ TEST(
 
 TEST(
     static_injector_test,
-    static_runtime_container_runtime_bindings_override_ambiguous_runtime_and_static_host_bindings) {
+    container_with_static_bindings_runtime_bindings_override_ambiguous_runtime_and_static_host_bindings) {
     struct helper {
         helper() : value(5) {}
 

@@ -53,16 +53,16 @@
 
 namespace dingo {
 template <typename... Registrations>
-class detail::static_runtime_container<static_registry<Registrations...>>
+class detail::container_with_static_bindings<static_registry<Registrations...>>
     : public runtime_registry<
           dynamic_container_traits,
           typename dynamic_container_traits::allocator_type, void,
-          detail::static_runtime_container<static_registry<Registrations...>>>,
+          detail::container_with_static_bindings<static_registry<Registrations...>>>,
       private detail::static_storage_state<Registrations...> {
     friend class runtime_context;
 
     using static_registry_type_ = static_registry<Registrations...>;
-    using self_type = detail::static_runtime_container<static_registry_type_>;
+    using self_type = detail::container_with_static_bindings<static_registry_type_>;
     using runtime_base =
         runtime_registry<dynamic_container_traits,
                          typename dynamic_container_traits::allocator_type,
@@ -469,9 +469,9 @@ class detail::static_runtime_container<static_registry<Registrations...>>
                   "container requires default-constructible compile-time "
                   "storage objects");
 
-    static_runtime_container() = default;
+    container_with_static_bindings() = default;
 
-    explicit static_runtime_container(allocator_type alloc)
+    explicit container_with_static_bindings(allocator_type alloc)
         : runtime_base(alloc) {}
 
     runtime_injector_type injector() { return runtime_injector_type(*this); }
@@ -925,7 +925,7 @@ struct container_base_from_parameter<
 template <typename Param>
 struct container_base_from_parameter<
     Param, std::enable_if_t<is_static_registry_v<Param>>> {
-    using type = static_runtime_container<Param>;
+    using type = container_with_static_bindings<Param>;
 };
 
 template <typename Param>
@@ -937,7 +937,7 @@ struct container_base_from_parameter<
                   "container<bindings<...>> requires a valid compile-time "
                   "bindings source");
 
-    using type = static_runtime_container<static_registry_type>;
+    using type = container_with_static_bindings<static_registry_type>;
 };
 
 } // namespace detail

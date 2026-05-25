@@ -7,7 +7,7 @@ and conversions plug in.
 Read these pages in order for the full picture:
 
 - [Containers](containers.md): the public entry points, include layout, and how
-  runtime, static, and hybrid containers relate.
+  unified, runtime-only, and static-only containers relate.
 - [Overview](overview.md): the main data flow and the key owners.
 - [Registration And Resolution](registration-and-resolution.md): the runtime
   path from `register_type<...>()` to `resolve<T>()`.

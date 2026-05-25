@@ -141,8 +141,9 @@ they do get a private singular override rule:
 - host-only singular match: selected
 - collection request: merge local and host results
 
-That keeps collection behavior aligned with hybrid resolution while still
-letting local overlays replace host singular dependencies.
+That keeps collection behavior aligned with `container<bindings<...>>`
+resolution while still letting local overlays replace host singular
+dependencies.
 
 ## Parent Containers And Auto Construction
 
@@ -161,9 +162,10 @@ not try to model the full C++ overload-resolution space, which is why ambiguous,
 policy-sensitive, or readability-critical cases should move to an explicit
 factory.
 
-Hybrid containers also apply compile-time cycle rejection to statically known
-static cycles, while mixed runtime/static recursion that only appears during
-actual construction is still rejected at runtime by the recursion guard.
+`container<bindings<...>>` also applies compile-time cycle rejection to
+statically known static cycles, while mixed runtime/static recursion that only
+appears during actual construction is still rejected at runtime by the
+recursion guard.
 
 ## Good Source Companions
 

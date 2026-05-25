@@ -45,7 +45,7 @@ template <typename... Params> class container;
 
 namespace detail {
 
-template <typename StaticRegistry> class static_runtime_container;
+template <typename StaticRegistry> class container_with_static_bindings;
 
 } // namespace detail
 

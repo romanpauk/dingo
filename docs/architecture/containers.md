@@ -40,7 +40,7 @@ using app_bindings = dingo::bindings<
     dingo::bind<dingo::scope<dingo::unique>, dingo::storage<Service>>
 >;
 
-dingo::container<app_bindings> hybrid;
+dingo::container<app_bindings> app_container;
 ```
 
 The runtime-only form owns mutable runtime registrations.
@@ -50,7 +50,8 @@ The `bindings<...>` form hosts both:
 - compile-time bindings from the `bindings<...>` source
 - runtime registrations added later through `register_type<...>()`
 
-That makes `container<bindings<...>>` the hybrid entry point.
+That makes `container<bindings<...>>` the unified entry point when a container
+starts with compile-time bindings and may also receive runtime registrations.
 
 ## Static And Runtime Facades
 
@@ -63,13 +64,13 @@ Those are lane-specific surfaces. `container` is the unified public front door.
 
 ## Binding Semantics
 
-For singular resolution in a hybrid container:
+For singular resolution in `container<bindings<...>>`:
 
 - runtime-only match: selected
 - static-only match: selected
 - runtime and static both provide the same singular binding: ambiguous
 
-For collection resolution in a hybrid container:
+For collection resolution in `container<bindings<...>>`:
 
 - runtime and static results are merged
 
@@ -93,7 +94,8 @@ to the normal constructor-based path.
 
 Purely static cycles are rejected at compile time.
 
-Hybrid containers also reject statically known static cycles at compile time.
+`container<bindings<...>>` also rejects statically known static cycles at
+compile time.
 
 Mixed runtime/static recursion that only becomes visible during actual runtime
 resolution is rejected at runtime through the normal recursion exception path.
