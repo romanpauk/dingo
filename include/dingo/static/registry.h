@@ -671,8 +671,8 @@ using static_registry_bindings_t =
 
 template <typename InterfaceBindings, typename... BindingModels>
 struct static_registry_dependency_diagnostics
-    // Keep dependency booleans available on the source itself so hybrid and
-    // runtime-assisted static paths can branch on them. Emit the detailed
+    // Keep dependency booleans available on the source itself so static-only
+    // and static/runtime paths can branch on them. Emit the detailed
     // diagnostics only when a static graph path instantiates this helper.
     : binding_declared_dependency_diagnostic<BindingModels,
                                              InterfaceBindings>...,

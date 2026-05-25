@@ -41,8 +41,13 @@ template <typename ContainerTraits = dynamic_container_traits,
           typename Allocator = typename ContainerTraits::allocator_type,
           typename ParentContainer = void>
 class runtime_container;
-template <typename StaticRegistry> class hybrid_container;
 template <typename... Params> class container;
+
+namespace detail {
+
+template <typename StaticRegistry> class static_runtime_container;
+
+} // namespace detail
 
 struct none_t {};
 

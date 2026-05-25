@@ -154,9 +154,9 @@ extern "C" [[gnu::noinline]] int probe_runtime_service_read() {
     return runtime.resolve<service&>().read();
 }
 
-extern "C" [[gnu::noinline]] int probe_hybrid_service_read() {
-    container<static_service_source> hybrid;
-    return hybrid.resolve<service&>().read();
+extern "C" [[gnu::noinline]] int probe_static_runtime_service_read() {
+    container<static_service_source> static_runtime;
+    return static_runtime.resolve<service&>().read();
 }
 
 extern "C" [[gnu::noinline]] int probe_static_shared_config() {
@@ -170,9 +170,9 @@ extern "C" [[gnu::noinline]] int probe_runtime_shared_config() {
     return runtime.construct<std::shared_ptr<config>>()->value;
 }
 
-extern "C" [[gnu::noinline]] int probe_hybrid_shared_config() {
-    container<static_wrapper_source> hybrid;
-    return hybrid.construct<std::shared_ptr<config>>()->value;
+extern "C" [[gnu::noinline]] int probe_static_runtime_shared_config() {
+    container<static_wrapper_source> static_runtime;
+    return static_runtime.construct<std::shared_ptr<config>>()->value;
 }
 
 extern "C" [[gnu::noinline]] int probe_static_shared_value_config() {
@@ -186,9 +186,9 @@ extern "C" [[gnu::noinline]] int probe_runtime_shared_value_config() {
     return runtime.construct<config>().value;
 }
 
-extern "C" [[gnu::noinline]] int probe_hybrid_shared_value_config() {
-    container<static_wrapper_source> hybrid;
-    return hybrid.construct<config>().value;
+extern "C" [[gnu::noinline]] int probe_static_runtime_shared_value_config() {
+    container<static_wrapper_source> static_runtime;
+    return static_runtime.construct<config>().value;
 }
 
 extern "C" [[gnu::noinline]] int probe_static_shared_reference_config() {
@@ -202,9 +202,10 @@ extern "C" [[gnu::noinline]] int probe_runtime_shared_reference_config() {
     return runtime.resolve<config&>().value;
 }
 
-extern "C" [[gnu::noinline]] int probe_hybrid_shared_reference_config() {
-    container<static_wrapper_source> hybrid;
-    return hybrid.resolve<config&>().value;
+extern "C" [[gnu::noinline]] int
+probe_static_runtime_shared_reference_config() {
+    container<static_wrapper_source> static_runtime;
+    return static_runtime.resolve<config&>().value;
 }
 
 extern "C" [[gnu::noinline]] int probe_static_optional_config() {
@@ -218,9 +219,9 @@ extern "C" [[gnu::noinline]] int probe_runtime_optional_config() {
     return runtime.construct<std::optional<config>>()->value;
 }
 
-extern "C" [[gnu::noinline]] int probe_hybrid_optional_config() {
-    container<static_wrapper_source> hybrid;
-    return hybrid.construct<std::optional<config>>()->value;
+extern "C" [[gnu::noinline]] int probe_static_runtime_optional_config() {
+    container<static_wrapper_source> static_runtime;
+    return static_runtime.construct<std::optional<config>>()->value;
 }
 
 extern "C" [[gnu::noinline]] int probe_static_unique_value_config() {
@@ -245,14 +246,14 @@ extern "C" [[gnu::noinline]] int probe_runtime_unique_rvalue_config() {
     return runtime.resolve<config&&>().value;
 }
 
-extern "C" [[gnu::noinline]] int probe_hybrid_unique_value_config() {
-    container<static_unique_source> hybrid;
-    return hybrid.construct<config>().value;
+extern "C" [[gnu::noinline]] int probe_static_runtime_unique_value_config() {
+    container<static_unique_source> static_runtime;
+    return static_runtime.construct<config>().value;
 }
 
-extern "C" [[gnu::noinline]] int probe_hybrid_unique_rvalue_config() {
-    container<static_unique_source> hybrid;
-    return hybrid.resolve<config&&>().value;
+extern "C" [[gnu::noinline]] int probe_static_runtime_unique_rvalue_config() {
+    container<static_unique_source> static_runtime;
+    return static_runtime.resolve<config&&>().value;
 }
 
 extern "C" [[gnu::noinline]] int probe_static_unique_wrapper_config() {
@@ -266,9 +267,9 @@ extern "C" [[gnu::noinline]] int probe_runtime_unique_wrapper_config() {
     return runtime.construct<std::unique_ptr<config>>()->value;
 }
 
-extern "C" [[gnu::noinline]] int probe_hybrid_unique_wrapper_config() {
-    container<static_unique_source> hybrid;
-    return hybrid.construct<std::unique_ptr<config>>()->value;
+extern "C" [[gnu::noinline]] int probe_static_runtime_unique_wrapper_config() {
+    container<static_unique_source> static_runtime;
+    return static_runtime.construct<std::unique_ptr<config>>()->value;
 }
 
 extern "C" [[gnu::noinline]] int probe_static_interface_handle() {
@@ -282,9 +283,9 @@ extern "C" [[gnu::noinline]] int probe_runtime_interface_handle() {
     return runtime.resolve<std::shared_ptr<iface>&>()->read();
 }
 
-extern "C" [[gnu::noinline]] int probe_hybrid_interface_handle() {
-    container<static_interface_source> hybrid;
-    return hybrid.resolve<std::shared_ptr<iface>&>()->read();
+extern "C" [[gnu::noinline]] int probe_static_runtime_interface_handle() {
+    container<static_interface_source> static_runtime;
+    return static_runtime.resolve<std::shared_ptr<iface>&>()->read();
 }
 
 extern "C" [[gnu::noinline]] int probe_runtime_external_value_storage() {
@@ -293,10 +294,10 @@ extern "C" [[gnu::noinline]] int probe_runtime_external_value_storage() {
     return runtime.resolve<external_config&>().value;
 }
 
-extern "C" [[gnu::noinline]] int probe_hybrid_external_value_storage() {
-    container<static_service_source> hybrid;
-    register_runtime_external_value_binding(hybrid);
-    return hybrid.resolve<external_config&>().value;
+extern "C" [[gnu::noinline]] int probe_static_runtime_external_value_storage() {
+    container<static_service_source> static_runtime;
+    register_runtime_external_value_binding(static_runtime);
+    return static_runtime.resolve<external_config&>().value;
 }
 
 extern "C" [[gnu::noinline]] int probe_runtime_external_reference_storage() {
@@ -306,11 +307,12 @@ extern "C" [[gnu::noinline]] int probe_runtime_external_reference_storage() {
     return runtime.resolve<external_config&>().value;
 }
 
-extern "C" [[gnu::noinline]] int probe_hybrid_external_reference_storage() {
-    container<static_service_source> hybrid;
+extern "C" [[gnu::noinline]] int
+probe_static_runtime_external_reference_storage() {
+    container<static_service_source> static_runtime;
     auto config = make_external_config();
-    register_runtime_external_reference_binding(hybrid, config);
-    return hybrid.resolve<external_config&>().value;
+    register_runtime_external_reference_binding(static_runtime, config);
+    return static_runtime.resolve<external_config&>().value;
 }
 
 extern "C" [[gnu::noinline]] int probe_runtime_external_wrapper_storage() {
@@ -320,11 +322,13 @@ extern "C" [[gnu::noinline]] int probe_runtime_external_wrapper_storage() {
     return runtime.resolve<std::shared_ptr<external_config>&>()->value;
 }
 
-extern "C" [[gnu::noinline]] int probe_hybrid_external_wrapper_storage() {
-    container<static_service_source> hybrid;
+extern "C" [[gnu::noinline]] int
+probe_static_runtime_external_wrapper_storage() {
+    container<static_service_source> static_runtime;
     register_runtime_external_wrapper_binding(
-        hybrid, std::make_shared<external_config>(make_external_config()));
-    return hybrid.resolve<std::shared_ptr<external_config>&>()->value;
+        static_runtime,
+        std::make_shared<external_config>(make_external_config()));
+    return static_runtime.resolve<std::shared_ptr<external_config>&>()->value;
 }
 
 extern "C" [[gnu::noinline]] int probe_static_collection_sum() {
@@ -340,8 +344,8 @@ extern "C" [[gnu::noinline]] int probe_runtime_collection_sum() {
     return values[0]->read() + values[1]->read();
 }
 
-extern "C" [[gnu::noinline]] int probe_hybrid_collection_sum() {
-    container<static_collection_source> hybrid;
-    auto values = hybrid.resolve<std::vector<std::shared_ptr<iface>>>();
+extern "C" [[gnu::noinline]] int probe_static_runtime_collection_sum() {
+    container<static_collection_source> static_runtime;
+    auto values = static_runtime.resolve<std::vector<std::shared_ptr<iface>>>();
     return values[0]->read() + values[1]->read();
 }

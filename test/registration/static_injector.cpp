@@ -161,15 +161,16 @@ TEST(static_injector_test, resolves_unique_rvalue_requests) {
     ASSERT_EQ(moved.value, 7);
 }
 
-TEST(static_injector_test,
-     hybrid_container_resolves_unique_rvalue_requests_from_static_bindings) {
+TEST(
+    static_injector_test,
+    static_runtime_container_resolves_unique_rvalue_requests_from_static_bindings) {
     using source =
         dingo::bindings<dingo::bind<scope<unique>, storage<injector_config>,
                                     factory<function<make_config>>>>;
 
-    container<source> hybrid;
+    container<source> mixed;
 
-    auto moved = hybrid.resolve<injector_config&&>();
+    auto moved = mixed.resolve<injector_config&&>();
 
     ASSERT_EQ(moved.value, 7);
 }
@@ -186,15 +187,16 @@ TEST(static_injector_test, constructs_unique_rvalue_requests) {
     ASSERT_EQ(moved.value, 7);
 }
 
-TEST(static_injector_test,
-     hybrid_container_constructs_unique_rvalue_requests_from_static_bindings) {
+TEST(
+    static_injector_test,
+    static_runtime_container_constructs_unique_rvalue_requests_from_static_bindings) {
     using source =
         dingo::bindings<dingo::bind<scope<unique>, storage<injector_config>,
                                     factory<function<make_config>>>>;
 
-    container<source> hybrid;
+    container<source> mixed;
 
-    auto moved = hybrid.construct<injector_config&&>();
+    auto moved = mixed.construct<injector_config&&>();
 
     ASSERT_EQ(moved.value, 7);
 }
@@ -302,64 +304,66 @@ TEST(static_injector_test,
 
 TEST(
     static_injector_test,
-    hybrid_container_resolves_unique_wrapper_rvalue_requests_from_static_bindings) {
+    static_runtime_container_resolves_unique_wrapper_rvalue_requests_from_static_bindings) {
     using source = dingo::bindings<dingo::bind<
         scope<unique>, storage<std::unique_ptr<Class>>, interfaces<IClass>>>;
 
-    container<source> hybrid;
+    container<source> mixed;
 
-    auto unique = hybrid.resolve<std::unique_ptr<IClass>&&>();
+    auto unique = mixed.resolve<std::unique_ptr<IClass>&&>();
 
     AssertClass(*unique);
 }
 
 TEST(
     static_injector_test,
-    hybrid_container_constructs_unique_wrapper_rvalue_requests_from_static_bindings) {
+    static_runtime_container_constructs_unique_wrapper_rvalue_requests_from_static_bindings) {
     using source = dingo::bindings<dingo::bind<
         scope<unique>, storage<std::unique_ptr<Class>>, interfaces<IClass>>>;
 
-    container<source> hybrid;
+    container<source> mixed;
 
-    auto unique = hybrid.construct<std::unique_ptr<IClass>&&>();
+    auto unique = mixed.construct<std::unique_ptr<IClass>&&>();
 
     AssertClass(*unique);
 }
 
 TEST(
     static_injector_test,
-    hybrid_container_rejects_shared_wrapper_rvalue_construction_from_static_bindings) {
-    container<shared_config_source> hybrid;
+    static_runtime_container_rejects_shared_wrapper_rvalue_construction_from_static_bindings) {
+    container<shared_config_source> mixed;
 
-    ASSERT_THROW((hybrid.construct<std::shared_ptr<injector_config>&&>()),
+    ASSERT_THROW((mixed.construct<std::shared_ptr<injector_config>&&>()),
+                 type_not_convertible_exception);
+}
+
+TEST(
+    static_injector_test,
+    static_runtime_container_rejects_shared_rvalue_construction_from_static_bindings) {
+    container<shared_config_source> mixed;
+
+    ASSERT_THROW((mixed.construct<injector_config&&>()),
+                 type_not_convertible_exception);
+}
+
+TEST(
+    static_injector_test,
+    static_runtime_container_rejects_runtime_shared_wrapper_rvalue_resolution) {
+    container<non_matching_static_source> mixed;
+    mixed.template register_type<scope<shared>, storage<injector_config>,
+                                 factory<function<make_config>>>();
+
+    ASSERT_THROW((mixed.resolve<std::shared_ptr<injector_config>&&>()),
                  type_not_convertible_exception);
 }
 
 TEST(static_injector_test,
-     hybrid_container_rejects_shared_rvalue_construction_from_static_bindings) {
-    container<shared_config_source> hybrid;
+     static_runtime_container_rejects_runtime_shared_rvalue_resolution) {
+    container<non_matching_static_source> mixed;
+    mixed.template register_type<scope<shared>, storage<injector_config>,
+                                 factory<function<make_config>>>();
 
-    ASSERT_THROW((hybrid.construct<injector_config&&>()),
-                 type_not_convertible_exception);
-}
-
-TEST(static_injector_test,
-     hybrid_container_rejects_runtime_shared_wrapper_rvalue_resolution) {
-    container<non_matching_static_source> hybrid;
-    hybrid.template register_type<scope<shared>, storage<injector_config>,
-                                  factory<function<make_config>>>();
-
-    ASSERT_THROW((hybrid.resolve<std::shared_ptr<injector_config>&&>()),
-                 type_not_convertible_exception);
-}
-
-TEST(static_injector_test,
-     hybrid_container_rejects_runtime_shared_rvalue_resolution) {
-    container<non_matching_static_source> hybrid;
-    hybrid.template register_type<scope<shared>, storage<injector_config>,
-                                  factory<function<make_config>>>();
-
-    ASSERT_THROW((hybrid.resolve<injector_config&&>()),
+    ASSERT_THROW((mixed.resolve<injector_config&&>()),
                  type_not_convertible_exception);
 }
 
@@ -406,13 +410,13 @@ TEST(static_injector_test,
 }
 
 TEST(static_injector_test,
-     hybrid_container_rejects_external_wrapper_rvalue_construction) {
-    container<shared_config_source> hybrid;
-    hybrid.template register_type<scope<external>,
-                                  storage<std::shared_ptr<injector_config>>>(
+     static_runtime_container_rejects_external_wrapper_rvalue_construction) {
+    container<shared_config_source> mixed;
+    mixed.template register_type<scope<external>,
+                                 storage<std::shared_ptr<injector_config>>>(
         std::make_shared<injector_config>(make_config()));
 
-    ASSERT_THROW((hybrid.construct<std::shared_ptr<injector_config>&&>()),
+    ASSERT_THROW((mixed.construct<std::shared_ptr<injector_config>&&>()),
                  type_not_convertible_exception);
 }
 
@@ -428,13 +432,13 @@ TEST(static_injector_test,
 }
 
 TEST(static_injector_test,
-     hybrid_container_rejects_external_rvalue_construction) {
-    container<shared_config_source> hybrid;
+     static_runtime_container_rejects_external_rvalue_construction) {
+    container<shared_config_source> mixed;
     auto config = make_config();
-    hybrid.template register_type<scope<external>, storage<injector_config>>(
+    mixed.template register_type<scope<external>, storage<injector_config>>(
         config);
 
-    ASSERT_THROW((hybrid.construct<injector_config&&>()),
+    ASSERT_THROW((mixed.construct<injector_config&&>()),
                  type_not_convertible_exception);
 }
 
@@ -449,14 +453,15 @@ TEST(static_injector_test,
                  type_not_convertible_exception);
 }
 
-TEST(static_injector_test,
-     hybrid_container_rejects_runtime_external_wrapper_rvalue_resolution) {
-    container<non_matching_static_source> hybrid;
-    hybrid.template register_type<scope<external>,
-                                  storage<std::shared_ptr<injector_config>>>(
+TEST(
+    static_injector_test,
+    static_runtime_container_rejects_runtime_external_wrapper_rvalue_resolution) {
+    container<non_matching_static_source> mixed;
+    mixed.template register_type<scope<external>,
+                                 storage<std::shared_ptr<injector_config>>>(
         std::make_shared<injector_config>(make_config()));
 
-    ASSERT_THROW((hybrid.resolve<std::shared_ptr<injector_config>&&>()),
+    ASSERT_THROW((mixed.resolve<std::shared_ptr<injector_config>&&>()),
                  type_not_convertible_exception);
 }
 
@@ -472,13 +477,13 @@ TEST(static_injector_test,
 }
 
 TEST(static_injector_test,
-     hybrid_container_rejects_runtime_external_rvalue_resolution) {
-    container<non_matching_static_source> hybrid;
+     static_runtime_container_rejects_runtime_external_rvalue_resolution) {
+    container<non_matching_static_source> mixed;
     auto config = make_config();
-    hybrid.template register_type<scope<external>, storage<injector_config>>(
+    mixed.template register_type<scope<external>, storage<injector_config>>(
         config);
 
-    ASSERT_THROW((hybrid.resolve<injector_config&&>()),
+    ASSERT_THROW((mixed.resolve<injector_config&&>()),
                  type_not_convertible_exception);
 }
 
@@ -539,35 +544,35 @@ TEST(static_injector_test, static_container_wraps_compile_time_sources) {
     ASSERT_EQ(equivalent_container.construct<constructed_consumer>().value, 7);
 }
 
-TEST(static_injector_test,
-     hybrid_container_runtime_and_static_singular_conflicts_are_ambiguous) {
+TEST(
+    static_injector_test,
+    static_runtime_container_runtime_and_static_singular_conflicts_are_ambiguous) {
     using source =
         dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
                                     factory<function<make_config>>>>;
 
-    container<source> hybrid;
-    hybrid.template register_type<scope<shared>, storage<injector_config>,
-                                  factory<function<make_other_config>>>();
+    container<source> mixed;
+    mixed.template register_type<scope<shared>, storage<injector_config>,
+                                 factory<function<make_other_config>>>();
 
-    ASSERT_THROW((hybrid.resolve<injector_config&>()),
-                 type_ambiguous_exception);
-    ASSERT_THROW((hybrid.construct<constructed_consumer>()),
+    ASSERT_THROW((mixed.resolve<injector_config&>()), type_ambiguous_exception);
+    ASSERT_THROW((mixed.construct<constructed_consumer>()),
                  type_ambiguous_exception);
 }
 
 TEST(static_injector_test,
-     hybrid_container_merges_runtime_and_static_collection_bindings) {
+     static_runtime_container_merges_runtime_and_static_collection_bindings) {
     using source = dingo::bindings<
         dingo::bind<scope<shared>, storage<std::shared_ptr<ClassTag<0>>>,
                     interfaces<IClass>>>;
 
-    container<source> hybrid;
-    hybrid.template register_type<scope<shared>,
-                                  storage<std::shared_ptr<ClassTag<1>>>,
-                                  interfaces<IClass>>();
+    container<source> mixed;
+    mixed.template register_type<scope<shared>,
+                                 storage<std::shared_ptr<ClassTag<1>>>,
+                                 interfaces<IClass>>();
 
     auto classes =
-        hybrid.construct_collection<std::vector<std::shared_ptr<IClass>>>();
+        mixed.construct_collection<std::vector<std::shared_ptr<IClass>>>();
 
     ASSERT_EQ(classes.size(), 2);
     std::vector<size_t> tags{classes[0]->GetTag(), classes[1]->GetTag()};
@@ -576,38 +581,38 @@ TEST(static_injector_test,
 }
 
 TEST(static_injector_test,
-     hybrid_container_runtime_bindings_can_depend_on_static_bindings) {
+     static_runtime_container_runtime_bindings_can_depend_on_static_bindings) {
     using source =
         dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
                                     factory<function<make_config>>>>;
 
-    container<source> hybrid;
-    hybrid.template register_type<scope<shared>, storage<injector_service>,
-                                  interfaces<injector_service_interface>>();
+    container<source> mixed;
+    mixed.template register_type<scope<shared>, storage<injector_service>,
+                                 interfaces<injector_service_interface>>();
 
-    auto& service = hybrid.resolve<injector_service_interface&>();
+    auto& service = mixed.resolve<injector_service_interface&>();
 
     ASSERT_EQ(service.read(), 7);
 }
 
 TEST(static_injector_test,
-     hybrid_container_static_bindings_can_depend_on_runtime_bindings) {
+     static_runtime_container_static_bindings_can_depend_on_runtime_bindings) {
     using source =
         dingo::bindings<dingo::bind<scope<shared>, storage<injector_service>,
                                     interfaces<injector_service_interface>,
                                     dependencies<injector_config&>>>;
 
-    container<source> hybrid;
-    hybrid.template register_type<scope<shared>, storage<injector_config>,
-                                  factory<function<make_other_config>>>();
+    container<source> mixed;
+    mixed.template register_type<scope<shared>, storage<injector_config>,
+                                 factory<function<make_other_config>>>();
 
-    auto& service = hybrid.resolve<injector_service_interface&>();
+    auto& service = mixed.resolve<injector_service_interface&>();
 
     ASSERT_EQ(service.read(), 11);
 }
 
 TEST(static_injector_test,
-     hybrid_container_runtime_bindings_can_use_static_host_bindings) {
+     static_runtime_container_runtime_bindings_can_use_static_host_bindings) {
     struct helper {
         helper() : value(5) {}
 
@@ -625,19 +630,19 @@ TEST(static_injector_test,
         dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
                                     factory<function<make_config>>>>;
 
-    container<static_bindings> hybrid;
-    hybrid.template register_type<
+    container<static_bindings> mixed;
+    mixed.template register_type<
         scope<shared>, storage<service>,
         dingo::bindings<dingo::bind<scope<shared>, storage<helper>>>>();
 
-    auto& resolved = hybrid.resolve<service&>();
+    auto& resolved = mixed.resolve<service&>();
 
     ASSERT_EQ(resolved.value, 12);
 }
 
 TEST(
     static_injector_test,
-    hybrid_container_runtime_bindings_override_conflicting_static_host_bindings) {
+    static_runtime_container_runtime_bindings_override_conflicting_static_host_bindings) {
     struct helper {
         helper() : value(5) {}
 
@@ -655,18 +660,18 @@ TEST(
         dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
                                     factory<function<make_config>>>>;
 
-    container<source> hybrid;
-    hybrid.template register_type<
+    container<source> mixed;
+    mixed.template register_type<
         scope<shared>, storage<service>,
         dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
                                     factory<function<make_other_config>>>,
                         dingo::bind<scope<shared>, storage<helper>>>>();
 
-    ASSERT_EQ(hybrid.resolve<service&>().value, 16);
-    ASSERT_EQ(hybrid.construct<service>().value, 16);
-    ASSERT_EQ(hybrid.construct<std::unique_ptr<service>>()->value, 16);
-    ASSERT_EQ(hybrid.construct<std::shared_ptr<service>>()->value, 16);
-    ASSERT_EQ(hybrid.invoke([](service resolved_service) {
+    ASSERT_EQ(mixed.resolve<service&>().value, 16);
+    ASSERT_EQ(mixed.construct<service>().value, 16);
+    ASSERT_EQ(mixed.construct<std::unique_ptr<service>>()->value, 16);
+    ASSERT_EQ(mixed.construct<std::shared_ptr<service>>()->value, 16);
+    ASSERT_EQ(mixed.invoke([](service resolved_service) {
         return resolved_service.value;
     }),
               16);
@@ -674,7 +679,7 @@ TEST(
 
 TEST(
     static_injector_test,
-    hybrid_container_runtime_bindings_override_ambiguous_runtime_and_static_host_bindings) {
+    static_runtime_container_runtime_bindings_override_ambiguous_runtime_and_static_host_bindings) {
     struct helper {
         helper() : value(5) {}
 
@@ -692,18 +697,18 @@ TEST(
         dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
                                     factory<function<make_config>>>>;
 
-    container<source> hybrid;
-    hybrid.template register_type<scope<shared>, storage<injector_config>,
-                                  factory<function<make_other_config>>>();
-    hybrid.template register_type<
+    container<source> mixed;
+    mixed.template register_type<scope<shared>, storage<injector_config>,
+                                 factory<function<make_other_config>>>();
+    mixed.template register_type<
         scope<shared>, storage<service>,
         dingo::bindings<dingo::bind<scope<shared>, storage<injector_config>,
                                     factory<constructor<injector_config()>>>,
                         dingo::bind<scope<shared>, storage<helper>>>>();
 
-    ASSERT_EQ(hybrid.resolve<service&>().value, 5);
-    ASSERT_EQ(hybrid.construct<service>().value, 5);
-    ASSERT_EQ(hybrid.invoke([](service resolved_service) {
+    ASSERT_EQ(mixed.resolve<service&>().value, 5);
+    ASSERT_EQ(mixed.construct<service>().value, 5);
+    ASSERT_EQ(mixed.invoke([](service resolved_service) {
         return resolved_service.value;
     }),
               5);

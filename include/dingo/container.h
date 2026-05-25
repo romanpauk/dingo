@@ -9,10 +9,10 @@
 
 #include <dingo/core/binding_collection.h>
 #include <dingo/core/binding_model.h>
-#include <dingo/core/config.h>
 #include <dingo/core/binding_resolution_context.h>
 #include <dingo/core/binding_resolution_status.h>
 #include <dingo/core/binding_selection.h>
+#include <dingo/core/config.h>
 #include <dingo/core/container_common.h>
 #include <dingo/core/exceptions.h>
 #include <dingo/core/keyed.h>
@@ -53,16 +53,16 @@
 
 namespace dingo {
 template <typename... Registrations>
-class hybrid_container<static_registry<Registrations...>>
+class detail::static_runtime_container<static_registry<Registrations...>>
     : public runtime_registry<
           dynamic_container_traits,
           typename dynamic_container_traits::allocator_type, void,
-          hybrid_container<static_registry<Registrations...>>>,
+          detail::static_runtime_container<static_registry<Registrations...>>>,
       private detail::static_storage_state<Registrations...> {
     friend class runtime_context;
 
     using static_registry_type_ = static_registry<Registrations...>;
-    using self_type = hybrid_container<static_registry_type_>;
+    using self_type = detail::static_runtime_container<static_registry_type_>;
     using runtime_base =
         runtime_registry<dynamic_container_traits,
                          typename dynamic_container_traits::allocator_type,
@@ -259,8 +259,7 @@ class hybrid_container<static_registry<Registrations...>>
         return resolve_static<T, RemoveRvalueReferences, Key>(static_context);
     }
 
-    template <typename T,
-              typename R = request_result_t<T>>
+    template <typename T, typename R = request_result_t<T>>
     DINGO_ALWAYS_INLINE R construct_static() {
         using request_type = request_interface_t<T>;
         using normalized_request_type = request_value_t<T>;
@@ -271,8 +270,7 @@ class hybrid_container<static_registry<Registrations...>>
         if constexpr (has_exact_static_binding) {
             using binding =
                 typename static_selection_t<request_type, void>::binding_type;
-            if constexpr (detail::binding_supports_request_v<
-                              T, binding>) {
+            if constexpr (detail::binding_supports_request_v<T, binding>) {
                 static_context_type static_context;
                 return resolve_static<T, false>(static_context);
             }
@@ -387,15 +385,13 @@ class hybrid_container<static_registry<Registrations...>>
         } else {
             static_resolution_ref static_state_ref(
                 static_cast<static_state&>(*this));
-            auto route =
-                static_state_ref.template make_route<binding>(*this);
+            auto route = static_state_ref.template make_route<binding>(*this);
             return route.template resolve<Request>(context);
         }
     }
 
     template <typename Request, typename Key, typename Context>
-    request_interface_t<Request>
-    resolve_binding_selection(Context& context) {
+    request_interface_t<Request> resolve_binding_selection(Context& context) {
         using selection = static_selection_t<Request, Key>;
         using binding = typename selection::binding_type;
         if constexpr (selection::status !=
@@ -404,8 +400,7 @@ class hybrid_container<static_registry<Registrations...>>
         } else {
             binding_resolution_ref static_state_ref(
                 static_cast<static_state&>(*this));
-            auto route =
-                static_state_ref.template make_route<binding>(*this);
+            auto route = static_state_ref.template make_route<binding>(*this);
             return route.template resolve<Request>(context);
         }
     }
@@ -470,9 +465,10 @@ class hybrid_container<static_registry<Registrations...>>
                   "container requires default-constructible compile-time "
                   "storage objects");
 
-    hybrid_container() = default;
+    static_runtime_container() = default;
 
-    explicit hybrid_container(allocator_type alloc) : runtime_base(alloc) {}
+    explicit static_runtime_container(allocator_type alloc)
+        : runtime_base(alloc) {}
 
     runtime_injector_type injector() { return runtime_injector_type(*this); }
 
@@ -873,29 +869,30 @@ class hybrid_container<static_registry<Registrations...>>
 namespace detail {
 
 template <typename... Params> struct container_base;
-template <typename Param, typename Enable = void> struct container_base_one;
-template <typename First, typename Second, typename Enable = void>
-struct container_base_two;
-template <typename First, typename Second, typename Third,
-          typename Enable = void>
-struct container_base_three;
+template <typename Param, typename Enable = void>
+struct container_base_from_parameter;
 
 template <> struct container_base<> {
     using type = runtime_container<dynamic_container_traits>;
 };
 
 template <typename Param> struct container_base<Param> {
-    using type = typename container_base_one<Param>::type;
+    using type = typename container_base_from_parameter<Param>::type;
 };
 
 template <typename First, typename Second>
 struct container_base<First, Second> {
-    using type = typename container_base_two<First, Second>::type;
+    static_assert(is_runtime_container_traits_v<First>,
+                  "container<T, U> requires runtime traits + allocator");
+    using type = runtime_container<First, Second, void>;
 };
 
 template <typename First, typename Second, typename Third>
 struct container_base<First, Second, Third> {
-    using type = typename container_base_three<First, Second, Third>::type;
+    static_assert(
+        is_runtime_container_traits_v<First>,
+        "container<T, U, V> requires runtime traits + allocator + parent");
+    using type = runtime_container<First, Second, Third>;
 };
 
 template <typename First, typename Second, typename Third, typename... Rest>
@@ -908,59 +905,35 @@ struct container_base<First, Second, Third, Rest...> {
 template <typename... Params>
 using container_base_t = typename container_base<Params...>::type;
 
-template <typename Param, typename Enable> struct container_base_one {
+template <typename Param, typename Enable>
+struct container_base_from_parameter {
     static_assert(container_dependent_false_v<Param>,
                   "container<T> requires runtime container traits or "
                   "compile-time bindings<...>");
 };
 
 template <typename Param>
-struct container_base_one<
+struct container_base_from_parameter<
     Param, std::enable_if_t<is_runtime_container_traits_v<Param>>> {
     using type = runtime_container<Param, typename Param::allocator_type, void>;
 };
 
 template <typename Param>
-struct container_base_one<Param,
-                          std::enable_if_t<is_static_registry_v<Param>>> {
-    using type = hybrid_container<Param>;
+struct container_base_from_parameter<
+    Param, std::enable_if_t<is_static_registry_v<Param>>> {
+    using type = static_runtime_container<Param>;
 };
 
 template <typename Param>
-struct container_base_one<Param,
-                          std::enable_if_t<is_bindings_wrapper_v<Param>>> {
+struct container_base_from_parameter<
+    Param, std::enable_if_t<is_bindings_wrapper_v<Param>>> {
     using static_registry_type = bindings_wrapper_registry_t<Param>;
 
     static_assert(is_static_registry_v<static_registry_type>,
                   "container<bindings<...>> requires a valid compile-time "
                   "bindings source");
 
-    using type = hybrid_container<static_registry_type>;
-};
-template <typename First, typename Second, typename Enable>
-struct container_base_two {
-    static_assert(container_dependent_false_v<First, Second>,
-                  "container<T, U> requires runtime traits + allocator");
-};
-
-template <typename First, typename Second>
-struct container_base_two<
-    First, Second, std::enable_if_t<is_runtime_container_traits_v<First>>> {
-    using type = runtime_container<First, Second, void>;
-};
-
-template <typename First, typename Second, typename Third, typename Enable>
-struct container_base_three {
-    static_assert(
-        container_dependent_false_v<First, Second, Third>,
-        "container<T, U, V> requires runtime traits + allocator + parent");
-};
-
-template <typename First, typename Second, typename Third>
-struct container_base_three<
-    First, Second, Third,
-    std::enable_if_t<is_runtime_container_traits_v<First>>> {
-    using type = runtime_container<First, Second, Third>;
+    using type = static_runtime_container<static_registry_type>;
 };
 
 } // namespace detail

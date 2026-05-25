@@ -9,31 +9,31 @@ from pathlib import Path
 
 EXPECTED_MAX = {
     "probe_static_service_read": 0x10,
-    "probe_hybrid_service_read": 0x50,
+    "probe_static_runtime_service_read": 0x50,
     "probe_static_shared_config": 0x90,
-    "probe_hybrid_shared_config": 0x120,
+    "probe_static_runtime_shared_config": 0x120,
     "probe_static_shared_value_config": 0x10,
-    "probe_hybrid_shared_value_config": 0x10,
+    "probe_static_runtime_shared_value_config": 0x10,
     "probe_static_shared_reference_config": 0x10,
-    "probe_hybrid_shared_reference_config": 0x10,
+    "probe_static_runtime_shared_reference_config": 0x10,
     "probe_static_optional_config": 0x60,
-    "probe_hybrid_optional_config": 0x10,
+    "probe_static_runtime_optional_config": 0x10,
     "probe_static_unique_value_config": 0x10,
     "probe_static_unique_rvalue_config": 0x10,
-    "probe_hybrid_unique_value_config": 0x10,
-    "probe_hybrid_unique_rvalue_config": 0x10,
+    "probe_static_runtime_unique_value_config": 0x10,
+    "probe_static_runtime_unique_rvalue_config": 0x10,
     "probe_static_unique_wrapper_config": 0x10,
-    "probe_hybrid_unique_wrapper_config": 0x10,
+    "probe_static_runtime_unique_wrapper_config": 0x10,
     "probe_static_interface_handle": 0x180,
-    "probe_hybrid_interface_handle": 0x200,
+    "probe_static_runtime_interface_handle": 0x200,
     "probe_static_collection_sum": 0x500,
-    "probe_hybrid_collection_sum": 0x800,
+    "probe_static_runtime_collection_sum": 0x800,
     "probe_runtime_external_value_storage": 0x280,
-    "probe_hybrid_external_value_storage": 0x520,
+    "probe_static_runtime_external_value_storage": 0x520,
     "probe_runtime_external_reference_storage": 0x280,
-    "probe_hybrid_external_reference_storage": 0x520,
+    "probe_static_runtime_external_reference_storage": 0x520,
     "probe_runtime_external_wrapper_storage": 0x420,
-    "probe_hybrid_external_wrapper_storage": 0x580,
+    "probe_static_runtime_external_wrapper_storage": 0x580,
 }
 
 CLANG_EXPECTED_MAX = {
@@ -41,11 +41,11 @@ CLANG_EXPECTED_MAX = {
     "probe_runtime_external_value_storage": 0x2b0,
     "probe_runtime_external_reference_storage": 0x2c0,
     "probe_runtime_external_wrapper_storage": 0x840,
-    "probe_hybrid_external_wrapper_storage": 0x840,
+    "probe_static_runtime_external_wrapper_storage": 0x840,
 }
 
 CLANG_ARM64_EXPECTED_MAX = {
-    "probe_hybrid_shared_config": 0x140,
+    "probe_static_runtime_shared_config": 0x140,
     "probe_static_shared_config": 0xd0,
     "probe_static_interface_handle": 0x1d0,
     "probe_runtime_external_wrapper_storage": 0x680,
@@ -60,11 +60,11 @@ GCC_TINY_PROBE_EXPECTED_MAX = {
     "probe_static_unique_wrapper_config": 0x50,
 }
 
-GCC_HYBRID_TINY_PROBE_EXPECTED_MAX = {
-    "probe_hybrid_shared_value_config": 0x50,
-    "probe_hybrid_shared_reference_config": 0x50,
-    "probe_hybrid_unique_value_config": 0x50,
-    "probe_hybrid_unique_rvalue_config": 0x50,
+GCC_STATIC_RUNTIME_TINY_PROBE_EXPECTED_MAX = {
+    "probe_static_runtime_shared_value_config": 0x50,
+    "probe_static_runtime_shared_reference_config": 0x50,
+    "probe_static_runtime_unique_value_config": 0x50,
+    "probe_static_runtime_unique_rvalue_config": 0x50,
 }
 
 GCC_ARM64_TINY_PROBE_EXPECTED_MAX = {
@@ -73,37 +73,37 @@ GCC_ARM64_TINY_PROBE_EXPECTED_MAX = {
 
 GCC_ARM64_EXPECTED_MAX = {
     **GCC_ARM64_TINY_PROBE_EXPECTED_MAX,
-    "probe_hybrid_service_read": 0x60,
-    "probe_hybrid_shared_value_config": 0x60,
-    "probe_hybrid_shared_reference_config": 0x60,
-    "probe_hybrid_unique_value_config": 0x60,
-    "probe_hybrid_unique_rvalue_config": 0x60,
-    "probe_hybrid_interface_handle": 0x360,
-    "probe_hybrid_external_value_storage": 0x560,
+    "probe_static_runtime_service_read": 0x60,
+    "probe_static_runtime_shared_value_config": 0x60,
+    "probe_static_runtime_shared_reference_config": 0x60,
+    "probe_static_runtime_unique_value_config": 0x60,
+    "probe_static_runtime_unique_rvalue_config": 0x60,
+    "probe_static_runtime_interface_handle": 0x360,
+    "probe_static_runtime_external_value_storage": 0x560,
     "probe_runtime_external_wrapper_storage": 0x480,
 }
 
 GCC13_EXPECTED_MAX = {
     **GCC_TINY_PROBE_EXPECTED_MAX,
-    **GCC_HYBRID_TINY_PROBE_EXPECTED_MAX,
-    "probe_hybrid_shared_reference_config": 0x90,
-    "probe_hybrid_unique_rvalue_config": 0x90,
+    **GCC_STATIC_RUNTIME_TINY_PROBE_EXPECTED_MAX,
+    "probe_static_runtime_shared_reference_config": 0x90,
+    "probe_static_runtime_unique_rvalue_config": 0x90,
 }
 
 GCC14_EXPECTED_MAX = {
     **GCC_TINY_PROBE_EXPECTED_MAX,
-    **GCC_HYBRID_TINY_PROBE_EXPECTED_MAX,
-    "probe_hybrid_external_value_storage": 0x5d0,
-    "probe_hybrid_external_reference_storage": 0x5c0,
-    "probe_hybrid_external_wrapper_storage": 0x620,
+    **GCC_STATIC_RUNTIME_TINY_PROBE_EXPECTED_MAX,
+    "probe_static_runtime_external_value_storage": 0x5d0,
+    "probe_static_runtime_external_reference_storage": 0x5c0,
+    "probe_static_runtime_external_wrapper_storage": 0x620,
 }
 
 GCC15_EXPECTED_MAX = {
     **GCC_TINY_PROBE_EXPECTED_MAX,
-    **GCC_HYBRID_TINY_PROBE_EXPECTED_MAX,
-    "probe_hybrid_external_value_storage": 0x580,
-    "probe_hybrid_external_reference_storage": 0x560,
-    "probe_hybrid_external_wrapper_storage": 0x5c0,
+    **GCC_STATIC_RUNTIME_TINY_PROBE_EXPECTED_MAX,
+    "probe_static_runtime_external_value_storage": 0x580,
+    "probe_static_runtime_external_reference_storage": 0x560,
+    "probe_static_runtime_external_wrapper_storage": 0x5c0,
 }
 
 EXPECTED_FASTER_THAN_RUNTIME = (
@@ -124,19 +124,19 @@ EXPECTED_FASTER_THAN_RUNTIME = (
 )
 
 SHAPES = {
-    "service_read": ("static", "hybrid", "runtime"),
-    "shared_config": ("static", "hybrid", "runtime"),
-    "shared_value_config": ("static", "hybrid", "runtime"),
-    "shared_reference_config": ("static", "hybrid", "runtime"),
-    "optional_config": ("static", "hybrid", "runtime"),
-    "unique_value_config": ("static", "hybrid", "runtime"),
-    "unique_rvalue_config": ("static", "hybrid", "runtime"),
-    "unique_wrapper_config": ("static", "hybrid", "runtime"),
-    "interface_handle": ("static", "hybrid", "runtime"),
-    "collection_sum": ("static", "hybrid", "runtime"),
-    "external_value_storage": ("hybrid", "runtime"),
-    "external_reference_storage": ("hybrid", "runtime"),
-    "external_wrapper_storage": ("hybrid", "runtime"),
+    "service_read": ("static", "static_runtime", "runtime"),
+    "shared_config": ("static", "static_runtime", "runtime"),
+    "shared_value_config": ("static", "static_runtime", "runtime"),
+    "shared_reference_config": ("static", "static_runtime", "runtime"),
+    "optional_config": ("static", "static_runtime", "runtime"),
+    "unique_value_config": ("static", "static_runtime", "runtime"),
+    "unique_rvalue_config": ("static", "static_runtime", "runtime"),
+    "unique_wrapper_config": ("static", "static_runtime", "runtime"),
+    "interface_handle": ("static", "static_runtime", "runtime"),
+    "collection_sum": ("static", "static_runtime", "runtime"),
+    "external_value_storage": ("static_runtime", "runtime"),
+    "external_reference_storage": ("static_runtime", "runtime"),
+    "external_wrapper_storage": ("static_runtime", "runtime"),
 }
 
 EXPECTED_SYMBOLS = {
