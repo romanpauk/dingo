@@ -13,35 +13,35 @@ Dingo is easiest to understand when separated into four concerns:
 
 The public entry points are:
 
-- [include/dingo/container.h](../../include/dingo/container.h): unified
+- [include/dingo/container.h](../../include/dingo/container.h): combined
   container
 - [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h):
   runtime-only facade
 - [include/dingo/static_container.h](../../include/dingo/static_container.h):
   static-only facade
 
-`container` is the primary public surface. It supports:
+`container` is the primary public API. It supports:
 
 - `container<>` for runtime-only registrations
 - `container<bindings<...>>` for compile-time bindings with optional runtime
   registrations
 
-Under that surface, the runtime-backed path owns:
+Below that API, the runtime registration path owns:
 
 - the factory registry (`type_factories_`)
 - the resolved-instance cache (`type_cache_`)
 - parent lookup for nested containers
 - the public registration and resolution entry points
 
-The static-backed path owns:
+The compile-time binding path owns:
 
 - compile-time binding normalization
 - static dependency graph validation
 - compile-time binding selection and static resolution state
 
-The container layer is the outer orchestration surface. It does not construct
-objects directly. It stores or selects bindings and asks factories or static
-resolution helpers for values, references, or pointers.
+The container layer coordinates registration and resolution. It does not
+construct objects directly. It stores or selects bindings and asks factories or
+static resolution helpers for values, references, or pointers.
 
 ### Type Registration
 
@@ -104,7 +104,7 @@ The shared runtime/static binding and resolution kernel now lives under
 - `binding_resolution.h`
 - `binding_resolution.h`
 
-The lane-specific code sits under:
+Runtime and static implementation code sits under:
 
 - [include/dingo/runtime/](../../include/dingo/runtime)
 - [include/dingo/static/](../../include/dingo/static)
@@ -114,11 +114,11 @@ The lane-specific code sits under:
 At a high level, Dingo runs this sequence:
 
 1. `register_type<...>()` deduces the missing registration policies.
-2. The runtime lane creates storage-backed factories for each exposed interface,
-   or the static lane normalizes `bindings<...>` into a validated static source.
+2. The runtime path creates storage-backed factories for each exposed interface,
+   or the static path normalizes `bindings<...>` into a validated static source.
 3. `resolve<T>()` converts `T` into the internal lookup form.
-4. The container selects the matching runtime or static binding lane.
-5. The selected lane builds an `instance_request` with the lookup type and
+4. The container selects the matching runtime or static binding source.
+5. The selected source builds an `instance_request` with the lookup type and
    requested descriptor, then calls the matching factory method for value,
    lvalue reference, rvalue reference, or pointer resolution.
 6. The factory or static resolution path gets or builds the stored instance

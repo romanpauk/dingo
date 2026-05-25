@@ -3,7 +3,13 @@
 Dingo's extensibility is mostly trait-driven. The key is to specialize the trait
 that matches the problem actually being solved.
 
-## The Three Main Extension Seams
+Dingo's container and resolution pipeline do not hard-code a closed list of
+supported wrapper forms. Library support for standard smart pointers, arrays,
+variants, and similar shapes is implemented through the same traits and
+conversion hooks available to external code. Adding support for another wrapper
+or storage shape follows the same path as Dingo's built-in support.
+
+## The Three Main Extension Points
 
 ### 1. `type_traits`
 

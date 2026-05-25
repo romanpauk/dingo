@@ -1,10 +1,10 @@
 # Registration And Resolution
 
 This page follows the current registration and resolution path through Dingo.
-The main mechanics are still runtime-backed, but the unified `container` surface
-can also host compile-time `bindings<...>` and local binding overlays.
+Runtime registration and compile-time registration use different storage
+backends, then meet at the shared binding selection and resolution model.
 
-## Registration
+## Runtime Registration
 
 The public API starts at `container::register_type<...>()` in
 [include/dingo/container.h](../../include/dingo/container.h).
@@ -30,7 +30,9 @@ deduces these pieces:
 That means a short registration such as `scope<shared>, storage<T>` is expanded
 into the full internal policy set before the factory is created.
 
-The unified container also accepts a compile-time binding source:
+## Compile-Time Registration
+
+`container<bindings<...>>` accepts a compile-time binding source:
 
 ```c++
 using app_bindings = dingo::bindings<
@@ -46,12 +48,13 @@ That path is normalized through
 validated by [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 / [include/dingo/static/injector.h](../../include/dingo/static/injector.h).
 
-So there are two registration lanes:
+There are two registration modes:
 
-- runtime registrations added through `register_type<...>()`
-- compile-time bindings supplied through `bindings<...>`
+- runtime registration through `register_type<...>()`
+- compile-time registration through `bindings<...>`
 
-The unified `container` can host both at once.
+`container<bindings<...>>` can host compile-time bindings and runtime
+registrations at the same time.
 
 ## Stored Type Versus Exposed Interface
 
@@ -83,7 +86,7 @@ The sequence is:
    - runtime-only singular match: selected
    - static-only singular match: selected
    - runtime and static both provide the same singular binding: ambiguous
-   - collection request: merge both lanes
+   - collection request: merge both sources
 4. Build an `instance_request` for the requested lookup type and descriptor.
 5. Call the matching runtime factory entry point or static resolution path for
    the requested form and convert the result back to `T`.
@@ -102,7 +105,7 @@ The container then chooses the appropriate factory entry point:
 - `get_rvalue_reference(...)`
 - `get_pointer(...)`
 
-The runtime and static lanes share the same core selection and per-binding
+The runtime and static paths share the same core selection and per-binding
 resolution vocabulary under [include/dingo/core/](../../include/dingo/core),
 even though their registration/storage backends differ.
 

@@ -4,16 +4,16 @@ This page documents the current public container model.
 
 ## Public Entry Points
 
-The top-level include surface is intentionally small:
+The top-level include set is intentionally small:
 
-- [include/dingo/container.h](../../include/dingo/container.h): unified public
+- [include/dingo/container.h](../../include/dingo/container.h): combined public
   container
 - [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h):
   runtime-only facade
 - [include/dingo/static_container.h](../../include/dingo/static_container.h):
   static-only facade
 
-Everything else is either lane-specific implementation detail or shared core.
+Everything else is either runtime/static implementation detail or shared core.
 
 ## Internal Layout
 
@@ -23,8 +23,8 @@ The container stack is split into three layers:
 - `include/dingo/runtime/`: runtime registry and injector internals
 - `include/dingo/static/`: static registry, graph, and injector internals
 
-That gives Dingo one public story at the top and narrower implementation
-surfaces underneath it.
+The split keeps public headers small while leaving runtime and static
+implementation details in their own directories.
 
 ## Unified Container
 
@@ -50,8 +50,9 @@ The `bindings<...>` form hosts both:
 - compile-time bindings from the `bindings<...>` source
 - runtime registrations added later through `register_type<...>()`
 
-That makes `container<bindings<...>>` the unified entry point when a container
-starts with compile-time bindings and may also receive runtime registrations.
+`container<bindings<...>>` is the container form for mixed graphs: static
+bindings are known when the container type is named, and runtime registrations
+can still be added afterward.
 
 ## Static And Runtime Facades
 
@@ -60,25 +61,27 @@ The split container facades remain available when the narrower shape is useful:
 - `runtime_container` for explicitly runtime-only code
 - `static_container` for explicitly static-only code
 
-Those are lane-specific surfaces. `container` is the unified public front door.
+Those headers expose only one registration mode. `container` is the public
+container that can represent runtime-only or mixed registration.
 
 ## Binding Semantics
 
-For singular resolution in `container<bindings<...>>`:
+`container<bindings<...>>` can have two binding sources: the static bindings in
+the container type and the runtime registrations added to the object.
 
-- runtime-only match: selected
-- static-only match: selected
-- runtime and static both provide the same singular binding: ambiguous
+A request for one object must have one source. If only the runtime source
+matches, Dingo uses it. If only the static source matches, Dingo uses it. If
+both sources provide the same singular binding, the request is ambiguous because
+neither source is an override of the other.
 
-For collection resolution in `container<bindings<...>>`:
+A request for a collection can use both sources. Runtime and static matches are
+merged into the returned collection.
 
-- runtime and static results are merged
-
-For local `bindings<...>` attached to a registered binding:
-
-- singular requests prefer local bindings over host bindings
-- collection requests merge local and host results
-- missing local dependencies fall back to the host container
+Local `bindings<...>` on a registration are different: they describe the private
+dependencies used while building that registered type. For a single dependency,
+the local binding is checked before the host container. For a dependency
+collection, local matches and host matches are merged. If the local binding set
+does not provide a dependency, resolution falls back to the host container.
 
 ## Direct Construction
 

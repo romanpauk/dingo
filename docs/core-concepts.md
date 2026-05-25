@@ -1,8 +1,8 @@
 # Core Concepts
 
-This page covers the parts of Dingo that shape runtime behavior: registration,
-lifetimes, stored forms, arrays, variants, factories, and interface-oriented
-resolution.
+This page covers the parts of Dingo that shape object graph behavior:
+registration modes, lifetimes, stored forms, arrays, variants, factories, and
+interface-oriented resolution.
 
 For the internal model behind these features, start with the
 [architecture docs](architecture/README.md).
@@ -11,7 +11,7 @@ For the internal model behind these features, start with the
 
 Dingo does not require managed types to inherit from a framework base class or
 to expose special metadata. Registration describes how a type should be handled
-at the registration site.
+at the registration site, either through runtime calls or compile-time bindings.
 
 Common registration policies:
 
@@ -22,6 +22,21 @@ Common registration policies:
 
 Many registrations stay short because Dingo can infer the missing policy from
 the rest.
+
+The same policies are used by both registration modes:
+
+```c++
+container<> runtime_container;
+runtime_container.register_type<scope<shared>, storage<config>>();
+
+using static_bindings =
+    bindings<bind<scope<shared>, storage<config>>>;
+container<static_bindings> compile_time_container;
+```
+
+Runtime registration is mutable container configuration. Compile-time bindings
+are part of the container type and can include `dependencies<...>` for static
+graph checks before the program runs.
 
 <!-- { include("../examples/registration/non_intrusive.cpp", scope="////", summary="Registration policies example") -->
 
@@ -757,9 +772,11 @@ See:
 
 ## Runtime Model And Error Handling
 
-Dingo is runtime-based. That makes cross-module usage practical, but it also
-means some wiring errors surface as exceptions during resolution rather than as
-pure compile-time failures.
+Dingo supports both runtime registrations and compile-time bindings. Runtime
+registration keeps cross-module usage practical, but wiring errors on that path
+surface as exceptions during resolution. Compile-time bindings move the declared
+graph into the type system, so missing static dependencies and static cycles can
+be diagnosed at compile time.
 
 When user code throws during resolution, the container remains in a valid state.
 Already completed shared resolutions may stay cached, because resolution is a

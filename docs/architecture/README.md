@@ -7,10 +7,10 @@ and conversions plug in.
 Read these pages in order for the full picture:
 
 - [Containers](containers.md): the public entry points, include layout, and how
-  unified, runtime-only, and static-only containers relate.
+  combined, runtime-only, and static-only containers relate.
 - [Overview](overview.md): the main data flow and the key owners.
-- [Registration And Resolution](registration-and-resolution.md): the runtime
-  path from `register_type<...>()` to `resolve<T>()`.
+- [Registration And Resolution](registration-and-resolution.md): runtime and
+  compile-time registration, and the shared path to `resolve<T>()`.
 - [Handles, Leaf Types, And Lookup](handles-leaf-types-and-lookup.md): wrapper
   algebra, `leaf_type_t`, `rebind_leaf_t`, `lookup_type_t`, and
   `exact_lookup<T>`.
@@ -19,24 +19,25 @@ Read these pages in order for the full picture:
 - [Conversion Model](conversion-model.md): how Dingo chooses value, reference,
   pointer, and wrapper conversions at resolution time.
 
-The public surface is centered on three container entry points:
+The public API is centered on three container entry points:
 
 ```text
-include/dingo/container.h          -> unified public container
+include/dingo/container.h          -> combined public container
 include/dingo/runtime_container.h  -> runtime-only facade
 include/dingo/static_container.h   -> static-only facade
 ```
 
-Under that surface, the architecture is centered on one flow:
+Below those headers, the architecture is centered on one resolution flow fed by
+two registration modes:
 
 ```text
-register_type -> type_registration -> storage/factory record
+register_type / bindings -> type_registration -> storage/factory record
 resolve<T> -> lookup type -> factory traits -> resolver -> conversion -> T
 ```
 
 The shared kernel for that flow lives under `include/dingo/core/`.
 
-The lane-specific code now sits under:
+Runtime and static implementation code sits under:
 
 - `include/dingo/runtime/` for runtime registry and injector internals
 - `include/dingo/static/` for static registry, graph, and injector internals

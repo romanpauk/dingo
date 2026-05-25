@@ -944,10 +944,10 @@ struct container_base_from_parameter<
 
 template <typename... Params>
 class container : public detail::container_base_t<Params...> {
-    using base_type = detail::container_base_t<Params...>;
+    using container_base_type = detail::container_base_t<Params...>;
 
   public:
-    using base_type::base_type;
+    using container_base_type::container_base_type;
 };
 } // namespace dingo
 

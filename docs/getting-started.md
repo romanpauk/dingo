@@ -1,21 +1,50 @@
 # Getting Started
 
-This guide covers the shortest path to a working container: add the library,
-register a few types, resolve them, and then use `construct()` or `invoke()` for
+This page covers the basic Dingo API: CMake integration, container types,
+registration modes, resolution, and the `construct()` / `invoke()` APIs for
 unmanaged code.
 
-## Add Dingo To The Build
+## CMake Integration
 
-For CMake projects, use `FetchContent` and link against `dingo::dingo`.
+CMake projects can integrate Dingo with `FetchContent` and link against
+`dingo::dingo`.
 
-See:
+References:
 
-- [README install section](../README.md#installation) for the short install
+- [README install section](../README.md#installation) with the short install
   snippet
-- [test/fetchcontent/CMakeLists.txt](../test/fetchcontent/CMakeLists.txt) for a
+- [test/fetchcontent/CMakeLists.txt](../test/fetchcontent/CMakeLists.txt) as a
   complete minimal project
 
-## Register And Resolve Types
+## Container Types And Registration Modes
+
+Dingo has two registration modes over the same scope, storage, interface, and
+factory policy model.
+
+- Runtime registration uses `container<>` and calls `register_type<...>()`. It
+  fits registrations assembled from ordinary control flow, split across modules,
+  or selected by runtime configuration.
+- Compile-time registration uses `bindings<...>` and instantiates
+  `container<bindings<...>>` or `static_container<bindings<...>>`. It fits
+  graphs known in the type system and provides earlier diagnostics for missing
+  dependencies or cycles.
+
+Both modes use `resolve<T>()`, `construct<T>()`, and `invoke(...)` in the same
+way after the container is configured.
+
+Dingo exposes three container shapes:
+
+- `container<>`: runtime-only registration with `register_type<...>()`
+- `static_container<bindings<...>>`: compile-time registration only, with no
+  runtime registration API
+- `container<bindings<...>>`: compile-time registrations plus optional runtime
+  registrations in the same container
+
+Dingo also applies supported ownership and interface conversions automatically:
+a registration can satisfy references, pointers, smart pointers, and interface
+views when the selected storage and scope allow it.
+
+## Runtime Registration
 
 `register_type(...)` wires a type into the container. The registration is built
 from policies such as:
@@ -25,72 +54,128 @@ from policies such as:
 - interfaces: which types can be used to resolve it
 - factory: how the instance is created
 
-The default path is straightforward:
+Resolution recursively builds the constructor arguments required by registered
+types, then applies the requested conversion to the resolved result.
 
-1. Register a type with a scope and storage policy.
-2. Call `resolve<T>()`.
-3. Let Dingo recursively build the required constructor arguments.
-
-<!-- { include("../examples/container/quick.cpp", scope="////", summary="Quick end-to-end example") -->
+<!-- { include("../examples/registration/runtime_registration.cpp", scope="////", summary="Runtime registration example") -->
 
 <details>
-<summary>Quick end-to-end example</summary>
+<summary>Runtime registration example</summary>
 
 Example code included from
-[../examples/container/quick.cpp](../examples/container/quick.cpp):
+[../examples/registration/runtime_registration.cpp](../examples/registration/runtime_registration.cpp):
 
 ```c++
-// Class types to be managed by the container. Note that there is no special
-// code required for a type to be used by the container and that conversions
-// are applied automatically based on an registered type scope.
-struct A {
-    A() {}
-};
-struct B {
-    B(A&, std::shared_ptr<A>) {}
-};
-struct C {
-    C(B*, std::unique_ptr<B>&, A&) {}
+class config {
+  public:
+    int retries() const { return retries_; }
+
+  private:
+    int retries_ = 3;
 };
 
-container<> container;
-// Register struct A with a shared scope, stored as std::shared_ptr<A>
-container.register_type<scope<shared>, storage<std::shared_ptr<A>>>();
-
-// Register struct B with a shared scope, stored as std::unique_ptr<B>
-container.register_type<scope<shared>, storage<std::unique_ptr<B>>>();
-
-// Register struct C with an unique scope, stored as plain C
-container.register_type<scope<unique>, storage<C>>();
-
-// Resolving the struct C will recursively instantiate required dependencies
-// (structs A and B) and inject the instances based on their scopes into C.
-// As C is in unique scope, each resolve<C> will return new C instance.
-// As A and B are in shared scope, each C will get the same instances
-// injected.
-/*C c =*/container.resolve<C>();
-
-struct D {
-    A& a;
-    B* b;
+struct service_interface {
+    virtual ~service_interface() {}
+    virtual int retries() const = 0;
 };
 
-// Construct an un-managed struct using dependencies from the container
-/*D d =*/container.construct<D>();
+struct service : service_interface {
+    explicit service(config& cfg) : cfg_(cfg) {}
 
-// Invoke callable
-/*D e =*/container.invoke([&](A& a, B* b) { return D{a, b}; });
+    int retries() const override { return cfg_.retries(); }
+
+  private:
+    config& cfg_;
+};
+
+void runtime_registration_example() {
+    using namespace dingo;
+    container<> container;
+
+    container.register_type<scope<shared>, storage<config>>();
+    container.register_type<scope<shared>, storage<std::shared_ptr<service>>,
+                            interfaces<service_interface>>();
+
+    assert(container.resolve<service_interface&>().retries() == 3);
+    assert(container.resolve<service_interface*>()->retries() == 3);
+    assert(
+        container.resolve<std::shared_ptr<service_interface>&>()->retries() ==
+        3);
+}
 ```
 
 </details>
 <!-- } -->
 
-See:
+## Compile-Time Registration
+
+`bindings<...>` wires the same policies into the container type. Each
+`bind<...>` entry describes one registration, including explicit constructors or
+`dependencies<...>` when dependency discovery should be part of the static
+graph.
+
+<!-- { include("../examples/registration/compile_time_registration.cpp", scope="////", summary="Compile-time registration example") -->
+
+<details>
+<summary>Compile-time registration example</summary>
+
+Example code included from
+[../examples/registration/compile_time_registration.cpp](../examples/registration/compile_time_registration.cpp):
+
+```c++
+class config {
+  public:
+    int retries() const { return retries_; }
+
+  private:
+    int retries_ = 3;
+};
+
+struct service_interface {
+    virtual ~service_interface() {}
+    virtual int retries() const = 0;
+};
+
+struct service : service_interface {
+    explicit service(config& cfg) : cfg_(cfg) {}
+
+    int retries() const override { return cfg_.retries(); }
+
+  private:
+    config& cfg_;
+};
+
+void compile_time_registration_example() {
+    using namespace dingo;
+    using app_bindings = dingo::bindings<
+        dingo::bind<scope<shared>, storage<config>>,
+        dingo::bind<scope<shared>, storage<std::shared_ptr<service>>,
+                    interfaces<service_interface>>>;
+
+    container<app_bindings> container;
+
+    assert(container.resolve<service_interface&>().retries() == 3);
+    assert(container.resolve<service_interface*>()->retries() == 3);
+    assert(
+        container.resolve<std::shared_ptr<service_interface>&>()->retries() ==
+        3);
+
+    static_container<app_bindings> static_only;
+    assert(static_only.resolve<service_interface&>().retries() == 3);
+}
+```
+
+</details>
+<!-- } -->
+
+Examples:
 
 - [examples/container/quick.cpp](../examples/container/quick.cpp)
 - [examples/registration/non_intrusive.cpp](../examples/registration/non_intrusive.cpp)
+- [examples/registration/runtime_registration.cpp](../examples/registration/runtime_registration.cpp)
+- [examples/registration/compile_time_registration.cpp](../examples/registration/compile_time_registration.cpp)
 
-## Choose A Scope Deliberately
+## Scopes
 
 The scope determines instance lifetime:
 
@@ -99,11 +184,11 @@ The scope determines instance lifetime:
 - `scope<shared>`: cache one instance and reuse it
 - `scope<shared_cyclical>`: allow cyclic graphs with two-phase construction
 
-Start with `unique` or `shared`. Use `external` when ownership lives elsewhere.
-Use `shared_cyclical` only when cyclic construction is actually needed and its
-extra constraints are acceptable.
+Most graphs use `unique` or `shared`. `external` represents ownership held
+outside the container. `shared_cyclical` is reserved for cyclic construction and
+adds the constraints required by that model.
 
-See:
+References:
 
 - [Core Concepts: Scopes and Storage](core-concepts.md#scopes-and-storage)
 - [examples/storage/scope_external.cpp](../examples/storage/scope_external.cpp)
@@ -182,12 +267,12 @@ struct overloaded_factory {
 </details>
 <!-- } -->
 
-See:
+Examples:
 
 - [examples/container/construct.cpp](../examples/container/construct.cpp)
 - [examples/container/invoke.cpp](../examples/container/invoke.cpp)
 
-## What To Read Next
+## Further Reading
 
 - [Core Concepts](core-concepts.md) for understanding how registration policies
   interact.

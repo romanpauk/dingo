@@ -7,9 +7,13 @@ the relevant feature and start there.
 ## Start Here
 
 - [examples/container/quick.cpp](../examples/container/quick.cpp): shortest path
-  from registration to resolution
+  from runtime registration to resolution
+- [examples/registration/runtime_registration.cpp](../examples/registration/runtime_registration.cpp):
+  runtime registration with the same service graph as the compile-time example
 - [examples/registration/non_intrusive.cpp](../examples/registration/non_intrusive.cpp):
   registration shape and policy deduction without touching user types
+- [examples/registration/compile_time_registration.cpp](../examples/registration/compile_time_registration.cpp):
+  compile-time registration with the same service graph as the runtime example
 
 ## Factories
 
