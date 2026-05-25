@@ -164,8 +164,8 @@ factory.
 
 `container<bindings<...>>` also applies compile-time cycle rejection to
 statically known static cycles, while mixed runtime/static recursion that only
-appears during actual construction is still rejected at runtime by the
-recursion guard.
+appears during actual construction is still rejected at runtime by the recursion
+guard.
 
 ## Good Source Companions
 
