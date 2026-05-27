@@ -237,6 +237,13 @@ struct binding_activation {
         }
     }
 
+    template <typename T, bool RemoveRvalueReferences, bool CheckCache,
+              typename Context, typename Key>
+    decltype(auto) resolve(Context& context, key<Key>) {
+        (void)CheckCache;
+        return resolve<T, RemoveRvalueReferences>(context, key<Key>{});
+    }
+
     template <typename T, typename Context>
     decltype(auto) resolve(Context& context) {
         return state.template resolve_binding_type<T, BindingModel>(host,
