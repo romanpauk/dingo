@@ -52,6 +52,20 @@
 #endif
 
 namespace dingo {
+namespace detail {
+template <typename T> struct is_static_context_argument : std::false_type {};
+
+template <typename StaticRegistry, bool RuntimeDependencies>
+struct is_static_context_argument<
+    basic_static_context<StaticRegistry, RuntimeDependencies>> : std::true_type {
+};
+
+template <typename T>
+inline constexpr bool is_static_context_argument_v =
+    is_static_context_argument<
+        std::remove_cv_t<std::remove_reference_t<T>>>::value;
+} // namespace detail
+
 template <typename... Registrations>
 class detail::container_with_static_bindings<static_registry<Registrations...>>
     : public runtime_registry<
@@ -291,7 +305,9 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
         }
     }
 
-    template <typename T, typename Fn>
+    template <
+        typename T, typename Fn,
+        std::enable_if_t<!detail::is_static_context_argument_v<Fn>, int> = 0>
     T construct_static_collection(Fn&& fn, none_t) {
         static_context_type static_context;
         return construct_static_collection<T>(static_context,
@@ -303,7 +319,9 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
         return construct_static_collection<T>(static_context, none_t{});
     }
 
-    template <typename T, typename Fn, typename Key>
+    template <
+        typename T, typename Fn, typename Key,
+        std::enable_if_t<!detail::is_static_context_argument_v<Fn>, int> = 0>
     T construct_static_collection(Fn&& fn, key<Key>) {
         static_context_type static_context;
         return construct_static_collection<T>(static_context,
