@@ -307,8 +307,13 @@ if(DINGO_DEVELOPMENT_MODE)
 
         add_executable(dingo_matrix_test
             ${DINGO_MATRIX_TEST_SOURCES}
+            test/matrix/features/construct_invoke.h
+            test/matrix/features/resolve_concrete.h
             test/matrix/features/resolve_collection.h
+            test/matrix/features/resolve_indexed.h
             test/matrix/features/resolve_interface.h
+            test/matrix/features/resolve_keyed.h
+            test/matrix/features/resolve_unique_wrapper.h
             test/matrix/support/types.h
         )
         add_test(NAME dingo_matrix_test COMMAND dingo_matrix_test)

@@ -22,6 +22,7 @@ class Feature:
     include: str
     requires: frozenset[str]
     modes: frozenset[str]
+    container_requires: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ class ContainerSpec:
     name: str
     modes: frozenset[str]
     container_type: str
+    provides: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,20 @@ class GeneratedTest:
 
 FEATURES = (
     Feature(
+        name="construct_invoke",
+        function="run_construct_invoke",
+        include="matrix/features/construct_invoke.h",
+        requires=frozenset({"concrete_binding", "shared_storage"}),
+        modes=frozenset({"runtime", "static", "mixed"}),
+    ),
+    Feature(
+        name="resolve_concrete",
+        function="run_resolve_concrete",
+        include="matrix/features/resolve_concrete.h",
+        requires=frozenset({"concrete_binding", "shared_storage"}),
+        modes=frozenset({"runtime", "static", "mixed"}),
+    ),
+    Feature(
         name="resolve_interface",
         function="run_resolve_interface",
         include="matrix/features/resolve_interface.h",
@@ -73,13 +89,57 @@ FEATURES = (
         requires=frozenset({"collection_binding", "shared_storage"}),
         modes=frozenset({"runtime", "static", "mixed"}),
     ),
+    Feature(
+        name="resolve_keyed",
+        function="run_resolve_keyed",
+        include="matrix/features/resolve_keyed.h",
+        requires=frozenset({"keyed_binding", "shared_storage"}),
+        modes=frozenset({"runtime", "static", "mixed"}),
+    ),
+    Feature(
+        name="resolve_unique_wrapper",
+        function="run_resolve_unique_wrapper",
+        include="matrix/features/resolve_unique_wrapper.h",
+        requires=frozenset({"interface_binding", "unique_storage"}),
+        modes=frozenset({"runtime", "static", "mixed"}),
+    ),
+    Feature(
+        name="resolve_indexed",
+        function="run_resolve_indexed",
+        include="matrix/features/resolve_indexed.h",
+        requires=frozenset({"indexed_binding", "shared_storage"}),
+        modes=frozenset({"runtime"}),
+        container_requires=frozenset({"indexed_container"}),
+    ),
 )
 
 
 BINDING_RECIPES = (
     BindingRecipe(
+        name="shared_concrete",
+        provides=frozenset({"concrete_binding", "shared_storage"}),
+        modes=frozenset({"runtime", "static", "mixed"}),
+        static_bindings=(
+            "dingo::bindings<"
+            "dingo::bind<dingo::scope<dingo::shared>, "
+            "dingo::storage<config>>>"
+        ),
+        runtime_setup=(
+            "container.template register_type<dingo::scope<dingo::shared>, "
+            "dingo::storage<config>>();",
+        ),
+        mixed_static_bindings=(
+            "dingo::bindings<"
+            "dingo::bind<dingo::scope<dingo::shared>, "
+            "dingo::storage<config>>>"
+        ),
+        mixed_runtime_setup=(),
+    ),
+    BindingRecipe(
         name="shared_interface",
-        provides=frozenset({"interface_binding", "shared_storage"}),
+        provides=frozenset(
+            {"concrete_binding", "interface_binding", "shared_storage"}
+        ),
         modes=frozenset({"runtime", "static", "mixed"}),
         static_bindings=(
             "dingo::bindings<"
@@ -106,6 +166,29 @@ BINDING_RECIPES = (
             "dingo::storage<std::shared_ptr<service>>, "
             "dingo::interfaces<service_interface>>();",
         ),
+    ),
+    BindingRecipe(
+        name="unique_interface",
+        provides=frozenset({"interface_binding", "unique_storage"}),
+        modes=frozenset({"runtime", "static", "mixed"}),
+        static_bindings=(
+            "dingo::bindings<"
+            "dingo::bind<dingo::scope<dingo::unique>, "
+            "dingo::storage<std::unique_ptr<unique_service>>, "
+            "dingo::interfaces<unique_interface>>>"
+        ),
+        runtime_setup=(
+            "container.template register_type<dingo::scope<dingo::unique>, "
+            "dingo::storage<std::unique_ptr<unique_service>>, "
+            "dingo::interfaces<unique_interface>>();",
+        ),
+        mixed_static_bindings=(
+            "dingo::bindings<"
+            "dingo::bind<dingo::scope<dingo::unique>, "
+            "dingo::storage<std::unique_ptr<unique_service>>, "
+            "dingo::interfaces<unique_interface>>>"
+        ),
+        mixed_runtime_setup=(),
     ),
     BindingRecipe(
         name="shared_processor_collection",
@@ -148,6 +231,63 @@ BINDING_RECIPES = (
             "dingo::interfaces<processor_interface>>();",
         ),
     ),
+    BindingRecipe(
+        name="keyed_shared_interface",
+        provides=frozenset({"keyed_binding", "shared_storage"}),
+        modes=frozenset({"runtime", "static", "mixed"}),
+        static_bindings=(
+            "dingo::bindings<"
+            "dingo::bind<dingo::scope<dingo::shared>, "
+            "dingo::storage<std::shared_ptr<processor<0>>>, "
+            "dingo::interfaces<processor_interface>, "
+            "dingo::key<first_key>>, "
+            "dingo::bind<dingo::scope<dingo::shared>, "
+            "dingo::storage<std::shared_ptr<processor<1>>>, "
+            "dingo::interfaces<processor_interface>, "
+            "dingo::key<second_key>>>"
+        ),
+        runtime_setup=(
+            "container.template register_type<dingo::scope<dingo::shared>, "
+            "dingo::storage<std::shared_ptr<processor<0>>>, "
+            "dingo::interfaces<processor_interface>, "
+            "dingo::key<first_key>>();",
+            "container.template register_type<dingo::scope<dingo::shared>, "
+            "dingo::storage<std::shared_ptr<processor<1>>>, "
+            "dingo::interfaces<processor_interface>, "
+            "dingo::key<second_key>>();",
+        ),
+        mixed_static_bindings=(
+            "dingo::bindings<"
+            "dingo::bind<dingo::scope<dingo::shared>, "
+            "dingo::storage<std::shared_ptr<processor<0>>>, "
+            "dingo::interfaces<processor_interface>, "
+            "dingo::key<first_key>>>"
+        ),
+        mixed_runtime_setup=(
+            "container.template register_type<dingo::scope<dingo::shared>, "
+            "dingo::storage<std::shared_ptr<processor<1>>>, "
+            "dingo::interfaces<processor_interface>, "
+            "dingo::key<second_key>>();",
+        ),
+    ),
+    BindingRecipe(
+        name="indexed_shared_interface",
+        provides=frozenset({"indexed_binding", "shared_storage"}),
+        modes=frozenset({"runtime"}),
+        static_bindings=None,
+        runtime_setup=(
+            "container.template register_indexed_type<"
+            "dingo::scope<dingo::shared>, "
+            "dingo::storage<std::shared_ptr<processor<0>>>, "
+            "dingo::interfaces<processor_interface>>(0);",
+            "container.template register_indexed_type<"
+            "dingo::scope<dingo::shared>, "
+            "dingo::storage<std::shared_ptr<processor<1>>>, "
+            "dingo::interfaces<processor_interface>>(1);",
+        ),
+        mixed_static_bindings=None,
+        mixed_runtime_setup=(),
+    ),
 )
 
 
@@ -177,6 +317,18 @@ CONTAINERS = (
         modes=frozenset({"mixed"}),
         container_type="dingo::container<static_bindings>",
     ),
+    ContainerSpec(
+        name="runtime_container_indexed",
+        modes=frozenset({"runtime"}),
+        container_type="dingo::runtime_container<indexed_container_traits>",
+        provides=frozenset({"indexed_container"}),
+    ),
+    ContainerSpec(
+        name="container_indexed",
+        modes=frozenset({"runtime"}),
+        container_type="dingo::container<indexed_container_traits>",
+        provides=frozenset({"indexed_container"}),
+    ),
 )
 
 
@@ -202,18 +354,31 @@ def make_case(mode: str, recipe: BindingRecipe, container: ContainerSpec) -> Gen
     )
 
 
+def can_generate(
+    feature: Feature, recipe: BindingRecipe, container: ContainerSpec
+) -> bool:
+    return (
+        feature.requires <= recipe.provides
+        and feature.container_requires <= container.provides
+    )
+
+
 def generate_feature(feature: Feature, out_dir: Path, env: Environment) -> Path:
     cases: list[GeneratedCase] = []
     tests: list[GeneratedTest] = []
 
     for recipe in BINDING_RECIPES:
-        if not feature.requires <= recipe.provides:
-            continue
         for container in CONTAINERS:
+            if not can_generate(feature, recipe, container):
+                continue
             modes = valid_modes(feature, recipe, container)
             if not modes:
                 continue
             for mode in sorted(modes):
+                if mode == "static" and recipe.static_bindings is None:
+                    continue
+                if mode == "mixed" and recipe.mixed_static_bindings is None:
+                    continue
                 case = make_case(mode, recipe, container)
                 cases.append(case)
                 tests.append(
@@ -224,6 +389,9 @@ def generate_feature(feature: Feature, out_dir: Path, env: Environment) -> Path:
                         case_name=case.name,
                     )
                 )
+
+    if not tests:
+        raise RuntimeError(f"feature {feature.name} did not generate any tests")
 
     source = out_dir / f"{feature.name}.cpp"
     rendered = env.get_template("source.cpp.j2").render(
