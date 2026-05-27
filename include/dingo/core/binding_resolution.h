@@ -111,7 +111,7 @@ template <typename T> T convert_resolved_binding(void* ptr) {
         return std::move(*static_cast<result_type*>(ptr));
     } else if constexpr (std::is_pointer_v<T>) {
         return static_cast<T>(ptr);
-    } else if constexpr (copy_on_resolve_v<T>) {
+    } else if constexpr (is_copy_constructible_v<T>) {
         return *static_cast<T*>(ptr);
     } else {
         return std::move(*static_cast<T*>(ptr));
@@ -139,7 +139,7 @@ decltype(auto) consume_resolved_binding(Instance&& instance, Fn&& fn) {
         return std::forward<Fn>(fn)(std::move(instance));
     } else if constexpr (std::is_pointer_v<T>) {
         return std::forward<Fn>(fn)(instance);
-    } else if constexpr (copy_on_resolve_v<T>) {
+    } else if constexpr (is_copy_constructible_v<T>) {
         using value_type = std::remove_reference_t<T>;
         return std::forward<Fn>(fn)(
             value_type(std::forward<Instance>(instance)));

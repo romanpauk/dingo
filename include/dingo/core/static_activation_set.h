@@ -466,7 +466,7 @@ std::size_t append_static_collection_impl(State& state, T& results, Host& host,
             using binding = typename decltype(binding_iterator)::type;
             auto resolver =
                 make_static_binding_resolver<binding>(state, host);
-            if constexpr (copy_on_resolve_v<resolve_type> &&
+            if constexpr (is_copy_constructible_v<resolve_type> &&
                           !std::is_reference_v<resolve_type>) {
                 resolver.template consume<resolve_type>(
                     context, [&](auto&& value) {
