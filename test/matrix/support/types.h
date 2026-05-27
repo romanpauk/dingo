@@ -9,13 +9,16 @@
 
 #include <dingo/container.h>
 #include <dingo/index/map.h>
+#include <dingo/index/unordered_map.h>
 #include <dingo/runtime_container.h>
 #include <dingo/static_container.h>
+#include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 
 #include <memory>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 namespace dingo::matrix {
@@ -74,6 +77,11 @@ struct key_b : std::integral_constant<int, 1> {};
 struct indexed_container_traits : dingo::dynamic_container_traits {
     using index_definition_type =
         std::tuple<std::tuple<int, dingo::index_type::map>>;
+};
+
+struct indexed_unordered_container_traits : dingo::dynamic_container_traits {
+    using index_definition_type =
+        std::tuple<std::tuple<int, dingo::index_type::unordered_map>>;
 };
 
 } // namespace dingo::matrix
