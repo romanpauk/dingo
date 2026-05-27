@@ -55,6 +55,7 @@ class RegistrationSpec:
     interfaces: str | None = None
     local_bindings: str | None = None
     factory: str | None = None
+    dependencies: str | None = None
     key: str | None = None
     indexed_key: str | None = None
     mixed: str = "static"
@@ -195,10 +196,6 @@ FEATURES = (
         name="local_bindings",
         requires=frozenset({"local_bindings"}),
         modes=frozenset({"runtime", "static", "mixed"}),
-        checks=(
-            "auto& resolved = container.template resolve<local_value_type&>();",
-            "ASSERT_EQ(resolved.value, 12);",
-        ),
     ),
     Feature(
         name="nested_container",
@@ -242,9 +239,40 @@ FEATURES = (
         name="factory_override",
         requires=frozenset({"factory_override"}),
         modes=frozenset({"runtime", "static", "mixed"}),
+    ),
+    Feature(
+        name="custom_allocator",
+        requires=frozenset(
+            {
+                "custom_allocator_container",
+                "concrete_binding",
+                "direct_value_resolution",
+                "stable_concrete_storage",
+            }
+        ),
+        modes=frozenset({"runtime"}),
         checks=(
-            "auto& resolved = container.template resolve<factory_value_type&>();",
-            "ASSERT_EQ(resolved.value, 9);",
+            "ASSERT_GT(test_allocator_stats<void>::allocated(), 0u);",
+            "auto& resolved = container.template resolve<value_type&>();",
+            "ASSERT_EQ(resolved.marker(), 3);",
+        ),
+    ),
+    Feature(
+        name="custom_rtti",
+        requires=frozenset(
+            {
+                "custom_rtti_container",
+                "concrete_binding",
+                "direct_value_resolution",
+                "stable_concrete_storage",
+            }
+        ),
+        modes=frozenset({"runtime"}),
+        checks=(
+            "using rtti_type = typename std::remove_reference_t<decltype(container)>::rtti_type;",
+            "static_assert(std::is_same_v<rtti_type, dingo::rtti<dingo::static_provider>>);",
+            "auto& resolved = container.template resolve<value_type&>();",
+            "ASSERT_EQ(resolved.marker(), 3);",
         ),
     ),
 )
@@ -438,10 +466,34 @@ STORED_TYPES = (
         provides=frozenset({"stored_value"}),
     ),
     StoredType(
-        id="factory_value_type",
-        name="factory_value_type",
-        kind="factory_value_type",
-        storage="dingo::storage<factory_value_type>",
+        id="local_override_value_type",
+        name="local_override_value_type",
+        kind="local_override_value_type",
+        storage="dingo::storage<local_override_value_type>",
+        supported_scopes=frozenset({"shared"}),
+        provides=frozenset({"stored_value"}),
+    ),
+    StoredType(
+        id="local_collection_value_type",
+        name="local_collection_value_type",
+        kind="local_collection_value_type",
+        storage="dingo::storage<local_collection_value_type>",
+        supported_scopes=frozenset({"shared"}),
+        provides=frozenset({"stored_value"}),
+    ),
+    StoredType(
+        id="factory_function_value_type",
+        name="factory_function_value_type",
+        kind="factory_function_value_type",
+        storage="dingo::storage<factory_function_value_type>",
+        supported_scopes=frozenset({"shared"}),
+        provides=frozenset({"stored_value"}),
+    ),
+    StoredType(
+        id="factory_constructor_value_type",
+        name="factory_constructor_value_type",
+        kind="factory_constructor_value_type",
+        storage="dingo::storage<factory_constructor_value_type>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_value"}),
     ),
@@ -590,13 +642,63 @@ EXPOSED_TYPES = (
         ),
     ),
     ExposedType(
-        name="factory_value",
-        kind="factory_value_type",
-        supported_stored_kinds=frozenset({"factory_value_type"}),
+        name="local_override_value",
+        kind="local_override_value_type",
+        supported_stored_kinds=frozenset({"local_override_value_type"}),
+        provides=frozenset({"local_bindings"}),
+        registrations=(
+            RegistrationSpec(
+                storage="dingo::storage<local_dependency_type>",
+                factory="dingo::factory<dingo::constructor<local_dependency_type()>>",
+            ),
+            RegistrationSpec(
+                local_bindings=(
+                    "dingo::bindings<dingo::bind<dingo::scope<dingo::shared>, "
+                    "dingo::storage<local_dependency_type>>>"
+                )
+            ),
+        ),
+    ),
+    ExposedType(
+        name="local_collection_value",
+        kind="local_collection_value_type",
+        supported_stored_kinds=frozenset({"local_collection_value_type"}),
+        provides=frozenset({"local_bindings"}),
+        registrations=(
+            RegistrationSpec(
+                storage="dingo::storage<std::shared_ptr<element_type<1>>>",
+                interfaces="dingo::interfaces<element_interface>",
+            ),
+            RegistrationSpec(
+                dependencies="dingo::dependencies<std::vector<std::shared_ptr<element_interface>>>",
+                local_bindings=(
+                    "dingo::bindings<dingo::bind<dingo::scope<dingo::shared>, "
+                    "dingo::storage<std::shared_ptr<element_type<0>>>, "
+                    "dingo::interfaces<element_interface>>>"
+                )
+            ),
+        ),
+    ),
+    ExposedType(
+        name="factory_function_value",
+        kind="factory_function_value_type",
+        supported_stored_kinds=frozenset({"factory_function_value_type"}),
         provides=frozenset({"factory_override"}),
         registrations=(
             RegistrationSpec(
-                factory="dingo::factory<dingo::function<&factory_value_type::create>>"
+                factory="dingo::factory<dingo::function<&factory_function_value_type::create>>"
+            ),
+        ),
+    ),
+    ExposedType(
+        name="factory_constructor_value",
+        kind="factory_constructor_value_type",
+        supported_stored_kinds=frozenset({"factory_constructor_value_type"}),
+        provides=frozenset({"factory_override"}),
+        registrations=(
+            RegistrationSpec(storage="dingo::storage<value_type>"),
+            RegistrationSpec(
+                factory="dingo::factory<dingo::constructor<factory_constructor_value_type(value_type&)>>"
             ),
         ),
     ),
@@ -1265,13 +1367,77 @@ RESOLVED_TYPES = (
         name="local_value_ref",
         supported_exposed_types=frozenset({"local_value"}),
         provides=frozenset({"resolved_concrete"}),
-        checks=(),
+        checks=(
+            (
+                "local_bindings",
+                (
+                    "auto& resolved = container.template resolve<local_value_type&>();",
+                    "ASSERT_EQ(resolved.value, 12);",
+                    "ASSERT_EQ(container.template construct<local_value_type>().value, 12);",
+                ),
+            ),
+        ),
     ),
     ResolvedType(
-        name="factory_value_ref",
-        supported_exposed_types=frozenset({"factory_value"}),
+        name="local_override_value_ref",
+        supported_exposed_types=frozenset({"local_override_value"}),
         provides=frozenset({"resolved_concrete"}),
-        checks=(),
+        checks=(
+            (
+                "local_bindings",
+                (
+                    "auto& resolved = container.template resolve<local_override_value_type&>();",
+                    "ASSERT_EQ(resolved.value, 4);",
+                    "ASSERT_EQ(container.template construct<local_override_value_type>().value, 4);",
+                ),
+            ),
+        ),
+    ),
+    ResolvedType(
+        name="local_collection_value_ref",
+        supported_exposed_types=frozenset({"local_collection_value"}),
+        provides=frozenset({"resolved_concrete"}),
+        checks=(
+            (
+                "local_bindings",
+                (
+                    "auto& resolved = container.template resolve<local_collection_value_type&>();",
+                    "ASSERT_EQ(resolved.count, 2u);",
+                    "ASSERT_EQ(resolved.sum, 1);",
+                    "auto constructed = container.template construct<local_collection_value_type>();",
+                    "ASSERT_EQ(constructed.count, 2u);",
+                    "ASSERT_EQ(constructed.sum, 1);",
+                ),
+            ),
+        ),
+    ),
+    ResolvedType(
+        name="factory_function_value_ref",
+        supported_exposed_types=frozenset({"factory_function_value"}),
+        provides=frozenset({"resolved_concrete"}),
+        checks=(
+            (
+                "factory_override",
+                (
+                    "auto& resolved = container.template resolve<factory_function_value_type&>();",
+                    "ASSERT_EQ(resolved.value, 9);",
+                ),
+            ),
+        ),
+    ),
+    ResolvedType(
+        name="factory_constructor_value_ref",
+        supported_exposed_types=frozenset({"factory_constructor_value"}),
+        provides=frozenset({"resolved_concrete"}),
+        checks=(
+            (
+                "factory_override",
+                (
+                    "auto& resolved = container.template resolve<factory_constructor_value_type&>();",
+                    "ASSERT_EQ(resolved.value, 9);",
+                ),
+            ),
+        ),
     ),
 )
 

@@ -25,6 +25,9 @@ are an output of axis selection.
 - `array`: resolve raw and smart-array storage forms.
 - `factory_override`: construct through explicit callable, function, or
   constructor factories.
+- `custom_allocator`: use a caller-selected allocator for container
+  bookkeeping.
+- `custom_rtti`: use a caller-selected RTTI provider for runtime lookup.
 
 Negative compile-time checks stay in `test/lit`. The generated matrix covers
 valid behavior combinations.
@@ -146,6 +149,7 @@ Then it should keep only rows that satisfy all rules below.
 - Factory rows require a constructor shape that would otherwise need the explicit
   factory.
 - Local-binding rows must verify local lookup, host fallback, and local override.
+- Local-binding collection rows must verify local and host collection merge.
 - Nested-container rows must verify child lookup, parent fallback, and child
   override.
 

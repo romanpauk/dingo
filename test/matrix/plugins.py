@@ -108,6 +108,7 @@ def binding(
     interfaces: str | None = None,
     local_bindings: str | None = None,
     factory: str | None = None,
+    dependencies: str | None = None,
     key: str | None = None,
 ) -> str:
     parts = [scope.type_name, storage]
@@ -117,6 +118,8 @@ def binding(
         parts.append(local_bindings)
     if factory:
         parts.append(factory)
+    if dependencies:
+        parts.append(dependencies)
     if key:
         parts.append(key)
     return "dingo::bind<" + ", ".join(parts) + ">"
@@ -129,6 +132,7 @@ def register_type(
     interfaces: str | None = None,
     local_bindings: str | None = None,
     factory: str | None = None,
+    dependencies: str | None = None,
     key: str | None = None,
 ) -> str:
     parts = [scope.type_name, storage]
@@ -138,6 +142,8 @@ def register_type(
         parts.append(local_bindings)
     if factory:
         parts.append(factory)
+    if dependencies:
+        parts.append(dependencies)
     if key:
         parts.append(key)
     return "container.template register_type<" + ", ".join(parts) + ">();"
@@ -151,6 +157,7 @@ def register_type_with_arg(
     interfaces: str | None = None,
     local_bindings: str | None = None,
     factory: str | None = None,
+    dependencies: str | None = None,
     key: str | None = None,
 ) -> str:
     registration = register_type(
@@ -159,6 +166,7 @@ def register_type_with_arg(
         interfaces=interfaces,
         local_bindings=local_bindings,
         factory=factory,
+        dependencies=dependencies,
         key=key,
     )
     return registration[:-3] + f"({argument});"
@@ -194,6 +202,7 @@ class RegistrationPlugin:
             interfaces=spec.interfaces,
             local_bindings=spec.local_bindings,
             factory=spec.factory or stored_type_factory(stored_type, spec),
+            dependencies=spec.dependencies,
             key=spec.key,
         )
 
@@ -221,6 +230,7 @@ class RegistrationPlugin:
                 interfaces=spec.interfaces,
                 local_bindings=spec.local_bindings,
                 factory=factory,
+                dependencies=spec.dependencies,
                 key=spec.key,
             )
         return register_type(
@@ -229,6 +239,7 @@ class RegistrationPlugin:
             interfaces=spec.interfaces,
             local_bindings=spec.local_bindings,
             factory=factory,
+            dependencies=spec.dependencies,
             key=spec.key,
         )
 

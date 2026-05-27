@@ -651,7 +651,38 @@ class basic_static_activation_set_base
               typename R = resolve_result_t<T, RemoveRvalueReferences>>
     decltype(auto) resolve_local_binding(Host& host, Context& context) {
         if constexpr (collection_traits<R>::is_collection) {
-            return host.template resolve<T, RemoveRvalueReferences>(context);
+            using collection_type = collection_traits<R>;
+            R results;
+            auto append = [](auto& values, auto&& value) {
+                collection_type::add(values,
+                                     std::forward<decltype(value)>(value));
+            };
+            auto& local_scope =
+                derived().template get_local_scope_for_model<BindingModel>();
+            const auto local_count =
+                local_scope.template append_static_collection<R, Key,
+                                                              LocalRegistry>(
+                    results, host, context, append);
+            try {
+                if constexpr (std::is_void_v<Key>) {
+                    auto host_results =
+                        host.template construct_collection<R>(append);
+                    for (auto& value : host_results) {
+                        collection_type::add(results, std::move(value));
+                    }
+                } else {
+                    auto host_results = host.template construct_collection<R>(
+                        append, key<Key>{});
+                    for (auto& value : host_results) {
+                        collection_type::add(results, std::move(value));
+                    }
+                }
+            } catch (const type_not_found_exception&) {
+                if (local_count == 0) {
+                    throw;
+                }
+            }
+            return results;
         } else {
             using selection = detail::static_binding_t<
                 typename LocalRegistry::template bindings<R, Key>>;

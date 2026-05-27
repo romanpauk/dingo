@@ -114,18 +114,47 @@ struct local_value_type {
     int value;
 };
 
+struct local_override_value_type {
+    explicit local_override_value_type(local_dependency_type& dependency)
+        : value(dependency.value) {}
+
+    int value;
+};
+
+struct local_collection_value_type {
+    explicit local_collection_value_type(
+        std::vector<std::shared_ptr<element_interface>> elements)
+        : count(elements.size()), sum(0) {
+        for (const auto& element : elements) {
+            sum += element->id();
+        }
+    }
+
+    std::size_t count;
+    int sum;
+};
+
 struct nested_value_type {
     explicit nested_value_type(int dependency) : value(dependency) {}
 
     int value;
 };
 
-struct factory_value_type {
+struct factory_function_value_type {
   private:
-    explicit factory_value_type(int init) : value(init) {}
+    explicit factory_function_value_type(int init) : value(init) {}
 
   public:
-    static factory_value_type create() { return factory_value_type(9); }
+    static factory_function_value_type create() {
+        return factory_function_value_type(9);
+    }
+
+    int value;
+};
+
+struct factory_constructor_value_type {
+    explicit factory_constructor_value_type(value_type& dependency)
+        : value(dependency.marker() + 6) {}
 
     int value;
 };
