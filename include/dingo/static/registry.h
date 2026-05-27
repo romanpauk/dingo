@@ -221,6 +221,27 @@ template <typename T> struct constructor_factory_target<constructor<T>> {
     using type = normalized_type_t<T>;
 };
 
+template <typename BindingModel, typename InterfaceBindings>
+struct remove_current_binding_model;
+
+template <typename BindingModel>
+struct remove_current_binding_model<BindingModel, type_list<>> {
+    using type = type_list<>;
+};
+
+template <typename BindingModel, typename Head, typename... Tail>
+struct remove_current_binding_model<BindingModel, type_list<Head, Tail...>> {
+  private:
+    using tail_type =
+        typename remove_current_binding_model<BindingModel,
+                                              type_list<Tail...>>::type;
+
+  public:
+    using type = std::conditional_t<
+        std::is_same_v<BindingModel, typename Head::binding_model_type>,
+        tail_type, type_list_cat_t<type_list<Head>, tail_type>>;
+};
+
 template <typename BindingModel, typename InterfaceBindings, typename = void>
 struct inferred_binding_dependencies {
     using type = void;
@@ -237,8 +258,11 @@ struct inferred_binding_dependencies<
     using factory_type = typename BindingModel::factory_type;
     using implementation_type =
         typename constructor_factory_target<factory_type>::type;
+    using candidate_bindings =
+        typename remove_current_binding_model<BindingModel,
+                                              InterfaceBindings>::type;
     using candidate_tuples =
-        typename binding_tuples<InterfaceBindings, factory_type::arity>::type;
+        typename binding_tuples<candidate_bindings, factory_type::arity>::type;
     using selection = unique_constructible_binding_tuple<implementation_type,
                                                          candidate_tuples>;
 

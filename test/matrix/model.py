@@ -567,6 +567,19 @@ EXPOSED_TYPES = (
         ),
     ),
     ExposedType(
+        name="copyable_interface_type",
+        kind="interface",
+        supported_stored_kinds=frozenset({"implementation_type"}),
+        provides=frozenset({"concrete_binding", "interface_binding"}),
+        registrations=(
+            RegistrationSpec(storage="dingo::storage<value_type>"),
+            RegistrationSpec(
+                interfaces="dingo::interfaces<copyable_interface_type>",
+                mixed="runtime",
+            ),
+        ),
+    ),
+    ExposedType(
         name="keyed_concrete",
         kind="keyed",
         supported_stored_kinds=frozenset({"value_type"}),
@@ -910,9 +923,17 @@ RESOLVED_TYPES = (
     ),
     ResolvedType(
         name="interface_value",
-        supported_exposed_types=frozenset({"interface_type", "multiple_interfaces"}),
-        provides=frozenset({"resolved_interface_value"}),
-        implemented=False,
+        supported_exposed_types=frozenset({"copyable_interface_type"}),
+        provides=frozenset({"resolved_interface", "resolved_interface_value"}),
+        checks=(
+            (
+                "resolve_interface",
+                (
+                    "auto instance = container.template resolve<copyable_interface_type>();",
+                    "ASSERT_EQ(instance.marker(), 3);",
+                ),
+            ),
+        ),
     ),
     ResolvedType(
         name="interface_ref_ptr_shared_ptr",
@@ -1102,6 +1123,23 @@ RESOLVED_TYPES = (
         ),
     ),
     ResolvedType(
+        name="element_map_custom_insert",
+        supported_exposed_types=frozenset({"element_collection"}),
+        provides=frozenset({"constructable_collection"}),
+        checks=(
+            (
+                "construct_collection",
+                (
+                    "auto elements = container.template construct_collection<std::map<int, std::shared_ptr<element_interface>>>(",
+                    "    [](auto& collection, auto&& value) { collection.emplace(value->id(), std::move(value)); });",
+                    "ASSERT_EQ(elements.size(), 2u);",
+                    "ASSERT_EQ(elements.at(0)->id(), 0);",
+                    "ASSERT_EQ(elements.at(1)->id(), 1);",
+                ),
+            ),
+        ),
+    ),
+    ResolvedType(
         name="element_keyed_shared_ptr_ref",
         supported_exposed_types=frozenset({"element_keyed"}),
         provides=frozenset({"resolved_keyed"}),
@@ -1113,6 +1151,30 @@ RESOLVED_TYPES = (
                     "auto& second = container.template resolve<std::shared_ptr<element_interface>&>(dingo::key<key_b>{});",
                     "ASSERT_EQ(first->id(), 0);",
                     "ASSERT_EQ(second->id(), 1);",
+                ),
+            ),
+        ),
+    ),
+    ResolvedType(
+        name="keyed_value_dependency",
+        supported_exposed_types=frozenset({"keyed_concrete"}),
+        provides=frozenset({"constructable_dependency", "invokable_dependency"}),
+        requires=frozenset({"stable_concrete_storage"}),
+        checks=(
+            (
+                "construct",
+                (
+                    "auto constructed = container.template construct<keyed_value_dependency_type>();",
+                    "ASSERT_EQ(constructed.value, 3);",
+                ),
+            ),
+            (
+                "invoke",
+                (
+                    "auto invoked = container.invoke([](dingo::keyed<value_type&, key_a> dependency) {",
+                    "    return static_cast<value_type&>(dependency).marker();",
+                    "});",
+                    "ASSERT_EQ(invoked, 3);",
                 ),
             ),
         ),
@@ -1179,6 +1241,31 @@ RESOLVED_TYPES = (
         ),
     ),
     ResolvedType(
+        name="keyed_collection_dependency",
+        supported_exposed_types=frozenset({"element_keyed_collection"}),
+        provides=frozenset({"constructable_dependency", "invokable_dependency"}),
+        checks=(
+            (
+                "construct",
+                (
+                    "auto constructed = container.template construct<keyed_collection_dependency_type>();",
+                    "ASSERT_EQ(constructed.count, 2u);",
+                    "ASSERT_EQ(constructed.sum, 1);",
+                ),
+            ),
+            (
+                "invoke",
+                (
+                    "auto invoked = container.invoke([](dingo::keyed<std::vector<std::shared_ptr<element_interface>>, key_a> elements) {",
+                    "    auto values = static_cast<std::vector<std::shared_ptr<element_interface>>>(elements);",
+                    "    return values.size();",
+                    "});",
+                    "ASSERT_EQ(invoked, 2u);",
+                ),
+            ),
+        ),
+    ),
+    ResolvedType(
         name="element_indexed_shared_ptr",
         supported_exposed_types=frozenset({"element_indexed"}),
         provides=frozenset({"resolved_indexed"}),
@@ -1222,6 +1309,22 @@ RESOLVED_TYPES = (
                     "auto& values = container.template resolve<value_type(&)[2]>();",
                     "ASSERT_EQ(values[0].marker(), 3);",
                     "ASSERT_EQ(values[1].marker(), 3);",
+                ),
+            ),
+        ),
+    ),
+    ResolvedType(
+        name="raw_array_ptr_to_array",
+        supported_exposed_types=frozenset({"array_concrete"}),
+        provides=frozenset({"resolved_array"}),
+        requires=frozenset({"array_1d"}),
+        checks=(
+            (
+                "array",
+                (
+                    "auto values = container.template resolve<value_type(*)[2]>();",
+                    "ASSERT_EQ((*values)[0].marker(), 3);",
+                    "ASSERT_EQ((*values)[1].marker(), 3);",
                 ),
             ),
         ),
@@ -1359,6 +1462,54 @@ RESOLVED_TYPES = (
                 (
                     "auto& instance = container.template resolve<dingo::annotated<interface_type&, tag_a>>();",
                     "ASSERT_EQ(instance.marker(), 3);",
+                ),
+            ),
+        ),
+    ),
+    ResolvedType(
+        name="annotated_interface_ptr",
+        supported_exposed_types=frozenset({"annotated_interface"}),
+        provides=frozenset({"resolved_annotated"}),
+        requires=frozenset({"shared_storage"}),
+        supported_modes=frozenset({"runtime"}),
+        checks=(
+            (
+                "annotated",
+                (
+                    "auto instance = container.template resolve<dingo::annotated<interface_type*, tag_a>>();",
+                    "ASSERT_EQ(instance->marker(), 3);",
+                ),
+            ),
+        ),
+    ),
+    ResolvedType(
+        name="annotated_interface_shared_ptr",
+        supported_exposed_types=frozenset({"annotated_interface"}),
+        provides=frozenset({"resolved_annotated"}),
+        requires=frozenset({"shared_storage", "stored_shared_ptr"}),
+        supported_modes=frozenset({"runtime"}),
+        checks=(
+            (
+                "annotated",
+                (
+                    "auto instance = container.template resolve<dingo::annotated<std::shared_ptr<interface_type>, tag_a>>();",
+                    "ASSERT_EQ(instance->marker(), 3);",
+                ),
+            ),
+        ),
+    ),
+    ResolvedType(
+        name="annotated_interface_shared_ptr_ref",
+        supported_exposed_types=frozenset({"annotated_interface"}),
+        provides=frozenset({"resolved_annotated"}),
+        requires=frozenset({"shared_storage", "stored_shared_ptr"}),
+        supported_modes=frozenset({"runtime"}),
+        checks=(
+            (
+                "annotated",
+                (
+                    "auto& instance = container.template resolve<dingo::annotated<std::shared_ptr<interface_type>&, tag_a>>();",
+                    "ASSERT_EQ(instance->marker(), 3);",
                 ),
             ),
         ),

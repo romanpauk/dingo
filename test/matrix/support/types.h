@@ -22,6 +22,7 @@
 #include <dingo/type/type_map.h>
 
 #include <cstddef>
+#include <map>
 #include <memory>
 #include <optional>
 #include <tuple>
@@ -44,14 +45,26 @@ struct interface_type {
     virtual int marker() const = 0;
 };
 
+class copyable_interface_type {
+  public:
+    copyable_interface_type() = default;
+    explicit copyable_interface_type(int init_marker) : marker_(init_marker) {}
+
+    int marker() const { return marker_; }
+
+  private:
+    int marker_ = 0;
+};
+
 struct second_interface_type {
     virtual ~second_interface_type() = default;
     virtual int second_marker() const = 0;
 };
 
-struct implementation_type : interface_type, second_interface_type {
+struct implementation_type : interface_type, copyable_interface_type,
+                             second_interface_type {
     explicit implementation_type(value_type& dependency)
-        : dependency_(dependency) {}
+        : copyable_interface_type(dependency.marker()), dependency_(dependency) {}
 
     int marker() const override { return dependency_.marker(); }
     int second_marker() const override { return dependency_.marker() + 1; }
@@ -78,11 +91,40 @@ struct unique_implementation_type : unique_interface_type {
     int value() const override { return 7; }
 };
 
+struct key_a;
+struct key_b;
+
 struct dependent_type {
     explicit dependent_type(value_type& dependency)
         : value(dependency.marker()) {}
 
     int value;
+};
+
+struct keyed_value_dependency_type {
+    explicit keyed_value_dependency_type(
+        dingo::keyed<value_type&, key_a> dependency)
+        : value(static_cast<value_type&>(dependency).marker()) {}
+
+    int value;
+};
+
+struct keyed_collection_dependency_type {
+    explicit keyed_collection_dependency_type(
+        dingo::keyed<std::vector<std::shared_ptr<element_interface>>, key_a>
+            elements)
+        : count(0), sum(0) {
+        auto values =
+            static_cast<std::vector<std::shared_ptr<element_interface>>>(
+                elements);
+        count = values.size();
+        for (const auto& element : values) {
+            sum += element->id();
+        }
+    }
+
+    std::size_t count;
+    int sum;
 };
 
 struct cycle_b_type;

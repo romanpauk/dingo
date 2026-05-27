@@ -308,6 +308,14 @@ class static_injector<static_registry<Registrations...>, void>
     R resolve(context_type& context, key<Key>) {
         return resolve<T, RemoveRvalueReferences, Key>(context);
     }
+
+    template <typename T, bool RemoveRvalueReferences, bool CheckCache,
+              typename Key,
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
+    R resolve(context_type& context, key<Key>) {
+        (void)CheckCache;
+        return resolve<T, RemoveRvalueReferences, Key>(context);
+    }
 };
 
 } // namespace dingo

@@ -89,9 +89,11 @@ valid behavior combinations.
 - `std::shared_ptr<I>`
 - `std::shared_ptr<I>&`
 - `std::vector<std::shared_ptr<I>>`
-- `keyed<T, Key>`
-- `keyed<T&, Key>`
-- `keyed<std::vector<std::shared_ptr<I>>, Key>`
+- keyed `T`, `T&`, and collection requests through `resolve(...,
+  key<Key>{})`
+- `keyed<T, Key>` constructor and invocation dependencies
+- `keyed<std::vector<std::shared_ptr<I>>, Key>` constructor and invocation
+  dependencies
 - `T (*)[N]`
 - `T (&)[M][N]`
 - `std::unique_ptr<T[]>`
