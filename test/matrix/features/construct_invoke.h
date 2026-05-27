@@ -18,7 +18,7 @@ template <typename Case> void run_construct_invoke() {
         auto constructed = container.template construct<dependent_type>();
         ASSERT_EQ(constructed.value, 3);
 
-        auto invoked = container.template invoke(
+        auto invoked = container.invoke(
             [](value_type& dependency) { return dependency.marker(); });
         ASSERT_EQ(invoked, 3);
     });
