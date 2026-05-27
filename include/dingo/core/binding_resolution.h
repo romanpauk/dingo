@@ -170,9 +170,10 @@ void* get_address_as(Context& context, T&& instance) {
     using instance_type = std::remove_reference_t<T>;
 
     if constexpr (std::is_pointer_v<instance_type>) {
-        return instance;
+        return const_cast<std::remove_const_t<std::remove_pointer_t<
+            instance_type>>*>(instance);
     } else if constexpr (std::is_reference_v<T>) {
-        return &instance;
+        return const_cast<std::remove_const_t<instance_type>*>(&instance);
     } else {
         return &context.template construct<Target>(std::forward<T>(instance));
     }

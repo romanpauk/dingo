@@ -27,8 +27,9 @@ inline constexpr bool is_handle_rebindable_v =
 
 template <typename Storage, typename Interface>
 inline constexpr bool is_interface_storage_rebindable_v =
-    detail::is_handle_rebindable_v<Storage,
-                                   rebind_leaf_t<Storage, Interface>>;
+    detail::is_handle_rebindable_v<
+        Storage, rebind_leaf_t<Storage,
+                               typename annotated_traits<Interface>::type>>;
 
 namespace detail {
 template <typename Storage, typename InterfaceList>

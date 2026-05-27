@@ -40,6 +40,14 @@ class value_type {
     int marker_ = 3;
 };
 
+inline std::unique_ptr<value_type[]> make_unique_value_array() {
+    return std::make_unique<value_type[]>(2);
+}
+
+inline std::shared_ptr<value_type[]> make_shared_value_array() {
+    return std::shared_ptr<value_type[]>(new value_type[2]);
+}
+
 struct interface_type {
     virtual ~interface_type() = default;
     virtual int marker() const = 0;

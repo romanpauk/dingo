@@ -433,8 +433,7 @@ STORED_TYPES = (
         storage="dingo::storage<std::unique_ptr<value_type[]>>",
         supported_scopes=frozenset({"unique"}),
         provides=frozenset({"stored_unique_array", "array_smart_unique"}),
-        supported_modes=frozenset({"runtime"}),
-        runtime_argument="dingo::callable([] { return std::make_unique<value_type[]>(2); })",
+        factory="dingo::factory<dingo::function<&make_unique_value_array>>",
     ),
     StoredType(
         id="value_shared_array",
@@ -443,10 +442,7 @@ STORED_TYPES = (
         storage="dingo::storage<std::shared_ptr<value_type[]>>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_shared_array", "array_smart_shared"}),
-        supported_modes=frozenset({"runtime"}),
-        runtime_argument=(
-            "dingo::callable([] { return std::shared_ptr<value_type[]>(new value_type[2]); })"
-        ),
+        factory="dingo::factory<dingo::function<&make_shared_value_array>>",
     ),
     StoredType(
         id="value_variant",
@@ -894,7 +890,6 @@ RESOLVED_TYPES = (
         supported_exposed_types=frozenset({"concrete"}),
         provides=frozenset({"resolved_concrete", "resolved_const_concrete"}),
         requires=frozenset({"stable_concrete_storage", "direct_value_resolution"}),
-        supported_modes=frozenset({"runtime"}),
         checks=(
             (
                 "resolve_concrete",
@@ -910,7 +905,6 @@ RESOLVED_TYPES = (
         supported_exposed_types=frozenset({"concrete"}),
         provides=frozenset({"resolved_concrete", "resolved_const_concrete"}),
         requires=frozenset({"stable_concrete_storage", "direct_value_resolution"}),
-        supported_modes=frozenset({"runtime"}),
         checks=(
             (
                 "resolve_concrete",
@@ -1471,7 +1465,6 @@ RESOLVED_TYPES = (
         supported_exposed_types=frozenset({"annotated_interface"}),
         provides=frozenset({"resolved_annotated"}),
         requires=frozenset({"shared_storage"}),
-        supported_modes=frozenset({"runtime"}),
         checks=(
             (
                 "annotated",
@@ -1487,7 +1480,6 @@ RESOLVED_TYPES = (
         supported_exposed_types=frozenset({"annotated_interface"}),
         provides=frozenset({"resolved_annotated"}),
         requires=frozenset({"shared_storage", "stored_shared_ptr"}),
-        supported_modes=frozenset({"runtime"}),
         checks=(
             (
                 "annotated",
@@ -1503,7 +1495,6 @@ RESOLVED_TYPES = (
         supported_exposed_types=frozenset({"annotated_interface"}),
         provides=frozenset({"resolved_annotated"}),
         requires=frozenset({"shared_storage", "stored_shared_ptr"}),
-        supported_modes=frozenset({"runtime"}),
         checks=(
             (
                 "annotated",
@@ -1679,7 +1670,6 @@ FILTER_RULES = (
     "scope_supports_stored_type",
     "exposure_supports_stored_type",
     "resolved_type_supports_exposure",
-    "resolved_type_supports_mode",
     "feature_requires_tags",
     "resolved_type_requires_tags",
     "container_requires",
