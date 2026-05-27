@@ -58,7 +58,7 @@ template <typename Bindings>
 using static_binding_t = typename static_binding<Bindings>::type;
 
 template <typename Binding, typename State = std::nullptr_t>
-struct runtime_binding_route {
+struct runtime_binding_selection {
     binding_selection_status status = binding_selection_status::not_found;
     Binding* binding = nullptr;
     State state = nullptr;
@@ -71,52 +71,52 @@ struct runtime_binding_route {
         return status == binding_selection_status::ambiguous;
     }
 
-    static constexpr runtime_binding_route found(Binding& binding,
-                                                 State state = nullptr) {
+    static constexpr runtime_binding_selection found(Binding& binding,
+                                                     State state = nullptr) {
         return {binding_selection_status::found, &binding, state};
     }
 
-    static constexpr runtime_binding_route miss() { return {}; }
+    static constexpr runtime_binding_selection miss() { return {}; }
 
-    static constexpr runtime_binding_route ambiguity() {
+    static constexpr runtime_binding_selection ambiguity() {
         return {binding_selection_status::ambiguous, nullptr, nullptr};
     }
 };
 
 template <typename Binding, typename State = std::nullptr_t>
-constexpr runtime_binding_route<Binding, State>
-make_runtime_route(Binding* binding, State state = nullptr) {
-    return binding
-               ? runtime_binding_route<Binding, State>::found(*binding, state)
-               : runtime_binding_route<Binding, State>::miss();
+constexpr runtime_binding_selection<Binding, State>
+make_runtime_selection(Binding* binding, State state = nullptr) {
+    return binding ? runtime_binding_selection<Binding, State>::found(*binding,
+                                                                      state)
+                   : runtime_binding_selection<Binding, State>::miss();
 }
 
 template <typename Binding, typename State = std::nullptr_t, typename Visitor>
-constexpr runtime_binding_route<Binding, State>
-make_runtime_route(Visitor&& visit_candidates) {
-    Binding* routed_binding = nullptr;
-    State routed_state = nullptr;
+constexpr runtime_binding_selection<Binding, State>
+make_runtime_selection(Visitor&& visit_candidates) {
+    Binding* selected_binding = nullptr;
+    State selected_state = nullptr;
     std::size_t matches = 0;
 
     std::forward<Visitor>(visit_candidates)(
         [&](Binding& binding, State state = nullptr) {
             ++matches;
             if (matches == 1) {
-                routed_binding = &binding;
-                routed_state = state;
+                selected_binding = &binding;
+                selected_state = state;
             }
         });
 
     if (matches == 0) {
-        return runtime_binding_route<Binding, State>::miss();
+        return runtime_binding_selection<Binding, State>::miss();
     }
 
     if (matches == 1) {
-        return runtime_binding_route<Binding, State>::found(*routed_binding,
-                                                            routed_state);
+        return runtime_binding_selection<Binding, State>::found(
+            *selected_binding, selected_state);
     }
 
-    return runtime_binding_route<Binding, State>::ambiguity();
+    return runtime_binding_selection<Binding, State>::ambiguity();
 }
 
 } // namespace detail

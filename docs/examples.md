@@ -51,7 +51,7 @@ the relevant feature and start there.
 - [examples/registration/collection.cpp](../examples/registration/collection.cpp):
   aggregate a custom collection shape with a custom insertion step
 - [examples/index/message_processing.cpp](../examples/index/message_processing.cpp):
-  route messages to indexed handlers
+  dispatch messages to indexed handlers
 
 ## Construction Helpers
 

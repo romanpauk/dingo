@@ -225,7 +225,8 @@ class runtime_registry : public allocator_base<Allocator> {
 
                                 if (candidate && candidate->cache) {
                                     return detail::convert_resolved_binding<
-                                        request_interface_t<T>>(candidate->cache);
+                                        request_interface_t<T>>(
+                                        candidate->cache);
                                 }
                             } else {
                                 auto indexed = data->template get_index<IdType>(
@@ -384,13 +385,13 @@ class runtime_registry : public allocator_base<Allocator> {
     template <typename Request, typename Key = void>
     detail::binding_selection_status binding_status() {
         using lookup_type = normalized_type_t<Request>;
-        auto route = find_runtime_route(
+        auto selection = select_runtime_binding(
             runtime_state_if_present()
                 ? runtime_state_if_present()
                       ->type_bindings.template get<lookup_type>()
                 : nullptr,
             std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>{});
-        return route.status;
+        return selection.status;
     }
 
     template <typename T, typename Key = void, typename Fn>
@@ -514,9 +515,9 @@ class runtime_registry : public allocator_base<Allocator> {
 
     using runtime_binding_interface_type =
         runtime_binding_interface<container_type>;
-    using runtime_route =
-        detail::runtime_binding_route<runtime_binding_interface_type,
-                                      binding_cache_state*>;
+    using runtime_selection =
+        detail::runtime_binding_selection<runtime_binding_interface_type,
+                                          binding_cache_state*>;
 
   protected:
     template <typename T, typename Key, typename Fn>
@@ -611,10 +612,11 @@ class runtime_registry : public allocator_base<Allocator> {
 
   private:
     template <typename IdType>
-    runtime_route find_runtime_route(type_binding_data* data, IdType&& id) {
+    runtime_selection select_runtime_binding(type_binding_data* data,
+                                             IdType&& id) {
         if constexpr (is_none_v<std::decay_t<IdType>>) {
-            return detail::make_runtime_route<runtime_binding_interface_type,
-                                              binding_cache_state*>(
+            return detail::make_runtime_selection<
+                runtime_binding_interface_type, binding_cache_state*>(
                 [&](auto&& select) {
                     if (!data) {
                         return;
@@ -626,8 +628,8 @@ class runtime_registry : public allocator_base<Allocator> {
                     }
                 });
         } else if constexpr (detail::is_typed_key_v<IdType>) {
-            return detail::make_runtime_route<runtime_binding_interface_type,
-                                              binding_cache_state*>(
+            return detail::make_runtime_selection<
+                runtime_binding_interface_type, binding_cache_state*>(
                 [&](auto&& select) {
                     if (!data) {
                         return;
@@ -651,27 +653,29 @@ class runtime_registry : public allocator_base<Allocator> {
                 data ? data->template get_index<index_key_type>(get_allocator())
                            .find(id)
                      : nullptr;
-            return detail::make_runtime_route<runtime_binding_interface_type,
-                                              binding_cache_state*>(
+            return detail::make_runtime_selection<
+                runtime_binding_interface_type, binding_cache_state*>(
                 indexed ? indexed->binding : nullptr, indexed);
         }
     }
 
     template <typename T, bool CheckCache, typename IdType>
-    auto resolve_runtime_route(runtime_route route, runtime_context& context,
-                               IdType&&) -> request_interface_t<T> {
+    auto resolve_runtime_selection(runtime_selection selection,
+                                   runtime_context& context, IdType&&)
+        -> request_interface_t<T> {
         if constexpr (is_none_v<std::decay_t<IdType>>) {
-            return resolve<T, request_interface_t<T>>(*route.binding, context);
+            return resolve<T, request_interface_t<T>>(*selection.binding,
+                                                      context);
         } else {
             if constexpr (cache_enabled && CheckCache) {
-                if (route.state->cache) {
+                if (selection.state->cache) {
                     return detail::convert_resolved_binding<
-                        request_interface_t<T>>(route.state->cache);
+                        request_interface_t<T>>(selection.state->cache);
                 }
             }
 
             return resolve<T, request_interface_t<T>>(
-                *route.binding, context, *route.state);
+                *selection.binding, context, *selection.state);
         }
     }
 
@@ -914,15 +918,15 @@ class runtime_registry : public allocator_base<Allocator> {
             }
         }
 
-        auto route = find_runtime_route(
+        auto selection = select_runtime_binding(
             runtime_state_if_present()
                 ? runtime_state_if_present()->type_bindings.template get<Type>()
                 : nullptr,
             id);
-        if (route.found()) {
-            return resolve_runtime_route<T, CheckCache>(
-                route, context, std::forward<IdType>(id));
-        } else if (route.ambiguous()) {
+        if (selection.found()) {
+            return resolve_runtime_selection<T, CheckCache>(
+                selection, context, std::forward<IdType>(id));
+        } else if (selection.ambiguous()) {
             throw detail::make_type_ambiguous_exception<T>(context);
         }
         return resolve_missing_binding<T, RemoveRvalueReferences,
@@ -938,8 +942,8 @@ class runtime_registry : public allocator_base<Allocator> {
                       "auto-construction requires a complete type");
 
         using type_detection = detail::automatic;
-        return context.template construct_temporary<
-            request_interface_t<T>, type_detection>(
+        return context.template construct_temporary<request_interface_t<T>,
+                                                    type_detection>(
             *resolve_root());
     }
 
