@@ -8,14 +8,15 @@
 #pragma once
 
 #include <dingo/memory/aligned_storage.h>
-#include <dingo/resolution/resolving_context.h>
+#include <dingo/core/context_base.h>
 
 namespace dingo::detail {
 
 template <typename T,
           bool DefaultConstructible = std::is_default_constructible_v<T>>
 struct recursion_guard {
-    explicit recursion_guard(resolving_context& context)
+    template <typename Context>
+    explicit recursion_guard(Context& context)
         : frame_guard_(context.template track_type<T>()) {
         // Track the active type path first so recursion exceptions can report
         // the full resolution chain, including the repeated type.
@@ -46,7 +47,8 @@ template <typename T, bool DefaultConstructible>
 thread_local bool recursion_guard<T, DefaultConstructible>::visited_ = false;
 
 template <typename T> struct recursion_guard<T, true> {
-    explicit recursion_guard(resolving_context&) {}
+    template <typename Context>
+    explicit recursion_guard(Context&) {}
 
     recursion_guard(const recursion_guard&) = delete;
     recursion_guard& operator=(const recursion_guard&) = delete;
@@ -56,7 +58,8 @@ template <typename T> struct recursion_guard<T, true> {
 
 template <typename T> class recursion_guard_wrapper {
   public:
-    recursion_guard_wrapper(resolving_context& context, bool enabled) {
+    template <typename Context>
+    recursion_guard_wrapper(Context& context, bool enabled) {
         if (enabled) {
             // The wrapped recursion_guard owns a self-linking resolving_frame,
             // so it must stay at a fixed address for the whole guarded scope.

@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 #include <dingo/type/type_descriptor.h>
 
 #include <cassert>

@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
 #include <dingo/factory/constructor_traits.h>
 #include <dingo/type/normalized_type.h>

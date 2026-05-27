@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/exceptions.h>
+#include <dingo/core/exceptions.h>
 #include <dingo/resolution/type_conversion.h>
 
 #include <gtest/gtest.h>

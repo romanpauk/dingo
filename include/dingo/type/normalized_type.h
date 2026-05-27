@@ -7,9 +7,10 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
 #include <dingo/registration/annotated.h>
+#include <dingo/core/keyed.h>
 #include <dingo/type/type_traits.h>
 
 #include <type_traits>
@@ -50,6 +51,10 @@ struct normalized_type<
 template <class T, class Tag>
 struct normalized_type<annotated<T, Tag>, void>
     : std::decay<annotated<typename normalized_type<T>::type, Tag>> {};
+
+template <class T, class Key>
+struct normalized_type<keyed<T, Key>, void>
+    : std::decay<keyed<typename normalized_type<T>::type, Key>> {};
 
 template <class T> using normalized_type_t = typename normalized_type<T>::type;
 } // namespace dingo

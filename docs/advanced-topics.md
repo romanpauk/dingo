@@ -113,7 +113,7 @@ See:
 
 - [examples/index/index.cpp](../examples/index/index.cpp)
 - [examples/index/message_processing.cpp](../examples/index/message_processing.cpp)
-- [include/dingo/index.h](../include/dingo/index.h)
+- [include/dingo/index/index.h](../include/dingo/index/index.h)
 - [include/dingo/index/map.h](../include/dingo/index/map.h)
 - [include/dingo/index/unordered_map.h](../include/dingo/index/unordered_map.h)
 - [include/dingo/index/array.h](../include/dingo/index/array.h)
@@ -131,28 +131,41 @@ See:
 - [test/registration/annotated.cpp](../test/registration/annotated.cpp)
 - [include/dingo/registration/annotated.h](../include/dingo/registration/annotated.h)
 
-## Static And Dynamic Containers
+## Runtime And Compile-Time Registration
 
-Dingo offers different container traits with different tradeoffs.
+Dingo has two registration modes with different tradeoffs.
 
-- dynamic containers use standard runtime structures and are the default choice
-- static containers use more compile-time structure for faster repeated lookup
+- Runtime registration uses `container<>` or `runtime_container` and adds
+  registrations with `register_type<...>()`.
+- Compile-time registration uses `bindings<...>` with `container<bindings<...>>`
+  or `static_container<bindings<...>>`.
+- `container<bindings<...>>` may also accept runtime registrations, which is
+  useful when most of the graph is static but a small boundary remains dynamic.
 
-Static containers are still runtime DI containers. Here, "static" refers to the
-container internals, not to compile-time object construction.
+The modes share the same resolution API and policy vocabulary. The difference is
+where the registration list lives: runtime container state or the container
+type.
 
-Static containers make sense when:
+Runtime registration makes sense when:
 
-- the participating types are known and stable
-- distinct container tags can be managed correctly
-- the performance tradeoff is worth the extra rigidity
+- registrations are discovered or selected at runtime
+- plugins, tests, or modules need to add registrations independently
+- the graph is intentionally open-ended
+
+Compile-time bindings make sense when:
+
+- the participating types are known and stable at compile time
+- missing dependencies and cycles should fail during compilation
+- lookup should avoid mutable runtime registration state
 
 See:
 
-- [examples/index/message_processing.cpp](../examples/index/message_processing.cpp)
+- [examples/container/quick.cpp](../examples/container/quick.cpp)
+- [examples/registration/compile_time_registration.cpp](../examples/registration/compile_time_registration.cpp)
+- [architecture/containers.md](architecture/containers.md)
 - [include/dingo/container.h](../include/dingo/container.h)
-- [include/dingo/type/type_map.h](../include/dingo/type/type_map.h)
-- [include/dingo/resolution/type_cache.h](../include/dingo/resolution/type_cache.h)
+- [include/dingo/runtime_container.h](../include/dingo/runtime_container.h)
+- [include/dingo/static_container.h](../include/dingo/static_container.h)
 
 ## Container Nesting
 
@@ -261,9 +274,10 @@ See:
 
 ## Runtime Notes
 
-Two runtime details are easy to miss:
+Some resolution details are easy to miss:
 
-- Dingo is runtime-based, so some wiring errors surface as exceptions
+- runtime registration errors surface as exceptions during resolution, while
+  compile-time bindings can diagnose declared graph errors during compilation
 - shared resolutions can act as a cache for already-built objects
 - `shared_cyclical` supports cycles through two-phase construction and should be
   treated as a constrained escape hatch rather than the default model

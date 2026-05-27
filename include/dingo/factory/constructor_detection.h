@@ -7,13 +7,15 @@
 
 #pragma once
 
-#include <dingo/config.h>
+#include <dingo/core/config.h>
 
 #include <dingo/registration/annotated.h>
+#include <dingo/core/keyed.h>
 #include <dingo/factory/constructor_traits.h>
 #include <dingo/factory/constructor_typedef.h>
 #include <dingo/type/complete_type.h>
 #include <dingo/type/normalized_type.h>
+#include <dingo/type/type_list.h>
 
 #include <type_traits>
 #include <utility>
@@ -26,6 +28,23 @@ template <typename T> struct constructor_detection_traits {
 
 namespace detail {
 struct automatic {};
+
+template <typename Detection, typename = void>
+struct constructor_detection_arguments {
+    using type = std::conditional_t<
+        Detection::kind == constructor_kind::concrete && Detection::arity == 0,
+        type_list<>, void>;
+};
+
+template <typename Detection>
+struct constructor_detection_arguments<
+    Detection, std::void_t<typename Detection::arguments>> {
+    using type = typename Detection::arguments;
+};
+
+template <typename Detection>
+using constructor_detection_arguments_t =
+    typename constructor_detection_arguments<Detection>::type;
 
 template <class DisabledType, typename Tag> struct constructor_argument;
 template <class DisabledType, typename Tag> struct opaque_constructor_argument;
@@ -65,6 +84,12 @@ struct constructor_argument<DisabledType, automatic> {
             is_complete<std::decay_t<T>>::value>
     >
     operator T();
+
+    template <
+        typename T, typename Key,
+        typename = typename std::enable_if_t<
+            !std::is_same_v<DisabledType, std::decay_t<T>>>>
+    operator keyed<T, Key>() const;
 };
 
 template <class DisabledType>
@@ -87,18 +112,6 @@ class constructor_argument_impl<DisabledType, Context, Container, automatic> {
   public:
     constructor_argument_impl(Context& context, Container& container)
         : context_(context), container_(container) {}
-
-    // Runtime value/rvalue conversion follows the same rule as the detection
-    // probes above: only complete types may be materialized here.
-    template <
-        typename T,
-        typename = typename std::enable_if_t<
-            !std::is_same_v<DisabledType, std::decay_t<T>> &&
-            is_complete<std::decay_t<T>>::value>
-    >
-    operator T&&() const {
-        return context_.template resolve<T&&>(container_);
-    }
 
     template <
         typename T,
@@ -123,6 +136,8 @@ class constructor_argument_impl<DisabledType, Context, Container, automatic> {
             is_complete<std::decay_t<T>>::value>
     >
     operator T() {
+        // A prvalue `T` still satisfies `T&&` constructor parameters, so
+        // constructor injection can stay on the regular value path here.
         return context_.template resolve<T>(container_);
     }
 
@@ -130,6 +145,12 @@ class constructor_argument_impl<DisabledType, Context, Container, automatic> {
               typename = std::enable_if_t< !std::is_same_v<DisabledType, std::decay_t<T>>> >
     operator annotated<T, Tag>() {
         return context_.template resolve<annotated<T, Tag>>(container_);
+    }
+
+    template <typename T, typename Key,
+              typename = std::enable_if_t<!std::is_same_v<DisabledType, std::decay_t<T>>>>
+    operator keyed<T, Key>() {
+        return context_.template resolve<keyed<T, Key>>(container_);
     }
 
   private:
@@ -439,10 +460,26 @@ struct constructor_detection {
 } // namespace detail
 
 template <typename T, typename DetectionType = detail::automatic>
-struct constructor_detection
-    : std::conditional_t<
-          has_constructor_typedef_v<T>, constructor_typedef<T>,
-          detail::default_constructor_detection<T, DetectionType>> {
+struct constructor_detection {
+  private:
+    using detection_type = std::conditional_t<
+        has_constructor_typedef_v<T>, constructor_typedef<T>,
+        detail::default_constructor_detection<T, DetectionType>>;
+
+  public:
+    using arguments = detail::constructor_detection_arguments_t<detection_type>;
+    static constexpr detail::constructor_kind kind = detection_type::kind;
+    static constexpr size_t arity = detection_type::arity;
+
+    template <typename Type, typename Context, typename Container>
+    static auto construct(Context& ctx, Container& container) {
+        return detection_type::template construct<Type>(ctx, container);
+    }
+
+    template <typename Type, typename Context, typename Container>
+    static void construct(void* ptr, Context& ctx, Container& container) {
+        detection_type::template construct<Type>(ptr, ctx, container);
+    }
 };
 
 } // namespace dingo

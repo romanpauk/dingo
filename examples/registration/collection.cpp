@@ -42,6 +42,11 @@ struct Dispatcher {
         std::map<std::type_index, std::unique_ptr<ProcessorBase>>&& processors)
         : processors_(std::move(processors)) {}
 
+    Dispatcher(const Dispatcher&) = delete;
+    Dispatcher& operator=(const Dispatcher&) = delete;
+    Dispatcher(Dispatcher&&) = default;
+    Dispatcher& operator=(Dispatcher&&) = default;
+
     template <typename T> void process(const T& value) {
         processors_.at(typeid(T))->process(&value);
     }

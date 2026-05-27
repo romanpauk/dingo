@@ -2,9 +2,13 @@
 
 Dependency Injection Container for C++, with DI, next-gen and an 'o' in a name.
 
-Dingo builds object graphs from ordinary C++ types. Scopes and storage policies
-control ownership explicitly, and user types stay free of framework macros or
-base classes.
+Dingo builds object graphs from ordinary C++ types with runtime or compile-time
+registration. Scopes and storage policies control ownership explicitly, and user
+types stay free of framework macros or base classes.
+
+Resolution applies supported ownership and interface conversions automatically,
+so one registration can satisfy references, pointers, smart pointers, and
+interface views when the selected storage and scope allow it.
 
 Tested with:
 
@@ -15,54 +19,113 @@ Tested with:
 
 [![Build](https://github.com/romanpauk/dingo/actions/workflows/build.yaml/badge.svg?branch=master)](https://github.com/romanpauk/dingo/actions?query=branch%3Amaster++)
 
-## Quick Start
+## Runtime Registration
 
-<!-- { include("examples/container/quick.cpp", scope="////") -->
+Runtime registration uses `container<>` with registrations added through
+`register_type<...>()`, which fits graphs assembled by ordinary control flow.
+
+<!-- { include("examples/registration/runtime_registration.cpp", scope="////") -->
 
 Example code included from
-[examples/container/quick.cpp](examples/container/quick.cpp):
+[examples/registration/runtime_registration.cpp](examples/registration/runtime_registration.cpp):
 
 ```c++
-// Class types to be managed by the container. Note that there is no special
-// code required for a type to be used by the container and that conversions
-// are applied automatically based on an registered type scope.
-struct A {
-    A() {}
-};
-struct B {
-    B(A&, std::shared_ptr<A>) {}
-};
-struct C {
-    C(B*, std::unique_ptr<B>&, A&) {}
+class config {
+  public:
+    int retries() const { return retries_; }
+
+  private:
+    int retries_ = 3;
 };
 
-container<> container;
-// Register struct A with a shared scope, stored as std::shared_ptr<A>
-container.register_type<scope<shared>, storage<std::shared_ptr<A>>>();
-
-// Register struct B with a shared scope, stored as std::unique_ptr<B>
-container.register_type<scope<shared>, storage<std::unique_ptr<B>>>();
-
-// Register struct C with an unique scope, stored as plain C
-container.register_type<scope<unique>, storage<C>>();
-
-// Resolving the struct C will recursively instantiate required dependencies
-// (structs A and B) and inject the instances based on their scopes into C.
-// As C is in unique scope, each resolve<C> will return new C instance.
-// As A and B are in shared scope, each C will get the same instances
-// injected.
-/*C c =*/container.resolve<C>();
-
-struct D {
-    A& a;
-    B* b;
+struct service_interface {
+    virtual ~service_interface() {}
+    virtual int retries() const = 0;
 };
 
-// Construct an un-managed struct using dependencies from the container
-/*D d =*/container.construct<D>();
+struct service : service_interface {
+    explicit service(config& cfg) : cfg_(cfg) {}
 
-// Invoke callable
-/*D e =*/container.invoke([&](A& a, B* b) { return D{a, b}; });
+    int retries() const override { return cfg_.retries(); }
+
+  private:
+    config& cfg_;
+};
+
+void runtime_registration_example() {
+    using namespace dingo;
+    container<> container;
+
+    container.register_type<scope<shared>, storage<config>>();
+    container.register_type<scope<shared>, storage<std::shared_ptr<service>>,
+                            interfaces<service_interface>>();
+
+    assert(container.resolve<service_interface&>().retries() == 3);
+    assert(container.resolve<service_interface*>()->retries() == 3);
+    assert(
+        container.resolve<std::shared_ptr<service_interface>&>()->retries() ==
+        3);
+}
+```
+
+<!-- } -->
+
+The broader [quick example](examples/container/quick.cpp) shows recursive
+constructor injection plus automatic reference, pointer, and smart-pointer
+conversions from registered storage.
+
+## Compile-Time Registration
+
+Compile-time registration uses `bindings<...>` with `container<bindings<...>>`
+or `static_container<bindings<...>>`, which fits graphs known in the type
+system.
+
+<!-- { include("examples/registration/compile_time_registration.cpp", scope="////") -->
+
+Example code included from
+[examples/registration/compile_time_registration.cpp](examples/registration/compile_time_registration.cpp):
+
+```c++
+class config {
+  public:
+    int retries() const { return retries_; }
+
+  private:
+    int retries_ = 3;
+};
+
+struct service_interface {
+    virtual ~service_interface() {}
+    virtual int retries() const = 0;
+};
+
+struct service : service_interface {
+    explicit service(config& cfg) : cfg_(cfg) {}
+
+    int retries() const override { return cfg_.retries(); }
+
+  private:
+    config& cfg_;
+};
+
+void compile_time_registration_example() {
+    using namespace dingo;
+    using app_bindings = dingo::bindings<
+        dingo::bind<scope<shared>, storage<config>>,
+        dingo::bind<scope<shared>, storage<std::shared_ptr<service>>,
+                    interfaces<service_interface>>>;
+
+    container<app_bindings> container;
+
+    assert(container.resolve<service_interface&>().retries() == 3);
+    assert(container.resolve<service_interface*>()->retries() == 3);
+    assert(
+        container.resolve<std::shared_ptr<service_interface>&>()->retries() ==
+        3);
+
+    static_container<app_bindings> static_only;
+    assert(static_only.resolve<service_interface&>().retries() == 3);
+}
 ```
 
 <!-- } -->
@@ -82,7 +145,7 @@ Example code included from
 include(FetchContent)
 FetchContent_Declare(dingo
                      GIT_REPOSITORY https://github.com/romanpauk/dingo.git
-                     GIT_TAG        master)
+                     GIT_TAG        v0.2.0)
 FetchContent_MakeAvailable(dingo)
 target_link_libraries(dingo_fetchcontent_test PRIVATE dingo::dingo)
 ```
@@ -94,65 +157,38 @@ When working from a checkout, the top-level CMake project also supports
 
 ## Documentation
 
-- [Getting Started](docs/getting-started.md): installation, first registrations,
-  `resolve()`, `construct()`, and `invoke()`.
-- [Core Concepts](docs/core-concepts.md): scopes, storage, arrays, variants,
-  factories, interfaces, and multibindings.
+- [Getting Started](docs/getting-started.md): installation, runtime
+  registration, compile-time registration, `resolve()`, `construct()`, and
+  `invoke()`.
+- [Core Concepts](docs/core-concepts.md): registration modes, scopes, storage,
+  arrays, variants, factories, interfaces, and multibindings.
 - [Advanced Topics](docs/advanced-topics.md): indexed resolution, annotations,
-  static vs dynamic containers, nesting, RTTI, allocation, and runtime notes.
+  runtime and compile-time registration modes, nesting, RTTI, allocation, and
+  runtime notes.
 - [Architecture](docs/architecture/README.md): registration flow, lookup shape,
   extension traits, and conversion rules.
 - [Examples](docs/examples.md): a guided index of runnable examples in
   [`examples/`](examples).
+- [Development](docs/development.md): local development builds, repo tooling,
+  Markdown verification, and CI container notes.
 - [Motivation and History](docs/history.md): background on how the library
   evolved.
 
 ## Feature Summary
 
 - Non-intrusive registration of ordinary C++ types
+- Runtime and compile-time registration modes
 - Explicit control over lifetime and stored representation
-- Array support for raw arrays and smart-pointer-backed arrays
-- Explicit variant construction plus whole-variant or held-alternative
-  resolution
 - Constructor deduction with explicit factory overrides when needed
 - Interface bindings and multibindings
 - Indexed and annotated resolution
-- Static and dynamic container configurations
 - Parent-child container nesting
+- Array support for raw arrays and smart-pointer-backed arrays
+- Explicit variant construction plus whole-variant or held-alternative
+  resolution
 - Custom RTTI and allocator hooks
 
-## Project Notes
-
-Development builds can enable tests, benchmarks, and runnable examples through
-`DINGO_DEVELOPMENT_MODE=ON`. The library itself remains header-only.
-
-Python helper tooling for development is declared in `pyproject.toml` and locked
-in `uv.lock`. `uv` is the required entry point for repo-owned Python tooling.
-
-For the Markdown CMake targets (`md-update` / `md-verify`), `uv sync` is not
-required first: CMake invokes `uv run --locked ...` directly.
-
-Preparing the environment ahead of time is still optional:
-
-```bash
-uv sync
-cmake --build build -t md-verify
-```
-
-CI uses the same locked `uv` environment.
-
-Container images:
-
-- Linux image examples:
-  - `dingo-toolchains:ubuntu-25.04-gcc-15` for GCC 15 builds on Ubuntu 25.04
-  - `dingo-toolchains:ubuntu-25.04-clang-20` for Clang 20 builds on Ubuntu 25.04
-- MSVC local workflow:
-  - build a local image from `docker/ubuntu25-toolchains/Containerfile` with
-    `TOOLCHAIN=msvc-wine` for an MSVC-style environment
-
-See [docker/ubuntu25-toolchains/README.md](docker/ubuntu25-toolchains/README.md)
-for the Linux CI-backed tags, the local MSVC build/run/test flow, and the
-broader `Containerfile` toolchain support.
+## Related Projects
 
 For DI library comparisons, also take a look at:
 

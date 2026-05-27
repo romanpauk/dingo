@@ -19,7 +19,9 @@
 
 #include <gtest/gtest.h>
 
+#include <map>
 #include <optional>
+#include <vector>
 
 #include "support/class.h"
 
@@ -123,7 +125,6 @@ template <typename T> struct type_traits<test_shared<T>> {
     static constexpr bool enabled = true;
     static constexpr bool is_pointer_like = true;
     static constexpr bool is_value_borrowable = true;
-    static constexpr bool copy_on_resolve = true;
 
     template <typename>
     static constexpr bool is_handle_rebindable = true;
@@ -165,7 +166,6 @@ template <typename T> struct type_traits<test_unique<T>> {
     static constexpr bool enabled = true;
     static constexpr bool is_pointer_like = true;
     static constexpr bool is_value_borrowable = true;
-    static constexpr bool copy_on_resolve = false;
 
     template <typename>
     static constexpr bool is_handle_rebindable = true;
@@ -213,7 +213,6 @@ template <typename T> struct type_traits<test_optional<T>> {
     static constexpr bool enabled = true;
     static constexpr bool is_pointer_like = false;
     static constexpr bool is_value_borrowable = true;
-    static constexpr bool copy_on_resolve = true;
 
     template <typename>
     static constexpr bool is_handle_rebindable = false;
@@ -398,9 +397,12 @@ struct type_conversion_traits<test_optional<U>, test_optional<T>> {
 
 static_assert(is_interface_storage_rebindable_v<test_shared<Class>, IClass>);
 static_assert(is_interface_storage_rebindable_v<test_unique<Class>, IClass>);
-static_assert(detail::copy_on_resolve_v<test_shared<Class>>);
-static_assert(!detail::copy_on_resolve_v<test_unique<Class>>);
-static_assert(detail::copy_on_resolve_v<test_optional<Class>>);
+static_assert(is_copy_constructible_v<test_shared<Class>>);
+static_assert(!is_copy_constructible_v<test_unique<Class>>);
+static_assert(is_copy_constructible_v<test_optional<Class>>);
+static_assert(is_copy_constructible_v<std::vector<test_shared<Class>>>);
+static_assert(!is_copy_constructible_v<std::vector<test_unique<Class>>>);
+static_assert(!is_copy_constructible_v<std::map<int, std::unique_ptr<Class>>>);
 
 TEST(type_traits_test, shared_storage_uses_custom_shared_wrapper) {
     container<> container;
