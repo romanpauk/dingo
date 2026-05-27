@@ -30,6 +30,9 @@
 namespace dingo {
 namespace detail {
 
+template <bool RuntimeDependencies, typename... Registrations>
+class basic_static_activation_set;
+
 template <typename Registration> struct binding_storage_slot {
     using binding_model = detail::binding_model<Registration>;
     using storage_type = typename binding_model::storage_type;
@@ -75,6 +78,19 @@ inline constexpr bool binding_has_conversion_cache_v = [] {
 
 template <typename Closure, typename Registration> struct binding_closure_slot {
     Closure closure;
+};
+
+template <bool RuntimeDependencies, typename Registration,
+          typename BindingsType =
+              typename detail::binding_model<Registration>::bindings_type>
+struct local_binding_scope_slot {};
+
+template <bool RuntimeDependencies, typename Registration,
+          typename... LocalRegistrations>
+struct local_binding_scope_slot<RuntimeDependencies, Registration,
+                                static_registry<LocalRegistrations...>> {
+    basic_static_activation_set<RuntimeDependencies, LocalRegistrations...>
+        scope;
 };
 
 template <typename Registration, bool Enabled = binding_has_conversion_cache_v<
@@ -152,15 +168,20 @@ using static_activation_closure_t =
     typename basic_static_activation_closure<RuntimeDependencies,
                                              Registrations...>::type;
 
-template <typename... Registrations>
+template <bool RuntimeDependencies, typename... Registrations>
 class static_binding_storage
     : private binding_conversion_cache_slot<Registrations>...,
-      private binding_storage_slot<Registrations>... {
+      private binding_storage_slot<Registrations>...,
+      private local_binding_scope_slot<RuntimeDependencies, Registrations>... {
     template <typename Registration>
     using storage_slot = binding_storage_slot<Registration>;
 
     template <typename Registration>
     using conversion_cache_slot = binding_conversion_cache_slot<Registration>;
+
+    template <typename Registration>
+    using local_scope_slot =
+        local_binding_scope_slot<RuntimeDependencies, Registration>;
 
   public:
     template <typename Registration> auto& get_storage() {
@@ -176,12 +197,45 @@ class static_binding_storage
             conversion_cache_slot<typename BindingModel::registration_type>&>(
             *this);
     }
+
+    template <typename BindingModel> auto& get_local_scope_for_model() {
+        return static_cast<
+                   local_scope_slot<typename BindingModel::registration_type>&>(
+                   *this)
+            .scope;
+    }
 };
 
 template <typename State, typename Host, typename BindingModel>
 struct binding_activation {
     State& state;
     Host& host;
+
+    template <typename T, bool RemoveRvalueReferences, typename Context>
+    decltype(auto) resolve(Context& context) {
+        using local_bindings = typename BindingModel::bindings_type;
+        if constexpr (std::is_void_v<local_bindings>) {
+            return host.template resolve<T, RemoveRvalueReferences>(context);
+        } else {
+            return state.template resolve_local_binding<
+                T, RemoveRvalueReferences, local_bindings, BindingModel>(
+                host, context);
+        }
+    }
+
+    template <typename T, bool RemoveRvalueReferences, typename Context,
+              typename Key>
+    decltype(auto) resolve(Context& context, key<Key>) {
+        using local_bindings = typename BindingModel::bindings_type;
+        if constexpr (std::is_void_v<local_bindings>) {
+            return host.template resolve<T, RemoveRvalueReferences>(
+                context, key<Key>{});
+        } else {
+            return state.template resolve_local_binding<
+                T, RemoveRvalueReferences, local_bindings, BindingModel, Key>(
+                host, context);
+        }
+    }
 
     template <typename T, typename Context>
     decltype(auto) resolve(Context& context) {
@@ -355,7 +409,7 @@ struct static_binding_resolver {
                 return detail::materialize_binding_source(
                     context,
                     state.template get_storage_for_model<binding_model_type>(),
-                    host, [&](auto&& source) -> void* {
+                    activation, [&](auto&& source) -> void* {
                         auto&& instance =
                             detail::resolve_binding_request<Request,
                                                             storage_type>(
@@ -369,7 +423,7 @@ struct static_binding_resolver {
                 return detail::forward_binding_request<Request>(
                     context,
                     state.template get_storage_for_model<binding_model_type>(),
-                    host, activation, [&](auto&& instance) -> void* {
+                    activation, activation, [&](auto&& instance) -> void* {
                         return detail::get_address_as<target_type>(
                             context,
                             std::forward<decltype(instance)>(instance));
@@ -380,7 +434,7 @@ struct static_binding_resolver {
                 conversion_request_type>(
                 context,
                 state.template get_storage_for_model<binding_model_type>(),
-                host,
+                activation,
                 state.template get_closure<
                     typename binding_model_type::registration_type>(),
                 activation, [&](auto&& instance) -> void* {
@@ -402,7 +456,7 @@ struct static_binding_resolver {
                 return detail::materialize_binding_source(
                     context,
                     state.template get_storage_for_model<binding_model_type>(),
-                    host, [&](auto&& source) -> decltype(auto) {
+                    activation, [&](auto&& source) -> decltype(auto) {
                         auto&& instance =
                             detail::resolve_binding_request<Request,
                                                             storage_type>(
@@ -416,7 +470,7 @@ struct static_binding_resolver {
                 return detail::consume_binding_request<Request>(
                     context,
                     state.template get_storage_for_model<binding_model_type>(),
-                    host, activation, std::forward<Fn>(fn));
+                    activation, activation, std::forward<Fn>(fn));
             }
         } else {
             binding_activation<State, Host, binding_model_type> activation{
@@ -424,7 +478,7 @@ struct static_binding_resolver {
             return detail::consume_binding_resolution_request<Request>(
                 context,
                 state.template get_storage_for_model<binding_model_type>(),
-                host,
+                activation,
                 state.template get_closure<
                     typename binding_model_type::registration_type>(),
                 activation, std::forward<Fn>(fn));
@@ -448,7 +502,8 @@ decltype(auto) evaluate_static_binding(State& state, Host& host,
                                        Context& context) {
     binding_activation<State, Host, BindingModel> activation{state, host};
     return detail::materialize_tracked_binding_source(
-        context, state.template get_storage_for_model<BindingModel>(), host,
+        context, state.template get_storage_for_model<BindingModel>(),
+        activation,
         [&](auto&& source) -> decltype(auto) {
             return detail::resolve_binding_value<T>(
                 activation, context, std::forward<decltype(source)>(source));
@@ -590,6 +645,37 @@ class basic_static_activation_set_base
             derived(), host);
     }
 
+    template <typename T, bool RemoveRvalueReferences, typename LocalRegistry,
+              typename BindingModel, typename Key = void, typename Host,
+              typename Context,
+              typename R = resolve_result_t<T, RemoveRvalueReferences>>
+    decltype(auto) resolve_local_binding(Host& host, Context& context) {
+        if constexpr (collection_traits<R>::is_collection) {
+            return host.template resolve<T, RemoveRvalueReferences>(context);
+        } else {
+            using selection = detail::static_binding_t<
+                typename LocalRegistry::template bindings<R, Key>>;
+            if constexpr (selection::status ==
+                          detail::binding_selection_status::found) {
+                using binding = typename selection::binding_type;
+                auto& local_scope =
+                    derived()
+                        .template get_local_scope_for_model<BindingModel>();
+                auto resolver =
+                    local_scope.template make_binding_resolver<binding>(host);
+                return resolver.template resolve<R>(context);
+            } else {
+                if constexpr (std::is_void_v<Key>) {
+                    return host.template resolve<T, RemoveRvalueReferences>(
+                        context);
+                } else {
+                    return host.template resolve<T, RemoveRvalueReferences>(
+                        context, key<Key>{});
+                }
+            }
+        }
+    }
+
     template <typename T, typename Key, typename StaticRegistryType,
               typename Host, typename Fn, typename Context>
     std::size_t append_static_collection(T& results, Host& host,
@@ -623,12 +709,17 @@ class basic_static_activation_set
     : public basic_static_activation_set_base<
           basic_static_activation_set<RuntimeDependencies, Registrations...>,
           RuntimeDependencies, Registrations...>,
-      private static_binding_storage<Registrations...> {
+      private static_binding_storage<RuntimeDependencies, Registrations...> {
   public:
     using static_binding_storage<
+        RuntimeDependencies,
         Registrations...>::get_conversion_cache_for_model;
-    using static_binding_storage<Registrations...>::get_storage;
-    using static_binding_storage<Registrations...>::get_storage_for_model;
+    using static_binding_storage<RuntimeDependencies,
+                                 Registrations...>::get_local_scope_for_model;
+    using static_binding_storage<RuntimeDependencies,
+                                 Registrations...>::get_storage;
+    using static_binding_storage<RuntimeDependencies,
+                                 Registrations...>::get_storage_for_model;
 };
 
 template <typename... Registrations>
@@ -639,7 +730,7 @@ template <typename... Registrations>
 using binding_scope = basic_static_activation_set<true, Registrations...>;
 
 template <typename... Registrations>
-using static_storage_state = static_binding_storage<Registrations...>;
+using static_storage_state = static_binding_storage<false, Registrations...>;
 
 template <bool RuntimeDependencies, typename StorageState,
           typename... Registrations>
@@ -662,6 +753,10 @@ class basic_static_activation_set_ref
 
     template <typename BindingModel> auto& get_conversion_cache_for_model() {
         return state_->template get_conversion_cache_for_model<BindingModel>();
+    }
+
+    template <typename BindingModel> auto& get_local_scope_for_model() {
+        return state_->template get_local_scope_for_model<BindingModel>();
     }
 
   private:

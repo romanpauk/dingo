@@ -452,15 +452,38 @@ struct dependency_bindings_are_resolved<type_list<Head, Tail...>>
           !std::is_void_v<Head> &&
           dependency_bindings_are_resolved<type_list<Tail...>>::value> {};
 
+template <typename BindingModel, typename InterfaceBindings,
+          typename LocalBindings = typename BindingModel::bindings_type>
+struct effective_interface_bindings {
+    using type = InterfaceBindings;
+};
+
+template <typename BindingModel, typename InterfaceBindings,
+          typename... LocalRegistrations>
+struct effective_interface_bindings<
+    BindingModel, InterfaceBindings, static_registry<LocalRegistrations...>> {
+    using type = type_list_cat_t<
+        typename binding_expansion<
+            binding_model<LocalRegistrations>>::interface_bindings...,
+        InterfaceBindings>;
+};
+
 template <typename BindingModel, typename InterfaceBindings>
-using resolved_dependency_bindings_t =
-    typename binding_dependency_resolution<BindingModel,
-                                           InterfaceBindings>::type;
+using effective_interface_bindings_t =
+    typename effective_interface_bindings<BindingModel, InterfaceBindings>::type;
+
+template <typename BindingModel, typename InterfaceBindings>
+using resolved_dependency_bindings_t = typename binding_dependency_resolution<
+    BindingModel,
+    effective_interface_bindings_t<BindingModel, InterfaceBindings>>::type;
 
 template <typename BindingModel, typename InterfaceBindings>
 inline constexpr dependency_resolution_status
     binding_dependency_resolution_status_v =
-        binding_dependency_resolution<BindingModel, InterfaceBindings>::status;
+        binding_dependency_resolution<
+            BindingModel,
+            effective_interface_bindings_t<BindingModel,
+                                           InterfaceBindings>>::status;
 
 template <typename BindingModel, typename StatusTag, typename = void>
 struct inferred_dependency_problem_type {
@@ -529,7 +552,8 @@ template <typename BindingModel, typename InterfaceBindings>
 struct binding_declared_dependencies_resolved<BindingModel, InterfaceBindings,
                                               true>
     : std::bool_constant<std::is_void_v<first_missing_declared_dependency_t<
-          binding_dependencies_t<BindingModel>, InterfaceBindings>>> {};
+          binding_dependencies_t<BindingModel>,
+          effective_interface_bindings_t<BindingModel, InterfaceBindings>>>> {};
 
 template <typename BindingModel, typename InterfaceBindings>
 struct binding_declared_dependencies_resolved<BindingModel, InterfaceBindings,
@@ -550,7 +574,9 @@ struct binding_declared_dependency_diagnostic<BindingModel, InterfaceBindings,
     : declared_dependency_diagnostic<
           BindingModel,
           first_missing_declared_dependency_t<
-              binding_dependencies_t<BindingModel>, InterfaceBindings>> {};
+              binding_dependencies_t<BindingModel>,
+              effective_interface_bindings_t<BindingModel,
+                                             InterfaceBindings>>> {};
 
 template <typename BindingModel, typename InterfaceBindings,
           bool HasKnownDependencies =

@@ -194,7 +194,7 @@ FEATURES = (
     Feature(
         name="local_bindings",
         requires=frozenset({"local_bindings"}),
-        modes=frozenset({"runtime", "mixed"}),
+        modes=frozenset({"runtime", "static", "mixed"}),
         checks=(
             "auto& resolved = container.template resolve<local_value_type&>();",
             "ASSERT_EQ(resolved.value, 12);",
@@ -585,9 +585,7 @@ EXPOSED_TYPES = (
                 local_bindings=(
                     "dingo::bindings<dingo::bind<dingo::scope<dingo::shared>, "
                     "dingo::storage<local_dependency_type>>>"
-                ),
-                mixed="runtime",
-                static=False,
+                )
             ),
         ),
     ),
