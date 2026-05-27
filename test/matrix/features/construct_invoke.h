@@ -15,11 +15,11 @@ namespace dingo::matrix {
 
 template <typename Case> void run_construct_invoke() {
     Case::with_container([](auto& container) {
-        auto constructed = container.template construct<consumer>();
+        auto constructed = container.template construct<dependent_type>();
         ASSERT_EQ(constructed.value, 3);
 
         auto invoked = container.template invoke(
-            [](config& cfg) { return cfg.retries(); });
+            [](value_type& dependency) { return dependency.marker(); });
         ASSERT_EQ(invoked, 3);
     });
 }

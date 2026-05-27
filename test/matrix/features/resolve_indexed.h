@@ -18,9 +18,9 @@ namespace dingo::matrix {
 template <typename Case> void run_resolve_indexed() {
     Case::with_container([](auto& container) {
         auto first =
-            container.template resolve<std::shared_ptr<processor_interface>>(0);
+            container.template resolve<std::shared_ptr<element_interface>>(0);
         auto second =
-            container.template resolve<std::shared_ptr<processor_interface>>(1);
+            container.template resolve<std::shared_ptr<element_interface>>(1);
 
         ASSERT_EQ(first->id(), 0);
         ASSERT_EQ(second->id(), 1);

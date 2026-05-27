@@ -195,30 +195,30 @@ SCOPES = (
 
 STORED_TYPES = (
     StoredType(
-        name="config_value",
-        kind="config",
-        storage="dingo::storage<config>",
+        name="value_type",
+        kind="value_type",
+        storage="dingo::storage<value_type>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_value"}),
     ),
     StoredType(
-        name="service_shared_ptr",
-        kind="service",
-        storage="dingo::storage<std::shared_ptr<service>>",
+        name="implementation_shared_ptr",
+        kind="implementation_type",
+        storage="dingo::storage<std::shared_ptr<implementation_type>>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_shared_ptr"}),
     ),
     StoredType(
-        name="processor_shared_ptr",
-        kind="processor",
-        storage="dingo::storage<std::shared_ptr<processor<0>>>",
+        name="element_shared_ptr",
+        kind="element_type",
+        storage="dingo::storage<std::shared_ptr<element_type<0>>>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_shared_ptr"}),
     ),
     StoredType(
-        name="unique_service_unique_ptr",
-        kind="unique_service",
-        storage="dingo::storage<std::unique_ptr<unique_service>>",
+        name="unique_implementation_unique_ptr",
+        kind="unique_implementation_type",
+        storage="dingo::storage<std::unique_ptr<unique_implementation_type>>",
         supported_scopes=frozenset({"unique"}),
         provides=frozenset({"stored_unique_ptr"}),
     ),
@@ -229,37 +229,37 @@ EXPOSED_TYPES = (
     ExposedType(
         name="concrete",
         kind="concrete",
-        supported_stored_kinds=frozenset({"config"}),
+        supported_stored_kinds=frozenset({"value_type"}),
         provides=frozenset({"concrete_binding"}),
     ),
     ExposedType(
-        name="service_interface",
+        name="interface_type",
         kind="interface",
-        supported_stored_kinds=frozenset({"service"}),
+        supported_stored_kinds=frozenset({"implementation_type"}),
         provides=frozenset({"concrete_binding", "interface_binding"}),
     ),
     ExposedType(
-        name="unique_interface",
+        name="unique_interface_type",
         kind="interface",
-        supported_stored_kinds=frozenset({"unique_service"}),
+        supported_stored_kinds=frozenset({"unique_implementation_type"}),
         provides=frozenset({"interface_binding"}),
     ),
     ExposedType(
-        name="processor_collection",
+        name="element_collection",
         kind="collection",
-        supported_stored_kinds=frozenset({"processor"}),
+        supported_stored_kinds=frozenset({"element_type"}),
         provides=frozenset({"collection_binding"}),
     ),
     ExposedType(
-        name="processor_keyed",
+        name="element_keyed",
         kind="keyed",
-        supported_stored_kinds=frozenset({"processor"}),
+        supported_stored_kinds=frozenset({"element_type"}),
         provides=frozenset({"keyed_binding"}),
     ),
     ExposedType(
-        name="processor_indexed",
+        name="element_indexed",
         kind="indexed",
-        supported_stored_kinds=frozenset({"processor"}),
+        supported_stored_kinds=frozenset({"element_type"}),
         provides=frozenset({"indexed_binding"}),
     ),
 )
@@ -267,33 +267,33 @@ EXPOSED_TYPES = (
 
 RESOLVED_TYPES = (
     ResolvedType(
-        name="config_ref_ptr",
-        supported_exposed_types=frozenset({"concrete", "service_interface"}),
+        name="value_ref_ptr",
+        supported_exposed_types=frozenset({"concrete", "interface_type"}),
         provides=frozenset({"resolved_concrete"}),
     ),
     ResolvedType(
-        name="service_interface_ref_ptr_shared_ptr",
-        supported_exposed_types=frozenset({"service_interface"}),
+        name="interface_ref_ptr_shared_ptr",
+        supported_exposed_types=frozenset({"interface_type"}),
         provides=frozenset({"resolved_shared_interface"}),
     ),
     ResolvedType(
         name="unique_interface_unique_ptr",
-        supported_exposed_types=frozenset({"unique_interface"}),
+        supported_exposed_types=frozenset({"unique_interface_type"}),
         provides=frozenset({"resolved_unique_wrapper"}),
     ),
     ResolvedType(
-        name="processor_vector",
-        supported_exposed_types=frozenset({"processor_collection"}),
+        name="element_vector",
+        supported_exposed_types=frozenset({"element_collection"}),
         provides=frozenset({"resolved_collection"}),
     ),
     ResolvedType(
-        name="processor_keyed_shared_ptr_ref",
-        supported_exposed_types=frozenset({"processor_keyed"}),
+        name="element_keyed_shared_ptr_ref",
+        supported_exposed_types=frozenset({"element_keyed"}),
         provides=frozenset({"resolved_keyed"}),
     ),
     ResolvedType(
-        name="processor_indexed_shared_ptr",
-        supported_exposed_types=frozenset({"processor_indexed"}),
+        name="element_indexed_shared_ptr",
+        supported_exposed_types=frozenset({"element_indexed"}),
         provides=frozenset({"resolved_indexed"}),
     ),
 )
@@ -386,7 +386,7 @@ def register_collection() -> str:
         "container.template register_type_collection<"
         "dingo::scope<dingo::unique>, "
         "dingo::storage<std::vector<std::shared_ptr<"
-        "processor_interface>>>>();"
+        "element_interface>>>>();"
     )
 
 
@@ -394,28 +394,28 @@ def bindings_type(bindings: tuple[str, ...]) -> str:
     return "dingo::bindings<" + ", ".join(bindings) + ">"
 
 
-def config_binding(scope: ScopeSpec) -> str:
-    return binding(scope, "dingo::storage<config>")
+def value_binding(scope: ScopeSpec) -> str:
+    return binding(scope, "dingo::storage<value_type>")
 
 
-def config_registration(scope: ScopeSpec) -> str:
-    return register_type(scope, "dingo::storage<config>")
+def value_registration(scope: ScopeSpec) -> str:
+    return register_type(scope, "dingo::storage<value_type>")
 
 
-def processor_binding(scope: ScopeSpec, index: int, key: str | None = None) -> str:
+def element_binding(scope: ScopeSpec, index: int, key: str | None = None) -> str:
     return binding(
         scope,
-        f"dingo::storage<std::shared_ptr<processor<{index}>>>",
-        interfaces="dingo::interfaces<processor_interface>",
+        f"dingo::storage<std::shared_ptr<element_type<{index}>>>",
+        interfaces="dingo::interfaces<element_interface>",
         key=key,
     )
 
 
-def processor_registration(scope: ScopeSpec, index: int, key: str | None = None) -> str:
+def element_registration(scope: ScopeSpec, index: int, key: str | None = None) -> str:
     return register_type(
         scope,
-        f"dingo::storage<std::shared_ptr<processor<{index}>>>",
-        interfaces="dingo::interfaces<processor_interface>",
+        f"dingo::storage<std::shared_ptr<element_type<{index}>>>",
+        interfaces="dingo::interfaces<element_interface>",
         key=key,
     )
 
@@ -423,52 +423,52 @@ def processor_registration(scope: ScopeSpec, index: int, key: str | None = None)
 def build_plan(
     scope: ScopeSpec, stored_type: StoredType, exposed_type: ExposedType
 ) -> BindingPlan | None:
-    if exposed_type.name == "concrete" and stored_type.name == "config_value":
-        bind_config = config_binding(scope)
-        register_config = config_registration(scope)
+    if exposed_type.name == "concrete" and stored_type.name == "value_type":
+        bind_value = value_binding(scope)
+        register_value = value_registration(scope)
         return BindingPlan(
-            static_bindings=(bind_config,),
-            runtime_setup=(register_config,),
-            mixed_static_bindings=(bind_config,),
+            static_bindings=(bind_value,),
+            runtime_setup=(register_value,),
+            mixed_static_bindings=(bind_value,),
             mixed_runtime_setup=(),
         )
 
     if (
-        exposed_type.name == "service_interface"
-        and stored_type.name == "service_shared_ptr"
+        exposed_type.name == "interface_type"
+        and stored_type.name == "implementation_shared_ptr"
     ):
-        bind_config = config_binding(scope)
-        bind_service = binding(
+        bind_value = value_binding(scope)
+        bind_implementation = binding(
             scope,
             stored_type.storage,
-            interfaces="dingo::interfaces<service_interface>",
+            interfaces="dingo::interfaces<interface_type>",
         )
-        register_config = config_registration(scope)
-        register_service = register_type(
+        register_value = value_registration(scope)
+        register_implementation = register_type(
             scope,
             stored_type.storage,
-            interfaces="dingo::interfaces<service_interface>",
+            interfaces="dingo::interfaces<interface_type>",
         )
         return BindingPlan(
-            static_bindings=(bind_config, bind_service),
-            runtime_setup=(register_config, register_service),
-            mixed_static_bindings=(bind_config,),
-            mixed_runtime_setup=(register_service,),
+            static_bindings=(bind_value, bind_implementation),
+            runtime_setup=(register_value, register_implementation),
+            mixed_static_bindings=(bind_value,),
+            mixed_runtime_setup=(register_implementation,),
         )
 
     if (
-        exposed_type.name == "unique_interface"
-        and stored_type.name == "unique_service_unique_ptr"
+        exposed_type.name == "unique_interface_type"
+        and stored_type.name == "unique_implementation_unique_ptr"
     ):
         bind_unique = binding(
             scope,
             stored_type.storage,
-            interfaces="dingo::interfaces<unique_interface>",
+            interfaces="dingo::interfaces<unique_interface_type>",
         )
         register_unique = register_type(
             scope,
             stored_type.storage,
-            interfaces="dingo::interfaces<unique_interface>",
+            interfaces="dingo::interfaces<unique_interface_type>",
         )
         return BindingPlan(
             static_bindings=(bind_unique,),
@@ -478,13 +478,13 @@ def build_plan(
         )
 
     if (
-        exposed_type.name == "processor_collection"
-        and stored_type.name == "processor_shared_ptr"
+        exposed_type.name == "element_collection"
+        and stored_type.name == "element_shared_ptr"
     ):
-        bind_first = processor_binding(scope, 0)
-        bind_second = processor_binding(scope, 1)
-        register_first = processor_registration(scope, 0)
-        register_second = processor_registration(scope, 1)
+        bind_first = element_binding(scope, 0)
+        bind_second = element_binding(scope, 1)
+        register_first = element_registration(scope, 0)
+        register_second = element_registration(scope, 1)
         return BindingPlan(
             static_bindings=(bind_first, bind_second),
             runtime_setup=(register_collection(), register_first, register_second),
@@ -493,13 +493,13 @@ def build_plan(
         )
 
     if (
-        exposed_type.name == "processor_keyed"
-        and stored_type.name == "processor_shared_ptr"
+        exposed_type.name == "element_keyed"
+        and stored_type.name == "element_shared_ptr"
     ):
-        bind_first = processor_binding(scope, 0, "dingo::key<first_key>")
-        bind_second = processor_binding(scope, 1, "dingo::key<second_key>")
-        register_first = processor_registration(scope, 0, "dingo::key<first_key>")
-        register_second = processor_registration(scope, 1, "dingo::key<second_key>")
+        bind_first = element_binding(scope, 0, "dingo::key<key_a>")
+        bind_second = element_binding(scope, 1, "dingo::key<key_b>")
+        register_first = element_registration(scope, 0, "dingo::key<key_a>")
+        register_second = element_registration(scope, 1, "dingo::key<key_b>")
         return BindingPlan(
             static_bindings=(bind_first, bind_second),
             runtime_setup=(register_first, register_second),
@@ -508,20 +508,20 @@ def build_plan(
         )
 
     if (
-        exposed_type.name == "processor_indexed"
-        and stored_type.name == "processor_shared_ptr"
+        exposed_type.name == "element_indexed"
+        and stored_type.name == "element_shared_ptr"
     ):
         return BindingPlan(
             static_bindings=(),
             runtime_setup=(
                 "container.template register_indexed_type<"
                 f"{scope.type_name}, "
-                "dingo::storage<std::shared_ptr<processor<0>>>, "
-                "dingo::interfaces<processor_interface>>(0);",
+                "dingo::storage<std::shared_ptr<element_type<0>>>, "
+                "dingo::interfaces<element_interface>>(0);",
                 "container.template register_indexed_type<"
                 f"{scope.type_name}, "
-                "dingo::storage<std::shared_ptr<processor<1>>>, "
-                "dingo::interfaces<processor_interface>>(1);",
+                "dingo::storage<std::shared_ptr<element_type<1>>>, "
+                "dingo::interfaces<element_interface>>(1);",
             ),
             mixed_static_bindings=None,
             mixed_runtime_setup=(),

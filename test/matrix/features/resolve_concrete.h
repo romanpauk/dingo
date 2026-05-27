@@ -15,11 +15,11 @@ namespace dingo::matrix {
 
 template <typename Case> void run_resolve_concrete() {
     Case::with_container([](auto& container) {
-        config& instance = container.template resolve<config&>();
-        config* pointer = container.template resolve<config*>();
+        value_type& instance = container.template resolve<value_type&>();
+        value_type* pointer = container.template resolve<value_type*>();
 
-        ASSERT_EQ(instance.retries(), 3);
-        ASSERT_EQ(pointer->retries(), 3);
+        ASSERT_EQ(instance.marker(), 3);
+        ASSERT_EQ(pointer->marker(), 3);
         ASSERT_EQ(&instance, pointer);
     });
 }

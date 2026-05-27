@@ -20,54 +20,56 @@
 
 namespace dingo::matrix {
 
-class config {
+class value_type {
   public:
-    int retries() const { return retries_; }
+    int marker() const { return marker_; }
 
   private:
-    int retries_ = 3;
+    int marker_ = 3;
 };
 
-struct service_interface {
-    virtual ~service_interface() = default;
-    virtual int retries() const = 0;
+struct interface_type {
+    virtual ~interface_type() = default;
+    virtual int marker() const = 0;
 };
 
-struct service : service_interface {
-    explicit service(config& cfg) : cfg_(cfg) {}
+struct implementation_type : interface_type {
+    explicit implementation_type(value_type& dependency)
+        : dependency_(dependency) {}
 
-    int retries() const override { return cfg_.retries(); }
+    int marker() const override { return dependency_.marker(); }
 
   private:
-    config& cfg_;
+    value_type& dependency_;
 };
 
-struct processor_interface {
-    virtual ~processor_interface() = default;
+struct element_interface {
+    virtual ~element_interface() = default;
     virtual int id() const = 0;
 };
 
-template <int Id> struct processor : processor_interface {
+template <int Id> struct element_type : element_interface {
     int id() const override { return Id; }
 };
 
-struct unique_interface {
-    virtual ~unique_interface() = default;
+struct unique_interface_type {
+    virtual ~unique_interface_type() = default;
     virtual int value() const = 0;
 };
 
-struct unique_service : unique_interface {
+struct unique_implementation_type : unique_interface_type {
     int value() const override { return 7; }
 };
 
-struct consumer {
-    explicit consumer(config& cfg) : value(cfg.retries()) {}
+struct dependent_type {
+    explicit dependent_type(value_type& dependency)
+        : value(dependency.marker()) {}
 
     int value;
 };
 
-struct first_key : std::integral_constant<int, 0> {};
-struct second_key : std::integral_constant<int, 1> {};
+struct key_a : std::integral_constant<int, 0> {};
+struct key_b : std::integral_constant<int, 1> {};
 
 struct indexed_container_traits : dingo::dynamic_container_traits {
     using index_definition_type =

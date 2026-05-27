@@ -19,16 +19,16 @@ namespace dingo::matrix {
 
 template <typename Case> void run_resolve_collection() {
     Case::with_container([](auto& container) {
-        auto processors = container.template resolve<
-            std::vector<std::shared_ptr<processor_interface>>>();
+        auto elements = container.template resolve<
+            std::vector<std::shared_ptr<element_interface>>>();
         std::vector<int> ids;
-        ids.reserve(processors.size());
-        for (auto& processor : processors) {
-            ids.push_back(processor->id());
+        ids.reserve(elements.size());
+        for (auto& element : elements) {
+            ids.push_back(element->id());
         }
         std::sort(ids.begin(), ids.end());
 
-        ASSERT_EQ(processors.size(), 2u);
+        ASSERT_EQ(elements.size(), 2u);
         ASSERT_EQ(ids[0], 0);
         ASSERT_EQ(ids[1], 1);
     });

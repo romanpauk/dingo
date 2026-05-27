@@ -18,7 +18,8 @@ namespace dingo::matrix {
 template <typename Case> void run_resolve_unique_wrapper() {
     Case::with_container([](auto& container) {
         auto instance =
-            container.template resolve<std::unique_ptr<unique_interface>&&>();
+            container
+                .template resolve<std::unique_ptr<unique_interface_type>&&>();
 
         ASSERT_EQ(instance->value(), 7);
     });

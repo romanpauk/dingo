@@ -20,11 +20,11 @@ namespace dingo::matrix {
 template <typename Case> void run_resolve_keyed() {
     Case::with_container([](auto& container) {
         auto& first =
-            container.template resolve<std::shared_ptr<processor_interface>&>(
-                dingo::key<first_key>{});
+            container.template resolve<std::shared_ptr<element_interface>&>(
+                dingo::key<key_a>{});
         auto& second =
-            container.template resolve<std::shared_ptr<processor_interface>&>(
-                dingo::key<second_key>{});
+            container.template resolve<std::shared_ptr<element_interface>&>(
+                dingo::key<key_b>{});
 
         ASSERT_EQ(first->id(), 0);
         ASSERT_EQ(second->id(), 1);
