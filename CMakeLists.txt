@@ -219,6 +219,10 @@ if(DINGO_DEVELOPMENT_MODE)
             "${CMAKE_CURRENT_BINARY_DIR}/generated/matrix-tests.cmake")
         set(DINGO_MATRIX_GENERATOR
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/generate.py")
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/model.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/plugins.py"
+            "${DINGO_MATRIX_GENERATOR}")
 
         if(UV_EXECUTABLE)
             set(DINGO_MATRIX_GENERATOR_COMMAND
