@@ -908,9 +908,23 @@ struct type_conversion<
 template <typename Target, typename Source>
 struct type_conversion<
     Target, detail::pointer_source<Source>,
+    std::enable_if_t<std::is_lvalue_reference_v<Target> &&
+                     std::is_array_v<std::remove_reference_t<Target>>>> {
+    template <typename Factory, typename Context, typename SourceCapability>
+    static Target apply(Factory&, Context&, SourceCapability&& source,
+                        type_descriptor, type_descriptor) {
+        using array_type = std::remove_reference_t<Target>;
+        return *reinterpret_cast<array_type*>(source.get());
+    }
+};
+
+template <typename Target, typename Source>
+struct type_conversion<
+    Target, detail::pointer_source<Source>,
     std::enable_if_t<!is_pointer_like_type_v<Target> &&
                      !std::is_pointer_v<Target> &&
-                     !std::is_array_v<Target> && !is_alternative_type_v<Source>>> {
+                     !std::is_array_v<std::remove_reference_t<Target>> &&
+                     !is_alternative_type_v<Source>>> {
     template <typename Factory, typename Context, typename SourceCapability>
     static Target& apply(Factory&, Context&, SourceCapability&& source,
                          type_descriptor, type_descriptor) {

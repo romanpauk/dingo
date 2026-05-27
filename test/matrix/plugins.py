@@ -58,35 +58,7 @@ class FeatureCheckPlugin:
 RowFilter = Callable[[CheckRow], bool]
 
 
-def runtime_only(row: CheckRow) -> bool:
-    return getattr(row.mode, "name") == "runtime"
-
-
-def supports_annotated_resolution(row: CheckRow) -> bool:
-    return row.feature.name != "annotated" or runtime_only(row)
-
-
-def supports_raw_array_reference_resolution(row: CheckRow) -> bool:
-    if row.feature.name != "array":
-        return True
-    if row.resolved_type.name not in {"raw_array_ref", "raw_nd_array_ref"}:
-        return True
-    return runtime_only(row)
-
-
-def supports_unique_variant_resolution(row: CheckRow) -> bool:
-    if row.feature.name != "variant":
-        return True
-    if row.scope.name != "unique":
-        return True
-    return runtime_only(row)
-
-
-ROW_FILTERS: tuple[RowFilter, ...] = (
-    supports_annotated_resolution,
-    supports_raw_array_reference_resolution,
-    supports_unique_variant_resolution,
-)
+ROW_FILTERS: tuple[RowFilter, ...] = ()
 
 
 @dataclass(frozen=True)

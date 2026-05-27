@@ -144,10 +144,11 @@ class static_injector<static_registry<Registrations...>, void>
               typename R = request_result_t<T>>
     R resolve(key<Key> = {}) {
         if constexpr (!collection_traits<R>::is_collection) {
+            using lookup_request_type = resolve_request_t<T, true>;
             using request_type = R;
             using selection = detail::static_binding_t<
-                typename static_source_type::template bindings<request_type,
-                                                               Key>>;
+                typename static_source_type::template bindings<
+                    lookup_request_type, Key>>;
             if constexpr (selection::status ==
                           detail::binding_selection_status::found) {
                 using binding = typename selection::binding_type;
@@ -281,10 +282,12 @@ class static_injector<static_registry<Registrations...>, void>
             return this->template construct_static_collection<
                 R, Key, static_source_type>(*this, context);
         } else {
+            using lookup_request_type =
+                resolve_request_t<T, RemoveRvalueReferences>;
             using request_type = R;
             using selection = detail::static_binding_t<
-                typename static_source_type::template bindings<request_type,
-                                                               Key>>;
+                typename static_source_type::template bindings<
+                    lookup_request_type, Key>>;
             static_assert(selection::status !=
                               detail::binding_selection_status::not_found,
                           "static_injector cannot resolve an unbound type");

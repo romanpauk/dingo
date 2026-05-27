@@ -126,7 +126,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
                   typename static_selection_t<Request, Key>::binding_type,
                   static_registry_type_> &&
               detail::binding_supports_request_v<
-                  Request,
+                  request_interface_t<Request>,
                   typename static_selection_t<Request, Key>::binding_type>> {};
 
     template <typename Request, typename Key = void>
@@ -374,14 +374,15 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
             std::forward<Fn>(fn));
     }
 
-    template <typename Request, typename Key, typename Context>
+    template <typename LookupRequest, typename Request, typename Key,
+              typename Context>
     DINGO_ALWAYS_INLINE request_interface_t<Request>
     resolve_static_selection(Context& context) {
-        using selection = static_selection_t<Request, Key>;
+        using selection = static_selection_t<LookupRequest, Key>;
         using binding = typename selection::binding_type;
         if constexpr (selection::status !=
                       detail::binding_selection_status::found) {
-            throw detail::make_type_not_found_exception<Request>(context);
+            throw detail::make_type_not_found_exception<LookupRequest>(context);
         } else {
             static_resolution_ref static_state_ref(
                 static_cast<static_state&>(*this));
@@ -418,8 +419,11 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
                 context,
                 std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>{});
         } else {
+            using lookup_request_type =
+                resolve_request_t<T, RemoveRvalueReferences>;
             using request_type = R;
-            return resolve_static_selection<request_type, Key>(context);
+            return resolve_static_selection<lookup_request_type, request_type,
+                                            Key>(context);
         }
     }
 
@@ -494,7 +498,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
                     return resolve_static<T, false, key_type>();
                 }
             } else {
-                if (select_static_resolve<R, key_type>()) {
+                if (select_static_resolve<T, key_type>()) {
                     return resolve_static<T, false, key_type>();
                 }
             }
@@ -511,7 +515,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
                     return resolve_static<T, false>();
                 }
             } else {
-                if (select_static_resolve<R>()) {
+                if (select_static_resolve<T>()) {
                     return resolve_static<T, false>();
                 }
             }

@@ -12,6 +12,7 @@
 #include <dingo/core/context_base.h>
 #include <dingo/core/exceptions.h>
 #include <dingo/core/factory_traits.h>
+#include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/rtti/static_provider.h>
 #include <dingo/static/graph.h>
@@ -270,6 +271,7 @@ template <typename State, typename Host, typename InterfaceBinding>
 struct static_binding_resolver {
     using binding_model_type = typename InterfaceBinding::binding_model_type;
     using interface_type = typename InterfaceBinding::interface_type;
+    using raw_interface_type = typename annotated_traits<interface_type>::type;
     using storage_type = typename binding_model_type::storage_type;
 
     State& state;
@@ -289,6 +291,16 @@ struct static_binding_resolver {
             typename request_capabilities<Request, storage_type>::type;
         using capability =
             typename request_capability_match<Request, capability_types>::type;
+        if constexpr (!std::is_void_v<capability> &&
+                      !storage_type::conversions::is_stable &&
+                      !std::is_reference_v<Request> &&
+                      !std::is_pointer_v<Request>) {
+            return consume_request<Request, capability>(
+                context, [](auto&& instance) -> Request {
+                    return std::forward<decltype(instance)>(instance);
+                });
+        }
+
         void* ptr = nullptr;
         if constexpr (!std::is_void_v<capability>) {
             // Stay on the normal materialization path even for identity
@@ -330,9 +342,9 @@ struct static_binding_resolver {
     template <typename Request, typename T, typename Context>
     void* resolve_request_address(Context& context) {
         using conversion_request_type =
-            std::remove_reference_t<resolved_type_t<T, interface_type>>;
+            std::remove_reference_t<resolved_type_t<T, raw_interface_type>>;
         using target_type =
-            std::remove_reference_t<resolved_type_t<T, interface_type>>;
+            std::remove_reference_t<resolved_type_t<T, raw_interface_type>>;
         constexpr bool uses_stored_request_identity =
             stored_request_identity_v<Request, storage_type>;
 
