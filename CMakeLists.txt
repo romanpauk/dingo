@@ -211,6 +211,42 @@ if(DINGO_DEVELOPMENT_MODE)
     endif()
 
     if(DINGO_TESTING_ENABLED)
+        find_package(Python3 COMPONENTS Interpreter REQUIRED)
+        find_program(UV_EXECUTABLE NAMES uv)
+
+        set(DINGO_MATRIX_TEST_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/matrix")
+        set(DINGO_MATRIX_TEST_CMAKE
+            "${CMAKE_CURRENT_BINARY_DIR}/generated/matrix-tests.cmake")
+        set(DINGO_MATRIX_GENERATOR
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/generate.py")
+
+        if(UV_EXECUTABLE)
+            set(DINGO_MATRIX_GENERATOR_COMMAND
+                ${CMAKE_COMMAND} -E env
+                    UV_CACHE_DIR=${CMAKE_CURRENT_BINARY_DIR}/.uv-cache
+                    ${UV_EXECUTABLE} run --locked python
+                    ${DINGO_MATRIX_GENERATOR}
+                    --out ${DINGO_MATRIX_TEST_DIR}
+                    --cmake ${DINGO_MATRIX_TEST_CMAKE})
+        else()
+            set(DINGO_MATRIX_GENERATOR_COMMAND
+                ${Python3_EXECUTABLE}
+                    ${DINGO_MATRIX_GENERATOR}
+                    --out ${DINGO_MATRIX_TEST_DIR}
+                    --cmake ${DINGO_MATRIX_TEST_CMAKE})
+        endif()
+
+        execute_process(
+            COMMAND ${DINGO_MATRIX_GENERATOR_COMMAND}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            RESULT_VARIABLE DINGO_MATRIX_GENERATOR_RESULT)
+        if(NOT DINGO_MATRIX_GENERATOR_RESULT EQUAL 0)
+            message(FATAL_ERROR
+                "Failed to generate matrix tests: "
+                "${DINGO_MATRIX_GENERATOR_RESULT}")
+        endif()
+        include(${DINGO_MATRIX_TEST_CMAKE})
+
         add_executable(dingo_test
             test/container/allocator.cpp
             test/container/construct.cpp
@@ -269,6 +305,21 @@ if(DINGO_DEVELOPMENT_MODE)
         # Force-include windows.h to each test to make sure library builds with windows.h included
         target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
 
+        add_executable(dingo_matrix_test
+            ${DINGO_MATRIX_TEST_SOURCES}
+            test/matrix/features/resolve_collection.h
+            test/matrix/features/resolve_interface.h
+            test/matrix/support/types.h
+        )
+        add_test(NAME dingo_matrix_test COMMAND dingo_matrix_test)
+        set_tests_properties(dingo_matrix_test PROPERTIES LABELS "runtime")
+        target_link_libraries(dingo_matrix_test dingo::dingo gtest_main)
+        target_include_directories(dingo_matrix_test PRIVATE test)
+        target_compile_options(dingo_matrix_test PRIVATE
+            $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
+        target_compile_options(dingo_matrix_test PRIVATE
+            $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
+
         if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
             # The monolithic template-heavy test binary can exceed AArch64's
             # branch range in GCC Release builds. Keep the full typed test
@@ -286,7 +337,6 @@ if(DINGO_DEVELOPMENT_MODE)
         option(DINGO_LIT_TESTS_ENABLED "Enable lit-based tests for static assertions and diagnostics." ON)
         if(DINGO_LIT_TESTS_ENABLED)
             find_program(LIT_EXECUTABLE NAMES lit)
-            find_program(UV_EXECUTABLE NAMES uv)
 
             if(UV_EXECUTABLE)
                 add_test(NAME dingo_lit_tests
