@@ -52,6 +52,20 @@
 #endif
 
 namespace dingo {
+namespace detail {
+template <typename T> struct is_static_context_argument : std::false_type {};
+
+template <typename StaticRegistry, bool RuntimeDependencies>
+struct is_static_context_argument<
+    basic_static_context<StaticRegistry, RuntimeDependencies>> : std::true_type {
+};
+
+template <typename T>
+inline constexpr bool is_static_context_argument_v =
+    is_static_context_argument<
+        std::remove_cv_t<std::remove_reference_t<T>>>::value;
+} // namespace detail
+
 template <typename... Registrations>
 class detail::container_with_static_bindings<static_registry<Registrations...>>
     : public runtime_registry<
@@ -126,7 +140,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
                   typename static_selection_t<Request, Key>::binding_type,
                   static_registry_type_> &&
               detail::binding_supports_request_v<
-                  Request,
+                  request_interface_t<Request>,
                   typename static_selection_t<Request, Key>::binding_type>> {};
 
     template <typename Request, typename Key = void>
@@ -291,7 +305,9 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
         }
     }
 
-    template <typename T, typename Fn>
+    template <
+        typename T, typename Fn,
+        std::enable_if_t<!detail::is_static_context_argument_v<Fn>, int> = 0>
     T construct_static_collection(Fn&& fn, none_t) {
         static_context_type static_context;
         return construct_static_collection<T>(static_context,
@@ -303,7 +319,9 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
         return construct_static_collection<T>(static_context, none_t{});
     }
 
-    template <typename T, typename Fn, typename Key>
+    template <
+        typename T, typename Fn, typename Key,
+        std::enable_if_t<!detail::is_static_context_argument_v<Fn>, int> = 0>
     T construct_static_collection(Fn&& fn, key<Key>) {
         static_context_type static_context;
         return construct_static_collection<T>(static_context,
@@ -374,14 +392,15 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
             std::forward<Fn>(fn));
     }
 
-    template <typename Request, typename Key, typename Context>
+    template <typename LookupRequest, typename Request, typename Key,
+              typename Context>
     DINGO_ALWAYS_INLINE request_interface_t<Request>
     resolve_static_selection(Context& context) {
-        using selection = static_selection_t<Request, Key>;
+        using selection = static_selection_t<LookupRequest, Key>;
         using binding = typename selection::binding_type;
         if constexpr (selection::status !=
                       detail::binding_selection_status::found) {
-            throw detail::make_type_not_found_exception<Request>(context);
+            throw detail::make_type_not_found_exception<LookupRequest>(context);
         } else {
             static_resolution_ref static_state_ref(
                 static_cast<static_state&>(*this));
@@ -418,8 +437,11 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
                 context,
                 std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>{});
         } else {
+            using lookup_request_type =
+                resolve_request_t<T, RemoveRvalueReferences>;
             using request_type = R;
-            return resolve_static_selection<request_type, Key>(context);
+            return resolve_static_selection<lookup_request_type, request_type,
+                                            Key>(context);
         }
     }
 
@@ -494,7 +516,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
                     return resolve_static<T, false, key_type>();
                 }
             } else {
-                if (select_static_resolve<R, key_type>()) {
+                if (select_static_resolve<T, key_type>()) {
                     return resolve_static<T, false, key_type>();
                 }
             }
@@ -511,7 +533,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
                     return resolve_static<T, false>();
                 }
             } else {
-                if (select_static_resolve<R>()) {
+                if (select_static_resolve<T>()) {
                     return resolve_static<T, false>();
                 }
             }
@@ -742,6 +764,48 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
                 [&](auto& collection, auto&& append) {
                     return this->append_runtime_collection(
                         collection, context,
+                        std::forward<decltype(append)>(append), key<Key>{});
+                },
+                [&](auto& collection, auto&& append) {
+                    return static_state_ref.template append_static_collection<
+                        T, Key, static_registry_type_>(
+                        collection, *this, context,
+                        std::forward<decltype(append)>(append));
+                },
+                std::forward<Fn>(fn));
+        }
+    }
+
+    template <typename T, typename Key = void, typename Fn, typename Context,
+              std::enable_if_t<!std::is_same_v<std::remove_reference_t<Context>,
+                                               runtime_context>,
+                               int> = 0>
+    std::size_t append_collection(T& results, Context& context, Fn&& fn) {
+        binding_resolution_ref static_state_ref(
+            static_cast<static_state&>(*this));
+        if constexpr (std::is_void_v<Key>) {
+            return detail::append_binding_collection(
+                results,
+                [&](auto& collection, auto&& append) {
+                    runtime_context runtime_context;
+                    return this->append_runtime_collection(
+                        collection, runtime_context,
+                        std::forward<decltype(append)>(append), none_t{});
+                },
+                [&](auto& collection, auto&& append) {
+                    return static_state_ref.template append_static_collection<
+                        T, void, static_registry_type_>(
+                        collection, *this, context,
+                        std::forward<decltype(append)>(append));
+                },
+                std::forward<Fn>(fn));
+        } else {
+            return detail::append_binding_collection(
+                results,
+                [&](auto& collection, auto&& append) {
+                    runtime_context runtime_context;
+                    return this->append_runtime_collection(
+                        collection, runtime_context,
                         std::forward<decltype(append)>(append), key<Key>{});
                 },
                 [&](auto& collection, auto&& append) {

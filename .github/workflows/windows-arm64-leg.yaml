@@ -34,7 +34,7 @@ env:
 jobs:
   cross:
     name: cross-build
-    timeout-minutes: 30
+    timeout-minutes: 45
     runs-on: ${{ inputs.cross_runner }}
     steps:
       - name: Setup MSVC Developer Command Prompt

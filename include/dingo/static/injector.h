@@ -144,10 +144,11 @@ class static_injector<static_registry<Registrations...>, void>
               typename R = request_result_t<T>>
     R resolve(key<Key> = {}) {
         if constexpr (!collection_traits<R>::is_collection) {
+            using lookup_request_type = resolve_request_t<T, true>;
             using request_type = R;
             using selection = detail::static_binding_t<
-                typename static_source_type::template bindings<request_type,
-                                                               Key>>;
+                typename static_source_type::template bindings<
+                    lookup_request_type, Key>>;
             if constexpr (selection::status ==
                           detail::binding_selection_status::found) {
                 using binding = typename selection::binding_type;
@@ -274,6 +275,19 @@ class static_injector<static_registry<Registrations...>, void>
                 *this, context, std::forward<Fn>(fn));
     }
 
+    template <typename T, typename Key = void, typename Fn, typename Context>
+    std::size_t append_collection(T& results, Context& context, Fn&& fn) {
+        return this
+            ->template append_static_collection<T, Key, static_source_type>(
+                results, *this, context, std::forward<Fn>(fn));
+    }
+
+    template <typename T, typename Key = void> std::size_t count_collection() {
+        using collection_type = collection_traits<T>;
+        return type_list_size_v<typename static_source_type::template bindings<
+            normalized_type_t<typename collection_type::resolve_type>, Key>>;
+    }
+
     template <typename T, bool RemoveRvalueReferences, typename Key = void,
               typename R = resolve_result_t<T, RemoveRvalueReferences>>
     R resolve(context_type& context) {
@@ -281,10 +295,12 @@ class static_injector<static_registry<Registrations...>, void>
             return this->template construct_static_collection<
                 R, Key, static_source_type>(*this, context);
         } else {
+            using lookup_request_type =
+                resolve_request_t<T, RemoveRvalueReferences>;
             using request_type = R;
             using selection = detail::static_binding_t<
-                typename static_source_type::template bindings<request_type,
-                                                               Key>>;
+                typename static_source_type::template bindings<
+                    lookup_request_type, Key>>;
             static_assert(selection::status !=
                               detail::binding_selection_status::not_found,
                           "static_injector cannot resolve an unbound type");
@@ -303,6 +319,14 @@ class static_injector<static_registry<Registrations...>, void>
     template <typename T, bool RemoveRvalueReferences, typename Key,
               typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve(context_type& context, key<Key>) {
+        return resolve<T, RemoveRvalueReferences, Key>(context);
+    }
+
+    template <typename T, bool RemoveRvalueReferences, bool CheckCache,
+              typename Key,
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
+    R resolve(context_type& context, key<Key>) {
+        (void)CheckCache;
         return resolve<T, RemoveRvalueReferences, Key>(context);
     }
 };

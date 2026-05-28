@@ -1,0 +1,14 @@
+set(DINGO_MATRIX_TEST_TARGETS
+{% for executable in executables %}
+    {{ executable.name }}
+{% endfor %}
+)
+
+{% for executable in executables %}
+set({{ executable.name }}_SOURCES
+{% for source in executable.sources %}
+    "{{ source }}"
+{% endfor %}
+)
+
+{% endfor %}

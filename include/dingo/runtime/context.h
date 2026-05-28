@@ -18,7 +18,7 @@ class runtime_context : public detail::context_state {
         if constexpr (is_keyed_v<T>) {
             using request_type = keyed_type_t<T>;
             using key_type = keyed_key_t<T>;
-            return T(container.template resolve<request_type, false>(
+            return T(container.template resolve<request_type, false, true>(
                 *this, key<key_type>{}));
         } else {
             return container.template resolve<T, false>(*this);

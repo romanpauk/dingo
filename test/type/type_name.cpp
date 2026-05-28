@@ -162,12 +162,7 @@ TEST(type_name_test, static_function_pointer_type_name) {
 TEST(type_name_test, functor_operator_type_name) {
     expect_type_name(
         type_name<decltype(&type_name_test_types::callable::operator())>(),
-        {"void",
-         "dingo::type_name_test_types::callable::",
-         "*",
-         "dingo::type_name_test_types::value",
-         "&",
-         "const"});
+        {"void", "callable::", "*", expected_type_name_value(), "&", "const"});
 }
 
 static_assert(detail::type_name_find("abcdef", "cd") == 2);

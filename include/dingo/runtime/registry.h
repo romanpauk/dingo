@@ -384,13 +384,18 @@ class runtime_registry : public allocator_base<Allocator> {
 
     template <typename Request, typename Key = void>
     detail::binding_selection_status binding_status() {
+        using exact_type =
+            std::remove_cv_t<std::remove_reference_t<request_interface_t<Request>>>;
         using lookup_type = normalized_type_t<Request>;
+        auto* state = runtime_state_if_present();
+        auto* data = state ? state->type_bindings.template get<exact_type>() : nullptr;
+        if constexpr (!std::is_same_v<exact_type, lookup_type>) {
+            if (!data && state) {
+                data = state->type_bindings.template get<lookup_type>();
+            }
+        }
         auto selection = select_runtime_binding(
-            runtime_state_if_present()
-                ? runtime_state_if_present()
-                      ->type_bindings.template get<lookup_type>()
-                : nullptr,
-            std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>{});
+            data, std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>{});
         return selection.status;
     }
 
@@ -720,10 +725,16 @@ class runtime_registry : public allocator_base<Allocator> {
                 },
                 std::decay_t<IdType>{});
         } else if constexpr (MayAutoConstruct &&
-                             is_auto_constructible<std::decay_t<T>>::value &&
-                             constructor<Type>::kind ==
-                                 detail::constructor_kind::concrete) {
-            return auto_construct<T>(context);
+                             is_auto_constructible<std::decay_t<T>>::value) {
+            if constexpr (constructor<Type>::kind ==
+                          detail::constructor_kind::concrete) {
+                return auto_construct<T>(context);
+            } else if constexpr (is_none_v<std::decay_t<IdType>>) {
+                throw detail::make_type_not_found_exception<T>(context);
+            } else {
+                throw detail::make_type_not_found_exception<
+                    T, std::decay_t<IdType>>(context);
+            }
         } else if constexpr (is_none_v<std::decay_t<IdType>>) {
             throw detail::make_type_not_found_exception<T>(context);
         } else {
@@ -918,11 +929,16 @@ class runtime_registry : public allocator_base<Allocator> {
             }
         }
 
-        auto selection = select_runtime_binding(
-            runtime_state_if_present()
-                ? runtime_state_if_present()->type_bindings.template get<Type>()
-                : nullptr,
-            id);
+        using exact_type =
+            std::remove_cv_t<std::remove_reference_t<request_interface_t<T>>>;
+        auto* state = runtime_state_if_present();
+        auto* data = state ? state->type_bindings.template get<exact_type>() : nullptr;
+        if constexpr (!std::is_same_v<exact_type, Type>) {
+            if (!data && state) {
+                data = state->type_bindings.template get<Type>();
+            }
+        }
+        auto selection = select_runtime_binding(data, id);
         if (selection.found()) {
             return resolve_runtime_selection<T, CheckCache>(
                 selection, context, std::forward<IdType>(id));

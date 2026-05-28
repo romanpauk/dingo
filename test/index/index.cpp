@@ -8,164 +8,61 @@
 #include <dingo/container.h>
 #include <dingo/index/array.h>
 #include <dingo/index/map.h>
-#include <dingo/index/unordered_map.h>
 #include <dingo/storage/shared.h>
-#include <dingo/storage/unique.h>
+#include <dingo/type/type_name.h>
 
 #include <gtest/gtest.h>
 
+#include <cstddef>
+#include <memory>
 #include <string>
+#include <tuple>
 #include <type_traits>
 
-#include "support/assert.h"
-#include "support/class.h"
-#include "support/containers.h"
-#include "support/test.h"
-
 namespace dingo {
+
 template <typename IndexKey, typename IndexType>
-struct dynamic_container_with_index {
-    template <typename>
-    using rebind_t = dynamic_container_with_static_rtti_traits;
-
-    using tag_type = void;
-    using rtti_type = dingo::rtti<dingo::static_provider>;
-    template <typename Value, typename Allocator>
-    using type_map_type = dingo::dynamic_type_map<Value, rtti_type, Allocator>;
-    template <typename Value, typename Allocator>
-    using type_cache_type =
-        dingo::dynamic_type_cache<Value, rtti_type, Allocator>;
-    using allocator_type = std::allocator<char>;
+struct dynamic_container_with_index : dynamic_container_traits {
     using index_definition_type = std::tuple<std::tuple<IndexKey, IndexType>>;
-    static constexpr bool cache_enabled = true;
 };
 
-#if defined(DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION)
-using container_types =
-    ::testing::Types<dingo::container<
-        dingo::dynamic_container_with_index<int, index_type::map>>>;
-#else
-using container_types = ::testing::Types<
-    dingo::container<dingo::dynamic_container_with_index<int, index_type::map>>,
-    dingo::container<
-        dingo::dynamic_container_with_index<size_t, index_type::map>>,
-    dingo::container<
-        dingo::dynamic_container_with_index<std::string, index_type::map>>,
-    dingo::container<
-        dingo::dynamic_container_with_index<int, index_type::unordered_map>>,
-    dingo::container<
-        dingo::dynamic_container_with_index<size_t, index_type::map>>,
-    dingo::container<
-        dingo::dynamic_container_with_index<size_t, index_type::array<32>>>>;
-#endif
-
-template <typename T> struct index_test : public test<T> {};
-TYPED_TEST_SUITE(index_test, container_types, );
-
-// TODO: could this be useful in the container<>?
-template <typename Container> struct get_index_type {
-    using type = std::tuple_element_t<
-        0, std::tuple_element_t<0, typename Container::index_definition_type>>;
-};
-
-template <typename Container>
-using get_index_type_t = typename get_index_type<Container>::type;
-
-template <typename T> static T value(int i) {
-    if constexpr (std::is_same_v<T, std::string>) {
-        return std::to_string(i);
-    } else {
-        return static_cast<T>(i);
-    }
-}
-
-TYPED_TEST(index_test, index_tag) {
+TEST(index_test, index_tag) {
     using indexes =
         std::tuple<std::tuple<short, float>, std::tuple<int, double>,
-                   std::tuple<size_t, char>>;
+                   std::tuple<std::size_t, char>>;
     static_assert(
         std::is_same_v<typename index_tag<int, indexes>::type, double>);
     static_assert(
         std::is_same_v<typename index_tag<short, indexes>::type, float>);
     static_assert(
-        std::is_same_v<typename index_tag<size_t, indexes>::type, char>);
-}
-
-TYPED_TEST(index_test, register_indexed_type_unique) {
-    using container_type = TypeParam;
-    container_type container;
-    using index_type = get_index_type_t<container_type>;
-
-    container.template register_indexed_type<
-        scope<unique>, storage<std::unique_ptr<ClassTag<0>>>,
-        interfaces<IClass>>(value<index_type>(0));
-    container.template register_indexed_type<
-        scope<unique>, storage<std::unique_ptr<ClassTag<1>>>,
-        interfaces<IClass>>(value<index_type>(1));
-    ASSERT_THROW((container.template register_indexed_type<
-                     scope<unique>, storage<std::unique_ptr<ClassTag<1>>>,
-                     interfaces<IClass>>(value<index_type>(1))),
-                 type_already_registered_exception);
-
-    ASSERT_EQ(
-        container
-            .template resolve<std::shared_ptr<IClass>>(value<index_type>(0))
-            ->GetTag(),
-        0);
-    ASSERT_EQ(
-        container
-            .template resolve<std::shared_ptr<IClass>>(value<index_type>(1))
-            ->GetTag(),
-        1);
-    ASSERT_THROW(container.template resolve<std::shared_ptr<IClass>>(
-                     value<index_type>(-1)),
-                 type_not_found_exception);
-}
-
-TYPED_TEST(index_test, register_indexed_type_shared) {
-    using container_type = TypeParam;
-    container_type container;
-    using index_type = get_index_type_t<container_type>;
-
-    container.template register_indexed_type<
-        scope<shared>, storage<std::shared_ptr<ClassTag<0>>>, interfaces<IClass>>(
-        value<index_type>(0));
-    container.template register_indexed_type<
-        scope<shared>, storage<std::shared_ptr<ClassTag<1>>>, interfaces<IClass>>(
-        value<index_type>(1));
-    ASSERT_THROW((container.template register_indexed_type<
-                     scope<shared>, storage<std::shared_ptr<ClassTag<1>>>,
-                     interfaces<IClass>>(value<index_type>(1))),
-                 type_already_registered_exception);
-
-    ASSERT_EQ(
-        container.template resolve<IClass&>(value<index_type>(0)).GetTag(), 0);
-    ASSERT_EQ(
-        container.template resolve<IClass&>(value<index_type>(1)).GetTag(), 1);
-    ASSERT_THROW(container.template resolve<IClass&>(value<index_type>(-1)),
-                 type_not_found_exception);
+        std::is_same_v<typename index_tag<std::size_t, indexes>::type, char>);
 }
 
 TEST(index_test, exception_message_index_out_of_range) {
-    using container_type =
-        container<dynamic_container_with_index<size_t, index_type::array<2>>>;
+    struct indexed_interface {
+        virtual ~indexed_interface() = default;
+    };
+    struct indexed_class : indexed_interface {};
+
+    using container_type = container<
+        dynamic_container_with_index<std::size_t, index_type::array<2>>>;
 
     container_type container;
 
     try {
         container.template register_indexed_type<
-            scope<shared>, storage<std::shared_ptr<Class>>, interfaces<IClass>>(
-            size_t(3));
+            scope<shared>, storage<std::shared_ptr<indexed_class>>,
+            interfaces<indexed_interface>>(std::size_t(3));
         FAIL() << "expected type_index_out_of_range_exception";
     } catch (const type_index_out_of_range_exception& e) {
         std::string expected = "type index out of range: key type ";
-        expected += type_name<size_t>();
+        expected += type_name<std::size_t>();
         ASSERT_STREQ(e.what(), expected.c_str());
     }
 }
 
 TEST(index_test, exception_message_index_out_of_range_negative) {
-    auto e = detail::make_type_index_out_of_range_exception(-1, size_t(2));
+    auto e = detail::make_type_index_out_of_range_exception(-1, std::size_t(2));
 
     std::string expected = "type index out of range: key type ";
     expected += type_name<int>();

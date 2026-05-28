@@ -140,6 +140,14 @@ class binding_resolution<Host, static_registry<Registrations...>>
         return resolve<T, RemoveRvalueReferences, Key>(context);
     }
 
+    template <typename T, bool RemoveRvalueReferences, bool CheckCache,
+              typename Key,
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
+    R resolve(runtime_context& context, key<Key>) {
+        (void)CheckCache;
+        return resolve<T, RemoveRvalueReferences, Key>(context);
+    }
+
   private:
     Host* host_;
 };
