@@ -166,7 +166,9 @@ FEATURES = (
             "std::remove_reference_t<decltype(container)> parent(allocator);",
             "parent.template register_type<dingo::scope<dingo::external>, dingo::storage<int>>(1);",
             "parent.template register_type<dingo::scope<dingo::unique>, dingo::storage<nested_value_type>>();",
+            "parent.template register_type<dingo::scope<dingo::unique>, dingo::storage<nested_parent_value_type>>();",
             "std::remove_reference_t<decltype(container)> child(&parent, allocator);",
+            "ASSERT_EQ(child.template resolve<nested_parent_value_type>().value, 1);",
             "child.template register_type<dingo::scope<dingo::external>, dingo::storage<int>>(2);",
             "child.template register_type<dingo::scope<dingo::unique>, dingo::storage<nested_value_type>>();",
             "ASSERT_EQ(parent.template resolve<nested_value_type>().value, 1);",
@@ -339,6 +341,16 @@ FEATURES = (
             {"mixed_external_dependency", "resolved_mixed_external_dependency"}
         ),
         modes=frozenset({"mixed"}),
+    ),
+    Feature(
+        name="mixed_singular_ambiguity",
+        requires=frozenset(
+            {"mixed_singular_conflict", "resolved_mixed_singular_conflict"}
+        ),
+        modes=frozenset({"mixed"}),
+        checks=(
+            "ASSERT_THROW(container.template resolve<value_type&>(), dingo::type_ambiguous_exception);",
+        ),
     ),
     Feature(
         name="custom_allocator",

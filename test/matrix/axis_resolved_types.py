@@ -105,6 +105,12 @@ RESOLVED_TYPES = (
         ),
     ),
     ResolvedType(
+        name="mixed_singular_conflict_ref",
+        supported_exposed_types=frozenset({"mixed_singular_conflict"}),
+        provides=frozenset({"resolved_mixed_singular_conflict"}),
+        requires=frozenset({"stable_concrete_storage", "direct_value_resolution"}),
+    ),
+    ResolvedType(
         name="const_value_ref",
         supported_exposed_types=frozenset({"concrete"}),
         provides=frozenset({"resolved_concrete", "resolved_const_concrete"}),

@@ -46,6 +46,16 @@ EXPOSED_TYPES = (
         ),
     ),
     ExposedType(
+        name="mixed_singular_conflict",
+        kind="value_type",
+        supported_stored_kinds=frozenset({"value_type"}),
+        provides=frozenset({"mixed_singular_conflict"}),
+        registrations=(
+            RegistrationSpec(),
+            RegistrationSpec(mixed="runtime"),
+        ),
+    ),
+    ExposedType(
         name="scenario",
         kind="scenario",
         supported_stored_kinds=frozenset({"scenario"}),

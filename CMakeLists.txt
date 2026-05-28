@@ -304,8 +304,7 @@ if(DINGO_DEVELOPMENT_MODE)
         # Force-include windows.h to each test to make sure library builds with windows.h included
         target_compile_options(dingo_unit_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
 
-        add_executable(dingo_matrix_test
-            ${DINGO_MATRIX_TEST_SOURCES}
+        set(DINGO_MATRIX_TEST_SUPPORT_HEADERS
             test/matrix/features/construct_invoke.h
             test/matrix/features/resolve_concrete.h
             test/matrix/features/resolve_collection.h
@@ -330,14 +329,28 @@ if(DINGO_DEVELOPMENT_MODE)
             test/matrix/support/values.h
             test/matrix/support/variant_types.h
         )
-        add_test(NAME dingo_matrix_test COMMAND dingo_matrix_test)
-        set_tests_properties(dingo_matrix_test PROPERTIES LABELS "runtime")
-        target_link_libraries(dingo_matrix_test dingo::dingo gtest_main)
-        target_include_directories(dingo_matrix_test PRIVATE test)
-        target_compile_options(dingo_matrix_test PRIVATE
-            $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
-        target_compile_options(dingo_matrix_test PRIVATE
-            $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
+
+        add_custom_target(dingo_matrix_test
+            DEPENDS ${DINGO_MATRIX_TEST_TARGETS})
+
+        foreach(DINGO_MATRIX_TEST_TARGET IN LISTS DINGO_MATRIX_TEST_TARGETS)
+            add_executable(${DINGO_MATRIX_TEST_TARGET}
+                ${${DINGO_MATRIX_TEST_TARGET}_SOURCES}
+                ${DINGO_MATRIX_TEST_SUPPORT_HEADERS}
+            )
+            add_test(NAME ${DINGO_MATRIX_TEST_TARGET}
+                COMMAND ${DINGO_MATRIX_TEST_TARGET})
+            set_tests_properties(${DINGO_MATRIX_TEST_TARGET}
+                PROPERTIES LABELS "runtime")
+            target_link_libraries(${DINGO_MATRIX_TEST_TARGET}
+                dingo::dingo gtest_main)
+            target_include_directories(${DINGO_MATRIX_TEST_TARGET}
+                PRIVATE test)
+            target_compile_options(${DINGO_MATRIX_TEST_TARGET} PRIVATE
+                $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
+            target_compile_options(${DINGO_MATRIX_TEST_TARGET} PRIVATE
+                $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
+        endforeach()
 
         if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
             # The unit test binary still carries some template-heavy coverage
