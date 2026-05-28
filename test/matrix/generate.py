@@ -90,12 +90,21 @@ class SourceGroup:
         )
 
 
+@dataclass(frozen=True)
+class AxisIndex:
+    scopes: tuple[ScopeSpec, ...]
+    stored_by_mode_scope: dict[tuple[str, str], tuple[StoredType, ...]]
+    exposed_by_stored_kind: dict[str, tuple[ExposedType, ...]]
+    resolved_by_mode_exposure: dict[tuple[str, str], tuple[ResolvedType, ...]]
+    containers_by_mode: dict[str, tuple[ContainerSpec, ...]]
+    rejected: dict[str, int]
+
+
 def implemented(axis: tuple) -> tuple:
     return tuple(member for member in axis if member.implemented)
 
 
-def generate_rows() -> tuple[MatrixRow, ...]:
-    rows: list[MatrixRow] = []
+def index_axes() -> AxisIndex:
     rejected: dict[str, int] = defaultdict(int)
     modes = REGISTRATION_MODES
     scopes = implemented(SCOPES)
@@ -104,50 +113,109 @@ def generate_rows() -> tuple[MatrixRow, ...]:
     resolved_types = implemented(RESOLVED_TYPES)
     containers = implemented(CONTAINERS)
 
+    containers_by_mode: dict[str, tuple[ContainerSpec, ...]] = {}
+    for mode in modes:
+        mode_containers: list[ContainerSpec] = []
+        for container in containers:
+            if mode.name not in container.modes:
+                rejected["container_mode"] += 1
+                continue
+            mode_containers.append(container)
+        containers_by_mode[mode.name] = tuple(mode_containers)
+
+    stored_by_mode_scope: dict[tuple[str, str], tuple[StoredType, ...]] = {}
+    for mode in modes:
+        for scope in scopes:
+            mode_scope_stored: list[StoredType] = []
+            for stored_type in stored_types:
+                if mode.name not in stored_type.supported_modes:
+                    rejected["stored_type_supports_mode"] += 1
+                    continue
+                if scope.name not in stored_type.supported_scopes:
+                    rejected["scope_supports_stored_type"] += 1
+                    continue
+                mode_scope_stored.append(stored_type)
+            stored_by_mode_scope[(mode.name, scope.name)] = tuple(mode_scope_stored)
+
+    exposed_by_stored_kind: dict[str, tuple[ExposedType, ...]] = {}
+    stored_kinds = {stored_type.kind for stored_type in stored_types}
+    for stored_kind in stored_kinds:
+        matching_exposures: list[ExposedType] = []
+        for exposed_type in exposed_types:
+            if stored_kind not in exposed_type.supported_stored_kinds:
+                rejected["exposure_supports_stored_type"] += 1
+                continue
+            matching_exposures.append(exposed_type)
+        exposed_by_stored_kind[stored_kind] = tuple(matching_exposures)
+
+    resolved_by_mode_exposure: dict[tuple[str, str], tuple[ResolvedType, ...]] = {}
+    for mode in modes:
+        for exposed_type in exposed_types:
+            matching_resolved: list[ResolvedType] = []
+            for resolved_type in resolved_types:
+                if exposed_type.name not in resolved_type.supported_exposed_types:
+                    rejected["resolved_type_supports_exposure"] += 1
+                    continue
+                if mode.name not in resolved_type.supported_modes:
+                    rejected["resolved_type_supports_mode"] += 1
+                    continue
+                matching_resolved.append(resolved_type)
+            resolved_by_mode_exposure[(mode.name, exposed_type.name)] = tuple(
+                matching_resolved
+            )
+
+    return AxisIndex(
+        scopes=scopes,
+        stored_by_mode_scope=stored_by_mode_scope,
+        exposed_by_stored_kind=exposed_by_stored_kind,
+        resolved_by_mode_exposure=resolved_by_mode_exposure,
+        containers_by_mode=containers_by_mode,
+        rejected=rejected,
+    )
+
+
+def generate_rows() -> tuple[MatrixRow, ...]:
+    rows: list[MatrixRow] = []
+    axes = index_axes()
+    rejected = axes.rejected
+    plan_cache: dict[
+        tuple[ScopeSpec, StoredType, ExposedType], RegistrationPlan
+    ] = {}
+
+    def plan_for(
+        scope: ScopeSpec, stored_type: StoredType, exposed_type: ExposedType
+    ) -> RegistrationPlan:
+        key = (scope, stored_type, exposed_type)
+        plan = plan_cache.get(key)
+        if plan is None:
+            plan = REGISTRATION_PLUGIN.build(scope, stored_type, exposed_type)
+            plan_cache[key] = plan
+        return plan
+
     for feature_plugin in FEATURE_CASE_PLUGINS:
         feature = feature_plugin.feature
-        for mode in modes:
+        for mode in REGISTRATION_MODES:
             if mode.name not in feature.modes:
                 rejected["feature_mode"] += 1
                 continue
 
-            mode_containers: list[ContainerSpec] = []
-            for container in containers:
-                if mode.name not in container.modes:
-                    rejected["container_mode"] += 1
-                    continue
-                mode_containers.append(container)
+            mode_containers = axes.containers_by_mode[mode.name]
 
-            for scope in scopes:
-                for stored_type in stored_types:
-                    if mode.name not in stored_type.supported_modes:
-                        rejected["stored_type_supports_mode"] += 1
-                        continue
-                    if scope.name not in stored_type.supported_scopes:
-                        rejected["scope_supports_stored_type"] += 1
-                        continue
-
-                    for exposed_type in exposed_types:
-                        if stored_type.kind not in exposed_type.supported_stored_kinds:
-                            rejected["exposure_supports_stored_type"] += 1
+            for scope in axes.scopes:
+                for stored_type in axes.stored_by_mode_scope[
+                    (mode.name, scope.name)
+                ]:
+                    for exposed_type in axes.exposed_by_stored_kind[stored_type.kind]:
+                        resolved_candidates = axes.resolved_by_mode_exposure[
+                            (mode.name, exposed_type.name)
+                        ]
+                        if not resolved_candidates:
                             continue
 
                         plan: RegistrationPlan | None = None
-                        for resolved_type in resolved_types:
-                            if (
-                                exposed_type.name
-                                not in resolved_type.supported_exposed_types
-                            ):
-                                rejected["resolved_type_supports_exposure"] += 1
-                                continue
-                            if mode.name not in resolved_type.supported_modes:
-                                rejected["resolved_type_supports_mode"] += 1
-                                continue
-
+                        for resolved_type in resolved_candidates:
                             if plan is None:
-                                plan = REGISTRATION_PLUGIN.build(
-                                    scope, stored_type, exposed_type
-                                )
+                                plan = plan_for(scope, stored_type, exposed_type)
                             if mode.name == "static" and not plan.static_bindings:
                                 rejected["static_registration_plan"] += 1
                                 continue
@@ -354,7 +422,7 @@ def render_source(
         cases=cases,
         tests=tests,
     )
-    source.write_text(rendered, encoding="utf-8")
+    write_text_if_changed(source, rendered)
     return source
 
 
@@ -394,12 +462,18 @@ def generate(out_dir: Path, cmake_file: Path) -> None:
     rows = generate_rows()
     sources = generate_sources(rows, out_dir, env)
     cmake_file.parent.mkdir(parents=True, exist_ok=True)
-    cmake_file.write_text(
+    write_text_if_changed(
+        cmake_file,
         env.get_template("cmake.cmake.j2").render(
             sources=[source.as_posix() for source in sources]
         ),
-        encoding="utf-8",
     )
+
+
+def write_text_if_changed(path: Path, content: str) -> None:
+    if path.exists() and path.read_text(encoding="utf-8") == content:
+        return
+    path.write_text(content, encoding="utf-8")
 
 
 def main() -> None:
