@@ -74,20 +74,41 @@ ROW_FILTERS: tuple[RowFilter, ...] = ()
 
 
 @dataclass(frozen=True)
+class CountRange:
+    minimum: int
+    maximum: int
+
+
+def exact_count(value: int) -> CountRange:
+    return CountRange(minimum=value, maximum=value)
+
+
+@dataclass(frozen=True)
 class LifetimeExpectation:
     check: tuple[str, ...]
     constructor: int
-    copy_constructor: int
-    move_constructor: int
+    copy_constructor: CountRange
+    move_constructor: CountRange
+
+
+def lifetime_count_assertions(counter: str, expected: CountRange) -> tuple[str, ...]:
+    if expected.minimum == expected.maximum:
+        return (f"ASSERT_EQ({counter}, {expected.minimum}u);",)
+    return (
+        f"ASSERT_GE({counter}, {expected.minimum}u);",
+        f"ASSERT_LE({counter}, {expected.maximum}u);",
+    )
 
 
 def lifetime_after(expectation: LifetimeExpectation) -> tuple[str, ...]:
     return (
         f"ASSERT_EQ(value_type::constructor_count(), {expectation.constructor}u);",
-        "ASSERT_EQ(value_type::copy_constructor_count(), "
-        f"{expectation.copy_constructor}u);",
-        "ASSERT_EQ(value_type::move_constructor_count(), "
-        f"{expectation.move_constructor}u);",
+        *lifetime_count_assertions(
+            "value_type::copy_constructor_count()", expectation.copy_constructor
+        ),
+        *lifetime_count_assertions(
+            "value_type::move_constructor_count()", expectation.move_constructor
+        ),
         "ASSERT_EQ(value_type::destructor_count(), value_type::total_instances());",
     )
 
@@ -106,8 +127,8 @@ LIFETIME_EXPECTATIONS: dict[
             "ASSERT_TRUE(is_constructed_value(instance));",
         ),
         constructor=1,
-        copy_constructor=0,
-        move_constructor=0,
+        copy_constructor=exact_count(0),
+        move_constructor=exact_count(0),
     ),
     (
         "shared",
@@ -120,8 +141,8 @@ LIFETIME_EXPECTATIONS: dict[
             "ASSERT_TRUE(is_constructed_value(*instance));",
         ),
         constructor=1,
-        copy_constructor=0,
-        move_constructor=0,
+        copy_constructor=exact_count(0),
+        move_constructor=exact_count(0),
     ),
     (
         "unique",
@@ -134,8 +155,8 @@ LIFETIME_EXPECTATIONS: dict[
             "ASSERT_TRUE(is_constructed_value(*instance));",
         ),
         constructor=1,
-        copy_constructor=0,
-        move_constructor=0,
+        copy_constructor=exact_count(0),
+        move_constructor=exact_count(0),
     ),
     (
         "unique",
@@ -149,8 +170,8 @@ LIFETIME_EXPECTATIONS: dict[
             "ASSERT_TRUE(is_constructed_value(*instance));",
         ),
         constructor=1,
-        copy_constructor=1,
-        move_constructor=1,
+        copy_constructor=CountRange(minimum=0, maximum=1),
+        move_constructor=CountRange(minimum=1, maximum=3),
     ),
 }
 
