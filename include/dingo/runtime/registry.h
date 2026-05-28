@@ -389,8 +389,10 @@ class runtime_registry : public allocator_base<Allocator> {
         using lookup_type = normalized_type_t<Request>;
         auto* state = runtime_state_if_present();
         auto* data = state ? state->type_bindings.template get<exact_type>() : nullptr;
-        if (!data && state) {
-            data = state->type_bindings.template get<lookup_type>();
+        if constexpr (!std::is_same_v<exact_type, lookup_type>) {
+            if (!data && state) {
+                data = state->type_bindings.template get<lookup_type>();
+            }
         }
         auto selection = select_runtime_binding(
             data, std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>{});
@@ -925,8 +927,10 @@ class runtime_registry : public allocator_base<Allocator> {
             std::remove_cv_t<std::remove_reference_t<request_interface_t<T>>>;
         auto* state = runtime_state_if_present();
         auto* data = state ? state->type_bindings.template get<exact_type>() : nullptr;
-        if (!data && state) {
-            data = state->type_bindings.template get<Type>();
+        if constexpr (!std::is_same_v<exact_type, Type>) {
+            if (!data && state) {
+                data = state->type_bindings.template get<Type>();
+            }
         }
         auto selection = select_runtime_binding(data, id);
         if (selection.found()) {

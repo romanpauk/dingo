@@ -906,11 +906,26 @@ template <typename... Registrations> struct static_registry {
         detail::binding_request_interface_t<Interface>,
         binding_lookup_key_t<Interface, Key>, interface_bindings>;
 
+    template <typename Interface, typename Key = void,
+              bool SameLookup =
+                  std::is_same_v<detail::binding_exact_request_interface_t<
+                                     Interface>,
+                                 detail::binding_request_interface_t<Interface>>>
+    struct selected_bindings {
+        using exact = exact_bindings_t<Interface, Key>;
+        using type =
+            std::conditional_t<type_list_size_v<exact> != 0, exact,
+                               normalized_bindings_t<Interface, Key>>;
+    };
+
+    template <typename Interface, typename Key>
+    struct selected_bindings<Interface, Key, true> {
+        using type = exact_bindings_t<Interface, Key>;
+    };
+
   public:
     template <typename Interface, typename Key = void>
-    using bindings = std::conditional_t<
-        type_list_size_v<exact_bindings_t<Interface, Key>> != 0,
-        exact_bindings_t<Interface, Key>, normalized_bindings_t<Interface, Key>>;
+    using bindings = typename selected_bindings<Interface, Key>::type;
 
     template <typename Interface, typename Key = void>
     using binding = typename detail::single_binding<bindings<Interface, Key>>::type;

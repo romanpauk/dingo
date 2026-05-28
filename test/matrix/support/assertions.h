@@ -36,9 +36,16 @@ class fail_expression {
         : file_{file}
         , line_{line} {}
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4722)
+#endif
     [[noreturn]] ~fail_expression() noexcept(false) {
         assertion_failed(message_, file_, line_);
     }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
     fail_expression& operator<<(std::string_view value) {
         message_ += value;
