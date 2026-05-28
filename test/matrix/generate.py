@@ -153,11 +153,13 @@ def generate_rows() -> tuple[MatrixRow, ...]:
                                     scope, stored_type, exposed_type
                                 )
                                 if mode.name == "static" and not plan.static_bindings:
+                                    rejected["static_registration_plan"] += 1
                                     continue
                                 if (
                                     mode.name == "mixed"
                                     and plan.mixed_static_bindings is None
                                 ):
+                                    rejected["mixed_registration_plan"] += 1
                                     continue
 
                                 row = MatrixRow(
@@ -187,6 +189,39 @@ def assert_axis_used(
     missing = sorted(expected - used)
     if missing:
         raise RuntimeError(f"matrix axis {axis} did not generate rows for: {missing}")
+
+
+def assert_feature_mode_container_coverage(rows: tuple[MatrixRow, ...]) -> None:
+    generated = {
+        (row.feature.name, row.mode.name, row.container.name) for row in rows
+    }
+    container_tags = frozenset().union(
+        *(container.provides for container in implemented(CONTAINERS))
+    )
+    missing: list[str] = []
+
+    for feature_plugin in FEATURE_CASE_PLUGINS:
+        feature = feature_plugin.feature
+        required_container_tags = feature.container_requires | (
+            feature.requires & container_tags
+        )
+        for mode in REGISTRATION_MODES:
+            if mode.name not in feature.modes:
+                continue
+            for container in implemented(CONTAINERS):
+                if mode.name not in container.modes:
+                    continue
+                if not required_container_tags <= container.provides:
+                    continue
+                key = (feature.name, mode.name, container.name)
+                if key not in generated:
+                    missing.append(" / ".join(key))
+
+    if missing:
+        raise RuntimeError(
+            "matrix feature/mode/container combinations did not generate rows: "
+            + ", ".join(sorted(missing))
+        )
 
 
 def assert_coverage(rows: list[MatrixRow], rejected: dict[str, int]) -> None:
@@ -221,6 +256,7 @@ def assert_coverage(rows: list[MatrixRow], rejected: dict[str, int]) -> None:
         "container",
         {container.name for container in implemented(CONTAINERS)},
     )
+    assert_feature_mode_container_coverage(row_tuple)
 
     missing_filters = sorted(rule for rule in FILTER_RULES if rejected[rule] == 0)
     if missing_filters:

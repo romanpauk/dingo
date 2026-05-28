@@ -212,7 +212,7 @@ if(DINGO_DEVELOPMENT_MODE)
 
     if(DINGO_TESTING_ENABLED)
         find_package(Python3 COMPONENTS Interpreter REQUIRED)
-        find_program(UV_EXECUTABLE NAMES uv)
+        find_program(UV_EXECUTABLE NAMES uv REQUIRED)
 
         set(DINGO_MATRIX_TEST_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/matrix")
         set(DINGO_MATRIX_TEST_CMAKE
@@ -226,21 +226,13 @@ if(DINGO_DEVELOPMENT_MODE)
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/templates/source.cpp.j2"
             "${DINGO_MATRIX_GENERATOR}")
 
-        if(UV_EXECUTABLE)
-            set(DINGO_MATRIX_GENERATOR_COMMAND
-                ${CMAKE_COMMAND} -E env
-                    UV_CACHE_DIR=${CMAKE_CURRENT_BINARY_DIR}/.uv-cache
-                    ${UV_EXECUTABLE} run --locked python
-                    ${DINGO_MATRIX_GENERATOR}
-                    --out ${DINGO_MATRIX_TEST_DIR}
-                    --cmake ${DINGO_MATRIX_TEST_CMAKE})
-        else()
-            set(DINGO_MATRIX_GENERATOR_COMMAND
-                ${Python3_EXECUTABLE}
-                    ${DINGO_MATRIX_GENERATOR}
-                    --out ${DINGO_MATRIX_TEST_DIR}
-                    --cmake ${DINGO_MATRIX_TEST_CMAKE})
-        endif()
+        set(DINGO_MATRIX_GENERATOR_COMMAND
+            ${CMAKE_COMMAND} -E env
+                UV_CACHE_DIR=${CMAKE_CURRENT_BINARY_DIR}/.uv-cache
+                ${UV_EXECUTABLE} run --locked python
+                ${DINGO_MATRIX_GENERATOR}
+                --out ${DINGO_MATRIX_TEST_DIR}
+                --cmake ${DINGO_MATRIX_TEST_CMAKE})
 
         execute_process(
             COMMAND ${DINGO_MATRIX_GENERATOR_COMMAND}
