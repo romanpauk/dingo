@@ -94,94 +94,87 @@ def implemented(axis: tuple) -> tuple:
     return tuple(member for member in axis if member.implemented)
 
 
-def row_tags(
-    mode: RegistrationMode,
-    scope: ScopeSpec,
-    stored_type: StoredType,
-    exposed_type: ExposedType,
-    resolved_type: ResolvedType,
-    container: ContainerSpec,
-) -> frozenset[str]:
-    return frozenset({mode.name}) | (
-        scope.provides
-        | stored_type.provides
-        | exposed_type.provides
-        | resolved_type.provides
-        | container.provides
-    )
-
-
-def reject_reason(
-    feature: Feature,
-    mode: RegistrationMode,
-    scope: ScopeSpec,
-    stored_type: StoredType,
-    exposed_type: ExposedType,
-    resolved_type: ResolvedType,
-    container: ContainerSpec,
-) -> str | None:
-    if mode.name not in container.modes:
-        return "container_mode"
-    if mode.name not in feature.modes:
-        return "feature_mode"
-    if mode.name not in stored_type.supported_modes:
-        return "stored_type_supports_mode"
-    if scope.name not in stored_type.supported_scopes:
-        return "scope_supports_stored_type"
-    if stored_type.kind not in exposed_type.supported_stored_kinds:
-        return "exposure_supports_stored_type"
-    if exposed_type.name not in resolved_type.supported_exposed_types:
-        return "resolved_type_supports_exposure"
-    if mode.name not in resolved_type.supported_modes:
-        return "resolved_type_supports_mode"
-
-    tags = row_tags(mode, scope, stored_type, exposed_type, resolved_type, container)
-    if not feature.requires <= tags:
-        return "feature_requires_tags"
-    if not resolved_type.requires <= tags:
-        return "resolved_type_requires_tags"
-    if not feature.container_requires <= container.provides:
-        return "container_requires"
-
-    return None
-
-
 def generate_rows() -> tuple[MatrixRow, ...]:
     rows: list[MatrixRow] = []
     rejected: dict[str, int] = defaultdict(int)
+    modes = REGISTRATION_MODES
+    scopes = implemented(SCOPES)
+    stored_types = implemented(STORED_TYPES)
+    exposed_types = implemented(EXPOSED_TYPES)
+    resolved_types = implemented(RESOLVED_TYPES)
+    containers = implemented(CONTAINERS)
 
     for feature_plugin in FEATURE_CASE_PLUGINS:
         feature = feature_plugin.feature
-        for mode in REGISTRATION_MODES:
-            for scope in implemented(SCOPES):
-                for stored_type in implemented(STORED_TYPES):
-                    for exposed_type in implemented(EXPOSED_TYPES):
-                        for resolved_type in implemented(RESOLVED_TYPES):
-                            for container in implemented(CONTAINERS):
-                                reason = reject_reason(
-                                    feature,
-                                    mode,
-                                    scope,
-                                    stored_type,
-                                    exposed_type,
-                                    resolved_type,
-                                    container,
-                                )
-                                if reason is not None:
-                                    rejected[reason] += 1
-                                    continue
+        for mode in modes:
+            if mode.name not in feature.modes:
+                rejected["feature_mode"] += 1
+                continue
 
+            mode_containers: list[ContainerSpec] = []
+            for container in containers:
+                if mode.name not in container.modes:
+                    rejected["container_mode"] += 1
+                    continue
+                mode_containers.append(container)
+
+            for scope in scopes:
+                for stored_type in stored_types:
+                    if mode.name not in stored_type.supported_modes:
+                        rejected["stored_type_supports_mode"] += 1
+                        continue
+                    if scope.name not in stored_type.supported_scopes:
+                        rejected["scope_supports_stored_type"] += 1
+                        continue
+
+                    for exposed_type in exposed_types:
+                        if stored_type.kind not in exposed_type.supported_stored_kinds:
+                            rejected["exposure_supports_stored_type"] += 1
+                            continue
+
+                        plan: RegistrationPlan | None = None
+                        for resolved_type in resolved_types:
+                            if (
+                                exposed_type.name
+                                not in resolved_type.supported_exposed_types
+                            ):
+                                rejected["resolved_type_supports_exposure"] += 1
+                                continue
+                            if mode.name not in resolved_type.supported_modes:
+                                rejected["resolved_type_supports_mode"] += 1
+                                continue
+
+                            if plan is None:
                                 plan = REGISTRATION_PLUGIN.build(
                                     scope, stored_type, exposed_type
                                 )
-                                if mode.name == "static" and not plan.static_bindings:
-                                    rejected["static_registration_plan"] += 1
+                            if mode.name == "static" and not plan.static_bindings:
+                                rejected["static_registration_plan"] += 1
+                                continue
+                            if (
+                                mode.name == "mixed"
+                                and plan.mixed_static_bindings is None
+                            ):
+                                rejected["mixed_registration_plan"] += 1
+                                continue
+
+                            base_tags = frozenset({mode.name}) | (
+                                scope.provides
+                                | stored_type.provides
+                                | exposed_type.provides
+                                | resolved_type.provides
+                            )
+
+                            for container in mode_containers:
+                                tags = base_tags | container.provides
+                                if not feature.requires <= tags:
+                                    rejected["feature_requires_tags"] += 1
                                     continue
-                                if (
-                                    mode.name == "mixed"
-                                    and plan.mixed_static_bindings is None
-                                ):
-                                    rejected["mixed_registration_plan"] += 1
+                                if not resolved_type.requires <= tags:
+                                    rejected["resolved_type_requires_tags"] += 1
+                                    continue
+                                if not feature.container_requires <= container.provides:
+                                    rejected["container_requires"] += 1
                                     continue
 
                                 row = MatrixRow(
