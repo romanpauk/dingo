@@ -784,13 +784,37 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
         binding_resolution_ref static_state_ref(
             static_cast<static_state&>(*this));
         if constexpr (std::is_void_v<Key>) {
-            return static_state_ref.template append_static_collection<
-                T, void, static_registry_type_>(
-                results, *this, context, std::forward<Fn>(fn));
+            return detail::append_binding_collection(
+                results,
+                [&](auto& collection, auto&& append) {
+                    runtime_context runtime_context;
+                    return this->append_runtime_collection(
+                        collection, runtime_context,
+                        std::forward<decltype(append)>(append), none_t{});
+                },
+                [&](auto& collection, auto&& append) {
+                    return static_state_ref.template append_static_collection<
+                        T, void, static_registry_type_>(
+                        collection, *this, context,
+                        std::forward<decltype(append)>(append));
+                },
+                std::forward<Fn>(fn));
         } else {
-            return static_state_ref.template append_static_collection<
-                T, Key, static_registry_type_>(
-                results, *this, context, std::forward<Fn>(fn));
+            return detail::append_binding_collection(
+                results,
+                [&](auto& collection, auto&& append) {
+                    runtime_context runtime_context;
+                    return this->append_runtime_collection(
+                        collection, runtime_context,
+                        std::forward<decltype(append)>(append), key<Key>{});
+                },
+                [&](auto& collection, auto&& append) {
+                    return static_state_ref.template append_static_collection<
+                        T, Key, static_registry_type_>(
+                        collection, *this, context,
+                        std::forward<decltype(append)>(append));
+                },
+                std::forward<Fn>(fn));
         }
     }
 

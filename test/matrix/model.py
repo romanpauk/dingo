@@ -724,6 +724,27 @@ EXPOSED_TYPES = (
         ),
     ),
     ExposedType(
+        name="local_collection_runtime_host_value",
+        kind="local_collection_value_type",
+        supported_stored_kinds=frozenset({"local_collection_value_type"}),
+        provides=frozenset({"local_bindings"}),
+        registrations=(
+            RegistrationSpec(
+                storage="dingo::storage<std::shared_ptr<element_type<1>>>",
+                interfaces="dingo::interfaces<element_interface>",
+                mixed="runtime",
+            ),
+            RegistrationSpec(
+                dependencies="dingo::dependencies<std::vector<std::shared_ptr<element_interface>>>",
+                local_bindings=(
+                    "dingo::bindings<dingo::bind<dingo::scope<dingo::shared>, "
+                    "dingo::storage<std::shared_ptr<element_type<0>>>, "
+                    "dingo::interfaces<element_interface>>>"
+                ),
+            ),
+        ),
+    ),
+    ExposedType(
         name="factory_function_value",
         kind="factory_function_value_type",
         supported_stored_kinds=frozenset({"factory_function_value_type"}),
@@ -1586,7 +1607,9 @@ RESOLVED_TYPES = (
     ),
     ResolvedType(
         name="local_collection_value_ref",
-        supported_exposed_types=frozenset({"local_collection_value"}),
+        supported_exposed_types=frozenset(
+            {"local_collection_value", "local_collection_runtime_host_value"}
+        ),
         provides=frozenset({"resolved_concrete"}),
         checks=(
             (
