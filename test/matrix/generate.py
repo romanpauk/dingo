@@ -56,11 +56,14 @@ class CandidateRow:
 @dataclass(frozen=True, slots=True)
 class MatrixRow(CandidateRow):
     plan: RegistrationPlan
+    name: str
+    source_name: str
     lines: CaseLines = CaseLines()
 
 
 @dataclass(frozen=True, slots=True)
 class GeneratedCase:
+    suite: str
     name: str
     container_type: str
     static_bindings: str | None
@@ -68,30 +71,6 @@ class GeneratedCase:
     setup_lines: tuple[str, ...]
     check_lines: tuple[str, ...]
     after_lines: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class GeneratedTest:
-    suite: str
-    name: str
-    case_name: str
-
-
-@dataclass(frozen=True, slots=True)
-class SourceGroup:
-    feature: Feature
-    mode: RegistrationMode
-    container: ContainerSpec
-
-    @property
-    def name(self) -> str:
-        return "_".join(
-            (
-                self.feature.name,
-                self.mode.name,
-                self.container.name,
-            )
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,6 +252,8 @@ def generate_rows() -> tuple[MatrixRow, ...]:
                                         resolved_type=resolved_type,
                                         container=container,
                                         plan=plan,
+                                        name=case_name(candidate),
+                                        source_name=source_name(candidate),
                                         lines=lines,
                                     )
                                 )
@@ -362,7 +343,7 @@ def assert_coverage(rows: list[MatrixRow], rejected: dict[str, int]) -> None:
         raise RuntimeError(f"matrix filters were not exercised: {missing_filters}")
 
 
-def case_name(row: MatrixRow) -> str:
+def case_name(row: CandidateRow) -> str:
     return "_".join(
         (
             row.mode.name,
@@ -375,6 +356,10 @@ def case_name(row: MatrixRow) -> str:
     )
 
 
+def source_name(row: CandidateRow) -> str:
+    return "_".join((row.feature.name, row.mode.name, row.container.name))
+
+
 def make_case(row: MatrixRow) -> GeneratedCase:
     static_bindings = None
     setup_lines = ()
@@ -384,14 +369,15 @@ def make_case(row: MatrixRow) -> GeneratedCase:
         setup_lines = row.plan.runtime_setup
     elif row.mode.name == "mixed":
         if row.plan.mixed_static_bindings is None:
-            raise RuntimeError(f"row {case_name(row)} has no mixed static bindings")
+            raise RuntimeError(f"row {row.name} has no mixed static bindings")
         static_bindings = bindings_type(row.plan.mixed_static_bindings)
         setup_lines = row.plan.mixed_runtime_setup
     else:
         raise RuntimeError(f"unknown registration mode: {row.mode.name}")
 
     return GeneratedCase(
-        name=case_name(row),
+        suite=row.feature.name,
+        name=row.name,
         container_type=row.container.container_type,
         static_bindings=static_bindings,
         before_lines=row.lines.before,
@@ -403,44 +389,28 @@ def make_case(row: MatrixRow) -> GeneratedCase:
 
 def render_source(
     source: Path,
-    rows: tuple[MatrixRow, ...],
+    rows: list[MatrixRow],
     template: Template,
 ) -> Path:
     cases: list[GeneratedCase] = []
-    tests: list[GeneratedTest] = []
 
     for row in rows:
-        case = make_case(row)
-        cases.append(case)
-        tests.append(
-            GeneratedTest(
-                suite=row.feature.name,
-                name=case.name,
-                case_name=case.name,
-            )
-        )
+        cases.append(make_case(row))
 
-    if not tests:
+    if not cases:
         raise RuntimeError(f"source {source} did not generate any tests")
 
     rendered = template.render(
         cases=cases,
-        tests=tests,
     )
     write_text_if_changed(source, rendered)
     return source
 
 
-def source_groups(rows: tuple[MatrixRow, ...]) -> dict[SourceGroup, list[MatrixRow]]:
-    grouped: dict[SourceGroup, list[MatrixRow]] = defaultdict(list)
+def source_groups(rows: tuple[MatrixRow, ...]) -> dict[str, list[MatrixRow]]:
+    grouped: dict[str, list[MatrixRow]] = defaultdict(list)
     for row in rows:
-        grouped[
-            SourceGroup(
-                feature=row.feature,
-                mode=row.mode,
-                container=row.container,
-            )
-        ].append(row)
+        grouped[row.source_name].append(row)
     return grouped
 
 
@@ -448,9 +418,9 @@ def generate_sources(
     rows: tuple[MatrixRow, ...], out_dir: Path, template: Template
 ) -> tuple[Path, ...]:
     sources: list[Path] = []
-    for group, group_rows in source_groups(rows).items():
-        source = out_dir / f"{group.name}.cpp"
-        sources.append(render_source(source, tuple(group_rows), template))
+    for group_name, group_rows in source_groups(rows).items():
+        source = out_dir / f"{group_name}.cpp"
+        sources.append(render_source(source, group_rows, template))
     return tuple(sorted(sources))
 
 

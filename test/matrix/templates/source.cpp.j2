@@ -53,9 +53,9 @@ struct {{ case.name }} {
 {% endfor %}
 } // namespace dingo::matrix
 
-{% for test in tests %}
-TEST({{ test.suite }}, {{ test.name }}) {
-    dingo::matrix::{{ test.case_name }}::run();
+{% for case in cases %}
+TEST({{ case.suite }}, {{ case.name }}) {
+    dingo::matrix::{{ case.name }}::run();
 }
 
 {% endfor %}
