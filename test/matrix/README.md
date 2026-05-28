@@ -25,6 +25,8 @@ are an output of axis selection.
 - `array`: resolve raw and smart-array storage forms.
 - `factory_override`: construct through explicit callable, function, or
   constructor factories.
+- `lifetime_counts`: verify selected storage forms construct, move, copy, and
+  destroy the stored value with expected counts.
 - `mixed_external_dependency`: combine compile-time bindings with a runtime
   external dependency.
 - `custom_allocator`: use a caller-selected allocator for container

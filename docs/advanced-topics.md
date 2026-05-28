@@ -128,7 +128,7 @@ lookup would be the wrong abstraction.
 
 See:
 
-- [test/registration/annotated.cpp](../test/registration/annotated.cpp)
+- [test/matrix/README.md](../test/matrix/README.md)
 - [include/dingo/registration/annotated.h](../include/dingo/registration/annotated.h)
 
 ## Runtime And Compile-Time Registration
@@ -222,7 +222,7 @@ assert(nested_container.resolve<B>().value == 1);
 See:
 
 - [examples/container/nesting.cpp](../examples/container/nesting.cpp)
-- [test/container/nesting.cpp](../test/container/nesting.cpp)
+- [test/matrix/README.md](../test/matrix/README.md)
 
 ## Custom RTTI
 

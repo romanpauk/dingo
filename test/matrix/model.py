@@ -153,6 +153,11 @@ FEATURES = (
         modes=frozenset({"runtime", "static", "mixed"}),
     ),
     Feature(
+        name="lifetime_counts",
+        requires=frozenset({"lifetime_countable"}),
+        modes=frozenset({"runtime", "static", "mixed"}),
+    ),
+    Feature(
         name="resolve_indexed",
         requires=frozenset(
             {"indexed_binding", "shared_storage", "resolved_indexed"}
@@ -264,7 +269,7 @@ FEATURES = (
         checks=(
             "ASSERT_GT(test_allocator_stats<void>::allocated(), 0u);",
             "auto& resolved = container.template resolve<value_type&>();",
-            "ASSERT_EQ(resolved.marker(), 3);",
+            "ASSERT_TRUE(is_constructed_value(resolved));",
         ),
     ),
     Feature(
@@ -282,7 +287,7 @@ FEATURES = (
             "using rtti_type = typename std::remove_reference_t<decltype(container)>::rtti_type;",
             "static_assert(std::is_same_v<rtti_type, dingo::rtti<dingo::static_provider>>);",
             "auto& resolved = container.template resolve<value_type&>();",
-            "ASSERT_EQ(resolved.marker(), 3);",
+            "ASSERT_TRUE(is_constructed_value(resolved));",
         ),
     ),
 )
@@ -326,7 +331,9 @@ STORED_TYPES = (
         kind="value_type",
         storage="dingo::storage<value_type>",
         supported_scopes=frozenset({"shared"}),
-        provides=frozenset({"stored_value", "direct_value_resolution"}),
+        provides=frozenset(
+            {"stored_value", "direct_value_resolution", "lifetime_countable"}
+        ),
     ),
     StoredType(
         id="dependent_type",
@@ -408,7 +415,7 @@ STORED_TYPES = (
         kind="value_type",
         storage="dingo::storage<std::unique_ptr<value_type>>",
         supported_scopes=frozenset({"unique"}),
-        provides=frozenset({"stored_unique_ptr"}),
+        provides=frozenset({"stored_unique_ptr", "lifetime_countable"}),
     ),
     StoredType(
         id="value_shared_ptr",
@@ -416,7 +423,7 @@ STORED_TYPES = (
         kind="value_type",
         storage="dingo::storage<std::shared_ptr<value_type>>",
         supported_scopes=frozenset({"shared"}),
-        provides=frozenset({"stored_shared_ptr"}),
+        provides=frozenset({"stored_shared_ptr", "lifetime_countable"}),
     ),
     StoredType(
         id="value_optional",
@@ -424,7 +431,7 @@ STORED_TYPES = (
         kind="value_type",
         storage="dingo::storage<std::optional<value_type>>",
         supported_scopes=frozenset({"unique"}),
-        provides=frozenset({"stored_optional"}),
+        provides=frozenset({"stored_optional", "lifetime_countable"}),
     ),
     StoredType(
         id="value_array_2",
@@ -903,8 +910,8 @@ RESOLVED_TYPES = (
                 (
                     "value_type& instance = container.template resolve<value_type&>();",
                     "value_type* pointer = container.template resolve<value_type*>();",
-                    "ASSERT_EQ(instance.marker(), 3);",
-                    "ASSERT_EQ(pointer->marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(instance));",
+                    "ASSERT_TRUE(is_constructed_value(*pointer));",
                     "ASSERT_EQ(&instance, pointer);",
                 ),
             ),
@@ -920,7 +927,7 @@ RESOLVED_TYPES = (
                 "resolve_concrete",
                 (
                     "auto instance = container.template resolve<value_type>();",
-                    "ASSERT_EQ(instance.marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(instance));",
                 ),
             ),
         ),
@@ -965,7 +972,7 @@ RESOLVED_TYPES = (
                 "resolve_concrete",
                 (
                     "const value_type& instance = container.template resolve<const value_type&>();",
-                    "ASSERT_EQ(instance.marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(instance));",
                 ),
             ),
         ),
@@ -980,7 +987,7 @@ RESOLVED_TYPES = (
                 "resolve_concrete",
                 (
                     "const value_type* instance = container.template resolve<const value_type*>();",
-                    "ASSERT_EQ(instance->marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(*instance));",
                 ),
             ),
         ),
@@ -994,7 +1001,7 @@ RESOLVED_TYPES = (
                 "resolve_interface",
                 (
                     "auto instance = container.template resolve<copyable_interface_type>();",
-                    "ASSERT_EQ(instance.marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(instance));",
                 ),
             ),
         ),
@@ -1009,11 +1016,11 @@ RESOLVED_TYPES = (
                 "resolve_interface",
                 (
                     "interface_type& instance = container.template resolve<interface_type&>();",
-                    "ASSERT_EQ(instance.marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(instance));",
                     "interface_type* pointer = container.template resolve<interface_type*>();",
-                    "ASSERT_EQ(pointer->marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(*pointer));",
                     "auto& handle = container.template resolve<std::shared_ptr<interface_type>&>();",
-                    "ASSERT_EQ(handle->marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(*handle));",
                 ),
             ),
         ),
@@ -1028,7 +1035,7 @@ RESOLVED_TYPES = (
                 "resolve_interface",
                 (
                     "interface_type& instance = container.template resolve<interface_type&>();",
-                    "ASSERT_EQ(instance.marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(instance));",
                 ),
             ),
         ),
@@ -1043,7 +1050,7 @@ RESOLVED_TYPES = (
                 "resolve_interface",
                 (
                     "interface_type* instance = container.template resolve<interface_type*>();",
-                    "ASSERT_EQ(instance->marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(*instance));",
                 ),
             ),
         ),
@@ -1059,6 +1066,7 @@ RESOLVED_TYPES = (
                 (
                     "second_interface_type& instance = container.template resolve<second_interface_type&>();",
                     "ASSERT_EQ(instance.second_marker(), 4);",
+                    "ASSERT_TRUE(instance.valid());",
                 ),
             ),
         ),
@@ -1073,7 +1081,7 @@ RESOLVED_TYPES = (
                 "resolve_unique_wrapper",
                 (
                     "auto instance = container.template resolve<std::unique_ptr<unique_interface_type>&&>();",
-                    "ASSERT_EQ(instance->value(), 7);",
+                    "ASSERT_TRUE(is_constructed_value(*instance));",
                 ),
             ),
         ),
@@ -1088,7 +1096,7 @@ RESOLVED_TYPES = (
                 "resolve_wrapper",
                 (
                     "auto instance = container.template resolve<std::unique_ptr<value_type>&&>();",
-                    "ASSERT_EQ(instance->marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(*instance));",
                 ),
             ),
         ),
@@ -1103,7 +1111,7 @@ RESOLVED_TYPES = (
                 "resolve_wrapper",
                 (
                     "auto instance = container.template resolve<std::unique_ptr<unique_interface_type>&&>();",
-                    "ASSERT_EQ(instance->value(), 7);",
+                    "ASSERT_TRUE(is_constructed_value(*instance));",
                 ),
             ),
         ),
@@ -1118,7 +1126,7 @@ RESOLVED_TYPES = (
                 "resolve_wrapper",
                 (
                     "auto instance = container.template resolve<std::shared_ptr<value_type>>();",
-                    "ASSERT_EQ(instance->marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(*instance));",
                 ),
             ),
         ),
@@ -1133,7 +1141,7 @@ RESOLVED_TYPES = (
                 "resolve_wrapper",
                 (
                     "auto& instance = container.template resolve<std::shared_ptr<value_type>&>();",
-                    "ASSERT_EQ(instance->marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(*instance));",
                 ),
             ),
         ),
@@ -1149,7 +1157,7 @@ RESOLVED_TYPES = (
                 (
                     "auto instance = container.template resolve<std::optional<value_type>>();",
                     "ASSERT_TRUE(instance.has_value());",
-                    "ASSERT_EQ(instance->marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(*instance));",
                 ),
             ),
         ),
@@ -1164,7 +1172,7 @@ RESOLVED_TYPES = (
                 "resolve_wrapper",
                 (
                     "auto instance = container.template resolve<std::shared_ptr<interface_type>>();",
-                    "ASSERT_EQ(instance->marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(*instance));",
                 ),
             ),
         ),
@@ -1252,7 +1260,7 @@ RESOLVED_TYPES = (
                 "resolve_keyed",
                 (
                     "auto instance = container.template resolve<value_type>(dingo::key<key_a>{});",
-                    "ASSERT_EQ(instance.marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(instance));",
                 ),
             ),
         ),
@@ -1267,7 +1275,7 @@ RESOLVED_TYPES = (
                 "resolve_keyed",
                 (
                     "auto& instance = container.template resolve<value_type&>(dingo::key<key_a>{});",
-                    "ASSERT_EQ(instance.marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(instance));",
                 ),
             ),
         ),
@@ -1282,7 +1290,7 @@ RESOLVED_TYPES = (
                 "resolve_keyed",
                 (
                     "auto& instance = container.template resolve<interface_type&>(dingo::key<key_a>{});",
-                    "ASSERT_EQ(instance.marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(instance));",
                 ),
             ),
         ),
@@ -1355,8 +1363,8 @@ RESOLVED_TYPES = (
                 "array",
                 (
                     "auto* values = container.template resolve<value_type*>();",
-                    "ASSERT_EQ(values[0].marker(), 3);",
-                    "ASSERT_EQ(values[1].marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(values[0]));",
+                    "ASSERT_TRUE(is_constructed_value(values[1]));",
                 ),
             ),
         ),
@@ -1371,8 +1379,8 @@ RESOLVED_TYPES = (
                 "array",
                 (
                     "auto& values = container.template resolve<value_type(&)[2]>();",
-                    "ASSERT_EQ(values[0].marker(), 3);",
-                    "ASSERT_EQ(values[1].marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(values[0]));",
+                    "ASSERT_TRUE(is_constructed_value(values[1]));",
                 ),
             ),
         ),
@@ -1387,8 +1395,8 @@ RESOLVED_TYPES = (
                 "array",
                 (
                     "auto values = container.template resolve<value_type(*)[2]>();",
-                    "ASSERT_EQ((*values)[0].marker(), 3);",
-                    "ASSERT_EQ((*values)[1].marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value((*values)[0]));",
+                    "ASSERT_TRUE(is_constructed_value((*values)[1]));",
                 ),
             ),
         ),
@@ -1403,8 +1411,8 @@ RESOLVED_TYPES = (
                 "array",
                 (
                     "auto& values = container.template resolve<value_type(&)[2][3]>();",
-                    "ASSERT_EQ(values[0][0].marker(), 3);",
-                    "ASSERT_EQ(values[1][2].marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(values[0][0]));",
+                    "ASSERT_TRUE(is_constructed_value(values[1][2]));",
                 ),
             ),
         ),
@@ -1419,8 +1427,8 @@ RESOLVED_TYPES = (
                 "array",
                 (
                     "auto values = container.template resolve<std::unique_ptr<value_type[]>&&>();",
-                    "ASSERT_EQ(values[0].marker(), 3);",
-                    "ASSERT_EQ(values[1].marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(values[0]));",
+                    "ASSERT_TRUE(is_constructed_value(values[1]));",
                 ),
             ),
         ),
@@ -1435,8 +1443,8 @@ RESOLVED_TYPES = (
                 "array",
                 (
                     "auto values = container.template resolve<std::shared_ptr<value_type[]>>();",
-                    "ASSERT_EQ(values[0].marker(), 3);",
-                    "ASSERT_EQ(values[1].marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(values[0]));",
+                    "ASSERT_TRUE(is_constructed_value(values[1]));",
                 ),
             ),
         ),
@@ -1510,7 +1518,7 @@ RESOLVED_TYPES = (
                 "annotated",
                 (
                     "auto& instance = container.template resolve<dingo::annotated<value_type&, tag_a>>();",
-                    "ASSERT_EQ(instance.marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(instance));",
                 ),
             ),
         ),
@@ -1525,7 +1533,7 @@ RESOLVED_TYPES = (
                 "annotated",
                 (
                     "auto& instance = container.template resolve<dingo::annotated<interface_type&, tag_a>>();",
-                    "ASSERT_EQ(instance.marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(instance));",
                 ),
             ),
         ),
@@ -1540,7 +1548,7 @@ RESOLVED_TYPES = (
                 "annotated",
                 (
                     "auto instance = container.template resolve<dingo::annotated<interface_type*, tag_a>>();",
-                    "ASSERT_EQ(instance->marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(*instance));",
                 ),
             ),
         ),
@@ -1555,7 +1563,7 @@ RESOLVED_TYPES = (
                 "annotated",
                 (
                     "auto instance = container.template resolve<dingo::annotated<std::shared_ptr<interface_type>, tag_a>>();",
-                    "ASSERT_EQ(instance->marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(*instance));",
                 ),
             ),
         ),
@@ -1570,7 +1578,7 @@ RESOLVED_TYPES = (
                 "annotated",
                 (
                     "auto& instance = container.template resolve<dingo::annotated<std::shared_ptr<interface_type>&, tag_a>>();",
-                    "ASSERT_EQ(instance->marker(), 3);",
+                    "ASSERT_TRUE(is_constructed_value(*instance));",
                 ),
             ),
         ),

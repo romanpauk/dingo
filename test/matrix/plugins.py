@@ -27,7 +27,16 @@ class CheckRow(Protocol):
     feature: Feature
     mode: object
     scope: ScopeSpec
+    stored_type: StoredType
+    exposed_type: ExposedType
     resolved_type: ResolvedType
+
+
+@dataclass(frozen=True)
+class CaseLines:
+    before: tuple[str, ...] = ()
+    check: tuple[str, ...] = ()
+    after: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -39,19 +48,22 @@ class RegistrationPlan:
 
 
 class CheckPlugin(Protocol):
-    def emit(self, row: CheckRow) -> tuple[str, ...] | None:
+    def emit(self, row: CheckRow) -> CaseLines | None:
         ...
 
 
 class ResolvedTypeCheckPlugin:
-    def emit(self, row: CheckRow) -> tuple[str, ...] | None:
-        return dict(row.resolved_type.checks).get(row.feature.name)
+    def emit(self, row: CheckRow) -> CaseLines | None:
+        lines = dict(row.resolved_type.checks).get(row.feature.name)
+        if lines is None:
+            return None
+        return CaseLines(check=lines)
 
 
 class FeatureCheckPlugin:
-    def emit(self, row: CheckRow) -> tuple[str, ...] | None:
+    def emit(self, row: CheckRow) -> CaseLines | None:
         if row.feature.checks:
-            return row.feature.checks
+            return CaseLines(check=row.feature.checks)
         return None
 
 
@@ -62,12 +74,113 @@ ROW_FILTERS: tuple[RowFilter, ...] = ()
 
 
 @dataclass(frozen=True)
+class LifetimeExpectation:
+    check: tuple[str, ...]
+    constructor: int
+    copy_constructor: int
+    move_constructor: int
+
+
+def lifetime_after(expectation: LifetimeExpectation) -> tuple[str, ...]:
+    return (
+        f"ASSERT_EQ(value_type::constructor_count(), {expectation.constructor}u);",
+        "ASSERT_EQ(value_type::copy_constructor_count(), "
+        f"{expectation.copy_constructor}u);",
+        "ASSERT_EQ(value_type::move_constructor_count(), "
+        f"{expectation.move_constructor}u);",
+        "ASSERT_EQ(value_type::destructor_count(), value_type::total_instances());",
+    )
+
+
+LIFETIME_EXPECTATIONS: dict[
+    tuple[str, str, str, str], LifetimeExpectation
+] = {
+    (
+        "shared",
+        "value_type",
+        "concrete",
+        "value_ref_ptr",
+    ): LifetimeExpectation(
+        check=(
+            "value_type& instance = container.template resolve<value_type&>();",
+            "ASSERT_TRUE(is_constructed_value(instance));",
+        ),
+        constructor=1,
+        copy_constructor=0,
+        move_constructor=0,
+    ),
+    (
+        "shared",
+        "value_shared_ptr",
+        "concrete",
+        "value_shared_ptr",
+    ): LifetimeExpectation(
+        check=(
+            "auto instance = container.template resolve<std::shared_ptr<value_type>>();",
+            "ASSERT_TRUE(is_constructed_value(*instance));",
+        ),
+        constructor=1,
+        copy_constructor=0,
+        move_constructor=0,
+    ),
+    (
+        "unique",
+        "value_unique_ptr",
+        "concrete",
+        "value_unique_ptr",
+    ): LifetimeExpectation(
+        check=(
+            "auto instance = container.template resolve<std::unique_ptr<value_type>&&>();",
+            "ASSERT_TRUE(is_constructed_value(*instance));",
+        ),
+        constructor=1,
+        copy_constructor=0,
+        move_constructor=0,
+    ),
+    (
+        "unique",
+        "value_optional",
+        "concrete",
+        "value_optional",
+    ): LifetimeExpectation(
+        check=(
+            "auto instance = container.template resolve<std::optional<value_type>>();",
+            "ASSERT_TRUE(instance.has_value());",
+            "ASSERT_TRUE(is_constructed_value(*instance));",
+        ),
+        constructor=1,
+        copy_constructor=1,
+        move_constructor=1,
+    ),
+}
+
+
+class LifetimeCountCheckPlugin:
+    def emit(self, row: CheckRow) -> CaseLines | None:
+        expectation = LIFETIME_EXPECTATIONS.get(
+            (
+                row.scope.name,
+                row.stored_type.id,
+                row.exposed_type.name,
+                row.resolved_type.name,
+            )
+        )
+        if expectation is None:
+            return None
+        return CaseLines(
+            before=("value_type::clear_stats();",),
+            check=expectation.check,
+            after=lifetime_after(expectation),
+        )
+
+
+@dataclass(frozen=True)
 class FeatureCasePlugin:
     feature: Feature
     check_plugins: tuple[CheckPlugin, ...]
     row_filters: tuple[RowFilter, ...]
 
-    def emit(self, row: CheckRow) -> tuple[str, ...] | None:
+    def emit(self, row: CheckRow) -> CaseLines | None:
         if row.feature != self.feature:
             return None
         if not all(row_filter(row) for row_filter in self.row_filters):
@@ -79,13 +192,19 @@ class FeatureCasePlugin:
         return None
 
 
+def plugins_for(feature: Feature) -> tuple[CheckPlugin, ...]:
+    if feature.name == "lifetime_counts":
+        return (LifetimeCountCheckPlugin(),)
+    return (
+        ResolvedTypeCheckPlugin(),
+        FeatureCheckPlugin(),
+    )
+
+
 FEATURE_CASE_PLUGINS: tuple[FeatureCasePlugin, ...] = tuple(
     FeatureCasePlugin(
         feature=feature,
-        check_plugins=(
-            ResolvedTypeCheckPlugin(),
-            FeatureCheckPlugin(),
-        ),
+        check_plugins=plugins_for(feature),
         row_filters=ROW_FILTERS,
     )
     for feature in FEATURES
@@ -93,7 +212,7 @@ FEATURE_CASE_PLUGINS: tuple[FeatureCasePlugin, ...] = tuple(
 )
 
 
-def check_lines_for(row: CheckRow) -> tuple[str, ...] | None:
+def case_lines_for(row: CheckRow) -> CaseLines | None:
     for plugin in FEATURE_CASE_PLUGINS:
         lines = plugin.emit(row)
         if lines is not None:

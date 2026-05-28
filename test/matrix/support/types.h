@@ -25,6 +25,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <string>
 #include <tuple>
 #include <utility>
 #include <variant>
@@ -34,11 +35,50 @@ namespace dingo::matrix {
 
 class value_type {
   public:
+    value_type() { ++constructor_count_; }
+    value_type(const value_type& other)
+        : marker_(other.marker_), name_(other.name_) {
+        ++copy_constructor_count_;
+    }
+    value_type(value_type&& other) noexcept
+        : marker_(other.marker_), name_(std::move(other.name_)) {
+        ++move_constructor_count_;
+    }
+    ~value_type() { ++destructor_count_; }
+
     int marker() const { return marker_; }
+    bool valid() const { return marker_ == 3 && name_ == "value_type"; }
+
+    static std::size_t constructor_count() { return constructor_count_; }
+    static std::size_t copy_constructor_count() {
+        return copy_constructor_count_;
+    }
+    static std::size_t move_constructor_count() {
+        return move_constructor_count_;
+    }
+    static std::size_t destructor_count() { return destructor_count_; }
+    static std::size_t total_instances() {
+        return constructor_count_ + copy_constructor_count_ +
+               move_constructor_count_;
+    }
+    static void clear_stats() {
+        constructor_count_ = copy_constructor_count_ = move_constructor_count_ =
+            destructor_count_ = 0;
+    }
 
   private:
     int marker_ = 3;
+    std::string name_ = "value_type";
+
+    inline static std::size_t constructor_count_ = 0;
+    inline static std::size_t copy_constructor_count_ = 0;
+    inline static std::size_t move_constructor_count_ = 0;
+    inline static std::size_t destructor_count_ = 0;
 };
+
+inline bool is_constructed_value(const value_type& value) {
+    return value.valid();
+}
 
 inline std::unique_ptr<value_type[]> make_unique_value_array() {
     return std::make_unique<value_type[]>(2);
@@ -51,30 +91,36 @@ inline std::shared_ptr<value_type[]> make_shared_value_array() {
 struct interface_type {
     virtual ~interface_type() = default;
     virtual int marker() const = 0;
+    virtual bool valid() const = 0;
 };
 
 class copyable_interface_type {
   public:
     copyable_interface_type() = default;
-    explicit copyable_interface_type(int init_marker) : marker_(init_marker) {}
+    explicit copyable_interface_type(const value_type& value)
+        : marker_(value.marker()), valid_(value.valid()) {}
 
     int marker() const { return marker_; }
+    bool valid() const { return marker_ == 3 && valid_; }
 
   private:
     int marker_ = 0;
+    bool valid_ = false;
 };
 
 struct second_interface_type {
     virtual ~second_interface_type() = default;
     virtual int second_marker() const = 0;
+    virtual bool valid() const = 0;
 };
 
 struct implementation_type : interface_type, copyable_interface_type,
                              second_interface_type {
     explicit implementation_type(value_type& dependency)
-        : copyable_interface_type(dependency.marker()), dependency_(dependency) {}
+        : copyable_interface_type(dependency), dependency_(dependency) {}
 
     int marker() const override { return dependency_.marker(); }
+    bool valid() const override { return dependency_.valid(); }
     int second_marker() const override { return dependency_.marker() + 1; }
 
   private:
@@ -94,6 +140,18 @@ struct unique_interface_type {
     virtual ~unique_interface_type() = default;
     virtual int value() const = 0;
 };
+
+inline bool is_constructed_value(const interface_type& value) {
+    return value.marker() == 3 && value.valid();
+}
+
+inline bool is_constructed_value(const copyable_interface_type& value) {
+    return value.valid();
+}
+
+inline bool is_constructed_value(const unique_interface_type& value) {
+    return value.value() == 7;
+}
 
 struct unique_implementation_type : unique_interface_type {
     int value() const override { return 7; }

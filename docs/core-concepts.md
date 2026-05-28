@@ -387,10 +387,8 @@ assert(&held == &std::get<A>(existing));
 See:
 
 - [examples/container/variant.cpp](../examples/container/variant.cpp)
-- [test/container/construct.cpp](../test/container/construct.cpp)
-- [test/storage/unique.cpp](../test/storage/unique.cpp)
-- [test/storage/shared.cpp](../test/storage/shared.cpp)
-- [test/storage/external.cpp](../test/storage/external.cpp)
+- [test/matrix/README.md](../test/matrix/README.md)
+- [test/container/lifetime.cpp](../test/container/lifetime.cpp)
 - [include/dingo/type/type_traits.h](../include/dingo/type/type_traits.h)
 
 ## Factories
@@ -599,7 +597,7 @@ See:
 - [examples/factory/factory_function.cpp](../examples/factory/factory_function.cpp)
 - [examples/factory/factory_callable.cpp](../examples/factory/factory_callable.cpp)
 - [test/factory/constructor_detection.cpp](../test/factory/constructor_detection.cpp)
-- [test/container/construct.cpp](../test/container/construct.cpp)
+- [test/matrix/README.md](../test/matrix/README.md)
 - [include/dingo/factory/constructor_detection.h](../include/dingo/factory/constructor_detection.h)
 - [include/dingo/factory/constructor.h](../include/dingo/factory/constructor.h)
 - [include/dingo/factory/function.h](../include/dingo/factory/function.h)

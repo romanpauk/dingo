@@ -32,11 +32,12 @@ from model import (
     StoredType,
 )
 from plugins import (
+    CaseLines,
     FEATURE_CASE_PLUGINS,
     REGISTRATION_PLUGIN,
     RegistrationPlan,
     bindings_type,
-    check_lines_for,
+    case_lines_for,
 )
 
 
@@ -57,8 +58,10 @@ class GeneratedCase:
     name: str
     container_type: str
     static_bindings: str | None
+    before_lines: tuple[str, ...]
     setup_lines: tuple[str, ...]
     check_lines: tuple[str, ...]
+    after_lines: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -276,8 +279,8 @@ def case_name(row: MatrixRow) -> str:
     )
 
 
-def check_lines(row: MatrixRow) -> tuple[str, ...]:
-    lines = check_lines_for(row)
+def case_lines(row: MatrixRow) -> CaseLines:
+    lines = case_lines_for(row)
     if lines:
         return lines
     raise RuntimeError(
@@ -300,12 +303,16 @@ def make_case(row: MatrixRow) -> GeneratedCase:
     else:
         raise RuntimeError(f"unknown registration mode: {row.mode.name}")
 
+    lines = case_lines(row)
+
     return GeneratedCase(
         name=case_name(row),
         container_type=row.container.container_type,
         static_bindings=static_bindings,
+        before_lines=lines.before,
         setup_lines=setup_lines,
-        check_lines=check_lines(row),
+        check_lines=lines.check,
+        after_lines=lines.after,
     )
 
 

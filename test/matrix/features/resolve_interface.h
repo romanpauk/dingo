@@ -19,14 +19,14 @@ template <typename Case> void run_resolve_interface() {
     Case::with_container([](auto& container) {
         interface_type& instance =
             container.template resolve<interface_type&>();
-        ASSERT_EQ(instance.marker(), 3);
+        ASSERT_TRUE(is_constructed_value(instance));
 
         interface_type* pointer = container.template resolve<interface_type*>();
-        ASSERT_EQ(pointer->marker(), 3);
+        ASSERT_TRUE(is_constructed_value(*pointer));
 
         auto& handle =
             container.template resolve<std::shared_ptr<interface_type>&>();
-        ASSERT_EQ(handle->marker(), 3);
+        ASSERT_TRUE(is_constructed_value(*handle));
     });
 }
 

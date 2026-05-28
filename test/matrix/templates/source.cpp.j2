@@ -36,11 +36,17 @@ struct {{ case.name }} {
     }
 
     static void run() {
+{% for line in case.before_lines %}
+        {{ line }}
+{% endfor %}
         with_container([](auto& container) {
 {% for line in case.check_lines %}
             {{ line }}
 {% endfor %}
         });
+{% for line in case.after_lines %}
+        {{ line }}
+{% endfor %}
     }
 };
 

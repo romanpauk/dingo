@@ -18,8 +18,8 @@ template <typename Case> void run_resolve_concrete() {
         value_type& instance = container.template resolve<value_type&>();
         value_type* pointer = container.template resolve<value_type*>();
 
-        ASSERT_EQ(instance.marker(), 3);
-        ASSERT_EQ(pointer->marker(), 3);
+        ASSERT_TRUE(is_constructed_value(instance));
+        ASSERT_TRUE(is_constructed_value(*pointer));
         ASSERT_EQ(&instance, pointer);
     });
 }
