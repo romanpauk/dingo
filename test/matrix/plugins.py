@@ -102,7 +102,7 @@ def check_lines_for(row: CheckRow) -> tuple[str, ...] | None:
 
 
 def binding(
-    scope: ScopeSpec,
+    scope: str,
     storage: str,
     *,
     interfaces: str | None = None,
@@ -111,7 +111,7 @@ def binding(
     dependencies: str | None = None,
     key: str | None = None,
 ) -> str:
-    parts = [scope.type_name, storage]
+    parts = [scope, storage]
     if interfaces:
         parts.append(interfaces)
     if local_bindings:
@@ -126,7 +126,7 @@ def binding(
 
 
 def register_type(
-    scope: ScopeSpec,
+    scope: str,
     storage: str,
     *,
     interfaces: str | None = None,
@@ -135,7 +135,7 @@ def register_type(
     dependencies: str | None = None,
     key: str | None = None,
 ) -> str:
-    parts = [scope.type_name, storage]
+    parts = [scope, storage]
     if interfaces:
         parts.append(interfaces)
     if local_bindings:
@@ -150,7 +150,7 @@ def register_type(
 
 
 def register_type_with_arg(
-    scope: ScopeSpec,
+    scope: str,
     storage: str,
     argument: str,
     *,
@@ -180,10 +180,24 @@ def spec_storage(spec: RegistrationSpec, stored_type: StoredType) -> str:
     return spec.storage or stored_type.storage
 
 
+def spec_scope(scope: ScopeSpec, spec: RegistrationSpec) -> str:
+    return spec.scope or scope.type_name
+
+
 def spec_runtime_argument(spec: RegistrationSpec, stored_type: StoredType) -> str | None:
+    if spec.runtime_argument is not None:
+        return spec.runtime_argument
     if spec.storage is None:
         return stored_type.runtime_argument
     return None
+
+
+def spec_runtime_setup(spec: RegistrationSpec, stored_type: StoredType) -> tuple[str, ...]:
+    if spec.runtime_argument is not None:
+        return spec.runtime_setup
+    if spec.storage is None and stored_type.runtime_argument is not None:
+        return stored_type.runtime_setup
+    return ()
 
 
 def stored_type_factory(stored_type: StoredType, spec: RegistrationSpec) -> str | None:
@@ -197,7 +211,7 @@ class RegistrationPlugin:
         self, scope: ScopeSpec, stored_type: StoredType, spec: RegistrationSpec
     ) -> str:
         return binding(
-            scope,
+            spec_scope(scope, spec),
             spec_storage(spec, stored_type),
             interfaces=spec.interfaces,
             local_bindings=spec.local_bindings,
@@ -211,8 +225,9 @@ class RegistrationPlugin:
     ) -> str:
         storage = spec_storage(spec, stored_type)
         factory = spec.factory or stored_type_factory(stored_type, spec)
+        scope_type = spec_scope(scope, spec)
         if spec.indexed_key is not None:
-            parts = [scope.type_name, storage]
+            parts = [scope_type, storage]
             if spec.interfaces:
                 parts.append(spec.interfaces)
             return (
@@ -224,7 +239,7 @@ class RegistrationPlugin:
         argument = spec_runtime_argument(spec, stored_type)
         if argument is not None:
             return register_type_with_arg(
-                scope,
+                scope_type,
                 storage,
                 argument,
                 interfaces=spec.interfaces,
@@ -234,7 +249,7 @@ class RegistrationPlugin:
                 key=spec.key,
             )
         return register_type(
-            scope,
+            scope_type,
             storage,
             interfaces=spec.interfaces,
             local_bindings=spec.local_bindings,
@@ -246,9 +261,12 @@ class RegistrationPlugin:
     def runtime_setup_prefix(
         self, stored_type: StoredType, specs: tuple[RegistrationSpec, ...]
     ) -> tuple[str, ...]:
-        if any(spec_runtime_argument(spec, stored_type) is not None for spec in specs):
-            return stored_type.runtime_setup
-        return ()
+        lines: list[str] = []
+        for spec in specs:
+            for line in spec_runtime_setup(spec, stored_type):
+                if line not in lines:
+                    lines.append(line)
+        return tuple(lines)
 
     def build(
         self, scope: ScopeSpec, stored_type: StoredType, exposed_type: ExposedType

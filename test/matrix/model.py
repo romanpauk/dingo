@@ -51,6 +51,7 @@ class StoredType:
 
 @dataclass(frozen=True)
 class RegistrationSpec:
+    scope: str | None = None
     storage: str | None = None
     interfaces: str | None = None
     local_bindings: str | None = None
@@ -58,6 +59,8 @@ class RegistrationSpec:
     dependencies: str | None = None
     key: str | None = None
     indexed_key: str | None = None
+    runtime_setup: tuple[str, ...] = ()
+    runtime_argument: str | None = None
     mixed: str = "static"
     static: bool = True
 
@@ -241,6 +244,13 @@ FEATURES = (
         modes=frozenset({"runtime", "static", "mixed"}),
     ),
     Feature(
+        name="mixed_external_dependency",
+        requires=frozenset(
+            {"mixed_external_dependency", "resolved_mixed_external_dependency"}
+        ),
+        modes=frozenset({"mixed"}),
+    ),
+    Feature(
         name="custom_allocator",
         requires=frozenset(
             {
@@ -317,6 +327,14 @@ STORED_TYPES = (
         storage="dingo::storage<value_type>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_value", "direct_value_resolution"}),
+    ),
+    StoredType(
+        id="dependent_type",
+        name="dependent_type",
+        kind="dependent_type",
+        storage="dingo::storage<dependent_type>",
+        supported_scopes=frozenset({"shared"}),
+        provides=frozenset({"stored_value"}),
     ),
     StoredType(
         id="external_value_type",
@@ -536,6 +554,23 @@ EXPOSED_TYPES = (
         supported_stored_kinds=frozenset({"value_type"}),
         provides=frozenset({"concrete_binding"}),
         registrations=(RegistrationSpec(),),
+    ),
+    ExposedType(
+        name="mixed_external_dependency",
+        kind="mixed_external_dependency",
+        supported_stored_kinds=frozenset({"dependent_type"}),
+        provides=frozenset({"mixed_external_dependency"}),
+        registrations=(
+            RegistrationSpec(
+                scope="dingo::scope<dingo::external>",
+                storage="dingo::storage<value_type&>",
+                runtime_setup=("value_type external_value;",),
+                runtime_argument="external_value",
+                mixed="runtime",
+                static=False,
+            ),
+            RegistrationSpec(),
+        ),
     ),
     ExposedType(
         name="interface_type",
@@ -881,6 +916,20 @@ RESOLVED_TYPES = (
                     "auto& instance = container.template resolve<cycle_a_type&>();",
                     "ASSERT_NE(instance.dependency, nullptr);",
                     "ASSERT_EQ(instance.dependency->dependency, &instance);",
+                ),
+            ),
+        ),
+    ),
+    ResolvedType(
+        name="dependent_type_ref",
+        supported_exposed_types=frozenset({"mixed_external_dependency"}),
+        provides=frozenset({"resolved_mixed_external_dependency"}),
+        checks=(
+            (
+                "mixed_external_dependency",
+                (
+                    "auto& resolved = container.template resolve<dependent_type&>();",
+                    "ASSERT_EQ(resolved.value, 3);",
                 ),
             ),
         ),
