@@ -232,6 +232,20 @@ if(DINGO_DEVELOPMENT_MODE)
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/templates/cmake.cmake.j2"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/templates/runner.cpp.j2"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/templates/source.cpp.j2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/containers.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/allocator_containers.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/custom_rtti_containers.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/factory_override.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/indexed_containers.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/indexed_registration.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/local_bindings.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/nested_container.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/nested_wrappers.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/runtime_containers.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/runtime_regressions.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/scenario.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/values.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/variant_types.h"
             "${DINGO_MATRIX_GENERATOR}")
 
         set(DINGO_MATRIX_GENERATOR_COMMAND
@@ -297,7 +311,20 @@ if(DINGO_DEVELOPMENT_MODE)
             test/matrix/features/resolve_interface.h
             test/matrix/features/resolve_keyed.h
             test/matrix/features/resolve_unique_wrapper.h
-            test/matrix/support/types.h
+            test/matrix/support/containers.h
+            test/matrix/support/allocator_containers.h
+            test/matrix/support/custom_rtti_containers.h
+            test/matrix/support/factory_override.h
+            test/matrix/support/indexed_containers.h
+            test/matrix/support/indexed_registration.h
+            test/matrix/support/local_bindings.h
+            test/matrix/support/nested_container.h
+            test/matrix/support/nested_wrappers.h
+            test/matrix/support/runtime_containers.h
+            test/matrix/support/runtime_regressions.h
+            test/matrix/support/scenario.h
+            test/matrix/support/values.h
+            test/matrix/support/variant_types.h
         )
         add_test(NAME dingo_matrix_test COMMAND dingo_matrix_test)
         set_tests_properties(dingo_matrix_test PROPERTIES LABELS "runtime")

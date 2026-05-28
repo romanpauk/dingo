@@ -71,6 +71,8 @@ class GeneratedCase:
     setup_lines: tuple[str, ...]
     check_lines: tuple[str, ...]
     after_lines: tuple[str, ...]
+    system_headers: tuple[str, ...]
+    support_headers: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -384,6 +386,28 @@ def make_case(row: MatrixRow) -> GeneratedCase:
         setup_lines=setup_lines,
         check_lines=row.lines.check,
         after_lines=row.lines.after,
+        system_headers=tuple(
+            sorted(
+                {
+                    *row.feature.system_headers,
+                    *row.stored_type.system_headers,
+                    *row.exposed_type.system_headers,
+                    *row.resolved_type.system_headers,
+                    *row.container.system_headers,
+                }
+            )
+        ),
+        support_headers=tuple(
+            sorted(
+                {
+                    *row.feature.support_headers,
+                    *row.stored_type.support_headers,
+                    *row.exposed_type.support_headers,
+                    *row.resolved_type.support_headers,
+                    *row.container.support_headers,
+                }
+            )
+        ),
     )
 
 
@@ -402,6 +426,12 @@ def render_source(
 
     rendered = template.render(
         cases=cases,
+        system_headers=tuple(
+            sorted({header for case in cases for header in case.system_headers})
+        ),
+        support_headers=tuple(
+            sorted({header for case in cases for header in case.support_headers})
+        ),
     )
     write_text_if_changed(source, rendered)
     return source

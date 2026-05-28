@@ -20,6 +20,11 @@ from schema import (
 )
 
 
+VALUE_HEADERS = ("matrix/support/values.h",)
+SCENARIO_HEADERS = ("matrix/support/scenario.h",)
+CUSTOM_WRAPPER_HEADERS = ("matrix/support/values.h", "support/custom_wrappers.h")
+
+
 STORED_TYPES = (
     StoredType(
         id="value_type",
@@ -30,6 +35,7 @@ STORED_TYPES = (
         provides=frozenset(
             {"stored_value", "direct_value_resolution", "lifetime_countable"}
         ),
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="unique_value_type",
@@ -40,6 +46,7 @@ STORED_TYPES = (
         provides=frozenset(
             {"stored_value", "direct_value_resolution", "lifetime_countable"}
         ),
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="dependent_type",
@@ -48,6 +55,7 @@ STORED_TYPES = (
         storage="dingo::storage<dependent_type>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_value"}),
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="scenario",
@@ -56,6 +64,7 @@ STORED_TYPES = (
         storage="dingo::storage<scenario_type>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"scenario"}),
+        support_headers=SCENARIO_HEADERS,
     ),
     StoredType(
         id="external_value_type",
@@ -67,6 +76,7 @@ STORED_TYPES = (
         supported_modes=frozenset({"runtime"}),
         runtime_setup=("value_type external_value;",),
         runtime_argument="std::move(external_value)",
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="external_value_ref",
@@ -78,6 +88,7 @@ STORED_TYPES = (
         supported_modes=frozenset({"runtime"}),
         runtime_setup=("value_type external_value;",),
         runtime_argument="external_value",
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="external_value_ptr",
@@ -89,6 +100,7 @@ STORED_TYPES = (
         supported_modes=frozenset({"runtime"}),
         runtime_setup=("value_type external_value;",),
         runtime_argument="&external_value",
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="value_ptr",
@@ -100,6 +112,7 @@ STORED_TYPES = (
         supported_modes=frozenset({"runtime"}),
         runtime_setup=("value_type external_value;",),
         runtime_argument="&external_value",
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="value_ref",
@@ -111,6 +124,7 @@ STORED_TYPES = (
         supported_modes=frozenset({"runtime"}),
         runtime_setup=("value_type external_value;",),
         runtime_argument="external_value",
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="external_value_shared_ptr",
@@ -122,6 +136,7 @@ STORED_TYPES = (
         supported_modes=frozenset({"runtime"}),
         runtime_setup=("auto external_value = std::make_shared<value_type>();",),
         runtime_argument="external_value",
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="value_unique_ptr",
@@ -130,6 +145,7 @@ STORED_TYPES = (
         storage="dingo::storage<std::unique_ptr<value_type>>",
         supported_scopes=frozenset({"unique"}),
         provides=frozenset({"stored_unique_ptr", "lifetime_countable"}),
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="value_shared_ptr",
@@ -138,6 +154,7 @@ STORED_TYPES = (
         storage="dingo::storage<std::shared_ptr<value_type>>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_shared_ptr", "lifetime_countable"}),
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="value_optional",
@@ -146,6 +163,8 @@ STORED_TYPES = (
         storage="dingo::storage<std::optional<value_type>>",
         supported_scopes=frozenset({"shared", "unique"}),
         provides=frozenset({"stored_optional", "lifetime_countable"}),
+        system_headers=("optional",),
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="custom_shared_value",
@@ -154,6 +173,7 @@ STORED_TYPES = (
         storage="dingo::storage<dingo::test_shared<value_type>>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_custom_shared"}),
+        support_headers=CUSTOM_WRAPPER_HEADERS,
     ),
     StoredType(
         id="external_custom_shared_value",
@@ -167,6 +187,7 @@ STORED_TYPES = (
             "auto external_value = dingo::type_traits<dingo::test_shared<value_type>>::make();",
         ),
         runtime_argument="std::move(external_value)",
+        support_headers=CUSTOM_WRAPPER_HEADERS,
     ),
     StoredType(
         id="external_custom_shared_value_ref",
@@ -180,6 +201,7 @@ STORED_TYPES = (
             "auto external_value = dingo::type_traits<dingo::test_shared<value_type>>::make();",
         ),
         runtime_argument="external_value",
+        support_headers=CUSTOM_WRAPPER_HEADERS,
     ),
     StoredType(
         id="custom_shared_interface",
@@ -191,6 +213,7 @@ STORED_TYPES = (
         ),
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_custom_shared"}),
+        support_headers=CUSTOM_WRAPPER_HEADERS,
     ),
     StoredType(
         id="custom_unique_interface",
@@ -202,6 +225,7 @@ STORED_TYPES = (
         ),
         supported_scopes=frozenset({"unique"}),
         provides=frozenset({"stored_custom_unique"}),
+        support_headers=CUSTOM_WRAPPER_HEADERS,
     ),
     StoredType(
         id="custom_optional_value",
@@ -210,6 +234,7 @@ STORED_TYPES = (
         storage="dingo::storage<dingo::test_optional<value_type>>",
         supported_scopes=frozenset({"shared", "unique"}),
         provides=frozenset({"stored_custom_optional"}),
+        support_headers=CUSTOM_WRAPPER_HEADERS,
     ),
     StoredType(
         id="external_custom_optional_value",
@@ -223,6 +248,7 @@ STORED_TYPES = (
             "auto external_value = dingo::type_traits<dingo::test_optional<value_type>>::make();",
         ),
         runtime_argument="std::move(external_value)",
+        support_headers=CUSTOM_WRAPPER_HEADERS,
     ),
     StoredType(
         id="external_custom_optional_value_ref",
@@ -236,6 +262,7 @@ STORED_TYPES = (
             "auto external_value = dingo::type_traits<dingo::test_optional<value_type>>::make();",
         ),
         runtime_argument="external_value",
+        support_headers=CUSTOM_WRAPPER_HEADERS,
     ),
     StoredType(
         id="value_array_2",
@@ -245,6 +272,7 @@ STORED_TYPES = (
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_raw_array", "array_1d"}),
         supported_modes=frozenset({"runtime", "static", "mixed"}),
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="value_array_2_3",
@@ -254,6 +282,7 @@ STORED_TYPES = (
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_raw_array", "array_2d"}),
         supported_modes=frozenset({"runtime", "static", "mixed"}),
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="value_unique_array",
@@ -263,6 +292,7 @@ STORED_TYPES = (
         supported_scopes=frozenset({"unique"}),
         provides=frozenset({"stored_unique_array", "array_smart_unique"}),
         factory="dingo::factory<dingo::function<&make_unique_value_array>>",
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="value_shared_array",
@@ -272,6 +302,7 @@ STORED_TYPES = (
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_shared_array", "array_smart_shared"}),
         factory="dingo::factory<dingo::function<&make_shared_value_array>>",
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="value_variant",
@@ -281,6 +312,7 @@ STORED_TYPES = (
         supported_scopes=frozenset({"unique", "shared"}),
         provides=frozenset({"stored_variant"}),
         factory="dingo::factory<dingo::constructor<variant_a(value_type&)>>",
+        support_headers=("matrix/support/variant_types.h",),
     ),
     StoredType(
         id="shared_unique_value",
@@ -290,6 +322,7 @@ STORED_TYPES = (
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_shared_unique"}),
         factory="dingo::factory<dingo::function<&make_shared_unique_value>>",
+        support_headers=("matrix/support/nested_wrappers.h",),
     ),
     StoredType(
         id="shared_unique_array_value",
@@ -299,6 +332,7 @@ STORED_TYPES = (
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_shared_unique_array"}),
         factory="dingo::factory<dingo::function<&make_shared_unique_array_value>>",
+        support_headers=("matrix/support/nested_wrappers.h",),
     ),
     StoredType(
         id="unique_shared_value",
@@ -308,6 +342,7 @@ STORED_TYPES = (
         supported_scopes=frozenset({"unique"}),
         provides=frozenset({"stored_unique_shared"}),
         factory="dingo::factory<dingo::function<&make_unique_shared_value>>",
+        support_headers=("matrix/support/nested_wrappers.h",),
     ),
     StoredType(
         id="variant_unique_value",
@@ -317,6 +352,7 @@ STORED_TYPES = (
         supported_scopes=frozenset({"unique"}),
         provides=frozenset({"stored_variant_unique"}),
         factory="dingo::factory<dingo::function<&make_variant_unique_value>>",
+        support_headers=("matrix/support/nested_wrappers.h",),
     ),
     StoredType(
         id="variant_shared_value",
@@ -326,6 +362,7 @@ STORED_TYPES = (
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_variant_shared"}),
         factory="dingo::factory<dingo::function<&make_variant_shared_value>>",
+        support_headers=("matrix/support/nested_wrappers.h",),
     ),
     StoredType(
         id="variant_shared_unique_value",
@@ -335,6 +372,7 @@ STORED_TYPES = (
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_variant_shared_unique"}),
         factory="dingo::factory<dingo::function<&make_variant_shared_unique_value>>",
+        support_headers=("matrix/support/nested_wrappers.h",),
     ),
     StoredType(
         id="unique_variant_value",
@@ -344,6 +382,7 @@ STORED_TYPES = (
         supported_scopes=frozenset({"unique"}),
         provides=frozenset({"stored_unique_variant"}),
         factory="dingo::factory<dingo::function<&make_unique_variant_value>>",
+        support_headers=("matrix/support/nested_wrappers.h",),
     ),
     StoredType(
         id="shared_variant_value",
@@ -353,6 +392,7 @@ STORED_TYPES = (
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_shared_variant"}),
         factory="dingo::factory<dingo::function<&make_shared_variant_value>>",
+        support_headers=("matrix/support/nested_wrappers.h",),
     ),
     StoredType(
         id="array_variant_value",
@@ -362,6 +402,7 @@ STORED_TYPES = (
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_array_variant"}),
         factory="dingo::factory<dingo::function<&make_array_variant_value>>",
+        support_headers=("matrix/support/nested_wrappers.h",),
     ),
     StoredType(
         id="local_value_type",
@@ -370,6 +411,7 @@ STORED_TYPES = (
         storage="dingo::storage<local_value_type>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_value"}),
+        support_headers=("matrix/support/local_bindings.h",),
     ),
     StoredType(
         id="local_override_value_type",
@@ -378,6 +420,7 @@ STORED_TYPES = (
         storage="dingo::storage<local_override_value_type>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_value"}),
+        support_headers=("matrix/support/local_bindings.h",),
     ),
     StoredType(
         id="local_collection_value_type",
@@ -386,6 +429,7 @@ STORED_TYPES = (
         storage="dingo::storage<local_collection_value_type>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_value"}),
+        support_headers=("matrix/support/local_bindings.h",),
     ),
     StoredType(
         id="factory_function_value_type",
@@ -394,6 +438,7 @@ STORED_TYPES = (
         storage="dingo::storage<factory_function_value_type>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_value"}),
+        support_headers=("matrix/support/factory_override.h",),
     ),
     StoredType(
         id="factory_constructor_value_type",
@@ -402,6 +447,7 @@ STORED_TYPES = (
         storage="dingo::storage<factory_constructor_value_type>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_value"}),
+        support_headers=("matrix/support/factory_override.h",),
     ),
     StoredType(
         id="cycle_a_type",
@@ -411,6 +457,7 @@ STORED_TYPES = (
         supported_scopes=frozenset({"shared_cyclical"}),
         provides=frozenset({"stored_value", "cycle_graph"}),
         supported_modes=frozenset({"runtime"}),
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="implementation_shared_ptr",
@@ -419,6 +466,7 @@ STORED_TYPES = (
         storage="dingo::storage<std::shared_ptr<implementation_type>>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_shared_ptr"}),
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="element_shared_ptr",
@@ -427,6 +475,7 @@ STORED_TYPES = (
         storage="dingo::storage<std::shared_ptr<element_type<0>>>",
         supported_scopes=frozenset({"shared"}),
         provides=frozenset({"stored_shared_ptr"}),
+        support_headers=VALUE_HEADERS,
     ),
     StoredType(
         id="unique_implementation_unique_ptr",
@@ -435,5 +484,6 @@ STORED_TYPES = (
         storage="dingo::storage<std::unique_ptr<unique_implementation_type>>",
         supported_scopes=frozenset({"unique"}),
         provides=frozenset({"stored_unique_ptr"}),
+        support_headers=VALUE_HEADERS,
     ),
 )

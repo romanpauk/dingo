@@ -56,6 +56,7 @@ FEATURES = (
             {"collection_binding", "shared_storage", "resolved_collection"}
         ),
         modes=frozenset({"runtime", "static", "mixed"}),
+        system_headers=("algorithm",),
     ),
     Feature(
         name="resolve_keyed",
@@ -102,12 +103,14 @@ FEATURES = (
         requires=frozenset({"scenario"}),
         modes=frozenset({"runtime"}),
         container_requires=frozenset({"indexed_regression_container"}),
+        support_headers=("matrix/support/indexed_registration.h",),
         checks=("exercise_indexed_registration(container);",),
     ),
     Feature(
         name="resolve_keyed_collection",
         requires=frozenset({"keyed_collection_binding", "resolved_keyed_collection"}),
         modes=frozenset({"runtime", "static", "mixed"}),
+        system_headers=("algorithm",),
     ),
     Feature(
         name="construct",
@@ -131,6 +134,7 @@ FEATURES = (
         name="construct_collection",
         requires=frozenset({"collection_binding", "constructable_collection"}),
         modes=frozenset({"runtime", "static", "mixed"}),
+        system_headers=("algorithm", "map"),
         checks=(
             "auto elements = container.template construct_collection<std::vector<std::shared_ptr<element_interface>>>();",
             "std::vector<int> ids;",
@@ -155,6 +159,8 @@ FEATURES = (
             }
         ),
         modes=frozenset({"runtime"}),
+        system_headers=("type_traits",),
+        support_headers=("matrix/support/nested_container.h",),
         checks=(
             "typename std::remove_reference_t<decltype(container)>::allocator_type allocator;",
             "std::remove_reference_t<decltype(container)> parent(allocator);",
@@ -191,6 +197,7 @@ FEATURES = (
         name="runtime_container_regressions",
         requires=frozenset({"scenario"}),
         modes=frozenset({"runtime"}),
+        support_headers=("matrix/support/runtime_regressions.h",),
         checks=(
             "container.template register_type<dingo::scope<dingo::unique>, dingo::storage<std::shared_ptr<unique_hierarchy_s>>>();",
             "container.template register_type<dingo::scope<dingo::unique>, dingo::storage<std::unique_ptr<unique_hierarchy_u>>>();",
@@ -226,6 +233,7 @@ FEATURES = (
         name="runtime_construct_dependency_regressions",
         requires=frozenset({"scenario"}),
         modes=frozenset({"runtime"}),
+        support_headers=("matrix/support/runtime_regressions.h",),
         checks=(
             "container.template register_type<dingo::scope<dingo::shared>, dingo::storage<std::shared_ptr<construct_dependency::a>>>();",
             "container.template register_type<dingo::scope<dingo::shared>, dingo::storage<std::shared_ptr<construct_dependency::b>>>();",
@@ -243,6 +251,8 @@ FEATURES = (
         name="runtime_exception_regressions",
         requires=frozenset({"scenario"}),
         modes=frozenset({"runtime"}),
+        system_headers=("dingo/type/type_name.h",),
+        support_headers=("matrix/support/values.h",),
         checks=(
             "struct MissingDependency {};",
             "struct MissingType { explicit MissingType(MissingDependency&) {} };",
@@ -288,6 +298,7 @@ FEATURES = (
         name="runtime_unique_reference_regressions",
         requires=frozenset({"scenario"}),
         modes=frozenset({"runtime"}),
+        support_headers=("matrix/support/runtime_regressions.h",),
         checks=(
             "container.template register_type<dingo::scope<dingo::shared>, dingo::storage<shared_from_unique_reference>>();",
             "container.template register_type<dingo::scope<dingo::unique>, dingo::storage<unique_reference_value>, dingo::factory<dingo::constructor<unique_reference_value()>>>();",
@@ -307,6 +318,7 @@ FEATURES = (
         name="shared_cyclical_regressions",
         requires=frozenset({"scenario"}),
         modes=frozenset({"runtime"}),
+        support_headers=("matrix/support/runtime_regressions.h",),
         checks=(
             "cyclical_rollback_b::fail = true;",
             "container.template register_type<dingo::scope<dingo::shared_cyclical>, dingo::storage<std::shared_ptr<cyclical_rollback_a>>>();",
@@ -356,6 +368,7 @@ FEATURES = (
             }
         ),
         modes=frozenset({"runtime"}),
+        system_headers=("type_traits",),
         checks=(
             "using rtti_type = typename std::remove_reference_t<decltype(container)>::rtti_type;",
             "static_assert(std::is_same_v<rtti_type, dingo::rtti<dingo::static_provider>>);",

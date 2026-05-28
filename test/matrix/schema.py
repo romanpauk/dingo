@@ -18,6 +18,8 @@ class Feature:
     modes: frozenset[str]
     checks: tuple[str, ...] = ()
     container_requires: frozenset[str] = frozenset()
+    system_headers: tuple[str, ...] = ()
+    support_headers: tuple[str, ...] = ()
     implemented: bool = True
 
 
@@ -46,6 +48,8 @@ class StoredType:
     runtime_setup: tuple[str, ...] = ()
     runtime_argument: str | None = None
     factory: str | None = None
+    system_headers: tuple[str, ...] = ()
+    support_headers: tuple[str, ...] = ()
     implemented: bool = True
 
 
@@ -75,6 +79,8 @@ class ExposedType:
     runtime_prefix: tuple[str, ...] = ()
     mixed_runtime_prefix: tuple[str, ...] = ()
     mixed: bool = True
+    system_headers: tuple[str, ...] = ()
+    support_headers: tuple[str, ...] = ()
     implemented: bool = True
 
 
@@ -86,6 +92,8 @@ class ResolvedType:
     requires: frozenset[str] = frozenset()
     supported_modes: frozenset[str] = frozenset({"runtime", "static", "mixed"})
     checks: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    system_headers: tuple[str, ...] = ()
+    support_headers: tuple[str, ...] = ()
     implemented: bool = True
 
 
@@ -95,4 +103,6 @@ class ContainerSpec:
     modes: frozenset[str]
     container_type: str
     provides: frozenset[str] = frozenset()
+    system_headers: tuple[str, ...] = ()
+    support_headers: tuple[str, ...] = ()
     implemented: bool = True
