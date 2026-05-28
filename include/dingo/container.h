@@ -637,11 +637,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
         }
 
         return construct_collection_with_runtime_context<T>(
-            [](auto& collection, auto&& value) {
-                collection_traits<std::decay_t<decltype(collection)>>::add(
-                    collection, std::move(value));
-            },
-            none_t{});
+            detail::binding_collection_append{}, none_t{});
     }
 
     template <typename T, typename Fn> T construct_collection(Fn&& fn) {
@@ -660,11 +656,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
         }
 
         return construct_collection_with_runtime_context<T>(
-            [](auto& collection, auto&& value) {
-                collection_traits<std::decay_t<decltype(collection)>>::add(
-                    collection, std::move(value));
-            },
-            key<Key>{});
+            detail::binding_collection_append{}, key<Key>{});
     }
 
     template <typename T, typename Fn, typename Key>
@@ -880,20 +872,10 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
         if constexpr (collection_traits<R>::is_collection) {
             if constexpr (std::is_void_v<Key>) {
                 return construct_collection<R>(
-                    context,
-                    [](auto& collection, auto&& value) {
-                        collection_traits<std::decay_t<decltype(collection)>>::
-                            add(collection, std::move(value));
-                    },
-                    none_t{});
+                    context, detail::binding_collection_append{}, none_t{});
             } else {
                 return construct_collection<R>(
-                    context,
-                    [](auto& collection, auto&& value) {
-                        collection_traits<std::decay_t<decltype(collection)>>::
-                            add(collection, std::move(value));
-                    },
-                    key<Key>{});
+                    context, detail::binding_collection_append{}, key<Key>{});
             }
         } else {
             using request_type = R;
@@ -903,19 +885,18 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
             const auto resolution = detail::resolve_binding(
                 runtime_status, static_selection::status,
                 detail::binding_resolution_policy::ambiguous_on_conflict);
-
-            if (resolution == detail::binding_result::ambiguous) {
+            if (detail::is_ambiguous_binding(resolution)) {
                 throw detail::make_type_ambiguous_exception<T>(context);
             }
 
-            if (resolution == detail::binding_result::primary) {
+            if (detail::is_primary_binding(resolution)) {
                 return runtime_base::template resolve_request<
                     T, RemoveRvalueReferences, Key>(context);
             }
 
             if constexpr (static_selection::status ==
                           detail::binding_selection_status::found) {
-                if (resolution == detail::binding_result::secondary) {
+                if (detail::is_secondary_binding(resolution)) {
                     return resolve_binding_selection<request_type, Key>(
                         context);
                 }

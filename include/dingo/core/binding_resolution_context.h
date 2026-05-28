@@ -100,10 +100,7 @@ class binding_resolution<Host, static_registry<Registrations...>>
     R resolve(runtime_context& context) {
         if constexpr (collection_traits<R>::is_collection) {
             return construct_collection<R, Key>(
-                context, [](auto& collection, auto&& value) {
-                    collection_traits<std::decay_t<decltype(collection)>>::add(
-                        collection, std::move(value));
-                });
+                context, detail::binding_collection_append{});
         } else {
             using request_type = R;
             using binding = binding_t<request_type, Key>;
@@ -112,17 +109,17 @@ class binding_resolution<Host, static_registry<Registrations...>>
             const auto merged = detail::resolve_binding(
                 binding::status, host_status,
                 detail::binding_resolution_policy::prefer_primary);
-            if (merged == detail::binding_result::ambiguous) {
+            if (detail::is_ambiguous_binding(merged)) {
                 throw detail::make_type_ambiguous_exception<T>(context);
             }
 
             if constexpr (binding::status ==
                           detail::binding_selection_status::found) {
-                if (merged == detail::binding_result::primary) {
+                if (detail::is_primary_binding(merged)) {
                     return resolve_binding<request_type, Key>(context);
                 }
 
-                if (merged == detail::binding_result::secondary) {
+                if (detail::is_secondary_binding(merged)) {
                     return host_->template resolve_request<
                         T, RemoveRvalueReferences, Key>(context);
                 }

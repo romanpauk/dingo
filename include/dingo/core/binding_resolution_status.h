@@ -84,4 +84,16 @@ resolve_binding_status(binding_selection_status primary,
     return binding_status(resolve_binding(primary, SecondaryStatus, policy));
 }
 
+constexpr bool is_primary_binding(binding_result resolution) {
+    return resolution == binding_result::primary;
+}
+
+constexpr bool is_secondary_binding(binding_result resolution) {
+    return resolution == binding_result::secondary;
+}
+
+constexpr bool is_ambiguous_binding(binding_result resolution) {
+    return resolution == binding_result::ambiguous;
+}
+
 } // namespace dingo::detail

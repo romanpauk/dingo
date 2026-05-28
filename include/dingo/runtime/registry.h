@@ -176,10 +176,7 @@ class runtime_registry : public allocator_base<Allocator> {
 
     template <typename... TypeArgs> auto& register_type_collection() {
         return register_type_collection<TypeArgs...>(
-            [](auto& collection, auto&& value) {
-                collection_traits<std::decay_t<decltype(collection)>>::add(
-                    collection, std::move(value));
-            });
+            detail::binding_collection_append{});
     }
 
   protected:
@@ -303,10 +300,7 @@ class runtime_registry : public allocator_base<Allocator> {
 
     template <typename T> T construct_collection_runtime_request() {
         return construct_collection_runtime_request<T>(
-            [](auto& collection, auto&& value) {
-                collection_traits<std::decay_t<decltype(collection)>>::add(
-                    collection, std::move(value));
-            });
+            detail::binding_collection_append{});
     }
 
     template <typename T, typename Fn>
@@ -318,11 +312,7 @@ class runtime_registry : public allocator_base<Allocator> {
     template <typename T, typename Key>
     T construct_collection_runtime_request(key<Key>) {
         return construct_collection_runtime_request<T>(
-            [](auto& collection, auto&& value) {
-                collection_traits<std::decay_t<decltype(collection)>>::add(
-                    collection, std::move(value));
-            },
-            key<Key>{});
+            detail::binding_collection_append{}, key<Key>{});
     }
 
     template <typename T, typename Fn, typename Key>
@@ -719,11 +709,7 @@ class runtime_registry : public allocator_base<Allocator> {
         if constexpr (MayAutoConstruct && detail::is_typed_key_v<IdType> &&
                       collection_traits<R>::is_collection) {
             return this->template construct_collection_runtime_request<R>(
-                [&](auto& collection, auto&& value) {
-                    collection_traits<std::decay_t<decltype(collection)>>::add(
-                        collection, std::move(value));
-                },
-                std::decay_t<IdType>{});
+                detail::binding_collection_append{}, std::decay_t<IdType>{});
         } else if constexpr (MayAutoConstruct &&
                              is_auto_constructible<std::decay_t<T>>::value) {
             if constexpr (constructor<Type>::kind ==
