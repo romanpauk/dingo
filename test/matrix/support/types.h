@@ -20,13 +20,18 @@
 #include <dingo/storage/shared_cyclical.h>
 #include <dingo/storage/unique.h>
 #include <dingo/type/type_map.h>
+#include <dingo/type/type_name.h>
+
+#include <gtest/gtest.h>
 
 #include <cstddef>
 #include <map>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -289,9 +294,25 @@ struct indexed_container_traits : dingo::dynamic_container_traits {
         std::tuple<std::tuple<std::size_t, dingo::index_type::map>>;
 };
 
+struct indexed_int_container_traits : dingo::dynamic_container_traits {
+    using index_definition_type =
+        std::tuple<std::tuple<int, dingo::index_type::map>>;
+};
+
+struct indexed_string_container_traits : dingo::dynamic_container_traits {
+    using index_definition_type =
+        std::tuple<std::tuple<std::string, dingo::index_type::map>>;
+};
+
 struct indexed_unordered_container_traits : dingo::dynamic_container_traits {
     using index_definition_type =
         std::tuple<std::tuple<std::size_t, dingo::index_type::unordered_map>>;
+};
+
+struct indexed_int_unordered_container_traits
+    : dingo::dynamic_container_traits {
+    using index_definition_type =
+        std::tuple<std::tuple<int, dingo::index_type::unordered_map>>;
 };
 
 struct indexed_array_container_traits : dingo::dynamic_container_traits {
@@ -354,4 +375,290 @@ struct custom_rtti_container_traits {
     static constexpr bool cache_enabled = true;
 };
 
+struct scenario_type {};
+
+struct unique_hierarchy_s {};
+struct unique_hierarchy_u {};
+struct unique_hierarchy_b {
+    explicit unique_hierarchy_b(std::shared_ptr<unique_hierarchy_s>&&) {}
+};
+
+struct nested_wrapper_value : interface_type {
+    int marker() const override { return 3; }
+    bool valid() const override { return true; }
+};
+
+struct nested_wrapper_consumer {
+    nested_wrapper_consumer(interface_type& init_value,
+                            interface_type* init_pointer)
+        : value(init_value), pointer(init_pointer) {}
+
+    interface_type& value;
+    interface_type* pointer;
+};
+
+struct rollback_exception {};
+
+struct rollback_a {
+    rollback_a() { ++constructor_count; }
+    ~rollback_a() { ++destructor_count; }
+
+    inline static std::size_t constructor_count = 0;
+    inline static std::size_t destructor_count = 0;
+};
+
+struct rollback_b {
+    rollback_b() { ++constructor_count; }
+    ~rollback_b() { ++destructor_count; }
+
+    inline static std::size_t constructor_count = 0;
+    inline static std::size_t destructor_count = 0;
+};
+
+struct rollback_c {
+    rollback_c(rollback_a&, rollback_b&) { throw rollback_exception(); }
+};
+
+inline void clear_rollback_stats() {
+    rollback_a::constructor_count = rollback_a::destructor_count = 0;
+    rollback_b::constructor_count = rollback_b::destructor_count = 0;
+}
+
+struct unique_reference_value {
+    unique_reference_value() = default;
+    std::shared_ptr<int> token = std::make_shared<int>(1);
+};
+
+struct shared_from_unique_reference {
+    explicit shared_from_unique_reference(unique_reference_value& unique)
+        : token(unique.token) {}
+
+    std::weak_ptr<int> token;
+};
+
+struct unique_reference_exception_value {
+    explicit unique_reference_exception_value(int& init_destructor_count)
+        : destructor_count(init_destructor_count) {}
+    unique_reference_exception_value(
+        const unique_reference_exception_value& other)
+        : destructor_count(other.destructor_count) {}
+    unique_reference_exception_value(unique_reference_exception_value&& other)
+        : destructor_count(other.destructor_count) {}
+    ~unique_reference_exception_value() { ++destructor_count; }
+
+    int& destructor_count;
+};
+
+struct shared_unique_reference_exception_value {
+    explicit shared_unique_reference_exception_value(
+        unique_reference_exception_value&) {
+        throw std::runtime_error("shared unique reference failure");
+    }
+};
+
+namespace construct_dependency {
+struct a {};
+struct b {};
+
+template <typename... Deps> class dependencies {
+  public:
+    dependencies() = delete;
+    explicit dependencies(Deps... deps) : deps_(std::forward<Deps>(deps)...) {}
+
+    template <typename D> auto dependency() const { return std::get<D>(deps_); }
+
+  private:
+    std::tuple<Deps...> deps_;
+};
+
+template <typename... Deps> class auto_dependencies {
+  public:
+    auto_dependencies() = delete;
+    explicit auto_dependencies(Deps... deps)
+        : deps_(std::forward<Deps>(deps)...) {}
+
+    template <typename D> auto dependency() const { return std::get<D>(deps_); }
+
+  private:
+    std::tuple<Deps...> deps_;
+};
+
+struct foo : dependencies<std::shared_ptr<a>, std::shared_ptr<b>> {
+    using dependencies_type =
+        dependencies<std::shared_ptr<a>, std::shared_ptr<b>>;
+    using dependencies_type::dependency;
+
+    explicit foo(dependencies_type deps) : dependencies_type(std::move(deps)) {}
+};
+
+struct opted_in_foo
+    : auto_dependencies<std::shared_ptr<a>, std::shared_ptr<b>> {
+    using dependencies_type =
+        auto_dependencies<std::shared_ptr<a>, std::shared_ptr<b>>;
+    using dependencies_type::dependency;
+
+    explicit opted_in_foo(dependencies_type deps)
+        : dependencies_type(std::move(deps)) {}
+};
+
+struct ambiguous_auto_dependencies {
+    explicit ambiguous_auto_dependencies(std::shared_ptr<a>) {}
+    explicit ambiguous_auto_dependencies(std::shared_ptr<b>) {}
+};
+
+struct ambiguous_opted_in_foo {
+    using dependencies_type = ambiguous_auto_dependencies;
+
+    explicit ambiguous_opted_in_foo(dependencies_type) {}
+};
+
+template <typename T> struct holder {
+    T value;
+};
+
+template <typename... Deps> struct aggregate_dependencies : holder<Deps>... {
+    template <typename D> auto dependency() const {
+        static_assert((std::is_same_v<D, Deps> || ...));
+        return static_cast<const holder<D>&>(*this).value;
+    }
+};
+
+struct aggregate_foo
+    : aggregate_dependencies<std::shared_ptr<a>, std::shared_ptr<b>> {
+    using dependencies_type =
+        aggregate_dependencies<std::shared_ptr<a>, std::shared_ptr<b>>;
+    using dependencies_type::dependency;
+
+    explicit aggregate_foo(dependencies_type deps)
+        : dependencies_type(std::move(deps)) {}
+};
+} // namespace construct_dependency
+
+struct cyclical_rollback_exception {};
+
+struct cyclical_rollback_b;
+
+struct cyclical_rollback_a : value_type {
+    explicit cyclical_rollback_a(
+        std::shared_ptr<interface_type>& init_dependency)
+        : dependency(init_dependency) {}
+
+    std::shared_ptr<interface_type>& dependency;
+};
+
+struct cyclical_rollback_b : interface_type {
+    explicit cyclical_rollback_b(cyclical_rollback_a&) {
+        if (fail) {
+            fail = false;
+            throw cyclical_rollback_exception();
+        }
+    }
+
+    int marker() const override { return 3; }
+    bool valid() const override { return true; }
+
+    inline static bool fail = true;
+};
+
+struct cyclical_commit_c {
+    explicit cyclical_commit_c(std::shared_ptr<interface_type>&) {
+        throw cyclical_rollback_exception();
+    }
+};
+
+template <typename Container> struct indexed_key {
+    using type = std::tuple_element_t<
+        0, std::tuple_element_t<0, typename std::remove_reference_t<
+                                       Container>::index_definition_type>>;
+};
+
+template <typename Container>
+using indexed_key_t = typename indexed_key<Container>::type;
+
+template <typename T> T indexed_value(int value) {
+    if constexpr (std::is_same_v<T, std::string>) {
+        return std::to_string(value);
+    } else {
+        return static_cast<T>(value);
+    }
+}
+
+template <typename Container>
+void exercise_indexed_registration(Container& container) {
+    using key_type = indexed_key_t<Container>;
+
+    container.template register_indexed_type<
+        dingo::scope<dingo::unique>,
+        dingo::storage<std::unique_ptr<element_type<0>>>,
+        dingo::interfaces<element_interface>>(indexed_value<key_type>(0));
+    container.template register_indexed_type<
+        dingo::scope<dingo::unique>,
+        dingo::storage<std::unique_ptr<element_type<1>>>,
+        dingo::interfaces<element_interface>>(indexed_value<key_type>(1));
+    ASSERT_THROW(
+        (container.template register_indexed_type<
+            dingo::scope<dingo::unique>,
+            dingo::storage<std::unique_ptr<element_type<1>>>,
+            dingo::interfaces<element_interface>>(indexed_value<key_type>(1))),
+        type_already_registered_exception);
+
+    ASSERT_EQ(container
+                  .template resolve<std::shared_ptr<element_interface>>(
+                      indexed_value<key_type>(0))
+                  ->id(),
+              0);
+    ASSERT_EQ(container
+                  .template resolve<std::shared_ptr<element_interface>>(
+                      indexed_value<key_type>(1))
+                  ->id(),
+              1);
+    ASSERT_THROW(
+        (container.template resolve<std::shared_ptr<element_interface>>(
+            indexed_value<key_type>(-1))),
+        type_not_found_exception);
+
+    container.template register_indexed_type<
+        dingo::scope<dingo::shared>,
+        dingo::storage<std::shared_ptr<element_type<2>>>,
+        dingo::interfaces<element_interface>>(indexed_value<key_type>(2));
+    container.template register_indexed_type<
+        dingo::scope<dingo::shared>,
+        dingo::storage<std::shared_ptr<element_type<3>>>,
+        dingo::interfaces<element_interface>>(indexed_value<key_type>(3));
+    ASSERT_THROW(
+        (container.template register_indexed_type<
+            dingo::scope<dingo::shared>,
+            dingo::storage<std::shared_ptr<element_type<3>>>,
+            dingo::interfaces<element_interface>>(indexed_value<key_type>(3))),
+        type_already_registered_exception);
+
+    ASSERT_EQ(
+        container
+            .template resolve<element_interface&>(indexed_value<key_type>(2))
+            .id(),
+        2);
+    ASSERT_EQ(
+        container
+            .template resolve<element_interface&>(indexed_value<key_type>(3))
+            .id(),
+        3);
+    ASSERT_THROW((container.template resolve<element_interface&>(
+                     indexed_value<key_type>(-2))),
+                 type_not_found_exception);
+}
+
 } // namespace dingo::matrix
+
+namespace dingo {
+
+template <typename... Deps>
+struct is_auto_constructible<
+    matrix::construct_dependency::auto_dependencies<Deps...>> : std::true_type {
+};
+
+template <>
+struct is_auto_constructible<
+    matrix::construct_dependency::ambiguous_auto_dependencies>
+    : std::true_type {};
+
+} // namespace dingo

@@ -255,7 +255,6 @@ if(DINGO_DEVELOPMENT_MODE)
             test/registration/binding_graph.cpp
             test/registration/static_bindings_source.cpp
             test/registration/type_registration.cpp
-            test/storage/shared_cyclical_regressions.cpp
             test/storage/shared_type_conversion.cpp
             test/container/construct_common.h
             test/support/assert.h
