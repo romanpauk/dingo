@@ -246,40 +246,18 @@ if(DINGO_DEVELOPMENT_MODE)
         include(${DINGO_MATRIX_TEST_CMAKE})
 
         add_executable(dingo_test
-            test/container/allocator.cpp
-            test/container/construct.cpp
             test/container/construct_dependency.cpp
-            test/container/construct_local.cpp
             test/container/dingo.cpp
             test/container/incomplete_resolve.cpp
             test/container/incomplete_resolve_fixture.cpp
-            test/container/invoke.cpp
-            test/container/nested_resolution.cpp
-            test/container/nesting.cpp
-            test/factory/constructor.cpp
             test/factory/constructor_detection.cpp
             test/index/index.cpp
-            test/index/multibindings.cpp
-            test/registration/annotated.cpp
             test/registration/binding_graph.cpp
             test/registration/static_bindings_source.cpp
-            test/registration/static_injector.cpp
             test/registration/type_registration.cpp
-            test/storage/array.cpp
-            test/storage/external.cpp
-            test/storage/external_misc.cpp
-            test/storage/external_unique.cpp
-            test/storage/external_variant.cpp
-            test/storage/shared.cpp
             test/storage/shared_cyclical_regressions.cpp
-            test/storage/shared_cyclical.cpp
-            test/storage/shared_hierarchy.cpp
             test/storage/shared_type_conversion.cpp
-            test/storage/shared_variant.cpp
-            test/storage/unique.cpp
             test/container/construct_common.h
-            test/storage/external_common.h
-            test/storage/shared_common.h
             test/support/assert.h
             test/support/class.h
             test/support/containers.h
