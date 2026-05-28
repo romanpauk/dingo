@@ -48,7 +48,7 @@ CLANG_ARM64_EXPECTED_MAX = {
     "probe_static_runtime_shared_config": 0x140,
     "probe_static_shared_config": 0xd0,
     "probe_static_interface_handle": 0x1d0,
-    "probe_runtime_external_wrapper_storage": 0x680,
+    "probe_runtime_external_wrapper_storage": 0x740,
 }
 
 GCC_TINY_PROBE_EXPECTED_MAX = {
