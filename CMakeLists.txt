@@ -222,6 +222,8 @@ if(DINGO_DEVELOPMENT_MODE)
         set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/model.py"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/plugins.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/templates/cmake.cmake.j2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/templates/source.cpp.j2"
             "${DINGO_MATRIX_GENERATOR}")
 
         if(UV_EXECUTABLE)

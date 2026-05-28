@@ -776,6 +776,24 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
         }
     }
 
+    template <typename T, typename Key = void, typename Fn, typename Context,
+              std::enable_if_t<!std::is_same_v<std::remove_reference_t<Context>,
+                                               runtime_context>,
+                               int> = 0>
+    std::size_t append_collection(T& results, Context& context, Fn&& fn) {
+        binding_resolution_ref static_state_ref(
+            static_cast<static_state&>(*this));
+        if constexpr (std::is_void_v<Key>) {
+            return static_state_ref.template append_static_collection<
+                T, void, static_registry_type_>(
+                results, *this, context, std::forward<Fn>(fn));
+        } else {
+            return static_state_ref.template append_static_collection<
+                T, Key, static_registry_type_>(
+                results, *this, context, std::forward<Fn>(fn));
+        }
+    }
+
     template <typename T, typename Key = void> std::size_t count_collection() {
         if constexpr (std::is_void_v<Key>) {
             return detail::count_binding_collection<T>(

@@ -275,6 +275,19 @@ class static_injector<static_registry<Registrations...>, void>
                 *this, context, std::forward<Fn>(fn));
     }
 
+    template <typename T, typename Key = void, typename Fn, typename Context>
+    std::size_t append_collection(T& results, Context& context, Fn&& fn) {
+        return this
+            ->template append_static_collection<T, Key, static_source_type>(
+                results, *this, context, std::forward<Fn>(fn));
+    }
+
+    template <typename T, typename Key = void> std::size_t count_collection() {
+        using collection_type = collection_traits<T>;
+        return type_list_size_v<typename static_source_type::template bindings<
+            normalized_type_t<typename collection_type::resolve_type>, Key>>;
+    }
+
     template <typename T, bool RemoveRvalueReferences, typename Key = void,
               typename R = resolve_result_t<T, RemoveRvalueReferences>>
     R resolve(context_type& context) {

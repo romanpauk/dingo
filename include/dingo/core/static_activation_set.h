@@ -670,24 +670,12 @@ class basic_static_activation_set_base
                 local_scope.template append_static_collection<R, Key,
                                                               LocalRegistry>(
                     results, host, context, append);
-            try {
-                if constexpr (std::is_void_v<Key>) {
-                    auto host_results =
-                        host.template construct_collection<R>(append);
-                    for (auto& value : host_results) {
-                        collection_type::add(results, std::move(value));
-                    }
-                } else {
-                    auto host_results = host.template construct_collection<R>(
-                        append, key<Key>{});
-                    for (auto& value : host_results) {
-                        collection_type::add(results, std::move(value));
-                    }
-                }
-            } catch (const type_not_found_exception&) {
-                if (local_count == 0) {
-                    throw;
-                }
+            const auto host_count =
+                host.template append_collection<R, Key>(results, context,
+                                                        append);
+            if (local_count + host_count == 0) {
+                throw detail::make_collection_type_not_found_exception<
+                    R, typename collection_type::resolve_type>();
             }
             return results;
         } else {
