@@ -12,8 +12,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from model import (
-    FEATURES,
+from data import FEATURES
+from schema import (
     ExposedType,
     Feature,
     RegistrationSpec,

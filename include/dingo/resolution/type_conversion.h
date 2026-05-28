@@ -50,6 +50,9 @@ template <typename SourceCapability>
 using source_value_type_t =
     typename materialized_source_traits_t<SourceCapability>::value_type;
 
+template <typename Type>
+using unqualified_t = std::remove_cv_t<std::remove_reference_t<Type>>;
+
 template <typename SourceCapability>
 decltype(auto) materialized_value(SourceCapability&& source) {
     return materialized_source_traits_t<SourceCapability>::value(
@@ -77,6 +80,26 @@ Target& borrow_reference(Source& source, type_descriptor requested_type,
                          type_traits<Source>::is_value_borrowable) {
         return borrow_reference<Target>(type_traits<Source>::borrow(source),
                                         requested_type, registered_type);
+    } else {
+        throw make_type_not_convertible_exception(requested_type,
+                                                  registered_type);
+    }
+}
+
+template <typename Target, typename Source>
+Target* borrow_pointer(Source& source, type_descriptor requested_type,
+                       type_descriptor registered_type) {
+    if constexpr (std::is_convertible_v<Source*, Target*>) {
+        return static_cast<Target*>(&source);
+    } else if constexpr (type_traits<Source>::enabled &&
+                         std::is_convertible_v<decltype(type_traits<Source>::get(
+                                                   source)),
+                                                Target*>) {
+        return type_traits<Source>::get(source);
+    } else if constexpr (type_traits<Source>::enabled &&
+                         type_traits<Source>::is_value_borrowable) {
+        return borrow_pointer<Target>(type_traits<Source>::borrow(source),
+                                      requested_type, registered_type);
     } else {
         throw make_type_not_convertible_exception(requested_type,
                                                   registered_type);
@@ -146,9 +169,8 @@ template <typename Target, typename SourceCapability>
 Target* resolve_borrowed_materialized_pointer(
     SourceCapability&& source, type_descriptor requested_type,
     type_descriptor registered_type) {
-    return std::addressof(resolve_borrowed_materialized_reference<Target>(
-        std::forward<SourceCapability>(source), requested_type,
-        registered_type));
+    return borrow_pointer<Target>(materialized_reference(source), requested_type,
+                                  registered_type);
 }
 
 template <typename Target, typename Source, typename Factory, typename Context,
@@ -191,8 +213,8 @@ Target* resolve_materialized_get_pointer(SourceCapability&& source,
 template <typename Target, typename Sum>
 Target extract_alternative_type_value(Sum&& sum, type_descriptor requested_type,
                                       type_descriptor registered_type) {
-    using selected_type = std::remove_const_t<Target>;
-    using alternative_type = std::remove_cv_t<std::remove_reference_t<Sum>>;
+    using selected_type = unqualified_t<Target>;
+    using alternative_type = unqualified_t<Sum>;
 
     if (auto* value =
             alternative_type_traits<alternative_type>::template get<selected_type>(
@@ -207,8 +229,8 @@ template <typename Target, typename Sum>
 Target& resolve_alternative_type_reference(Sum& sum,
                                            type_descriptor requested_type,
                                            type_descriptor registered_type) {
-    using selected_type = std::remove_const_t<Target>;
-    using alternative_type = std::remove_cv_t<std::remove_reference_t<Sum>>;
+    using selected_type = unqualified_t<Target>;
+    using alternative_type = unqualified_t<Sum>;
 
     if (auto* value =
             alternative_type_traits<alternative_type>::template get<selected_type>(
@@ -226,6 +248,54 @@ Target* resolve_alternative_type_pointer(Sum& sum,
     return std::addressof(
         resolve_alternative_type_reference<Target>(sum, requested_type,
                                                    registered_type));
+}
+
+template <typename Target, typename Sum, typename Alternatives>
+struct alternative_borrow_reference;
+
+template <typename Target, typename Sum>
+struct alternative_borrow_reference<Target, Sum, type_list<>> {
+    static Target& resolve(Sum&, type_descriptor requested_type,
+                           type_descriptor registered_type) {
+        throw make_type_not_convertible_exception(requested_type,
+                                                  registered_type);
+    }
+};
+
+template <typename Target, typename Sum, typename Alternative,
+          typename... Alternatives>
+struct alternative_borrow_reference<Target, Sum,
+                                    type_list<Alternative, Alternatives...>> {
+    static Target& resolve(Sum& sum, type_descriptor requested_type,
+                           type_descriptor registered_type) {
+        using alternative_type = unqualified_t<Sum>;
+        if (auto* value =
+                alternative_type_traits<alternative_type>::template get<
+                    Alternative>(sum)) {
+            return borrow_reference<Target>(*value, requested_type,
+                                            registered_type);
+        }
+
+        return alternative_borrow_reference<
+            Target, Sum, type_list<Alternatives...>>::resolve(
+            sum, requested_type, registered_type);
+    }
+};
+
+template <typename Target, typename Sum>
+Target& resolve_alternative_borrowed_reference(
+    Sum& sum, type_descriptor requested_type, type_descriptor registered_type) {
+    using alternative_type = unqualified_t<Sum>;
+    return alternative_borrow_reference<
+        Target, Sum, alternative_type_alternatives_t<alternative_type>>::resolve(
+        sum, requested_type, registered_type);
+}
+
+template <typename Target, typename Sum>
+Target* resolve_alternative_borrowed_pointer(
+    Sum& sum, type_descriptor requested_type, type_descriptor registered_type) {
+    return std::addressof(resolve_alternative_borrowed_reference<Target>(
+        sum, requested_type, registered_type));
 }
 
 template <typename Target, typename SourceCapability>
@@ -271,7 +341,7 @@ struct is_borrowed_alternative_type<
                      type_traits<Source>::is_value_borrowable &&
                      is_alternative_type_v<borrowed_value_type_t<Source>>>>
     : std::bool_constant<
-          std::is_same_v<std::remove_cv_t<Target>, borrowed_value_type_t<Source>>> {
+          std::is_same_v<unqualified_t<Target>, borrowed_value_type_t<Source>>> {
 };
 
 template <typename Source, typename Target>
@@ -281,9 +351,9 @@ struct is_borrowed_alternative_type_alternative<
                      type_traits<Source>::is_value_borrowable &&
                      is_alternative_type_v<borrowed_value_type_t<Source>>>>
     : std::bool_constant<
-          !std::is_same_v<std::remove_cv_t<Target>, borrowed_value_type_t<Source>> &&
+          !std::is_same_v<unqualified_t<Target>, borrowed_value_type_t<Source>> &&
           (alternative_type_count<borrowed_value_type_t<Source>,
-                                  std::remove_cv_t<Target>>::value == 1)> {};
+                                  unqualified_t<Target>>::value == 1)> {};
 
 template <typename Source, typename Target>
 inline constexpr bool is_borrowed_alternative_type_v =
@@ -356,9 +426,10 @@ struct type_conversion<
     std::enable_if_t<
         is_alternative_type_v<Source> &&
         !std::is_pointer_v<Target> &&
-        !std::is_same_v<std::remove_cv_t<Target>, std::remove_cv_t<Source>> &&
+        !std::is_same_v<detail::unqualified_t<Target>,
+                        detail::unqualified_t<Source>> &&
         (detail::alternative_type_count<Source,
-                                        std::remove_cv_t<Target>>::value == 1)>> {
+                                        detail::unqualified_t<Target>>::value == 1)>> {
     template <typename Factory, typename Context, typename SourceCapability>
     static Target apply(Factory&, Context&, SourceCapability&& source,
                         type_descriptor requested_type,
@@ -373,8 +444,8 @@ template <typename Target, typename Source>
 struct type_conversion<
     Target, detail::rvalue_source<Source>,
     std::enable_if_t<is_alternative_type_v<Source> &&
-                     std::is_same_v<std::remove_cv_t<Target>,
-                                    std::remove_cv_t<Source>>>> {
+                     std::is_same_v<detail::unqualified_t<Target>,
+                                    detail::unqualified_t<Source>>>> {
     template <typename Factory, typename Context, typename SourceCapability>
     static decltype(auto) apply(Factory&, Context&, SourceCapability&& source,
                                 type_descriptor, type_descriptor) {
@@ -388,9 +459,10 @@ struct type_conversion<
     std::enable_if_t<
         is_alternative_type_v<Source> &&
         !std::is_pointer_v<Target> &&
-        !std::is_same_v<std::remove_cv_t<Target>, std::remove_cv_t<Source>> &&
+        !std::is_same_v<detail::unqualified_t<Target>,
+                        detail::unqualified_t<Source>> &&
         (detail::alternative_type_count<Source,
-                                        std::remove_cv_t<Target>>::value != 1)>> {
+                                        detail::unqualified_t<Target>>::value != 1)>> {
     template <typename Factory, typename Context, typename SourceCapability>
     static Target apply(Factory&, Context&, SourceCapability&&,
                         type_descriptor requested_type,
@@ -484,11 +556,11 @@ struct type_conversion<
         is_alternative_type_v<detail::source_value_type_t<SourceCapability>> &&
         !std::is_pointer_v<Target> &&
         !std::is_same_v<
-            std::remove_cv_t<Target>,
-            std::remove_cv_t<detail::source_value_type_t<SourceCapability>>> &&
+            detail::unqualified_t<Target>,
+            detail::unqualified_t<detail::source_value_type_t<SourceCapability>>> &&
         (detail::alternative_type_count<
              detail::source_value_type_t<SourceCapability>,
-             std::remove_cv_t<Target>>::value == 1)>> {
+             detail::unqualified_t<Target>>::value == 1)>> {
     template <typename Factory, typename Context, typename Capability>
     static Target& apply(Factory&, Context&, Capability&& source,
                          type_descriptor requested_type,
@@ -506,8 +578,8 @@ struct type_conversion<
         detail::materialized_source_traits_t<SourceCapability>::reference_like &&
         is_alternative_type_v<detail::source_value_type_t<SourceCapability>> &&
         std::is_same_v<
-            std::remove_cv_t<Target>,
-            std::remove_cv_t<detail::source_value_type_t<SourceCapability>>>>> {
+            detail::unqualified_t<Target>,
+            detail::unqualified_t<detail::source_value_type_t<SourceCapability>>>>> {
     template <typename Factory, typename Context, typename Capability>
     static Target& apply(Factory&, Context&, Capability&& source,
                          type_descriptor, type_descriptor) {
@@ -523,17 +595,18 @@ struct type_conversion<
         is_alternative_type_v<detail::source_value_type_t<SourceCapability>> &&
         !std::is_pointer_v<Target> &&
         !std::is_same_v<
-            std::remove_cv_t<Target>,
-            std::remove_cv_t<detail::source_value_type_t<SourceCapability>>> &&
+            detail::unqualified_t<Target>,
+            detail::unqualified_t<detail::source_value_type_t<SourceCapability>>> &&
         (detail::alternative_type_count<
              detail::source_value_type_t<SourceCapability>,
-             std::remove_cv_t<Target>>::value != 1)>> {
+             detail::unqualified_t<Target>>::value != 1)>> {
     template <typename Factory, typename Context, typename Capability>
-    static Target& apply(Factory&, Context&, Capability&&,
+    static Target& apply(Factory&, Context&, Capability&& source,
                          type_descriptor requested_type,
                          type_descriptor registered_type) {
-        throw detail::make_type_not_convertible_exception(requested_type,
-                                                          registered_type);
+        return detail::resolve_alternative_borrowed_reference<Target>(
+            detail::materialized_reference(source), requested_type,
+            registered_type);
     }
 };
 
@@ -556,11 +629,11 @@ struct type_conversion<
         detail::materialized_source_traits_t<SourceCapability>::reference_like &&
         is_alternative_type_v<detail::source_value_type_t<SourceCapability>> &&
         !std::is_same_v<
-            std::remove_cv_t<Target>,
-            std::remove_cv_t<detail::source_value_type_t<SourceCapability>>> &&
+            detail::unqualified_t<Target>,
+            detail::unqualified_t<detail::source_value_type_t<SourceCapability>>> &&
         (detail::alternative_type_count<
              detail::source_value_type_t<SourceCapability>,
-             std::remove_cv_t<Target>>::value == 1)>> {
+             detail::unqualified_t<Target>>::value == 1)>> {
     template <typename Factory, typename Context, typename Capability>
     static Target* apply(Factory&, Context&, Capability&& source,
                          type_descriptor requested_type,
@@ -578,8 +651,8 @@ struct type_conversion<
         detail::materialized_source_traits_t<SourceCapability>::reference_like &&
         is_alternative_type_v<detail::source_value_type_t<SourceCapability>> &&
         std::is_same_v<
-            std::remove_cv_t<Target>,
-            std::remove_cv_t<detail::source_value_type_t<SourceCapability>>>>> {
+            detail::unqualified_t<Target>,
+            detail::unqualified_t<detail::source_value_type_t<SourceCapability>>>>> {
     template <typename Factory, typename Context, typename Capability>
     static Target* apply(Factory&, Context&, Capability&& source,
                          type_descriptor, type_descriptor) {
@@ -595,17 +668,18 @@ struct type_conversion<
         detail::materialized_source_traits_t<SourceCapability>::reference_like &&
         is_alternative_type_v<detail::source_value_type_t<SourceCapability>> &&
         !std::is_same_v<
-            std::remove_cv_t<Target>,
-            std::remove_cv_t<detail::source_value_type_t<SourceCapability>>> &&
+            detail::unqualified_t<Target>,
+            detail::unqualified_t<detail::source_value_type_t<SourceCapability>>> &&
         (detail::alternative_type_count<
              detail::source_value_type_t<SourceCapability>,
-             std::remove_cv_t<Target>>::value != 1)>> {
+             detail::unqualified_t<Target>>::value != 1)>> {
     template <typename Factory, typename Context, typename Capability>
-    static Target* apply(Factory&, Context&, Capability&&,
+    static Target* apply(Factory&, Context&, Capability&& source,
                          type_descriptor requested_type,
                          type_descriptor registered_type) {
-        throw detail::make_type_not_convertible_exception(requested_type,
-                                                          registered_type);
+        return detail::resolve_alternative_borrowed_pointer<Target>(
+            detail::materialized_reference(source), requested_type,
+            registered_type);
     }
 };
 

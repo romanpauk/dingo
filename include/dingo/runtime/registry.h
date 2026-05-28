@@ -384,13 +384,16 @@ class runtime_registry : public allocator_base<Allocator> {
 
     template <typename Request, typename Key = void>
     detail::binding_selection_status binding_status() {
+        using exact_type =
+            std::remove_cv_t<std::remove_reference_t<request_interface_t<Request>>>;
         using lookup_type = normalized_type_t<Request>;
+        auto* state = runtime_state_if_present();
+        auto* data = state ? state->type_bindings.template get<exact_type>() : nullptr;
+        if (!data && state) {
+            data = state->type_bindings.template get<lookup_type>();
+        }
         auto selection = select_runtime_binding(
-            runtime_state_if_present()
-                ? runtime_state_if_present()
-                      ->type_bindings.template get<lookup_type>()
-                : nullptr,
-            std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>{});
+            data, std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>{});
         return selection.status;
     }
 
@@ -918,11 +921,14 @@ class runtime_registry : public allocator_base<Allocator> {
             }
         }
 
-        auto selection = select_runtime_binding(
-            runtime_state_if_present()
-                ? runtime_state_if_present()->type_bindings.template get<Type>()
-                : nullptr,
-            id);
+        using exact_type =
+            std::remove_cv_t<std::remove_reference_t<request_interface_t<T>>>;
+        auto* state = runtime_state_if_present();
+        auto* data = state ? state->type_bindings.template get<exact_type>() : nullptr;
+        if (!data && state) {
+            data = state->type_bindings.template get<Type>();
+        }
+        auto selection = select_runtime_binding(data, id);
         if (selection.found()) {
             return resolve_runtime_selection<T, CheckCache>(
                 selection, context, std::forward<IdType>(id));

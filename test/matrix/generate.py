@@ -15,7 +15,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from model import (
+from data import (
     CONTAINERS,
     EXPOSED_TYPES,
     FILTER_RULES,
@@ -23,6 +23,8 @@ from model import (
     RESOLVED_TYPES,
     SCOPES,
     STORED_TYPES,
+)
+from schema import (
     ContainerSpec,
     ExposedType,
     Feature,
@@ -69,6 +71,23 @@ class GeneratedTest:
     suite: str
     name: str
     case_name: str
+
+
+@dataclass(frozen=True)
+class SourceGroup:
+    feature: Feature
+    mode: RegistrationMode
+    container: ContainerSpec
+
+    @property
+    def name(self) -> str:
+        return "_".join(
+            (
+                self.feature.name,
+                self.mode.name,
+                self.container.name,
+            )
+        )
 
 
 def implemented(axis: tuple) -> tuple:
@@ -316,35 +335,57 @@ def make_case(row: MatrixRow) -> GeneratedCase:
     )
 
 
-def generate_feature(
-    feature: Feature, rows: tuple[MatrixRow, ...], out_dir: Path, env: Environment
+def render_source(
+    source: Path,
+    rows: tuple[MatrixRow, ...],
+    env: Environment,
 ) -> Path:
     cases: list[GeneratedCase] = []
     tests: list[GeneratedTest] = []
 
     for row in rows:
-        if row.feature != feature:
-            continue
         case = make_case(row)
         cases.append(case)
         tests.append(
             GeneratedTest(
-                suite=feature.name,
+                suite=row.feature.name,
                 name=case.name,
                 case_name=case.name,
             )
         )
 
     if not tests:
-        raise RuntimeError(f"feature {feature.name} did not generate any tests")
+        raise RuntimeError(f"source {source} did not generate any tests")
 
-    source = out_dir / f"{feature.name}.cpp"
     rendered = env.get_template("source.cpp.j2").render(
         cases=cases,
         tests=tests,
     )
     source.write_text(rendered, encoding="utf-8")
     return source
+
+
+def source_groups(rows: tuple[MatrixRow, ...]) -> dict[SourceGroup, list[MatrixRow]]:
+    grouped: dict[SourceGroup, list[MatrixRow]] = defaultdict(list)
+    for row in rows:
+        grouped[
+            SourceGroup(
+                feature=row.feature,
+                mode=row.mode,
+                container=row.container,
+            )
+        ].append(row)
+    return grouped
+
+
+def generate_sources(
+    rows: tuple[MatrixRow, ...], out_dir: Path, env: Environment
+) -> tuple[Path, ...]:
+    sources: list[Path] = []
+    for group, group_rows in source_groups(rows).items():
+        source = out_dir / f"{group.name}.cpp"
+        sources.append(render_source(source, tuple(group_rows), env))
+    return tuple(sorted(sources))
 
 
 def generate(out_dir: Path, cmake_file: Path) -> None:
@@ -358,10 +399,7 @@ def generate(out_dir: Path, cmake_file: Path) -> None:
 
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = generate_rows()
-    sources = [
-        generate_feature(plugin.feature, rows, out_dir, env)
-        for plugin in FEATURE_CASE_PLUGINS
-    ]
+    sources = generate_sources(rows, out_dir, env)
     cmake_file.parent.mkdir(parents=True, exist_ok=True)
     cmake_file.write_text(
         env.get_template("cmake.cmake.j2").render(

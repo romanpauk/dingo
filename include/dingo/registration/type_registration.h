@@ -101,6 +101,85 @@ template <typename... Args> struct dependencies<type_list<Args...>> {
 };
 
 namespace detail {
+template <typename Accumulated, typename Remaining> struct registration_type_list_unique;
+
+template <typename... Accumulated>
+struct registration_type_list_unique<type_list<Accumulated...>, type_list<>> {
+    using type = type_list<Accumulated...>;
+};
+
+template <typename T, typename List> struct registration_type_list_contains;
+
+template <typename T>
+struct registration_type_list_contains<T, type_list<>> : std::false_type {};
+
+template <typename T, typename Head, typename... Tail>
+struct registration_type_list_contains<T, type_list<Head, Tail...>>
+    : std::bool_constant<
+          std::is_same_v<T, Head> ||
+          registration_type_list_contains<T, type_list<Tail...>>::value> {};
+
+template <typename... Accumulated, typename Head, typename... Tail>
+struct registration_type_list_unique<type_list<Accumulated...>,
+                                     type_list<Head, Tail...>> {
+  private:
+    using next_accumulated = std::conditional_t<
+        registration_type_list_contains<Head, type_list<Accumulated...>>::value,
+        type_list<Accumulated...>, type_list<Accumulated..., Head>>;
+
+  public:
+    using type = typename registration_type_list_unique<
+        next_accumulated, type_list<Tail...>>::type;
+};
+
+template <typename List>
+using registration_type_list_unique_t =
+    typename registration_type_list_unique<type_list<>, List>::type;
+
+template <typename Type, typename = void> struct deduced_interface_types {
+    using type = type_list<std::remove_cv_t<std::remove_reference_t<Type>>>;
+};
+
+template <typename Type>
+struct deduced_interface_types<
+    Type,
+    std::enable_if_t<type_traits<std::remove_cv_t<
+                         std::remove_reference_t<Type>>>::enabled &&
+                     type_traits<std::remove_cv_t<
+                         std::remove_reference_t<Type>>>::is_value_borrowable>> {
+  private:
+    using value_type = std::remove_cv_t<std::remove_reference_t<Type>>;
+
+  public:
+    using type = type_list_cat_t<
+        type_list<value_type>,
+        typename deduced_interface_types<
+            typename type_traits<value_type>::value_type>::type>;
+};
+
+template <typename Type>
+struct deduced_interface_types<
+    Type,
+    std::enable_if_t<is_alternative_type_v<
+        std::remove_cv_t<std::remove_reference_t<Type>>>>> {
+  private:
+    using value_type = std::remove_cv_t<std::remove_reference_t<Type>>;
+
+    template <typename Alternatives> struct alternatives_interface_types;
+
+    template <typename... Alternatives>
+    struct alternatives_interface_types<type_list<Alternatives...>> {
+        using type = type_list_cat_t<
+            typename deduced_interface_types<Alternatives>::type...>;
+    };
+
+  public:
+    using type = registration_type_list_unique_t<type_list_cat_t<
+        type_list<value_type>,
+        typename alternatives_interface_types<
+            alternative_type_alternatives_t<value_type>>::type>>;
+};
+
 template <typename Expected, typename Candidate, typename = void>
 struct registration_arg_matches : std::false_type {};
 
@@ -252,7 +331,7 @@ struct deduced_interface_type<
     std::void_t<typename ::dingo::detail::alternative_type_interface_types<
         std::remove_cv_t<std::remove_reference_t<StorageType>>>::type>> {
     using type = ::dingo::interfaces<
-        typename ::dingo::detail::alternative_type_interface_types<
+        typename ::dingo::detail::deduced_interface_types<
             std::remove_cv_t<std::remove_reference_t<StorageType>>>::type>;
 };
 
@@ -266,7 +345,7 @@ struct deduced_interface_type<
                          std::remove_reference_t<StorageType>>>::is_value_borrowable &&
                      is_alternative_type_v<std::remove_cv_t<leaf_type_t<StorageType>>>>> {
     using type = ::dingo::interfaces<
-        typename ::dingo::detail::alternative_type_interface_types<
+        typename ::dingo::detail::deduced_interface_types<
             std::remove_cv_t<leaf_type_t<StorageType>>>::type>;
 };
 

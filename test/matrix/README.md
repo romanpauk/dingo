@@ -11,6 +11,9 @@ are an output of axis selection.
 - `resolve_concrete`: resolve the registered concrete type.
 - `resolve_interface`: resolve through `interfaces<...>`.
 - `resolve_wrapper`: resolve an owning or sharing wrapper directly.
+- `custom_wrappers`: resolve through user-defined wrapper traits.
+- `nested_wrappers`: resolve nested smart-pointer, variant, and array wrapper
+  combinations.
 - `resolve_collection`: resolve all unkeyed bindings for an interface.
 - `resolve_keyed`: resolve one keyed binding.
 - `resolve_keyed_collection`: resolve all bindings for a key.
@@ -58,11 +61,13 @@ valid behavior combinations.
 - `std::unique_ptr<T>`
 - `std::shared_ptr<T>`
 - `std::optional<T>`
+- user-defined shared, unique, and optional-like wrappers
 - `T[N]`
 - `T[M][N]`
 - `std::unique_ptr<T[]>`
 - `std::shared_ptr<T[]>`
 - `std::variant<A, B>`
+- nested smart-pointer, variant, and array wrapper combinations
 - local-binding target types
 - factory-override target types
 - cycle-shaped shared types
@@ -75,6 +80,7 @@ valid behavior combinations.
 - one interface
 - multiple interfaces
 - copyable interface
+- user-defined wrapper concrete and interface bindings
 - keyed concrete
 - keyed interface
 - annotated concrete
@@ -105,6 +111,7 @@ valid behavior combinations.
 - `std::shared_ptr<T>&`
 - `std::shared_ptr<I>`
 - `std::shared_ptr<I>&`
+- user-defined wrapper values, references, and interface conversions
 - `std::vector<std::shared_ptr<I>>`
 - custom inserted collection forms such as `std::map<int, std::shared_ptr<I>>`
 - keyed `T`, `T&`, and collection requests through `resolve(...,
@@ -119,6 +126,7 @@ valid behavior combinations.
 - `std::shared_ptr<T[]>`
 - `std::variant<A, B>`
 - held variant alternative as value, reference, and pointer
+- nested smart-pointer, variant, and array wrapper requests
 - annotated concrete and interface requests
 - local binding, factory override, mixed external dependency, and cycle-shaped
   concrete requests
@@ -195,3 +203,14 @@ Not every axis combination should exist. Completeness means every axis member an
 filter rule is represented by at least one valid generated row, and each
 applicable feature / registration mode / container combination has at least one
 valid generated row.
+
+## Generated Sources
+
+Generated tests are split by:
+
+`feature x registration_mode x container`
+
+Each source file contains one valid slice of the matrix, for example
+`resolve_concrete_runtime_runtime_container.cpp`. The split keeps translation
+units tied to matrix meaning instead of arbitrary shard numbers, while limiting
+the amount of template-heavy container code compiled by one compiler process.

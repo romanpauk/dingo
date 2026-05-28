@@ -220,8 +220,15 @@ if(DINGO_DEVELOPMENT_MODE)
         set(DINGO_MATRIX_GENERATOR
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/generate.py")
         set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/model.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/axis_config.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/axis_containers.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/axis_exposed_types.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/axis_features.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/axis_resolved_types.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/axis_stored_types.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/data.py"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/plugins.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/schema.py"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/templates/cmake.cmake.j2"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/templates/source.cpp.j2"
             "${DINGO_MATRIX_GENERATOR}")
@@ -245,7 +252,7 @@ if(DINGO_DEVELOPMENT_MODE)
         endif()
         include(${DINGO_MATRIX_TEST_CMAKE})
 
-        add_executable(dingo_test
+        add_executable(dingo_unit_test
             test/container/construct_dependency.cpp
             test/container/dingo.cpp
             test/container/incomplete_resolve.cpp
@@ -266,19 +273,19 @@ if(DINGO_DEVELOPMENT_MODE)
             test/type/type_name.cpp
             test/type/type_traits.cpp
         )
-        add_test(NAME dingo_test COMMAND dingo_test)
-        set_tests_properties(dingo_test PROPERTIES LABELS "runtime")
-        target_link_libraries(dingo_test dingo::dingo gtest_main)
-        target_include_directories(dingo_test PRIVATE test)
-        target_compile_definitions(dingo_test PRIVATE
+        add_test(NAME dingo_unit_test COMMAND dingo_unit_test)
+        set_tests_properties(dingo_unit_test PROPERTIES LABELS "unit")
+        target_link_libraries(dingo_unit_test dingo::dingo gtest_main)
+        target_include_directories(dingo_unit_test PRIVATE test)
+        target_compile_definitions(dingo_unit_test PRIVATE
             $<$<BOOL:${DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION}>:
                 DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION=1>
         )
 
-        target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
+        target_compile_options(dingo_unit_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
 
         # Force-include windows.h to each test to make sure library builds with windows.h included
-        target_compile_options(dingo_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
+        target_compile_options(dingo_unit_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
 
         add_executable(dingo_matrix_test
             ${DINGO_MATRIX_TEST_SOURCES}
@@ -301,15 +308,14 @@ if(DINGO_DEVELOPMENT_MODE)
             $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
 
         if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
-            # The monolithic template-heavy test binary can exceed AArch64's
-            # branch range in GCC Release builds. Keep the full typed test
-            # matrix on other jobs and use the existing reduced dynamic matrix
-            # here to keep this runner's executable linkable.
-            target_compile_definitions(dingo_test PRIVATE
+            # The unit test binary still carries some template-heavy coverage
+            # from the old integration tests. Keep this runner's executable
+            # linkable in GCC Release builds.
+            target_compile_definitions(dingo_unit_test PRIVATE
                 $<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Release>>:
                     DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION=1>
             )
-            target_compile_options(dingo_test PRIVATE
+            target_compile_options(dingo_unit_test PRIVATE
                 $<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Release>>:-Os>
             )
         endif()

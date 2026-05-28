@@ -112,6 +112,10 @@ struct keyed_request_types<Key, type_list<RequestTypes...>> {
 template <typename Request>
 using binding_request_interface_t = normalized_type_t<keyed_type_t<Request>>;
 
+template <typename Request>
+using binding_exact_request_interface_t =
+    std::remove_cv_t<std::remove_reference_t<keyed_type_t<Request>>>;
+
 template <typename Request> using binding_request_key_t = keyed_key_t<Request>;
 
 template <typename Binding> struct binding_request_types {
@@ -121,7 +125,23 @@ template <typename Binding> struct binding_request_types {
     using raw_interface_type = typename annotated_traits<interface_type>::type;
     using storage_conversions =
         typename binding_model_type::storage_type::conversions;
+    using exact_interface_value_types = std::conditional_t<
+        type_traits<raw_interface_type>::enabled &&
+            !std::is_pointer_v<raw_interface_type>,
+        type_list<raw_interface_type>, type_list<>>;
+    using exact_interface_lvalue_reference_types = std::conditional_t<
+        storage_conversions::is_stable &&
+            type_traits<raw_interface_type>::enabled &&
+            !std::is_pointer_v<raw_interface_type>,
+        type_list<raw_interface_type&>, type_list<>>;
+    using exact_interface_pointer_types = std::conditional_t<
+        storage_conversions::is_stable &&
+            type_traits<raw_interface_type>::enabled &&
+            !std::is_pointer_v<raw_interface_type>,
+        type_list<raw_interface_type*>, type_list<>>;
     using base_types = type_list_cat_t<
+        exact_interface_value_types, exact_interface_lvalue_reference_types,
+        exact_interface_pointer_types,
         rebind_leaf_t<typename storage_conversions::value_types,
                       raw_interface_type>,
         rebind_leaf_t<typename storage_conversions::lvalue_reference_types,
@@ -870,19 +890,30 @@ template <typename... Registrations> struct static_registry {
     static_assert(
         factories_are_compile_time_bindable,
         "bindings<...> source requires compile-time-bindable factories");
+  private:
     template <typename Interface, typename Key = void>
-    using bindings = detail::bindings_t<
-        detail::binding_request_interface_t<Interface>,
+    using binding_lookup_key_t =
         std::conditional_t<std::is_void_v<Key>,
-                           detail::binding_request_key_t<Interface>, Key>,
-        interface_bindings>;
+                           detail::binding_request_key_t<Interface>, Key>;
 
     template <typename Interface, typename Key = void>
-    using binding = detail::binding_t<
+    using exact_bindings_t = detail::bindings_t<
+        detail::binding_exact_request_interface_t<Interface>,
+        binding_lookup_key_t<Interface, Key>, interface_bindings>;
+
+    template <typename Interface, typename Key = void>
+    using normalized_bindings_t = detail::bindings_t<
         detail::binding_request_interface_t<Interface>,
-        std::conditional_t<std::is_void_v<Key>,
-                           detail::binding_request_key_t<Interface>, Key>,
-        interface_bindings>;
+        binding_lookup_key_t<Interface, Key>, interface_bindings>;
+
+  public:
+    template <typename Interface, typename Key = void>
+    using bindings = std::conditional_t<
+        type_list_size_v<exact_bindings_t<Interface, Key>> != 0,
+        exact_bindings_t<Interface, Key>, normalized_bindings_t<Interface, Key>>;
+
+    template <typename Interface, typename Key = void>
+    using binding = typename detail::single_binding<bindings<Interface, Key>>::type;
 
     template <typename Interface>
     using model = typename binding<Interface>::binding_model_type;

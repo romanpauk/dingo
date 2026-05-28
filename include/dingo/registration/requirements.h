@@ -22,15 +22,71 @@ namespace dingo {
 template <typename... Args> struct interfaces;
 
 namespace detail {
+template <typename Alternative, typename Interface, typename = void>
+struct alternative_provides_interface
+    : std::bool_constant<std::is_same_v<
+          std::remove_cv_t<std::remove_reference_t<Alternative>>,
+          std::remove_cv_t<std::remove_reference_t<Interface>>>> {};
+
+template <typename Alternative, typename Interface>
+struct alternative_provides_interface<
+    Alternative, Interface,
+    std::enable_if_t<type_traits<std::remove_cv_t<
+                         std::remove_reference_t<Alternative>>>::enabled &&
+                     type_traits<std::remove_cv_t<
+                         std::remove_reference_t<Alternative>>>::is_value_borrowable>>
+    : std::bool_constant<
+          std::is_same_v<
+              std::remove_cv_t<std::remove_reference_t<Alternative>>,
+              std::remove_cv_t<std::remove_reference_t<Interface>>> ||
+          alternative_provides_interface<
+              typename type_traits<std::remove_cv_t<
+                  std::remove_reference_t<Alternative>>>::value_type,
+              Interface>::value> {};
+
+template <typename Alternatives, typename Interface>
+struct alternative_interface_match_count;
+
+template <typename Interface, typename... Alternatives>
+struct alternative_interface_match_count<type_list<Alternatives...>, Interface>
+    : std::integral_constant<
+          size_t,
+          (0u + ... +
+           (alternative_provides_interface<Alternatives, Interface>::value ? 1u
+                                                                           : 0u))> {
+};
+
+template <typename Type, typename Interface, typename = void>
+struct alternative_type_provides_interface : std::false_type {};
+
+template <typename Type, typename Interface>
+struct alternative_type_provides_interface<
+    Type, Interface,
+    std::enable_if_t<is_alternative_type_v<
+        std::remove_cv_t<std::remove_reference_t<Type>>>>>
+    : std::bool_constant<
+          alternative_interface_match_count<
+              alternative_type_alternatives_t<
+                  std::remove_cv_t<std::remove_reference_t<Type>>>,
+              Interface>::value == 1> {};
+
 template <typename Storage, typename TypeInterface, typename Type>
 struct interface_registration_requirements {
     using interface_type = typename annotated_traits<TypeInterface>::type;
     using normalized_type = normalized_type_t<Type>;
     using normalized_interface_type = normalized_type_t<interface_type>;
+    using interface_value_type =
+        std::remove_cv_t<std::remove_reference_t<interface_type>>;
 
     static constexpr bool is_alternative_type_interface =
         is_alternative_type_interface_compatible_v<normalized_type,
-                                                   normalized_interface_type>;
+                                                   interface_value_type> ||
+        is_alternative_type_interface_compatible_v<normalized_type,
+                                                   normalized_interface_type> ||
+        alternative_type_provides_interface<normalized_type,
+                                            interface_value_type>::value ||
+        alternative_type_provides_interface<normalized_type,
+                                            normalized_interface_type>::value;
     static constexpr bool is_reference_interface =
         std::is_reference_v<interface_type>;
     static constexpr bool is_void_interface =

@@ -12,6 +12,7 @@
 #include <dingo/core/context_base.h>
 #include <dingo/core/exceptions.h>
 #include <dingo/core/factory_traits.h>
+#include <dingo/core/keyed.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/rtti/static_provider.h>
@@ -299,6 +300,10 @@ template <typename Request, typename StorageType> struct request_capabilities {
 template <typename Request, typename CapabilityTypes>
 struct request_capability_match;
 
+template <typename Capability>
+using unwrapped_static_capability_t =
+    typename annotated_traits<keyed_type_t<Capability>>::type;
+
 template <typename Request>
 struct request_capability_match<Request, type_list<>> {
     using type = void;
@@ -307,17 +312,17 @@ struct request_capability_match<Request, type_list<>> {
 template <typename Request, typename Head, typename... Tail>
 struct request_capability_match<Request, type_list<Head, Tail...>> {
     using type = std::conditional_t<
-        std::is_same_v<lookup_type_t<Head>, request_lookup_type_t<Request>>,
+        std::is_same_v<lookup_type_t<Head>, request_lookup_type_t<Request>> ||
+            std::is_same_v<
+                request_lookup_type_t<unwrapped_static_capability_t<Head>>,
+                request_lookup_type_t<Request>>,
         Head,
         typename request_capability_match<Request, type_list<Tail...>>::type>;
 };
 
 template <typename Request, typename InterfaceBinding>
 struct binding_supports_request {
-    using storage_type =
-        typename InterfaceBinding::binding_model_type::storage_type;
-    using capability_types =
-        typename request_capabilities<Request, storage_type>::type;
+    using capability_types = typename binding_request_types<InterfaceBinding>::type;
     using type =
         typename request_capability_match<Request, capability_types>::type;
 
@@ -348,8 +353,7 @@ struct static_binding_resolver {
                           binding_supports_request_v<Request, InterfaceBinding>,
                       "static resolution cannot satisfy a request the storage "
                       "does not publish");
-        using capability_types =
-            typename request_capabilities<Request, storage_type>::type;
+        using capability_types = typename binding_request_types<InterfaceBinding>::type;
         using capability =
             typename request_capability_match<Request, capability_types>::type;
         if constexpr (!std::is_void_v<capability> &&
@@ -386,8 +390,7 @@ struct static_binding_resolver {
                           binding_supports_request_v<Request, InterfaceBinding>,
                       "static resolution cannot satisfy a request the storage "
                       "does not publish");
-        using capability_types =
-            typename request_capabilities<Request, storage_type>::type;
+        using capability_types = typename binding_request_types<InterfaceBinding>::type;
         using capability =
             typename request_capability_match<Request, capability_types>::type;
 
