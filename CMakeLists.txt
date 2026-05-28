@@ -250,7 +250,6 @@ if(DINGO_DEVELOPMENT_MODE)
             test/container/dingo.cpp
             test/container/incomplete_resolve.cpp
             test/container/incomplete_resolve_fixture.cpp
-            test/container/lifetime.cpp
             test/factory/constructor_detection.cpp
             test/index/index.cpp
             test/registration/binding_graph.cpp

@@ -336,6 +336,16 @@ STORED_TYPES = (
         ),
     ),
     StoredType(
+        id="unique_value_type",
+        name="value_type",
+        kind="value_type",
+        storage="dingo::storage<value_type>",
+        supported_scopes=frozenset({"unique"}),
+        provides=frozenset(
+            {"stored_value", "direct_value_resolution", "lifetime_countable"}
+        ),
+    ),
+    StoredType(
         id="dependent_type",
         name="dependent_type",
         kind="dependent_type",
@@ -430,7 +440,7 @@ STORED_TYPES = (
         name="std::optional<value_type>",
         kind="value_type",
         storage="dingo::storage<std::optional<value_type>>",
-        supported_scopes=frozenset({"unique"}),
+        supported_scopes=frozenset({"shared", "unique"}),
         provides=frozenset({"stored_optional", "lifetime_countable"}),
     ),
     StoredType(
@@ -933,6 +943,21 @@ RESOLVED_TYPES = (
         ),
     ),
     ResolvedType(
+        name="value_rvalue",
+        supported_exposed_types=frozenset({"concrete"}),
+        provides=frozenset({"resolved_concrete"}),
+        requires=frozenset({"unique_storage", "stored_value"}),
+        checks=(
+            (
+                "lifetime_counts",
+                (
+                    "value_type&& instance = container.template resolve<value_type&&>();",
+                    "ASSERT_TRUE(is_constructed_value(instance));",
+                ),
+            ),
+        ),
+    ),
+    ResolvedType(
         name="cycle_ref",
         supported_exposed_types=frozenset({"cycle_concrete"}),
         provides=frozenset({"resolved_concrete"}),
@@ -1163,6 +1188,30 @@ RESOLVED_TYPES = (
         ),
     ),
     ResolvedType(
+        name="value_optional_ref",
+        supported_exposed_types=frozenset({"concrete"}),
+        provides=frozenset({"resolved_wrapper"}),
+        requires=frozenset({"shared_storage", "stored_optional"}),
+        checks=(
+            (
+                "resolve_wrapper",
+                (
+                    "auto& instance = container.template resolve<std::optional<value_type>&>();",
+                    "ASSERT_TRUE(instance.has_value());",
+                    "ASSERT_TRUE(is_constructed_value(*instance));",
+                ),
+            ),
+            (
+                "lifetime_counts",
+                (
+                    "auto& instance = container.template resolve<std::optional<value_type>&>();",
+                    "ASSERT_TRUE(instance.has_value());",
+                    "ASSERT_TRUE(is_constructed_value(*instance));",
+                ),
+            ),
+        ),
+    ),
+    ResolvedType(
         name="interface_shared_ptr",
         supported_exposed_types=frozenset({"interface_type"}),
         provides=frozenset({"resolved_wrapper"}),
@@ -1231,7 +1280,7 @@ RESOLVED_TYPES = (
         name="keyed_value_dependency",
         supported_exposed_types=frozenset({"keyed_concrete"}),
         provides=frozenset({"constructable_dependency", "invokable_dependency"}),
-        requires=frozenset({"stable_concrete_storage"}),
+        requires=frozenset({"direct_value_resolution", "stable_concrete_storage"}),
         checks=(
             (
                 "construct",
@@ -1255,6 +1304,7 @@ RESOLVED_TYPES = (
         name="keyed_value",
         supported_exposed_types=frozenset({"keyed_concrete"}),
         provides=frozenset({"resolved_keyed"}),
+        requires=frozenset({"direct_value_resolution"}),
         checks=(
             (
                 "resolve_keyed",
@@ -1269,7 +1319,7 @@ RESOLVED_TYPES = (
         name="keyed_value_ref",
         supported_exposed_types=frozenset({"keyed_concrete"}),
         provides=frozenset({"resolved_keyed"}),
-        requires=frozenset({"stable_concrete_storage"}),
+        requires=frozenset({"direct_value_resolution", "stable_concrete_storage"}),
         checks=(
             (
                 "resolve_keyed",

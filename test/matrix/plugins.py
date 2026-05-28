@@ -145,6 +145,35 @@ LIFETIME_EXPECTATIONS: dict[
         move_constructor=exact_count(0),
     ),
     (
+        "shared",
+        "value_optional",
+        "concrete",
+        "value_optional_ref",
+    ): LifetimeExpectation(
+        check=(
+            "auto& instance = container.template resolve<std::optional<value_type>&>();",
+            "ASSERT_TRUE(instance.has_value());",
+            "ASSERT_TRUE(is_constructed_value(*instance));",
+        ),
+        constructor=1,
+        copy_constructor=exact_count(0),
+        move_constructor=CountRange(minimum=1, maximum=3),
+    ),
+    (
+        "unique",
+        "unique_value_type",
+        "concrete",
+        "value_rvalue",
+    ): LifetimeExpectation(
+        check=(
+            "value_type&& instance = container.template resolve<value_type&&>();",
+            "ASSERT_TRUE(is_constructed_value(instance));",
+        ),
+        constructor=1,
+        copy_constructor=exact_count(0),
+        move_constructor=CountRange(minimum=1, maximum=3),
+    ),
+    (
         "unique",
         "value_unique_ptr",
         "concrete",

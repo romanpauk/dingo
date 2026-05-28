@@ -388,7 +388,6 @@ See:
 
 - [examples/container/variant.cpp](../examples/container/variant.cpp)
 - [test/matrix/README.md](../test/matrix/README.md)
-- [test/container/lifetime.cpp](../test/container/lifetime.cpp)
 - [include/dingo/type/type_traits.h](../include/dingo/type/type_traits.h)
 
 ## Factories
