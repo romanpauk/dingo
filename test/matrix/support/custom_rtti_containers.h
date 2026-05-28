@@ -9,6 +9,7 @@
 
 #include "matrix/support/runtime_containers.h"
 
+#include <dingo/container.h>
 #include <dingo/rtti/static_provider.h>
 #include <dingo/type/type_map.h>
 

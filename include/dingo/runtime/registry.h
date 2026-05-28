@@ -725,10 +725,16 @@ class runtime_registry : public allocator_base<Allocator> {
                 },
                 std::decay_t<IdType>{});
         } else if constexpr (MayAutoConstruct &&
-                             is_auto_constructible<std::decay_t<T>>::value &&
-                             constructor<Type>::kind ==
-                                 detail::constructor_kind::concrete) {
-            return auto_construct<T>(context);
+                             is_auto_constructible<std::decay_t<T>>::value) {
+            if constexpr (constructor<Type>::kind ==
+                          detail::constructor_kind::concrete) {
+                return auto_construct<T>(context);
+            } else if constexpr (is_none_v<std::decay_t<IdType>>) {
+                throw detail::make_type_not_found_exception<T>(context);
+            } else {
+                throw detail::make_type_not_found_exception<
+                    T, std::decay_t<IdType>>(context);
+            }
         } else if constexpr (is_none_v<std::decay_t<IdType>>) {
             throw detail::make_type_not_found_exception<T>(context);
         } else {

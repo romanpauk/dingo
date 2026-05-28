@@ -9,6 +9,7 @@
 
 #include "matrix/support/runtime_containers.h"
 
+#include <dingo/container.h>
 #include <dingo/index/array.h>
 #include <dingo/index/map.h>
 #include <dingo/index/unordered_map.h>

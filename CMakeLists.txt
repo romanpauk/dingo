@@ -232,8 +232,8 @@ if(DINGO_DEVELOPMENT_MODE)
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/templates/cmake.cmake.j2"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/templates/runner.cpp.j2"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/templates/source.cpp.j2"
-            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/containers.h"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/allocator_containers.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/container_containers.h"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/custom_rtti_containers.h"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/factory_override.h"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/indexed_containers.h"
@@ -244,6 +244,8 @@ if(DINGO_DEVELOPMENT_MODE)
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/runtime_containers.h"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/runtime_regressions.h"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/scenario.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/static_containers.h"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/storage_containers.h"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/values.h"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/support/variant_types.h"
             "${DINGO_MATRIX_GENERATOR}")
@@ -311,8 +313,8 @@ if(DINGO_DEVELOPMENT_MODE)
             test/matrix/features/resolve_interface.h
             test/matrix/features/resolve_keyed.h
             test/matrix/features/resolve_unique_wrapper.h
-            test/matrix/support/containers.h
             test/matrix/support/allocator_containers.h
+            test/matrix/support/container_containers.h
             test/matrix/support/custom_rtti_containers.h
             test/matrix/support/factory_override.h
             test/matrix/support/indexed_containers.h
@@ -323,6 +325,8 @@ if(DINGO_DEVELOPMENT_MODE)
             test/matrix/support/runtime_containers.h
             test/matrix/support/runtime_regressions.h
             test/matrix/support/scenario.h
+            test/matrix/support/static_containers.h
+            test/matrix/support/storage_containers.h
             test/matrix/support/values.h
             test/matrix/support/variant_types.h
         )

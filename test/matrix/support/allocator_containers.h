@@ -9,6 +9,8 @@
 
 #include "matrix/support/runtime_containers.h"
 
+#include <dingo/container.h>
+
 #include <cstddef>
 
 namespace dingo::matrix {
