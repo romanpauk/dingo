@@ -39,6 +39,14 @@ cmake --build build -t md-verify
 
 CI uses the same locked `uv` environment.
 
+## Generated Matrix Tests
+
+`dingo_matrix_test` is generated from the axis model in
+[`test/matrix/README.md`](../test/matrix/README.md). The model combines
+features, registration modes, scopes, stored types, exposed types, resolved
+types, and container shapes, then filters invalid combinations before emitting
+GoogleTest sources.
+
 ## Container Images
 
 The CI toolchain images are documented under

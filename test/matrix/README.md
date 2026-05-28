@@ -25,6 +25,8 @@ are an output of axis selection.
 - `array`: resolve raw and smart-array storage forms.
 - `factory_override`: construct through explicit callable, function, or
   constructor factories.
+- `mixed_external_dependency`: combine compile-time bindings with a runtime
+  external dependency.
 - `custom_allocator`: use a caller-selected allocator for container
   bookkeeping.
 - `custom_rtti`: use a caller-selected RTTI provider for runtime lookup.
@@ -59,18 +61,31 @@ valid behavior combinations.
 - `std::unique_ptr<T[]>`
 - `std::shared_ptr<T[]>`
 - `std::variant<A, B>`
+- local-binding target types
+- factory-override target types
+- cycle-shaped shared types
+- interface implementation types
 
 ### Exposed Type
 
 - concrete only
+- mixed static graph with a runtime external dependency
 - one interface
 - multiple interfaces
+- copyable interface
 - keyed concrete
 - keyed interface
 - annotated concrete
 - annotated interface
 - collection of interfaces
+- keyed collection of interfaces
 - indexed interface
+- local binding target
+- local binding override target
+- local and host collection target
+- factory override target
+- cycle-shaped concrete target
+- unique interface target
 
 ### Resolved Type
 
@@ -89,17 +104,22 @@ valid behavior combinations.
 - `std::shared_ptr<I>`
 - `std::shared_ptr<I>&`
 - `std::vector<std::shared_ptr<I>>`
+- custom inserted collection forms such as `std::map<int, std::shared_ptr<I>>`
 - keyed `T`, `T&`, and collection requests through `resolve(...,
   key<Key>{})`
 - `keyed<T, Key>` constructor and invocation dependencies
 - `keyed<std::vector<std::shared_ptr<I>>, Key>` constructor and invocation
   dependencies
+- indexed runtime requests
 - `T (*)[N]`
 - `T (&)[M][N]`
 - `std::unique_ptr<T[]>`
 - `std::shared_ptr<T[]>`
 - `std::variant<A, B>`
 - held variant alternative as value, reference, and pointer
+- annotated concrete and interface requests
+- local binding, factory override, mixed external dependency, and cycle-shaped
+  concrete requests
 
 ### Container
 
@@ -165,9 +185,11 @@ The generator should fail if:
 - a stored type category produces no rows
 - a resolved type category produces no rows
 - a container produces no rows
+- an applicable feature / registration mode / container combination produces no
+  rows
 - a filter rule is declared but never exercised
 
 Not every axis combination should exist. Completeness means every axis member and
-filter rule is represented by at least one valid generated row, and broad
-features such as concrete/interface resolution cover the common product of
-scope, stored type, resolved type, registration mode, and container.
+filter rule is represented by at least one valid generated row, and each
+applicable feature / registration mode / container combination has at least one
+valid generated row.
