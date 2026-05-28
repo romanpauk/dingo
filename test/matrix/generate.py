@@ -407,6 +407,17 @@ def render_source(
     return source
 
 
+def render_runner(
+    source: Path,
+    rows: tuple[MatrixRow, ...],
+    template: Template,
+) -> Path:
+    cases = [make_case(row) for row in rows]
+    rendered = template.render(cases=cases)
+    write_text_if_changed(source, rendered)
+    return source
+
+
 def source_groups(rows: tuple[MatrixRow, ...]) -> dict[str, list[MatrixRow]]:
     grouped: dict[str, list[MatrixRow]] = defaultdict(list)
     for row in rows:
@@ -415,12 +426,16 @@ def source_groups(rows: tuple[MatrixRow, ...]) -> dict[str, list[MatrixRow]]:
 
 
 def generate_sources(
-    rows: tuple[MatrixRow, ...], out_dir: Path, template: Template
+    rows: tuple[MatrixRow, ...],
+    out_dir: Path,
+    source_template: Template,
+    runner_template: Template,
 ) -> tuple[Path, ...]:
     sources: list[Path] = []
     for group_name, group_rows in source_groups(rows).items():
         source = out_dir / f"{group_name}.cpp"
-        sources.append(render_source(source, group_rows, template))
+        sources.append(render_source(source, group_rows, source_template))
+    sources.append(render_runner(out_dir / "matrix_runner.cpp", rows, runner_template))
     return tuple(sorted(sources))
 
 
@@ -435,7 +450,12 @@ def generate(out_dir: Path, cmake_file: Path) -> None:
 
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = generate_rows()
-    sources = generate_sources(rows, out_dir, env.get_template("source.cpp.j2"))
+    sources = generate_sources(
+        rows,
+        out_dir,
+        env.get_template("source.cpp.j2"),
+        env.get_template("runner.cpp.j2"),
+    )
     cmake_file.parent.mkdir(parents=True, exist_ok=True)
     write_text_if_changed(
         cmake_file,

@@ -10,8 +10,6 @@
 #include <dingo/factory/function.h>
 #include <dingo/registration/annotated.h>
 
-#include <gtest/gtest.h>
-
 #include <algorithm>
 #include <memory>
 #include <type_traits>
@@ -50,12 +48,9 @@ struct {{ case.name }} {
     }
 };
 
-{% endfor %}
-} // namespace dingo::matrix
-
-{% for case in cases %}
-TEST({{ case.suite }}, {{ case.name }}) {
-    dingo::matrix::{{ case.name }}::run();
+void run_{{ case.suite }}_{{ case.name }}() {
+    {{ case.name }}::run();
 }
 
 {% endfor %}
+} // namespace dingo::matrix

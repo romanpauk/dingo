@@ -22,8 +22,6 @@
 #include <dingo/type/type_map.h>
 #include <dingo/type/type_name.h>
 
-#include <gtest/gtest.h>
-
 #include <array>
 #include <cstddef>
 #include <map>
@@ -37,6 +35,7 @@
 #include <variant>
 #include <vector>
 
+#include "matrix/support/assertions.h"
 #include "support/custom_wrappers.h"
 
 namespace dingo::matrix {
