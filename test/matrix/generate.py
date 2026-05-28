@@ -13,7 +13,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2 import Environment, FileSystemLoader, StrictUndefined, Template
 
 from data import (
     CONTAINERS,
@@ -39,12 +39,11 @@ from plugins import (
     REGISTRATION_PLUGIN,
     RegistrationPlan,
     bindings_type,
-    case_lines_for,
 )
 
 
-@dataclass(frozen=True)
-class MatrixRow:
+@dataclass(frozen=True, slots=True)
+class CandidateRow:
     feature: Feature
     mode: RegistrationMode
     scope: ScopeSpec
@@ -52,10 +51,15 @@ class MatrixRow:
     exposed_type: ExposedType
     resolved_type: ResolvedType
     container: ContainerSpec
+
+
+@dataclass(frozen=True, slots=True)
+class MatrixRow(CandidateRow):
     plan: RegistrationPlan
+    lines: CaseLines = CaseLines()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class GeneratedCase:
     name: str
     container_type: str
@@ -66,14 +70,14 @@ class GeneratedCase:
     after_lines: tuple[str, ...]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class GeneratedTest:
     suite: str
     name: str
     case_name: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class SourceGroup:
     feature: Feature
     mode: RegistrationMode
@@ -90,7 +94,7 @@ class SourceGroup:
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class AxisIndex:
     scopes: tuple[ScopeSpec, ...]
     stored_by_mode_scope: dict[tuple[str, str], tuple[StoredType, ...]]
@@ -245,7 +249,7 @@ def generate_rows() -> tuple[MatrixRow, ...]:
                                     rejected["container_requires"] += 1
                                     continue
 
-                                row = MatrixRow(
+                                candidate = CandidateRow(
                                     feature=feature,
                                     mode=mode,
                                     scope=scope,
@@ -253,13 +257,25 @@ def generate_rows() -> tuple[MatrixRow, ...]:
                                     exposed_type=exposed_type,
                                     resolved_type=resolved_type,
                                     container=container,
-                                    plan=plan,
                                 )
-                                if feature_plugin.emit(row) is None:
+                                lines = feature_plugin.emit(candidate)
+                                if lines is None:
                                     rejected["feature_has_check"] += 1
                                     continue
 
-                                rows.append(row)
+                                rows.append(
+                                    MatrixRow(
+                                        feature=feature,
+                                        mode=mode,
+                                        scope=scope,
+                                        stored_type=stored_type,
+                                        exposed_type=exposed_type,
+                                        resolved_type=resolved_type,
+                                        container=container,
+                                        plan=plan,
+                                        lines=lines,
+                                    )
+                                )
 
     assert_coverage(rows, rejected)
     return tuple(rows)
@@ -359,15 +375,6 @@ def case_name(row: MatrixRow) -> str:
     )
 
 
-def case_lines(row: MatrixRow) -> CaseLines:
-    lines = case_lines_for(row)
-    if lines:
-        return lines
-    raise RuntimeError(
-        f"row {case_name(row)} has no checks for feature {row.feature.name}"
-    )
-
-
 def make_case(row: MatrixRow) -> GeneratedCase:
     static_bindings = None
     setup_lines = ()
@@ -383,23 +390,21 @@ def make_case(row: MatrixRow) -> GeneratedCase:
     else:
         raise RuntimeError(f"unknown registration mode: {row.mode.name}")
 
-    lines = case_lines(row)
-
     return GeneratedCase(
         name=case_name(row),
         container_type=row.container.container_type,
         static_bindings=static_bindings,
-        before_lines=lines.before,
+        before_lines=row.lines.before,
         setup_lines=setup_lines,
-        check_lines=lines.check,
-        after_lines=lines.after,
+        check_lines=row.lines.check,
+        after_lines=row.lines.after,
     )
 
 
 def render_source(
     source: Path,
     rows: tuple[MatrixRow, ...],
-    env: Environment,
+    template: Template,
 ) -> Path:
     cases: list[GeneratedCase] = []
     tests: list[GeneratedTest] = []
@@ -418,7 +423,7 @@ def render_source(
     if not tests:
         raise RuntimeError(f"source {source} did not generate any tests")
 
-    rendered = env.get_template("source.cpp.j2").render(
+    rendered = template.render(
         cases=cases,
         tests=tests,
     )
@@ -440,12 +445,12 @@ def source_groups(rows: tuple[MatrixRow, ...]) -> dict[SourceGroup, list[MatrixR
 
 
 def generate_sources(
-    rows: tuple[MatrixRow, ...], out_dir: Path, env: Environment
+    rows: tuple[MatrixRow, ...], out_dir: Path, template: Template
 ) -> tuple[Path, ...]:
     sources: list[Path] = []
     for group, group_rows in source_groups(rows).items():
         source = out_dir / f"{group.name}.cpp"
-        sources.append(render_source(source, tuple(group_rows), env))
+        sources.append(render_source(source, tuple(group_rows), template))
     return tuple(sorted(sources))
 
 
@@ -460,7 +465,7 @@ def generate(out_dir: Path, cmake_file: Path) -> None:
 
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = generate_rows()
-    sources = generate_sources(rows, out_dir, env)
+    sources = generate_sources(rows, out_dir, env.get_template("source.cpp.j2"))
     cmake_file.parent.mkdir(parents=True, exist_ok=True)
     write_text_if_changed(
         cmake_file,
