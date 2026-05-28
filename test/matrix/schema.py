@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Feature:
     name: str
     requires: frozenset[str]
@@ -21,12 +21,12 @@ class Feature:
     implemented: bool = True
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RegistrationMode:
     name: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ScopeSpec:
     name: str
     type_name: str
@@ -34,7 +34,7 @@ class ScopeSpec:
     implemented: bool = True
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class StoredType:
     id: str
     name: str
@@ -49,7 +49,7 @@ class StoredType:
     implemented: bool = True
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RegistrationSpec:
     scope: str | None = None
     storage: str | None = None
@@ -65,7 +65,7 @@ class RegistrationSpec:
     static: bool = True
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ExposedType:
     name: str
     kind: str
@@ -78,7 +78,7 @@ class ExposedType:
     implemented: bool = True
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ResolvedType:
     name: str
     supported_exposed_types: frozenset[str]
@@ -89,7 +89,7 @@ class ResolvedType:
     implemented: bool = True
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ContainerSpec:
     name: str
     modes: frozenset[str]

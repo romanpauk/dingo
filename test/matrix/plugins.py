@@ -32,14 +32,14 @@ class CheckRow(Protocol):
     resolved_type: ResolvedType
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CaseLines:
     before: tuple[str, ...] = ()
     check: tuple[str, ...] = ()
     after: tuple[str, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RegistrationPlan:
     static_bindings: tuple[str, ...]
     runtime_setup: tuple[str, ...]
@@ -73,7 +73,7 @@ RowFilter = Callable[[CheckRow], bool]
 ROW_FILTERS: tuple[RowFilter, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CountRange:
     minimum: int
     maximum: int
@@ -83,7 +83,7 @@ def exact_count(value: int) -> CountRange:
     return CountRange(minimum=value, maximum=value)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class LifetimeExpectation:
     check: tuple[str, ...]
     constructor: int
@@ -224,7 +224,7 @@ class LifetimeCountCheckPlugin:
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class FeatureCasePlugin:
     feature: Feature
     check_plugins: tuple[CheckPlugin, ...]
