@@ -10,7 +10,7 @@
 #include <dingo/core/binding_collection.h>
 #include <dingo/core/binding_model.h>
 #include <dingo/core/binding_resolution_context.h>
-#include <dingo/core/binding_resolution_status.h>
+#include <dingo/core/binding_resolution_policy.h>
 #include <dingo/core/binding_selection.h>
 #include <dingo/core/config.h>
 #include <dingo/core/container_common.h>
@@ -91,6 +91,56 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
     template <typename T, typename Key>
     using static_selection_t = detail::static_binding_t<
         typename static_registry_type_::template bindings<T, Key>>;
+
+    template <typename Request, typename Key>
+    detail::binding_selection_status runtime_source_status() {
+        return runtime_base::template binding_status<Request, Key>();
+    }
+
+    template <typename T, bool RemoveRvalueReferences, typename Key>
+    decltype(auto) resolve_runtime_source(runtime_context& context) {
+        return runtime_base::template resolve_request<T, RemoveRvalueReferences,
+                                                      Key>(context);
+    }
+
+    template <typename T, bool RemoveRvalueReferences, typename Key,
+              typename Request>
+    struct runtime_binding_source {
+        static constexpr bool can_resolve = true;
+
+        self_type& self;
+
+        detail::binding_selection_status status() const {
+            return self.template runtime_source_status<Request, Key>();
+        }
+
+        template <typename ResolveRequest>
+        decltype(auto) resolve(runtime_context& context) {
+            return self
+                .template resolve_runtime_source<T, RemoveRvalueReferences,
+                                                 Key>(context);
+        }
+    };
+
+    template <typename T, bool RemoveRvalueReferences, typename Key,
+              typename Request>
+    struct static_binding_source {
+        using selection = static_selection_t<Request, Key>;
+        static constexpr bool can_resolve =
+            selection::status == detail::binding_selection_status::found;
+
+        self_type& self;
+
+        constexpr detail::binding_selection_status status() const {
+            return selection::status;
+        }
+
+        template <typename ResolveRequest>
+        decltype(auto) resolve(runtime_context& context) {
+            return self.template resolve_binding_selection<Request, Key>(
+                context);
+        }
+    };
 
     template <typename T>
     static constexpr bool runtime_auto_constructible_v =
@@ -879,31 +929,15 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
             }
         } else {
             using request_type = R;
-            using static_selection = static_selection_t<request_type, Key>;
-            const auto runtime_status =
-                runtime_base::template binding_status<request_type, Key>();
-            const auto resolution = detail::resolve_binding(
-                runtime_status, static_selection::status,
+            runtime_binding_source<T, RemoveRvalueReferences, Key, request_type>
+                runtime{*this};
+            static_binding_source<T, RemoveRvalueReferences, Key, request_type>
+                static_binding{*this};
+            auto sources = detail::make_two_binding_sources(
+                runtime, static_binding, runtime,
                 detail::binding_resolution_policy::ambiguous_on_conflict);
-            if (detail::is_ambiguous_binding(resolution)) {
-                throw detail::make_type_ambiguous_exception<T>(context);
-            }
-
-            if (detail::is_primary_binding(resolution)) {
-                return runtime_base::template resolve_request<
-                    T, RemoveRvalueReferences, Key>(context);
-            }
-
-            if constexpr (static_selection::status ==
-                          detail::binding_selection_status::found) {
-                if (detail::is_secondary_binding(resolution)) {
-                    return resolve_binding_selection<request_type, Key>(
-                        context);
-                }
-            }
-
-            return runtime_base::template resolve_request<
-                T, RemoveRvalueReferences, Key>(context);
+            return detail::resolve_from_binding_sources<T, request_type>(
+                context, sources);
         }
     }
 

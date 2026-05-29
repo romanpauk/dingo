@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <dingo/core/binding_resolution_policy.h>
 #include <dingo/core/exceptions.h>
 #include <dingo/core/keyed.h>
 #include <dingo/core/static_activation_set.h>
@@ -119,6 +120,40 @@ class static_injector<static_registry<Registrations...>, void>
     using self_type = static_injector<registry_type_>;
     using state_type = detail::static_binding_scope<Registrations...>;
     using context_type = static_context<registry_type_>;
+
+    template <typename Request, typename LookupRequest, typename Key>
+    struct static_binding_sources {
+        using selection = detail::static_binding_t<
+            typename registry_type_::template bindings<LookupRequest, Key>>;
+
+        self_type& injector;
+
+        detail::binding_source_selection select() {
+            static_assert(selection::status !=
+                              detail::binding_selection_status::not_found,
+                          "static_injector cannot resolve an unbound type");
+            static_assert(
+                selection::status !=
+                    detail::binding_selection_status::ambiguous,
+                "static_injector cannot resolve an ambiguously bound type");
+            return {detail::binding_result::primary};
+        }
+
+        template <typename ResolveRequest>
+        decltype(auto) resolve_selected(context_type& context,
+                                        detail::binding_source_selection) {
+            using binding = typename selection::binding_type;
+            auto resolver =
+                injector.template make_binding_resolver<binding>(injector);
+            return resolver.template resolve<Request>(context);
+        }
+
+        template <typename ResolveRequest>
+        ResolveRequest resolve_missing(context_type& context) {
+            (void)context;
+            throw detail::make_type_not_found_exception<LookupRequest>();
+        }
+    };
 
   public:
     using rtti_type = typename state_type::rtti_type;
@@ -298,21 +333,10 @@ class static_injector<static_registry<Registrations...>, void>
             using lookup_request_type =
                 resolve_request_t<T, RemoveRvalueReferences>;
             using request_type = R;
-            using selection = detail::static_binding_t<
-                typename static_source_type::template bindings<
-                    lookup_request_type, Key>>;
-            static_assert(selection::status !=
-                              detail::binding_selection_status::not_found,
-                          "static_injector cannot resolve an unbound type");
-            static_assert(
-                selection::status !=
-                    detail::binding_selection_status::ambiguous,
-                "static_injector cannot resolve an ambiguously bound type");
-            using binding = typename selection::binding_type;
-
-            auto resolver =
-                this->template make_binding_resolver<binding>(*this);
-            return resolver.template resolve<request_type>(context);
+            static_binding_sources<request_type, lookup_request_type, Key>
+                sources{*this};
+            return detail::resolve_from_binding_sources<T, request_type>(
+                context, sources);
         }
     }
 
