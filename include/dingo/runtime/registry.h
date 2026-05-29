@@ -90,7 +90,7 @@ class runtime_registry : public allocator_base<Allocator> {
 
     runtime_registry(parent_registry_type* parent,
                      allocator_type alloc = allocator_type())
-        : allocator_base<allocator_type>(alloc), parent_(parent),
+        : allocator_base<allocator_type>(alloc), resolve_root_(parent),
           runtime_bindings_(get_allocator()) {
 
         static_assert(
@@ -126,7 +126,7 @@ class runtime_registry : public allocator_base<Allocator> {
                                                resolve_root_type>) {
             return static_cast<resolve_root_type*>(this);
         } else {
-            return parent_;
+            return resolve_root_;
         }
     }
 
@@ -138,7 +138,7 @@ class runtime_registry : public allocator_base<Allocator> {
                                                resolve_root_type>) {
             return static_cast<const resolve_root_type*>(this);
         } else {
-            return parent_;
+            return resolve_root_;
         }
     }
 
@@ -371,6 +371,12 @@ class runtime_registry : public allocator_base<Allocator> {
 
     template <typename Request, typename Key = void>
     detail::binding_selection_status binding_status() {
+        return binding_status_for_id<Request>(
+            std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>{});
+    }
+
+    template <typename Request, typename IdType>
+    detail::binding_selection_status binding_status_for_id(IdType&& id) {
         using exact_type =
             std::remove_cv_t<std::remove_reference_t<request_interface_t<Request>>>;
         using lookup_type = normalized_type_t<Request>;
@@ -382,8 +388,7 @@ class runtime_registry : public allocator_base<Allocator> {
                            .type_bindings.template get<lookup_type>();
             }
         }
-        auto selection = select_runtime_binding(
-            data, std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>{});
+        auto selection = select_runtime_binding(data, std::forward<IdType>(id));
         return selection.status;
     }
 
@@ -712,29 +717,19 @@ class runtime_registry : public allocator_base<Allocator> {
               typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve_missing_binding(runtime_context& context, IdType&& id) {
         using Type = normalized_type_t<T>;
+        (void)id;
 
-        if constexpr (!std::is_same_v<void*, decltype(parent_)>) {
-            if (parent_) {
-                if constexpr (!std::is_same_v<void, ResolveRoot> &&
-                              !std::is_base_of_v<registry_type,
-                                                 resolve_root_type>) {
-                    if constexpr (is_none_v<std::decay_t<IdType>>) {
-                        return resolve_root()
-                            ->template resolve<T, RemoveRvalueReferences, true>(
-                                context, none_t{});
-                    } else if constexpr (detail::is_typed_key_v<IdType>) {
-                        return resolve_root()
-                            ->template resolve<T, RemoveRvalueReferences, true>(
-                                context, std::decay_t<IdType>{});
-                    } else {
-                        return parent_->template resolve_impl<
-                            T, RemoveRvalueReferences, MayAutoConstruct>(
-                            context, std::forward<IdType>(id));
-                    }
+        if constexpr (!std::is_same_v<void*, decltype(resolve_root_)> &&
+                      !std::is_base_of_v<registry_type, resolve_root_type>) {
+            if (resolve_root_) {
+                if constexpr (is_none_v<std::decay_t<IdType>>) {
+                    return resolve_root()->template resolve<T>();
+                } else if constexpr (detail::is_typed_key_v<IdType>) {
+                    return resolve_root()->template resolve<T>(
+                        std::decay_t<IdType>{});
                 } else {
-                    return parent_->template resolve_impl<
-                        T, RemoveRvalueReferences, MayAutoConstruct>(
-                        context, std::forward<IdType>(id));
+                    return resolve_root()->template resolve<T>(
+                        std::forward<IdType>(id));
                 }
             }
         }
@@ -1049,7 +1044,7 @@ class runtime_registry : public allocator_base<Allocator> {
         allocator_traits::deallocate(alloc, instance, 1);
     }
 
-    parent_registry_type* parent_ = nullptr;
+    parent_registry_type* resolve_root_ = nullptr;
 
     runtime_binding_state runtime_bindings_;
 

@@ -78,26 +78,6 @@ struct keyed_binding_identity : Binding {
     using Binding::Binding;
 };
 
-template <typename ParentContainer>
-struct runtime_parent_registry {
-    using type = typename ParentContainer::registry_type;
-};
-
-template <>
-struct runtime_parent_registry<void> {
-    using type = void;
-};
-
-template <typename ParentContainer>
-using runtime_parent_registry_t =
-    typename runtime_parent_registry<ParentContainer>::type;
-
-template <typename ParentContainer>
-runtime_parent_registry_t<ParentContainer>*
-runtime_parent_registry_ptr(ParentContainer* parent) {
-    return parent ? &parent->registry() : nullptr;
-}
-
 template <typename T, typename = void>
 struct is_runtime_container_traits : std::false_type {};
 

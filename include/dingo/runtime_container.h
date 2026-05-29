@@ -15,15 +15,11 @@ namespace dingo {
 template <typename ContainerTraits, typename Allocator, typename ParentContainer>
 class runtime_container
     : public runtime_registry<
-          ContainerTraits, Allocator,
-          std::conditional_t<std::is_same_v<void, ParentContainer>, void,
-                             detail::runtime_parent_registry_t<ParentContainer>>,
-          void> {
+          ContainerTraits, Allocator, void,
+          runtime_container<ContainerTraits, Allocator, ParentContainer>> {
     using registry_base = runtime_registry<
-        ContainerTraits, Allocator,
-        std::conditional_t<std::is_same_v<void, ParentContainer>, void,
-                           detail::runtime_parent_registry_t<ParentContainer>>,
-        void>;
+        ContainerTraits, Allocator, void,
+        runtime_container<ContainerTraits, Allocator, ParentContainer>>;
 
   public:
     using container_traits_type = ContainerTraits;
@@ -59,7 +55,7 @@ class runtime_container
 
     runtime_container(parent_container_type* parent,
                       allocator_type alloc = allocator_type())
-        : registry_type(detail::runtime_parent_registry_ptr(parent), alloc) {}
+        : registry_type(alloc), parent_(parent) {}
 
     registry_type& registry() { return *this; }
 
@@ -70,7 +66,45 @@ class runtime_container
     template <typename T, typename IdType = none_t,
               typename R = request_result_t<T>>
     R resolve(IdType&& id = IdType()) {
+        if (parent_ &&
+            registry_type::template binding_status_for_id<T>(id) ==
+                detail::binding_selection_status::not_found) {
+            if constexpr (is_none_v<std::decay_t<IdType>>) {
+                return parent_->template resolve<T>();
+            } else if constexpr (detail::is_typed_key_v<IdType>) {
+                return parent_->template resolve<T>(std::decay_t<IdType>{});
+            } else {
+                return parent_->template resolve<T>(std::forward<IdType>(id));
+            }
+        }
         return injector().template resolve<T>(std::forward<IdType>(id));
+    }
+
+    template <typename T, bool RemoveRvalueReferences,
+              bool CheckCache = true,
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
+    R resolve(runtime_context& context) {
+        (void)CheckCache;
+        return registry_type::template resolve_request<
+            T, RemoveRvalueReferences>(context);
+    }
+
+    template <typename T, bool RemoveRvalueReferences,
+              bool CheckCache = true,
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
+    R resolve(runtime_context& context, none_t) {
+        (void)CheckCache;
+        return registry_type::template resolve_request<
+            T, RemoveRvalueReferences>(context);
+    }
+
+    template <typename T, bool RemoveRvalueReferences, bool CheckCache,
+              typename Key,
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
+    R resolve(runtime_context& context, key<Key>) {
+        (void)CheckCache;
+        return registry_type::template resolve_request<
+            T, RemoveRvalueReferences, Key>(context);
     }
 
     template <typename T,
@@ -110,6 +144,9 @@ class runtime_container
         return injector().template invoke<Signature>(
             std::forward<Callable>(callable));
     }
+
+  private:
+    parent_container_type* parent_ = nullptr;
 };
 
 } // namespace dingo
