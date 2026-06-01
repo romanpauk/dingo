@@ -55,11 +55,11 @@ template <typename Derived> class runtime_registration_api {
     template <typename... TypeArgs, typename Fn>
     auto& register_type_collection(Fn&& fn) {
         using registration = type_registration<TypeArgs...>;
-        return register_type<TypeArgs...>(callable([&] {
-            return self().template construct_collection<
-                typename registration::storage_type::type>(
-                fn);
-        }));
+        return register_type<TypeArgs...>(callable(
+            [this, collection_fn = std::forward<Fn>(fn)]() mutable {
+                return self().template construct_collection<
+                    typename registration::storage_type::type>(collection_fn);
+            }));
     }
 
     template <typename... TypeArgs> auto& register_type_collection() {

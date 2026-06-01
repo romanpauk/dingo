@@ -19,6 +19,11 @@
 #include <type_traits>
 #include <utility>
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+
 namespace dingo {
 
 namespace detail {
@@ -286,3 +291,7 @@ class static_container
           static_bindings_source_t<StaticSource>> {};
 
 } // namespace dingo
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
