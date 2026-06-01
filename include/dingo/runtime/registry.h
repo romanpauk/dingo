@@ -623,10 +623,13 @@ class runtime_registry : public allocator_base<Allocator> {
                       !std::is_base_of_v<registry_type, resolve_root_type>) {
             if (resolve_root_) {
                 if constexpr (is_none_v<std::decay_t<IdType>>) {
-                    return resolve_root()->template resolve<T>();
+                    return resolve_root()
+                        ->template resolve<T, RemoveRvalueReferences, true>(
+                            context, none_t{});
                 } else if constexpr (detail::is_typed_key_v<IdType>) {
-                    return resolve_root()->template resolve<T>(
-                        std::decay_t<IdType>{});
+                    return resolve_root()
+                        ->template resolve<T, RemoveRvalueReferences, true>(
+                            context, std::decay_t<IdType>{});
                 } else {
                     return resolve_root()->template resolve<T>(
                         std::forward<IdType>(id));

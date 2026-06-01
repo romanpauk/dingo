@@ -260,8 +260,8 @@ class runtime_binding
 #endif
 
     template <typename Context> decltype(auto) resolve(Context& context) {
-        return detail::materialize_tracked_binding_source(
-            context, get_storage(), get_resolution_container(),
+        return detail::materialize_binding_resolution_source(
+            context, get_storage(), get_resolution_container(), closure_,
             [](auto&& source) -> decltype(auto) {
                 return std::forward<decltype(source)>(source).get();
             });
@@ -270,8 +270,8 @@ class runtime_binding
     template <typename T, typename Context>
     decltype(auto) resolve(Context& context) {
         binding_activation activation{*this};
-        return detail::materialize_tracked_binding_source(
-            context, get_storage(), get_resolution_container(),
+        return detail::materialize_binding_resolution_source(
+            context, get_storage(), get_resolution_container(), closure_,
             [&](auto&& source) -> decltype(auto) {
                 return detail::resolve_binding_value<T>(
                     activation, context,

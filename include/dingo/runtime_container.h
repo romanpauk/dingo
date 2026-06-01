@@ -85,7 +85,12 @@ class runtime_container
               bool CheckCache = true,
               typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve(runtime_context& context) {
-        (void)CheckCache;
+        if (parent_ &&
+            runtime_registry_.template binding_status_for_id<T>(none_t{}) ==
+                detail::binding_selection_status::not_found) {
+            return parent_->template resolve<T, RemoveRvalueReferences,
+                                             CheckCache>(context);
+        }
         return runtime_registry_.template resolve_request<
             T, RemoveRvalueReferences>(context);
     }
@@ -94,16 +99,19 @@ class runtime_container
               bool CheckCache = true,
               typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve(runtime_context& context, none_t) {
-        (void)CheckCache;
-        return runtime_registry_.template resolve_request<
-            T, RemoveRvalueReferences>(context);
+        return resolve<T, RemoveRvalueReferences, CheckCache>(context);
     }
 
     template <typename T, bool RemoveRvalueReferences, bool CheckCache,
               typename Key,
               typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve(runtime_context& context, key<Key>) {
-        (void)CheckCache;
+        if (parent_ &&
+            runtime_registry_.template binding_status_for_id<T>(key<Key>{}) ==
+                detail::binding_selection_status::not_found) {
+            return parent_->template resolve<T, RemoveRvalueReferences,
+                                             CheckCache>(context, key<Key>{});
+        }
         return runtime_registry_.template resolve_request<
             T, RemoveRvalueReferences, Key>(context);
     }
