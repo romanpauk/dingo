@@ -109,6 +109,12 @@ GCC13_EXPECTED_MAX = {
 GCC14_EXPECTED_MAX = {
     **GCC_TINY_PROBE_EXPECTED_MAX,
     **GCC_STATIC_RUNTIME_TINY_PROBE_EXPECTED_MAX,
+    "probe_static_runtime_service_read": 0xd0,
+    "probe_static_runtime_shared_config": 0x130,
+    "probe_static_runtime_shared_value_config": 0x60,
+    "probe_static_runtime_shared_reference_config": 0x60,
+    "probe_runtime_external_value_storage": 0x320,
+    "probe_runtime_external_reference_storage": 0x340,
     "probe_static_runtime_external_value_storage": 0x5d0,
     "probe_static_runtime_external_reference_storage": 0x5c0,
     "probe_static_runtime_external_wrapper_storage": 0x620,
