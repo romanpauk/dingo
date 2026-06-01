@@ -37,9 +37,18 @@ EXPECTED_MAX = {
 }
 
 CLANG_EXPECTED_MAX = {
+    "probe_static_runtime_service_read": 0xe0,
+    "probe_static_runtime_shared_config": 0x150,
+    "probe_static_runtime_shared_value_config": 0xc0,
+    "probe_static_runtime_shared_reference_config": 0xc0,
+    "probe_static_runtime_optional_config": 0xb0,
+    "probe_static_runtime_unique_value_config": 0x90,
+    "probe_static_runtime_unique_rvalue_config": 0x90,
+    "probe_static_runtime_unique_wrapper_config": 0x90,
     "probe_static_interface_handle": 0x1a0,
-    "probe_runtime_external_value_storage": 0x2b0,
-    "probe_runtime_external_reference_storage": 0x2c0,
+    "probe_static_runtime_interface_handle": 0x280,
+    "probe_runtime_external_value_storage": 0x330,
+    "probe_runtime_external_reference_storage": 0x340,
     "probe_runtime_external_wrapper_storage": 0x940,
     "probe_static_runtime_external_wrapper_storage": 0x840,
 }
