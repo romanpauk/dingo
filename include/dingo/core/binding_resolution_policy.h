@@ -10,6 +10,11 @@
 #include <dingo/core/binding_selection.h>
 #include <dingo/core/exceptions.h>
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+
 namespace dingo::detail {
 
 enum class binding_resolution_policy {
@@ -252,3 +257,7 @@ template <typename LookupRequest> struct missing_binding_source {
 };
 
 } // namespace dingo::detail
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
