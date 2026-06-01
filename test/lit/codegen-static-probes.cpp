@@ -6,7 +6,7 @@
 // RUN: %python %dingo_lit_root/check_codegen_probe_instructions.py %t.objdump
 
 #include <dingo/container.h>
-#include <dingo/static/injector.h>
+#include <dingo/static_container.h>
 
 #include <dingo/factory/function.h>
 #include <dingo/storage/external.h>
@@ -144,8 +144,8 @@ static_assert(!detail::binding_supports_request_v<std::shared_ptr<config>&&,
 } // namespace
 
 extern "C" [[gnu::noinline]] int probe_static_service_read() {
-    static_injector<static_service_source> injector;
-    return injector.resolve<service&>().read();
+    static_container<static_service_source> container;
+    return container.resolve<service&>().read();
 }
 
 extern "C" [[gnu::noinline]] int probe_runtime_service_read() {
@@ -160,8 +160,8 @@ extern "C" [[gnu::noinline]] int probe_static_runtime_service_read() {
 }
 
 extern "C" [[gnu::noinline]] int probe_static_shared_config() {
-    static_injector<static_wrapper_source> injector;
-    return injector.construct<std::shared_ptr<config>>()->value;
+    static_container<static_wrapper_source> container;
+    return container.construct<std::shared_ptr<config>>()->value;
 }
 
 extern "C" [[gnu::noinline]] int probe_runtime_shared_config() {
@@ -176,8 +176,8 @@ extern "C" [[gnu::noinline]] int probe_static_runtime_shared_config() {
 }
 
 extern "C" [[gnu::noinline]] int probe_static_shared_value_config() {
-    static_injector<static_wrapper_source> injector;
-    return injector.construct<config>().value;
+    static_container<static_wrapper_source> container;
+    return container.construct<config>().value;
 }
 
 extern "C" [[gnu::noinline]] int probe_runtime_shared_value_config() {
@@ -192,8 +192,8 @@ extern "C" [[gnu::noinline]] int probe_static_runtime_shared_value_config() {
 }
 
 extern "C" [[gnu::noinline]] int probe_static_shared_reference_config() {
-    static_injector<static_wrapper_source> injector;
-    return injector.resolve<config&>().value;
+    static_container<static_wrapper_source> container;
+    return container.resolve<config&>().value;
 }
 
 extern "C" [[gnu::noinline]] int probe_runtime_shared_reference_config() {
@@ -209,8 +209,8 @@ probe_static_runtime_shared_reference_config() {
 }
 
 extern "C" [[gnu::noinline]] int probe_static_optional_config() {
-    static_injector<static_wrapper_source> injector;
-    return injector.construct<std::optional<config>>()->value;
+    static_container<static_wrapper_source> container;
+    return container.construct<std::optional<config>>()->value;
 }
 
 extern "C" [[gnu::noinline]] int probe_runtime_optional_config() {
@@ -225,13 +225,13 @@ extern "C" [[gnu::noinline]] int probe_static_runtime_optional_config() {
 }
 
 extern "C" [[gnu::noinline]] int probe_static_unique_value_config() {
-    static_injector<static_unique_source> injector;
-    return injector.construct<config>().value;
+    static_container<static_unique_source> container;
+    return container.construct<config>().value;
 }
 
 extern "C" [[gnu::noinline]] int probe_static_unique_rvalue_config() {
-    static_injector<static_unique_source> injector;
-    return injector.resolve<config&&>().value;
+    static_container<static_unique_source> container;
+    return container.resolve<config&&>().value;
 }
 
 extern "C" [[gnu::noinline]] int probe_runtime_unique_value_config() {
@@ -257,8 +257,8 @@ extern "C" [[gnu::noinline]] int probe_static_runtime_unique_rvalue_config() {
 }
 
 extern "C" [[gnu::noinline]] int probe_static_unique_wrapper_config() {
-    static_injector<static_unique_source> injector;
-    return injector.construct<std::unique_ptr<config>>()->value;
+    static_container<static_unique_source> container;
+    return container.construct<std::unique_ptr<config>>()->value;
 }
 
 extern "C" [[gnu::noinline]] int probe_runtime_unique_wrapper_config() {
@@ -273,8 +273,8 @@ extern "C" [[gnu::noinline]] int probe_static_runtime_unique_wrapper_config() {
 }
 
 extern "C" [[gnu::noinline]] int probe_static_interface_handle() {
-    static_injector<static_interface_source> injector;
-    return injector.resolve<std::shared_ptr<iface>&>()->read();
+    static_container<static_interface_source> container;
+    return container.resolve<std::shared_ptr<iface>&>()->read();
 }
 
 extern "C" [[gnu::noinline]] int probe_runtime_interface_handle() {
@@ -332,8 +332,8 @@ probe_static_runtime_external_wrapper_storage() {
 }
 
 extern "C" [[gnu::noinline]] int probe_static_collection_sum() {
-    static_injector<static_collection_source> injector;
-    auto values = injector.resolve<std::vector<std::shared_ptr<iface>>>();
+    static_container<static_collection_source> container;
+    auto values = container.resolve<std::vector<std::shared_ptr<iface>>>();
     return values[0]->read() + values[1]->read();
 }
 

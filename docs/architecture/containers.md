@@ -20,8 +20,8 @@ Everything else is either runtime/static implementation detail or shared core.
 The container stack is split into three layers:
 
 - `include/dingo/core/`: shared runtime/static substrate
-- `include/dingo/runtime/`: runtime registry and injector internals
-- `include/dingo/static/`: static registry, graph, and injector internals
+- `include/dingo/runtime/`: runtime registry internals
+- `include/dingo/static/`: static registry and graph internals
 
 The split keeps public headers small while leaving runtime and static
 implementation details in their own directories.
@@ -109,10 +109,8 @@ The key implementation headers behind this model are:
 
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
-- [include/dingo/runtime/injector.h](../../include/dingo/runtime/injector.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
-- [include/dingo/static/injector.h](../../include/dingo/static/injector.h)
 - [include/dingo/core/binding_selection.h](../../include/dingo/core/binding_selection.h)
 - [include/dingo/core/binding_resolution.h](../../include/dingo/core/binding_resolution.h)
-- [include/dingo/core/binding_resolution_status.h](../../include/dingo/core/binding_resolution_status.h)
+- [include/dingo/core/binding_resolution_policy.h](../../include/dingo/core/binding_resolution_policy.h)

@@ -45,8 +45,7 @@ dingo::container<app_bindings> container;
 
 That path is normalized through
 [include/dingo/static/registry.h](../../include/dingo/static/registry.h) and
-validated by [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
-/ [include/dingo/static/injector.h](../../include/dingo/static/injector.h).
+validated by [include/dingo/static/graph.h](../../include/dingo/static/graph.h).
 
 There are two registration modes:
 
@@ -177,10 +176,8 @@ These files are useful while reading this flow:
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 - [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
-- [include/dingo/runtime/injector.h](../../include/dingo/runtime/injector.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
-- [include/dingo/static/injector.h](../../include/dingo/static/injector.h)
 - [include/dingo/resolution/runtime_binding.h](../../include/dingo/resolution/runtime_binding.h)
 - [include/dingo/resolution/runtime_binding_interface.h](../../include/dingo/resolution/runtime_binding_interface.h)
 - [include/dingo/factory/constructor_detection.h](../../include/dingo/factory/constructor_detection.h)

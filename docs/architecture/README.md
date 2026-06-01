@@ -39,8 +39,8 @@ The shared kernel for that flow lives under `include/dingo/core/`.
 
 Runtime and static implementation code sits under:
 
-- `include/dingo/runtime/` for runtime registry and injector internals
-- `include/dingo/static/` for static registry, graph, and injector internals
+- `include/dingo/runtime/` for runtime registry internals
+- `include/dingo/static/` for static registry and graph internals
 
 The main owners for the current architecture are:
 
@@ -51,10 +51,8 @@ The main owners for the current architecture are:
 - [include/dingo/core/binding_resolution.h](../../include/dingo/core/binding_resolution.h)
 - [include/dingo/core/factory_traits.h](../../include/dingo/core/factory_traits.h)
 - [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
-- [include/dingo/runtime/injector.h](../../include/dingo/runtime/injector.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
-- [include/dingo/static/injector.h](../../include/dingo/static/injector.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 - [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
 - [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)

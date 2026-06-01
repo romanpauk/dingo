@@ -11,7 +11,7 @@
 #include <dingo/core/binding_resolution_policy.h>
 #include <dingo/core/exceptions.h>
 #include <dingo/core/keyed.h>
-#include <dingo/core/static_activation_set.h>
+#include <dingo/static/activation_set.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/runtime/context.h>
 #include <dingo/static/graph.h>

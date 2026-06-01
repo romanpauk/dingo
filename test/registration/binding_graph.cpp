@@ -6,7 +6,7 @@
 //
 
 #include <dingo/static/graph.h>
-#include <dingo/core/static_activation_set.h>
+#include <dingo/static/activation_set.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>
 #include <dingo/storage/unique.h>

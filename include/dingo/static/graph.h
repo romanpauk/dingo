@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <dingo/core/container_common.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/static/registry.h>
 #include <dingo/storage/type_storage_traits.h>

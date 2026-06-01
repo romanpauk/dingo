@@ -91,16 +91,19 @@ if(DINGO_DEVELOPMENT_MODE)
         core/config.h
         static/graph.h
         static/registry.h
+        static/source.h
         container.h
+        core/auto_constructible.h
         core/binding_model.h
         core/binding_resolution.h
-        core/binding_resolution_context.h
-        core/binding_resolution_status.h
+        static/local_resolution.h
+        core/binding_resolution_policy.h
         core/binding_selection.h
-        core/container_common.h
         core/factory_traits.h
         core/keyed.h
-        core/static_activation_set.h
+        core/none.h
+        static/activation_set.h
+        static/container_traits.h
         core/exceptions.h
         factory/callable.h
         factory/constructor_traits.h
@@ -122,13 +125,14 @@ if(DINGO_DEVELOPMENT_MODE)
         registration/constructor.h
         registration/type_registration.h
         runtime_container.h
-        runtime/injector.h
+        runtime/container_traits.h
+        runtime/registration_api.h
         runtime/registry.h
+        runtime/source.h
         static_container.h
         resolution/conversion_cache.h
         resolution/runtime_binding_interface.h
         resolution/runtime_binding.h
-        static/injector.h
         storage/interface_storage_traits.h
         core/context_base.h
         runtime/context.h
