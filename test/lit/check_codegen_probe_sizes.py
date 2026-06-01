@@ -47,7 +47,14 @@ CLANG_EXPECTED_MAX = {
 CLANG_ARM64_EXPECTED_MAX = {
     "probe_static_runtime_shared_config": 0x140,
     "probe_static_shared_config": 0xd0,
+    "probe_static_runtime_shared_value_config": 0x80,
+    "probe_static_runtime_shared_reference_config": 0x80,
+    "probe_static_runtime_optional_config": 0x80,
+    "probe_static_runtime_unique_value_config": 0x70,
+    "probe_static_runtime_unique_rvalue_config": 0x70,
+    "probe_static_runtime_unique_wrapper_config": 0x70,
     "probe_static_interface_handle": 0x1d0,
+    "probe_static_runtime_interface_handle": 0x240,
     "probe_runtime_external_wrapper_storage": 0x740,
 }
 
