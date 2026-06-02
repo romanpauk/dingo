@@ -47,6 +47,11 @@ features, registration modes, scopes, stored types, exposed types, resolved
 types, and container shapes, then filters invalid combinations before emitting
 GoogleTest sources.
 
+The codegen probe lit test uses the same matrix row model. Probe definitions in
+`test/matrix/probe_config.py` select representative matrix rows, and
+`test/matrix/generate_probes.py` emits both the C++ probe source and the Python
+expectations consumed by the size and instruction checkers.
+
 ## Container Images
 
 The CI toolchain images are documented under

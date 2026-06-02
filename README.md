@@ -187,9 +187,9 @@ When working from a checkout, the top-level CMake project also supports
 - Explicit variant construction plus whole-variant or held-alternative
   resolution
 - Custom RTTI and allocator hooks
-- Extensive generated matrix tests across features, registration modes, scopes,
-  stored types, resolved types, and containers. See the
-  [generated matrix test model](test/matrix/README.md).
+- Extensive generated matrix tests and matrix-based codegen probes across
+  features, registration modes, scopes, stored types, resolved types, and
+  containers. See the [generated matrix test model](test/matrix/README.md).
 
 ## Related Projects
 

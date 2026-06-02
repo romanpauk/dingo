@@ -214,3 +214,29 @@ Each source file contains one valid slice of the matrix, for example
 `resolve_concrete_runtime_runtime_container.cpp`. The split keeps translation
 units tied to matrix meaning instead of arbitrary shard numbers, while limiting
 the amount of template-heavy container code compiled by one compiler process.
+
+## Generated Codegen Probes
+
+The code-size probes use the same row model as the generated matrix tests.
+`test/matrix/generate_probes.py` selects named rows from `generate_rows()` and
+emits:
+
+- a probe source file from `test/matrix/templates/probes.cpp.j2`
+- a Python expectations file from
+  `test/matrix/templates/probe_expectations.py.j2`
+
+Probe definitions live in `test/matrix/probe_config.py`. Each definition names
+the feature, registration mode, scope, stored type, exposed type, resolved type,
+and container shape it wants from the matrix. The generator then reuses the
+matrix registration plan for that row instead of maintaining separate
+hand-written registration code.
+
+The lit test `test/lit/codegen-static-probes.cpp` generates the probe source at
+test time, compiles it, and checks the resulting symbols with:
+
+- `test/lit/check_codegen_probe_sizes.py`
+- `test/lit/check_codegen_probe_instructions.py`
+
+The expectations are generated with the probe source so symbol names, size
+limits, instruction checks, and runtime-vs-static comparisons stay attached to
+the same selected matrix rows.
