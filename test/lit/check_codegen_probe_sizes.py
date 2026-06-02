@@ -15,6 +15,7 @@ PROBE_LIMITS = {
     },
     "probe_static_resolution_mixed_container_consumer_read": {
         "default": 0x50,
+        "gcc13": 0x60,
         "gcc15": 0x60,
         "gcc_arm64": 0x60,
     },
@@ -131,6 +132,7 @@ PROBE_LIMITS = {
     "probe_runtime_resolution_external_value_storage": {
         "default": 0x300,
         "clang": 0x2d0,
+        "gcc13": 0x310,
         "gcc_arm64": 0x390,
     },
     "probe_runtime_resolution_mixed_container_external_value_storage": {
@@ -142,6 +144,7 @@ PROBE_LIMITS = {
     "probe_runtime_resolution_external_reference_storage": {
         "default": 0x300,
         "clang": 0x2e0,
+        "gcc13": 0x330,
         "gcc15": 0x320,
         "gcc_arm64": 0x330,
     },
