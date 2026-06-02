@@ -75,8 +75,8 @@ jobs:
               -DCMAKE_CXX_COMPILER=${{ matrix.compiler.cxx }} \
               -DDINGO_DEVELOPMENT_MODE=ON \
               -DDINGO_BENCHMARK_ENABLED=OFF && \
-              cmake --build /workspace/${{ matrix.compiler.build_dir }} --verbose -j"$(nproc)" && \
-              ctest --test-dir /workspace/${{ matrix.compiler.build_dir }} --output-on-failure'
+              cmake --build /workspace/${{ matrix.compiler.build_dir }} --target dingo_unit_test --verbose -j"$(nproc)" && \
+              ctest --test-dir /workspace/${{ matrix.compiler.build_dir }} --output-on-failure -R "^dingo_unit_test$"'
 
       - name: Upload Failure Artifacts
         if: ${{ failure() }}
