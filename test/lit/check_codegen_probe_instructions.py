@@ -8,20 +8,13 @@ from pathlib import Path
 
 
 TINY_PROBES = {
-    "probe_static_service_read": 1,
-    "probe_static_runtime_service_read": 1,
-    "probe_static_shared_value_config": 1,
-    "probe_static_runtime_shared_value_config": 1,
-    "probe_static_shared_reference_config": 1,
-    "probe_static_runtime_shared_reference_config": 1,
-    "probe_static_optional_config": 1,
-    "probe_static_runtime_optional_config": 1,
-    "probe_static_unique_value_config": 1,
-    "probe_static_runtime_unique_value_config": 1,
-    "probe_static_unique_rvalue_config": 1,
-    "probe_static_runtime_unique_rvalue_config": 1,
-    "probe_static_unique_wrapper_config": 1,
-    "probe_static_runtime_unique_wrapper_config": 1,
+    "probe_static_resolution_consumer_read": 1,
+    "probe_static_resolution_shared_value_config": 1,
+    "probe_static_resolution_shared_reference_config": 1,
+    "probe_static_resolution_optional_config": 1,
+    "probe_static_resolution_unique_value_config": 1,
+    "probe_static_resolution_unique_rvalue_config": 1,
+    "probe_static_resolution_unique_wrapper_config": 1,
 }
 
 SYMBOL_RE = re.compile(r"^[0-9a-fA-F]+ <([^>]+)>:$")

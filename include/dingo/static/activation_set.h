@@ -572,7 +572,7 @@ T construct_static_collection_impl(State& state, Host& host, Context& context,
                   "missing collection_traits specialization for type T");
     static_assert(
         type_list_size_v<interface_bindings> != 0,
-        "static_injector cannot construct a collection for an unbound type");
+        "static container cannot construct a collection for an unbound type");
 
     T results;
     collection_type::reserve(results, type_list_size_v<interface_bindings>);
@@ -594,7 +594,7 @@ T construct_static_collection_default_impl(State& state, Host& host,
                   "missing collection_traits specialization for type T");
     static_assert(
         type_list_size_v<interface_bindings> != 0,
-        "static_injector cannot construct a collection for an unbound type");
+        "static container cannot construct a collection for an unbound type");
 
     if constexpr (collection_type::has_fixed_size_construct) {
         T results = collection_type::make_fixed_size(

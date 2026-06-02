@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <dingo/runtime/injector.h>
 #include <dingo/runtime/registry.h>
 #include <dingo/runtime_container.h>
 #include <dingo/storage/external.h>

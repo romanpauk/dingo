@@ -13,9 +13,18 @@
 #include <dingo/type/type_list.h>
 
 #include <cstddef>
+#include <type_traits>
 #include <utility>
 
 namespace dingo::detail {
+
+struct binding_collection_append {
+    template <typename Collection, typename Value>
+    void operator()(Collection& collection, Value&& value) const {
+        collection_traits<std::decay_t<Collection>>::add(
+            collection, std::forward<Value>(value));
+    }
+};
 
 template <typename StaticRegistry, typename T, typename Key = void>
 constexpr std::size_t static_collection_binding_count() {

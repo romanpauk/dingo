@@ -7,137 +7,245 @@ import sys
 from pathlib import Path
 
 
-EXPECTED_MAX = {
-    "probe_static_service_read": 0x10,
-    "probe_static_runtime_service_read": 0x50,
-    "probe_static_shared_config": 0x90,
-    "probe_static_runtime_shared_config": 0x120,
-    "probe_static_shared_value_config": 0x10,
-    "probe_static_runtime_shared_value_config": 0x10,
-    "probe_static_shared_reference_config": 0x10,
-    "probe_static_runtime_shared_reference_config": 0x10,
-    "probe_static_optional_config": 0x60,
-    "probe_static_runtime_optional_config": 0x10,
-    "probe_static_unique_value_config": 0x10,
-    "probe_static_unique_rvalue_config": 0x10,
-    "probe_static_runtime_unique_value_config": 0x10,
-    "probe_static_runtime_unique_rvalue_config": 0x10,
-    "probe_static_unique_wrapper_config": 0x10,
-    "probe_static_runtime_unique_wrapper_config": 0x10,
-    "probe_static_interface_handle": 0x180,
-    "probe_static_runtime_interface_handle": 0x200,
-    "probe_static_collection_sum": 0x500,
-    "probe_static_runtime_collection_sum": 0x800,
-    "probe_runtime_external_value_storage": 0x280,
-    "probe_static_runtime_external_value_storage": 0x520,
-    "probe_runtime_external_reference_storage": 0x280,
-    "probe_static_runtime_external_reference_storage": 0x520,
-    "probe_runtime_external_wrapper_storage": 0x420,
-    "probe_static_runtime_external_wrapper_storage": 0x580,
-}
-
-CLANG_EXPECTED_MAX = {
-    "probe_static_interface_handle": 0x1a0,
-    "probe_runtime_external_value_storage": 0x2b0,
-    "probe_runtime_external_reference_storage": 0x2c0,
-    "probe_runtime_external_wrapper_storage": 0x940,
-    "probe_static_runtime_external_wrapper_storage": 0x840,
-}
-
-CLANG_ARM64_EXPECTED_MAX = {
-    "probe_static_runtime_shared_config": 0x140,
-    "probe_static_shared_config": 0xd0,
-    "probe_static_interface_handle": 0x1d0,
-    "probe_runtime_external_wrapper_storage": 0x740,
-}
-
-GCC_TINY_PROBE_EXPECTED_MAX = {
-    "probe_static_service_read": 0x50,
-    "probe_static_shared_value_config": 0x50,
-    "probe_static_shared_reference_config": 0x50,
-    "probe_static_unique_value_config": 0x50,
-    "probe_static_unique_rvalue_config": 0x50,
-    "probe_static_unique_wrapper_config": 0x50,
-}
-
-GCC_STATIC_RUNTIME_TINY_PROBE_EXPECTED_MAX = {
-    "probe_static_runtime_shared_value_config": 0x50,
-    "probe_static_runtime_shared_reference_config": 0x50,
-    "probe_static_runtime_unique_value_config": 0x50,
-    "probe_static_runtime_unique_rvalue_config": 0x50,
-}
-
-GCC_ARM64_TINY_PROBE_EXPECTED_MAX = {
-    symbol: 0x60 for symbol in GCC_TINY_PROBE_EXPECTED_MAX
-}
-
-GCC_ARM64_EXPECTED_MAX = {
-    **GCC_ARM64_TINY_PROBE_EXPECTED_MAX,
-    "probe_static_runtime_service_read": 0x60,
-    "probe_static_runtime_shared_value_config": 0x60,
-    "probe_static_runtime_shared_reference_config": 0x60,
-    "probe_static_runtime_unique_value_config": 0x60,
-    "probe_static_runtime_unique_rvalue_config": 0x60,
-    "probe_static_runtime_interface_handle": 0x360,
-    "probe_static_runtime_external_value_storage": 0x560,
-    "probe_runtime_external_wrapper_storage": 0x500,
-}
-
-GCC13_EXPECTED_MAX = {
-    **GCC_TINY_PROBE_EXPECTED_MAX,
-    **GCC_STATIC_RUNTIME_TINY_PROBE_EXPECTED_MAX,
-    "probe_static_runtime_shared_reference_config": 0x90,
-    "probe_static_runtime_unique_rvalue_config": 0x90,
-}
-
-GCC14_EXPECTED_MAX = {
-    **GCC_TINY_PROBE_EXPECTED_MAX,
-    **GCC_STATIC_RUNTIME_TINY_PROBE_EXPECTED_MAX,
-    "probe_static_runtime_external_value_storage": 0x5d0,
-    "probe_static_runtime_external_reference_storage": 0x5c0,
-    "probe_static_runtime_external_wrapper_storage": 0x620,
-}
-
-GCC15_EXPECTED_MAX = {
-    **GCC_TINY_PROBE_EXPECTED_MAX,
-    **GCC_STATIC_RUNTIME_TINY_PROBE_EXPECTED_MAX,
-    "probe_static_runtime_external_value_storage": 0x580,
-    "probe_static_runtime_external_reference_storage": 0x560,
-    "probe_runtime_external_wrapper_storage": 0x440,
-    "probe_static_runtime_external_wrapper_storage": 0x5c0,
+PROBE_LIMITS = {
+    "probe_static_resolution_consumer_read": {
+        "default": 0x10,
+        "gcc": 0x50,
+        "gcc_arm64": 0x60,
+    },
+    "probe_static_resolution_mixed_container_consumer_read": {
+        "default": 0x50,
+        "gcc": 0x60,
+        "gcc_arm64": 0x60,
+    },
+    "probe_runtime_resolution_consumer_read": {
+        "default": None,
+    },
+    "probe_static_resolution_shared_config": {
+        "default": 0x90,
+        "clang_arm64": 0xd0,
+    },
+    "probe_static_resolution_mixed_container_shared_config": {
+        "default": 0x120,
+        "clang_arm64": 0x140,
+    },
+    "probe_runtime_resolution_shared_config": {
+        "default": None,
+    },
+    "probe_static_resolution_shared_value_config": {
+        "default": 0x10,
+        "gcc": 0x50,
+        "gcc_arm64": 0x60,
+    },
+    "probe_static_resolution_mixed_container_shared_value_config": {
+        "default": 0x10,
+        "gcc": 0x50,
+        "gcc_arm64": 0x60,
+    },
+    "probe_runtime_resolution_shared_value_config": {
+        "default": None,
+    },
+    "probe_static_resolution_shared_reference_config": {
+        "default": 0x10,
+        "gcc": 0x50,
+        "gcc_arm64": 0x60,
+    },
+    "probe_static_resolution_mixed_container_shared_reference_config": {
+        "default": 0x10,
+        "gcc": 0x50,
+        "gcc13": 0xa0,
+        "gcc_arm64": 0x60,
+    },
+    "probe_runtime_resolution_shared_reference_config": {
+        "default": None,
+    },
+    "probe_static_resolution_optional_config": {
+        "default": 0x60,
+    },
+    "probe_static_resolution_mixed_container_optional_config": {
+        "default": 0x10,
+    },
+    "probe_runtime_resolution_optional_config": {
+        "default": None,
+    },
+    "probe_static_resolution_unique_value_config": {
+        "default": 0x10,
+        "gcc": 0x50,
+        "gcc_arm64": 0x60,
+    },
+    "probe_runtime_resolution_unique_value_config": {
+        "default": None,
+    },
+    "probe_static_resolution_unique_rvalue_config": {
+        "default": 0x10,
+        "gcc": 0x50,
+        "gcc_arm64": 0x60,
+    },
+    "probe_static_resolution_mixed_container_unique_value_config": {
+        "default": 0x10,
+        "gcc": 0x50,
+        "gcc_arm64": 0x60,
+    },
+    "probe_static_resolution_mixed_container_unique_rvalue_config": {
+        "default": 0x10,
+        "gcc": 0x50,
+        "gcc13": 0x90,
+        "gcc_arm64": 0x60,
+    },
+    "probe_runtime_resolution_unique_rvalue_config": {
+        "default": None,
+    },
+    "probe_static_resolution_unique_wrapper_config": {
+        "default": 0x10,
+        "gcc": 0x50,
+        "gcc_arm64": 0x60,
+    },
+    "probe_static_resolution_mixed_container_unique_wrapper_config": {
+        "default": 0x10,
+    },
+    "probe_runtime_resolution_unique_wrapper_config": {
+        "default": None,
+    },
+    "probe_static_resolution_interface_handle": {
+        "default": 0x180,
+        "clang": 0x1a0,
+        "clang_arm64": 0x1d0,
+    },
+    "probe_static_resolution_mixed_container_interface_handle": {
+        "default": 0x200,
+        "clang": 0x250,
+        "gcc_arm64": 0x360,
+    },
+    "probe_runtime_resolution_interface_handle": {
+        "default": None,
+    },
+    "probe_static_resolution_collection_sum": {
+        "default": 0x500,
+    },
+    "probe_static_resolution_mixed_container_collection_sum": {
+        "default": 0x800,
+    },
+    "probe_runtime_resolution_collection_sum": {
+        "default": None,
+    },
+    "probe_runtime_resolution_external_value_storage": {
+        "default": 0x300,
+        "clang": 0x2d0,
+        "gcc": 0x310,
+        "gcc_arm64": 0x390,
+    },
+    "probe_runtime_resolution_mixed_container_external_value_storage": {
+        "default": 0x520,
+        "gcc14": 0x5d0,
+        "gcc15": 0x580,
+        "gcc_arm64": 0x560,
+    },
+    "probe_runtime_resolution_external_reference_storage": {
+        "default": 0x300,
+        "clang": 0x2e0,
+        "gcc": 0x330,
+        "gcc_arm64": 0x330,
+    },
+    "probe_runtime_resolution_mixed_container_external_reference_storage": {
+        "default": 0x520,
+        "gcc14": 0x5c0,
+        "gcc15": 0x560,
+    },
+    "probe_runtime_resolution_external_wrapper_storage": {
+        "default": 0x420,
+        "clang": 0x940,
+        "clang_arm64": 0x740,
+        "gcc15": 0x440,
+        "gcc_arm64": 0x500,
+    },
+    "probe_runtime_resolution_mixed_container_external_wrapper_storage": {
+        "default": 0x580,
+        "clang": 0x840,
+        "gcc14": 0x620,
+        "gcc15": 0x5c0,
+    },
 }
 
 EXPECTED_FASTER_THAN_RUNTIME = (
-    ("probe_static_service_read", "probe_runtime_service_read"),
-    ("probe_static_shared_value_config", "probe_runtime_shared_value_config"),
+    ("probe_static_resolution_consumer_read", "probe_runtime_resolution_consumer_read"),
+    ("probe_static_resolution_shared_value_config", "probe_runtime_resolution_shared_value_config"),
     (
-        "probe_static_shared_reference_config",
-        "probe_runtime_shared_reference_config",
+        "probe_static_resolution_shared_reference_config",
+        "probe_runtime_resolution_shared_reference_config",
     ),
-    ("probe_static_unique_value_config", "probe_runtime_unique_value_config"),
-    ("probe_static_unique_rvalue_config", "probe_runtime_unique_rvalue_config"),
+    ("probe_static_resolution_unique_value_config", "probe_runtime_resolution_unique_value_config"),
+    ("probe_static_resolution_unique_rvalue_config", "probe_runtime_resolution_unique_rvalue_config"),
     (
-        "probe_static_unique_wrapper_config",
-        "probe_runtime_unique_wrapper_config",
+        "probe_static_resolution_unique_wrapper_config",
+        "probe_runtime_resolution_unique_wrapper_config",
     ),
-    ("probe_static_interface_handle", "probe_runtime_interface_handle"),
-    ("probe_static_collection_sum", "probe_runtime_collection_sum"),
+    ("probe_static_resolution_interface_handle", "probe_runtime_resolution_interface_handle"),
+    ("probe_static_resolution_collection_sum", "probe_runtime_resolution_collection_sum"),
 )
 
 SHAPES = {
-    "service_read": ("static", "static_runtime", "runtime"),
-    "shared_config": ("static", "static_runtime", "runtime"),
-    "shared_value_config": ("static", "static_runtime", "runtime"),
-    "shared_reference_config": ("static", "static_runtime", "runtime"),
-    "optional_config": ("static", "static_runtime", "runtime"),
-    "unique_value_config": ("static", "static_runtime", "runtime"),
-    "unique_rvalue_config": ("static", "static_runtime", "runtime"),
-    "unique_wrapper_config": ("static", "static_runtime", "runtime"),
-    "interface_handle": ("static", "static_runtime", "runtime"),
-    "collection_sum": ("static", "static_runtime", "runtime"),
-    "external_value_storage": ("static_runtime", "runtime"),
-    "external_reference_storage": ("static_runtime", "runtime"),
-    "external_wrapper_storage": ("static_runtime", "runtime"),
+    "consumer_read": (
+        "static_resolution",
+        "static_resolution_mixed_container",
+        "runtime_resolution",
+    ),
+    "shared_config": (
+        "static_resolution",
+        "static_resolution_mixed_container",
+        "runtime_resolution",
+    ),
+    "shared_value_config": (
+        "static_resolution",
+        "static_resolution_mixed_container",
+        "runtime_resolution",
+    ),
+    "shared_reference_config": (
+        "static_resolution",
+        "static_resolution_mixed_container",
+        "runtime_resolution",
+    ),
+    "optional_config": (
+        "static_resolution",
+        "static_resolution_mixed_container",
+        "runtime_resolution",
+    ),
+    "unique_value_config": (
+        "static_resolution",
+        "static_resolution_mixed_container",
+        "runtime_resolution",
+    ),
+    "unique_rvalue_config": (
+        "static_resolution",
+        "static_resolution_mixed_container",
+        "runtime_resolution",
+    ),
+    "unique_wrapper_config": (
+        "static_resolution",
+        "static_resolution_mixed_container",
+        "runtime_resolution",
+    ),
+    "interface_handle": (
+        "static_resolution",
+        "static_resolution_mixed_container",
+        "runtime_resolution",
+    ),
+    "collection_sum": (
+        "static_resolution",
+        "static_resolution_mixed_container",
+        "runtime_resolution",
+    ),
+    "external_value_storage": (
+        "runtime_resolution_mixed_container",
+        "runtime_resolution",
+    ),
+    "external_reference_storage": (
+        "runtime_resolution_mixed_container",
+        "runtime_resolution",
+    ),
+    "external_wrapper_storage": (
+        "runtime_resolution_mixed_container",
+        "runtime_resolution",
+    ),
 }
 
 EXPECTED_SYMBOLS = {
@@ -149,6 +257,39 @@ EXPECTED_SYMBOLS = {
 SYMBOL_RE = re.compile(
     r"^[0-9a-fA-F]+\s+([0-9a-fA-F]+)\s+\S\s+(probe_[a-z0-9_]+)$"
 )
+
+
+def expected_max_for_environment() -> dict[str, int]:
+    compiler_id = os.environ.get("DINGO_CXX_ID", "")
+    machine = platform.machine().lower()
+    is_clang = "clang" in compiler_id
+    is_gcc = "g++" in compiler_id and not is_clang
+    is_arm64 = machine in ("aarch64", "arm64")
+
+    columns = ["default"]
+    if is_clang:
+        columns.append("clang")
+        if is_arm64:
+            columns.append("clang_arm64")
+    if is_gcc:
+        columns.append("gcc")
+    if "g++-13" in compiler_id:
+        columns.append("gcc13")
+    if "g++-14" in compiler_id:
+        columns.append("gcc14")
+    if "g++-15" in compiler_id:
+        columns.append("gcc15")
+    if is_gcc and is_arm64:
+        columns.append("gcc_arm64")
+
+    expected_max: dict[str, int] = {}
+    for symbol, limits in PROBE_LIMITS.items():
+        limit = limits["default"]
+        for column in columns[1:]:
+            limit = limits.get(column, limit)
+        if limit is not None:
+            expected_max[symbol] = limit
+    return expected_max
 
 
 def load_sizes(path: Path) -> dict[str, int]:
@@ -167,29 +308,27 @@ def main() -> int:
         return 2
 
     sizes = load_sizes(Path(sys.argv[1]))
+    unexpected_limits = sorted(PROBE_LIMITS.keys() - EXPECTED_SYMBOLS)
+    missing_limits = sorted(EXPECTED_SYMBOLS - PROBE_LIMITS.keys())
+    if unexpected_limits or missing_limits:
+        if unexpected_limits:
+            print(
+                f"unexpected probe limits: {', '.join(unexpected_limits)}",
+                file=sys.stderr,
+            )
+        if missing_limits:
+            print(
+                f"missing probe limits: {', '.join(missing_limits)}",
+                file=sys.stderr,
+            )
+        return 1
+
     missing = sorted(EXPECTED_SYMBOLS - sizes.keys())
     if missing:
         print(f"missing probe symbols: {', '.join(missing)}", file=sys.stderr)
         return 1
 
-    expected_max = dict(EXPECTED_MAX)
-    compiler_id = os.environ.get("DINGO_CXX_ID", "")
-    is_clang = "clang" in compiler_id
-    is_gcc = "g++" in compiler_id and not is_clang
-    if is_clang:
-        expected_max.update(CLANG_EXPECTED_MAX)
-        machine = platform.machine().lower()
-        if machine in ("aarch64", "arm64"):
-            expected_max.update(CLANG_ARM64_EXPECTED_MAX)
-    if "g++-13" in compiler_id:
-        expected_max.update(GCC13_EXPECTED_MAX)
-    if "g++-14" in compiler_id:
-        expected_max.update(GCC14_EXPECTED_MAX)
-    if "g++-15" in compiler_id:
-        expected_max.update(GCC15_EXPECTED_MAX)
-    machine = platform.machine().lower()
-    if is_gcc and machine in ("aarch64", "arm64"):
-        expected_max.update(GCC_ARM64_EXPECTED_MAX)
+    expected_max = expected_max_for_environment()
 
     failed = False
     for symbol, max_size in expected_max.items():

@@ -8,10 +8,10 @@
 #pragma once
 
 #include <dingo/core/binding_collection.h>
-#include <dingo/core/binding_resolution_status.h>
+#include <dingo/core/binding_resolution_policy.h>
 #include <dingo/core/exceptions.h>
 #include <dingo/core/keyed.h>
-#include <dingo/core/static_activation_set.h>
+#include <dingo/static/activation_set.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/runtime/context.h>
 #include <dingo/static/graph.h>
@@ -36,6 +36,43 @@ class binding_resolution<Host, static_registry<Registrations...>>
     template <typename T, typename Key>
     using binding_t = static_binding_t<
         typename static_registry_type::template bindings<T, Key>>;
+
+    template <typename T, bool RemoveRvalueReferences, typename Key,
+              typename Request>
+    struct local_binding_source {
+        using binding = binding_t<Request, Key>;
+        static constexpr bool can_resolve =
+            binding::status == binding_selection_status::found;
+
+        self_type& self;
+
+        constexpr binding_selection_status status() const {
+            return binding::status;
+        }
+
+        template <typename ResolveRequest>
+        decltype(auto) resolve(runtime_context& context) {
+            return self.template resolve_binding<Request, Key>(context);
+        }
+    };
+
+    template <typename T, bool RemoveRvalueReferences, typename Key,
+              typename Request>
+    struct host_binding_source {
+        static constexpr bool can_resolve = true;
+
+        Host& host;
+
+        binding_selection_status status() const {
+            return host.template binding_status<Request, Key>();
+        }
+
+        template <typename ResolveRequest>
+        decltype(auto) resolve(runtime_context& context) {
+            return host.template resolve_request<T, RemoveRvalueReferences, Key>(
+                context);
+        }
+    };
 
     template <typename Request, typename Key>
     typename annotated_traits<Request>::type
@@ -100,37 +137,18 @@ class binding_resolution<Host, static_registry<Registrations...>>
     R resolve(runtime_context& context) {
         if constexpr (collection_traits<R>::is_collection) {
             return construct_collection<R, Key>(
-                context, [](auto& collection, auto&& value) {
-                    collection_traits<std::decay_t<decltype(collection)>>::add(
-                        collection, std::move(value));
-                });
+                context, detail::binding_collection_append{});
         } else {
             using request_type = R;
-            using binding = binding_t<request_type, Key>;
-            const auto host_status =
-                host_->template binding_status<request_type, Key>();
-            const auto merged = detail::resolve_binding(
-                binding::status, host_status,
+            local_binding_source<T, RemoveRvalueReferences, Key, request_type>
+                local{*this};
+            host_binding_source<T, RemoveRvalueReferences, Key, request_type>
+                host{*host_};
+            auto sources = detail::make_two_binding_sources(
+                local, host, host,
                 detail::binding_resolution_policy::prefer_primary);
-            if (merged == detail::binding_result::ambiguous) {
-                throw detail::make_type_ambiguous_exception<T>(context);
-            }
-
-            if constexpr (binding::status ==
-                          detail::binding_selection_status::found) {
-                if (merged == detail::binding_result::primary) {
-                    return resolve_binding<request_type, Key>(context);
-                }
-
-                if (merged == detail::binding_result::secondary) {
-                    return host_->template resolve_request<
-                        T, RemoveRvalueReferences, Key>(context);
-                }
-            }
-
-            return host_
-                ->template resolve_request<T, RemoveRvalueReferences, Key>(
-                    context);
+            return detail::resolve_from_binding_sources<T, request_type>(
+                context, sources);
         }
     }
 

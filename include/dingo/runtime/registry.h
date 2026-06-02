@@ -8,11 +8,13 @@
 #pragma once
 
 #include <dingo/core/binding_model.h>
-#include <dingo/core/binding_resolution_context.h>
+#include <dingo/core/auto_constructible.h>
+#include <dingo/static/local_resolution.h>
+#include <dingo/core/binding_resolution_policy.h>
 #include <dingo/core/binding_selection.h>
-#include <dingo/core/container_common.h>
 #include <dingo/core/exceptions.h>
 #include <dingo/core/keyed.h>
+#include <dingo/core/none.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/invoke.h>
 #include <dingo/index/index.h>
@@ -21,31 +23,45 @@
 #include <dingo/registration/collection_traits.h>
 #include <dingo/registration/requirements.h>
 #include <dingo/resolution/runtime_binding.h>
+#include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
-#include <dingo/runtime/injector.h>
+#include <dingo/runtime/source.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/request_traits.h>
+#include <dingo/type/type_list.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <functional>
 #include <map>
 #include <memory>
+#include <new>
 #include <type_traits>
 #include <typeindex>
 #include <variant>
 
 namespace dingo {
+namespace detail {
+
+template <typename StaticRegistry> class container_with_static_bindings;
+
+} // namespace detail
 
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
           typename ResolveRoot>
 class runtime_registry : public allocator_base<Allocator> {
     friend class runtime_context;
     template <typename, typename> friend class detail::binding_resolution;
+    template <typename> friend class detail::container_with_static_bindings;
+    template <typename, typename, bool, typename>
+    friend struct detail::runtime_selected_binding_source;
+    template <typename, typename, bool, bool, typename>
+    friend struct detail::runtime_missing_binding_source;
+    template <typename, typename, typename> friend class runtime_container;
     template <typename ContainerTraitsT, typename AllocatorT,
               typename ParentRegistryT, typename ResolveRootT>
     friend class runtime_registry;
-    template <typename> friend class runtime_injector;
 
     template <typename ContainerTraitsT, typename AllocatorT,
               typename ParentRegistryT, typename ResolveRootT>
@@ -75,27 +91,31 @@ class runtime_registry : public allocator_base<Allocator> {
     using rtti_type = typename ContainerTraits::rtti_type;
     using index_definition_type =
         typename ContainerTraits::index_definition_type;
-    using runtime_injector_type = runtime_injector<registry_type>;
-
-    runtime_injector_type injector();
-
-    runtime_registry() : allocator_base<allocator_type>(allocator_type()) {}
+    runtime_registry()
+        : allocator_base<allocator_type>(allocator_type()) {}
 
     runtime_registry(allocator_type alloc)
         : allocator_base<allocator_type>(alloc) {}
 
-    runtime_registry(parent_registry_type* parent,
+    runtime_registry(resolve_root_type* root,
                      allocator_type alloc = allocator_type())
-        : allocator_base<allocator_type>(alloc), parent_(parent) {
+        : allocator_base<allocator_type>(alloc), resolve_root_(root) {
 
-        static_assert(
-            !is_tagged_container_v<container_traits_type> ||
-                !std::is_same_v<typename container_traits_type::tag_type,
-                                typename parent_registry_type::
-                                    container_traits_type::tag_type>,
-            "static typemap based containers require parent and child "
-            "container tags to be different");
+        if constexpr (!std::is_same_v<void, ParentRegistry>) {
+            static_assert(
+                !detail::is_tagged_container_v<container_traits_type> ||
+                    !std::is_same_v<typename container_traits_type::tag_type,
+                                    typename parent_registry_type::
+                                        container_traits_type::tag_type>,
+                "static typemap based containers require parent and child "
+                "container tags to be different");
+        }
     }
+
+    runtime_registry(const runtime_registry&) = delete;
+    runtime_registry& operator=(const runtime_registry&) = delete;
+
+    ~runtime_registry() { destroy_runtime_bindings(); }
 
     allocator_type& get_allocator() {
         return allocator_base<allocator_type>::get_allocator();
@@ -103,20 +123,15 @@ class runtime_registry : public allocator_base<Allocator> {
 
   protected:
     bool has_runtime_registrations() const { return runtime_bindings_present_; }
-    struct runtime_state;
+    struct runtime_binding_state;
 
-    runtime_state* runtime_state_if_present() { return runtime_state_.get(); }
+    runtime_binding_state* runtime_bindings_if_present();
 
-    const runtime_state* runtime_state_if_present() const {
-        return runtime_state_.get();
-    }
+    const runtime_binding_state* runtime_bindings_if_present() const;
 
-    runtime_state& ensure_runtime_state() {
-        if (!runtime_state_) {
-            runtime_state_ = std::make_unique<runtime_state>(get_allocator());
-        }
-        return *runtime_state_;
-    }
+    runtime_binding_state& ensure_runtime_bindings();
+
+    void destroy_runtime_bindings();
 
     resolve_root_type* resolve_root() {
         if constexpr (std::is_same_v<void, ResolveRoot> ||
@@ -126,7 +141,7 @@ class runtime_registry : public allocator_base<Allocator> {
                                                resolve_root_type>) {
             return static_cast<resolve_root_type*>(this);
         } else {
-            return parent_;
+            return resolve_root_;
         }
     }
 
@@ -138,51 +153,94 @@ class runtime_registry : public allocator_base<Allocator> {
                                                resolve_root_type>) {
             return static_cast<const resolve_root_type*>(this);
         } else {
-            return parent_;
+            return resolve_root_;
         }
     }
 
   public:
     template <typename... TypeArgs> auto& register_type() {
-        return register_type_impl<TypeArgs...>(none_t(), none_t());
+        return register_type_impl<TypeArgs...>(resolve_root(), none_t{},
+                                               none_t{});
     }
 
     template <typename... TypeArgs, typename Arg>
     auto& register_type(Arg&& arg) {
-        return register_type_impl<TypeArgs...>(std::forward<Arg>(arg),
-                                               none_t());
+        return register_type_impl<TypeArgs...>(
+            resolve_root(), std::forward<Arg>(arg), none_t{});
     }
 
     template <typename... TypeArgs, typename IdType>
     auto& register_indexed_type(IdType&& id) {
-        return register_type_impl<TypeArgs...>(none_t(),
-                                               std::forward<IdType>(id));
+        return register_type_impl<TypeArgs...>(
+            resolve_root(), none_t{}, std::forward<IdType>(id));
     }
 
     template <typename... TypeArgs, typename Arg, typename IdType>
     auto& register_indexed_type(Arg&& arg, IdType&& id) {
-        return register_type_impl<TypeArgs...>(std::forward<Arg>(arg),
-                                               std::forward<IdType>(id));
+        return register_type_impl<TypeArgs...>(
+            resolve_root(), std::forward<Arg>(arg),
+            std::forward<IdType>(id));
     }
 
     template <typename... TypeArgs, typename Fn>
     auto& register_type_collection(Fn&& fn) {
         using registration = type_registration<TypeArgs...>;
-        return register_type<TypeArgs...>(callable([&] {
-            return this->template construct_collection_runtime_request<
-                typename registration::storage_type::type>(fn);
-        }));
+        return register_type<TypeArgs...>(callable(
+            [this, collection_fn = std::forward<Fn>(fn)]() mutable {
+                return this->template construct_collection<
+                    typename registration::storage_type::type>(collection_fn);
+            }));
     }
 
     template <typename... TypeArgs> auto& register_type_collection() {
         return register_type_collection<TypeArgs...>(
-            [](auto& collection, auto&& value) {
-                collection_traits<std::decay_t<decltype(collection)>>::add(
-                    collection, std::move(value));
-            });
+            detail::binding_collection_append{});
+    }
+
+    template <typename... TypeArgs, typename Parent, typename Arg,
+              typename IdType>
+    auto& emplace_type_binding(Parent& parent, Arg&& arg, IdType&& id) {
+        return register_type_impl<TypeArgs...>(
+            &parent, std::forward<Arg>(arg), std::forward<IdType>(id));
     }
 
   protected:
+    template <typename T, typename IdType = none_t,
+              typename R = request_result_t<T>>
+    R resolve(IdType&& id = IdType()) {
+        return resolve_runtime_request<T>(std::forward<IdType>(id));
+    }
+
+    template <typename T, typename Factory = constructor<normalized_type_t<T>>,
+              typename R = request_result_t<T>>
+    R construct(Factory factory = Factory()) {
+        return construct_runtime_request<T>(std::move(factory));
+    }
+
+    template <typename T> T construct_collection() {
+        return construct_collection_runtime_request<T>();
+    }
+
+    template <typename T, typename Fn> T construct_collection(Fn&& fn) {
+        return construct_collection_runtime_request<T>(std::forward<Fn>(fn));
+    }
+
+    template <typename T, typename Key> T construct_collection(key<Key>) {
+        return construct_collection_runtime_request<T>(key<Key>{});
+    }
+
+    template <typename T, typename Fn, typename Key>
+    T construct_collection(Fn&& fn, key<Key>) {
+        return construct_collection_runtime_request<T>(
+            std::forward<Fn>(fn), key<Key>{});
+    }
+
+    template <typename Signature = void, typename Callable>
+    auto invoke(Callable&& callable) {
+        return invoke_runtime_request<Signature>(
+            std::forward<Callable>(callable));
+    }
+
     template <typename T, typename IdType = none_t,
               typename R = request_result_t<T>>
     R resolve_runtime_request(IdType&& id = IdType()) {
@@ -193,7 +251,7 @@ class runtime_registry : public allocator_base<Allocator> {
         } else {
             if constexpr (cache_enabled) {
                 if constexpr (is_none_v<std::decay_t<IdType>>) {
-                    if (auto* state = runtime_state_if_present()) {
+                    if (auto* state = runtime_bindings_if_present()) {
                         void* cache = state->type_cache.template get<T>();
                         if (cache) {
                             return detail::convert_resolved_binding<
@@ -201,9 +259,9 @@ class runtime_registry : public allocator_base<Allocator> {
                         }
                     }
                 } else {
-                    if (auto* state = runtime_state_if_present()) {
-                        auto data = state->type_bindings
-                                        .template get<normalized_type_t<T>>();
+                    if (auto* state = runtime_bindings_if_present()) {
+                        auto data = state->type_bindings.template get<
+                            normalized_type_t<T>>();
                         if (data) {
                             if constexpr (detail::is_typed_key_v<IdType>) {
                                 registered_binding_entry* candidate = nullptr;
@@ -229,9 +287,10 @@ class runtime_registry : public allocator_base<Allocator> {
                                         candidate->cache);
                                 }
                             } else {
-                                auto indexed = data->template get_index<IdType>(
-                                                       get_allocator())
-                                                   .find(id);
+                                auto indexed =
+                                    data->template get_index<IdType>(
+                                            get_allocator())
+                                        .find(id);
 
                                 if (indexed) {
                                     if (indexed->cache) {
@@ -303,10 +362,7 @@ class runtime_registry : public allocator_base<Allocator> {
 
     template <typename T> T construct_collection_runtime_request() {
         return construct_collection_runtime_request<T>(
-            [](auto& collection, auto&& value) {
-                collection_traits<std::decay_t<decltype(collection)>>::add(
-                    collection, std::move(value));
-            });
+            detail::binding_collection_append{});
     }
 
     template <typename T, typename Fn>
@@ -318,11 +374,7 @@ class runtime_registry : public allocator_base<Allocator> {
     template <typename T, typename Key>
     T construct_collection_runtime_request(key<Key>) {
         return construct_collection_runtime_request<T>(
-            [](auto& collection, auto&& value) {
-                collection_traits<std::decay_t<decltype(collection)>>::add(
-                    collection, std::move(value));
-            },
-            key<Key>{});
+            detail::binding_collection_append{}, key<Key>{});
     }
 
     template <typename T, typename Fn, typename Key>
@@ -384,18 +436,24 @@ class runtime_registry : public allocator_base<Allocator> {
 
     template <typename Request, typename Key = void>
     detail::binding_selection_status binding_status() {
+        return binding_status_for_id<Request>(
+            std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>{});
+    }
+
+    template <typename Request, typename IdType>
+    detail::binding_selection_status binding_status_for_id(IdType&& id) {
         using exact_type =
             std::remove_cv_t<std::remove_reference_t<request_interface_t<Request>>>;
         using lookup_type = normalized_type_t<Request>;
-        auto* state = runtime_state_if_present();
-        auto* data = state ? state->type_bindings.template get<exact_type>() : nullptr;
+        auto* state = runtime_bindings_if_present();
+        auto* data =
+            state ? state->type_bindings.template get<exact_type>() : nullptr;
         if constexpr (!std::is_same_v<exact_type, lookup_type>) {
             if (!data && state) {
                 data = state->type_bindings.template get<lookup_type>();
             }
         }
-        auto selection = select_runtime_binding(
-            data, std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>{});
+        auto selection = select_runtime_binding(data, std::forward<IdType>(id));
         return selection.status;
     }
 
@@ -432,7 +490,7 @@ class runtime_registry : public allocator_base<Allocator> {
     template <typename CachedT>
     static void store_type_cache(void* context, void* ptr) {
         static_cast<registry_type*>(context)
-            ->ensure_runtime_state()
+            ->ensure_runtime_bindings()
             .type_cache.template insert<CachedT>(ptr);
     }
 
@@ -497,8 +555,8 @@ class runtime_registry : public allocator_base<Allocator> {
     using index_type = detail::index_impl<index_definition_list_type,
                                           index_data, allocator_type>;
 
-    struct type_binding_data : index_type {
-        type_binding_data(allocator_type& allocator)
+    struct runtime_type_bindings : index_type {
+        runtime_type_bindings(allocator_type& allocator)
             : index_type(allocator), bindings(allocator) {}
 
         typename ContainerTraits::template type_map_type<
@@ -506,11 +564,11 @@ class runtime_registry : public allocator_base<Allocator> {
             bindings;
     };
 
-    struct runtime_state {
-        explicit runtime_state(allocator_type& allocator)
+    struct runtime_binding_state {
+        explicit runtime_binding_state(allocator_type& allocator)
             : type_bindings(allocator), type_cache(allocator) {}
 
-        typename ContainerTraits::template type_map_type<type_binding_data,
+        typename ContainerTraits::template type_map_type<runtime_type_bindings,
                                                          allocator_type>
             type_bindings;
         typename ContainerTraits::template type_cache_type<void*,
@@ -525,6 +583,93 @@ class runtime_registry : public allocator_base<Allocator> {
                                           binding_cache_state*>;
 
   protected:
+    template <typename Request, typename IdType = none_t>
+    runtime_selection runtime_source_select(IdType&& id = IdType()) {
+        using exact_type =
+            std::remove_cv_t<std::remove_reference_t<request_interface_t<Request>>>;
+        using lookup_type = normalized_type_t<Request>;
+        auto* state = runtime_bindings_if_present();
+        auto* data =
+            state ? state->type_bindings.template get<exact_type>() : nullptr;
+        if constexpr (!std::is_same_v<exact_type, lookup_type>) {
+            if (!data && state) {
+                data = state->type_bindings.template get<lookup_type>();
+            }
+        }
+        return select_runtime_binding(data, std::forward<IdType>(id));
+    }
+
+    template <typename T, bool CheckCache, typename IdType>
+    auto runtime_source_resolve(runtime_selection selection,
+                                runtime_context& context, IdType&& id)
+        -> request_interface_t<T> {
+        (void)id;
+        if constexpr (is_none_v<std::decay_t<IdType>>) {
+            return resolve<T, request_interface_t<T>>(*selection.binding,
+                                                      context);
+        } else {
+            if constexpr (cache_enabled && CheckCache) {
+                if (selection.state->cache) {
+                    return detail::convert_resolved_binding<
+                        request_interface_t<T>>(selection.state->cache);
+                }
+            }
+
+            return resolve<T, request_interface_t<T>>(
+                *selection.binding, context, *selection.state);
+        }
+    }
+
+    template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
+              typename IdType,
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
+    R runtime_source_missing(runtime_context& context, IdType&& id) {
+        using Type = normalized_type_t<T>;
+        (void)id;
+
+        if constexpr (!std::is_same_v<void, ParentRegistry> &&
+                      !std::is_same_v<void*, decltype(resolve_root_)> &&
+                      !std::is_base_of_v<registry_type, resolve_root_type>) {
+            if (resolve_root_) {
+                if constexpr (is_none_v<std::decay_t<IdType>>) {
+                    return resolve_root()
+                        ->template resolve<T, RemoveRvalueReferences, true>(
+                            context, none_t{});
+                } else if constexpr (detail::is_typed_key_v<IdType>) {
+                    return resolve_root()
+                        ->template resolve<T, RemoveRvalueReferences, true>(
+                            context, std::decay_t<IdType>{});
+                } else {
+                    return resolve_root()->template resolve<T>(
+                        std::forward<IdType>(id));
+                }
+            }
+        }
+
+        if constexpr (MayAutoConstruct && detail::is_typed_key_v<IdType> &&
+                      collection_traits<R>::is_collection) {
+            return this->template construct_collection_runtime_request<R>(
+                detail::binding_collection_append{}, std::decay_t<IdType>{});
+        } else if constexpr (MayAutoConstruct &&
+                             is_auto_constructible<std::decay_t<T>>::value) {
+            if constexpr (constructor<Type>::kind ==
+                          detail::constructor_kind::concrete) {
+                return auto_construct<T>(context);
+            } else if constexpr (is_none_v<std::decay_t<IdType>>) {
+                throw detail::make_type_not_found_exception<T>(context);
+            } else {
+                throw detail::make_type_not_found_exception<
+                    T, std::decay_t<IdType>>(context);
+            }
+        } else if constexpr (is_none_v<std::decay_t<IdType>>) {
+            throw detail::make_type_not_found_exception<T>(context);
+        } else {
+            throw detail::make_type_not_found_exception<T,
+                                                        std::decay_t<IdType>>(
+                context);
+        }
+    }
+
     template <typename T, typename Key, typename Fn>
     std::size_t append_runtime_collection(T& results, runtime_context& context,
                                           Fn&& fn, key<Key>) {
@@ -532,7 +677,7 @@ class runtime_registry : public allocator_base<Allocator> {
         using resolve_type = typename collection_type::resolve_type;
         using lookup_type = normalized_type_t<resolve_type>;
 
-        auto* state = runtime_state_if_present();
+        auto* state = runtime_bindings_if_present();
         auto data =
             state ? state->type_bindings.template get<lookup_type>() : nullptr;
         if (!data) {
@@ -561,7 +706,7 @@ class runtime_registry : public allocator_base<Allocator> {
         using resolve_type = typename collection_type::resolve_type;
         using lookup_type = normalized_type_t<resolve_type>;
 
-        auto* state = runtime_state_if_present();
+        auto* state = runtime_bindings_if_present();
         auto data =
             state ? state->type_bindings.template get<lookup_type>() : nullptr;
         if (!data) {
@@ -584,7 +729,7 @@ class runtime_registry : public allocator_base<Allocator> {
         using resolve_type = typename collection_type::resolve_type;
         using lookup_type = normalized_type_t<resolve_type>;
 
-        auto* state = runtime_state_if_present();
+        auto* state = runtime_bindings_if_present();
         auto data =
             state ? state->type_bindings.template get<lookup_type>() : nullptr;
         if (!data) {
@@ -609,7 +754,7 @@ class runtime_registry : public allocator_base<Allocator> {
         using resolve_type = typename collection_type::resolve_type;
         using lookup_type = normalized_type_t<resolve_type>;
 
-        auto* state = runtime_state_if_present();
+        auto* state = runtime_bindings_if_present();
         auto data =
             state ? state->type_bindings.template get<lookup_type>() : nullptr;
         return data ? data->bindings.size() : 0;
@@ -617,7 +762,7 @@ class runtime_registry : public allocator_base<Allocator> {
 
   private:
     template <typename IdType>
-    runtime_selection select_runtime_binding(type_binding_data* data,
+    runtime_selection select_runtime_binding(runtime_type_bindings* data,
                                              IdType&& id) {
         if constexpr (is_none_v<std::decay_t<IdType>>) {
             return detail::make_runtime_selection<
@@ -664,88 +809,9 @@ class runtime_registry : public allocator_base<Allocator> {
         }
     }
 
-    template <typename T, bool CheckCache, typename IdType>
-    auto resolve_runtime_selection(runtime_selection selection,
-                                   runtime_context& context, IdType&&)
-        -> request_interface_t<T> {
-        if constexpr (is_none_v<std::decay_t<IdType>>) {
-            return resolve<T, request_interface_t<T>>(*selection.binding,
-                                                      context);
-        } else {
-            if constexpr (cache_enabled && CheckCache) {
-                if (selection.state->cache) {
-                    return detail::convert_resolved_binding<
-                        request_interface_t<T>>(selection.state->cache);
-                }
-            }
-
-            return resolve<T, request_interface_t<T>>(
-                *selection.binding, context, *selection.state);
-        }
-    }
-
-    template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
-              typename IdType,
-              typename R = resolve_request_t<T, RemoveRvalueReferences>>
-    R resolve_missing_binding(runtime_context& context, IdType&& id) {
-        using Type = normalized_type_t<T>;
-
-        if constexpr (!std::is_same_v<void*, decltype(parent_)>) {
-            if (parent_) {
-                if constexpr (!std::is_same_v<void, ResolveRoot> &&
-                              !std::is_base_of_v<registry_type,
-                                                 resolve_root_type>) {
-                    if constexpr (is_none_v<std::decay_t<IdType>>) {
-                        return resolve_root()
-                            ->template resolve<T, RemoveRvalueReferences, true>(
-                                context, none_t{});
-                    } else if constexpr (detail::is_typed_key_v<IdType>) {
-                        return resolve_root()
-                            ->template resolve<T, RemoveRvalueReferences, true>(
-                                context, std::decay_t<IdType>{});
-                    } else {
-                        return parent_->template resolve_impl<
-                            T, RemoveRvalueReferences, MayAutoConstruct>(
-                            context, std::forward<IdType>(id));
-                    }
-                } else {
-                    return parent_->template resolve_impl<
-                        T, RemoveRvalueReferences, MayAutoConstruct>(
-                        context, std::forward<IdType>(id));
-                }
-            }
-        }
-
-        if constexpr (MayAutoConstruct && detail::is_typed_key_v<IdType> &&
-                      collection_traits<R>::is_collection) {
-            return this->template construct_collection_runtime_request<R>(
-                [&](auto& collection, auto&& value) {
-                    collection_traits<std::decay_t<decltype(collection)>>::add(
-                        collection, std::move(value));
-                },
-                std::decay_t<IdType>{});
-        } else if constexpr (MayAutoConstruct &&
-                             is_auto_constructible<std::decay_t<T>>::value) {
-            if constexpr (constructor<Type>::kind ==
-                          detail::constructor_kind::concrete) {
-                return auto_construct<T>(context);
-            } else if constexpr (is_none_v<std::decay_t<IdType>>) {
-                throw detail::make_type_not_found_exception<T>(context);
-            } else {
-                throw detail::make_type_not_found_exception<
-                    T, std::decay_t<IdType>>(context);
-            }
-        } else if constexpr (is_none_v<std::decay_t<IdType>>) {
-            throw detail::make_type_not_found_exception<T>(context);
-        } else {
-            throw detail::make_type_not_found_exception<T,
-                                                        std::decay_t<IdType>>(
-                context);
-        }
-    }
-
-    template <typename... TypeArgs, typename Arg, typename IdType>
-    auto& register_type_impl(Arg&& arg, IdType&& id) {
+    template <typename... TypeArgs, typename Parent, typename Arg,
+              typename IdType>
+    auto& register_type_impl(Parent* parent, Arg&& arg, IdType&& id) {
         static_assert(!detail::has_explicit_void_interface_v<TypeArgs...>,
                       "interfaces<void> is not a valid registration target");
         using registration =
@@ -765,8 +831,7 @@ class runtime_registry : public allocator_base<Allocator> {
             binding_model::storage_tag_is_complete;
         static_assert(storage_tag_is_complete,
                       "registered storage tag must be complete; include the "
-                      "corresponding "
-                      "dingo/storage header");
+                      "corresponding dingo/storage header");
         if constexpr (storage_tag_is_complete) {
             using storage_type = typename binding_model::storage_type;
             using registration_requirements =
@@ -797,14 +862,13 @@ class runtime_registry : public allocator_base<Allocator> {
                 if constexpr (!is_none_v<std::decay_t<Arg>>) {
                     auto&& [binding, binding_container] =
                         allocate_binding<registered_binding_type>(
-                            resolve_root(), std::forward<Arg>(arg));
+                            parent, std::forward<Arg>(arg));
                     register_type_binding<interface_type, storage_type>(
                         std::move(binding), std::move(id), key_id_type{});
                     return *binding_container;
                 } else {
                     auto&& [binding, binding_container] =
-                        allocate_binding<registered_binding_type>(
-                            resolve_root());
+                        allocate_binding<registered_binding_type>(parent);
                     register_type_binding<interface_type, storage_type>(
                         std::move(binding), std::move(id), key_id_type{});
                     return *binding_container;
@@ -816,12 +880,12 @@ class runtime_registry : public allocator_base<Allocator> {
                         data = std::allocate_shared<runtime_binding_data_type>(
                             allocator_traits::rebind<runtime_binding_data_type>(
                                 get_allocator()),
-                            resolve_root(), std::forward<Arg>(arg));
+                            parent, std::forward<Arg>(arg));
                     } else {
                         data = std::allocate_shared<runtime_binding_data_type>(
                             allocator_traits::rebind<runtime_binding_data_type>(
                                 get_allocator()),
-                            resolve_root());
+                            parent);
                     }
 
                     for_each(interface_types{}, [&](auto element) {
@@ -861,7 +925,8 @@ class runtime_registry : public allocator_base<Allocator> {
             typename TypeStorage::type>();
 
         auto pb =
-            ensure_runtime_state().type_bindings.template insert<TypeInterface>(
+            ensure_runtime_bindings()
+                .type_bindings.template insert<TypeInterface>(
                 get_allocator());
         auto& data = pb.first;
         using binding_registration_key = std::conditional_t<
@@ -920,7 +985,7 @@ class runtime_registry : public allocator_base<Allocator> {
         static_assert(!std::is_const_v<Type>);
 
         if constexpr (cache_enabled && CheckCache) {
-            if (auto* state = runtime_state_if_present()) {
+            if (auto* state = runtime_bindings_if_present()) {
                 void* cache = state->type_cache.template get<T>();
                 if (cache) {
                     return detail::convert_resolved_binding<
@@ -929,25 +994,14 @@ class runtime_registry : public allocator_base<Allocator> {
             }
         }
 
-        using exact_type =
-            std::remove_cv_t<std::remove_reference_t<request_interface_t<T>>>;
-        auto* state = runtime_state_if_present();
-        auto* data = state ? state->type_bindings.template get<exact_type>() : nullptr;
-        if constexpr (!std::is_same_v<exact_type, Type>) {
-            if (!data && state) {
-                data = state->type_bindings.template get<Type>();
-            }
-        }
-        auto selection = select_runtime_binding(data, id);
-        if (selection.found()) {
-            return resolve_runtime_selection<T, CheckCache>(
-                selection, context, std::forward<IdType>(id));
-        } else if (selection.ambiguous()) {
-            throw detail::make_type_ambiguous_exception<T>(context);
-        }
-        return resolve_missing_binding<T, RemoveRvalueReferences,
-                                       MayAutoConstruct>(
-            context, std::forward<IdType>(id));
+        detail::runtime_selected_binding_source<registry_type, T, CheckCache,
+                                                IdType>
+            selected{*this, id};
+        detail::runtime_missing_binding_source<
+            registry_type, T, RemoveRvalueReferences, MayAutoConstruct, IdType>
+            missing{*this, id};
+        auto sources = detail::make_selected_binding_sources(selected, missing);
+        return detail::resolve_from_binding_sources<T, R>(context, sources);
     }
 
     template <typename T>
@@ -1046,9 +1100,11 @@ class runtime_registry : public allocator_base<Allocator> {
         allocator_traits::deallocate(alloc, instance, 1);
     }
 
-    parent_registry_type* parent_ = nullptr;
+    resolve_root_type* resolve_root_ = nullptr;
 
-    std::unique_ptr<runtime_state> runtime_state_;
+    alignas(runtime_binding_state) std::byte
+        runtime_bindings_[sizeof(runtime_binding_state)];
+    bool runtime_bindings_constructed_ = false;
 
     bool runtime_bindings_present_ = false;
 };
@@ -1056,10 +1112,50 @@ class runtime_registry : public allocator_base<Allocator> {
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
           typename ResolveRoot>
 auto runtime_registry<ContainerTraits, Allocator, ParentRegistry,
-                      ResolveRoot>::injector() ->
-    typename runtime_registry<ContainerTraits, Allocator, ParentRegistry,
-                              ResolveRoot>::runtime_injector_type {
-    return runtime_injector_type(*this);
+                      ResolveRoot>::runtime_bindings_if_present()
+    -> runtime_binding_state* {
+    if (!runtime_bindings_constructed_) {
+        return nullptr;
+    }
+    return std::launder(
+        reinterpret_cast<runtime_binding_state*>(runtime_bindings_));
+}
+
+template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
+          typename ResolveRoot>
+auto runtime_registry<ContainerTraits, Allocator, ParentRegistry,
+                      ResolveRoot>::runtime_bindings_if_present() const
+    -> const runtime_binding_state* {
+    if (!runtime_bindings_constructed_) {
+        return nullptr;
+    }
+    return std::launder(
+        reinterpret_cast<const runtime_binding_state*>(runtime_bindings_));
+}
+
+template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
+          typename ResolveRoot>
+auto runtime_registry<ContainerTraits, Allocator, ParentRegistry,
+                      ResolveRoot>::ensure_runtime_bindings()
+    -> runtime_binding_state& {
+    if (!runtime_bindings_constructed_) {
+        new (runtime_bindings_) runtime_binding_state(get_allocator());
+        runtime_bindings_constructed_ = true;
+    }
+    return *std::launder(
+        reinterpret_cast<runtime_binding_state*>(runtime_bindings_));
+}
+
+template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
+          typename ResolveRoot>
+void runtime_registry<ContainerTraits, Allocator, ParentRegistry,
+                      ResolveRoot>::destroy_runtime_bindings() {
+    if (runtime_bindings_constructed_) {
+        std::launder(
+            reinterpret_cast<runtime_binding_state*>(runtime_bindings_))
+            ->~runtime_binding_state();
+        runtime_bindings_constructed_ = false;
+    }
 }
 
 } // namespace dingo

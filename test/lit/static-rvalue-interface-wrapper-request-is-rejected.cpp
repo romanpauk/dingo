@@ -3,7 +3,7 @@
 // clang-format on
 
 #include <dingo/container.h>
-#include <dingo/static/injector.h>
+#include <dingo/static_container.h>
 
 #include <dingo/factory/function.h>
 #include <dingo/storage/shared.h>
@@ -26,8 +26,8 @@ using source = dingo::bindings<dingo::bind<
     dingo::interfaces<iface>, dingo::factory<dingo::function<make_impl>>>>;
 
 void test_static() {
-    dingo::static_injector<source> injector;
-    (void)injector.resolve<std::shared_ptr<iface>&&>();
+    dingo::static_container<source> container;
+    (void)container.resolve<std::shared_ptr<iface>&&>();
 }
 
 void test_static_runtime() {

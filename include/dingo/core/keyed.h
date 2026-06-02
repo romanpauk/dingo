@@ -110,4 +110,21 @@ struct is_keyed : std::bool_constant<!std::is_void_v<keyed_key_t<T>>> {};
 template <typename T>
 inline constexpr bool is_keyed_v = is_keyed<T>::value;
 
+namespace detail {
+
+template <typename T> struct is_typed_key : std::false_type {};
+
+template <typename T>
+struct is_typed_key<key<T>> : std::bool_constant<!std::is_void_v<T>> {};
+
+template <typename T>
+inline constexpr bool is_typed_key_v = is_typed_key<std::decay_t<T>>::value;
+
+template <typename Identity, typename Binding>
+struct keyed_binding_identity : Binding {
+    using Binding::Binding;
+};
+
+} // namespace detail
+
 } // namespace dingo
