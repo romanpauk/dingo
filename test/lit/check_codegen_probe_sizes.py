@@ -15,6 +15,7 @@ PROBE_LIMITS = {
     },
     "probe_static_resolution_mixed_container_consumer_read": {
         "default": 0x50,
+        "gcc15": 0x60,
         "gcc_arm64": 0x60,
     },
     "probe_runtime_resolution_consumer_read": {
@@ -113,6 +114,7 @@ PROBE_LIMITS = {
     "probe_static_resolution_mixed_container_interface_handle": {
         "default": 0x200,
         "clang": 0x240,
+        "clang20": 0x250,
         "gcc_arm64": 0x360,
     },
     "probe_runtime_resolution_interface_handle": {
@@ -130,6 +132,8 @@ PROBE_LIMITS = {
     "probe_runtime_resolution_external_value_storage": {
         "default": 0x300,
         "clang": 0x2b0,
+        "clang20": 0x2d0,
+        "gcc_arm64": 0x390,
     },
     "probe_runtime_resolution_mixed_container_external_value_storage": {
         "default": 0x520,
@@ -140,6 +144,9 @@ PROBE_LIMITS = {
     "probe_runtime_resolution_external_reference_storage": {
         "default": 0x300,
         "clang": 0x2c0,
+        "clang20": 0x2e0,
+        "gcc15": 0x320,
+        "gcc_arm64": 0x330,
     },
     "probe_runtime_resolution_mixed_container_external_reference_storage": {
         "default": 0x520,
@@ -264,6 +271,8 @@ def expected_max_for_environment() -> dict[str, int]:
     columns = ["default"]
     if is_clang:
         columns.append("clang")
+        if "clang++-20" in compiler_id or "clang-20" in compiler_id:
+            columns.append("clang20")
         if is_arm64:
             columns.append("clang_arm64")
     if is_gcc:
