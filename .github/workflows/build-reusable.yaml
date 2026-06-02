@@ -67,7 +67,7 @@ jobs:
         with:
           key: ubuntu-24.04-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
           restore-keys: |
-            ubuntu-24.04-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-
+            ubuntu-24.04-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}
           max-size: 1G
           verbose: 1
           evict-old-files: job
@@ -143,7 +143,7 @@ jobs:
         with:
           key: ubuntu-25.04-image-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
           restore-keys: |
-            ubuntu-25.04-image-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-
+            ubuntu-25.04-image-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}
           max-size: 1G
           verbose: 1
           evict-old-files: job
@@ -202,7 +202,7 @@ jobs:
         with:
           key: ubuntu-24.04-arm-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
           restore-keys: |
-            ubuntu-24.04-arm-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-
+            ubuntu-24.04-arm-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}
           max-size: 1G
           verbose: 1
           evict-old-files: job
@@ -272,7 +272,7 @@ jobs:
         with:
           key: ${{ matrix.vs.label }}-x64-${{ matrix.config.id }}-${{ matrix.std }}
           restore-keys: |
-            ${{ matrix.vs.label }}-x64-${{ matrix.config.id }}-
+            ${{ matrix.vs.label }}-x64-${{ matrix.config.id }}
           max-size: 1G
           verbose: 1
           evict-old-files: job
@@ -342,7 +342,7 @@ jobs:
         with:
           key: vs2026-arm64-${{ matrix.config.id }}-${{ matrix.std }}
           restore-keys: |
-            vs2026-arm64-${{ matrix.config.id }}-
+            vs2026-arm64-${{ matrix.config.id }}
           max-size: 1G
           verbose: 1
           evict-old-files: job

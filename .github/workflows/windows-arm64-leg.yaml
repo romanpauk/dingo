@@ -73,7 +73,7 @@ jobs:
         with:
           key: ${{ inputs.vs_label }}-arm64-${{ inputs.config_id }}-${{ inputs.std }}
           restore-keys: |
-            ${{ inputs.vs_label }}-arm64-${{ inputs.config_id }}-
+            ${{ inputs.vs_label }}-arm64-${{ inputs.config_id }}
           max-size: 1G
           verbose: 1
           evict-old-files: job
