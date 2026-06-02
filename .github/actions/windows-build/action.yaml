@@ -48,7 +48,7 @@ runs:
     - name: Build
       shell: pwsh
       run: |
-        cmake --build "${{ inputs.build_dir }}" --config ${{ inputs.config_id }} -j $env:BUILD_JOBS
+        cmake --build "${{ inputs.build_dir }}" --config ${{ inputs.config_id }} -j $env:BUILD_JOBS -- /nodeReuse:false
     - name: Test
       shell: pwsh
       run: |
@@ -57,7 +57,7 @@ runs:
       shell: pwsh
       run: |
         cmake -S "${{ inputs.source_dir }}/test/fetchcontent" -B "${{ inputs.fetchcontent_dir }}" -G "${{ inputs.generator }}" -A x64 -DCMAKE_BUILD_TYPE=${{ inputs.config_id }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
-        cmake --build "${{ inputs.fetchcontent_dir }}" --config ${{ inputs.config_id }} -j $env:BUILD_JOBS
+        cmake --build "${{ inputs.fetchcontent_dir }}" --config ${{ inputs.config_id }} -j $env:BUILD_JOBS -- /nodeReuse:false
     - name: Upload Failure Artifacts
       if: ${{ failure() }}
       uses: actions/upload-artifact@v4.6.2

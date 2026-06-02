@@ -80,7 +80,7 @@ jobs:
       - name: Build
         shell: pwsh
         run: |
-          cmake --build build --config ${{ inputs.config_id }} -j $env:BUILD_JOBS
+          cmake --build build --config ${{ inputs.config_id }} -j $env:BUILD_JOBS -- /nodeReuse:false
       - name: Run Compile-Only Tests
         shell: pwsh
         run: |
@@ -96,7 +96,7 @@ jobs:
         shell: pwsh
         run: |
           cmake -S "${{ env.SOURCE_DIR }}/test/fetchcontent" -B fetchcontent-build -G "${{ inputs.cross_generator }}" -A ARM64 -DCMAKE_BUILD_TYPE=${{ inputs.config_id }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
-          cmake --build fetchcontent-build --config ${{ inputs.config_id }} -j $env:BUILD_JOBS
+          cmake --build fetchcontent-build --config ${{ inputs.config_id }} -j $env:BUILD_JOBS -- /nodeReuse:false
       - name: Upload Failure Artifacts
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4.6.2
