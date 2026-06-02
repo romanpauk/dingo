@@ -9,7 +9,7 @@ inputs:
     description: CMake build type
     required: true
   ccache_key:
-    description: Cache key for ccache-action
+    description: Failure artifact suffix matching the caller's ccache key
     required: true
   container_image:
     description: Optional local container image to run the Linux build inside
@@ -46,13 +46,6 @@ runs:
         cache-dependency-glob: |
           ${{ inputs.source_dir }}/pyproject.toml
           ${{ inputs.source_dir }}/uv.lock
-    - name: CCache
-      uses: hendrikmuhs/ccache-action@v1.2.22
-      with:
-        key: ${{ inputs.ccache_key }}
-        restore-keys: ${{ inputs.ccache_key }}
-        max-size: 1G
-        evict-old-files: job
     - name: Install Compiler
       if: ${{ inputs.container_image == '' }}
       shell: bash
