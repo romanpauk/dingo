@@ -1,21 +1,12 @@
 #!/usr/bin/env python3
 
-import re
 import os
 import platform
+import re
+import runpy
 import sys
 from pathlib import Path
 
-
-TINY_PROBES = {
-    "probe_static_resolution_consumer_read": 1,
-    "probe_static_resolution_shared_value_config": 1,
-    "probe_static_resolution_shared_reference_config": 1,
-    "probe_static_resolution_optional_config": 1,
-    "probe_static_resolution_unique_value_config": 1,
-    "probe_static_resolution_unique_rvalue_config": 1,
-    "probe_static_resolution_unique_wrapper_config": 1,
-}
 
 SYMBOL_RE = re.compile(r"^[0-9a-fA-F]+ <([^>]+)>:$")
 INSTRUCTION_RE = re.compile(r"^\s*[0-9a-fA-F]+:\s+([A-Za-z.][A-Za-z0-9.]*)\b")
@@ -25,7 +16,7 @@ RETURNS = {"ret", "retq", "retl", "retab", "retaa"}
 FORBIDDEN_PREFIXES = ("call", "jmp", "j", "b", "bl", "cb", "tb")
 
 
-def load_instructions(path: Path) -> dict[str, list[str]]:
+def load_instructions(path: Path, tiny_probes: dict[str, int]) -> dict[str, list[str]]:
     instructions: dict[str, list[str]] = {}
     current_symbol: str | None = None
     for raw_line in path.read_text().splitlines():
@@ -35,7 +26,7 @@ def load_instructions(path: Path) -> dict[str, list[str]]:
             continue
         match = SYMBOL_RE.match(line.strip())
         if match is not None:
-            current_symbol = match.group(1) if match.group(1) in TINY_PROBES else None
+            current_symbol = match.group(1) if match.group(1) in tiny_probes else None
             if current_symbol is not None:
                 instructions.setdefault(current_symbol, [])
             continue
@@ -49,15 +40,16 @@ def load_instructions(path: Path) -> dict[str, list[str]]:
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 3:
         print(
-            "usage: check_codegen_probe_instructions.py <objdump-output>",
+            "usage: check_codegen_probe_instructions.py <objdump-output> <expectations.py>",
             file=sys.stderr,
         )
         return 2
 
-    instructions = load_instructions(Path(sys.argv[1]))
-    missing = sorted(set(TINY_PROBES) - instructions.keys())
+    tiny_probes = runpy.run_path(sys.argv[2])["TINY_PROBES"]
+    instructions = load_instructions(Path(sys.argv[1]), tiny_probes)
+    missing = sorted(set(tiny_probes) - instructions.keys())
     if missing:
         print(f"missing probe disassembly: {', '.join(missing)}", file=sys.stderr)
         return 1
@@ -79,7 +71,7 @@ def main() -> int:
         # and use the size checker as the GCC guard.
         return 0
 
-    for symbol, max_non_return in TINY_PROBES.items():
+    for symbol, max_non_return in tiny_probes.items():
         ops = instructions[symbol]
         significant = [op for op in ops if op not in NOPS and op not in RETURNS]
         for op in significant:

@@ -232,6 +232,7 @@ if(DINGO_DEVELOPMENT_MODE)
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/axis_stored_types.py"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/data.py"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/plugins.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/rows.py"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/schema.py"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/templates/cmake.cmake.j2"
             "${CMAKE_CURRENT_SOURCE_DIR}/test/matrix/templates/runner.cpp.j2"
