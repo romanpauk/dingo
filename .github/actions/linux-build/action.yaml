@@ -50,6 +50,8 @@ runs:
       uses: hendrikmuhs/ccache-action@v1.2.22
       with:
         key: ${{ inputs.ccache_key }}
+        restore-keys: ${{ inputs.ccache_key }}
+        max-size: 1G
         evict-old-files: job
     - name: Install Compiler
       if: ${{ inputs.container_image == '' }}
@@ -91,7 +93,8 @@ runs:
       run: |
         set -euo pipefail
 
-        mkdir -p "$HOME/.ccache"
+        mkdir -p "$GITHUB_WORKSPACE/.ccache"
+        echo "Using ccache directory: $GITHUB_WORKSPACE/.ccache"
 
         docker run --rm \
           --user "$(id -u):$(id -g)" \
@@ -100,7 +103,7 @@ runs:
           -e CC="${{ inputs.compiler_cc }}" \
           -e CXX="${{ inputs.compiler_cxx }}" \
           -v "$GITHUB_WORKSPACE:/workspace" \
-          -v "$HOME/.ccache:/ccache" \
+          -v "$GITHUB_WORKSPACE/.ccache:/ccache" \
           -w /workspace \
           "${CONTAINER_IMAGE}" \
           bash -lc '

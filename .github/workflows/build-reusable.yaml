@@ -311,13 +311,13 @@ jobs:
       - name: Build
         shell: pwsh
         run: |
-          cmake --build build --config ${{ matrix.config.id }} -j $env:BUILD_JOBS
+          cmake --build build --config ${{ matrix.config.id }} -j $env:BUILD_JOBS -- /nodeReuse:false
 
       - name: FetchContent
         shell: pwsh
         run: |
           cmake -S "${{ env.SOURCE_DIR }}/test/fetchcontent" -B fetchcontent-build -G "Visual Studio 18 2026" -A ARM64 -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }} -DDINGO_EXAMPLES_ENABLED=OFF
-          cmake --build fetchcontent-build --config ${{ matrix.config.id }} -j $env:BUILD_JOBS
+          cmake --build fetchcontent-build --config ${{ matrix.config.id }} -j $env:BUILD_JOBS -- /nodeReuse:false
 
       - name: Upload Failure Artifacts
         if: ${{ failure() }}
