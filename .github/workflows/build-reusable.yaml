@@ -267,6 +267,16 @@ jobs:
           tar -xzf release-artifacts/release-source.tar.gz -C release-src
           echo "SOURCE_DIR=release-src" >> "$GITHUB_ENV"
 
+      - name: CCache
+        uses: hendrikmuhs/ccache-action@v1.2.22
+        with:
+          key: ${{ matrix.vs.label }}-x64-${{ matrix.config.id }}-${{ matrix.std }}
+          restore-keys: |
+            ${{ matrix.vs.label }}-x64-${{ matrix.config.id }}-
+          max-size: 1G
+          verbose: 1
+          evict-old-files: job
+
       - name: Run Windows build
         uses: ./.github/actions/windows-build
         with:
@@ -331,6 +341,10 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.22
         with:
           key: vs2026-arm64-${{ matrix.config.id }}-${{ matrix.std }}
+          restore-keys: |
+            vs2026-arm64-${{ matrix.config.id }}-
+          max-size: 1G
+          verbose: 1
           evict-old-files: job
 
       - name: Configure

@@ -6,7 +6,7 @@ inputs:
     required: false
     default: build
   ccache_key:
-    description: Cache key for ccache-action
+    description: Failure artifact suffix matching the caller's ccache key
     required: true
   config_id:
     description: Visual Studio configuration id
@@ -36,11 +36,6 @@ runs:
         cache-dependency-glob: |
           ${{ inputs.source_dir }}/pyproject.toml
           ${{ inputs.source_dir }}/uv.lock
-    - name: CCache
-      uses: hendrikmuhs/ccache-action@v1.2.22
-      with:
-        key: ${{ inputs.ccache_key }}
-        evict-old-files: job
     - name: Configure
       shell: pwsh
       run: |
