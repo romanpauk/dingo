@@ -50,6 +50,7 @@ runs:
       uses: hendrikmuhs/ccache-action@v1.2.22
       with:
         key: ${{ inputs.ccache_key }}
+        restore-keys: ${{ inputs.ccache_key }}
         evict-old-files: job
     - name: Install Compiler
       if: ${{ inputs.container_image == '' }}
