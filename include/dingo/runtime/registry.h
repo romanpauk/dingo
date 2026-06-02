@@ -32,6 +32,7 @@
 #include <dingo/type/type_list.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <functional>
 #include <map>
 #include <memory>
@@ -1101,9 +1102,8 @@ class runtime_registry : public allocator_base<Allocator> {
 
     resolve_root_type* resolve_root_ = nullptr;
 
-    typename std::aligned_storage<sizeof(runtime_binding_state),
-                                  alignof(runtime_binding_state)>::type
-        runtime_bindings_;
+    alignas(runtime_binding_state) std::byte
+        runtime_bindings_[sizeof(runtime_binding_state)];
     bool runtime_bindings_constructed_ = false;
 
     bool runtime_bindings_present_ = false;
@@ -1117,8 +1117,8 @@ auto runtime_registry<ContainerTraits, Allocator, ParentRegistry,
     if (!runtime_bindings_constructed_) {
         return nullptr;
     }
-    return std::launder(reinterpret_cast<runtime_binding_state*>(
-        &runtime_bindings_));
+    return std::launder(
+        reinterpret_cast<runtime_binding_state*>(runtime_bindings_));
 }
 
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
@@ -1129,8 +1129,8 @@ auto runtime_registry<ContainerTraits, Allocator, ParentRegistry,
     if (!runtime_bindings_constructed_) {
         return nullptr;
     }
-    return std::launder(reinterpret_cast<const runtime_binding_state*>(
-        &runtime_bindings_));
+    return std::launder(
+        reinterpret_cast<const runtime_binding_state*>(runtime_bindings_));
 }
 
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
@@ -1139,11 +1139,11 @@ auto runtime_registry<ContainerTraits, Allocator, ParentRegistry,
                       ResolveRoot>::ensure_runtime_bindings()
     -> runtime_binding_state& {
     if (!runtime_bindings_constructed_) {
-        new (&runtime_bindings_) runtime_binding_state(get_allocator());
+        new (runtime_bindings_) runtime_binding_state(get_allocator());
         runtime_bindings_constructed_ = true;
     }
     return *std::launder(
-        reinterpret_cast<runtime_binding_state*>(&runtime_bindings_));
+        reinterpret_cast<runtime_binding_state*>(runtime_bindings_));
 }
 
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
@@ -1151,8 +1151,8 @@ template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
 void runtime_registry<ContainerTraits, Allocator, ParentRegistry,
                       ResolveRoot>::destroy_runtime_bindings() {
     if (runtime_bindings_constructed_) {
-        std::launder(reinterpret_cast<runtime_binding_state*>(
-            &runtime_bindings_))
+        std::launder(
+            reinterpret_cast<runtime_binding_state*>(runtime_bindings_))
             ->~runtime_binding_state();
         runtime_bindings_constructed_ = false;
     }
