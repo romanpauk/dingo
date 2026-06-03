@@ -51,17 +51,6 @@ template <class DisabledType, typename Tag> struct opaque_constructor_argument;
 
 template <class DisabledType>
 struct constructor_argument<DisabledType, automatic> {
-    // Value and rvalue probes imply materialization, so they must not
-    // participate for forward declarations. Otherwise constructor deduction
-    // would pull incomplete dependencies into class-trait inspection.
-    template <
-        typename T,
-        typename = typename std::enable_if_t<
-            !std::is_same_v<DisabledType, std::decay_t<T>> &&
-            is_complete<std::decay_t<T>>::value>
-    >
-    operator T&&() const;
-
     // Lvalue-reference probes stay available for incomplete types. They model
     // borrowed dependencies that can be satisfied by lookup without trying to
     // construct the forward-declared type.
