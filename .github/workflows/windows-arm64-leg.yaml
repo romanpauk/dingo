@@ -30,6 +30,8 @@ on:
 
 env:
   BUILD_JOBS: ${{ vars.DINGO_BUILD_JOBS || '4' }}
+  DINGO_CCACHE_EXPECTED_ENTRIES: ${{ vars.DINGO_CCACHE_EXPECTED_ENTRIES || '100' }}
+  DINGO_CCACHE_TOTAL_MB: ${{ vars.DINGO_CCACHE_TOTAL_MB || '5000' }}
 
 jobs:
   cross:
@@ -101,12 +103,12 @@ jobs:
         run: |
           cmake -S "${{ env.SOURCE_DIR }}/test/fetchcontent" -B fetchcontent-build -G "${{ inputs.cross_generator }}" -A ARM64 -DCMAKE_BUILD_TYPE=${{ inputs.config_id }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
           cmake --build fetchcontent-build --config ${{ inputs.config_id }} -j $env:BUILD_JOBS -- /nodeReuse:false
-      - name: Trim CCache
+      - name: Prepare CCache save
         if: ${{ always() }}
-        shell: pwsh
-        run: |
-          ccache --cleanup
-          exit 0
+        uses: ./.github/actions/prepare-ccache-save
+        with:
+          total-budget-mb: ${{ env.DINGO_CCACHE_TOTAL_MB }}
+          expected-entries: ${{ env.DINGO_CCACHE_EXPECTED_ENTRIES }}
       - name: Upload Failure Artifacts
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4.6.2

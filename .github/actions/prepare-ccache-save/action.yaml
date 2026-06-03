@@ -1,0 +1,73 @@
+name: Prepare CCache save
+description: Compute the per-job ccache budget and trim the restored cache before the post-action save.
+inputs:
+  total-budget-mb:
+    description: Total repository cache budget reserved for ccache archives.
+    required: false
+    default: '5000'
+  expected-entries:
+    description: Number of ccache archives the CI matrix should be able to retain.
+    required: false
+    default: '100'
+  min-size-mb:
+    description: Minimum per-archive ccache budget.
+    required: false
+    default: '10'
+runs:
+  using: composite
+  steps:
+    - name: Prepare CCache save
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        total_budget_mb='${{ inputs.total-budget-mb }}'
+        expected_entries='${{ inputs.expected-entries }}'
+        min_size_mb='${{ inputs.min-size-mb }}'
+
+        if ! command -v ccache >/dev/null 2>&1; then
+          echo "ccache is not available; skipping save preparation"
+          exit 0
+        fi
+
+        if [ "$expected_entries" -lt 1 ]; then
+          expected_entries=1
+        fi
+
+        save_budget_mb=$((total_budget_mb / expected_entries))
+        if [ "$save_budget_mb" -lt "$min_size_mb" ]; then
+          save_budget_mb="$min_size_mb"
+        fi
+
+        echo "CCache save budget: ${save_budget_mb}M (${total_budget_mb}M / ${expected_entries} expected entries)"
+        ccache --set-config=max_size="${save_budget_mb}M"
+        ccache --cleanup
+        ccache -s -v || ccache -s
+
+    - name: Prepare CCache save
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $totalBudgetMb = [int]'${{ inputs.total-budget-mb }}'
+        $expectedEntries = [int]'${{ inputs.expected-entries }}'
+        $minSizeMb = [int]'${{ inputs.min-size-mb }}'
+
+        if (-not (Get-Command ccache -ErrorAction SilentlyContinue)) {
+          Write-Host "ccache is not available; skipping save preparation"
+          exit 0
+        }
+
+        if ($expectedEntries -lt 1) {
+          $expectedEntries = 1
+        }
+
+        $saveBudgetMb = [math]::Floor($totalBudgetMb / $expectedEntries)
+        if ($saveBudgetMb -lt $minSizeMb) {
+          $saveBudgetMb = $minSizeMb
+        }
+
+        Write-Host "CCache save budget: ${saveBudgetMb}M (${totalBudgetMb}M / ${expectedEntries} expected entries)"
+        ccache --set-config=max_size="${saveBudgetMb}M"
+        ccache --cleanup
+        ccache -s -v
