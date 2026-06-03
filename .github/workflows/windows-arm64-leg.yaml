@@ -71,10 +71,10 @@ jobs:
       - name: CCache
         uses: hendrikmuhs/ccache-action@v1.2.22
         with:
-          key: ${{ inputs.vs_label }}-arm64-${{ inputs.config_id }}-${{ inputs.std }}
+          key: ${{ inputs.vs_label }}-arm64-${{ inputs.config_id }}
           restore-keys: |
             ${{ inputs.vs_label }}-arm64-${{ inputs.config_id }}
-          max-size: 1G
+          max-size: 250M
           verbose: 1
           evict-old-files: job
       - name: Configure

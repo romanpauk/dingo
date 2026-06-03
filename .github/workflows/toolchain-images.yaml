@@ -54,7 +54,7 @@ jobs:
           load: true
           tags: dingo-toolchains:ubuntu-25.04-${{ matrix.compiler.toolchain }}
           cache-from: type=gha,scope=toolchain-smoke-${{ matrix.compiler.toolchain }}
-          cache-to: type=gha,mode=max,scope=toolchain-smoke-${{ matrix.compiler.toolchain }}
+          cache-to: type=gha,mode=min,scope=toolchain-smoke-${{ matrix.compiler.toolchain }}
 
       - name: Smoke test container command
         shell: bash
@@ -109,7 +109,7 @@ jobs:
           load: true
           tags: dingo-toolchains:ubuntu-25.04-msvc-wine
           cache-from: type=gha,scope=toolchain-smoke-msvc-wine
-          cache-to: type=gha,mode=max,scope=toolchain-smoke-msvc-wine
+          cache-to: type=gha,mode=min,scope=toolchain-smoke-msvc-wine
 
       - name: Verify msvc-wine image baseline tools
         shell: bash

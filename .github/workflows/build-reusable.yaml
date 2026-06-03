@@ -65,10 +65,10 @@ jobs:
       - name: CCache
         uses: hendrikmuhs/ccache-action@v1.2.22
         with:
-          key: ubuntu-24.04-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
+          key: ubuntu-24.04-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}
           restore-keys: |
             ubuntu-24.04-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}
-          max-size: 1G
+          max-size: 250M
           verbose: 1
           evict-old-files: job
 
@@ -116,7 +116,7 @@ jobs:
           load: true
           tags: dingo-toolchains:ubuntu-25.04-${{ matrix.compiler.TOOLCHAIN }}
           cache-from: type=gha,scope=toolchain-${{ matrix.compiler.TOOLCHAIN }}
-          cache-to: type=gha,mode=max,scope=toolchain-${{ matrix.compiler.TOOLCHAIN }}
+          cache-to: type=gha,mode=min,scope=toolchain-${{ matrix.compiler.TOOLCHAIN }}
 
       - name: Initialize source dir
         shell: bash
@@ -141,10 +141,10 @@ jobs:
       - name: CCache
         uses: hendrikmuhs/ccache-action@v1.2.22
         with:
-          key: ubuntu-25.04-image-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
+          key: ubuntu-25.04-image-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}
           restore-keys: |
             ubuntu-25.04-image-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}
-          max-size: 1G
+          max-size: 250M
           verbose: 1
           evict-old-files: job
 
@@ -200,10 +200,10 @@ jobs:
       - name: CCache
         uses: hendrikmuhs/ccache-action@v1.2.22
         with:
-          key: ubuntu-24.04-arm-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
+          key: ubuntu-24.04-arm-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}
           restore-keys: |
             ubuntu-24.04-arm-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}
-          max-size: 1G
+          max-size: 250M
           verbose: 1
           evict-old-files: job
 
@@ -270,10 +270,10 @@ jobs:
       - name: CCache
         uses: hendrikmuhs/ccache-action@v1.2.22
         with:
-          key: ${{ matrix.vs.label }}-x64-${{ matrix.config.id }}-${{ matrix.std }}
+          key: ${{ matrix.vs.label }}-x64-${{ matrix.config.id }}
           restore-keys: |
             ${{ matrix.vs.label }}-x64-${{ matrix.config.id }}
-          max-size: 1G
+          max-size: 250M
           verbose: 1
           evict-old-files: job
 
@@ -340,10 +340,10 @@ jobs:
       - name: CCache
         uses: hendrikmuhs/ccache-action@v1.2.22
         with:
-          key: vs2026-arm64-${{ matrix.config.id }}-${{ matrix.std }}
+          key: vs2026-arm64-${{ matrix.config.id }}
           restore-keys: |
             vs2026-arm64-${{ matrix.config.id }}
-          max-size: 1G
+          max-size: 250M
           verbose: 1
           evict-old-files: job
 
