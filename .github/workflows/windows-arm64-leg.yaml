@@ -101,6 +101,12 @@ jobs:
         run: |
           cmake -S "${{ env.SOURCE_DIR }}/test/fetchcontent" -B fetchcontent-build -G "${{ inputs.cross_generator }}" -A ARM64 -DCMAKE_BUILD_TYPE=${{ inputs.config_id }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
           cmake --build fetchcontent-build --config ${{ inputs.config_id }} -j $env:BUILD_JOBS -- /nodeReuse:false
+      - name: Trim CCache
+        if: ${{ always() }}
+        shell: pwsh
+        run: |
+          ccache --cleanup
+          exit 0
       - name: Upload Failure Artifacts
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4.6.2

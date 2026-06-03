@@ -83,6 +83,11 @@ jobs:
           source_dir: ${{ env.SOURCE_DIR }}
           std: ${{ matrix.compiler.STD }}
 
+      - name: Trim CCache
+        if: ${{ always() }}
+        shell: bash
+        run: ccache --cleanup || true
+
   linux-toolchain-image:
     name: ubuntu-25.04 / ${{ matrix.compiler.TOOLCHAIN }} / std-${{ matrix.compiler.STD }} / ${{ matrix.config.label }}
     timeout-minutes: 60
@@ -160,6 +165,11 @@ jobs:
           source_dir: ${{ env.SOURCE_DIR }}
           std: ${{ matrix.compiler.STD }}
 
+      - name: Trim CCache
+        if: ${{ always() }}
+        shell: bash
+        run: ccache --cleanup || true
+
   linux-arm64:
     name: ubuntu-24.04-arm / ${{ matrix.compiler.CXX }} / std-${{ matrix.compiler.STD }} / ${{ matrix.config.label }}
     timeout-minutes: 45
@@ -217,6 +227,11 @@ jobs:
           sanitizer: ${{ matrix.compiler.SANITIZER }}
           source_dir: ${{ env.SOURCE_DIR }}
           std: ${{ matrix.compiler.STD }}
+
+      - name: Trim CCache
+        if: ${{ always() }}
+        shell: bash
+        run: ccache --cleanup || true
 
   windows-x64:
     name: ${{ matrix.vs.label }} / x64 / std-${{ matrix.std }} / ${{ matrix.config.label }}
@@ -285,6 +300,13 @@ jobs:
           generator: ${{ matrix.vs.generator }}
           source_dir: ${{ env.SOURCE_DIR }}
           std: ${{ matrix.std }}
+
+      - name: Trim CCache
+        if: ${{ always() }}
+        shell: pwsh
+        run: |
+          ccache --cleanup
+          exit 0
 
   windows-arm64-vs2026:
     name: vs2026 / arm64 / std-${{ matrix.std }} / ${{ matrix.config.label }}
@@ -362,6 +384,13 @@ jobs:
         run: |
           cmake -S "${{ env.SOURCE_DIR }}/test/fetchcontent" -B fetchcontent-build -G "Visual Studio 18 2026" -A ARM64 -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }} -DDINGO_EXAMPLES_ENABLED=OFF
           cmake --build fetchcontent-build --config ${{ matrix.config.id }} -j $env:BUILD_JOBS -- /nodeReuse:false
+
+      - name: Trim CCache
+        if: ${{ always() }}
+        shell: pwsh
+        run: |
+          ccache --cleanup
+          exit 0
 
       - name: Upload Failure Artifacts
         if: ${{ failure() }}
