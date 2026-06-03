@@ -462,10 +462,14 @@ inline constexpr std::size_t static_binding_preserved_closure_cost_v =
         : 0;
 
 template <typename InterfaceBinding>
+using static_binding_dependencies_t =
+    typename binding_model_dependencies_t<
+        typename InterfaceBinding::binding_model_type>::type;
+
+template <typename InterfaceBinding>
 inline constexpr std::size_t static_binding_destructible_slot_cost_v =
     static_dependency_destructible_cost<
-        typename InterfaceBinding::binding_model_type::dependencies_type::
-            type>::value +
+        static_binding_dependencies_t<InterfaceBinding>>::value +
     static_conversion_destructible_slots_v<
         typename InterfaceBinding::binding_model_type::storage_type> +
     (!std::is_trivially_destructible_v<
@@ -478,8 +482,7 @@ inline constexpr std::size_t static_binding_destructible_slot_cost_v =
 template <typename InterfaceBinding>
 inline constexpr std::size_t static_binding_temporary_slot_cost_v =
     static_dependency_temporary_slot_cost<
-        typename InterfaceBinding::binding_model_type::dependencies_type::
-            type>::value +
+        static_binding_dependencies_t<InterfaceBinding>>::value +
     static_conversion_temporary_slots_v<
         typename InterfaceBinding::binding_model_type::storage_type> +
     static_storage_temporary_slot_cost_v<
@@ -488,8 +491,7 @@ inline constexpr std::size_t static_binding_temporary_slot_cost_v =
 template <typename InterfaceBinding>
 inline constexpr std::size_t static_binding_max_temporary_size_v = std::max(
     {static_dependency_temporary_size<
-         typename InterfaceBinding::binding_model_type::dependencies_type::
-             type>::value,
+         static_binding_dependencies_t<InterfaceBinding>>::value,
      static_conversion_temporary_size_v<
          typename InterfaceBinding::binding_model_type::storage_type>,
      sizeof(typename InterfaceBinding::binding_model_type::storage_type::type),
@@ -500,8 +502,7 @@ inline constexpr std::size_t static_binding_max_temporary_size_v = std::max(
 template <typename InterfaceBinding>
 inline constexpr std::size_t static_binding_max_temporary_align_v = std::max(
     {static_dependency_temporary_align<
-         typename InterfaceBinding::binding_model_type::dependencies_type::
-             type>::value,
+         static_binding_dependencies_t<InterfaceBinding>>::value,
      static_conversion_temporary_align_v<
          typename InterfaceBinding::binding_model_type::storage_type>,
      alignof(typename InterfaceBinding::binding_model_type::storage_type::type),
@@ -583,7 +584,7 @@ struct static_binding_retained_destructible_slots
     : std::integral_constant<
           std::size_t,
           static_dependency_retained_destructible_slots<
-              typename Binding::binding_model_type::dependencies_type::type,
+              static_binding_dependencies_t<Binding>,
               typename static_graph_node_t<Binding, StaticRegistry,
                                            false>::dependency_bindings,
               StaticRegistry>::value +
@@ -595,7 +596,7 @@ struct static_binding_peak_destructible_slots
           std::size_t,
           std::max(
               static_dependency_peak_destructible_slots<
-                  typename Binding::binding_model_type::dependencies_type::type,
+                  static_binding_dependencies_t<Binding>,
                   typename static_graph_node_t<Binding, StaticRegistry,
                                                false>::dependency_bindings,
                   StaticRegistry>::value,
@@ -676,7 +677,7 @@ struct static_binding_retained_temporary_slots
     : std::integral_constant<
           std::size_t,
           static_dependency_retained_temporary_slots<
-              typename Binding::binding_model_type::dependencies_type::type,
+              static_binding_dependencies_t<Binding>,
               typename static_graph_node_t<Binding, StaticRegistry,
                                            false>::dependency_bindings,
               StaticRegistry>::value +
@@ -688,7 +689,7 @@ struct static_binding_peak_temporary_slots
           std::size_t,
           std::max(
               static_dependency_peak_temporary_slots<
-                  typename Binding::binding_model_type::dependencies_type::type,
+                  static_binding_dependencies_t<Binding>,
                   typename static_graph_node_t<Binding, StaticRegistry,
                                                false>::dependency_bindings,
                   StaticRegistry>::value,

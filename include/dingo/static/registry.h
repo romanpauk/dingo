@@ -30,7 +30,8 @@ enum class dependency_resolution_status {
 };
 
 template <typename BindingModel>
-using binding_dependencies_t = typename BindingModel::dependencies_type::type;
+using binding_dependencies_t =
+    typename binding_model_dependencies_t<BindingModel>::type;
 
 template <typename...> inline constexpr bool dependent_false_v = false;
 
@@ -934,7 +935,8 @@ template <typename... Registrations> struct static_registry {
     using model = typename binding<Interface>::binding_model_type;
 
     template <typename Interface>
-    using dependencies = typename model<Interface>::dependencies_type::type;
+    using dependencies =
+        typename detail::binding_model_dependencies_t<model<Interface>>::type;
 
     template <typename Interface>
     using dependency_bindings =

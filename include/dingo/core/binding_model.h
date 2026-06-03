@@ -38,7 +38,6 @@ struct binding_model_impl {
     using factory_type = typename Registration::factory_type::type;
     using key_type = typename Registration::key_type::type;
     using conversions_type = typename Registration::conversions_type::type;
-    using dependencies_type = typename Registration::dependencies_type;
     using bindings_type = typename Registration::bindings_type::type;
 
     static constexpr bool storage_tag_is_complete = StorageTagIsComplete;
@@ -60,7 +59,6 @@ struct binding_model_impl<Registration, true> {
     using factory_type = typename Registration::factory_type::type;
     using key_type = typename Registration::key_type::type;
     using conversions_type = typename Registration::conversions_type::type;
-    using dependencies_type = typename Registration::dependencies_type;
     using bindings_type = typename Registration::bindings_type::type;
 
     static constexpr bool storage_tag_is_complete = true;
@@ -89,6 +87,14 @@ using binding_model = binding_model_impl<
     Registration,
     !requires_complete_type_v<typename Registration::scope_type::type> ||
         is_complete_v<typename Registration::scope_type::type>>;
+
+template <typename BindingModel> struct binding_model_dependencies {
+    using type = typename BindingModel::registration_type::dependencies_type;
+};
+
+template <typename BindingModel>
+using binding_model_dependencies_t =
+    typename binding_model_dependencies<BindingModel>::type;
 
 template <typename BindingModel, typename InterfaceList>
 struct binding_expansion_impl;
