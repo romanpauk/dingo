@@ -57,7 +57,6 @@ class CandidateRow:
 class MatrixRow(CandidateRow):
     plan: RegistrationPlan
     name: str
-    source_name: str
     lines: CaseLines = CaseLines()
 
 
@@ -261,7 +260,6 @@ def generate_rows() -> tuple[MatrixRow, ...]:
                                         container=container,
                                         plan=plan,
                                         name=case_name(candidate),
-                                        source_name=source_name(candidate),
                                         lines=lines,
                                     )
                                 )
@@ -364,10 +362,6 @@ def case_name(row: CandidateRow) -> str:
     )
 
 
-def source_name(row: CandidateRow) -> str:
-    return "_".join((row.feature.name, row.mode.name, row.container.name))
-
-
 def make_case(row: MatrixRow) -> GeneratedCase:
     static_bindings = None
     setup_lines = ()
@@ -458,13 +452,6 @@ def executable_name(feature_name: str) -> str:
     return f"dingo_matrix_test_{feature_name}"
 
 
-def source_groups(rows: tuple[MatrixRow, ...]) -> dict[str, list[MatrixRow]]:
-    grouped: dict[str, list[MatrixRow]] = defaultdict(list)
-    for row in rows:
-        grouped[row.source_name].append(row)
-    return grouped
-
-
 def executable_groups(rows: tuple[MatrixRow, ...]) -> dict[str, list[MatrixRow]]:
     grouped: dict[str, list[MatrixRow]] = defaultdict(list)
     for row in rows:
@@ -478,30 +465,32 @@ def generate_sources(
     source_template: Template,
     runner_template: Template,
 ) -> tuple[GeneratedExecutable, ...]:
-    sources_by_group: dict[str, Path] = {}
-    rows_by_source = source_groups(rows)
-    for group_name, group_rows in rows_by_source.items():
-        source = out_dir / f"{group_name}.cpp"
-        sources_by_group[group_name] = render_source(source, group_rows, source_template)
-
     executables: list[GeneratedExecutable] = []
     for feature_name, feature_rows in executable_groups(rows).items():
+        source = render_source(
+            out_dir / f"{feature_name}.cpp",
+            feature_rows,
+            source_template,
+        )
         runner = render_runner(
             out_dir / f"matrix_runner_{feature_name}.cpp",
             tuple(feature_rows),
             runner_template,
         )
-        feature_sources = {
-            sources_by_group[row.source_name] for row in feature_rows
-        }
         executables.append(
             GeneratedExecutable(
                 name=executable_name(feature_name),
-                sources=tuple(sorted((*feature_sources, runner))),
+                sources=(source, runner),
             )
         )
 
     return tuple(sorted(executables, key=lambda executable: executable.name))
+
+
+def remove_stale_sources(out_dir: Path, live_sources: set[Path]) -> None:
+    for source in out_dir.glob("*.cpp"):
+        if source not in live_sources:
+            source.unlink()
 
 
 def generate(out_dir: Path, cmake_file: Path) -> None:
@@ -520,6 +509,10 @@ def generate(out_dir: Path, cmake_file: Path) -> None:
         out_dir,
         env.get_template("source.cpp.j2"),
         env.get_template("runner.cpp.j2"),
+    )
+    remove_stale_sources(
+        out_dir,
+        {source for executable in executables for source in executable.sources},
     )
     cmake_file.parent.mkdir(parents=True, exist_ok=True)
     write_text_if_changed(

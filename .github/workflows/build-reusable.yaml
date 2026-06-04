@@ -9,6 +9,7 @@ on:
 
 env:
   BUILD_JOBS: ${{ vars.DINGO_BUILD_JOBS || '4' }}
+  CCACHE_MAX_SIZE: ${{ vars.DINGO_CCACHE_MAX_SIZE || '700M' }}
 
 jobs:
   linux:
@@ -18,24 +19,16 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - id: Debug
-            label: debug
+          # Debug builds are temporarily disabled to keep ccache pressure inside
+          # the repository cache budget.
+          # - id: Debug
+          #   label: debug
           - id: Release
             label: release
         compiler:
           - { CC: gcc-13, CXX: g++-13, STD: 17, SANITIZER: ON }
-          - { CC: gcc-13, CXX: g++-13, STD: 20, SANITIZER: ON }
-          - { CC: gcc-13, CXX: g++-13, STD: 23, SANITIZER: ON }
-          - { CC: gcc-14, CXX: g++-14, STD: 17, SANITIZER: ON }
-          - { CC: gcc-14, CXX: g++-14, STD: 20, SANITIZER: ON }
           - { CC: gcc-14, CXX: g++-14, STD: 23, SANITIZER: ON }
-          - { CC: gcc-14, CXX: g++-14, STD: 26, SANITIZER: ON }
-          - { CC: clang-18, CXX: clang++-18, STD: 17, SANITIZER: ON }
           - { CC: clang-18, CXX: clang++-18, STD: 20, SANITIZER: ON }
-          - { CC: clang-18, CXX: clang++-18, STD: 23, SANITIZER: ON }
-          - { CC: clang-19, CXX: clang++-19, STD: 17, SANITIZER: ON }
-          - { CC: clang-19, CXX: clang++-19, STD: 20, SANITIZER: ON }
-          - { CC: clang-19, CXX: clang++-19, STD: 23, SANITIZER: ON }
           - { CC: clang-19, CXX: clang++-19, STD: 26, SANITIZER: ON }
     runs-on: ubuntu-24.04
     steps:
@@ -80,8 +73,10 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - id: Debug
-            label: debug
+          # Debug builds are temporarily disabled to keep ccache pressure inside
+          # the repository cache budget.
+          # - id: Debug
+          #   label: debug
           - id: Release
             label: release
         compiler:
@@ -151,7 +146,7 @@ jobs:
             label: release
         compiler:
           - { CC: gcc-14, CXX: g++-14, STD: 23, SANITIZER: ON }
-          - { CC: clang-18, CXX: clang++-18, STD: 23, SANITIZER: ON }
+          - { CC: clang-18, CXX: clang++-18, STD: 20, SANITIZER: ON }
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout workflow repo
@@ -189,25 +184,39 @@ jobs:
           std: ${{ matrix.compiler.STD }}
 
   windows-x64:
-    name: ${{ matrix.vs.label }} / x64 / std-${{ matrix.std }} / ${{ matrix.config.label }}
+    name: ${{ matrix.vs_label }} / x64 / std-${{ matrix.std }} / ${{ matrix.config_label }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        config:
-          - id: Debug
-            label: debug
-          - id: Release
-            label: release
-        std: [17, 20, 23]
-        vs:
-          - label: vs2022
+        include:
+          # Debug builds are temporarily disabled to keep ccache pressure inside
+          # the repository cache budget.
+          # - vs_label: vs2022
+          #   config_id: Debug
+          #   config_label: debug
+          #   std: 17
+          #   runner: windows-2022
+          #   generator: Visual Studio 17 2022
+          - vs_label: vs2022
+            config_id: Release
+            config_label: release
+            std: 17
             runner: windows-2022
             generator: Visual Studio 17 2022
-          - label: vs2026
+          - vs_label: vs2022
+            config_id: Release
+            config_label: release
+            std: 20
+            runner: windows-2022
+            generator: Visual Studio 17 2022
+          - vs_label: vs2026
+            config_id: Release
+            config_label: release
+            std: 23
             runner: windows-2025-vs2026
             generator: Visual Studio 18 2026
-    runs-on: ${{ matrix.vs.runner }}
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Setup MSVC Developer Command Prompt
         uses: TheMrMilchmann/setup-msvc-dev@v4.0.0
@@ -240,9 +249,9 @@ jobs:
       - name: Run Windows build
         uses: ./.github/actions/windows-build
         with:
-          ccache_key: ${{ matrix.vs.label }}-x64-${{ matrix.config.id }}-${{ matrix.std }}
-          config_id: ${{ matrix.config.id }}
-          generator: ${{ matrix.vs.generator }}
+          ccache_key: ${{ matrix.vs_label }}-x64-${{ matrix.config_id }}-${{ matrix.std }}
+          config_id: ${{ matrix.config_id }}
+          generator: ${{ matrix.generator }}
           source_dir: ${{ env.SOURCE_DIR }}
           std: ${{ matrix.std }}
 
@@ -253,11 +262,13 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - id: Debug
-            label: debug
+          # Debug builds are temporarily disabled to keep ccache pressure inside
+          # the repository cache budget.
+          # - id: Debug
+          #   label: debug
           - id: Release
             label: release
-        std: [17, 20, 23]
+        std: [23]
     runs-on: windows-2025-vs2026
     steps:
       - name: Setup MSVC Developer Command Prompt
@@ -301,6 +312,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.22
         with:
           key: vs2026-arm64-${{ matrix.config.id }}-${{ matrix.std }}
+          max-size: ${{ env.CCACHE_MAX_SIZE }}
           evict-old-files: job
 
       - name: Configure
@@ -338,11 +350,13 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - id: Debug
-            label: debug
+          # Debug builds are temporarily disabled to keep ccache pressure inside
+          # the repository cache budget.
+          # - id: Debug
+          #   label: debug
           - id: Release
             label: release
-        std: [17, 20, 23]
+        std: [17]
     uses: ./.github/workflows/windows-arm64-leg.yaml
     with:
       source_artifact_name: ${{ inputs.source_artifact_name }}

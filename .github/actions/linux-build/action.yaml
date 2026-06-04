@@ -51,7 +51,7 @@ runs:
       with:
         key: ${{ inputs.ccache_key }}
         restore-keys: ${{ inputs.ccache_key }}
-        max-size: 1G
+        max-size: ${{ env.CCACHE_MAX_SIZE }}
         evict-old-files: job
     - name: Install Compiler
       if: ${{ inputs.container_image == '' }}
@@ -112,6 +112,11 @@ runs:
             command -v uv
             uv --version
 
+            echo "::group::Initial ccache stats"
+            ccache --show-stats --verbose
+            ccache --zero-stats
+            echo "::endgroup::"
+
             cmake -S "/workspace/${{ inputs.source_dir }}" \
               -B "/workspace/${{ inputs.build_dir }}" \
               -DDINGO_DEVELOPMENT_MODE=ON \
@@ -124,15 +129,24 @@ runs:
 
             cmake --build "/workspace/${{ inputs.build_dir }}" -j "$BUILD_JOBS"
 
+            echo "::group::Main build ccache stats"
+            ccache --show-stats --verbose
+            echo "::endgroup::"
+
             cd "/workspace/${{ inputs.build_dir }}"
             ASAN_OPTIONS=use_sigaltstack=false ctest --verbose --output-on-failure
 
             cmake -S "/workspace/${{ inputs.source_dir }}/test/fetchcontent" \
               -B "/workspace/${{ inputs.fetchcontent_dir }}" \
+              -DDINGO_CCACHE=ON \
               -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} \
               -DCMAKE_CXX_STANDARD=${{ inputs.std }}
 
             cmake --build "/workspace/${{ inputs.fetchcontent_dir }}" -j "$BUILD_JOBS"
+
+            echo "::group::Final ccache stats"
+            ccache --show-stats --verbose
+            echo "::endgroup::"
           '
     - name: Upload Failure Artifacts
       if: ${{ failure() }}
