@@ -101,41 +101,6 @@ template <typename... Args> struct dependencies<type_list<Args...>> {
 };
 
 namespace detail {
-template <typename Accumulated, typename Remaining> struct registration_type_list_unique;
-
-template <typename... Accumulated>
-struct registration_type_list_unique<type_list<Accumulated...>, type_list<>> {
-    using type = type_list<Accumulated...>;
-};
-
-template <typename T, typename List> struct registration_type_list_contains;
-
-template <typename T>
-struct registration_type_list_contains<T, type_list<>> : std::false_type {};
-
-template <typename T, typename Head, typename... Tail>
-struct registration_type_list_contains<T, type_list<Head, Tail...>>
-    : std::bool_constant<
-          std::is_same_v<T, Head> ||
-          registration_type_list_contains<T, type_list<Tail...>>::value> {};
-
-template <typename... Accumulated, typename Head, typename... Tail>
-struct registration_type_list_unique<type_list<Accumulated...>,
-                                     type_list<Head, Tail...>> {
-  private:
-    using next_accumulated = std::conditional_t<
-        registration_type_list_contains<Head, type_list<Accumulated...>>::value,
-        type_list<Accumulated...>, type_list<Accumulated..., Head>>;
-
-  public:
-    using type = typename registration_type_list_unique<
-        next_accumulated, type_list<Tail...>>::type;
-};
-
-template <typename List>
-using registration_type_list_unique_t =
-    typename registration_type_list_unique<type_list<>, List>::type;
-
 template <typename Type, typename = void> struct deduced_interface_types {
     using type = type_list<std::remove_cv_t<std::remove_reference_t<Type>>>;
 };
@@ -174,7 +139,7 @@ struct deduced_interface_types<
     };
 
   public:
-    using type = registration_type_list_unique_t<type_list_cat_t<
+    using type = type_list_unique_t<type_list_cat_t<
         type_list<value_type>,
         typename alternatives_interface_types<
             alternative_type_alternatives_t<value_type>>::type>>;

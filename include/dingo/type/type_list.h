@@ -61,6 +61,46 @@ struct type_list_head<type_list<Head, Tail...>> {
 template <typename List>
 using type_list_head_t = typename type_list_head<List>::type;
 
+template <typename T, typename List> struct type_list_contains;
+
+template <typename T>
+struct type_list_contains<T, type_list<>> : std::false_type {};
+
+template <typename T, typename Head, typename... Tail>
+struct type_list_contains<T, type_list<Head, Tail...>>
+    : std::bool_constant<std::is_same_v<T, Head> ||
+                         type_list_contains<T, type_list<Tail...>>::value> {};
+
+template <typename T, typename List>
+inline constexpr bool type_list_contains_v = type_list_contains<T, List>::value;
+
+namespace detail {
+template <typename Accumulated, typename Remaining>
+struct type_list_unique_impl;
+
+template <typename... Accumulated>
+struct type_list_unique_impl<type_list<Accumulated...>, type_list<>> {
+    using type = type_list<Accumulated...>;
+};
+
+template <typename... Accumulated, typename Head, typename... Tail>
+struct type_list_unique_impl<type_list<Accumulated...>,
+                             type_list<Head, Tail...>> {
+  private:
+    using next_accumulated = std::conditional_t<
+        type_list_contains_v<Head, type_list<Accumulated...>>,
+        type_list<Accumulated...>, type_list<Accumulated..., Head>>;
+
+  public:
+    using type = typename type_list_unique_impl<next_accumulated,
+                                                type_list<Tail...>>::type;
+};
+} // namespace detail
+
+template <typename List>
+using type_list_unique_t =
+    typename detail::type_list_unique_impl<type_list<>, List>::type;
+
 template <typename T> struct to_type_list {
     using type = T;
 };
