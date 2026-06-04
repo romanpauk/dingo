@@ -4,7 +4,7 @@ inputs:
   total-budget-mb:
     description: Total repository cache budget reserved for ccache archives.
     required: false
-    default: '5000'
+    default: '10000'
   expected-entries:
     description: Number of ccache archives the CI matrix should be able to retain.
     required: false

@@ -10,7 +10,7 @@ on:
 env:
   BUILD_JOBS: ${{ vars.DINGO_BUILD_JOBS || '4' }}
   DINGO_CCACHE_EXPECTED_ENTRIES: ${{ vars.DINGO_CCACHE_EXPECTED_ENTRIES || '100' }}
-  DINGO_CCACHE_TOTAL_MB: ${{ vars.DINGO_CCACHE_TOTAL_MB || '5000' }}
+  DINGO_CCACHE_TOTAL_MB: ${{ vars.DINGO_CCACHE_TOTAL_MB || '10000' }}
 
 jobs:
   linux:
@@ -70,7 +70,7 @@ jobs:
           key: ubuntu-24.04-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
           restore-keys: |
             ubuntu-24.04-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
-          max-size: 50M
+          max-size: 100M
           verbose: 1
           evict-old-files: job
 
@@ -153,7 +153,7 @@ jobs:
           key: ubuntu-25.04-image-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
           restore-keys: |
             ubuntu-25.04-image-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
-          max-size: 50M
+          max-size: 100M
           verbose: 1
           evict-old-files: job
 
@@ -219,7 +219,7 @@ jobs:
           key: ubuntu-24.04-arm-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
           restore-keys: |
             ubuntu-24.04-arm-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
-          max-size: 50M
+          max-size: 100M
           verbose: 1
           evict-old-files: job
 
@@ -296,7 +296,7 @@ jobs:
           key: ${{ matrix.vs.label }}-x64-${{ matrix.config.id }}-${{ matrix.std }}
           restore-keys: |
             ${{ matrix.vs.label }}-x64-${{ matrix.config.id }}-${{ matrix.std }}
-          max-size: 50M
+          max-size: 100M
           verbose: 1
           evict-old-files: job
 
@@ -373,7 +373,7 @@ jobs:
           key: vs2026-arm64-${{ matrix.config.id }}-${{ matrix.std }}
           restore-keys: |
             vs2026-arm64-${{ matrix.config.id }}-${{ matrix.std }}
-          max-size: 50M
+          max-size: 100M
           verbose: 1
           evict-old-files: job
 
