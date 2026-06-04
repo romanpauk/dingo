@@ -30,6 +30,7 @@ on:
 
 env:
   BUILD_JOBS: ${{ vars.DINGO_BUILD_JOBS || '4' }}
+  CCACHE_MAX_SIZE: ${{ vars.DINGO_CCACHE_MAX_SIZE || '700M' }}
 
 jobs:
   cross:
@@ -72,6 +73,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.22
         with:
           key: ${{ inputs.vs_label }}-arm64-${{ inputs.config_id }}-${{ inputs.std }}
+          max-size: ${{ env.CCACHE_MAX_SIZE }}
           evict-old-files: job
       - name: Configure
         shell: pwsh

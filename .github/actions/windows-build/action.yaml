@@ -40,6 +40,7 @@ runs:
       uses: hendrikmuhs/ccache-action@v1.2.22
       with:
         key: ${{ inputs.ccache_key }}
+        max-size: ${{ env.CCACHE_MAX_SIZE }}
         evict-old-files: job
     - name: Configure
       shell: pwsh

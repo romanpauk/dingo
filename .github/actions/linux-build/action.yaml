@@ -51,7 +51,7 @@ runs:
       with:
         key: ${{ inputs.ccache_key }}
         restore-keys: ${{ inputs.ccache_key }}
-        max-size: 1G
+        max-size: ${{ env.CCACHE_MAX_SIZE }}
         evict-old-files: job
     - name: Install Compiler
       if: ${{ inputs.container_image == '' }}
