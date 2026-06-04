@@ -379,28 +379,18 @@ class runtime_registry : public allocator_base<Allocator> {
 
     template <typename T, typename Fn, typename Key>
     T construct_collection_runtime_request(Fn&& fn, key<Key>) {
-        using collection_type = collection_traits<T>;
-        using resolve_type = typename collection_type::resolve_type;
-
-        static_assert(collection_type::is_collection,
-                      "missing collection_traits specialization for type T");
-
-        T results;
-        runtime_context context;
-        const std::size_t keyed_count = count_runtime_collection<T>(key<Key>{});
-        if (keyed_count == 0) {
-            throw detail::make_collection_type_not_found_exception<
-                T, resolve_type>();
-        }
-
-        collection_type::reserve(results, keyed_count);
-        append_runtime_collection(results, context, std::forward<Fn>(fn),
-                                  key<Key>{});
-        return results;
+        return construct_collection_runtime_request_impl<T, Key>(
+            std::forward<Fn>(fn));
     }
 
     template <typename T, typename Fn>
     T construct_collection_runtime_request(Fn&& fn, none_t) {
+        return construct_collection_runtime_request_impl<T, void>(
+            std::forward<Fn>(fn));
+    }
+
+    template <typename T, typename Key, typename Fn>
+    T construct_collection_runtime_request_impl(Fn&& fn) {
         using collection_type = collection_traits<T>;
         using resolve_type = typename collection_type::resolve_type;
 
@@ -409,7 +399,8 @@ class runtime_registry : public allocator_base<Allocator> {
 
         T results;
         runtime_context context;
-        const std::size_t count = count_runtime_collection<T>(none_t{});
+        const std::size_t count =
+            count_runtime_collection<T>(collection_key<Key>());
         if (count == 0) {
             throw detail::make_collection_type_not_found_exception<
                 T, resolve_type>();
@@ -417,7 +408,7 @@ class runtime_registry : public allocator_base<Allocator> {
 
         collection_type::reserve(results, count);
         append_runtime_collection(results, context, std::forward<Fn>(fn),
-                                  none_t{});
+                                  collection_key<Key>());
         return results;
     }
 
@@ -436,8 +427,7 @@ class runtime_registry : public allocator_base<Allocator> {
 
     template <typename Request, typename Key = void>
     detail::binding_selection_status binding_status() {
-        return binding_status_for_id<Request>(
-            std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>{});
+        return binding_status_for_id<Request>(collection_key<Key>());
     }
 
     template <typename Request, typename IdType>
@@ -460,31 +450,19 @@ class runtime_registry : public allocator_base<Allocator> {
     template <typename T, typename Key = void, typename Fn>
     std::size_t append_collection(T& results, runtime_context& context,
                                   Fn&& fn) {
-        if constexpr (std::is_void_v<Key>) {
-            return append_runtime_collection(results, context,
-                                             std::forward<Fn>(fn), none_t{});
-        } else {
-            return append_runtime_collection(results, context,
-                                             std::forward<Fn>(fn), key<Key>{});
-        }
+        return append_runtime_collection(results, context, std::forward<Fn>(fn),
+                                         collection_key<Key>());
     }
 
     template <typename T, typename Key = void> std::size_t count_collection() {
-        if constexpr (std::is_void_v<Key>) {
-            return count_runtime_collection<T>(none_t{});
-        } else {
-            return count_runtime_collection<T>(key<Key>{});
-        }
+        return count_runtime_collection<T>(collection_key<Key>());
     }
 
     template <typename T, bool RemoveRvalueReferences, typename Key = void,
               typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve_request(runtime_context& context) {
-        if constexpr (std::is_void_v<Key>) {
-            return resolve<T, RemoveRvalueReferences>(context, none_t{});
-        } else {
-            return resolve<T, RemoveRvalueReferences>(context, key<Key>{});
-        }
+        return resolve<T, RemoveRvalueReferences>(context,
+                                                  collection_key<Key>());
     }
 
     template <typename CachedT>
@@ -581,8 +559,15 @@ class runtime_registry : public allocator_base<Allocator> {
     using runtime_selection =
         detail::runtime_binding_selection<runtime_binding_interface_type,
                                           binding_cache_state*>;
+    template <typename Key>
+    using collection_key_t =
+        std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>;
 
   protected:
+    template <typename Key> static collection_key_t<Key> collection_key() {
+        return {};
+    }
+
     template <typename Request, typename IdType = none_t>
     runtime_selection runtime_source_select(IdType&& id = IdType()) {
         using exact_type =
@@ -670,16 +655,35 @@ class runtime_registry : public allocator_base<Allocator> {
         }
     }
 
-    template <typename T, typename Key, typename Fn>
-    std::size_t append_runtime_collection(T& results, runtime_context& context,
-                                          Fn&& fn, key<Key>) {
+    template <typename T> runtime_type_bindings* runtime_collection_bindings() {
         using collection_type = collection_traits<T>;
         using resolve_type = typename collection_type::resolve_type;
         using lookup_type = normalized_type_t<resolve_type>;
 
         auto* state = runtime_bindings_if_present();
-        auto data =
-            state ? state->type_bindings.template get<lookup_type>() : nullptr;
+        return state ? state->type_bindings.template get<lookup_type>()
+                     : nullptr;
+    }
+
+    template <typename Entry>
+    static bool runtime_collection_entry_matches(const Entry&, none_t) {
+        return true;
+    }
+
+    template <typename Entry, typename Key>
+    static bool runtime_collection_entry_matches(const Entry& entry, key<Key>) {
+        return entry.key_type &&
+               *entry.key_type ==
+                   rtti_type::template get_type_index<key<Key>>();
+    }
+
+    template <typename T, typename Fn, typename IdType>
+    std::size_t append_runtime_collection(T& results, runtime_context& context,
+                                          Fn&& fn, IdType id) {
+        using collection_type = collection_traits<T>;
+        using resolve_type = typename collection_type::resolve_type;
+
+        auto data = runtime_collection_bindings<T>();
         if (!data) {
             return 0;
         }
@@ -687,77 +691,35 @@ class runtime_registry : public allocator_base<Allocator> {
         std::size_t count = 0;
         for (auto&& p : data->bindings) {
             auto& entry = p.second;
-            if (entry.key_type &&
-                *entry.key_type ==
-                    rtti_type::template get_type_index<key<Key>>()) {
-                ++count;
-                fn(results, resolve_collection_type<resolve_type>(
-                                *entry.binding, context));
+            if (!runtime_collection_entry_matches(entry, id)) {
+                continue;
             }
-        }
-
-        return count;
-    }
-
-    template <typename T, typename Fn>
-    std::size_t append_runtime_collection(T& results, runtime_context& context,
-                                          Fn&& fn, none_t) {
-        using collection_type = collection_traits<T>;
-        using resolve_type = typename collection_type::resolve_type;
-        using lookup_type = normalized_type_t<resolve_type>;
-
-        auto* state = runtime_bindings_if_present();
-        auto data =
-            state ? state->type_bindings.template get<lookup_type>() : nullptr;
-        if (!data) {
-            return 0;
-        }
-
-        std::size_t count = 0;
-        for (auto&& p : data->bindings) {
             ++count;
-            fn(results, resolve_collection_type<resolve_type>(*p.second.binding,
-                                                              context));
+            fn(results,
+               resolve_collection_type<resolve_type>(*entry.binding, context));
         }
 
         return count;
     }
 
-    template <typename T, typename Key>
-    std::size_t count_runtime_collection(key<Key>) {
-        using collection_type = collection_traits<T>;
-        using resolve_type = typename collection_type::resolve_type;
-        using lookup_type = normalized_type_t<resolve_type>;
-
-        auto* state = runtime_bindings_if_present();
-        auto data =
-            state ? state->type_bindings.template get<lookup_type>() : nullptr;
+    template <typename T, typename IdType>
+    std::size_t count_runtime_collection(IdType id) {
+        auto data = runtime_collection_bindings<T>();
         if (!data) {
             return 0;
         }
 
+        if constexpr (is_none_v<std::decay_t<IdType>>) {
+            return data->bindings.size();
+        }
+
         std::size_t count = 0;
         for (auto&& p : data->bindings) {
-            auto& entry = p.second;
-            if (entry.key_type &&
-                *entry.key_type ==
-                    rtti_type::template get_type_index<key<Key>>()) {
+            if (runtime_collection_entry_matches(p.second, id)) {
                 ++count;
             }
         }
-
         return count;
-    }
-
-    template <typename T> std::size_t count_runtime_collection(none_t) {
-        using collection_type = collection_traits<T>;
-        using resolve_type = typename collection_type::resolve_type;
-        using lookup_type = normalized_type_t<resolve_type>;
-
-        auto* state = runtime_bindings_if_present();
-        auto data =
-            state ? state->type_bindings.template get<lookup_type>() : nullptr;
-        return data ? data->bindings.size() : 0;
     }
 
   private:
