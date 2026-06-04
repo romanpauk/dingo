@@ -80,7 +80,9 @@ jobs:
           - id: Release
             label: release
         compiler:
+          - { TOOLCHAIN: gcc-15, CC: gcc-15, CXX: g++-15, STD: 23, SANITIZER: ON }
           - { TOOLCHAIN: gcc-15, CC: gcc-15, CXX: g++-15, STD: 26, SANITIZER: ON }
+          - { TOOLCHAIN: clang-20, CC: clang-20, CXX: clang++-20, STD: 23, SANITIZER: ON }
           - { TOOLCHAIN: clang-20, CC: clang-20, CXX: clang++-20, STD: 26, SANITIZER: ON }
     runs-on: ubuntu-24.04
     steps:
