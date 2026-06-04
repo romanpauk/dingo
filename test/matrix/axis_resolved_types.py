@@ -1095,89 +1095,31 @@ RESOLVED_TYPES = (
         name="factory_function_value_ref",
         supported_exposed_types=frozenset({"factory_function_value"}),
         provides=frozenset({"resolved_concrete"}),
-        checks=(
-            (
-                "factory_override",
-                (
-                    "auto& resolved = container.template resolve<factory_function_value_type&>();",
-                    "ASSERT_EQ(resolved.value, 9);",
-                ),
-            ),
-        ),
     ),
     ResolvedType(
         name="factory_function_dependency_value_ref",
         supported_exposed_types=frozenset({"factory_function_dependency_value"}),
         provides=frozenset({"resolved_concrete"}),
-        checks=(
-            (
-                "factory_override",
-                (
-                    "auto& resolved = container.template resolve<factory_function_dependency_value_type&>();",
-                    "ASSERT_EQ(resolved.value, 39);",
-                ),
-            ),
-        ),
     ),
     ResolvedType(
         name="factory_constructor_value_ref",
         supported_exposed_types=frozenset({"factory_constructor_value"}),
         provides=frozenset({"resolved_concrete"}),
-        checks=(
-            (
-                "factory_override",
-                (
-                    "auto& resolved = container.template resolve<factory_constructor_value_type&>();",
-                    "ASSERT_EQ(resolved.value, 9);",
-                ),
-            ),
-        ),
     ),
     ResolvedType(
         name="factory_detected_constructor_value_ref",
         supported_exposed_types=frozenset({"factory_detected_constructor_value"}),
         provides=frozenset({"resolved_concrete"}),
-        checks=(
-            (
-                "factory_override",
-                (
-                    "auto& resolved = container.template resolve<factory_detected_constructor_value_type&>();",
-                    "ASSERT_EQ(resolved.value, 27);",
-                ),
-            ),
-        ),
     ),
     ResolvedType(
         name="factory_typedef_constructor_value_ref",
         supported_exposed_types=frozenset({"factory_typedef_constructor_value"}),
         provides=frozenset({"resolved_concrete"}),
-        checks=(
-            (
-                "factory_override",
-                (
-                    "auto& resolved = container.template resolve<factory_typedef_constructor_value_type&>();",
-                    "ASSERT_EQ(resolved.value, 33);",
-                ),
-            ),
-        ),
     ),
     ResolvedType(
         name="factory_callable_value_ref",
         supported_exposed_types=frozenset({"factory_callable_value"}),
         provides=frozenset({"resolved_concrete"}),
         supported_modes=frozenset({"runtime", "mixed"}),
-        checks=(
-            (
-                "factory_override",
-                (
-                    "auto& resolved = container.template resolve<factory_callable_value_type&>();",
-                    "ASSERT_EQ(resolved.value, 15);",
-                    "auto constructed = container.template construct<factory_callable_value_type>("
-                    "dingo::callable<factory_callable_value_type(value_type&)>("
-                    "factory_overloaded_callable{}));",
-                    "ASSERT_EQ(constructed.value, 21);",
-                ),
-            ),
-        ),
     ),
 )

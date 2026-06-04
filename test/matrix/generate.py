@@ -18,6 +18,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, Template
 from data import (
     CONTAINERS,
     EXPOSED_TYPES,
+    FEATURE_CASES,
     FILTER_RULES,
     REGISTRATION_MODES,
     RESOLVED_TYPES,
@@ -28,6 +29,7 @@ from schema import (
     ContainerSpec,
     ExposedType,
     Feature,
+    FeatureCaseSpec,
     RegistrationMode,
     ResolvedType,
     ScopeSpec,
@@ -45,6 +47,7 @@ from plugins import (
 @dataclass(frozen=True, slots=True)
 class CandidateRow:
     feature: Feature
+    feature_case: FeatureCaseSpec
     mode: RegistrationMode
     scope: ScopeSpec
     stored_type: StoredType
@@ -82,6 +85,7 @@ class GeneratedExecutable:
 
 @dataclass(frozen=True, slots=True)
 class AxisIndex:
+    feature_cases_by_feature: dict[str, tuple[FeatureCaseSpec, ...]]
     scopes: tuple[ScopeSpec, ...]
     stored_by_mode_scope: dict[tuple[str, str], tuple[StoredType, ...]]
     exposed_by_stored_kind: dict[str, tuple[ExposedType, ...]]
@@ -102,6 +106,25 @@ def index_axes() -> AxisIndex:
     exposed_types = implemented(EXPOSED_TYPES)
     resolved_types = implemented(RESOLVED_TYPES)
     containers = implemented(CONTAINERS)
+    feature_cases = implemented(FEATURE_CASES)
+
+    explicit_feature_cases: dict[str, list[FeatureCaseSpec]] = defaultdict(list)
+    for feature_case in feature_cases:
+        explicit_feature_cases[feature_case.feature].append(feature_case)
+
+    feature_cases_by_feature: dict[str, tuple[FeatureCaseSpec, ...]] = {}
+    for feature in implemented(tuple(plugin.feature for plugin in FEATURE_CASE_PLUGINS)):
+        feature_cases_by_feature[feature.name] = tuple(
+            explicit_feature_cases.get(
+                feature.name,
+                [
+                    FeatureCaseSpec(
+                        name="default",
+                        feature=feature.name,
+                    )
+                ],
+            )
+        )
 
     containers_by_mode: dict[str, tuple[ContainerSpec, ...]] = {}
     for mode in modes:
@@ -155,6 +178,7 @@ def index_axes() -> AxisIndex:
             )
 
     return AxisIndex(
+        feature_cases_by_feature=feature_cases_by_feature,
         scopes=scopes,
         stored_by_mode_scope=stored_by_mode_scope,
         exposed_by_stored_kind=exposed_by_stored_kind,
@@ -184,6 +208,7 @@ def generate_rows() -> tuple[MatrixRow, ...]:
 
     for feature_plugin in FEATURE_CASE_PLUGINS:
         feature = feature_plugin.feature
+        feature_cases = axes.feature_cases_by_feature[feature.name]
         for mode in REGISTRATION_MODES:
             if mode.name not in feature.modes:
                 rejected["feature_mode"] += 1
@@ -235,34 +260,59 @@ def generate_rows() -> tuple[MatrixRow, ...]:
                                     rejected["container_requires"] += 1
                                     continue
 
-                                candidate = CandidateRow(
-                                    feature=feature,
-                                    mode=mode,
-                                    scope=scope,
-                                    stored_type=stored_type,
-                                    exposed_type=exposed_type,
-                                    resolved_type=resolved_type,
-                                    container=container,
-                                )
-                                lines = feature_plugin.emit(candidate)
-                                if lines is None:
-                                    rejected["feature_has_check"] += 1
-                                    continue
+                                for feature_case in feature_cases:
+                                    if not feature_case.requires <= tags:
+                                        rejected["feature_case_requires_tags"] += 1
+                                        continue
+                                    if (
+                                        feature_case.supported_exposed_types
+                                        and exposed_type.name
+                                        not in feature_case.supported_exposed_types
+                                    ):
+                                        rejected[
+                                            "feature_case_supports_exposure"
+                                        ] += 1
+                                        continue
+                                    if (
+                                        feature_case.supported_resolved_types
+                                        and resolved_type.name
+                                        not in feature_case.supported_resolved_types
+                                    ):
+                                        rejected[
+                                            "feature_case_supports_resolution"
+                                        ] += 1
+                                        continue
 
-                                rows.append(
-                                    MatrixRow(
+                                    candidate = CandidateRow(
                                         feature=feature,
+                                        feature_case=feature_case,
                                         mode=mode,
                                         scope=scope,
                                         stored_type=stored_type,
                                         exposed_type=exposed_type,
                                         resolved_type=resolved_type,
                                         container=container,
-                                        plan=plan,
-                                        name=case_name(candidate),
-                                        lines=lines,
                                     )
-                                )
+                                    lines = feature_plugin.emit(candidate)
+                                    if lines is None:
+                                        rejected["feature_has_check"] += 1
+                                        continue
+
+                                    rows.append(
+                                        MatrixRow(
+                                            feature=feature,
+                                            feature_case=feature_case,
+                                            mode=mode,
+                                            scope=scope,
+                                            stored_type=stored_type,
+                                            exposed_type=exposed_type,
+                                            resolved_type=resolved_type,
+                                            container=container,
+                                            plan=plan,
+                                            name=case_name(candidate),
+                                            lines=lines,
+                                        )
+                                    )
 
     assert_coverage(rows, rejected)
     return tuple(rows)
@@ -318,6 +368,26 @@ def assert_coverage(rows: list[MatrixRow], rejected: dict[str, int]) -> None:
     assert_axis_used(
         row_tuple, "feature", {plugin.feature.name for plugin in FEATURE_CASE_PLUGINS}
     )
+    used_feature_cases = {
+        (row.feature_case.feature, row.feature_case.name)
+        for row in row_tuple
+        if row.feature_case.name != "default"
+    }
+    missing_feature_cases = sorted(
+        {
+            (feature_case.feature, feature_case.name)
+            for feature_case in implemented(FEATURE_CASES)
+        }
+        - used_feature_cases
+    )
+    if missing_feature_cases:
+        raise RuntimeError(
+            "matrix feature_case axis did not generate rows for: "
+            + ", ".join(
+                f"{feature} / {feature_case}"
+                for feature, feature_case in missing_feature_cases
+            )
+        )
     assert_axis_used(row_tuple, "mode", {mode.name for mode in REGISTRATION_MODES})
     assert_axis_used(
         row_tuple, "scope", {scope.name for scope in implemented(SCOPES)}
@@ -350,16 +420,17 @@ def assert_coverage(rows: list[MatrixRow], rejected: dict[str, int]) -> None:
 
 
 def case_name(row: CandidateRow) -> str:
-    return "_".join(
-        (
-            row.mode.name,
-            row.scope.name,
-            row.stored_type.id,
-            row.exposed_type.name,
-            row.resolved_type.name,
-            row.container.name,
-        )
-    )
+    parts = [
+        row.mode.name,
+        row.scope.name,
+        row.stored_type.id,
+        row.exposed_type.name,
+        row.resolved_type.name,
+    ]
+    if row.feature_case.name != "default":
+        parts.append(row.feature_case.name)
+    parts.append(row.container.name)
+    return "_".join(parts)
 
 
 def make_case(row: MatrixRow) -> GeneratedCase:
@@ -390,6 +461,7 @@ def make_case(row: MatrixRow) -> GeneratedCase:
             sorted(
                 {
                     *row.feature.system_headers,
+                    *row.feature_case.system_headers,
                     *row.stored_type.system_headers,
                     *row.exposed_type.system_headers,
                     *row.resolved_type.system_headers,
@@ -401,6 +473,7 @@ def make_case(row: MatrixRow) -> GeneratedCase:
             sorted(
                 {
                     *row.feature.support_headers,
+                    *row.feature_case.support_headers,
                     *row.stored_type.support_headers,
                     *row.exposed_type.support_headers,
                     *row.resolved_type.support_headers,
@@ -459,6 +532,17 @@ def executable_groups(rows: tuple[MatrixRow, ...]) -> dict[str, list[MatrixRow]]
     return grouped
 
 
+def source_groups(rows: list[MatrixRow]) -> dict[str, list[MatrixRow]]:
+    grouped: dict[str, list[MatrixRow]] = defaultdict(list)
+    for row in rows:
+        if row.feature_case.name == "default":
+            source_name = row.feature.name
+        else:
+            source_name = f"{row.feature.name}__{row.feature_case.name}"
+        grouped[source_name].append(row)
+    return grouped
+
+
 def generate_sources(
     rows: tuple[MatrixRow, ...],
     out_dir: Path,
@@ -467,20 +551,26 @@ def generate_sources(
 ) -> tuple[GeneratedExecutable, ...]:
     executables: list[GeneratedExecutable] = []
     for feature_name, feature_rows in executable_groups(rows).items():
-        source = render_source(
-            out_dir / f"{feature_name}.cpp",
-            feature_rows,
-            source_template,
-        )
-        runner = render_runner(
-            out_dir / f"matrix_runner_{feature_name}.cpp",
-            tuple(feature_rows),
-            runner_template,
-        )
+        sources: list[Path] = []
+        for source_name, source_rows in sorted(source_groups(feature_rows).items()):
+            sources.append(
+                render_source(
+                    out_dir / f"{source_name}.cpp",
+                    source_rows,
+                    source_template,
+                )
+            )
+            sources.append(
+                render_runner(
+                    out_dir / f"matrix_runner_{source_name}.cpp",
+                    tuple(source_rows),
+                    runner_template,
+                )
+            )
         executables.append(
             GeneratedExecutable(
                 name=executable_name(feature_name),
-                sources=(source, runner),
+                sources=tuple(sources),
             )
         )
 

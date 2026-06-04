@@ -39,6 +39,20 @@ are an output of axis selection.
 Negative compile-time checks stay in `test/lit`. The generated matrix covers
 valid behavior combinations.
 
+### Feature Case
+
+Most features use a single default case. Dispatch-heavy features use this axis
+to describe the behavior under test without hiding it in resolved-type checks.
+
+- `invoke`: inferred lambdas, explicit signatures, `std::function`, function
+  pointers, static member functions, member function pointers, mutable and
+  generic lambdas, ref-qualified and `noexcept` functors, move-only functors,
+  multi-argument callables, and `std::move_only_function` when available.
+- `factory_override`: no-argument function factories, function factories with
+  dependencies, explicit constructor factories, detected constructors,
+  `DINGO_CONSTRUCTOR` typedef constructors, callable registration factories,
+  and explicit callable construction.
+
 ### Registration Mode
 
 - `runtime`: registrations are added with `register_type<...>()`.
@@ -151,7 +165,7 @@ valid behavior combinations.
 
 The generator should form candidate rows from:
 
-`feature x registration_mode x scope x stored_type x exposed_type x resolved_type x container`
+`feature x feature_case x registration_mode x scope x stored_type x exposed_type x resolved_type x container`
 
 Then it should keep only rows that satisfy all rules below.
 
@@ -190,6 +204,7 @@ Then it should keep only rows that satisfy all rules below.
 The generator should fail if:
 
 - a feature produces no rows
+- an explicit feature case produces no rows
 - a registration mode produces no rows
 - a scope produces no rows
 - a stored type category produces no rows
@@ -206,11 +221,15 @@ valid generated row.
 
 ## Generated Sources
 
-Generated tests are split by:
+Generated test executables are split by feature. Implementation and runner
+sources are split by:
 
-`feature x registration_mode x container`
+`feature x feature_case`
 
-Each source file contains one valid slice of the matrix, for example
-`resolve_concrete_runtime_runtime_container.cpp`. The split keeps translation
-units tied to matrix meaning instead of arbitrary shard numbers, while limiting
-the amount of template-heavy container code compiled by one compiler process.
+Features with only the default case keep a single source and runner named after
+the feature. Dispatch-heavy features get one source and runner per case, for
+example `invoke__member_function_pointer.cpp` and
+`matrix_runner_invoke__member_function_pointer.cpp`. The split keeps
+translation units tied to matrix meaning instead of arbitrary shard numbers,
+while limiting the amount of template-heavy container and generated test code
+compiled by one compiler process.
