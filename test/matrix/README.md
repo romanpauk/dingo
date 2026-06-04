@@ -53,6 +53,10 @@ to describe the behavior under test without hiding it in resolved-type checks.
   `DINGO_CONSTRUCTOR` typedef constructors, callable registration factories,
   and explicit callable construction.
 
+Factory case entries own the registration factory expression for the behavior
+under test. The stored, exposed, and resolved type axes only select the C++
+fixture type needed by that case.
+
 ### Registration Mode
 
 - `runtime`: registrations are added with `register_type<...>()`.
@@ -228,8 +232,8 @@ sources are split by:
 
 Features with only the default case keep a single source and runner named after
 the feature. Dispatch-heavy features get one source and runner per case, for
-example `invoke__member_function_pointer.cpp` and
-`matrix_runner_invoke__member_function_pointer.cpp`. The split keeps
+example `invoke_member_function_pointer.cpp` and
+`matrix_runner_invoke_member_function_pointer.cpp`. The split keeps
 translation units tied to matrix meaning instead of arbitrary shard numbers,
 while limiting the amount of template-heavy container and generated test code
 compiled by one compiler process.

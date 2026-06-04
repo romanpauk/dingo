@@ -30,6 +30,7 @@ class FeatureCaseSpec:
     requires: frozenset[str] = frozenset()
     supported_exposed_types: frozenset[str] = frozenset()
     supported_resolved_types: frozenset[str] = frozenset()
+    registrations: tuple[RegistrationSpec, ...] = ()
     checks: tuple[str, ...] = ()
     system_headers: tuple[str, ...] = ()
     support_headers: tuple[str, ...] = ()

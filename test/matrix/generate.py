@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, Template
@@ -193,15 +193,23 @@ def generate_rows() -> tuple[MatrixRow, ...]:
     axes = index_axes()
     rejected = axes.rejected
     plan_cache: dict[
-        tuple[ScopeSpec, StoredType, ExposedType], RegistrationPlan
+        tuple[ScopeSpec, StoredType, ExposedType, FeatureCaseSpec], RegistrationPlan
     ] = {}
 
     def plan_for(
-        scope: ScopeSpec, stored_type: StoredType, exposed_type: ExposedType
+        scope: ScopeSpec,
+        stored_type: StoredType,
+        exposed_type: ExposedType,
+        feature_case: FeatureCaseSpec,
     ) -> RegistrationPlan:
-        key = (scope, stored_type, exposed_type)
+        key = (scope, stored_type, exposed_type, feature_case)
         plan = plan_cache.get(key)
         if plan is None:
+            if feature_case.registrations:
+                exposed_type = replace(
+                    exposed_type,
+                    registrations=feature_case.registrations,
+                )
             plan = REGISTRATION_PLUGIN.build(scope, stored_type, exposed_type)
             plan_cache[key] = plan
         return plan
@@ -227,20 +235,7 @@ def generate_rows() -> tuple[MatrixRow, ...]:
                         if not resolved_candidates:
                             continue
 
-                        plan: RegistrationPlan | None = None
                         for resolved_type in resolved_candidates:
-                            if plan is None:
-                                plan = plan_for(scope, stored_type, exposed_type)
-                            if mode.name == "static" and not plan.static_bindings:
-                                rejected["static_registration_plan"] += 1
-                                continue
-                            if (
-                                mode.name == "mixed"
-                                and plan.mixed_static_bindings is None
-                            ):
-                                rejected["mixed_registration_plan"] += 1
-                                continue
-
                             base_tags = frozenset({mode.name}) | (
                                 scope.provides
                                 | stored_type.provides
@@ -281,6 +276,22 @@ def generate_rows() -> tuple[MatrixRow, ...]:
                                         rejected[
                                             "feature_case_supports_resolution"
                                         ] += 1
+                                        continue
+
+                                    plan = plan_for(
+                                        scope,
+                                        stored_type,
+                                        exposed_type,
+                                        feature_case,
+                                    )
+                                    if mode.name == "static" and not plan.static_bindings:
+                                        rejected["static_registration_plan"] += 1
+                                        continue
+                                    if (
+                                        mode.name == "mixed"
+                                        and plan.mixed_static_bindings is None
+                                    ):
+                                        rejected["mixed_registration_plan"] += 1
                                         continue
 
                                     candidate = CandidateRow(
@@ -538,7 +549,7 @@ def source_groups(rows: list[MatrixRow]) -> dict[str, list[MatrixRow]]:
         if row.feature_case.name == "default":
             source_name = row.feature.name
         else:
-            source_name = f"{row.feature.name}__{row.feature_case.name}"
+            source_name = f"{row.feature.name}_{row.feature_case.name}"
         grouped[source_name].append(row)
     return grouped
 

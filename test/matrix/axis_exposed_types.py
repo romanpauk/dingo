@@ -292,11 +292,7 @@ EXPOSED_TYPES = (
         kind="factory_function_value_type",
         supported_stored_kinds=frozenset({"factory_function_value_type"}),
         provides=frozenset({"factory_override"}),
-        registrations=(
-            RegistrationSpec(
-                factory="dingo::factory<dingo::function<&factory_function_value_type::create>>"
-            ),
-        ),
+        registrations=(),
     ),
     ExposedType(
         name="factory_function_dependency_value",
@@ -305,61 +301,35 @@ EXPOSED_TYPES = (
             {"factory_function_dependency_value_type"}
         ),
         provides=frozenset({"factory_override"}),
-        registrations=(
-            RegistrationSpec(storage="dingo::storage<value_type>"),
-            RegistrationSpec(
-                factory="dingo::factory<dingo::function<&factory_function_dependency_value_type::create>>"
-            ),
-        ),
+        registrations=(),
     ),
     ExposedType(
         name="factory_constructor_value",
         kind="factory_constructor_value_type",
         supported_stored_kinds=frozenset({"factory_constructor_value_type"}),
         provides=frozenset({"factory_override"}),
-        registrations=(
-            RegistrationSpec(storage="dingo::storage<value_type>"),
-            RegistrationSpec(
-                factory="dingo::factory<dingo::constructor<factory_constructor_value_type(value_type&)>>"
-            ),
-        ),
+        registrations=(),
     ),
     ExposedType(
         name="factory_detected_constructor_value",
         kind="factory_detected_constructor_value_type",
         supported_stored_kinds=frozenset({"factory_detected_constructor_value_type"}),
         provides=frozenset({"factory_override"}),
-        registrations=(
-            RegistrationSpec(storage="dingo::storage<value_type>"),
-            RegistrationSpec(),
-        ),
+        registrations=(),
     ),
     ExposedType(
         name="factory_typedef_constructor_value",
         kind="factory_typedef_constructor_value_type",
         supported_stored_kinds=frozenset({"factory_typedef_constructor_value_type"}),
         provides=frozenset({"factory_override"}),
-        registrations=(
-            RegistrationSpec(storage="dingo::storage<value_type>"),
-            RegistrationSpec(),
-        ),
+        registrations=(),
     ),
     ExposedType(
         name="factory_callable_value",
         kind="factory_callable_value_type",
         supported_stored_kinds=frozenset({"factory_callable_value_type"}),
         provides=frozenset({"factory_override"}),
-        registrations=(
-            RegistrationSpec(storage="dingo::storage<value_type>"),
-            RegistrationSpec(
-                runtime_argument=(
-                    "dingo::callable([](value_type& dependency) { "
-                    "return factory_callable_value_type(dependency.marker() + 12); })"
-                ),
-                mixed="runtime",
-                static=False,
-            ),
-        ),
+        registrations=(),
     ),
     ExposedType(
         name="cycle_concrete",

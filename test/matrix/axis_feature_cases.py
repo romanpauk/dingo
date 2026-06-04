@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from schema import FeatureCaseSpec
+from schema import FeatureCaseSpec, RegistrationSpec
 
 
 VALUE_DEPENDENCY = frozenset({"direct_value_resolution", "stable_concrete_storage"})
@@ -167,6 +167,11 @@ FEATURE_CASES = (
         feature="factory_override",
         supported_exposed_types=frozenset({"factory_function_value"}),
         supported_resolved_types=frozenset({"factory_function_value_ref"}),
+        registrations=(
+            RegistrationSpec(
+                factory="dingo::factory<dingo::function<&factory_function_value_type::create>>"
+            ),
+        ),
         checks=(
             "auto& resolved = container.template resolve<factory_function_value_type&>();",
             "ASSERT_EQ(resolved.value, 9);",
@@ -177,6 +182,12 @@ FEATURE_CASES = (
         feature="factory_override",
         supported_exposed_types=frozenset({"factory_function_dependency_value"}),
         supported_resolved_types=frozenset({"factory_function_dependency_value_ref"}),
+        registrations=(
+            RegistrationSpec(storage="dingo::storage<value_type>"),
+            RegistrationSpec(
+                factory="dingo::factory<dingo::function<&factory_function_dependency_value_type::create>>"
+            ),
+        ),
         checks=(
             "auto& resolved = container.template resolve<factory_function_dependency_value_type&>();",
             "ASSERT_EQ(resolved.value, 39);",
@@ -187,6 +198,12 @@ FEATURE_CASES = (
         feature="factory_override",
         supported_exposed_types=frozenset({"factory_constructor_value"}),
         supported_resolved_types=frozenset({"factory_constructor_value_ref"}),
+        registrations=(
+            RegistrationSpec(storage="dingo::storage<value_type>"),
+            RegistrationSpec(
+                factory="dingo::factory<dingo::constructor<factory_constructor_value_type(value_type&)>>"
+            ),
+        ),
         checks=(
             "auto& resolved = container.template resolve<factory_constructor_value_type&>();",
             "ASSERT_EQ(resolved.value, 9);",
@@ -197,6 +214,10 @@ FEATURE_CASES = (
         feature="factory_override",
         supported_exposed_types=frozenset({"factory_detected_constructor_value"}),
         supported_resolved_types=frozenset({"factory_detected_constructor_value_ref"}),
+        registrations=(
+            RegistrationSpec(storage="dingo::storage<value_type>"),
+            RegistrationSpec(),
+        ),
         checks=(
             "auto& resolved = container.template resolve<factory_detected_constructor_value_type&>();",
             "ASSERT_EQ(resolved.value, 27);",
@@ -207,6 +228,10 @@ FEATURE_CASES = (
         feature="factory_override",
         supported_exposed_types=frozenset({"factory_typedef_constructor_value"}),
         supported_resolved_types=frozenset({"factory_typedef_constructor_value_ref"}),
+        registrations=(
+            RegistrationSpec(storage="dingo::storage<value_type>"),
+            RegistrationSpec(),
+        ),
         checks=(
             "auto& resolved = container.template resolve<factory_typedef_constructor_value_type&>();",
             "ASSERT_EQ(resolved.value, 33);",
@@ -217,6 +242,17 @@ FEATURE_CASES = (
         feature="factory_override",
         supported_exposed_types=frozenset({"factory_callable_value"}),
         supported_resolved_types=frozenset({"factory_callable_value_ref"}),
+        registrations=(
+            RegistrationSpec(storage="dingo::storage<value_type>"),
+            RegistrationSpec(
+                runtime_argument=(
+                    "dingo::callable([](value_type& dependency) { "
+                    "return factory_callable_value_type(dependency.marker() + 12); })"
+                ),
+                mixed="runtime",
+                static=False,
+            ),
+        ),
         checks=(
             "auto& resolved = container.template resolve<factory_callable_value_type&>();",
             "ASSERT_EQ(resolved.value, 15);",
@@ -227,6 +263,9 @@ FEATURE_CASES = (
         feature="factory_override",
         supported_exposed_types=frozenset({"factory_callable_value"}),
         supported_resolved_types=frozenset({"factory_callable_value_ref"}),
+        registrations=(
+            RegistrationSpec(storage="dingo::storage<value_type>"),
+        ),
         checks=(
             "auto constructed = container.template construct<factory_callable_value_type>("
             "dingo::callable<factory_callable_value_type(value_type&)>("
