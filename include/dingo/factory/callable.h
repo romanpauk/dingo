@@ -110,28 +110,75 @@ struct callable_signature<std::copyable_function<Signature>, void>
 
 template <typename Class, typename R, typename... Args>
 struct callable_signature<R (Class::*)(Args...), void>
-    : callable_signature<R(Args...)> {};
+    : callable_signature<R(Class&, Args...)> {};
 
 template <typename Class, typename R, typename... Args>
 struct callable_signature<R (Class::*)(Args...) noexcept, void>
+    : callable_signature<R(Class&, Args...) noexcept> {};
+
+template <typename T> struct callable_operator_signature;
+
+template <typename Class, typename R, typename... Args>
+struct callable_operator_signature<R (Class::*)(Args...)>
+    : callable_signature<R(Args...)> {};
+
+template <typename Class, typename R, typename... Args>
+struct callable_operator_signature<R (Class::*)(Args...) noexcept>
     : callable_signature<R(Args...) noexcept> {};
 
+#define DINGO_MEMBER_CALLABLE_SIGNATURE_VARIANTS(APPLY)                        \
+    APPLY(, &, Class&, )                                                       \
+    APPLY(, &, Class&, noexcept)                                               \
+    APPLY(, &&, Class&&, )                                                     \
+    APPLY(, &&, Class&&, noexcept)                                             \
+    APPLY(const, , const Class&, )                                             \
+    APPLY(const, , const Class&, noexcept)                                     \
+    APPLY(const, &, const Class&, )                                            \
+    APPLY(const, &, const Class&, noexcept)                                    \
+    APPLY(const, &&, const Class&&, )                                          \
+    APPLY(const, &&, const Class&&, noexcept)                                  \
+    APPLY(volatile, , volatile Class&, )                                       \
+    APPLY(volatile, , volatile Class&, noexcept)                               \
+    APPLY(volatile, &, volatile Class&, )                                      \
+    APPLY(volatile, &, volatile Class&, noexcept)                              \
+    APPLY(volatile, &&, volatile Class&&, )                                    \
+    APPLY(volatile, &&, volatile Class&&, noexcept)                            \
+    APPLY(const volatile, , const volatile Class&, )                           \
+    APPLY(const volatile, , const volatile Class&, noexcept)                   \
+    APPLY(const volatile, &, const volatile Class&, )                          \
+    APPLY(const volatile, &, const volatile Class&, noexcept)                  \
+    APPLY(const volatile, &&, const volatile Class&&, )                        \
+    APPLY(const volatile, &&, const volatile Class&&, noexcept)
+
 #define DINGO_DEFINE_MEMBER_CALLABLE_SIGNATURE(cv_qualifier, ref_qualifier,    \
+                                               object_type,                    \
                                                noexcept_qualifier)             \
     template <typename Class, typename R, typename... Args>                    \
     struct callable_signature<                                                 \
         R (Class::*)(Args...) cv_qualifier ref_qualifier noexcept_qualifier,   \
-        void> : callable_signature<R(Args...) noexcept_qualifier> {};
+        void> : callable_signature<R(object_type, Args...) noexcept_qualifier> {};
 
-DINGO_CALLABLE_SIGNATURE_VARIANTS(DINGO_DEFINE_MEMBER_CALLABLE_SIGNATURE)
+DINGO_MEMBER_CALLABLE_SIGNATURE_VARIANTS(DINGO_DEFINE_MEMBER_CALLABLE_SIGNATURE)
 
 #undef DINGO_DEFINE_MEMBER_CALLABLE_SIGNATURE
+#undef DINGO_MEMBER_CALLABLE_SIGNATURE_VARIANTS
+
+#define DINGO_DEFINE_CALLABLE_OPERATOR_SIGNATURE(cv_qualifier, ref_qualifier,  \
+                                                noexcept_qualifier)            \
+    template <typename Class, typename R, typename... Args>                    \
+    struct callable_operator_signature<                                        \
+        R (Class::*)(Args...) cv_qualifier ref_qualifier noexcept_qualifier>   \
+        : callable_signature<R(Args...) noexcept_qualifier> {};
+
+DINGO_CALLABLE_SIGNATURE_VARIANTS(DINGO_DEFINE_CALLABLE_OPERATOR_SIGNATURE)
+
+#undef DINGO_DEFINE_CALLABLE_OPERATOR_SIGNATURE
 #undef DINGO_CALLABLE_SIGNATURE_VARIANTS
 
 template <typename T>
 struct callable_signature<T,
                           std::void_t<decltype(&remove_cvref_t<T>::operator())>>
-    : callable_signature<decltype(&remove_cvref_t<T>::operator())> {};
+    : callable_operator_signature<decltype(&remove_cvref_t<T>::operator())> {};
 
 template <typename T>
 using callable_signature_t =
