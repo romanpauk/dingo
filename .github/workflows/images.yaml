@@ -1,4 +1,4 @@
-name: toolchain-images
+name: images
 permissions:
   contents: read
 env:
@@ -13,7 +13,7 @@ on:
       - docker/ubuntu25-toolchains/**
       - .github/actions/linux-build/action.yaml
       - .github/workflows/build-reusable.yaml
-      - .github/workflows/toolchain-images.yaml
+      - .github/workflows/images.yaml
   push:
     branches:
       - master
@@ -21,7 +21,7 @@ on:
       - docker/ubuntu25-toolchains/**
       - .github/actions/linux-build/action.yaml
       - .github/workflows/build-reusable.yaml
-      - .github/workflows/toolchain-images.yaml
+      - .github/workflows/images.yaml
 
 jobs:
   linux-toolchain-smoke:
