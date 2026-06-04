@@ -71,93 +71,97 @@ struct combined_storage_types {
     using rvalue_reference_types =
         type_list_cat_t<typename AccessTraits::rvalue_reference_types,
                         typename ResolutionTraits::rvalue_reference_types>;
-    using pointer_types = type_list_cat_t<typename AccessTraits::pointer_types,
-                                          typename ResolutionTraits::pointer_types>;
+    using pointer_types =
+        type_list_cat_t<typename AccessTraits::pointer_types,
+                        typename ResolutionTraits::pointer_types>;
     using conversion_types =
         type_list_cat_t<typename AccessTraits::conversion_types,
                         typename ResolutionTraits::conversion_types>;
 };
 
-template <typename T, typename List> struct type_list_contains_distinct;
+template <typename T>
+using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
+
+template <typename T, typename List> struct has_distinct_conversion_type;
 
 template <typename T>
-struct type_list_contains_distinct<T, type_list<>> : std::false_type {};
+struct has_distinct_conversion_type<T, type_list<>> : std::false_type {};
 
 template <typename T, typename Head, typename... Tail>
-struct type_list_contains_distinct<T, type_list<Head, Tail...>>
+struct has_distinct_conversion_type<T, type_list<Head, Tail...>>
     : std::bool_constant<
-          !std::is_same_v<T, std::remove_cv_t<std::remove_reference_t<Head>>> ||
-          type_list_contains_distinct<T, type_list<Tail...>>::value> {};
+          !std::is_same_v<T, remove_cvref_t<Head>> ||
+          has_distinct_conversion_type<T, type_list<Tail...>>::value> {};
 
 template <typename T, typename List>
-inline constexpr bool type_list_contains_distinct_v =
-    type_list_contains_distinct<T, List>::value;
+inline constexpr bool has_distinct_conversion_type_v =
+    has_distinct_conversion_type<T, List>::value;
 
-template <typename T, typename List> struct type_list_max_distinct_size;
+template <typename T, typename List> struct max_distinct_conversion_size;
 
 template <typename T>
-struct type_list_max_distinct_size<T, type_list<>>
+struct max_distinct_conversion_size<T, type_list<>>
     : std::integral_constant<std::size_t, 0> {};
 
 template <typename T, typename Head, typename... Tail>
-struct type_list_max_distinct_size<T, type_list<Head, Tail...>>
+struct max_distinct_conversion_size<T, type_list<Head, Tail...>>
     : std::integral_constant<
           std::size_t,
-          !std::is_same_v<T, std::remove_cv_t<std::remove_reference_t<Head>>>
-              ? (sizeof(std::remove_cv_t<std::remove_reference_t<Head>>) >
-                         type_list_max_distinct_size<T,
-                                                     type_list<Tail...>>::value
-                     ? sizeof(std::remove_cv_t<std::remove_reference_t<Head>>)
-                     : type_list_max_distinct_size<T,
-                                                   type_list<Tail...>>::value)
-              : type_list_max_distinct_size<T, type_list<Tail...>>::value> {};
-
-template <typename T, typename List>
-inline constexpr std::size_t type_list_max_distinct_size_v =
-    type_list_max_distinct_size<T, List>::value;
-
-template <typename T, typename List> struct type_list_max_distinct_align;
-
-template <typename T>
-struct type_list_max_distinct_align<T, type_list<>>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename T, typename Head, typename... Tail>
-struct type_list_max_distinct_align<T, type_list<Head, Tail...>>
-    : std::integral_constant<
-          std::size_t,
-          !std::is_same_v<T, std::remove_cv_t<std::remove_reference_t<Head>>>
-              ? (alignof(std::remove_cv_t<std::remove_reference_t<Head>>) >
-                         type_list_max_distinct_align<T,
+          !std::is_same_v<T, remove_cvref_t<Head>>
+              ? (sizeof(remove_cvref_t<Head>) >
+                         max_distinct_conversion_size<T,
                                                       type_list<Tail...>>::value
-                     ? alignof(std::remove_cv_t<std::remove_reference_t<Head>>)
-                     : type_list_max_distinct_align<T,
+                     ? sizeof(remove_cvref_t<Head>)
+                     : max_distinct_conversion_size<T,
                                                     type_list<Tail...>>::value)
-              : type_list_max_distinct_align<T, type_list<Tail...>>::value> {};
+              : max_distinct_conversion_size<T, type_list<Tail...>>::value> {};
 
 template <typename T, typename List>
-inline constexpr std::size_t type_list_max_distinct_align_v =
-    type_list_max_distinct_align<T, List>::value;
+inline constexpr std::size_t max_distinct_conversion_size_v =
+    max_distinct_conversion_size<T, List>::value;
 
-template <typename T, typename List>
-struct type_list_has_nontrivial_distinct_destructor;
+template <typename T, typename List> struct max_distinct_conversion_align;
 
 template <typename T>
-struct type_list_has_nontrivial_distinct_destructor<T, type_list<>>
+struct max_distinct_conversion_align<T, type_list<>>
+    : std::integral_constant<std::size_t, 0> {};
+
+template <typename T, typename Head, typename... Tail>
+struct max_distinct_conversion_align<T, type_list<Head, Tail...>>
+    : std::integral_constant<
+          std::size_t,
+          !std::is_same_v<T, remove_cvref_t<Head>>
+              ? (alignof(remove_cvref_t<Head>) >
+                         max_distinct_conversion_align<
+                             T, type_list<Tail...>>::value
+                     ? alignof(remove_cvref_t<Head>)
+                     : max_distinct_conversion_align<T,
+                                                     type_list<Tail...>>::value)
+              : max_distinct_conversion_align<T, type_list<Tail...>>::value> {};
+
+template <typename T, typename List>
+inline constexpr std::size_t max_distinct_conversion_align_v =
+    max_distinct_conversion_align<T, List>::value;
+
+template <typename T, typename List>
+struct has_nontrivial_distinct_conversion_destructor;
+
+template <typename T>
+struct has_nontrivial_distinct_conversion_destructor<T, type_list<>>
     : std::false_type {};
 
 template <typename T, typename Head, typename... Tail>
-struct type_list_has_nontrivial_distinct_destructor<T, type_list<Head, Tail...>>
+struct has_nontrivial_distinct_conversion_destructor<T,
+                                                     type_list<Head, Tail...>>
     : std::bool_constant<
-          (!std::is_same_v<T, std::remove_cv_t<std::remove_reference_t<Head>>> &&
-           !std::is_trivially_destructible_v<
-               std::remove_cv_t<std::remove_reference_t<Head>>>) ||
-          type_list_has_nontrivial_distinct_destructor<
+          (!std::is_same_v<T, remove_cvref_t<Head>> &&
+           !std::is_trivially_destructible_v<remove_cvref_t<Head>>) ||
+          has_nontrivial_distinct_conversion_destructor<
               T, type_list<Tail...>>::value> {};
 
 template <typename T, typename List>
-inline constexpr bool type_list_has_nontrivial_distinct_destructor_v =
-    type_list_has_nontrivial_distinct_destructor<T, List>::value;
+inline constexpr bool has_nontrivial_distinct_conversion_destructor_v =
+    has_nontrivial_distinct_conversion_destructor<T, List>::value;
 
 template <typename Storage, typename = void>
 struct static_conversion_temporary_slots_base
@@ -272,39 +276,34 @@ template <typename StorageTag, typename Type, typename U>
 struct type_storage_traits<
     StorageTag, Type, U,
     std::enable_if_t<storage_traits<StorageTag, Type, U>::enabled>>
-    : detail::combined_storage_types<
-          storage_traits<StorageTag, Type, U>,
-          resolution_traits<StorageTag, Type, U>> {
+    : detail::combined_storage_types<storage_traits<StorageTag, Type, U>,
+                                     resolution_traits<StorageTag, Type, U>> {
   private:
-    using combined_types = detail::combined_storage_types<
-        storage_traits<StorageTag, Type, U>,
-        resolution_traits<StorageTag, Type, U>>;
+    using combined_types =
+        detail::combined_storage_types<storage_traits<StorageTag, Type, U>,
+                                       resolution_traits<StorageTag, Type, U>>;
 
   public:
     static constexpr bool is_stable =
         storage_traits<StorageTag, Type, U>::is_stable;
     static constexpr std::size_t static_conversion_temporary_slots =
-        detail::type_list_contains_distinct_v<
-            Type,
-            typename combined_types::conversion_types> &&
+        detail::has_distinct_conversion_type_v<
+            Type, typename combined_types::conversion_types> &&
                 !is_stable
             ? 1
             : 0;
     static constexpr std::size_t static_conversion_temporary_size =
-        !is_stable
-            ? detail::type_list_max_distinct_size_v<
-                  Type, typename combined_types::conversion_types>
-            : 0;
+        !is_stable ? detail::max_distinct_conversion_size_v<
+                         Type, typename combined_types::conversion_types>
+                   : 0;
     static constexpr std::size_t static_conversion_temporary_align =
-        !is_stable
-            ? detail::type_list_max_distinct_align_v<
-                  Type, typename combined_types::conversion_types>
-            : 0;
+        !is_stable ? detail::max_distinct_conversion_align_v<
+                         Type, typename combined_types::conversion_types>
+                   : 0;
     static constexpr std::size_t static_conversion_destructible_slots =
-            !is_stable &&
-                    detail::type_list_has_nontrivial_distinct_destructor_v<
-                        Type, typename combined_types::conversion_types>
-                ? 1
-                : 0;
+        !is_stable && detail::has_nontrivial_distinct_conversion_destructor_v<
+                          Type, typename combined_types::conversion_types>
+            ? 1
+            : 0;
 };
 } // namespace dingo
