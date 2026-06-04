@@ -34,46 +34,6 @@ using binding_dependencies_t = typename BindingModel::dependencies_type::type;
 
 template <typename...> inline constexpr bool dependent_false_v = false;
 
-template <typename T, typename List> struct binding_type_list_contains;
-
-template <typename T>
-struct binding_type_list_contains<T, type_list<>> : std::false_type {};
-
-template <typename T, typename Head, typename... Tail>
-struct binding_type_list_contains<T, type_list<Head, Tail...>>
-    : std::bool_constant<
-          std::is_same_v<T, Head> ||
-          binding_type_list_contains<T, type_list<Tail...>>::value> {};
-
-template <typename T, typename List>
-inline constexpr bool binding_type_list_contains_v =
-    binding_type_list_contains<T, List>::value;
-
-template <typename Accumulated, typename Remaining>
-struct type_list_unique_impl;
-
-template <typename... Accumulated>
-struct type_list_unique_impl<type_list<Accumulated...>, type_list<>> {
-    using type = type_list<Accumulated...>;
-};
-
-template <typename... Accumulated, typename Head, typename... Tail>
-struct type_list_unique_impl<type_list<Accumulated...>,
-                             type_list<Head, Tail...>> {
-  private:
-    using next_accumulated = std::conditional_t<
-        binding_type_list_contains_v<Head, type_list<Accumulated...>>,
-        type_list<Accumulated...>, type_list<Accumulated..., Head>>;
-
-  public:
-    using type = typename type_list_unique_impl<next_accumulated,
-                                                type_list<Tail...>>::type;
-};
-
-template <typename List>
-using type_list_unique_t =
-    typename type_list_unique_impl<type_list<>, List>::type;
-
 template <typename Head, typename List> struct type_list_prepend;
 
 template <typename Head, typename... Tail>

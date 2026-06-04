@@ -55,19 +55,6 @@ template <typename DependencyBindings>
 using filter_resolved_dependency_bindings_t =
     typename filter_resolved_dependency_bindings<DependencyBindings>::type;
 
-template <typename T, typename List> struct type_list_contains;
-
-template <typename T>
-struct type_list_contains<T, type_list<>> : std::false_type {};
-
-template <typename T, typename Head, typename... Tail>
-struct type_list_contains<T, type_list<Head, Tail...>>
-    : std::bool_constant<std::is_same_v<T, Head> ||
-                         type_list_contains<T, type_list<Tail...>>::value> {};
-
-template <typename T, typename List>
-inline constexpr bool type_list_contains_v = type_list_contains<T, List>::value;
-
 template <typename InterfaceBinding, typename StaticRegistry,
           bool RuntimeDependencies = false>
 struct static_graph_node {
