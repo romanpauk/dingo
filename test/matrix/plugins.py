@@ -16,6 +16,7 @@ from data import FEATURES
 from schema import (
     ExposedType,
     Feature,
+    FeatureCaseSpec,
     RegistrationSpec,
     ResolvedType,
     ScopeSpec,
@@ -25,6 +26,7 @@ from schema import (
 
 class CheckRow(Protocol):
     feature: Feature
+    feature_case: FeatureCaseSpec
     mode: object
     scope: ScopeSpec
     stored_type: StoredType
@@ -58,6 +60,13 @@ class ResolvedTypeCheckPlugin:
         if lines is None:
             return None
         return CaseLines(check=lines)
+
+
+class FeatureCaseCheckPlugin:
+    def emit(self, row: CheckRow) -> CaseLines | None:
+        if row.feature_case.checks:
+            return CaseLines(check=row.feature_case.checks)
+        return None
 
 
 class FeatureCheckPlugin:
@@ -246,6 +255,7 @@ def plugins_for(feature: Feature) -> tuple[CheckPlugin, ...]:
     if feature.name == "lifetime_counts":
         return (LifetimeCountCheckPlugin(),)
     return (
+        FeatureCaseCheckPlugin(),
         ResolvedTypeCheckPlugin(),
         FeatureCheckPlugin(),
     )

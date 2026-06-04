@@ -24,6 +24,20 @@ class Feature:
 
 
 @dataclass(frozen=True, slots=True)
+class FeatureCaseSpec:
+    name: str
+    feature: str
+    requires: frozenset[str] = frozenset()
+    supported_exposed_types: frozenset[str] = frozenset()
+    supported_resolved_types: frozenset[str] = frozenset()
+    registrations: tuple[RegistrationSpec, ...] = ()
+    checks: tuple[str, ...] = ()
+    system_headers: tuple[str, ...] = ()
+    support_headers: tuple[str, ...] = ()
+    implemented: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class RegistrationMode:
     name: str
 

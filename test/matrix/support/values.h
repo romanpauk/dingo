@@ -10,6 +10,7 @@
 #include <dingo/core/keyed.h>
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -159,6 +160,60 @@ struct dependent_type {
         : value(dependency.marker()) {}
 
     int value;
+};
+
+struct overloaded_invoker {
+    int operator()(value_type& dependency) const {
+        return dependency.marker() + 42;
+    }
+
+    int operator()(int value) const { return value + 100; }
+};
+
+inline int free_function_invoke(value_type& dependency) {
+    return dependency.marker() + 54;
+}
+
+inline int noexcept_function_invoke(value_type& dependency) noexcept {
+    return dependency.marker() + 60;
+}
+
+struct member_function_invoker {
+    static int invoke(value_type& dependency) {
+        return dependency.marker() + 66;
+    }
+};
+
+struct lvalue_ref_qualified_invoker {
+    int operator()(value_type& dependency) & {
+        return dependency.marker() + 72;
+    }
+};
+
+struct rvalue_ref_qualified_invoker {
+    int operator()(value_type& dependency) && {
+        return dependency.marker() + 78;
+    }
+};
+
+struct noexcept_invoker {
+    int operator()(value_type& dependency) const noexcept {
+        return dependency.marker() + 84;
+    }
+};
+
+struct move_only_invoker {
+    move_only_invoker() : offset(std::make_unique<int>(90)) {}
+    move_only_invoker(const move_only_invoker&) = delete;
+    move_only_invoker& operator=(const move_only_invoker&) = delete;
+    move_only_invoker(move_only_invoker&&) noexcept = default;
+    move_only_invoker& operator=(move_only_invoker&&) noexcept = default;
+
+    int operator()(value_type& dependency) const {
+        return dependency.marker() + *offset;
+    }
+
+    std::unique_ptr<int> offset;
 };
 
 struct keyed_value_dependency_type {

@@ -125,10 +125,6 @@ FEATURES = (
         name="invoke",
         requires=frozenset({"invokable_dependency"}),
         modes=frozenset({"runtime", "static", "mixed"}),
-        checks=(
-            "auto invoked = container.invoke([](value_type& dependency) { return dependency.marker(); });",
-            "ASSERT_EQ(invoked, 3);",
-        ),
     ),
     Feature(
         name="construct_collection",
