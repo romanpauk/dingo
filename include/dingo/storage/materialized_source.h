@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/core/config.h>
+#include <dingo/memory/object_lifetime.h>
 
 #include <cstddef>
 #include <memory>
@@ -17,17 +18,6 @@
 
 namespace dingo {
 namespace detail {
-template <typename Type>
-void destroy_rvalue_source_value(Type& value) {
-    if constexpr (std::is_array_v<Type>) {
-        for (size_t i = std::extent_v<Type>; i > 0; --i) {
-            destroy_rvalue_source_value(value[i - 1]);
-        }
-    } else if constexpr (!std::is_trivially_destructible_v<Type>) {
-        value.~Type();
-    }
-}
-
 template <typename Source> class rvalue_source {
   public:
     using value_type = Source;
@@ -55,7 +45,7 @@ template <typename Source> class rvalue_source {
 
     ~rvalue_source() {
         if (initialized_) {
-            destroy_rvalue_source_value(get());
+            destroy_object_value(get());
         }
     }
 

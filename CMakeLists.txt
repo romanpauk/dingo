@@ -119,6 +119,7 @@ if(DINGO_DEVELOPMENT_MODE)
         memory/aligned_storage.h
         memory/allocator.h
         memory/arena_allocator.h
+        memory/object_lifetime.h
         memory/static_allocator.h
         registration/annotated.h
         registration/collection_traits.h

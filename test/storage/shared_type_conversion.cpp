@@ -7,10 +7,12 @@
 
 #include <dingo/core/exceptions.h>
 #include <dingo/resolution/type_conversion.h>
+#include <dingo/storage/shared.h>
 
 #include <gtest/gtest.h>
 
 #include <variant>
+#include <vector>
 
 namespace dingo {
 namespace {
@@ -41,6 +43,27 @@ struct converter_pointer_factory {
 };
 
 struct converter_context {};
+
+struct destructor_order_value {
+    destructor_order_value(int init, std::vector<int>& target_order)
+        : value(init), order(&target_order) {}
+    ~destructor_order_value() { order->push_back(value); }
+
+    int value;
+    std::vector<int>* order;
+};
+
+struct destructor_order_array_factory {
+    std::vector<int>* order;
+
+    template <typename Type, typename Context, typename Container>
+    void construct(void* ptr, Context&, Container&) {
+        auto* values = reinterpret_cast<Type*>(ptr);
+        for (int i = 0; i != 3; ++i) {
+            new (&(*values)[i]) destructor_order_value(i, *order);
+        }
+    }
+};
 } // namespace
 
 TEST(type_conversion_test,
@@ -72,5 +95,36 @@ TEST(type_conversion_test,
             describe_type<
                 std::variant<converter_variant_a, converter_variant_b>*>())),
         type_not_convertible_exception);
+}
+
+TEST(type_conversion_test, rvalue_source_destroys_materialized_value) {
+    std::vector<int> order;
+
+    {
+        auto source = detail::make_rvalue_source<destructor_order_value>(
+            std::in_place,
+            [&](void* ptr) { new (ptr) destructor_order_value(0, order); });
+        (void)source;
+    }
+
+    ASSERT_EQ(order, (std::vector<int>{0}));
+}
+
+TEST(type_conversion_test,
+     shared_fixed_array_storage_reset_destroys_elements_in_reverse_order) {
+    std::vector<int> order;
+    using array_type = destructor_order_value[3];
+    using storage_type =
+        detail::storage<shared, array_type, array_type,
+                        destructor_order_array_factory,
+                        detail::conversions<shared, array_type, array_type>>;
+    converter_context context;
+    converter_context container;
+
+    storage_type storage(destructor_order_array_factory{&order});
+    storage.resolve(context, container);
+    storage.reset();
+
+    ASSERT_EQ(order, (std::vector<int>{2, 1, 0}));
 }
 } // namespace dingo
