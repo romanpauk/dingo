@@ -3,7 +3,8 @@
 #include <dingo/type/type_traits.h>
 
 int main() {
-    [[maybe_unused]] auto values = dingo::detail::make_dynamic_array<int>();
+    auto values = dingo::detail::make_dynamic_array<int>();
+    (void)values;
 }
 
 // CHECK: dynamic arrays require an explicit size via a custom factory or element initializers

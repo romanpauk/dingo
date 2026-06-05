@@ -28,8 +28,9 @@ The public entry points are:
 
 Below that API, the runtime registration path owns:
 
-- the factory registry (`type_factories_`)
-- the resolved-instance cache (`type_cache_`)
+- runtime binding state (`runtime_binding_state`)
+- per-type binding maps (`runtime_type_bindings::bindings`)
+- the resolved-instance cache (`runtime_binding_state::type_cache`)
 - parent lookup for nested containers
 - the public registration and resolution entry points
 
@@ -102,7 +103,7 @@ The shared runtime/static binding and resolution kernel now lives under
 - `binding_model.h`
 - `binding_selection.h`
 - `binding_resolution.h`
-- `binding_resolution.h`
+- `binding_resolution_policy.h`
 
 Runtime and static implementation code sits under:
 

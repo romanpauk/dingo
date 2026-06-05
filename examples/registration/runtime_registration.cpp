@@ -7,46 +7,56 @@
 
 #include <dingo/container.h>
 #include <dingo/storage/shared.h>
+#include <dingo/storage/unique.h>
 
 #include <cassert>
 #include <memory>
 
 ////
-class config {
+class settings {
   public:
-    int retries() const { return retries_; }
+    int seed() const { return seed_; }
 
   private:
-    int retries_ = 3;
+    int seed_ = 7;
 };
 
-struct service_interface {
-    virtual ~service_interface() {}
-    virtual int retries() const = 0;
+struct cache {
+    explicit cache(settings& cfg) : seed(cfg.seed()) {}
+
+    int seed;
 };
 
-struct service : service_interface {
-    explicit service(config& cfg) : cfg_(cfg) {}
+struct job {
+    job(settings& cfg, cache& shared_cache)
+        : total(cfg.seed() + shared_cache.seed) {}
 
-    int retries() const override { return cfg_.retries(); }
+    int total;
+};
 
-  private:
-    config& cfg_;
+struct report {
+    report(settings& cfg, job transient_job)
+        : total(cfg.seed() + transient_job.total) {}
+
+    int total;
 };
 
 void runtime_registration_example() {
     using namespace dingo;
     container<> container;
 
-    container.register_type<scope<shared>, storage<config>>();
-    container.register_type<scope<shared>, storage<std::shared_ptr<service>>,
-                            interfaces<service_interface>>();
+    container.register_type<scope<shared>, storage<std::shared_ptr<settings>>>();
+    container.register_type<scope<shared>, storage<std::unique_ptr<cache>>>();
+    container.register_type<scope<unique>, storage<job>>();
 
-    assert(container.resolve<service_interface&>().retries() == 3);
-    assert(container.resolve<service_interface*>()->retries() == 3);
-    assert(
-        container.resolve<std::shared_ptr<service_interface>&>()->retries() ==
-        3);
+    [[maybe_unused]] auto& cfg = container.resolve<settings&>();
+    [[maybe_unused]] auto& cfg_handle =
+        container.resolve<std::shared_ptr<settings>&>();
+    assert(&cfg == cfg_handle.get());
+
+    assert(container.resolve<cache*>()->seed == 7);
+    assert(container.resolve<job>().total == 14);
+    assert(container.construct<report>().total == 21);
 }
 ////
 

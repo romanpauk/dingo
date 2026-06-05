@@ -39,6 +39,7 @@ int main() {
         std::string("cat"));
 
     // Resolve an instance of a dog
-    /*auto dog =*/container.template resolve<IAnimal>(std::string("dog"));
+    auto dog = container.template resolve<IAnimal>(std::string("dog"));
     ////
+    (void)dog;
 }

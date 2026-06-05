@@ -9,7 +9,8 @@ struct ambiguous_type {
 
 int main() {
     dingo::container<> container;
-    [[maybe_unused]] auto value = container.construct<ambiguous_type>();
+    auto value = container.construct<ambiguous_type>();
+    (void)value;
 }
 
 // CHECK: class T construction not detected or ambiguous

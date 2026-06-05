@@ -34,11 +34,16 @@ int main() {
     container.register_type<scope<external>, storage<int>>(2);
     ////
     // Construct instance of B, injecting shared instance of A
-    /*B b1 =*/container.invoke([&](A& a) { return B{a}; });
-    /*B b2 =*/container.invoke(
-        std::function<B(A&)>([](auto& a) { return B{a}; }));
-    /*B b3 =*/container.invoke(B::factory);
+    B b1 = container.invoke([&](A& a) { return B{a}; });
+    B b2 = container.invoke(std::function<B(A&)>([](auto& a) {
+        return B{a};
+    }));
+    B b3 = container.invoke(B::factory);
     // Use an explicit signature to disambiguate overloaded call operators.
-    /*B b4 =*/container.invoke<B(A&)>(overloaded_factory{});
+    B b4 = container.invoke<B(A&)>(overloaded_factory{});
     ////
+    (void)b1;
+    (void)b2;
+    (void)b3;
+    (void)b4;
 }

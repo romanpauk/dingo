@@ -11,8 +11,9 @@ using source = dingo::bindings<
                 dingo::factory<decltype(factory)>>>;
 using registry_type = typename source::type;
 
-[[maybe_unused]] registry_type instance;
-
-int main() {}
+int main() {
+    registry_type instance;
+    (void)instance;
+}
 
 // CHECK: bindings<...> source requires compile-time-bindable factories
