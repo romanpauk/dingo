@@ -219,7 +219,7 @@ Runtime registration makes sense when:
 Compile-time bindings make sense when:
 
 - the participating types are known and stable at compile time
-- missing dependencies and cycles should fail during compilation
+- missing dependencies and unsupported cycles should fail during compilation
 - lookup should avoid mutable runtime registration state
 
 See:
@@ -338,8 +338,9 @@ Some resolution details are easy to miss:
 - runtime registration errors surface as exceptions during resolution, while
   compile-time bindings can diagnose declared graph errors during compilation
 - shared resolutions can act as a cache for already-built objects
-- `shared_cyclical` supports cycles through two-phase construction and should be
-  treated as a constrained escape hatch rather than the default model
+- `shared_cyclical` supports runtime and static cycles through two-phase
+  construction and should be treated as a constrained escape hatch rather than
+  the default model
 
 For a first pass through the project, read [Getting Started](getting-started.md)
 and [Core Concepts](core-concepts.md) first.

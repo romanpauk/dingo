@@ -164,10 +164,11 @@ not try to model the full C++ overload-resolution space, which is why ambiguous,
 policy-sensitive, or readability-critical cases should move to an explicit
 factory.
 
-`container<bindings<...>>` also applies compile-time cycle rejection to
-statically known static cycles, while mixed runtime/static recursion that only
-appears during actual construction is still rejected at runtime by the recursion
-guard.
+`container<bindings<...>>` also checks statically known static cycles at compile
+time. Ordinary static cycles are rejected; cycles where every participating
+binding uses `scope<shared_cyclical>` are allowed through the static binding
+path. Mixed runtime/static recursion that only appears during actual
+construction is still rejected at runtime by the recursion guard.
 
 ## Good Source Companions
 

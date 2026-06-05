@@ -493,7 +493,6 @@ STORED_TYPES = (
         storage="dingo::storage<cycle_a_type>",
         supported_scopes=frozenset({"shared_cyclical"}),
         provides=frozenset({"stored_value", "cycle_graph"}),
-        supported_modes=frozenset({"runtime"}),
         support_headers=VALUE_HEADERS,
     ),
     StoredType(

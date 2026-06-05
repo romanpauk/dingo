@@ -155,8 +155,8 @@ class static_container_impl<static_registry<Registrations...>, ParentContainer>
     static_assert(static_source_type::valid,
                   "static_container requires a valid compile-time bindings "
                   "source");
-    static_assert(graph_type_::acyclic,
-                  "static_container requires an acyclic compile-time binding "
+    static_assert(graph_type_::resolvable,
+                  "static_container requires a resolvable compile-time binding "
                   "graph");
     static_assert((binding_factory_is_default_constructible<
                        binding_model<Registrations>>::value &&

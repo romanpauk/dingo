@@ -36,7 +36,8 @@ container<static_bindings> compile_time_container;
 
 Runtime registration is mutable container configuration. Compile-time bindings
 are part of the container type and can include `dependencies<...>` for static
-graph checks before the program runs.
+graph checks before the program runs. Static cycles are rejected unless every
+binding in the cycle uses `scope<shared_cyclical>`.
 
 <!-- { include("../examples/registration/non_intrusive.cpp", scope="////") -->
 
@@ -701,8 +702,8 @@ See:
 Dingo supports both runtime registrations and compile-time bindings. Runtime
 registration keeps cross-module usage practical, but wiring errors on that path
 surface as exceptions during resolution. Compile-time bindings move the declared
-graph into the type system, so missing static dependencies and static cycles can
-be diagnosed at compile time.
+graph into the type system, so missing static dependencies and unsupported
+static cycles can be diagnosed at compile time.
 
 When user code throws during resolution, the container remains in a valid state.
 Already completed shared resolutions may stay cached, because resolution is a
