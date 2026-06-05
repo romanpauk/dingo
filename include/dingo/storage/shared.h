@@ -11,6 +11,7 @@
 
 #include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
+#include <dingo/memory/object_lifetime.h>
 #include <dingo/storage/resettable.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
@@ -189,17 +190,6 @@ namespace detail {
 template <typename Type, typename U> struct conversions<shared, Type, U>
     : type_storage_traits<shared, Type, U> {};
 
-template <typename Type>
-void destroy_array_value(Type& value) {
-    if constexpr (std::is_array_v<Type>) {
-        for (size_t i = std::extent_v<Type>; i > 0; --i) {
-            destroy_array_value(value[i - 1]);
-        }
-    } else if constexpr (!std::is_trivially_destructible_v<Type>) {
-        value.~Type();
-    }
-}
-
 template <typename Type, typename Factory>
 struct storage_instance_base : Factory {
     template <typename... Args>
@@ -351,12 +341,7 @@ class storage_instance<shared, Type[N], StoredType, Factory>
             return;
         }
 
-        if constexpr (std::is_array_v<Type> ||
-                      !std::is_trivially_destructible_v<Type>) {
-            for (size_t i = N; i > 0; --i) {
-                destroy_array_value((*get_array())[i - 1]);
-            }
-        }
+        destroy_object_value(*get_array());
         initialized_ = false;
     }
 
