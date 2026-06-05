@@ -235,7 +235,12 @@ See:
 
 Containers can form a parent-child hierarchy. Resolution walks from the child
 toward the parent chain, which allows local overrides on top of broader shared
-configuration.
+configuration. Runtime-only containers use `container<> child(&parent)`. Mixed
+static/runtime containers use `container<bindings<...>, Parent>` and construct
+the child with `child(&parent)`. Purely static containers use
+`static_container<bindings<...>, Parent>` the same way. Static bindings in the
+child can resolve missing dependencies from the parent's static or runtime
+graph.
 
 Nesting is most useful for:
 

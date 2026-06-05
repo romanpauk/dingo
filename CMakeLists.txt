@@ -283,6 +283,7 @@ if(DINGO_DEVELOPMENT_MODE)
             test/index/index.cpp
             test/registration/binding_graph.cpp
             test/registration/static_bindings_source.cpp
+            test/registration/static_parent_container.cpp
             test/registration/type_registration.cpp
             test/storage/shared_type_conversion.cpp
             test/container/construct_common.h

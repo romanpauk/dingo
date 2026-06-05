@@ -113,7 +113,7 @@ PROBE_LIMITS = {
     },
     "probe_static_resolution_mixed_container_interface_handle": {
         "default": 0x200,
-        "clang": 0x250,
+        "clang": 0x260,
         "gcc_arm64": 0x360,
     },
     "probe_runtime_resolution_interface_handle": {

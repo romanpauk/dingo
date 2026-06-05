@@ -43,12 +43,14 @@ CONTAINERS = (
         name="static_container",
         modes=frozenset({"static"}),
         container_type="dingo::static_container<static_bindings>",
+        provides=frozenset({"static_parent_static_child"}),
         support_headers=("matrix/support/static_containers.h",),
     ),
     container(
         name="container_static",
         modes=frozenset({"static"}),
         container_type="dingo::container<static_bindings>",
+        provides=frozenset({"static_parent_container_child"}),
         support_headers=("matrix/support/container_containers.h",),
     ),
     container(

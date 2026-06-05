@@ -16,6 +16,11 @@
 #include <type_traits>
 #include <utility>
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+
 namespace dingo {
 namespace detail {
 template <typename Source> class rvalue_source {
@@ -227,3 +232,7 @@ pointer_source<Source> make_resolved_source(Source* source) {
 
 } // namespace detail
 } // namespace dingo
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif

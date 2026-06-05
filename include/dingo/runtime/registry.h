@@ -44,7 +44,8 @@
 namespace dingo {
 namespace detail {
 
-template <typename StaticRegistry> class container_with_static_bindings;
+template <typename StaticRegistry, typename ParentContainer>
+class container_with_static_bindings;
 
 } // namespace detail
 
@@ -53,7 +54,8 @@ template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
 class runtime_registry : public allocator_base<Allocator> {
     friend class runtime_context;
     template <typename, typename> friend class detail::binding_resolution;
-    template <typename> friend class detail::container_with_static_bindings;
+    template <typename, typename>
+    friend class detail::container_with_static_bindings;
     template <typename, typename, bool, typename>
     friend struct detail::runtime_selected_binding_source;
     template <typename, typename, bool, bool, typename>
