@@ -18,6 +18,35 @@
 
 using namespace dingo;
 
+namespace {
+struct same_conversion_storage_tag {};
+struct larger_conversion_storage_tag {};
+} // namespace
+
+template <typename Type, typename U>
+struct dingo::storage_traits<same_conversion_storage_tag, Type, U> {
+    static constexpr bool enabled = true;
+    static constexpr bool is_stable = false;
+
+    using value_types = type_list<Type>;
+    using lvalue_reference_types = type_list<>;
+    using rvalue_reference_types = type_list<>;
+    using pointer_types = type_list<>;
+    using conversion_types = type_list<Type>;
+};
+
+template <typename Type, typename U>
+struct dingo::storage_traits<larger_conversion_storage_tag, Type, U> {
+    static constexpr bool enabled = true;
+    static constexpr bool is_stable = false;
+
+    using value_types = type_list<Type>;
+    using lvalue_reference_types = type_list<>;
+    using rvalue_reference_types = type_list<>;
+    using pointer_types = type_list<>;
+    using conversion_types = type_list<U>;
+};
+
 TEST(static_graph_test, exposes_dependency_nodes_and_topological_order) {
     struct config {};
     struct service_interface {
@@ -147,35 +176,57 @@ TEST(static_execution_traits_test,
     struct payload {
         ~payload() {}
     };
+    struct larger_payload {
+        alignas(16) char bytes[32];
+    };
 
     using unique_value_storage = detail::conversions<unique, payload, payload>;
+    using unique_same_value_storage =
+        type_storage_traits<same_conversion_storage_tag, payload, payload>;
+    using unique_larger_value_storage =
+        type_storage_traits<larger_conversion_storage_tag, payload,
+                            larger_payload>;
     using unique_handle_storage =
         detail::conversions<unique, std::shared_ptr<payload>, payload>;
     using shared_handle_storage =
         detail::conversions<shared, std::shared_ptr<payload>, payload>;
 
+    static_assert(unique_value_storage::static_conversion_temporary_slots == 1);
+    static_assert(unique_value_storage::static_conversion_destructible_slots ==
+                  1);
+    static_assert(unique_value_storage::static_conversion_temporary_size ==
+                  sizeof(std::optional<payload>));
+    static_assert(unique_value_storage::static_conversion_temporary_align ==
+                  alignof(std::optional<payload>));
     static_assert(
-        unique_value_storage::static_conversion_temporary_slots == 1);
+        unique_same_value_storage::static_conversion_temporary_slots == 0);
     static_assert(
-        unique_value_storage::static_conversion_destructible_slots == 1);
+        unique_same_value_storage::static_conversion_destructible_slots == 0);
+    static_assert(unique_same_value_storage::static_conversion_temporary_size ==
+                  0);
     static_assert(
-        unique_value_storage::static_conversion_temporary_size ==
-        sizeof(std::optional<payload>));
+        unique_same_value_storage::static_conversion_temporary_align == 0);
     static_assert(
-        unique_value_storage::static_conversion_temporary_align ==
-        alignof(std::optional<payload>));
+        unique_larger_value_storage::static_conversion_temporary_slots == 1);
     static_assert(
-        unique_handle_storage::static_conversion_temporary_slots == 0);
+        unique_larger_value_storage::static_conversion_destructible_slots == 0);
     static_assert(
-        unique_handle_storage::static_conversion_destructible_slots == 0);
+        unique_larger_value_storage::static_conversion_temporary_size ==
+        sizeof(larger_payload));
     static_assert(
-        unique_handle_storage::static_conversion_temporary_size == 0);
-    static_assert(
-        unique_handle_storage::static_conversion_temporary_align == 0);
-    static_assert(
-        shared_handle_storage::static_conversion_temporary_slots == 0);
-    static_assert(
-        shared_handle_storage::static_conversion_destructible_slots == 0);
+        unique_larger_value_storage::static_conversion_temporary_align ==
+        alignof(larger_payload));
+    static_assert(unique_handle_storage::static_conversion_temporary_slots ==
+                  0);
+    static_assert(unique_handle_storage::static_conversion_destructible_slots ==
+                  0);
+    static_assert(unique_handle_storage::static_conversion_temporary_size == 0);
+    static_assert(unique_handle_storage::static_conversion_temporary_align ==
+                  0);
+    static_assert(shared_handle_storage::static_conversion_temporary_slots ==
+                  0);
+    static_assert(shared_handle_storage::static_conversion_destructible_slots ==
+                  0);
     static_assert(
         shared_handle_storage::static_conversion_temporary_size == 0);
     static_assert(
