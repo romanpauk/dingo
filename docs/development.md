@@ -47,6 +47,33 @@ features, registration modes, scopes, stored types, exposed types, resolved
 types, and container shapes, then filters invalid combinations before emitting
 GoogleTest sources.
 
+## Code Size Tests
+
+The lit suite also contains code-generation probes in
+[`test/lit/codegen-static-probes.cpp`](../test/lit/codegen-static-probes.cpp).
+They compile representative static and runtime resolution paths, inspect symbol
+sizes with `nm`, and inspect selected tiny static probes with `objdump`.
+
+The checks are implemented by
+[`test/lit/check_codegen_probe_sizes.py`](../test/lit/check_codegen_probe_sizes.py)
+and
+[`test/lit/check_codegen_probe_instructions.py`](../test/lit/check_codegen_probe_instructions.py).
+Run them through the normal lit test target:
+
+```bash
+ctest --test-dir build --output-on-failure -R dingo_lit_tests
+```
+
+## Compile-Time Profiling
+
+For template compile-cost investigations, use
+[`time-trace`](https://github.com/romanpauk/time-trace). It wraps a direct Clang
+compile, reads Clang's time-trace JSON, and writes synthetic `perf.data` that
+can be inspected with normal `perf` commands.
+
+This is useful when a registration or resolution change affects compile time and
+the expensive template instantiations need to be identified directly.
+
 ## Container Images
 
 The CI toolchain images are documented under

@@ -8,50 +8,60 @@
 #include <dingo/container.h>
 #include <dingo/static_container.h>
 #include <dingo/storage/shared.h>
+#include <dingo/storage/unique.h>
 
 #include <cassert>
 #include <memory>
 
 ////
-class config {
+class settings {
   public:
-    int retries() const { return retries_; }
+    int seed() const { return seed_; }
 
   private:
-    int retries_ = 3;
+    int seed_ = 7;
 };
 
-struct service_interface {
-    virtual ~service_interface() {}
-    virtual int retries() const = 0;
+struct cache {
+    explicit cache(settings& cfg) : seed(cfg.seed()) {}
+
+    int seed;
 };
 
-struct service : service_interface {
-    explicit service(config& cfg) : cfg_(cfg) {}
+struct job {
+    job(settings& cfg, cache& shared_cache)
+        : total(cfg.seed() + shared_cache.seed) {}
 
-    int retries() const override { return cfg_.retries(); }
+    int total;
+};
 
-  private:
-    config& cfg_;
+struct report {
+    report(settings& cfg, job transient_job)
+        : total(cfg.seed() + transient_job.total) {}
+
+    int total;
 };
 
 void compile_time_registration_example() {
     using namespace dingo;
     using app_bindings = dingo::bindings<
-        dingo::bind<scope<shared>, storage<config>>,
-        dingo::bind<scope<shared>, storage<std::shared_ptr<service>>,
-                    interfaces<service_interface>>>;
+        dingo::bind<scope<shared>, storage<std::shared_ptr<settings>>>,
+        dingo::bind<scope<shared>, storage<std::unique_ptr<cache>>>,
+        dingo::bind<scope<unique>, storage<job>>>;
 
     container<app_bindings> container;
 
-    assert(container.resolve<service_interface&>().retries() == 3);
-    assert(container.resolve<service_interface*>()->retries() == 3);
-    assert(
-        container.resolve<std::shared_ptr<service_interface>&>()->retries() ==
-        3);
+    [[maybe_unused]] auto& cfg = container.resolve<settings&>();
+    [[maybe_unused]] auto& cfg_handle =
+        container.resolve<std::shared_ptr<settings>&>();
+    assert(&cfg == cfg_handle.get());
+
+    assert(container.resolve<cache*>()->seed == 7);
+    assert(container.resolve<job>().total == 14);
+    assert(container.construct<report>().total == 21);
 
     static_container<app_bindings> static_only;
-    assert(static_only.resolve<service_interface&>().retries() == 3);
+    assert(static_only.resolve<job>().total == 14);
 }
 ////
 

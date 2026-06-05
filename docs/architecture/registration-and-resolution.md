@@ -14,8 +14,8 @@ The public API starts at `container::register_type<...>()` in
 1. It builds a complete `type_registration<...>` from the supplied policies.
 2. It computes the stored type, including the interface-storage rewrite
    optimization for the single-interface virtual-destructor case.
-3. It allocates one or more factories and inserts them into the container's
-   factory map.
+3. It allocates one or more runtime bindings and inserts them into the per-type
+   binding map.
 
 `type_registration<...>` in
 [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
@@ -127,8 +127,8 @@ If a match is found, the factory produces the source object and
 converts it to the requested shape.
 
 The static path uses the same binding model and conversion rules, but it selects
-from a validated compile-time binding source instead of a mutable runtime
-factory map.
+from a validated compile-time binding source instead of mutable runtime binding
+state.
 
 ## Local `bindings<...>` Overlays
 

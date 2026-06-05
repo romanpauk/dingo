@@ -12,8 +12,9 @@ struct service {
 using source =
     dingo::bindings<dingo::bind<dingo::scope<dingo::unique>, dingo::storage<service>>>;
 
-[[maybe_unused]] dingo::static_container<source> instance;
-
-int main() {}
+int main() {
+    dingo::static_container<source> instance;
+    (void)instance;
+}
 
 // CHECK: {{(bindings<...> source requires every inferred constructor dependency to map to an interface binding|static_container requires an acyclic compile-time binding graph)}}

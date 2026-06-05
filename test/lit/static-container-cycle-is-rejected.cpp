@@ -12,8 +12,9 @@ using source =
                     dingo::bind<dingo::scope<dingo::shared>, dingo::storage<b>,
                                 dingo::dependencies<a&>>>;
 
-[[maybe_unused]] dingo::static_container<source> instance;
-
-int main() {}
+int main() {
+    dingo::static_container<source> instance;
+    (void)instance;
+}
 
 // CHECK: static_container requires an acyclic compile-time binding graph

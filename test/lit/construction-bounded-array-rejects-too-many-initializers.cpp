@@ -3,8 +3,8 @@
 #include <dingo/factory/constructor_traits.h>
 
 int main() {
-    [[maybe_unused]] auto values =
-        dingo::constructor_traits<int[2]>::construct(1, 2, 3);
+    auto values = dingo::constructor_traits<int[2]>::construct(1, 2, 3);
+    (void)values;
 }
 
 // CHECK: too many initializers for bounded array construction

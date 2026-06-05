@@ -57,6 +57,7 @@ struct ProcessorB : IProcessor {
 int main() {
     using namespace dingo;
 
+////
     // Define traits type with a single index using size_t as a key,
     // backed by a std::array of size 10
     struct container_traits : static_container_traits<void> {
@@ -91,4 +92,5 @@ int main() {
         container.template resolve<std::shared_ptr<IProcessor>>(msg.id())
             ->process(msg);
     }
+////
 }

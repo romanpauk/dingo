@@ -78,15 +78,3 @@ wrapper form.
 The current implementation is intentionally narrow: the conversions object is
 closer to an expanded variant of cached conversion instances than to a general
 conversion graph.
-
-## Typical Customization Flow
-
-If a request fails to resolve unexpectedly, inspect the layers in this order:
-
-1. Does `storage_traits` expose the requested result shape?
-2. Does the wrapper define the right borrow/reset/rebind semantics in
-   `type_traits`?
-3. Does `type_conversion` already have a generic rule for this pair?
-4. If not, should `type_conversion_traits` bridge the two wrapper types?
-
-That sequence usually leads to the real missing piece quickly.

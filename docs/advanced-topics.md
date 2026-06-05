@@ -20,10 +20,7 @@ Built-in index backends:
 - `std::unordered_map`
 - `std::array`
 
-<!-- { include("../examples/index/index.cpp", scope="////", summary="Indexed resolution example") -->
-
-<details>
-<summary>Indexed resolution example</summary>
+<!-- { include("../examples/index/index.cpp", scope="////") -->
 
 Example code included from
 [../examples/index/index.cpp](../examples/index/index.cpp):
@@ -50,16 +47,12 @@ container.template register_indexed_type<
     scope<shared>, storage<Cat>, interfaces<IAnimal>>(std::string("cat"));
 
 // Resolve an instance of a dog
-/*auto dog =*/container.template resolve<IAnimal>(std::string("dog"));
+auto dog = container.template resolve<IAnimal>(std::string("dog"));
 ```
 
-</details>
 <!-- } -->
 
-<!-- { include("../examples/index/message_processing.cpp", scope="////", summary="Indexed message dispatch example") -->
-
-<details>
-<summary>Indexed message dispatch example</summary>
+<!-- { include("../examples/index/message_processing.cpp", scope="////") -->
 
 Example code included from
 [../examples/index/message_processing.cpp](../examples/index/message_processing.cpp):
@@ -104,15 +97,47 @@ struct ProcessorB : IProcessor {
     ProcessorB(RepositoryB&) {}
     void process(const MessageWrapper& message) override { message.GetB(); }
 };
+
+// Define traits type with a single index using size_t as a key,
+// backed by a std::array of size 10
+struct container_traits : static_container_traits<void> {
+    using index_definition_type =
+        std::tuple<std::tuple<size_t, index_type::array<10>>>;
+};
+
+container<container_traits> container;
+
+// Register processors into the container, indexed by the type they process
+container
+    .register_indexed_type<scope<shared>, storage<std::shared_ptr<ProcessorA>>,
+                           interfaces<IProcessor>>(size_t(1));
+container
+    .register_indexed_type<scope<unique>, storage<std::shared_ptr<ProcessorB>>,
+                           interfaces<IProcessor>>(size_t(2));
+
+// Register repositories used by the processors
+container.register_type<scope<shared>, storage<RepositoryA>>();
+container.register_type<scope<shared>, storage<RepositoryB>>();
+
+// Invokes the processor for MessageA that is stateful
+{
+    MessageWrapper msg((MessageA{1}));
+    container.template resolve<std::shared_ptr<IProcessor>>(msg.id())->process(
+        msg);
+}
+
+// Invokes the processor for MessageB that is stateless
+{
+    MessageWrapper msg((MessageB{1.1f}));
+    container.template resolve<std::shared_ptr<IProcessor>>(msg.id())->process(
+        msg);
+}
 ```
 
-</details>
 <!-- } -->
 
 See:
 
-- [examples/index/index.cpp](../examples/index/index.cpp)
-- [examples/index/message_processing.cpp](../examples/index/message_processing.cpp)
 - [include/dingo/index/index.h](../include/dingo/index/index.h)
 - [include/dingo/index/map.h](../include/dingo/index/map.h)
 - [include/dingo/index/unordered_map.h](../include/dingo/index/unordered_map.h)
@@ -125,6 +150,45 @@ disambiguate them with a tag type.
 
 Use annotations when type-based registration is not enough but runtime key
 lookup would be the wrong abstraction.
+
+<!-- { include("../examples/registration/annotated.cpp", scope="////") -->
+
+Example code included from
+[../examples/registration/annotated.cpp](../examples/registration/annotated.cpp):
+
+```c++
+struct primary_tag {};
+struct replica_tag {};
+
+struct database {
+    int id;
+};
+
+struct repository {
+    repository(dingo::annotated<database&, primary_tag> primary_db,
+               dingo::annotated<database&, replica_tag> replica_db)
+        : primary(primary_db), replica(replica_db) {}
+
+    database& primary;
+    database& replica;
+};
+
+database primary{1};
+database replica{2};
+container<> container;
+
+container.register_type<scope<external>, storage<database*>,
+                        interfaces<annotated<database, primary_tag>>>(&primary);
+container.register_type<scope<external>, storage<database*>,
+                        interfaces<annotated<database, replica_tag>>>(&replica);
+container.register_type<scope<unique>, storage<repository>>();
+
+[[maybe_unused]] auto repo = container.resolve<repository>();
+assert(&repo.primary == &primary);
+assert(&repo.replica == &replica);
+```
+
+<!-- } -->
 
 See:
 
@@ -160,7 +224,7 @@ Compile-time bindings make sense when:
 
 See:
 
-- [examples/container/quick.cpp](../examples/container/quick.cpp)
+- [examples/container/quick_runtime.cpp](../examples/container/quick_runtime.cpp)
 - [examples/registration/compile_time_registration.cpp](../examples/registration/compile_time_registration.cpp)
 - [architecture/containers.md](architecture/containers.md)
 - [include/dingo/container.h](../include/dingo/container.h)
@@ -179,10 +243,7 @@ Nesting is most useful for:
 - test-specific replacements
 - local configuration layered on top of a base application container
 
-<!-- { include("../examples/container/nesting.cpp", scope="////", summary="Nested container override example") -->
-
-<details>
-<summary>Nested container override example</summary>
+<!-- { include("../examples/container/nesting.cpp", scope="////") -->
 
 Example code included from
 [../examples/container/nesting.cpp](../examples/container/nesting.cpp):
@@ -216,12 +277,10 @@ nested_container.register_type<scope<unique>, storage<B>>();
 assert(nested_container.resolve<B>().value == 1);
 ```
 
-</details>
 <!-- } -->
 
 See:
 
-- [examples/container/nesting.cpp](../examples/container/nesting.cpp)
 - [test/matrix/README.md](../test/matrix/README.md)
 
 ## Custom RTTI
@@ -248,10 +307,7 @@ This affects container bookkeeping, not the ownership model of every resolved
 object. A resolved object may still be externally owned or stored in a standard
 smart pointer, depending on its registration.
 
-<!-- { include("../examples/container/allocator.cpp", scope="////", summary="Custom allocator example") -->
-
-<details>
-<summary>Custom allocator example</summary>
+<!-- { include("../examples/container/allocator.cpp", scope="////") -->
 
 Example code included from
 [../examples/container/allocator.cpp](../examples/container/allocator.cpp):
@@ -263,12 +319,10 @@ container<dingo::dynamic_container_traits, std::allocator<char>>
     container(alloc);
 ```
 
-</details>
 <!-- } -->
 
 See:
 
-- [examples/container/allocator.cpp](../examples/container/allocator.cpp)
 - [include/dingo/memory/allocator.h](../include/dingo/memory/allocator.h)
 - [include/dingo/memory/arena_allocator.h](../include/dingo/memory/arena_allocator.h)
 

@@ -38,10 +38,7 @@ Runtime registration is mutable container configuration. Compile-time bindings
 are part of the container type and can include `dependencies<...>` for static
 graph checks before the program runs.
 
-<!-- { include("../examples/registration/non_intrusive.cpp", scope="////", summary="Registration policies example") -->
-
-<details>
-<summary>Registration policies example</summary>
+<!-- { include("../examples/registration/non_intrusive.cpp", scope="////") -->
 
 Example code included from
 [../examples/registration/non_intrusive.cpp](../examples/registration/non_intrusive.cpp):
@@ -60,12 +57,10 @@ container.register_type<scope<unique>, // using unique scope
 container.register_type<scope<unique>, storage<std::unique_ptr<A>>>();
 ```
 
-</details>
 <!-- } -->
 
 See:
 
-- [examples/registration/non_intrusive.cpp](../examples/registration/non_intrusive.cpp)
 - [include/dingo/registration/type_registration.h](../include/dingo/registration/type_registration.h)
 
 ## Scopes And Storage
@@ -102,10 +97,7 @@ The injectable result depends on both:
 - some exact wrapper forms intentionally resolve only as the wrapper itself,
   rather than as every possible contained alternative
 
-<!-- { include("../examples/storage/scope_external.cpp", scope="////", summary="External scope example") -->
-
-<details>
-<summary>External scope example</summary>
+<!-- { include("../examples/storage/scope_external.cpp", scope="////") -->
 
 Example code included from
 [../examples/storage/scope_external.cpp](../examples/storage/scope_external.cpp):
@@ -121,13 +113,9 @@ container.register_type<scope<external>, storage<A*>>(&instance);
 assert(&container.resolve<A&>() == container.resolve<A*>());
 ```
 
-</details>
 <!-- } -->
 
-<!-- { include("../examples/storage/scope_unique.cpp", scope="////", summary="Unique scope example") -->
-
-<details>
-<summary>Unique scope example</summary>
+<!-- { include("../examples/storage/scope_unique.cpp", scope="////") -->
 
 Example code included from
 [../examples/storage/scope_unique.cpp](../examples/storage/scope_unique.cpp):
@@ -141,13 +129,9 @@ container.register_type<scope<unique>, storage<A>>();
 container.resolve<A>();
 ```
 
-</details>
 <!-- } -->
 
-<!-- { include("../examples/storage/scope_shared.cpp", scope="////", summary="Shared scope example") -->
-
-<details>
-<summary>Shared scope example</summary>
+<!-- { include("../examples/storage/scope_shared.cpp", scope="////") -->
 
 Example code included from
 [../examples/storage/scope_shared.cpp](../examples/storage/scope_shared.cpp):
@@ -161,13 +145,9 @@ container.register_type<scope<shared>, storage<A>>();
 assert(container.resolve<A*>() == &container.resolve<A&>());
 ```
 
-</details>
 <!-- } -->
 
-<!-- { include("../examples/storage/scope_shared_cyclical.cpp", scope="////", summary="Shared cyclical scope example") -->
-
-<details>
-<summary>Shared cyclical scope example</summary>
+<!-- { include("../examples/storage/scope_shared_cyclical.cpp", scope="////") -->
 
 Example code included from
 [../examples/storage/scope_shared_cyclical.cpp](../examples/storage/scope_shared_cyclical.cpp):
@@ -210,15 +190,10 @@ assert(&b.a_ == &a);
 assert(b.aptr_ == &a);
 ```
 
-</details>
 <!-- } -->
 
 See:
 
-- [examples/storage/scope_external.cpp](../examples/storage/scope_external.cpp)
-- [examples/storage/scope_unique.cpp](../examples/storage/scope_unique.cpp)
-- [examples/storage/scope_shared.cpp](../examples/storage/scope_shared.cpp)
-- [examples/storage/scope_shared_cyclical.cpp](../examples/storage/scope_shared_cyclical.cpp)
 - [include/dingo/storage/external.h](../include/dingo/storage/external.h)
 - [include/dingo/storage/unique.h](../include/dingo/storage/unique.h)
 - [include/dingo/storage/shared.h](../include/dingo/storage/shared.h)
@@ -243,10 +218,7 @@ The main constraints are:
   `std::unique_ptr<T[]>`
 - shared array storage can hand out stable borrowed views and shared handles
 
-<!-- { include("../examples/storage/array.cpp", scope="////", summary="Array storage and resolution example") -->
-
-<details>
-<summary>Array storage and resolution example</summary>
+<!-- { include("../examples/storage/array.cpp", scope="////") -->
 
 Example code included from
 [../examples/storage/array.cpp](../examples/storage/array.cpp):
@@ -269,30 +241,29 @@ container<> raw_container;
 raw_container.register_type<scope<shared>, storage<cell[2][3]>>();
 
 // Resolve row view, exact pointer view and inject the row view.
-/*auto* rows =*/raw_container.resolve<cell (*)[3]>();
-/*auto& exact =*/raw_container.resolve<cell (&)[2][3]>();
-/*row_consumer borrowed =*/
-raw_container.construct<row_consumer, constructor<row_consumer(cell (*)[3])>>();
+auto* rows = raw_container.resolve<cell (*)[3]>();
+auto& exact = raw_container.resolve<cell (&)[2][3]>();
+row_consumer borrowed =
+    raw_container
+        .construct<row_consumer, constructor<row_consumer(cell (*)[3])>>();
 
 container<> unique_container;
 // Register a fixed-size array in unique scope and resolve it as an owning
 // dynamic array handle.
 unique_container.register_type<scope<unique>, storage<cell[4]>>();
-/*auto owned =*/unique_container.resolve<std::unique_ptr<cell[]>>();
+auto owned = unique_container.resolve<std::unique_ptr<cell[]>>();
 
 container<> shared_container;
 // Register a shared smart array directly.
 shared_container.register_type<scope<shared>, storage<std::shared_ptr<cell[]>>>(
     callable([] { return std::shared_ptr<cell[]>(new cell[4]); }));
-/*auto shared =*/shared_container.resolve<std::shared_ptr<cell[]>>();
+auto shared = shared_container.resolve<std::shared_ptr<cell[]>>();
 ```
 
-</details>
 <!-- } -->
 
 See:
 
-- [examples/storage/array.cpp](../examples/storage/array.cpp)
 - [include/dingo/type/type_traits.h](../include/dingo/type/type_traits.h)
 
 ## Variants
@@ -319,10 +290,7 @@ The current rules are narrow on purpose:
   references, or pointers, and a held alternative as values, references, or
   pointers
 
-<!-- { include("../examples/container/variant.cpp", scope="////", summary="Variant construction and storage example") -->
-
-<details>
-<summary>Variant construction and storage example</summary>
+<!-- { include("../examples/container/variant.cpp", scope="////") -->
 
 Example code included from
 [../examples/container/variant.cpp](../examples/container/variant.cpp):
@@ -381,12 +349,10 @@ assert(std::holds_alternative<A>(ref));
 assert(&held == &std::get<A>(existing));
 ```
 
-</details>
 <!-- } -->
 
 See:
 
-- [examples/container/variant.cpp](../examples/container/variant.cpp)
 - [test/matrix/README.md](../test/matrix/README.md)
 - [include/dingo/type/type_traits.h](../include/dingo/type/type_traits.h)
 
@@ -460,10 +426,7 @@ Reach for an explicit factory when:
 - construction depends on extra callable state
 - selecting a specific alternative for variant construction or storage matters
 
-<!-- { include("../examples/factory/factory_constructor_deduction.cpp", scope="////", summary="Automatically deduced constructor factory") -->
-
-<details>
-<summary>Automatically deduced constructor factory</summary>
+<!-- { include("../examples/factory/factory_constructor_deduction.cpp", scope="////") -->
 
 Example code included from
 [../examples/factory/factory_constructor_deduction.cpp](../examples/factory/factory_constructor_deduction.cpp):
@@ -483,13 +446,9 @@ container
     .register_type<scope<unique>, storage<A> /*, factory<constructor<A>> */>();
 ```
 
-</details>
 <!-- } -->
 
-<!-- { include("../examples/factory/factory_constructor.cpp", scope="////", summary="Explicit constructor selection") -->
-
-<details>
-<summary>Explicit constructor selection</summary>
+<!-- { include("../examples/factory/factory_constructor.cpp", scope="////") -->
 
 Example code included from
 [../examples/factory/factory_constructor.cpp](../examples/factory/factory_constructor.cpp):
@@ -509,7 +468,6 @@ container.register_type<scope<unique>, storage<A>,
                         factory<constructor<A(double)>>>();
 ```
 
-</details>
 <!-- } -->
 
 Templated constructors are supported when the type is registered with an
@@ -527,10 +485,7 @@ container.register_type<scope<unique>, storage<Generic>,
                         factory<constructor<Generic(int, float)>>>();
 ```
 
-<!-- { include("../examples/factory/factory_function.cpp", scope="////", summary="Static factory-function example") -->
-
-<details>
-<summary>Static factory-function example</summary>
+<!-- { include("../examples/factory/factory_function.cpp", scope="////") -->
 
 Example code included from
 [../examples/factory/factory_function.cpp](../examples/factory/factory_function.cpp):
@@ -551,13 +506,9 @@ container
     .register_type<scope<unique>, storage<A>, factory<function<&A::factory>>>();
 ```
 
-</details>
 <!-- } -->
 
-<!-- { include("../examples/factory/factory_callable.cpp", scope="////", summary="Stateful callable factory example") -->
-
-<details>
-<summary>Stateful callable factory example</summary>
+<!-- { include("../examples/factory/factory_callable.cpp", scope="////") -->
 
 Example code included from
 [../examples/factory/factory_callable.cpp](../examples/factory/factory_callable.cpp):
@@ -586,15 +537,10 @@ assert(container.construct<A>(callable<A(int)>(overloaded_factory{})).value ==
        4);
 ```
 
-</details>
 <!-- } -->
 
 See:
 
-- [examples/factory/factory_constructor_deduction.cpp](../examples/factory/factory_constructor_deduction.cpp)
-- [examples/factory/factory_constructor.cpp](../examples/factory/factory_constructor.cpp)
-- [examples/factory/factory_function.cpp](../examples/factory/factory_function.cpp)
-- [examples/factory/factory_callable.cpp](../examples/factory/factory_callable.cpp)
 - [test/factory/constructor_detection.cpp](../test/factory/constructor_detection.cpp)
 - [test/matrix/README.md](../test/matrix/README.md)
 - [include/dingo/factory/constructor_detection.h](../include/dingo/factory/constructor_detection.h)
@@ -613,10 +559,7 @@ This is the right fit when:
 - concrete implementations should stay hidden behind an interface
 - one concrete type should be resolvable through several interfaces
 
-<!-- { include("../examples/container/service_locator.cpp", scope="////", summary="Resolve through an interface") -->
-
-<details>
-<summary>Resolve through an interface</summary>
+<!-- { include("../examples/container/service_locator.cpp", scope="////") -->
 
 Example code included from
 [../examples/container/service_locator.cpp](../examples/container/service_locator.cpp):
@@ -638,12 +581,7 @@ IA& instance = container.resolve<IA&>();
 assert(dynamic_cast<A*>(&instance));
 ```
 
-</details>
 <!-- } -->
-
-See:
-
-- [examples/container/service_locator.cpp](../examples/container/service_locator.cpp)
 
 ## Multibindings And Collections
 
@@ -658,10 +596,7 @@ This is a good fit for extension-point style code such as:
 
 The collection can use a standard aggregation rule or a custom one.
 
-<!-- { include("../examples/index/multibindings.cpp", scope="////", summary="Multibindings example") -->
-
-<details>
-<summary>Multibindings example</summary>
+<!-- { include("../examples/index/multibindings.cpp", scope="////") -->
 
 Example code included from
 [../examples/index/multibindings.cpp](../examples/index/multibindings.cpp):
@@ -688,13 +623,9 @@ container.template register_type<scope<shared>, storage<Processor<1>>,
 container.template resolve<std::vector<IProcessor*>>();
 ```
 
-</details>
 <!-- } -->
 
-<!-- { include("../examples/registration/collection.cpp", scope="////", summary="Custom collection aggregation example") -->
-
-<details>
-<summary>Custom collection aggregation example</summary>
+<!-- { include("../examples/registration/collection.cpp", scope="////") -->
 
 Example code included from
 [../examples/registration/collection.cpp](../examples/registration/collection.cpp):
@@ -759,13 +690,10 @@ auto dispatcher = container.construct<Dispatcher>();
 dispatcher.process(std::string(""));
 ```
 
-</details>
 <!-- } -->
 
 See:
 
-- [examples/index/multibindings.cpp](../examples/index/multibindings.cpp)
-- [examples/registration/collection.cpp](../examples/registration/collection.cpp)
 - [include/dingo/registration/collection_traits.h](../include/dingo/registration/collection_traits.h)
 
 ## Runtime Model And Error Handling

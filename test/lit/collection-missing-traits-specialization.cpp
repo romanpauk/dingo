@@ -4,7 +4,8 @@
 
 int main() {
     dingo::container<> container;
-    [[maybe_unused]] auto values = container.construct_collection<int>();
+    auto values = container.construct_collection<int>();
+    (void)values;
 }
 
 // CHECK: missing collection_traits specialization for type T

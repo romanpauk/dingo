@@ -24,55 +24,48 @@ Tested with:
 Runtime registration uses `container<>` with registrations added through
 `register_type<...>()`, which fits graphs assembled by ordinary control flow.
 
-<!-- { include("examples/registration/runtime_registration.cpp", scope="////") -->
+<!-- { include("examples/container/quick_runtime.cpp", scope="////") -->
 
 Example code included from
-[examples/registration/runtime_registration.cpp](examples/registration/runtime_registration.cpp):
+[examples/container/quick_runtime.cpp](examples/container/quick_runtime.cpp):
 
 ```c++
-class config {
-  public:
-    int retries() const { return retries_; }
-
-  private:
-    int retries_ = 3;
+// User types do not need Dingo-specific base classes or macros.
+struct A {
+    A() {}
+};
+struct B {
+    B(A&, std::shared_ptr<A>) {}
+};
+struct C {
+    C(B*, std::unique_ptr<B>&, A&) {}
 };
 
-struct service_interface {
-    virtual ~service_interface() {}
-    virtual int retries() const = 0;
+container<> container;
+// A and B are shared, so every resolution reuses the same instances.
+container.register_type<scope<shared>, storage<std::shared_ptr<A>>>();
+container.register_type<scope<shared>, storage<std::unique_ptr<B>>>();
+
+// C is unique, so every resolve<C>() creates a fresh C.
+container.register_type<scope<unique>, storage<C>>();
+
+// Constructor arguments are resolved recursively, including ownership
+// conversions from the registered storage forms.
+C c = container.resolve<C>();
+
+struct D {
+    A& a;
+    B* b;
 };
 
-struct service : service_interface {
-    explicit service(config& cfg) : cfg_(cfg) {}
+// Construct an unmanaged object using dependencies from the container.
+D d = container.construct<D>();
 
-    int retries() const override { return cfg_.retries(); }
-
-  private:
-    config& cfg_;
-};
-
-void runtime_registration_example() {
-    using namespace dingo;
-    container<> container;
-
-    container.register_type<scope<shared>, storage<config>>();
-    container.register_type<scope<shared>, storage<std::shared_ptr<service>>,
-                            interfaces<service_interface>>();
-
-    assert(container.resolve<service_interface&>().retries() == 3);
-    assert(container.resolve<service_interface*>()->retries() == 3);
-    assert(
-        container.resolve<std::shared_ptr<service_interface>&>()->retries() ==
-        3);
-}
+// Or invoke a callable with resolved arguments.
+D e = container.invoke([&](A& a, B* b) { return D{a, b}; });
 ```
 
 <!-- } -->
-
-The broader [quick example](examples/container/quick.cpp) shows recursive
-constructor injection plus automatic reference, pointer, and smart-pointer
-conversions from registered storage.
 
 ## Compile-Time Registration
 
@@ -80,52 +73,41 @@ Compile-time registration uses `bindings<...>` with `container<bindings<...>>`
 or `static_container<bindings<...>>`, which fits graphs known in the type
 system.
 
-<!-- { include("examples/registration/compile_time_registration.cpp", scope="////") -->
+<!-- { include("examples/container/quick_static.cpp", scope="////") -->
 
 Example code included from
-[examples/registration/compile_time_registration.cpp](examples/registration/compile_time_registration.cpp):
+[examples/container/quick_static.cpp](examples/container/quick_static.cpp):
 
 ```c++
-class config {
-  public:
-    int retries() const { return retries_; }
-
-  private:
-    int retries_ = 3;
+struct A {
+    A() {}
+};
+struct B {
+    B(A&, std::shared_ptr<A>) {}
+};
+struct C {
+    C(B*, std::unique_ptr<B>&, A&) {}
 };
 
-struct service_interface {
-    virtual ~service_interface() {}
-    virtual int retries() const = 0;
+// Compile-time bindings declare the same storage and scope as runtime
+// registration.
+using app_bindings =
+    bindings<dingo::bind<scope<shared>, storage<std::shared_ptr<A>>>,
+             dingo::bind<scope<shared>, storage<std::unique_ptr<B>>>,
+             dingo::bind<scope<unique>, storage<C>>>;
+
+container<app_bindings> container;
+// Resolution still uses the same API.
+C c = container.resolve<C>();
+
+struct D {
+    A& a;
+    B* b;
 };
 
-struct service : service_interface {
-    explicit service(config& cfg) : cfg_(cfg) {}
-
-    int retries() const override { return cfg_.retries(); }
-
-  private:
-    config& cfg_;
-};
-
-void compile_time_registration_example() {
-    using namespace dingo;
-    using app_bindings = dingo::bindings<
-        dingo::bind<scope<shared>, storage<config>>,
-        dingo::bind<scope<shared>, storage<std::shared_ptr<service>>,
-                    interfaces<service_interface>>>;
-
-    container<app_bindings> container;
-
-    assert(container.resolve<service_interface&>().retries() == 3);
-    assert(container.resolve<service_interface*>()->retries() == 3);
-    assert(
-        container.resolve<std::shared_ptr<service_interface>&>()->retries() ==
-        3);
-
-    static_container<app_bindings> static_only;
-    assert(static_only.resolve<service_interface&>().retries() == 3);
-}
+// construct() and invoke() work with compile-time registration, too.
+D d = container.construct<D>();
+D e = container.invoke([&](A& a, B* b) { return D{a, b}; });
 ```
 
 <!-- } -->

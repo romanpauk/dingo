@@ -55,17 +55,7 @@ direct converting constructor or pointer cast.
 
 This is the last-mile "build target wrapper from source wrapper" hook.
 
-## Quick Decision Guide
-
-- If Dingo does not understand a wrapper's shape, start with `type_traits`.
-- If a wrapper should resolve differently in `shared` and `unique` storage, use
-  `storage_traits`.
-- If two wrappers need an explicit conversion implementation, use
-  `type_conversion_traits`.
-- If interface storage rebinding should be possible, make the wrapper rebindable
-  and compatible with interface-storage rebinding.
-
-## Worked Example
+## Extension Example
 
 The best example is already in
 [test/type/type_traits.cpp](../../test/type/type_traits.cpp).
@@ -95,18 +85,6 @@ single-interface storage rewrite in registration.
 
 In practice this means the wrapper must be rebindable in a way that preserves
 correct ownership and deletion semantics for interface use.
-
-## A Useful Mental Model
-
-When adding a new wrapper, answer these questions in order:
-
-1. What is the wrapper's leaf type?
-2. Can the wrapper be rebound to another leaf type?
-3. Is it pointer-like, borrowable, or reference-resolvable?
-4. Which request shapes should each storage scope expose?
-5. Does any wrapper-to-wrapper conversion need a custom implementation?
-
-If those five answers are clear, the implementation is usually straightforward.
 
 ## Good Source Companions
 

@@ -6,14 +6,18 @@ the relevant feature and start there.
 
 ## Start Here
 
-- [examples/container/quick.cpp](../examples/container/quick.cpp): shortest path
-  from runtime registration to resolution
+- [examples/container/quick_runtime.cpp](../examples/container/quick_runtime.cpp):
+  shortest path from runtime registration to resolution
+- [examples/container/quick_static.cpp](../examples/container/quick_static.cpp):
+  shortest path from compile-time bindings to resolution
 - [examples/registration/runtime_registration.cpp](../examples/registration/runtime_registration.cpp):
-  runtime registration with the same service graph as the compile-time example
+  runtime registration with shared and unique storage plus `resolve()` and
+  `construct()`
 - [examples/registration/non_intrusive.cpp](../examples/registration/non_intrusive.cpp):
   registration shape and policy deduction without touching user types
 - [examples/registration/compile_time_registration.cpp](../examples/registration/compile_time_registration.cpp):
-  compile-time registration with the same service graph as the runtime example
+  compile-time bindings for the same storage and resolution shape as the runtime
+  example
 
 ## Factories
 
@@ -26,7 +30,7 @@ the relevant feature and start there.
 - [examples/factory/factory_callable.cpp](../examples/factory/factory_callable.cpp):
   stateful callable-based construction with injected arguments
 
-## Scopes, Arrays, And Wrappers
+## Scopes
 
 - [examples/storage/scope_external.cpp](../examples/storage/scope_external.cpp):
   use an existing object without moving ownership into the container
@@ -36,8 +40,14 @@ the relevant feature and start there.
   cache and reuse a single stored instance
 - [examples/storage/scope_shared_cyclical.cpp](../examples/storage/scope_shared_cyclical.cpp):
   resolve cyclic graphs through two-phase construction
+
+## Arrays
+
 - [examples/storage/array.cpp](../examples/storage/array.cpp): register and
   resolve raw arrays plus smart-array forms
+
+## Wrappers
+
 - [examples/container/variant.cpp](../examples/container/variant.cpp): construct
   variants and resolve either the whole variant or its held alternative from
   variant storage
@@ -50,6 +60,8 @@ the relevant feature and start there.
   resolve multiple implementations through a single interface
 - [examples/registration/collection.cpp](../examples/registration/collection.cpp):
   aggregate a custom collection shape with a custom insertion step
+- [examples/registration/annotated.cpp](../examples/registration/annotated.cpp):
+  disambiguate same-type dependencies with annotation tags
 - [examples/index/message_processing.cpp](../examples/index/message_processing.cpp):
   dispatch messages to indexed handlers
 

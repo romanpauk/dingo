@@ -8,7 +8,8 @@ struct generic_constructor_type {
 
 int main() {
     dingo::container<> container;
-    [[maybe_unused]] auto value = container.construct<generic_constructor_type>();
+    auto value = container.construct<generic_constructor_type>();
+    (void)value;
 }
 
 // CHECK: generic constructor detected; use explicit factory<constructor<...>>
