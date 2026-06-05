@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/static/graph.h>
 #include <dingo/static/activation_set.h>
+#include <dingo/static/graph.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>
 #include <dingo/storage/unique.h>
@@ -61,18 +61,20 @@ TEST(static_graph_test, exposes_dependency_nodes_and_topological_order) {
 
     using config_binding = dingo::bind<scope<shared>, storage<config>>;
     using service_binding =
-        dingo::bind<scope<shared>, storage<service>, interfaces<service_interface>,
-             dependencies<config&>>;
-    using controller_binding =
-        dingo::bind<scope<unique>, storage<controller>,
-             dependencies<service_interface&>>;
-    using source = dingo::bindings<config_binding, service_binding, controller_binding>;
+        dingo::bind<scope<shared>, storage<service>,
+                    interfaces<service_interface>, dependencies<config&>>;
+    using controller_binding = dingo::bind<scope<unique>, storage<controller>,
+                                           dependencies<service_interface&>>;
+    using source =
+        dingo::bindings<config_binding, service_binding, controller_binding>;
     using graph = static_graph<source>;
-    using static_traits = detail::static_execution_traits<typename source::type>;
+    using static_traits =
+        detail::static_execution_traits<typename source::type>;
 
+    static_assert(graph::resolvable);
     static_assert(graph::acyclic);
-    static_assert(std::is_same_v<typename graph::dependency_nodes<config>,
-                                 type_list<>>);
+    static_assert(
+        std::is_same_v<typename graph::dependency_nodes<config>, type_list<>>);
     static_assert(
         std::is_same_v<typename graph::dependency_nodes<service_interface>,
                        type_list<typename graph::node<config>>>);
@@ -84,30 +86,74 @@ TEST(static_graph_test, exposes_dependency_nodes_and_topological_order) {
                   type_list<typename graph::template binding<config>,
                             typename graph::template binding<service_interface>,
                             typename graph::template binding<controller>>>);
-    static_assert(std::is_same_v<
-                  typename graph::topological_nodes,
-                  type_list<typename graph::node<config>,
-                            typename graph::node<service_interface>,
-                            typename graph::node<controller>>>);
+    static_assert(
+        std::is_same_v<typename graph::topological_nodes,
+                       type_list<typename graph::node<config>,
+                                 typename graph::node<service_interface>,
+                                 typename graph::node<controller>>>);
     static_assert(static_traits::max_preserved_closure_depth == 2);
     static_assert(static_traits::max_destructible_slots == 0);
 }
 
-TEST(static_graph_test, detects_cycles_without_invalidating_compile_time_bindings_source) {
+TEST(static_graph_test,
+     detects_cycles_without_invalidating_compile_time_bindings_source) {
     struct a {};
     struct b {};
 
-    using a_binding =
-        dingo::bind<scope<shared>, storage<a>, dependencies<b&>>;
-    using b_binding =
-        dingo::bind<scope<shared>, storage<b>, dependencies<a&>>;
+    using a_binding = dingo::bind<scope<shared>, storage<a>, dependencies<b&>>;
+    using b_binding = dingo::bind<scope<shared>, storage<b>, dependencies<a&>>;
     using source = dingo::bindings<a_binding, b_binding>;
     using graph = static_graph<source>;
 
     static_assert(source::type::valid);
+    static_assert(!graph::resolvable);
     static_assert(!graph::acyclic);
     static_assert(std::is_same_v<typename graph::topological_bindings, void>);
     static_assert(std::is_same_v<typename graph::topological_nodes, void>);
+}
+
+TEST(static_graph_test,
+     allows_cycles_when_every_cycle_binding_is_shared_cyclical) {
+    struct a {};
+    struct b {};
+    struct owner {};
+
+    using a_binding =
+        dingo::bind<scope<shared_cyclical>, storage<a>, dependencies<b&>>;
+    using b_binding =
+        dingo::bind<scope<shared_cyclical>, storage<b>, dependencies<a&>>;
+    using owner_binding =
+        dingo::bind<scope<shared>, storage<owner>, dependencies<a&>>;
+    using source = dingo::bindings<a_binding, b_binding, owner_binding>;
+    using graph = static_graph<source>;
+
+    static_assert(source::type::valid);
+    static_assert(graph::resolvable);
+    static_assert(!graph::acyclic);
+    static_assert(graph::contains_cycle);
+    static_assert(std::is_void_v<typename graph::topological_bindings>);
+    static_assert(detail::static_binding_resolvable_v<
+                  typename source::type::template binding<owner>,
+                  typename source::type>);
+}
+
+TEST(static_graph_test,
+     rejects_cycles_when_any_cycle_binding_is_not_shared_cyclical) {
+    struct a {};
+    struct b {};
+
+    using a_binding =
+        dingo::bind<scope<shared_cyclical>, storage<a>, dependencies<b&>>;
+    using b_binding = dingo::bind<scope<shared>, storage<b>, dependencies<a&>>;
+    using source = dingo::bindings<a_binding, b_binding>;
+    using graph = static_graph<source>;
+
+    static_assert(source::type::valid);
+    static_assert(!graph::resolvable);
+    static_assert(!graph::acyclic);
+    static_assert(
+        !detail::static_binding_resolvable_v<
+            typename source::type::template binding<a>, typename source::type>);
 }
 
 TEST(static_graph_test,
@@ -118,14 +164,16 @@ TEST(static_graph_test,
 
     using a_binding =
         dingo::bind<scope<shared>, storage<a>, dependencies<b&, runtime_only&>>;
-    using b_binding =
-        dingo::bind<scope<shared>, storage<b>, dependencies<a&>>;
+    using b_binding = dingo::bind<scope<shared>, storage<b>, dependencies<a&>>;
     using source = dingo::bindings<a_binding, b_binding>;
     using traits = detail::execution_traits<typename source::type, true>;
 
     static_assert(source::type::valid);
     static_assert(
         !detail::graph_analysis<typename source::type, true>::acyclic);
+    static_assert(
+        !detail::graph_analysis<typename source::type, true>::resolvable);
+    static_assert(!traits::resolvable);
     static_assert(!traits::acyclic);
 }
 
@@ -143,7 +191,8 @@ TEST(static_execution_traits_test,
         dingo::bind<scope<unique>, storage<leaf>>,
         dingo::bind<scope<unique>, storage<middle>, dependencies<leaf&>>,
         dingo::bind<scope<unique>, storage<root>, dependencies<middle&>>>;
-    using static_traits = detail::static_execution_traits<typename source::type>;
+    using static_traits =
+        detail::static_execution_traits<typename source::type>;
 
     static_assert(static_traits::acyclic);
     static_assert(static_traits::max_preserved_closure_depth == 0);
@@ -164,7 +213,8 @@ TEST(static_execution_traits_test,
         dingo::bind<scope<unique>, storage<left>>,
         dingo::bind<scope<unique>, storage<right>>,
         dingo::bind<scope<unique>, storage<root>, dependencies<left&, right&>>>;
-    using static_traits = detail::static_execution_traits<typename source::type>;
+    using static_traits =
+        detail::static_execution_traits<typename source::type>;
 
     static_assert(static_traits::acyclic);
     static_assert(static_traits::max_temporary_slots == 3);
@@ -227,10 +277,9 @@ TEST(static_execution_traits_test,
                   0);
     static_assert(shared_handle_storage::static_conversion_destructible_slots ==
                   0);
-    static_assert(
-        shared_handle_storage::static_conversion_temporary_size == 0);
-    static_assert(
-        shared_handle_storage::static_conversion_temporary_align == 0);
+    static_assert(shared_handle_storage::static_conversion_temporary_size == 0);
+    static_assert(shared_handle_storage::static_conversion_temporary_align ==
+                  0);
 }
 
 TEST(static_execution_traits_test,
@@ -251,8 +300,9 @@ TEST(static_execution_traits_test,
         std::is_base_of_v<detail::context_closure_base, partial_closure>);
 }
 
-TEST(static_execution_traits_test,
-     preserved_closure_depth_counts_preserving_bindings_across_non_preserving_edges) {
+TEST(
+    static_execution_traits_test,
+    preserved_closure_depth_counts_preserving_bindings_across_non_preserving_edges) {
     struct config {};
     struct transient_service {
         explicit transient_service(config&) {}
@@ -267,10 +317,12 @@ TEST(static_execution_traits_test,
     using source = dingo::bindings<
         dingo::bind<scope<shared>, storage<config>>,
         dingo::bind<scope<unique>, storage<transient_service>,
-             dependencies<config&>>,
-        dingo::bind<scope<unique>, storage<leaf>, dependencies<transient_service&>>,
+                    dependencies<config&>>,
+        dingo::bind<scope<unique>, storage<leaf>,
+                    dependencies<transient_service&>>,
         dingo::bind<scope<shared>, storage<shared_leaf>, dependencies<leaf&>>>;
-    using static_traits = detail::static_execution_traits<typename source::type>;
+    using static_traits =
+        detail::static_execution_traits<typename source::type>;
 
     static_assert(static_traits::acyclic);
     static_assert(static_traits::max_preserved_closure_depth == 2);
@@ -284,13 +336,15 @@ TEST(static_execution_traits_test,
 
     using source = dingo::bindings<
         dingo::bind<scope<unique>, storage<std::shared_ptr<payload>>>>;
-    using static_traits = detail::static_execution_traits<typename source::type>;
+    using static_traits =
+        detail::static_execution_traits<typename source::type>;
 
     static_assert(static_traits::acyclic);
     static_assert(static_traits::max_preserved_closure_depth == 0);
     static_assert(static_traits::max_destructible_slots == 1);
     static_assert(static_traits::max_temporary_slots == 1);
-    static_assert(static_traits::max_temporary_size >= sizeof(std::shared_ptr<payload>));
+    static_assert(static_traits::max_temporary_size >=
+                  sizeof(std::shared_ptr<payload>));
     static_assert(static_traits::max_temporary_align >=
                   alignof(std::shared_ptr<payload>));
 }
@@ -301,14 +355,17 @@ TEST(static_execution_traits_test,
         ~payload() {}
     };
 
-    using source = dingo::bindings<dingo::bind<scope<unique>, storage<payload>>>;
-    using static_traits = detail::static_execution_traits<typename source::type>;
+    using source =
+        dingo::bindings<dingo::bind<scope<unique>, storage<payload>>>;
+    using static_traits =
+        detail::static_execution_traits<typename source::type>;
 
     static_assert(static_traits::acyclic);
     static_assert(static_traits::max_preserved_closure_depth == 0);
     static_assert(static_traits::max_temporary_slots == 1);
     static_assert(static_traits::max_destructible_slots == 1);
-    static_assert(static_traits::max_temporary_size >= sizeof(std::optional<payload>));
+    static_assert(static_traits::max_temporary_size >=
+                  sizeof(std::optional<payload>));
     static_assert(static_traits::max_temporary_align >=
                   alignof(std::optional<payload>));
 }
@@ -317,8 +374,10 @@ TEST(static_execution_traits_test,
      shared_cyclical_paths_account_for_rollback_temporary_slots) {
     struct node {};
 
-    using source = dingo::bindings<dingo::bind<scope<shared_cyclical>, storage<node>>>;
-    using static_traits = detail::static_execution_traits<typename source::type>;
+    using source =
+        dingo::bindings<dingo::bind<scope<shared_cyclical>, storage<node>>>;
+    using static_traits =
+        detail::static_execution_traits<typename source::type>;
 
     static_assert(static_traits::acyclic);
     static_assert(static_traits::max_preserved_closure_depth == 0);
@@ -328,8 +387,9 @@ TEST(static_execution_traits_test,
     static_assert(static_traits::max_temporary_align >= alignof(void*));
 }
 
-TEST(static_execution_traits_test,
-     destructible_slots_follow_non_trivial_dependency_requests_along_static_paths) {
+TEST(
+    static_execution_traits_test,
+    destructible_slots_follow_non_trivial_dependency_requests_along_static_paths) {
     struct config {
         virtual ~config() = default;
     };
@@ -345,14 +405,17 @@ TEST(static_execution_traits_test,
     using source = dingo::bindings<
         dingo::bind<scope<shared>, storage<config>>,
         dingo::bind<scope<unique>, storage<payload>, dependencies<config&>>,
-        dingo::bind<scope<unique>, storage<service>,
-             dependencies<std::shared_ptr<payload>, std::optional<payload>>>>;
-    using static_traits = detail::static_execution_traits<typename source::type>;
+        dingo::bind<
+            scope<unique>, storage<service>,
+            dependencies<std::shared_ptr<payload>, std::optional<payload>>>>;
+    using static_traits =
+        detail::static_execution_traits<typename source::type>;
 
     static_assert(static_traits::acyclic);
     static_assert(static_traits::max_destructible_slots == 3);
     static_assert(static_traits::max_temporary_slots == 3);
-    static_assert(static_traits::max_temporary_size >= sizeof(std::optional<payload>));
+    static_assert(static_traits::max_temporary_size >=
+                  sizeof(std::optional<payload>));
     static_assert(static_traits::max_temporary_align >=
                   alignof(std::optional<payload>));
 }
@@ -367,11 +430,11 @@ TEST(static_graph_test, annotated_bindings_reuse_compile_time_bindings_lookup) {
 
     using config_binding =
         dingo::bind<scope<shared>, storage<config>,
-             interfaces<annotated<config, config_tag>>>;
+                    interfaces<annotated<config, config_tag>>>;
     using service_binding =
         dingo::bind<scope<unique>, storage<service>,
-             interfaces<annotated<service, service_tag>>,
-             dependencies<annotated<config&, config_tag>>>;
+                    interfaces<annotated<service, service_tag>>,
+                    dependencies<annotated<config&, config_tag>>>;
     using source = dingo::bindings<config_binding, service_binding>;
     using graph = static_graph<source>;
 

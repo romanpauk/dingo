@@ -97,13 +97,55 @@ template <typename Binding, typename StaticRegistry,
           bool InVisiting = type_list_contains_v<Binding, Visiting>>
 struct static_binding_resolvable;
 
+template <typename Binding>
+struct static_binding_uses_cyclical_storage
+    : std::is_same<typename Binding::binding_model_type::storage_tag,
+                   shared_cyclical> {};
+
+template <typename Binding>
+inline constexpr bool static_binding_uses_cyclical_storage_v =
+    static_binding_uses_cyclical_storage<Binding>::value;
+
+template <typename Binding, typename Visiting> struct static_cycle_path;
+
+template <typename Binding> struct static_cycle_path<Binding, type_list<>> {
+    using type = type_list<>;
+};
+
+template <typename Binding, typename Head, typename... Tail>
+struct static_cycle_path<Binding, type_list<Head, Tail...>> {
+    using tail_path =
+        typename static_cycle_path<Binding, type_list<Tail...>>::type;
+    using type = std::conditional_t<std::is_same_v<Binding, Head>,
+                                    type_list<Head, Tail...>, tail_path>;
+};
+
+template <typename Binding, typename Visiting>
+using static_cycle_path_t = typename static_cycle_path<Binding, Visiting>::type;
+
+template <typename Bindings> struct static_bindings_use_cyclical_storage;
+
+template <>
+struct static_bindings_use_cyclical_storage<type_list<>> : std::true_type {};
+
+template <typename... Bindings>
+struct static_bindings_use_cyclical_storage<type_list<Bindings...>>
+    : std::bool_constant<(static_binding_uses_cyclical_storage_v<Bindings> &&
+                          ...)> {};
+
+template <typename Binding, typename Visiting>
+inline constexpr bool static_cycle_uses_cyclical_storage_v =
+    static_bindings_use_cyclical_storage<
+        static_cycle_path_t<Binding, Visiting>>::value;
+
 template <typename StaticRegistry, typename Visiting>
 struct static_binding_resolvable<void, StaticRegistry, Visiting, false>
     : std::false_type {};
 
 template <typename Binding, typename StaticRegistry, typename Visiting>
 struct static_binding_resolvable<Binding, StaticRegistry, Visiting, true>
-    : std::false_type {};
+    : std::bool_constant<
+          static_cycle_uses_cyclical_storage_v<Binding, Visiting>> {};
 
 template <typename Binding, typename StaticRegistry, typename Visiting>
 struct static_binding_resolvable<Binding, StaticRegistry, Visiting, false>
@@ -726,6 +768,54 @@ template <typename Binding, typename StaticRegistry,
           bool RuntimeDependencies = false>
 struct static_binding_graph_temporary_slots;
 
+template <typename Bindings> struct static_graph_total_preserved_closure_depth;
+
+template <typename Bindings> struct static_graph_total_destructible_slots;
+
+template <typename Bindings> struct static_graph_total_temporary_slots;
+
+template <typename StaticRegistry, bool RuntimeDependencies, bool Acyclic,
+          bool ContainsCycle>
+struct static_graph_preserved_closure_depth_bound;
+
+template <typename StaticRegistry, bool RuntimeDependencies, bool Acyclic,
+          bool ContainsCycle>
+struct static_graph_destructible_slots_bound;
+
+template <typename StaticRegistry, bool RuntimeDependencies, bool Acyclic,
+          bool ContainsCycle>
+struct static_graph_temporary_slots_bound;
+
+template <>
+struct static_graph_total_preserved_closure_depth<type_list<>>
+    : std::integral_constant<std::size_t, 0> {};
+
+template <typename... Bindings>
+struct static_graph_total_preserved_closure_depth<type_list<Bindings...>>
+    : std::integral_constant<
+          std::size_t, (static_binding_preserved_closure_cost_v<Bindings> +
+                        ... + std::size_t{0})> {};
+
+template <>
+struct static_graph_total_destructible_slots<type_list<>>
+    : std::integral_constant<std::size_t, 0> {};
+
+template <typename... Bindings>
+struct static_graph_total_destructible_slots<type_list<Bindings...>>
+    : std::integral_constant<
+          std::size_t, (static_binding_destructible_slot_cost_v<Bindings> +
+                        ... + std::size_t{0})> {};
+
+template <>
+struct static_graph_total_temporary_slots<type_list<>>
+    : std::integral_constant<std::size_t, 0> {};
+
+template <typename... Bindings>
+struct static_graph_total_temporary_slots<type_list<Bindings...>>
+    : std::integral_constant<std::size_t,
+                             (static_binding_temporary_slot_cost_v<Bindings> +
+                              ... + std::size_t{0})> {};
+
 template <typename StaticRegistry, bool RuntimeDependencies>
 struct static_graph_max_preserved_closure_depth_all<type_list<>, StaticRegistry,
                                                     RuntimeDependencies>
@@ -915,9 +1005,63 @@ struct static_graph_max_temporary_slots<StaticRegistry, RuntimeDependencies,
           typename StaticRegistry::interface_bindings, StaticRegistry,
           RuntimeDependencies> {};
 
-template <bool Acyclic, typename Visited, typename Order>
+template <typename StaticRegistry, bool RuntimeDependencies, bool ContainsCycle>
+struct static_graph_preserved_closure_depth_bound<
+    StaticRegistry, RuntimeDependencies, false, ContainsCycle>
+    : std::integral_constant<std::size_t, 0> {};
+
+template <typename StaticRegistry, bool RuntimeDependencies>
+struct static_graph_preserved_closure_depth_bound<
+    StaticRegistry, RuntimeDependencies, true, false>
+    : static_graph_max_preserved_closure_depth<StaticRegistry,
+                                               RuntimeDependencies, true> {};
+
+template <typename StaticRegistry, bool RuntimeDependencies>
+struct static_graph_preserved_closure_depth_bound<
+    StaticRegistry, RuntimeDependencies, true, true>
+    : static_graph_total_preserved_closure_depth<
+          typename StaticRegistry::interface_bindings> {};
+
+template <typename StaticRegistry, bool RuntimeDependencies, bool ContainsCycle>
+struct static_graph_destructible_slots_bound<
+    StaticRegistry, RuntimeDependencies, false, ContainsCycle>
+    : std::integral_constant<std::size_t, 0> {};
+
+template <typename StaticRegistry, bool RuntimeDependencies>
+struct static_graph_destructible_slots_bound<StaticRegistry,
+                                             RuntimeDependencies, true, false>
+    : static_graph_max_destructible_slots<StaticRegistry, RuntimeDependencies,
+                                          true> {};
+
+template <typename StaticRegistry, bool RuntimeDependencies>
+struct static_graph_destructible_slots_bound<StaticRegistry,
+                                             RuntimeDependencies, true, true>
+    : static_graph_total_destructible_slots<
+          typename StaticRegistry::interface_bindings> {};
+
+template <typename StaticRegistry, bool RuntimeDependencies, bool ContainsCycle>
+struct static_graph_temporary_slots_bound<StaticRegistry, RuntimeDependencies,
+                                          false, ContainsCycle>
+    : std::integral_constant<std::size_t, 0> {};
+
+template <typename StaticRegistry, bool RuntimeDependencies>
+struct static_graph_temporary_slots_bound<StaticRegistry, RuntimeDependencies,
+                                          true, false>
+    : static_graph_max_temporary_slots<StaticRegistry, RuntimeDependencies,
+                                       true> {};
+
+template <typename StaticRegistry, bool RuntimeDependencies>
+struct static_graph_temporary_slots_bound<StaticRegistry, RuntimeDependencies,
+                                          true, true>
+    : static_graph_total_temporary_slots<
+          typename StaticRegistry::interface_bindings> {};
+
+template <bool Resolvable, typename Visited, typename Order,
+          bool ContainsCycle = false>
 struct graph_visit_result {
-    static constexpr bool acyclic = Acyclic;
+    static constexpr bool resolvable = Resolvable;
+    static constexpr bool contains_cycle = ContainsCycle;
+    static constexpr bool acyclic = Resolvable && !ContainsCycle;
     using visited = Visited;
     using order = Order;
 };
@@ -927,15 +1071,17 @@ struct graph_visit_merge;
 
 template <typename HeadResult, typename TailResult>
 struct graph_visit_merge<HeadResult, TailResult, true> {
-    using type =
-        graph_visit_result<true, typename TailResult::visited,
-                           type_list_cat_t<typename HeadResult::order,
-                                           typename TailResult::order>>;
+    using type = graph_visit_result<
+        true, typename TailResult::visited,
+        type_list_cat_t<typename HeadResult::order, typename TailResult::order>,
+        HeadResult::contains_cycle || TailResult::contains_cycle>;
 };
 
 template <typename HeadResult, typename TailResult>
 struct graph_visit_merge<HeadResult, TailResult, false> {
-    using type = graph_visit_result<false, typename TailResult::visited, void>;
+    using type = graph_visit_result<false, typename TailResult::visited, void,
+                                    HeadResult::contains_cycle ||
+                                        TailResult::contains_cycle>;
 };
 
 template <typename RecurseResult, typename Binding, bool Acyclic>
@@ -946,13 +1092,14 @@ struct graph_visit_append<RecurseResult, Binding, true> {
     using type = graph_visit_result<
         true,
         type_list_cat_t<typename RecurseResult::visited, type_list<Binding>>,
-        type_list_cat_t<typename RecurseResult::order, type_list<Binding>>>;
+        type_list_cat_t<typename RecurseResult::order, type_list<Binding>>,
+        RecurseResult::contains_cycle>;
 };
 
 template <typename RecurseResult, typename Binding>
 struct graph_visit_append<RecurseResult, Binding, false> {
-    using type =
-        graph_visit_result<false, typename RecurseResult::visited, void>;
+    using type = graph_visit_result<false, typename RecurseResult::visited,
+                                    void, RecurseResult::contains_cycle>;
 };
 
 template <typename Bindings, typename StaticRegistry, typename Visiting,
@@ -987,7 +1134,7 @@ struct graph_visit_all<type_list<Head, Tail...>, StaticRegistry, Visiting,
                                  RuntimeDependencies>::type;
 
     using tail_result = std::conditional_t<
-        head_result::acyclic,
+        head_result::resolvable,
         typename graph_visit_all<type_list<Tail...>, StaticRegistry, Visiting,
                                  typename head_result::visited,
                                  RuntimeDependencies>::type,
@@ -995,8 +1142,8 @@ struct graph_visit_all<type_list<Head, Tail...>, StaticRegistry, Visiting,
 
   public:
     using type = typename graph_visit_merge<head_result, tail_result,
-                                            head_result::acyclic &&
-                                                tail_result::acyclic>::type;
+                                            head_result::resolvable &&
+                                                tail_result::resolvable>::type;
 };
 
 template <typename Binding, typename StaticRegistry, typename Visiting,
@@ -1008,7 +1155,10 @@ template <typename Binding, typename StaticRegistry, typename Visiting,
           typename Visited, bool RuntimeDependencies>
 struct graph_visit_one_impl<Binding, StaticRegistry, Visiting, Visited,
                             RuntimeDependencies, true, false> {
-    using type = graph_visit_result<false, Visited, void>;
+    using type = std::conditional_t<
+        static_cycle_uses_cyclical_storage_v<Binding, Visiting>,
+        graph_visit_result<true, Visited, type_list<>, true>,
+        graph_visit_result<false, Visited, void>>;
 };
 
 template <typename Binding, typename StaticRegistry, typename Visiting,
@@ -1034,7 +1184,7 @@ struct graph_visit_one_impl<Binding, StaticRegistry, Visiting, Visited,
 
   public:
     using type = typename graph_visit_append<recurse_result, Binding,
-                                             recurse_result::acyclic>::type;
+                                             recurse_result::resolvable>::type;
 };
 
 template <typename Binding, typename StaticRegistry, typename Visiting,
@@ -1062,6 +1212,8 @@ struct basic_static_graph_topology_analysis {
                                  RuntimeDependencies>::type;
 
   public:
+    static constexpr bool resolvable = traversal::resolvable;
+    static constexpr bool contains_cycle = traversal::contains_cycle;
     static constexpr bool acyclic = traversal::acyclic;
     using topological_bindings =
         std::conditional_t<acyclic, typename traversal::order, void>;
@@ -1074,20 +1226,24 @@ struct basic_static_execution_traits {
                                                           RuntimeDependencies>;
 
   public:
+    static constexpr bool resolvable = topology::resolvable;
+    static constexpr bool contains_cycle = topology::contains_cycle;
     static constexpr bool acyclic = topology::acyclic;
     static constexpr std::size_t max_preserved_closure_depth =
-        static_graph_max_preserved_closure_depth<
-            StaticRegistry, RuntimeDependencies, acyclic>::value;
+        static_graph_preserved_closure_depth_bound<
+            StaticRegistry, RuntimeDependencies, resolvable,
+            contains_cycle>::value;
     static constexpr std::size_t max_destructible_slots =
-        static_graph_max_destructible_slots<StaticRegistry, RuntimeDependencies,
-                                            acyclic>::value;
+        static_graph_destructible_slots_bound<StaticRegistry,
+                                              RuntimeDependencies, resolvable,
+                                              contains_cycle>::value;
     static constexpr std::size_t max_temporary_slots =
-        static_graph_max_temporary_slots<StaticRegistry, RuntimeDependencies,
-                                         acyclic>::value;
+        static_graph_temporary_slots_bound<StaticRegistry, RuntimeDependencies,
+                                           resolvable, contains_cycle>::value;
     static constexpr std::size_t max_temporary_size =
-        static_graph_max_temporary_size<StaticRegistry, acyclic>::value;
+        static_graph_max_temporary_size<StaticRegistry, resolvable>::value;
     static constexpr std::size_t max_temporary_align =
-        static_graph_max_temporary_align<StaticRegistry, acyclic>::value;
+        static_graph_max_temporary_align<StaticRegistry, resolvable>::value;
 };
 
 template <typename StaticRegistry, bool RuntimeDependencies = false>
@@ -1125,6 +1281,10 @@ struct static_graph<static_registry<Registrations...>, void>
     static_assert(static_registry_type::valid,
                   "static_graph requires a valid compile-time bindings source");
 
+    static constexpr bool resolvable =
+        detail::graph_analysis<static_registry_type>::resolvable;
+    static constexpr bool contains_cycle =
+        detail::graph_analysis<static_registry_type>::contains_cycle;
     static constexpr bool acyclic =
         detail::graph_analysis<static_registry_type>::acyclic;
     using topological_bindings = typename detail::graph_analysis<

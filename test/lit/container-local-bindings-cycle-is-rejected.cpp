@@ -24,4 +24,4 @@ int main() {
                         dingo::dependencies<a&>>>>();
 }
 
-// CHECK: register_type bindings<...> requires an acyclic compile-time binding graph
+// CHECK: register_type bindings<...> requires a resolvable compile-time binding graph

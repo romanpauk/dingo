@@ -29,6 +29,7 @@ struct static_container_graph_type<StaticRegistry, true> {
 template <typename StaticRegistry>
 struct static_container_graph_type<StaticRegistry, false> {
     struct type {
+        static constexpr bool resolvable = true;
         static constexpr bool acyclic = true;
     };
 };

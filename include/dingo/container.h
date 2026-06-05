@@ -694,8 +694,8 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
 
     static_assert(static_source_type::valid,
                   "container requires a valid compile-time bindings source");
-    static_assert(detail::graph_analysis<static_source_type, true>::acyclic,
-                  "container requires an acyclic compile-time binding graph");
+    static_assert(detail::graph_analysis<static_source_type, true>::resolvable,
+                  "container requires a resolvable compile-time binding graph");
     static_assert(
         (detail::binding_factory_is_default_constructible<
              detail::binding_model<Registrations>>::value &&

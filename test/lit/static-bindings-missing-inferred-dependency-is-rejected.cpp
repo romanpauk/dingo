@@ -17,4 +17,4 @@ int main() {
     (void)instance;
 }
 
-// CHECK: {{(bindings<...> source requires every inferred constructor dependency to map to an interface binding|static_container requires an acyclic compile-time binding graph)}}
+// CHECK: {{(bindings<...> source requires every inferred constructor dependency to map to an interface binding|static_container requires a resolvable compile-time binding graph)}}

@@ -113,8 +113,8 @@ class binding_resolution<Host, static_registry<Registrations...>>
     static_assert(static_registry_type::valid,
                   "register_type bindings<...> requires a valid compile-time "
                   "bindings source");
-    static_assert(detail::graph_analysis<static_registry_type, true>::acyclic,
-                  "register_type bindings<...> requires an acyclic "
+    static_assert(detail::graph_analysis<static_registry_type, true>::resolvable,
+                  "register_type bindings<...> requires a resolvable "
                   "compile-time binding graph");
     static_assert((detail::binding_factory_is_default_constructible<
                        detail::binding_model<Registrations>>::value &&

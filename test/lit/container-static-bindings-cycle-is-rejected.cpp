@@ -18,4 +18,4 @@ int main() {
     (void)instance;
 }
 
-// CHECK: container requires an acyclic compile-time binding graph
+// CHECK: container requires a resolvable compile-time binding graph

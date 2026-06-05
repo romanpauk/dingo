@@ -17,4 +17,4 @@ int main() {
     (void)instance;
 }
 
-// CHECK: static_container requires an acyclic compile-time binding graph
+// CHECK: static_container requires a resolvable compile-time binding graph

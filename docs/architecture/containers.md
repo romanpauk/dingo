@@ -101,10 +101,14 @@ to the normal constructor-based path.
 
 ## Cycle Rules
 
-Purely static cycles are rejected at compile time.
+Purely static cycles are rejected at compile time unless every binding in the
+cycle uses `scope<shared_cyclical>`. A supported static cycle uses the same
+two-phase storage model as runtime `shared_cyclical` registration, so each
+participating slot can be published before its dependencies finish resolving.
 
-`container<bindings<...>>` also rejects statically known static cycles at
-compile time.
+`container<bindings<...>>` applies the same rule to statically known static
+cycles: ordinary static cycles are rejected, while all-`shared_cyclical` static
+cycles can resolve through the static binding path.
 
 Mixed runtime/static recursion that only becomes visible during actual runtime
 resolution is rejected at runtime through the normal recursion exception path.
