@@ -98,6 +98,27 @@ TEST(static_bindings_source_test,
                                  typename registry_type::binding<logger>>>);
 }
 
+TEST(static_bindings_source_test,
+     inferred_dependencies_can_reuse_one_binding_for_multiple_request_shapes) {
+    struct config {};
+    struct service {
+        service(config&, std::shared_ptr<config>) {}
+    };
+
+    using source = dingo::bindings<
+        dingo::bind<scope<shared>, storage<std::shared_ptr<config>>>,
+        dingo::bind<scope<unique>, storage<service>>>;
+    using registry_type = typename source::type;
+
+    static_assert(registry_type::valid);
+    static_assert(std::is_same_v<typename registry_type::dependencies<service>,
+                                 void>);
+    static_assert(
+        std::is_same_v<typename registry_type::dependency_bindings<service>,
+                       type_list<typename registry_type::binding<config>,
+                                 typename registry_type::binding<config>>>);
+}
+
 TEST(static_bindings_source_test, annotated_dependencies_normalize_to_annotated_interfaces) {
     struct service_tag {};
     struct config_tag {};

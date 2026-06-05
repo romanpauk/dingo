@@ -122,31 +122,63 @@ template <typename Request> struct binding_request_converter {
     operator Request() const;
 };
 
-template <typename RequestTypes> struct binding_argument_placeholder;
-
-template <typename... RequestTypes>
-struct binding_argument_placeholder<type_list<RequestTypes...>>
-    : binding_request_converter<RequestTypes>... {};
-
-template <typename RequestTypes>
-using binding_argument_placeholder_t =
-    binding_argument_placeholder<RequestTypes>;
-
 template <typename Implementation, typename BindingTuple>
 struct binding_tuple_constructible;
+
+template <typename Implementation, typename SelectedRequests,
+          typename BindingTuple>
+struct binding_tuple_request_constructible;
+
+template <typename Implementation, typename SelectedRequests,
+          typename RequestTypes, typename RemainingBindings>
+struct binding_request_options_constructible;
+
+template <typename Implementation, typename... SelectedRequests>
+struct binding_tuple_request_constructible<Implementation,
+                                           type_list<SelectedRequests...>,
+                                           type_list<>>
+    : std::bool_constant<
+          is_list_initializable_v<
+              Implementation,
+              binding_request_converter<SelectedRequests>...> ||
+          is_direct_initializable_v<
+              Implementation,
+              binding_request_converter<SelectedRequests>...>> {};
+
+template <typename Implementation, typename... SelectedRequests, typename Head,
+          typename... Tail>
+struct binding_tuple_request_constructible<Implementation,
+                                           type_list<SelectedRequests...>,
+                                           type_list<Head, Tail...>>
+    : binding_request_options_constructible<
+          Implementation, type_list<SelectedRequests...>,
+          typename binding_request_types<Head>::type, type_list<Tail...>> {};
+
+template <typename Implementation, typename SelectedRequests,
+          typename RemainingBindings>
+struct binding_request_options_constructible<Implementation, SelectedRequests,
+                                             type_list<>,
+                                             RemainingBindings>
+    : std::false_type {};
+
+template <typename Implementation, typename... SelectedRequests,
+          typename Request, typename... Requests, typename RemainingBindings>
+struct binding_request_options_constructible<
+    Implementation, type_list<SelectedRequests...>, type_list<Request, Requests...>,
+    RemainingBindings>
+    : std::bool_constant<
+          binding_tuple_request_constructible<
+              Implementation, type_list<SelectedRequests..., Request>,
+              RemainingBindings>::value ||
+          binding_request_options_constructible<
+              Implementation, type_list<SelectedRequests...>,
+              type_list<Requests...>, RemainingBindings>::value> {};
 
 template <typename Implementation, typename... InterfaceBindings>
 struct binding_tuple_constructible<Implementation,
                                    type_list<InterfaceBindings...>>
-    : std::bool_constant<
-          is_list_initializable_v<Implementation,
-                                  binding_argument_placeholder_t<
-                                      typename binding_request_types<
-                                          InterfaceBindings>::type>...> ||
-          is_direct_initializable_v<
-              Implementation, binding_argument_placeholder_t<
-                                  typename binding_request_types<
-                                      InterfaceBindings>::type>...>> {};
+    : binding_tuple_request_constructible<Implementation, type_list<>,
+                                          type_list<InterfaceBindings...>> {};
 
 template <typename InterfaceBindings, size_t Arity, typename = void>
 struct binding_tuples;
