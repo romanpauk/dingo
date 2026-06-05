@@ -281,11 +281,11 @@ TEST(static_bindings_source_test,
 
     dingo::container<source> container;
     auto& instance = container.resolve<a&>();
-    auto& interface = container.resolve<b_interface&>();
-    auto& b_instance = static_cast<b&>(interface);
+    auto& b_view = container.resolve<b_interface&>();
+    auto& b_instance = static_cast<b&>(b_view);
 
-    EXPECT_EQ(instance.dependency, &interface);
+    EXPECT_EQ(instance.dependency, &b_view);
     EXPECT_EQ(b_instance.dependency, &instance);
     EXPECT_EQ(&container.resolve<a&>(), &instance);
-    EXPECT_EQ(&container.resolve<b_interface&>(), &interface);
+    EXPECT_EQ(&container.resolve<b_interface&>(), &b_view);
 }
