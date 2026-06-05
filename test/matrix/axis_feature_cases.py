@@ -16,6 +16,46 @@ VALUE_DEPENDENCY = frozenset({"direct_value_resolution", "stable_concrete_storag
 
 FEATURE_CASES = (
     FeatureCaseSpec(
+        name="container_child_container_parent",
+        feature="static_parent_container",
+        requires=frozenset({"static_parent_container_child"}),
+        supported_exposed_types=frozenset({"concrete"}),
+        supported_resolved_types=frozenset({"value_ref_ptr"}),
+        checks=(
+            "exercise_static_parent_container_pair<container_parent_shape, container_child_shape>();",
+        ),
+    ),
+    FeatureCaseSpec(
+        name="container_child_static_parent",
+        feature="static_parent_container",
+        requires=frozenset({"static_parent_container_child"}),
+        supported_exposed_types=frozenset({"concrete"}),
+        supported_resolved_types=frozenset({"value_ref_ptr"}),
+        checks=(
+            "exercise_static_parent_container_pair<static_parent_shape, container_child_shape>();",
+        ),
+    ),
+    FeatureCaseSpec(
+        name="static_child_static_parent",
+        feature="static_parent_container",
+        requires=frozenset({"static_parent_static_child"}),
+        supported_exposed_types=frozenset({"concrete"}),
+        supported_resolved_types=frozenset({"value_ref_ptr"}),
+        checks=(
+            "exercise_static_parent_container_pair<static_parent_shape, static_child_shape>();",
+        ),
+    ),
+    FeatureCaseSpec(
+        name="static_child_container_parent",
+        feature="static_parent_container",
+        requires=frozenset({"static_parent_static_child"}),
+        supported_exposed_types=frozenset({"concrete"}),
+        supported_resolved_types=frozenset({"value_ref_ptr"}),
+        checks=(
+            "exercise_static_parent_container_pair<container_parent_shape, static_child_shape>();",
+        ),
+    ),
+    FeatureCaseSpec(
         name="inferred_lambda",
         feature="invoke",
         requires=VALUE_DEPENDENCY,

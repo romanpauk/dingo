@@ -50,6 +50,7 @@
 #include <optional>
 #include <type_traits>
 #include <typeindex>
+#include <utility>
 #include <variant>
 
 #ifdef _MSC_VER
@@ -73,13 +74,40 @@ template <typename T>
 inline constexpr bool is_static_context_argument_v =
     is_static_context_argument<
         std::remove_cv_t<std::remove_reference_t<T>>>::value;
+
+template <typename Parent, typename T, bool RemoveRvalueReferences,
+          bool CheckCache, typename Key, typename = void>
+struct parent_context_resolve_supported : std::false_type {};
+
+template <typename Parent, typename T, bool RemoveRvalueReferences,
+          bool CheckCache>
+struct parent_context_resolve_supported<
+    Parent, T, RemoveRvalueReferences, CheckCache, void,
+    std::void_t<decltype(std::declval<Parent&>().template resolve<
+                         T, RemoveRvalueReferences, CheckCache>(
+        std::declval<runtime_context&>()))>> : std::true_type {};
+
+template <typename Parent, typename T, bool RemoveRvalueReferences,
+          bool CheckCache, typename Key>
+struct parent_context_resolve_supported<
+    Parent, T, RemoveRvalueReferences, CheckCache, Key,
+    std::void_t<decltype(std::declval<Parent&>().template resolve<
+                         T, RemoveRvalueReferences, CheckCache>(
+        std::declval<runtime_context&>(), key<Key>{}))>> : std::true_type {};
+
+template <typename Parent, typename T, bool RemoveRvalueReferences,
+          bool CheckCache, typename Key>
+inline constexpr bool parent_context_resolve_supported_v =
+    parent_context_resolve_supported<Parent, T, RemoveRvalueReferences,
+                                     CheckCache, Key>::value;
 } // namespace detail
 
-template <typename... Registrations>
-class detail::container_with_static_bindings<static_registry<Registrations...>>
+template <typename ParentContainer, typename... Registrations>
+class detail::container_with_static_bindings<static_registry<Registrations...>,
+                                             ParentContainer>
     : public detail::runtime_registration_api<
           detail::container_with_static_bindings<
-              static_registry<Registrations...>>> {
+              static_registry<Registrations...>, ParentContainer>> {
     friend class runtime_context;
     template <typename, typename, bool, typename, typename>
     friend struct detail::runtime_binding_source;
@@ -89,7 +117,9 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
     friend struct detail::static_binding_source;
 
     using static_registry_type_ = static_registry<Registrations...>;
-    using self_type = detail::container_with_static_bindings<static_registry_type_>;
+    using self_type =
+        detail::container_with_static_bindings<static_registry_type_,
+                                               ParentContainer>;
     using runtime_base =
         runtime_registry<dynamic_container_traits,
                          typename dynamic_container_traits::allocator_type,
@@ -100,6 +130,8 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
     using binding_resolution_ref =
         detail::binding_scope_ref<static_state, Registrations...>;
     using static_context_type = static_context<static_registry_type_>;
+    static constexpr bool has_parent_v = !std::is_void_v<ParentContainer>;
+    using parent_container_type = ParentContainer;
 
     template <typename T, typename Key>
     using static_selection_t = detail::static_binding_t<
@@ -165,9 +197,10 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
     template <typename Request, typename Key>
     struct static_binding_satisfies_request<Request, Key, true>
         : std::bool_constant<
-              detail::static_binding_resolvable_v<
-                  typename static_selection_t<Request, Key>::binding_type,
-                  static_registry_type_> &&
+              (has_parent_v ||
+               detail::static_binding_resolvable_v<
+                   typename static_selection_t<Request, Key>::binding_type,
+                   static_registry_type_>) &&
               detail::binding_supports_request_v<
                   request_interface_t<Request>,
                   typename static_selection_t<Request, Key>::binding_type>> {};
@@ -186,6 +219,16 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
             return !has_runtime_binding<Request, Key>();
         }
     }
+
+    template <typename T, bool RemoveRvalueReferences, typename Key = void>
+    static constexpr bool has_static_resolve_request_v =
+        static_binding_satisfies_request_v<
+            resolve_request_t<T, RemoveRvalueReferences>, Key>;
+
+    template <typename T, bool RemoveRvalueReferences, typename Key = void>
+    static constexpr detail::binding_selection_status static_resolve_status_v =
+        static_selection_t<resolve_request_t<T, RemoveRvalueReferences>,
+                           Key>::status;
 
     template <typename Collection, typename Key = void>
     bool select_static_collection() {
@@ -246,6 +289,8 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
 
     template <typename Collection, typename Key = void>
     static constexpr bool has_static_collection_v =
+        detail::static_collection_binding_count<static_registry_type_,
+                                                Collection, Key>() != 0 &&
         detail::static_bindings_resolvable_v<
             typename static_registry_type_::template bindings<
                 normalized_type_t<
@@ -412,7 +457,14 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
         using binding = typename selection::binding_type;
         if constexpr (selection::status !=
                       detail::binding_selection_status::found) {
-            throw detail::make_type_not_found_exception<LookupRequest>(context);
+            if constexpr (selection::status ==
+                          detail::binding_selection_status::ambiguous) {
+                throw detail::make_type_ambiguous_exception<LookupRequest>(
+                    context);
+            } else {
+                throw detail::make_type_not_found_exception<LookupRequest>(
+                    context);
+            }
         } else {
             static_resolution_ref static_state_ref(
                 static_state_);
@@ -429,7 +481,12 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
         using binding = typename selection::binding_type;
         if constexpr (selection::status !=
                       detail::binding_selection_status::found) {
-            throw detail::make_type_not_found_exception<Request>(context);
+            if constexpr (selection::status ==
+                          detail::binding_selection_status::ambiguous) {
+                throw detail::make_type_ambiguous_exception<Request>(context);
+            } else {
+                throw detail::make_type_not_found_exception<Request>(context);
+            }
         } else {
             binding_resolution_ref static_state_ref(
                 static_state_);
@@ -520,6 +577,35 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
             missing{*this, id};
         auto sources = detail::make_selected_binding_sources(selected, missing);
         return detail::resolve_from_binding_sources<T, R>(context, sources);
+    }
+
+    template <typename T, bool RemoveRvalueReferences, typename Key = void,
+              typename R = resolve_result_t<T, RemoveRvalueReferences>>
+    R resolve_parent(none_t = {}) {
+        if constexpr (std::is_void_v<Key>) {
+            return parent_->template resolve<T>();
+        } else {
+            return parent_->template resolve<T>(key<Key>{});
+        }
+    }
+
+    template <typename T, bool RemoveRvalueReferences, bool CheckCache,
+              typename Key = void,
+              typename R = resolve_request_t<T, RemoveRvalueReferences>>
+    R resolve_parent(runtime_context& context) {
+        if constexpr (detail::parent_context_resolve_supported_v<
+                          parent_container_type, T, RemoveRvalueReferences,
+                          CheckCache, Key>) {
+            if constexpr (std::is_void_v<Key>) {
+                return parent_->template resolve<T, RemoveRvalueReferences,
+                                                 CheckCache>(context);
+            } else {
+                return parent_->template resolve<T, RemoveRvalueReferences,
+                                                 CheckCache>(context, key<Key>{});
+            }
+        } else {
+            return resolve_parent<T, RemoveRvalueReferences, Key>();
+        }
     }
 
     template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
@@ -626,16 +712,25 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
     explicit container_with_static_bindings(allocator_type alloc)
         : runtime_registry_(nullptr, alloc) {}
 
+    template <typename Parent = ParentContainer,
+              std::enable_if_t<!std::is_void_v<Parent>, int> = 0>
+    explicit container_with_static_bindings(Parent* parent,
+                                            allocator_type alloc =
+                                                allocator_type())
+        : runtime_registry_(nullptr, alloc), parent_(parent) {}
+
     container_with_static_bindings(const self_type& other)
         : runtime_registry_(other.runtime_registry_),
           static_registry_(other.static_registry_),
-          static_state_(other.static_state_) {
+          static_state_(other.static_state_),
+          parent_(other.parent_) {
     }
 
     container_with_static_bindings(self_type&& other)
         : runtime_registry_(std::move(other.runtime_registry_)),
           static_registry_(std::move(other.static_registry_)),
-          static_state_(std::move(other.static_state_)) {
+          static_state_(std::move(other.static_state_)),
+          parent_(other.parent_) {
     }
 
     self_type& operator=(const self_type& other) {
@@ -643,6 +738,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
             runtime_registry_ = other.runtime_registry_;
             static_registry_ = other.static_registry_;
             static_state_ = other.static_state_;
+            parent_ = other.parent_;
         }
         return *this;
     }
@@ -652,6 +748,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
             runtime_registry_ = std::move(other.runtime_registry_);
             static_registry_ = std::move(other.static_registry_);
             static_state_ = std::move(other.static_state_);
+            parent_ = other.parent_;
         }
         return *this;
     }
@@ -670,28 +767,83 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
         if constexpr (detail::is_typed_key_v<IdType>) {
             using key_type = typename std::decay_t<IdType>::type;
             if constexpr (collection_traits<R>::is_collection) {
-                if (select_static_collection<R, key_type>()) {
-                    return resolve_static<T, false, key_type>();
+                if constexpr (has_static_collection_v<R, key_type>) {
+                    if (select_static_collection<R, key_type>()) {
+                        return resolve_static<T, false, key_type>();
+                    }
+                }
+                if constexpr (has_parent_v) {
+                    if (parent_ && count_collection<R, key_type>() == 0) {
+                        return resolve_parent<T, false, key_type>();
+                    }
                 }
             } else {
                 if (select_static_resolve<T, key_type>()) {
                     return resolve_static<T, false, key_type>();
                 }
+                if constexpr (has_parent_v) {
+                    if constexpr (static_resolve_status_v<
+                                      T, false, key_type> ==
+                                  detail::binding_selection_status::not_found) {
+                        if (parent_ &&
+                            resolve_binding_status<T, false, key_type>() ==
+                                detail::binding_selection_status::not_found) {
+                            return resolve_parent<T, false, key_type>();
+                        }
+                    }
+                }
             }
             runtime_context context;
             return resolve<T, false, true, key_type>(context);
         } else if constexpr (!is_none_v<std::decay_t<IdType>>) {
+            if constexpr (has_parent_v) {
+                if constexpr (collection_traits<R>::is_collection) {
+                    if (parent_ &&
+                        runtime_registry_
+                                .template count_runtime_collection<R>(id) ==
+                            0) {
+                        return parent_->template resolve<T>(
+                            std::forward<IdType>(id));
+                    }
+                } else {
+                    if (parent_ &&
+                        runtime_registry_.template binding_status_for_id<T>(
+                            id) ==
+                            detail::binding_selection_status::not_found) {
+                        return parent_->template resolve<T>(
+                            std::forward<IdType>(id));
+                    }
+                }
+            }
             runtime_context context;
             return resolve_runtime_only<T, false, runtime_auto_constructible_v<T>>(
                 context, std::forward<IdType>(id));
         } else {
             if constexpr (collection_traits<R>::is_collection) {
-                if (select_static_collection<R>()) {
-                    return resolve_static<T, false>();
+                if constexpr (has_static_collection_v<R>) {
+                    if (select_static_collection<R>()) {
+                        return resolve_static<T, false>();
+                    }
+                }
+                if constexpr (has_parent_v) {
+                    if (parent_ && count_collection<R>() == 0) {
+                        return resolve_parent<T, false>();
+                    }
                 }
             } else {
                 if (select_static_resolve<T>()) {
                     return resolve_static<T, false>();
+                }
+                if constexpr (has_parent_v) {
+                    if constexpr (static_resolve_status_v<
+                                      T, false> ==
+                                  detail::binding_selection_status::not_found) {
+                        if (parent_ &&
+                            resolve_binding_status<T, false>() ==
+                                detail::binding_selection_status::not_found) {
+                            return resolve_parent<T, false>();
+                        }
+                    }
                 }
             }
             runtime_context context;
@@ -848,6 +1000,17 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
             detail::binding_resolution_policy::ambiguous_on_conflict);
     }
 
+    template <typename T, bool RemoveRvalueReferences, typename Key = void>
+    detail::binding_selection_status resolve_binding_status() {
+        using request_type = resolve_request_t<T, RemoveRvalueReferences>;
+        const auto runtime_status =
+            runtime_registry_.template binding_status<request_type, Key>();
+        return detail::resolve_binding_status<
+            static_resolve_status_v<T, RemoveRvalueReferences, Key>>(
+            runtime_status,
+            detail::binding_resolution_policy::ambiguous_on_conflict);
+    }
+
     template <typename T, typename Key = void, typename Fn>
     std::size_t append_collection(T& results, runtime_context& context,
                                   Fn&& fn) {
@@ -908,21 +1071,63 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
     template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
               typename R = resolve_result_t<T, RemoveRvalueReferences>>
     R resolve(static_context_type& context, none_t) {
-        return resolve_static<T, RemoveRvalueReferences>(context);
+        if constexpr (has_static_resolve_request_v<T,
+                                                   RemoveRvalueReferences>) {
+            return resolve_static<T, RemoveRvalueReferences>(context);
+        } else if constexpr (has_parent_v) {
+            if constexpr (static_resolve_status_v<
+                              T, RemoveRvalueReferences> ==
+                          detail::binding_selection_status::not_found) {
+                if (parent_) {
+                    return resolve_parent<T, RemoveRvalueReferences>();
+                }
+            }
+            return resolve_static<T, RemoveRvalueReferences>(context);
+        } else {
+            return resolve_static<T, RemoveRvalueReferences>(context);
+        }
     }
 
     template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
               typename Key = void,
               typename R = resolve_result_t<T, RemoveRvalueReferences>>
     R resolve(static_context_type& context) {
-        return resolve_static<T, RemoveRvalueReferences, Key>(context);
+        if constexpr (has_static_resolve_request_v<T, RemoveRvalueReferences,
+                                                   Key>) {
+            return resolve_static<T, RemoveRvalueReferences, Key>(context);
+        } else if constexpr (has_parent_v) {
+            if constexpr (static_resolve_status_v<
+                              T, RemoveRvalueReferences, Key> ==
+                          detail::binding_selection_status::not_found) {
+                if (parent_) {
+                    return resolve_parent<T, RemoveRvalueReferences, Key>();
+                }
+            }
+            return resolve_static<T, RemoveRvalueReferences, Key>(context);
+        } else {
+            return resolve_static<T, RemoveRvalueReferences, Key>(context);
+        }
     }
 
     template <typename T, bool RemoveRvalueReferences, bool CheckCache,
               typename Key,
               typename R = resolve_request_t<T, RemoveRvalueReferences>>
     R resolve(static_context_type& context, key<Key>) {
-        return resolve_static<T, RemoveRvalueReferences, Key>(context);
+        if constexpr (has_static_resolve_request_v<T, RemoveRvalueReferences,
+                                                   Key>) {
+            return resolve_static<T, RemoveRvalueReferences, Key>(context);
+        } else if constexpr (has_parent_v) {
+            if constexpr (static_resolve_status_v<
+                              T, RemoveRvalueReferences, Key> ==
+                          detail::binding_selection_status::not_found) {
+                if (parent_) {
+                    return resolve_parent<T, RemoveRvalueReferences, Key>();
+                }
+            }
+            return resolve_static<T, RemoveRvalueReferences, Key>(context);
+        } else {
+            return resolve_static<T, RemoveRvalueReferences, Key>(context);
+        }
     }
 
     template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
@@ -936,10 +1141,29 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
               typename R = resolve_result_t<T, RemoveRvalueReferences>>
     R resolve(runtime_context& context) {
         if constexpr (collection_traits<R>::is_collection) {
+            if constexpr (has_parent_v) {
+                if (parent_ && count_collection<R, Key>() == 0) {
+                    return resolve_parent<T, RemoveRvalueReferences,
+                                          CheckCache, Key>(context);
+                }
+            }
             return construct_collection<R>(context,
                                            detail::binding_collection_append{},
                                            collection_key<Key>());
         } else {
+            if constexpr (has_parent_v) {
+                if constexpr (static_resolve_status_v<
+                                  T, RemoveRvalueReferences, Key> ==
+                              detail::binding_selection_status::not_found) {
+                    if (parent_ &&
+                        resolve_binding_status<T, RemoveRvalueReferences,
+                                               Key>() ==
+                            detail::binding_selection_status::not_found) {
+                        return resolve_parent<T, RemoveRvalueReferences,
+                                              CheckCache, Key>(context);
+                    }
+                }
+            }
             using request_type = R;
             detail::runtime_binding_source<self_type, T, RemoveRvalueReferences,
                                            Key, request_type>
@@ -972,6 +1196,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>>
     runtime_registry_type runtime_registry_;
     static_registry_type static_registry_;
     static_state static_state_;
+    parent_container_type* parent_ = nullptr;
 };
 
 namespace detail {
@@ -979,6 +1204,19 @@ namespace detail {
 template <typename... Params> struct container_base;
 template <typename Param, typename Enable = void>
 struct container_base_from_parameter;
+template <typename Param, typename Parent, typename Enable = void>
+struct container_base_from_static_parent;
+struct container_base_runtime_two_parameter_tag {};
+struct container_base_static_parent_tag {};
+struct container_base_invalid_two_parameter_tag {};
+
+template <typename First>
+using container_base_two_parameter_tag_t = std::conditional_t<
+    is_runtime_container_traits_v<First>, container_base_runtime_two_parameter_tag,
+    std::conditional_t<is_static_registry_v<First> ||
+                           is_bindings_wrapper_v<First>,
+                       container_base_static_parent_tag,
+                       container_base_invalid_two_parameter_tag>>;
 
 template <> struct container_base<> {
     using type = runtime_container<dynamic_container_traits>;
@@ -990,9 +1228,28 @@ template <typename Param> struct container_base<Param> {
 
 template <typename First, typename Second>
 struct container_base<First, Second> {
-    static_assert(is_runtime_container_traits_v<First>,
-                  "container<T, U> requires runtime traits + allocator");
+    using type = typename container_base<
+        container_base_two_parameter_tag_t<First>, First, Second>::type;
+};
+
+template <typename First, typename Second>
+struct container_base<container_base_runtime_two_parameter_tag, First,
+                      Second> {
     using type = runtime_container<First, Second, void>;
+};
+
+template <typename First, typename Second>
+struct container_base<container_base_static_parent_tag, First, Second> {
+    using type = typename container_base_from_static_parent<First, Second>::type;
+};
+
+template <typename First, typename Second>
+struct container_base<container_base_invalid_two_parameter_tag, First,
+                      Second> {
+    static_assert(
+        container_dependent_false_v<First, Second>,
+        "container<T, U> requires runtime traits + allocator or "
+        "compile-time bindings + parent container");
 };
 
 template <typename First, typename Second, typename Third>
@@ -1042,6 +1299,31 @@ struct container_base_from_parameter<
                   "bindings source");
 
     using type = container_with_static_bindings<static_registry_type>;
+};
+
+template <typename Param, typename Parent, typename Enable>
+struct container_base_from_static_parent {
+    static_assert(container_dependent_false_v<Param, Parent>,
+                  "container<bindings<...>, Parent> requires a valid "
+                  "compile-time bindings source");
+};
+
+template <typename Param, typename Parent>
+struct container_base_from_static_parent<
+    Param, Parent, std::enable_if_t<is_static_registry_v<Param>>> {
+    using type = container_with_static_bindings<Param, Parent>;
+};
+
+template <typename Param, typename Parent>
+struct container_base_from_static_parent<
+    Param, Parent, std::enable_if_t<is_bindings_wrapper_v<Param>>> {
+    using static_registry_type = bindings_wrapper_registry_t<Param>;
+
+    static_assert(is_static_registry_v<static_registry_type>,
+                  "container<bindings<...>, Parent> requires a valid "
+                  "compile-time bindings source");
+
+    using type = container_with_static_bindings<static_registry_type, Parent>;
 };
 
 } // namespace detail

@@ -77,6 +77,11 @@ neither source is an override of the other.
 A request for a collection can use both sources. Runtime and static matches are
 merged into the returned collection.
 
+Parent containers are another fallback source. `container<bindings<...>, Parent>`
+and `static_container<bindings<...>, Parent>` keep the child graph local first:
+a child static or runtime binding wins for singular requests, and a missing
+child dependency can be resolved from the parent graph.
+
 Local `bindings<...>` on a registration are different: they describe the private
 dependencies used while building that registered type. For a single dependency,
 the local binding is checked before the host container. For a dependency

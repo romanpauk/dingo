@@ -32,11 +32,13 @@ template <typename Tag = void> struct static_container_traits {
     static constexpr bool cache_enabled = true;
 };
 
-template <typename StaticSource> class static_container;
+template <typename StaticSource, typename ParentContainer = void>
+class static_container;
 
 namespace detail {
 
-template <typename StaticRegistry> class container_with_static_bindings;
+template <typename StaticRegistry, typename ParentContainer = void>
+class container_with_static_bindings;
 
 template <typename T> struct is_static_registry : std::false_type {};
 

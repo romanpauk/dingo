@@ -172,6 +172,19 @@ FEATURES = (
         ),
     ),
     Feature(
+        name="static_parent_container",
+        requires=frozenset(
+            {
+                "concrete_binding",
+                "direct_value_resolution",
+                "resolved_concrete",
+                "stable_concrete_storage",
+            }
+        ),
+        modes=frozenset({"static"}),
+        support_headers=("matrix/support/static_parent_container.h",),
+    ),
+    Feature(
         name="annotated",
         requires=frozenset({"annotated_binding", "resolved_annotated"}),
         modes=frozenset({"runtime", "static", "mixed"}),
