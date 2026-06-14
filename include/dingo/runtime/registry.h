@@ -25,7 +25,6 @@
 #include <dingo/resolution/runtime_binding.h>
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
-#include <dingo/runtime/source.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/request_traits.h>
@@ -56,10 +55,6 @@ class runtime_registry : public allocator_base<Allocator> {
     template <typename, typename> friend class detail::binding_resolution;
     template <typename, typename>
     friend class detail::container_with_static_bindings;
-    template <typename, typename, bool, typename>
-    friend struct detail::runtime_selected_binding_source;
-    template <typename, typename, bool, bool, typename>
-    friend struct detail::runtime_missing_binding_source;
     template <typename, typename, typename> friend class runtime_container;
     template <typename ContainerTraitsT, typename AllocatorT,
               typename ParentRegistryT, typename ResolveRootT>
@@ -570,6 +565,38 @@ class runtime_registry : public allocator_base<Allocator> {
         return {};
     }
 
+    template <typename T, bool CheckCache, typename IdType>
+    struct selected_runtime_binding {
+        registry_type& registry;
+        IdType& id;
+
+        decltype(auto) select() {
+            return registry.template runtime_source_select<T>(
+                std::forward<IdType>(id));
+        }
+
+        template <typename Request, typename Selection>
+        decltype(auto) resolve(runtime_context& context, Selection selection) {
+            return registry.template runtime_source_resolve<T, CheckCache>(
+                selection, context, std::forward<IdType>(id));
+        }
+    };
+
+    template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
+              typename IdType>
+    struct missing_runtime_binding {
+        registry_type& registry;
+        IdType& id;
+
+        template <typename Request>
+        request_interface_t<Request> resolve(runtime_context& context) {
+            return registry.template runtime_source_missing<
+                T, RemoveRvalueReferences, MayAutoConstruct, IdType,
+                request_interface_t<Request>>(context,
+                                              std::forward<IdType>(id));
+        }
+    };
+
     template <typename Request, typename IdType = none_t>
     runtime_selection runtime_source_select(IdType&& id = IdType()) {
         using exact_type =
@@ -958,11 +985,9 @@ class runtime_registry : public allocator_base<Allocator> {
             }
         }
 
-        detail::runtime_selected_binding_source<registry_type, T, CheckCache,
-                                                IdType>
-            selected{*this, id};
-        detail::runtime_missing_binding_source<
-            registry_type, T, RemoveRvalueReferences, MayAutoConstruct, IdType>
+        selected_runtime_binding<T, CheckCache, IdType> selected{*this, id};
+        missing_runtime_binding<T, RemoveRvalueReferences, MayAutoConstruct,
+                                IdType>
             missing{*this, id};
         auto sources = detail::make_selected_binding_sources(selected, missing);
         return detail::resolve_from_binding_sources<T, R>(context, sources);

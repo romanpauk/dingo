@@ -31,13 +31,11 @@
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/runtime/context.h>
 #include <dingo/runtime/container_traits.h>
-#include <dingo/runtime/source.h>
 #include <dingo/runtime_container.h>
 #include <dingo/static/context.h>
 #include <dingo/static/container_traits.h>
 #include <dingo/static/local_resolution.h>
 #include <dingo/static/resolution.h>
-#include <dingo/static/source.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/complete_type.h>
 #include <dingo/type/normalized_type.h>
@@ -109,12 +107,6 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
           detail::container_with_static_bindings<
               static_registry<Registrations...>, ParentContainer>> {
     friend class runtime_context;
-    template <typename, typename, bool, typename, typename>
-    friend struct detail::runtime_binding_source;
-    template <typename, typename, bool, bool, typename>
-    friend struct detail::runtime_missing_binding_source;
-    template <typename, typename, typename, typename>
-    friend struct detail::static_binding_source;
 
     using static_registry_type_ = static_registry<Registrations...>;
     using self_type =
@@ -144,18 +136,6 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
         return {};
     }
 
-    template <typename Request, typename Key>
-    detail::binding_selection_status runtime_source_status() {
-        return runtime_registry_.template binding_status<Request, Key>();
-    }
-
-    template <typename T, bool RemoveRvalueReferences, typename Key>
-    decltype(auto) resolve_runtime_source(runtime_context& context) {
-        return resolve_runtime_only<T, RemoveRvalueReferences,
-                                    runtime_auto_constructible_v<T>>(
-            context, collection_key<Key>());
-    }
-
     template <typename T>
     static constexpr bool runtime_auto_constructible_v =
         std::is_same_v<request_value_t<T>, std::decay_t<T>> &&
@@ -163,6 +143,78 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
          (std::is_lvalue_reference_v<T> &&
           std::is_const_v<std::remove_reference_t<T>> &&
           is_auto_constructible<std::decay_t<T>>::value));
+
+    template <typename T, bool CheckCache, typename IdType>
+    struct selected_runtime_binding {
+        runtime_base& registry;
+        IdType& id;
+
+        decltype(auto) select() {
+            return registry.template runtime_source_select<T>(
+                std::forward<IdType>(id));
+        }
+
+        template <typename Request, typename Selection>
+        decltype(auto) resolve(runtime_context& context, Selection selection) {
+            return registry.template runtime_source_resolve<T, CheckCache>(
+                selection, context, std::forward<IdType>(id));
+        }
+    };
+
+    template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
+              typename IdType>
+    struct missing_runtime_binding {
+        self_type& self;
+        IdType& id;
+
+        template <typename Request>
+        request_interface_t<Request> resolve(runtime_context& context) {
+            return self.template resolve_missing_runtime<
+                T, RemoveRvalueReferences, MayAutoConstruct, IdType,
+                request_interface_t<Request>>(context,
+                                              std::forward<IdType>(id));
+        }
+    };
+
+    template <typename T, bool RemoveRvalueReferences, typename Key,
+              typename Request>
+    struct runtime_binding_candidate {
+        static constexpr bool can_resolve = true;
+
+        self_type& self;
+
+        detail::binding_selection_status status() const {
+            return self.runtime_registry_.template binding_status<Request,
+                                                                  Key>();
+        }
+
+        template <typename ResolveRequest>
+        decltype(auto) resolve(runtime_context& context) {
+            return self.template resolve_runtime_only<
+                T, RemoveRvalueReferences, runtime_auto_constructible_v<T>>(
+                context, collection_key<Key>());
+        }
+    };
+
+    template <typename Request, typename Key>
+    struct static_binding_candidate {
+        using selection = detail::static_binding_t<
+            typename static_registry_type_::template bindings<Request, Key>>;
+        static constexpr bool can_resolve =
+            selection::status == detail::binding_selection_status::found;
+
+        self_type& self;
+
+        constexpr detail::binding_selection_status status() const {
+            return selection::status;
+        }
+
+        template <typename ResolveRequest>
+        decltype(auto) resolve(runtime_context& context) {
+            return self.template resolve_binding_selection<Request, Key>(
+                context);
+        }
+    };
 
     template <typename Request, typename Key = void>
     bool has_runtime_binding() {
@@ -497,11 +549,6 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
         }
     }
 
-    template <typename Request, typename Key>
-    decltype(auto) resolve_static_source(runtime_context& context) {
-        return resolve_binding_selection<Request, Key>(context);
-    }
-
     template <typename T, bool RemoveRvalueReferences, typename Key = void,
               typename Context,
               typename R = resolve_result_t<T, RemoveRvalueReferences>>
@@ -569,11 +616,10 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
         using Type = normalized_type_t<T>;
         static_assert(!std::is_const_v<Type>);
 
-        detail::runtime_selected_binding_source<runtime_registry_type, T,
-                                                CheckCache, IdType>
-            selected{runtime_registry_, id};
-        detail::runtime_missing_binding_source<
-            self_type, T, RemoveRvalueReferences, MayAutoConstruct, IdType>
+        selected_runtime_binding<T, CheckCache, IdType> selected{
+            runtime_registry_, id};
+        missing_runtime_binding<T, RemoveRvalueReferences, MayAutoConstruct,
+                                IdType>
             missing{*this, id};
         auto sources = detail::make_selected_binding_sources(selected, missing);
         return detail::resolve_from_binding_sources<T, R>(context, sources);
@@ -606,15 +652,6 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
         } else {
             return resolve_parent<T, RemoveRvalueReferences, Key>();
         }
-    }
-
-    template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
-              typename IdType,
-              typename R = resolve_request_t<T, RemoveRvalueReferences>>
-    R runtime_source_missing(runtime_context& context, IdType&& id) {
-        return resolve_missing_runtime<T, RemoveRvalueReferences,
-                                       MayAutoConstruct, IdType, R>(
-            context, std::forward<IdType>(id));
     }
 
     template <typename T, typename Factory = constructor<normalized_type_t<T>>,
@@ -1165,12 +1202,10 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
                 }
             }
             using request_type = R;
-            detail::runtime_binding_source<self_type, T, RemoveRvalueReferences,
-                                           Key, request_type>
+            runtime_binding_candidate<T, RemoveRvalueReferences, Key,
+                                      request_type>
                 runtime{*this};
-            detail::static_binding_source<self_type, static_registry_type,
-                                          request_type, Key>
-                static_binding{*this};
+            static_binding_candidate<request_type, Key> static_binding{*this};
             auto sources = detail::make_two_binding_sources(
                 runtime, static_binding, runtime,
                 detail::binding_resolution_policy::ambiguous_on_conflict);
