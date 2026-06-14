@@ -6,6 +6,7 @@
 //
 
 #include <dingo/core/factory_traits.h>
+#include <dingo/container.h>
 #include <dingo/registration/constructor.h>
 #include <dingo/resolution/conversion_cache.h>
 #include <dingo/resolution/runtime_binding.h>
@@ -24,7 +25,38 @@ using namespace dingo;
 
 namespace {
 int build_from_double_and_cstr(double, const char*) { return 0; }
+
+struct runtime_binding_first_interface {
+    virtual ~runtime_binding_first_interface() = default;
+};
+
+struct runtime_binding_second_interface {
+    virtual ~runtime_binding_second_interface() = default;
+};
+
+struct runtime_binding_shared_implementation
+    : runtime_binding_first_interface,
+      runtime_binding_second_interface {};
+
+struct runtime_binding_local_dependency {
+    explicit runtime_binding_local_dependency(int init_value)
+        : value(init_value) {}
+
+    int value;
+};
+
+runtime_binding_local_dependency make_runtime_binding_local_dependency() {
+    return runtime_binding_local_dependency{7};
 }
+
+struct runtime_binding_local_service {
+    explicit runtime_binding_local_service(
+        runtime_binding_local_dependency& dependency)
+        : value(dependency.value) {}
+
+    int value;
+};
+} // namespace
 
 TEST(type_registration_test, get_type) {
     struct A {};
@@ -249,7 +281,7 @@ TEST(type_registration_test, registration_specialization) {
         typename shared_registration::factory_type::type,
         typename shared_registration::conversions_type::type>;
     using shared_binding_data =
-        runtime_binding_data<test_container, shared_storage>;
+        runtime_binding_state<test_container, shared_storage>;
     using shared_binding = runtime_binding<test_container, A, shared_storage,
                                             shared_binding_data>;
 
@@ -264,7 +296,7 @@ TEST(type_registration_test, registration_specialization) {
         typename shared_ptr_registration::factory_type::type,
         typename shared_ptr_registration::conversions_type::type>;
     using shared_ptr_binding_data =
-        runtime_binding_data<test_container, shared_ptr_storage>;
+        runtime_binding_state<test_container, shared_ptr_storage>;
     using shared_ptr_binding =
         runtime_binding<test_container, A, shared_ptr_storage,
                          shared_ptr_binding_data>;
@@ -280,7 +312,7 @@ TEST(type_registration_test, registration_specialization) {
         typename external_registration::factory_type::type,
         typename external_registration::conversions_type::type>;
     using external_binding_data =
-        runtime_binding_data<test_container, external_storage>;
+        runtime_binding_state<test_container, external_storage>;
     using external_binding =
         runtime_binding<test_container, A, external_storage,
                          external_binding_data>;
@@ -296,7 +328,7 @@ TEST(type_registration_test, registration_specialization) {
         typename external_shared_registration::factory_type::type,
         typename external_shared_registration::conversions_type::type>;
     using external_shared_binding_data =
-        runtime_binding_data<test_container, external_shared_storage>;
+        runtime_binding_state<test_container, external_shared_storage>;
     using external_shared_binding =
         runtime_binding<test_container, A, external_shared_storage,
                          external_shared_binding_data>;
@@ -336,6 +368,37 @@ TEST(type_registration_test, registration_specialization) {
         std::is_trivially_destructible_v<conversion_cache<type_list<>>>);
     static_assert(sizeof(shared_binding) <= sizeof(shared_ptr_binding));
     static_assert(sizeof(external_binding) <= sizeof(external_shared_binding));
+}
+
+TEST(type_registration_test, runtime_multi_interface_binding_shares_storage) {
+    dingo::container<> container;
+    container.register_type<scope<shared>,
+                            storage<runtime_binding_shared_implementation>,
+                            interfaces<runtime_binding_first_interface,
+                                       runtime_binding_second_interface>>();
+
+    auto& first = container.resolve<runtime_binding_first_interface&>();
+    auto& second = container.resolve<runtime_binding_second_interface&>();
+    auto* first_impl =
+        dynamic_cast<runtime_binding_shared_implementation*>(&first);
+    auto* second_impl =
+        dynamic_cast<runtime_binding_shared_implementation*>(&second);
+
+    ASSERT_NE(first_impl, nullptr);
+    EXPECT_EQ(first_impl, second_impl);
+}
+
+TEST(type_registration_test,
+     runtime_local_bindings_use_separate_resolution_container) {
+    dingo::container<> container;
+    container.register_type<
+        scope<shared>, storage<runtime_binding_local_service>,
+        dependencies<runtime_binding_local_dependency&>,
+        dingo::bindings<dingo::bind<
+            scope<shared>, storage<runtime_binding_local_dependency>,
+            factory<function<make_runtime_binding_local_dependency>>>>>();
+
+    EXPECT_EQ(container.resolve<runtime_binding_local_service&>().value, 7);
 }
 
 TEST(type_registration_test, binding_model_rewrites_single_interface_storage_leaf) {

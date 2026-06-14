@@ -125,13 +125,13 @@ class runtime_registry : public allocator_base<Allocator> {
 
   protected:
     bool has_runtime_registrations() const { return runtime_bindings_present_; }
-    struct runtime_binding_state;
+    struct runtime_bindings_state;
 
-    runtime_binding_state* runtime_bindings_if_present();
+    runtime_bindings_state* runtime_bindings_if_present();
 
-    const runtime_binding_state* runtime_bindings_if_present() const;
+    const runtime_bindings_state* runtime_bindings_if_present() const;
 
-    runtime_binding_state& ensure_runtime_bindings();
+    runtime_bindings_state& ensure_runtime_bindings();
 
     void destroy_runtime_bindings();
 
@@ -544,8 +544,8 @@ class runtime_registry : public allocator_base<Allocator> {
             bindings;
     };
 
-    struct runtime_binding_state {
-        explicit runtime_binding_state(allocator_type& allocator)
+    struct runtime_bindings_state {
+        explicit runtime_bindings_state(allocator_type& allocator)
             : type_bindings(allocator), type_cache(allocator) {}
 
         typename ContainerTraits::template type_map_type<runtime_type_bindings,
@@ -806,9 +806,9 @@ class runtime_registry : public allocator_base<Allocator> {
 
             registration_requirements::assert_valid();
 
-            using runtime_binding_data_type =
-                runtime_binding_data<instance_container_type, storage_type,
-                                     resolution_container_type>;
+            using runtime_binding_state_type =
+                runtime_binding_state<instance_container_type, storage_type,
+                                      resolution_container_type>;
 
             if constexpr (registration_requirements::valid &&
                           type_list_size_v<interface_types> == 1) {
@@ -817,7 +817,7 @@ class runtime_registry : public allocator_base<Allocator> {
                 using runtime_binding_type = runtime_binding<
                     container_type,
                     typename annotated_traits<interface_type>::type,
-                    storage_type, runtime_binding_data_type>;
+                    storage_type, runtime_binding_state_type>;
                 using registered_binding_type = std::conditional_t<
                     is_none_v<key_id_type>, runtime_binding_type,
                     detail::keyed_binding_identity<key_id_type,
@@ -839,16 +839,16 @@ class runtime_registry : public allocator_base<Allocator> {
                 }
             } else {
                 if constexpr (registration_requirements::valid) {
-                    std::shared_ptr<runtime_binding_data_type> data;
+                    std::shared_ptr<runtime_binding_state_type> data;
                     if constexpr (!is_none_v<std::decay_t<Arg>>) {
-                        data = std::allocate_shared<runtime_binding_data_type>(
-                            allocator_traits::rebind<runtime_binding_data_type>(
-                                get_allocator()),
+                        data = std::allocate_shared<runtime_binding_state_type>(
+                            allocator_traits::rebind<
+                                runtime_binding_state_type>(get_allocator()),
                             parent, std::forward<Arg>(arg));
                     } else {
-                        data = std::allocate_shared<runtime_binding_data_type>(
-                            allocator_traits::rebind<runtime_binding_data_type>(
-                                get_allocator()),
+                        data = std::allocate_shared<runtime_binding_state_type>(
+                            allocator_traits::rebind<
+                                runtime_binding_state_type>(get_allocator()),
                             parent);
                     }
 
@@ -859,7 +859,7 @@ class runtime_registry : public allocator_base<Allocator> {
                             container_type,
                             typename annotated_traits<interface_type>::type,
                             storage_type,
-                            std::shared_ptr<runtime_binding_data_type>>;
+                            std::shared_ptr<runtime_binding_state_type>>;
                         using registered_binding_type = std::conditional_t<
                             is_none_v<key_id_type>, runtime_binding_type,
                             detail::keyed_binding_identity<
@@ -870,7 +870,7 @@ class runtime_registry : public allocator_base<Allocator> {
                                 .first,
                             id, key_id_type{});
                     });
-                    return data->container;
+                    return data->instance_container_ref();
                 } else {
                     return invalid_registration_return<
                         instance_container_type>();
@@ -1066,8 +1066,8 @@ class runtime_registry : public allocator_base<Allocator> {
 
     resolve_root_type* resolve_root_ = nullptr;
 
-    alignas(runtime_binding_state) std::byte
-        runtime_bindings_[sizeof(runtime_binding_state)];
+    alignas(runtime_bindings_state) std::byte
+        runtime_bindings_[sizeof(runtime_bindings_state)];
     bool runtime_bindings_constructed_ = false;
 
     bool runtime_bindings_present_ = false;
@@ -1077,37 +1077,37 @@ template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
           typename ResolveRoot>
 auto runtime_registry<ContainerTraits, Allocator, ParentRegistry,
                       ResolveRoot>::runtime_bindings_if_present()
-    -> runtime_binding_state* {
+    -> runtime_bindings_state* {
     if (!runtime_bindings_constructed_) {
         return nullptr;
     }
     return std::launder(
-        reinterpret_cast<runtime_binding_state*>(runtime_bindings_));
+        reinterpret_cast<runtime_bindings_state*>(runtime_bindings_));
 }
 
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
           typename ResolveRoot>
 auto runtime_registry<ContainerTraits, Allocator, ParentRegistry,
                       ResolveRoot>::runtime_bindings_if_present() const
-    -> const runtime_binding_state* {
+    -> const runtime_bindings_state* {
     if (!runtime_bindings_constructed_) {
         return nullptr;
     }
     return std::launder(
-        reinterpret_cast<const runtime_binding_state*>(runtime_bindings_));
+        reinterpret_cast<const runtime_bindings_state*>(runtime_bindings_));
 }
 
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
           typename ResolveRoot>
 auto runtime_registry<ContainerTraits, Allocator, ParentRegistry,
                       ResolveRoot>::ensure_runtime_bindings()
-    -> runtime_binding_state& {
+    -> runtime_bindings_state& {
     if (!runtime_bindings_constructed_) {
-        new (runtime_bindings_) runtime_binding_state(get_allocator());
+        new (runtime_bindings_) runtime_bindings_state(get_allocator());
         runtime_bindings_constructed_ = true;
     }
     return *std::launder(
-        reinterpret_cast<runtime_binding_state*>(runtime_bindings_));
+        reinterpret_cast<runtime_bindings_state*>(runtime_bindings_));
 }
 
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
@@ -1116,8 +1116,8 @@ void runtime_registry<ContainerTraits, Allocator, ParentRegistry,
                       ResolveRoot>::destroy_runtime_bindings() {
     if (runtime_bindings_constructed_) {
         std::launder(
-            reinterpret_cast<runtime_binding_state*>(runtime_bindings_))
-            ->~runtime_binding_state();
+            reinterpret_cast<runtime_bindings_state*>(runtime_bindings_))
+            ->~runtime_bindings_state();
         runtime_bindings_constructed_ = false;
     }
 }

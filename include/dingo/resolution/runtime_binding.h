@@ -14,65 +14,72 @@
 #include <dingo/runtime/context.h>
 #include <dingo/type/rebind_type.h>
 
+#include <memory>
+#include <type_traits>
+
 namespace dingo {
 // TODO: this is bit convoluted, ideally merge resolver with runtime binding
 
-template <typename Container, typename Storage,
-          typename ResolutionContainer = Container>
-struct runtime_binding_data {
+template <typename InstanceContainer, typename Storage,
+          typename ResolutionContainer = InstanceContainer>
+class runtime_binding_state {
   public:
-    using container_type = Container;
+    using container_type = InstanceContainer;
+    using instance_container_type = InstanceContainer;
     using resolution_container_type = ResolutionContainer;
 
     template <typename ParentContainer, typename... Args>
-    runtime_binding_data(ParentContainer* parent, Args&&... args)
-        : storage(std::forward<Args>(args)...),
-          container(parent, parent->get_allocator()),
-          resolution_container(parent, parent->get_allocator()) {}
+    runtime_binding_state(ParentContainer* parent, Args&&... args)
+        : storage_(std::forward<Args>(args)...),
+          instance_container_(parent, parent->get_allocator()),
+          resolution_container_(parent, parent->get_allocator()) {}
 
-    Storage storage;
-    Container container;
-    ResolutionContainer resolution_container;
+    Storage& storage_ref() { return storage_; }
+    InstanceContainer& instance_container_ref() { return instance_container_; }
+    ResolutionContainer& resolution_container_ref() {
+        return resolution_container_;
+    }
+
+  private:
+    Storage storage_;
+    InstanceContainer instance_container_;
+    ResolutionContainer resolution_container_;
 };
 
-template <typename Container, typename Storage>
-struct runtime_binding_data<Container, Storage, Container> {
+template <typename InstanceContainer, typename Storage>
+class runtime_binding_state<InstanceContainer, Storage, InstanceContainer> {
   public:
-    using container_type = Container;
-    using resolution_container_type = Container;
+    using container_type = InstanceContainer;
+    using instance_container_type = InstanceContainer;
+    using resolution_container_type = InstanceContainer;
 
     template <typename ParentContainer, typename... Args>
-    runtime_binding_data(ParentContainer* parent, Args&&... args)
-        : storage(std::forward<Args>(args)...),
-          container(parent, parent->get_allocator()) {}
+    runtime_binding_state(ParentContainer* parent, Args&&... args)
+        : storage_(std::forward<Args>(args)...),
+          instance_container_(parent, parent->get_allocator()) {}
 
-    Storage storage;
-    Container container;
+    Storage& storage_ref() { return storage_; }
+    InstanceContainer& instance_container_ref() { return instance_container_; }
+    InstanceContainer& resolution_container_ref() {
+        return instance_container_;
+    }
+
+  private:
+    Storage storage_;
+    InstanceContainer instance_container_;
 };
 
-template <typename T> T& get_runtime_binding_data(T& data) { return data; }
+template <typename T> struct runtime_binding_state_traits {
+    using state_type = T;
 
-template <typename T> T& get_runtime_binding_data(std::shared_ptr<T>& data) {
-    return *data;
-}
+    static T& ref(T& state) { return state; }
+};
 
-template <typename T, typename = void>
-struct has_runtime_binding_resolution_container_member : std::false_type {};
+template <typename T> struct runtime_binding_state_traits<std::shared_ptr<T>> {
+    using state_type = T;
 
-template <typename T>
-struct has_runtime_binding_resolution_container_member<
-    T, std::void_t<decltype(std::declval<T&>().resolution_container)>>
-    : std::true_type {};
-
-template <typename T> auto& get_runtime_binding_resolution_container(T& data) {
-    auto& binding_data = get_runtime_binding_data(data);
-    if constexpr (has_runtime_binding_resolution_container_member<
-                      std::remove_reference_t<decltype(binding_data)>>::value) {
-        return binding_data.resolution_container;
-    } else {
-        return binding_data.container;
-    }
-}
+    static T& ref(std::shared_ptr<T>& state) { return *state; }
+};
 
 namespace detail {
 template <typename Storage> using registered_type_t = typename Storage::type;
@@ -90,7 +97,7 @@ static constexpr bool runtime_binding_has_conversion_cache_v =
 // TODO: the container here is just for RTTI, but it is needed to get the
 // inner container type and that is very hard. Perhaps pass RTTI and inner
 // container directly?
-template <typename Container, typename Type, typename Storage, typename Data>
+template <typename Container, typename Type, typename Storage, typename State>
 class runtime_binding
     : public runtime_binding_interface<Container>,
       private detail::binding_conversion_cache_base<
@@ -100,9 +107,9 @@ class runtime_binding
           detail::runtime_binding_conversion_types_t<Type, Storage>> {
   public:
     using storage_type = Storage;
-    using data_type = std::remove_reference_t<decltype(get_runtime_binding_data(
-        std::declval<Data&>()))>;
-    using container_type = typename data_type::container_type;
+    using state_traits = runtime_binding_state_traits<State>;
+    using state_type = typename state_traits::state_type;
+    using container_type = typename state_type::container_type;
     using rtti_type = typename Container::rtti_type;
     using type_index = typename rtti_type::type_index;
     using request_type = instance_request<rtti_type>;
@@ -157,13 +164,14 @@ class runtime_binding
     };
 
     detail::context_closure closure_;
-    // `data_` must be destroyed before binding state so shared storage can
+    // `state_` must be destroyed before binding state so shared storage can
     // tear down cached instances before preserved construction temporaries.
-    Data data_;
+    State state_;
 
-    auto& get_storage() { return get_runtime_binding_data(data_).storage; }
+    state_type& state_ref() { return state_traits::ref(state_); }
+    auto& get_storage() { return state_ref().storage_ref(); }
     auto& get_resolution_container() {
-        return get_runtime_binding_resolution_container(data_);
+        return state_ref().resolution_container_ref();
     }
 
     static constexpr type_descriptor registered_type() {
@@ -203,9 +211,9 @@ class runtime_binding
 
   public:
     template <typename... Args>
-    runtime_binding(Args&&... args) : data_(std::forward<Args>(args)...) {}
+    runtime_binding(Args&&... args) : state_(std::forward<Args>(args)...) {}
 
-    auto& get_container() { return get_runtime_binding_data(data_).container; }
+    auto& get_container() { return state_ref().instance_container_ref(); }
 
     void* get_value(runtime_context& context, const request_type& request,
                     instance_cache_sink cache) override {
