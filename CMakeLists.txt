@@ -91,7 +91,6 @@ if(DINGO_DEVELOPMENT_MODE)
         core/config.h
         static/graph.h
         static/registry.h
-        static/source.h
         container.h
         core/auto_constructible.h
         core/binding_model.h
@@ -129,7 +128,6 @@ if(DINGO_DEVELOPMENT_MODE)
         runtime/container_traits.h
         runtime/registration_api.h
         runtime/registry.h
-        runtime/source.h
         static_container.h
         resolution/conversion_cache.h
         resolution/runtime_binding_interface.h
