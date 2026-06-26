@@ -20,6 +20,31 @@ Built-in index backends:
 - `std::unordered_map`
 - `std::array`
 
+Index definitions are scoped to the interface they serve. Every indexed
+registration or lookup requires a matching `(Interface, Key)` definition.
+
+Custom backends can specialize
+`dingo::detail::index_storage<Backend, Key, Value, Allocator>`. The
+specialization must provide `bool emplace(Key, Value)` and `Value* find(Key)`.
+
+Constructor dependencies can also bind to a fixed indexed key:
+
+```c++
+struct Pipeline {
+    Pipeline(dingo::indexed<IProcessor&, dingo::key<std::size_t, 1>> first,
+             dingo::indexed<IProcessor&, dingo::key<std::size_t, 2>> second);
+};
+```
+
+This is backend-independent. `indexed<IProcessor&, key<std::size_t, 1>>`
+resolves the same object as `container.resolve<IProcessor&>(std::size_t{1})`;
+the configured `(IProcessor, std::size_t)` index can be `array`, `map`,
+`unordered_map`, or a custom backend.
+
+The value in `key<T, Value>` must be a valid non-type template parameter and
+must be usable as `T{Value}`. Class-type values such as `key<MyKey, MyKey{1}>`
+require C++20 structural non-type template parameter support.
+
 <!-- { include("../examples/index/index.cpp", scope="////") -->
 
 Example code included from
@@ -36,7 +61,7 @@ struct Cat : IAnimal {};
 // Declare traits with std::string based index
 struct container_traits : dynamic_container_traits {
     using index_definition_type =
-        std::tuple<std::tuple<std::string, index_type::unordered_map>>;
+        indexes<index<IAnimal, std::string, index_type::unordered_map>>;
 };
 
 container<container_traits> container;
@@ -98,11 +123,21 @@ struct ProcessorB : IProcessor {
     void process(const MessageWrapper& message) override { message.GetB(); }
 };
 
+struct Pipeline {
+    Pipeline(
+        dingo::indexed<IProcessor&, dingo::key<size_t, 1>> first_processor,
+        dingo::indexed<IProcessor&, dingo::key<size_t, 2>> second_processor)
+        : first(first_processor), second(second_processor) {}
+
+    IProcessor& first;
+    IProcessor& second;
+};
+
 // Define traits type with a single index using size_t as a key,
 // backed by a std::array of size 10
 struct container_traits : static_container_traits<void> {
     using index_definition_type =
-        std::tuple<std::tuple<size_t, index_type::array<10>>>;
+        indexes<index<IProcessor, size_t, index_type::array<10>>>;
 };
 
 container<container_traits> container;
@@ -112,25 +147,25 @@ container
     .register_indexed_type<scope<shared>, storage<std::shared_ptr<ProcessorA>>,
                            interfaces<IProcessor>>(size_t(1));
 container
-    .register_indexed_type<scope<unique>, storage<std::shared_ptr<ProcessorB>>,
+    .register_indexed_type<scope<shared>, storage<std::shared_ptr<ProcessorB>>,
                            interfaces<IProcessor>>(size_t(2));
 
 // Register repositories used by the processors
 container.register_type<scope<shared>, storage<RepositoryA>>();
 container.register_type<scope<shared>, storage<RepositoryB>>();
 
+auto pipeline = container.construct<Pipeline>();
+
 // Invokes the processor for MessageA that is stateful
 {
     MessageWrapper msg((MessageA{1}));
-    container.template resolve<std::shared_ptr<IProcessor>>(msg.id())->process(
-        msg);
+    container.template resolve<IProcessor&>(msg.id()).process(msg);
 }
 
 // Invokes the processor for MessageB that is stateless
 {
     MessageWrapper msg((MessageB{1.1f}));
-    container.template resolve<std::shared_ptr<IProcessor>>(msg.id())->process(
-        msg);
+    container.template resolve<IProcessor&>(msg.id()).process(msg);
 }
 ```
 

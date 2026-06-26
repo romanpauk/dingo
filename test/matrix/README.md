@@ -162,6 +162,8 @@ fixture type needed by that case.
 - `container<indexed_traits<unordered_map>>`
 - `runtime_container<indexed_traits<array>>`
 - `container<indexed_traits<array>>`
+- `runtime_container<indexed_dsl_traits>`
+- `container<indexed_dsl_traits>`
 - allocator-parameterized `container`
 - custom-RTTI `container`
 

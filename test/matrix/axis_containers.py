@@ -144,6 +144,20 @@ CONTAINERS = (
         support_headers=("matrix/support/indexed_containers.h",),
     ),
     container(
+        name="runtime_container_indexed_dsl",
+        modes=frozenset({"runtime"}),
+        container_type="dingo::runtime_container<indexed_dsl_container_traits>",
+        provides=frozenset({"indexed_container", "indexed_regression_container"}),
+        support_headers=("matrix/support/indexed_containers.h",),
+    ),
+    container(
+        name="container_indexed_dsl",
+        modes=frozenset({"runtime"}),
+        container_type="dingo::container<indexed_dsl_container_traits>",
+        provides=frozenset({"indexed_container", "indexed_regression_container"}),
+        support_headers=("matrix/support/indexed_containers.h",),
+    ),
+    container(
         name="container_allocator",
         modes=frozenset({"runtime"}),
         container_type="dingo::container<dingo::dynamic_container_traits, test_allocator<char>>",

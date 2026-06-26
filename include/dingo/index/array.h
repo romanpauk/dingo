@@ -18,11 +18,12 @@ namespace index_type {
 template <size_t N> struct array {};
 } // namespace index_type
 
+namespace detail {
 template <typename Key, typename Value, typename Allocator, size_t N>
-struct index_collection<Key, Value, Allocator, index_type::array<N>> {
+struct index_storage<index_type::array<N>, Key, Value, Allocator> {
     static_assert(std::is_integral_v<Key> && std::is_unsigned_v<Key>);
 
-    index_collection(Allocator&) {}
+    explicit index_storage(Allocator&) {}
 
     bool emplace(Key key, Value value) {
         if (key >= array_.size())
@@ -44,5 +45,6 @@ struct index_collection<Key, Value, Allocator, index_type::array<N>> {
   private:
     std::array<Value, N> array_{};
 };
+} // namespace detail
 
 } // namespace dingo
