@@ -56,5 +56,9 @@ template <class T, class Key>
 struct normalized_type<keyed<T, Key>, void>
     : std::decay<keyed<typename normalized_type<T>::type, Key>> {};
 
+template <class T, class Selector>
+struct normalized_type<detail::selected<T, Selector>, void>
+    : std::decay<detail::selected<typename normalized_type<T>::type, Selector>> {};
+
 template <class T> using normalized_type_t = typename normalized_type<T>::type;
 } // namespace dingo

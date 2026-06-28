@@ -257,8 +257,30 @@ class runtime_registry : public allocator_base<Allocator> {
                     }
                 } else {
                     if (auto* state = runtime_bindings_if_present()) {
-                        auto data = state->type_bindings.template get<
-                            normalized_type_t<T>>();
+                        using lookup_type = normalized_type_t<T>;
+                        using exact_type = std::remove_cv_t<
+                            std::remove_reference_t<request_interface_t<T>>>;
+                        auto data = [&]() {
+                            if constexpr (detail::is_typed_key_v<IdType>) {
+                                return state->type_bindings
+                                    .template get<exact_type>();
+                            } else {
+                                return state->type_bindings
+                                    .template get<lookup_type>();
+                            }
+                        }();
+                        if constexpr (!std::is_same_v<lookup_type,
+                                                       exact_type>) {
+                            if (!data) {
+                                if constexpr (detail::is_typed_key_v<IdType>) {
+                                    data = state->type_bindings
+                                               .template get<lookup_type>();
+                                } else {
+                                    data = state->type_bindings
+                                               .template get<exact_type>();
+                                }
+                            }
+                        }
                         if (data) {
                             if constexpr (detail::is_typed_key_v<IdType>) {
                                 registered_binding_entry* candidate = nullptr;
@@ -284,16 +306,32 @@ class runtime_registry : public allocator_base<Allocator> {
                                         candidate->cache);
                                 }
                             } else {
-                                auto indexed =
-                                    data->template get_index<IdType>(
-                                            get_allocator())
-                                        .find(id);
+                                using index_entry =
+                                    detail::selected_index_entry_t<
+                                        lookup_type, IdType,
+                                        detail::normalize_index_definitions_t<
+                                            index_definition_type>>;
+                                if constexpr (std::is_void_v<index_entry> &&
+                                              !std::is_same_v<void,
+                                                              ParentRegistry> &&
+                                              !std::is_base_of_v<
+                                                  registry_type,
+                                                  resolve_root_type>) {
+                                    (void)data;
+                                } else {
+                                    auto indexed =
+                                        data->template get_index<lookup_type,
+                                                                 IdType>(
+                                                get_allocator())
+                                            .find(id);
 
-                                if (indexed) {
-                                    if (indexed->cache) {
-                                        return detail::convert_resolved_binding<
-                                            request_interface_t<T>>(
-                                            indexed->cache);
+                                    if (indexed) {
+                                        if (indexed->cache) {
+                                            return detail::
+                                                convert_resolved_binding<
+                                                    request_interface_t<T>>(
+                                                    indexed->cache);
+                                        }
                                     }
                                 }
                             }
@@ -429,18 +467,33 @@ class runtime_registry : public allocator_base<Allocator> {
 
     template <typename Request, typename IdType>
     detail::binding_selection_status binding_status_for_id(IdType&& id) {
+        using lookup_type = normalized_type_t<Request>;
         using exact_type =
             std::remove_cv_t<std::remove_reference_t<request_interface_t<Request>>>;
-        using lookup_type = normalized_type_t<Request>;
         auto* state = runtime_bindings_if_present();
-        auto* data =
-            state ? state->type_bindings.template get<exact_type>() : nullptr;
-        if constexpr (!std::is_same_v<exact_type, lookup_type>) {
+        auto* data = [&]() {
+            if (!state) {
+                return static_cast<runtime_type_bindings*>(nullptr);
+            }
+            if constexpr (!is_none_v<std::decay_t<IdType>> &&
+                          !detail::is_typed_key_v<IdType>) {
+                return state->type_bindings.template get<lookup_type>();
+            } else {
+                return state->type_bindings.template get<exact_type>();
+            }
+        }();
+        if constexpr (!std::is_same_v<lookup_type, exact_type>) {
             if (!data && state) {
-                data = state->type_bindings.template get<lookup_type>();
+                if constexpr (!is_none_v<std::decay_t<IdType>> &&
+                              !detail::is_typed_key_v<IdType>) {
+                    data = state->type_bindings.template get<exact_type>();
+                } else {
+                    data = state->type_bindings.template get<lookup_type>();
+                }
             }
         }
-        auto selection = select_runtime_binding(data, std::forward<IdType>(id));
+        auto selection =
+            select_runtime_binding<Request>(data, std::forward<IdType>(id));
         return selection.status;
     }
 
@@ -526,13 +579,13 @@ class runtime_registry : public allocator_base<Allocator> {
         }
     };
 
-    using index_definition_list_type = to_type_list_t<index_definition_type>;
-    using index_type = detail::index_impl<index_definition_list_type,
-                                          index_data, allocator_type>;
+    using index_bindings_type =
+        detail::index_bindings<index_definition_type, index_data,
+                               allocator_type>;
 
-    struct runtime_type_bindings : index_type {
+    struct runtime_type_bindings : index_bindings_type {
         runtime_type_bindings(allocator_type& allocator)
-            : index_type(allocator), bindings(allocator) {}
+            : index_bindings_type(allocator), bindings(allocator) {}
 
         typename ContainerTraits::template type_map_type<
             registered_binding_entry, allocator_type>
@@ -599,18 +652,32 @@ class runtime_registry : public allocator_base<Allocator> {
 
     template <typename Request, typename IdType = none_t>
     runtime_selection runtime_source_select(IdType&& id = IdType()) {
+        using lookup_type = normalized_type_t<Request>;
         using exact_type =
             std::remove_cv_t<std::remove_reference_t<request_interface_t<Request>>>;
-        using lookup_type = normalized_type_t<Request>;
         auto* state = runtime_bindings_if_present();
-        auto* data =
-            state ? state->type_bindings.template get<exact_type>() : nullptr;
-        if constexpr (!std::is_same_v<exact_type, lookup_type>) {
+        auto* data = [&]() {
+            if (!state) {
+                return static_cast<runtime_type_bindings*>(nullptr);
+            }
+            if constexpr (!is_none_v<std::decay_t<IdType>> &&
+                          !detail::is_typed_key_v<IdType>) {
+                return state->type_bindings.template get<lookup_type>();
+            } else {
+                return state->type_bindings.template get<exact_type>();
+            }
+        }();
+        if constexpr (!std::is_same_v<lookup_type, exact_type>) {
             if (!data && state) {
-                data = state->type_bindings.template get<lookup_type>();
+                if constexpr (!is_none_v<std::decay_t<IdType>> &&
+                              !detail::is_typed_key_v<IdType>) {
+                    data = state->type_bindings.template get<exact_type>();
+                } else {
+                    data = state->type_bindings.template get<lookup_type>();
+                }
             }
         }
-        return select_runtime_binding(data, std::forward<IdType>(id));
+        return select_runtime_binding<Request>(data, std::forward<IdType>(id));
     }
 
     template <typename T, bool CheckCache, typename IdType>
@@ -752,7 +819,7 @@ class runtime_registry : public allocator_base<Allocator> {
     }
 
   private:
-    template <typename IdType>
+    template <typename Request, typename IdType>
     runtime_selection select_runtime_binding(runtime_type_bindings* data,
                                              IdType&& id) {
         if constexpr (is_none_v<std::decay_t<IdType>>) {
@@ -790,13 +857,28 @@ class runtime_registry : public allocator_base<Allocator> {
                 });
         } else {
             using index_key_type = std::decay_t<IdType>;
-            auto indexed =
-                data ? data->template get_index<index_key_type>(get_allocator())
-                           .find(id)
-                     : nullptr;
-            return detail::make_runtime_selection<
-                runtime_binding_interface_type, binding_cache_state*>(
-                indexed ? indexed->binding : nullptr, indexed);
+            using index_interface_type = normalized_type_t<Request>;
+            using index_entry = detail::selected_index_entry_t<
+                index_interface_type, index_key_type,
+                detail::normalize_index_definitions_t<index_definition_type>>;
+            if constexpr (std::is_void_v<index_entry> &&
+                          !std::is_same_v<void, ParentRegistry> &&
+                          !std::is_base_of_v<registry_type,
+                                             resolve_root_type>) {
+                return detail::make_runtime_selection<
+                    runtime_binding_interface_type, binding_cache_state*>(
+                    nullptr, nullptr);
+            } else {
+                auto indexed =
+                    data ? data->template get_index<index_interface_type,
+                                                    index_key_type>(
+                               get_allocator())
+                               .find(id)
+                         : nullptr;
+                return detail::make_runtime_selection<
+                    runtime_binding_interface_type, binding_cache_state*>(
+                    indexed ? indexed->binding : nullptr, indexed);
+            }
         }
     }
 
@@ -951,7 +1033,7 @@ class runtime_registry : public allocator_base<Allocator> {
         runtime_bindings_present_ = true;
 
         if constexpr (!is_none_v<std::decay_t<IdType>>) {
-            if (!data.template get_index<IdType>(get_allocator())
+            if (!data.template get_index<TypeInterface, IdType>(get_allocator())
                      .emplace(std::forward<IdType>(id),
                               index_data{binding_ptr})) {
                 bool erased =

@@ -53,6 +53,15 @@ struct ProcessorB : IProcessor {
     void process(const MessageWrapper& message) override { message.GetB(); }
 };
 
+struct Pipeline {
+    Pipeline(dingo::indexed<IProcessor&, dingo::key<size_t, 1>> first_processor,
+             dingo::indexed<IProcessor&, dingo::key<size_t, 2>> second_processor)
+        : first(first_processor), second(second_processor) {}
+
+    IProcessor& first;
+    IProcessor& second;
+};
+
 ////
 int main() {
     using namespace dingo;
@@ -62,7 +71,7 @@ int main() {
     // backed by a std::array of size 10
     struct container_traits : static_container_traits<void> {
         using index_definition_type =
-            std::tuple<std::tuple<size_t, index_type::array<10>>>;
+            indexes<index<IProcessor, size_t, index_type::array<10>>>;
     };
 
     container<container_traits> container;
@@ -71,7 +80,7 @@ int main() {
     container.register_indexed_type<scope<shared>,
                                     storage<std::shared_ptr<ProcessorA>>,
                                     interfaces<IProcessor>>(size_t(1));
-    container.register_indexed_type<scope<unique>,
+    container.register_indexed_type<scope<shared>,
                                     storage<std::shared_ptr<ProcessorB>>,
                                     interfaces<IProcessor>>(size_t(2));
 
@@ -79,18 +88,19 @@ int main() {
     container.register_type<scope<shared>, storage<RepositoryA>>();
     container.register_type<scope<shared>, storage<RepositoryB>>();
 
+    auto pipeline = container.construct<Pipeline>();
+
     // Invokes the processor for MessageA that is stateful
     {
         MessageWrapper msg((MessageA{1}));
-        container.template resolve<std::shared_ptr<IProcessor>>(msg.id())
-            ->process(msg);
+        container.template resolve<IProcessor&>(msg.id()).process(msg);
     }
 
     // Invokes the processor for MessageB that is stateless
     {
         MessageWrapper msg((MessageB{1.1f}));
-        container.template resolve<std::shared_ptr<IProcessor>>(msg.id())
-            ->process(msg);
+        container.template resolve<IProcessor&>(msg.id()).process(msg);
     }
 ////
+    (void)pipeline;
 }

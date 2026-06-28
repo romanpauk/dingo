@@ -10,6 +10,7 @@
 // #include <dingo/core/config.h>
 
 #include <dingo/factory/constructor.h>
+#include <dingo/core/keyed.h>
 #include <dingo/core/factory_traits.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/storage/storage.h>
@@ -45,9 +46,17 @@ template <typename T> struct factory {
     template <typename U> using rebind_t = factory<U>;
 };
 
-template <typename T> struct key {
+template <typename T, auto... Values> struct key {
+    static_assert(sizeof...(Values) <= 1,
+                  "dingo::key<T, V> accepts at most one value");
+    static_assert(sizeof...(Values) > 1 ||
+                      detail::is_key_value_usable_v<T, Values...>,
+                  "dingo::key<T, V> requires V to be usable as T{V}");
+
     using type = T;
     template <typename U> using rebind_t = key<U>;
+
+    static constexpr bool has_value = sizeof...(Values) == 1;
 };
 
 template <typename T> struct conversions {
@@ -352,10 +361,103 @@ using registration_interface_from_factory_t = ::dingo::interfaces<leaf_type_t<
     typename registration_factory_t<ParsedArgs>::type>>;
 
 template <typename ParsedArgs>
+struct selected_registration_interface {
+    using type = ParsedArgs;
+};
+
+template <typename T, typename Tag>
+struct selected_registration_interface<
+    ::dingo::detail::selected<T, ::dingo::detail::type_selector<Tag>>> {
+    using type = T;
+};
+
+template <typename T> struct selected_registration_key {
+    using type = ::dingo::key<void>;
+};
+
+template <typename T, typename Tag>
+struct selected_registration_key<
+    ::dingo::detail::selected<T, ::dingo::detail::type_selector<Tag>>> {
+    using type = ::dingo::key<Tag>;
+};
+
+template <typename Left, typename Right> struct merge_selected_registration_key;
+
+template <>
+struct merge_selected_registration_key<::dingo::key<void>, ::dingo::key<void>> {
+    using type = ::dingo::key<void>;
+};
+
+template <typename Right>
+struct merge_selected_registration_key<::dingo::key<void>, Right> {
+    using type = Right;
+};
+
+template <typename Left>
+struct merge_selected_registration_key<Left, ::dingo::key<void>> {
+    using type = Left;
+};
+
+template <typename Key>
+struct merge_selected_registration_key<Key, Key> {
+    using type = Key;
+};
+
+template <typename Left, typename Right>
+struct merge_selected_registration_key {
+    static_assert(std::is_same_v<Left, Right>,
+                  "selected registration interfaces must use one compile-time selector");
+    using type = void;
+};
+
+template <typename... Interfaces> struct normalize_selected_registration_interfaces {
+    using type = ::dingo::interfaces<
+        typename selected_registration_interface<Interfaces>::type...>;
+};
+
+template <typename... Interfaces> struct selected_registration_key_from_interfaces;
+
+template <> struct selected_registration_key_from_interfaces<> {
+    using type = ::dingo::key<void>;
+};
+
+template <typename Head, typename... Tail>
+struct selected_registration_key_from_interfaces<Head, Tail...> {
+    using head_key = typename selected_registration_key<Head>::type;
+    using tail_key =
+        typename selected_registration_key_from_interfaces<Tail...>::type;
+    using type = typename merge_selected_registration_key<head_key, tail_key>::type;
+};
+
+template <typename Interfaces> struct normalize_selected_registration_interface_arg {
+    using type = Interfaces;
+    using key_type = ::dingo::key<void>;
+};
+
+template <typename... Interfaces>
+struct normalize_selected_registration_interface_arg<
+    ::dingo::interfaces<Interfaces...>> {
+    using type =
+        typename normalize_selected_registration_interfaces<Interfaces...>::type;
+    using key_type =
+        typename selected_registration_key_from_interfaces<Interfaces...>::type;
+};
+
+template <typename ParsedArgs>
+using registration_explicit_interface_t =
+    typename normalize_selected_registration_interface_arg<
+        typename ParsedArgs::interface_type>::type;
+
+template <typename ParsedArgs>
+using registration_selected_key_t =
+    typename normalize_selected_registration_interface_arg<
+        typename ParsedArgs::interface_type>::key_type;
+
+template <typename ParsedArgs>
 using registration_interface_t = std::conditional_t<
     !std::is_same_v<typename ParsedArgs::interface_type,
                     ::dingo::interfaces<void>>,
-    typename ParsedArgs::interface_type,
+    registration_explicit_interface_t<ParsedArgs>,
     std::conditional_t<
         !std::is_same_v<registration_interface_from_storage_t<ParsedArgs>,
                         ::dingo::interfaces<void>>,
@@ -400,7 +502,7 @@ template <typename ParsedArgs>
 using registration_key_t = std::conditional_t<
     !std::is_same_v<typename ParsedArgs::key_type, ::dingo::key<void>>,
     typename ParsedArgs::key_type,
-    ::dingo::key<void>>;
+    registration_selected_key_t<ParsedArgs>>;
 
 } // namespace detail
 
@@ -437,6 +539,8 @@ template <typename... Args> struct type_registration {
                   "failed to deduce an interface type");
 
     using key_type = detail::registration_key_t<parsed_args>;
+    static_assert(!detail::is_key_value_v<key_type>,
+                  "dingo::key<T, V> cannot be used as a typed-key registration key");
 
     // Conversions are deduced from Storage and Scope
     using conversions_type = detail::registration_conversions_t<parsed_args>;

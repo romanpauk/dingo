@@ -2,6 +2,8 @@
 
 import os
 import platform
+import shlex
+import subprocess
 import lit.formats
 
 config.name = 'dingo-lit-tests'
@@ -21,6 +23,53 @@ else:
 
 cxx = os.environ.get('CXX', 'cl' if platform.system() == 'Windows' else 'c++')
 config.environment['DINGO_CXX_ID'] = os.path.basename(cxx)
+
+def windows_msvc_target_arch(cxx_path):
+    parts = cxx_path.replace('\\', '/').lower().split('/')
+    for index, part in enumerate(parts[:-1]):
+        if part.startswith('host') and parts[index + 1] in ('x64', 'x86', 'arm64'):
+            return parts[index + 1]
+    return ''
+
+def can_run_built_executables():
+    if platform.system() != 'Windows':
+        return True
+
+    target_arch = windows_msvc_target_arch(cxx)
+    if not target_arch:
+        return True
+
+    host_arch = platform.machine().lower()
+    if host_arch in ('amd64', 'x86_64'):
+        return target_arch == 'x64'
+    if host_arch in ('arm64', 'aarch64'):
+        return target_arch == 'arm64'
+    if host_arch in ('x86', 'i386', 'i686'):
+        return target_arch == 'x86'
+    return False
+
+if can_run_built_executables():
+    config.available_features.add('can-run-built-executables')
+
+def read_compiler_output(*args):
+    try:
+        return subprocess.check_output(
+            [*shlex.split(cxx), *args],
+            stderr=subprocess.STDOUT,
+            text=True,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return ''
+
+compiler_version_text = read_compiler_output('--version').lower()
+if 'clang' in compiler_version_text:
+    config.environment['DINGO_CXX_FAMILY'] = 'clang'
+elif 'gcc' in compiler_version_text or 'g++' in compiler_version_text:
+    config.environment['DINGO_CXX_FAMILY'] = 'gcc'
+
+compiler_full_version = read_compiler_output('-dumpfullversion')
+if compiler_full_version:
+    config.environment['DINGO_CXX_VERSION_MAJOR'] = compiler_full_version.split('.', 1)[0]
 
 config.substitutions.append(('%python', python))
 if platform.system() == 'Windows':

@@ -19,13 +19,14 @@ namespace index_type {
 struct map {};
 } // namespace index_type
 
+namespace detail {
 template <typename Key, typename Value, typename Allocator>
-struct index_collection<Key, Value, Allocator, index_type::map> {
+struct index_storage<index_type::map, Key, Value, Allocator> {
     static_assert(!is_static_allocator_v<Allocator>);
 
-    index_collection(Allocator& allocator) : map_(allocator) {}
+    explicit index_storage(Allocator& allocator) : map_(allocator) {}
 
-    bool emplace(Key&& key, Value value) {
+    bool emplace(Key key, Value value) {
         auto pb = map_.emplace(std::move(key), value);
         return pb.second;
     }
@@ -41,4 +42,5 @@ struct index_collection<Key, Value, Allocator, index_type::map> {
 
     std::map<Key, Value, std::less<Key>, allocator_type> map_;
 };
+} // namespace detail
 } // namespace dingo

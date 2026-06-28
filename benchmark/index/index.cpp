@@ -100,7 +100,8 @@ static void index_ptr_shared(benchmark::State& state) {
 
 template <typename IndexType>
 struct static_container_traits : dingo::static_container_traits<void> {
-    using index_definition_type = std::tuple<std::tuple<size_t, IndexType>>;
+    using index_definition_type =
+        dingo::indexes<dingo::index<IProcessor, size_t, IndexType>>;
 };
 
 BENCHMARK_TEMPLATE(
@@ -114,7 +115,8 @@ BENCHMARK_TEMPLATE(
 
 template <typename IndexType>
 struct dynamic_container_traits : dingo::dynamic_container_traits {
-    using index_definition_type = std::tuple<std::tuple<size_t, IndexType>>;
+    using index_definition_type =
+        dingo::indexes<dingo::index<IProcessor, size_t, IndexType>>;
 };
 
 BENCHMARK_TEMPLATE(

@@ -116,6 +116,25 @@ class runtime_container
             T, RemoveRvalueReferences, Key>(context);
     }
 
+    template <typename T, bool RemoveRvalueReferences, bool CheckCache,
+              typename IdType,
+              typename R = resolve_request_t<T, RemoveRvalueReferences>,
+              std::enable_if_t<!is_none_v<std::decay_t<IdType>> &&
+                                   !detail::is_typed_key_v<IdType>,
+                               int> = 0>
+    R resolve(runtime_context& context, IdType&& id) {
+        if (parent_ &&
+            runtime_registry_.template binding_status_for_id<T>(id) ==
+                detail::binding_selection_status::not_found) {
+            return parent_->template resolve<T, RemoveRvalueReferences,
+                                             CheckCache>(
+                context, std::forward<IdType>(id));
+        }
+        return runtime_registry_.template resolve<T, RemoveRvalueReferences,
+                                                  CheckCache>(
+            context, std::forward<IdType>(id));
+    }
+
     template <typename T,
               typename Factory = constructor<normalized_type_t<T>>,
               typename R = request_result_t<T>>

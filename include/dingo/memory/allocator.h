@@ -9,7 +9,9 @@
 
 #include <dingo/core/config.h>
 
+#include <cassert>
 #include <memory>
+#include <utility>
 
 namespace dingo {
 template <typename Allocator> struct allocator_base : public Allocator {
@@ -49,4 +51,70 @@ struct allocator_traits {
         std::allocator_traits<Allocator>::deallocate(alloc, ptr, n);
     }
 };
+
+namespace detail {
+template <typename T, typename Allocator>
+struct allocator_ptr
+    : allocator_base<
+          typename std::allocator_traits<Allocator>::template rebind_alloc<T>> {
+    using allocator_type =
+        typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+    using base = allocator_base<allocator_type>;
+
+    explicit allocator_ptr(Allocator& al)
+        : base(allocator_type(al)) {}
+
+    template <typename... Args>
+    allocator_ptr(Allocator& al, Args&&... args)
+        : allocator_ptr(al) {
+        emplace(std::forward<Args>(args)...);
+    }
+
+    ~allocator_ptr() { reset(); }
+
+    allocator_ptr(const allocator_ptr&) = delete;
+    allocator_ptr& operator=(const allocator_ptr&) = delete;
+
+    allocator_ptr(allocator_ptr&& other) noexcept
+        : base(std::move(other)) {
+        std::swap(ptr_, other.ptr_);
+    }
+
+    allocator_ptr& operator=(allocator_ptr&&) = delete;
+
+    explicit operator bool() const { return ptr_ != nullptr; }
+
+    T& operator*() {
+        assert(ptr_);
+        return *ptr_;
+    }
+
+    template <typename... Args>
+    void emplace(Args&&... args) {
+        reset();
+        auto& alloc = this->get_allocator();
+        ptr_ = allocator_traits::allocate(alloc, 1);
+        try {
+            allocator_traits::construct(alloc, ptr_,
+                                        std::forward<Args>(args)...);
+        } catch (...) {
+            allocator_traits::deallocate(alloc, ptr_, 1);
+            ptr_ = nullptr;
+            throw;
+        }
+    }
+
+    void reset() {
+        if (ptr_) {
+            auto& alloc = this->get_allocator();
+            allocator_traits::destroy(alloc, ptr_);
+            allocator_traits::deallocate(alloc, ptr_, 1);
+            ptr_ = nullptr;
+        }
+    }
+
+  private:
+    T* ptr_ = nullptr;
+};
+} // namespace detail
 } // namespace dingo

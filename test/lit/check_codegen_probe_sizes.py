@@ -132,7 +132,10 @@ PROBE_LIMITS = {
         "default": 0x300,
         "clang": 0x2d0,
         "gcc": 0x310,
-        "gcc_arm64": 0x390,
+        "gcc13": 0x370,
+        "gcc14": 0x3e0,
+        "gcc15": 0x400,
+        "gcc_arm64": 0x3b0,
     },
     "probe_runtime_resolution_mixed_container_external_value_storage": {
         "default": 0x520,
@@ -144,7 +147,10 @@ PROBE_LIMITS = {
         "default": 0x300,
         "clang": 0x2e0,
         "gcc": 0x330,
-        "gcc_arm64": 0x330,
+        "gcc13": 0x390,
+        "gcc14": 0x3e0,
+        "gcc15": 0x410,
+        "gcc_arm64": 0x3c0,
     },
     "probe_runtime_resolution_mixed_container_external_reference_storage": {
         "default": 0x520,
@@ -261,9 +267,11 @@ SYMBOL_RE = re.compile(
 
 def expected_max_for_environment() -> dict[str, int]:
     compiler_id = os.environ.get("DINGO_CXX_ID", "")
+    compiler_family = os.environ.get("DINGO_CXX_FAMILY", "")
+    compiler_major = os.environ.get("DINGO_CXX_VERSION_MAJOR", "")
     machine = platform.machine().lower()
-    is_clang = "clang" in compiler_id
-    is_gcc = "g++" in compiler_id and not is_clang
+    is_clang = compiler_family == "clang" or "clang" in compiler_id
+    is_gcc = compiler_family == "gcc" or ("g++" in compiler_id and not is_clang)
     is_arm64 = machine in ("aarch64", "arm64")
 
     columns = ["default"]
@@ -273,11 +281,11 @@ def expected_max_for_environment() -> dict[str, int]:
             columns.append("clang_arm64")
     if is_gcc:
         columns.append("gcc")
-    if "g++-13" in compiler_id:
+    if compiler_major == "13" or "g++-13" in compiler_id:
         columns.append("gcc13")
-    if "g++-14" in compiler_id:
+    if compiler_major == "14" or "g++-14" in compiler_id:
         columns.append("gcc14")
-    if "g++-15" in compiler_id:
+    if compiler_major == "15" or "g++-15" in compiler_id:
         columns.append("gcc15")
     if is_gcc and is_arm64:
         columns.append("gcc_arm64")

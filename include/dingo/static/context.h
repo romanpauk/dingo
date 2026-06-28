@@ -92,11 +92,40 @@ class basic_static_context : public detail::context_path_state {
     }
 
     template <typename T, typename Container> T resolve(Container& container) {
-        if constexpr (is_keyed_v<T>) {
+        if constexpr (detail::is_selected_v<T>) {
+            using request_type = detail::selected_type_t<T>;
+            using selector_type = detail::selected_selector_t<T>;
+            if constexpr (detail::is_type_selector_v<selector_type>) {
+                using key_type = detail::type_selector_type_t<selector_type>;
+                return T(container.template resolve<request_type, false, true>(
+                    *this, key<key_type>{}));
+            } else if constexpr (detail::is_value_selector_v<selector_type>) {
+                return T(container.template resolve<request_type, false, true>(
+                    *this, detail::is_value_selector<selector_type>::make()));
+            } else {
+                static_assert(detail::is_type_selector_v<selector_type> ||
+                                  detail::is_value_selector_v<selector_type>,
+                              "detail::selected<T, Selector> requires a type_selector or value_selector");
+            }
+        } else if constexpr (is_keyed_v<T>) {
             using request_type = keyed_type_t<T>;
             using key_type = keyed_key_t<T>;
             return T(container.template resolve<request_type, false, true>(
                 *this, key<key_type>{}));
+        } else if constexpr (is_indexed_v<T>) {
+            using request_type = indexed_type_t<T>;
+            using selector_type = indexed_selector_t<T>;
+            if constexpr (detail::is_key_value_v<selector_type>) {
+                using key_type =
+                    typename detail::key_selector_value<selector_type>::type;
+                return T(container.template resolve<request_type, false, true>(
+                    *this,
+                    key_type{
+                        detail::key_selector_value<selector_type>::make()}));
+            } else {
+                static_assert(detail::is_key_value_v<selector_type>,
+                              "dingo::indexed<T, dingo::key<Key>> constructor injection requires dingo::key<Key, Value>");
+            }
         } else {
             return container.template resolve<T, false>(*this);
         }

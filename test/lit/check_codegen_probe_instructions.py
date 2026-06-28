@@ -72,7 +72,8 @@ def main() -> int:
         return 0
 
     compiler_id = os.environ.get("DINGO_CXX_ID", "")
-    if "g++" in compiler_id:
+    compiler_family = os.environ.get("DINGO_CXX_FAMILY", "")
+    if compiler_family == "gcc" or "g++" in compiler_id:
         # GCC can keep the static probe under the tiny size cap while still
         # emitting a local conditional branch. Keep the exact branch-free
         # mnemonic check for compiler families that reliably expose that shape,

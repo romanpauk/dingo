@@ -8,64 +8,73 @@
 #pragma once
 
 #include <dingo/core/config.h>
+#include <dingo/core/selected.h>
 
 #include <type_traits>
 #include <utility>
 
 namespace dingo {
-template <typename T> struct key;
+template <typename T, auto... Values> struct key;
 
 namespace detail {
-template <typename T, typename Key, bool IsConstructible = std::is_constructible_v<T>>
-struct keyed_base;
+template <typename T, auto Value, typename = void>
+struct is_key_value_brace_constructible : std::false_type {};
 
-template <typename T, typename Key>
-struct keyed_base<T, Key, true> {
-    keyed_base(const keyed_base&) = default;
-    keyed_base(keyed_base&&) = default;
-    keyed_base& operator=(const keyed_base&) = default;
-    keyed_base& operator=(keyed_base&&) = default;
+template <typename T, auto Value>
+struct is_key_value_brace_constructible<T, Value,
+                                        std::void_t<decltype(T{Value})>>
+    : std::true_type {};
 
-    explicit keyed_base(T&& value)
-        : value_(std::move(value)) {}
+template <typename T, auto Value>
+inline constexpr bool is_key_value_brace_constructible_v =
+    is_key_value_brace_constructible<T, Value>::value;
 
-    operator T() { return std::move(value_); }
-
-  private:
-    T value_;
+template <typename T, auto... Values> struct key_value {
+    static_assert(sizeof...(Values) <= 1,
+                  "dingo::key<T, V> accepts at most one value");
 };
 
-template <typename T, typename Key>
-struct keyed_base<T&, Key, false> {
-    keyed_base(const keyed_base&) = default;
-    keyed_base(keyed_base&&) = default;
-    keyed_base& operator=(const keyed_base&) = default;
-    keyed_base& operator=(keyed_base&&) = default;
+template <typename T, auto Value> struct key_value<T, Value> {
+    static_assert(is_key_value_brace_constructible_v<T, Value>,
+                  "dingo::key<T, V> requires V to be usable as T{V}");
 
-    explicit keyed_base(T& value)
-        : value_(value) {}
-
-    operator T&() { return value_; }
-
-  private:
-    T& value_;
+    static T make() { return T{Value}; }
 };
 
-template <typename T, typename Key>
-struct keyed_base<T, Key, false> : keyed_base<T&, Key, false> {
-    explicit keyed_base(T& value)
-        : keyed_base<T&, Key, false>(value) {}
-};
+template <typename T, auto... Values>
+struct is_key_value_usable : std::false_type {};
+
+template <typename T>
+struct is_key_value_usable<T> : std::true_type {};
+
+template <typename T, auto Value>
+struct is_key_value_usable<T, Value>
+    : is_key_value_brace_constructible<T, Value> {};
+
+template <typename T, auto... Values>
+inline constexpr bool is_key_value_usable_v =
+    is_key_value_usable<T, Values...>::value;
+
 } // namespace detail
 
 template <typename T, typename Key>
-struct keyed : detail::keyed_base<T, Key> {
-    using detail::keyed_base<T, Key>::keyed_base;
+struct keyed : detail::selected<T, detail::type_selector<Key>> {
+    using detail::selected<T, detail::type_selector<Key>>::selected;
 };
 
 template <typename T, typename Key>
-struct keyed<T&, Key> : detail::keyed_base<T&, Key> {
-    using detail::keyed_base<T&, Key>::keyed_base;
+struct keyed<T&, Key> : detail::selected<T&, detail::type_selector<Key>> {
+    using detail::selected<T&, detail::type_selector<Key>>::selected;
+};
+
+template <typename T, typename Selector>
+struct indexed : detail::selected<T, Selector> {
+    using detail::selected<T, Selector>::selected;
+};
+
+template <typename T, typename Selector>
+struct indexed<T&, Selector> : detail::selected<T&, Selector> {
+    using detail::selected<T&, Selector>::selected;
 };
 
 template <typename T>
@@ -110,15 +119,82 @@ struct is_keyed : std::bool_constant<!std::is_void_v<keyed_key_t<T>>> {};
 template <typename T>
 inline constexpr bool is_keyed_v = is_keyed<T>::value;
 
+template <typename T>
+struct indexed_traits {
+    using type = T;
+    using selector_type = void;
+};
+
+template <typename T, typename Selector>
+struct indexed_traits<indexed<T, Selector>> {
+    using type = T;
+    using selector_type = Selector;
+};
+
+template <typename T, typename Selector>
+struct indexed_traits<indexed<T, Selector>&> {
+    using type = T&;
+    using selector_type = Selector;
+};
+
+template <typename T, typename Selector>
+struct indexed_traits<indexed<T, Selector>&&> {
+    using type = T&&;
+    using selector_type = Selector;
+};
+
+template <typename T, typename Selector>
+struct indexed_traits<indexed<T, Selector>*> {
+    using type = T*;
+    using selector_type = Selector;
+};
+
+template <typename T>
+using indexed_type_t = typename indexed_traits<T>::type;
+
+template <typename T>
+using indexed_selector_t = typename indexed_traits<T>::selector_type;
+
+template <typename T>
+struct is_indexed
+    : std::bool_constant<!std::is_void_v<indexed_selector_t<T>>> {};
+
+template <typename T>
+inline constexpr bool is_indexed_v = is_indexed<T>::value;
+
 namespace detail {
 
 template <typename T> struct is_typed_key : std::false_type {};
 
-template <typename T>
-struct is_typed_key<key<T>> : std::bool_constant<!std::is_void_v<T>> {};
+template <typename T, auto... Values>
+struct is_typed_key<key<T, Values...>>
+    : std::bool_constant<sizeof...(Values) == 0 && !std::is_void_v<T>> {};
 
 template <typename T>
 inline constexpr bool is_typed_key_v = is_typed_key<std::decay_t<T>>::value;
+
+template <typename T> struct is_key_value : std::false_type {};
+
+template <typename T, auto Value>
+struct is_key_value<key<T, Value>> : std::bool_constant<!std::is_void_v<T>> {};
+
+template <typename T>
+inline constexpr bool is_key_value_v = is_key_value<std::decay_t<T>>::value;
+
+template <typename Selector> struct key_selector_value;
+
+template <typename T, auto Value>
+struct key_selector_value<key<T, Value>> {
+    using type = T;
+
+    static T make() { return key_value<T, Value>::make(); }
+};
+
+template <typename T, auto Value>
+struct is_value_selector<key<T, Value>> : std::true_type {
+    using type = T;
+    static T make() { return key_value<T, Value>::make(); }
+};
 
 template <typename Identity, typename Binding>
 struct keyed_binding_identity : Binding {

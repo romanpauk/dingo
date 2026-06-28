@@ -388,6 +388,18 @@ class static_container_impl<static_registry<Registrations...>, ParentContainer>
         return resolve<T, RemoveRvalueReferences, Key>(context);
     }
 
+    template <typename T, bool RemoveRvalueReferences, bool CheckCache,
+              typename IdType,
+              typename R = resolve_request_t<T, RemoveRvalueReferences>,
+              std::enable_if_t<!is_none_v<std::decay_t<IdType>> &&
+                                   !detail::is_typed_key_v<IdType>,
+                               int> = 0>
+    R resolve(context_type&, IdType&&) {
+        static_assert(detail::container_dependent_false_v<T, IdType>,
+                      "dingo::indexed<T, dingo::key<Key, Value>> constructor "
+                      "injection requires a runtime index");
+    }
+
   private:
     static_source_type static_registry_;
     state_type static_state_;

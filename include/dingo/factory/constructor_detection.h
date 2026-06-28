@@ -90,6 +90,18 @@ struct constructor_argument<DisabledType, automatic> {
         typename = typename std::enable_if_t<
             !std::is_same_v<DisabledType, std::decay_t<T>>>>
     operator keyed<T, Key>() const;
+
+    template <
+        typename T, typename Selector,
+        typename = typename std::enable_if_t<
+            !std::is_same_v<DisabledType, std::decay_t<T>>>>
+    operator indexed<T, Selector>() const;
+
+    template <
+        typename T, typename Selector,
+        typename = typename std::enable_if_t<
+            !std::is_same_v<DisabledType, std::decay_t<T>>>>
+    operator detail::selected<T, Selector>() const;
 };
 
 template <class DisabledType>
@@ -151,6 +163,18 @@ class constructor_argument_impl<DisabledType, Context, Container, automatic> {
               typename = std::enable_if_t<!std::is_same_v<DisabledType, std::decay_t<T>>>>
     operator keyed<T, Key>() {
         return context_.template resolve<keyed<T, Key>>(container_);
+    }
+
+    template <typename T, typename Selector,
+              typename = std::enable_if_t<!std::is_same_v<DisabledType, std::decay_t<T>>>>
+    operator indexed<T, Selector>() {
+        return context_.template resolve<indexed<T, Selector>>(container_);
+    }
+
+    template <typename T, typename Selector,
+              typename = std::enable_if_t<!std::is_same_v<DisabledType, std::decay_t<T>>>>
+    operator detail::selected<T, Selector>() {
+        return context_.template resolve<detail::selected<T, Selector>>(container_);
     }
 
   private:
