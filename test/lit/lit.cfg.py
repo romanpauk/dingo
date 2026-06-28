@@ -8,6 +8,10 @@ import lit.formats
 
 config.name = 'dingo-lit-tests'
 config.test_source_root = os.path.dirname(__file__)
+config.test_exec_root = lit_config.params.get('DINGO_LIT_EXEC_ROOT')
+if not config.test_exec_root:
+    lit_config.fatal('DINGO_LIT_EXEC_ROOT must point at a build directory')
+os.makedirs(config.test_exec_root, exist_ok=True)
 project_root = os.path.abspath(os.path.join(config.test_source_root, '..', '..'))
 config.available_features.add(platform.system().lower())
 config.suffixes = ['.t', '.txt', '.cpp', '.hpp', '.h', '.cxx']

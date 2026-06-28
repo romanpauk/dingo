@@ -1,4 +1,4 @@
-name: lint
+name: check
 permissions:
   contents: read
 concurrency:
@@ -13,5 +13,5 @@ on:
       - master
 
 jobs:
-  lint:
-    uses: ./.github/workflows/lint-reusable.yaml
+  check:
+    uses: ./.github/workflows/check-base.yaml

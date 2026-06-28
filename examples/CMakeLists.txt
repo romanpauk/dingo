@@ -1,12 +1,17 @@
 function(add_example source)
-    get_filename_component(name ${source} NAME_WE)
-    add_executable(dingo_example_${name} ${source})
-    set_property(GLOBAL APPEND PROPERTY DINGO_EXAMPLE_TARGETS dingo_example_${name})
-    target_link_libraries(dingo_example_${name} dingo)
-    add_test(NAME dingo_example_${name} COMMAND $<TARGET_FILE:dingo_example_${name}>)
+    string(REGEX REPLACE "\\.[^.]*$" "" name "${source}")
+    string(REPLACE "/" "_" name "${name}")
+    set(target dingo_example_${name})
+
+    add_executable(${target} ${source})
+    set_property(GLOBAL APPEND PROPERTY DINGO_EXAMPLE_TARGETS ${target})
+    set_property(GLOBAL APPEND PROPERTY DINGO_EXAMPLE_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/${source}")
+    target_link_libraries(${target} dingo)
+    add_test(NAME ${target} COMMAND $<TARGET_FILE:${target}>)
 
     # Force-include windows.h to each example to make sure it builds with windows.h included
-    target_compile_options(dingo_example_${name} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
+    target_compile_options(${target} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
 endfunction()
 
 add_example(container/allocator.cpp)
