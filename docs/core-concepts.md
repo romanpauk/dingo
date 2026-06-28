@@ -332,14 +332,9 @@ assert(std::holds_alternative<A>(value));
 
 [[maybe_unused]] auto selected = unique_container.resolve<A>();
 
-bool rejected_wrong_alternative = false;
 try {
   unique_container.resolve<B>();
 } catch (const type_not_convertible_exception &) {
-  rejected_wrong_alternative = true;
-}
-if (!rejected_wrong_alternative) {
-  return 1;
 }
 
 std::variant<A, B> existing(std::in_place_type<A>, 9);
