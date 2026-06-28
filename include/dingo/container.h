@@ -66,6 +66,8 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
           detail::container_with_static_bindings<
               static_registry<Registrations...>, ParentContainer>> {
   friend class runtime_context;
+  template <typename T, typename Context, typename Container>
+  friend T detail::resolve_context_request(Context &, Container &);
 
   using static_registry_type_ = static_registry<Registrations...>;
   using self_type =

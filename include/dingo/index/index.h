@@ -302,30 +302,6 @@ struct index_bindings
   using base::base;
 };
 
-template <typename Value, typename Allocator> struct empty_index_bindings {
-  empty_index_bindings(Allocator &) {}
-
-  template <typename Interface, typename Key> struct empty_index {
-    Value *find(const Key &) { return nullptr; }
-  };
-
-  template <typename Interface, typename Key>
-  empty_index<Interface, Key> get_index(Allocator &) {
-    return {};
-  }
-};
-
-template <typename Value, typename Allocator>
-struct index_bindings<std::tuple<>, Value, Allocator>
-    : empty_index_bindings<Value, Allocator> {
-  using empty_index_bindings<Value, Allocator>::empty_index_bindings;
-};
-
-template <typename Value, typename Allocator>
-struct index_bindings<::dingo::indexes<>, Value, Allocator>
-    : empty_index_bindings<Value, Allocator> {
-  using empty_index_bindings<Value, Allocator>::empty_index_bindings;
-};
 } // namespace detail
 
 template <typename Arg, typename Definitions>

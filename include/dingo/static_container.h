@@ -52,6 +52,9 @@ template <typename ParentContainer, typename... Registrations>
 class static_container_impl<static_registry<Registrations...>, ParentContainer>
     : private static_container_dependency_diagnostics_base<
           static_registry<Registrations...>, !std::is_void_v<ParentContainer>> {
+  template <typename T, typename Context, typename Container>
+  friend T detail::resolve_context_request(Context &, Container &);
+
   using registry_type_ = static_registry<Registrations...>;
   static constexpr bool has_parent_v = !std::is_void_v<ParentContainer>;
   using graph_type_ = std::conditional_t<

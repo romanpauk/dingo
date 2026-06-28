@@ -52,6 +52,8 @@ template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
           typename ResolveRoot>
 class runtime_registry : public allocator_base<Allocator> {
   friend class runtime_context;
+  template <typename T, typename Context, typename Container>
+  friend T detail::resolve_context_request(Context &, Container &);
   template <typename, typename> friend class detail::binding_resolution;
   template <typename, typename>
   friend class detail::container_with_static_bindings;
