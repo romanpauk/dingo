@@ -28,6 +28,25 @@ wheels = [
 ]
 
 [[package]]
+name = "clang-tidy"
+version = "21.1.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ff/33/f73d03d3ae88481433d95d4f142f4774715f44443f81affd10c483ab5454/clang_tidy-21.1.6.tar.gz", hash = "sha256:0e0951d18e7e50acdcdb6b5c34e589edb354e01c2825c0d27793a15ac60b38da", size = 11316, upload-time = "2025-11-24T15:39:51.502Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/73/59/cef36a88d30ed6dfc7237b3a9fa7de062726b4f30aeacf3e0e0316eee41e/clang_tidy-21.1.6-py2.py3-none-macosx_10_9_x86_64.whl", hash = "sha256:372f20267e67f41b758b0c2009e4607f1b53fbee40092e76da3121491d439985", size = 28607989, upload-time = "2025-11-24T15:39:20.364Z" },
+    { url = "https://files.pythonhosted.org/packages/ca/ad/cd1f262bd51376920af406cc3721416f7c303d7eec0ae39218d1a6aa9b45/clang_tidy-21.1.6-py2.py3-none-macosx_11_0_arm64.whl", hash = "sha256:12634548feceb2bce89b65d94550f1b92359ebc19c35cf72b93855cd18845ef9", size = 27718166, upload-time = "2025-11-24T15:39:22.971Z" },
+    { url = "https://files.pythonhosted.org/packages/07/9d/3c27e9059b24d1089426bdf5b7b843393d982a1805e4f58e586989722e71/clang_tidy-21.1.6-py2.py3-none-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:3569e0ec58f89a1e5f338a02b64e1feb5f6a48b599e4abb411038b2a225edc19", size = 45138884, upload-time = "2025-11-24T15:39:26.142Z" },
+    { url = "https://files.pythonhosted.org/packages/e0/88/494022a892bd121f01c55d32e754867a8d6bbe7640975389be5792a55636/clang_tidy-21.1.6-py2.py3-none-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:d954cc13d87aa6ba847eac4d26bec019024c54c2968389444eed6d4201ec45e6", size = 38598066, upload-time = "2025-11-24T15:39:28.895Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/fc/f0a2ba49f142e019117e9d9d6c1b49bde410ec0139cc9392ccae1be4ff3e/clang_tidy-21.1.6-py2.py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:685e549e80461afb0f0c420ecfd0427e8bf38b927e989bdfee49dab4a9794cd1", size = 40427492, upload-time = "2025-11-24T15:39:31.944Z" },
+    { url = "https://files.pythonhosted.org/packages/04/38/c03a3b792e4463e94c74bded37f49545639bfaae713a196bab0ac500fb8d/clang_tidy-21.1.6-py2.py3-none-manylinux_2_31_armv7l.whl", hash = "sha256:9ba32f74038e322e16f7c29f8d241b5eff5433bd9a32d2ca87ee59c96d9f0802", size = 37240012, upload-time = "2025-11-24T15:39:34.545Z" },
+    { url = "https://files.pythonhosted.org/packages/81/67/ad4b952562d2a7910b1d95b5785c150c46b60f951c3fcc60d657bdf759b4/clang_tidy-21.1.6-py2.py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:413d5b55596a04a409387b84e76ed2409c48c0deab61adaaf623e2f3e419eaed", size = 38066639, upload-time = "2025-11-24T15:39:37.058Z" },
+    { url = "https://files.pythonhosted.org/packages/25/64/015477c9f9d76c45d7658ea6027575d14184e05c3c256231a0cbc7a39cca/clang_tidy-21.1.6-py2.py3-none-musllinux_1_2_i686.whl", hash = "sha256:7a1358d99f7aa9863c7c3a7efce4fbfd85b03bc1ea50fbbbe3a8ff5b0ea038f2", size = 48022073, upload-time = "2025-11-24T15:39:39.77Z" },
+    { url = "https://files.pythonhosted.org/packages/79/30/cf31c02ee8dc93886b8487d41b60237c6f9e6a0b579bea7dda7a543f9d31/clang_tidy-21.1.6-py2.py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:3376e988ab33331368bda9a4f541763adfa5906dc529478b9be75565254868f8", size = 42995095, upload-time = "2025-11-24T15:39:43.191Z" },
+    { url = "https://files.pythonhosted.org/packages/26/eb/2d9acbdfa37c2a8289f59fe26c7d5646f2b91ed400a75cac1516d046e1fd/clang_tidy-21.1.6-py2.py3-none-win32.whl", hash = "sha256:5fa919601bbe70e31fdabfee84dbf1ca66c22c01def36b877eac5fdb7f16bf44", size = 21022203, upload-time = "2025-11-24T15:39:45.67Z" },
+    { url = "https://files.pythonhosted.org/packages/4b/ed/26fbf1a0847ccd424f5a270d851b3b726e17d7eaebefbf58fff8191bdf81/clang_tidy-21.1.6-py2.py3-none-win_amd64.whl", hash = "sha256:8f29fbc3e8aa0552810dd0e3e69f3158f8dbf0edb425e0437798e9db9d0a28a6", size = 23797590, upload-time = "2025-11-24T15:39:48.269Z" },
+]
+
+[[package]]
 name = "dingo-dev-tools"
 version = "0.0.0"
 source = { virtual = "." }
@@ -35,6 +54,7 @@ source = { virtual = "." }
 [package.dev-dependencies]
 dev = [
     { name = "clang-format" },
+    { name = "clang-tidy" },
     { name = "filecheck" },
     { name = "jinja2" },
     { name = "lit" },
@@ -46,6 +66,7 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "clang-format", specifier = "==21.1.8" },
+    { name = "clang-tidy", specifier = "==21.1.6" },
     { name = "filecheck", specifier = ">=1.0.3" },
     { name = "jinja2", specifier = ">=3.1.0" },
     { name = "lit", specifier = ">=18.1.8" },
