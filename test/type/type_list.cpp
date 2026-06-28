@@ -21,79 +21,78 @@ struct type_list_b {};
 struct type_list_c {};
 
 TEST(type_list_test, meta_utilities) {
-    using nested_tuple =
-        std::tuple<type_list_a, std::tuple<type_list_b, type_list_c>>;
-    using nested_list =
-        type_list<type_list_a, type_list<type_list_b, type_list_c>>;
+  using nested_tuple =
+      std::tuple<type_list_a, std::tuple<type_list_b, type_list_c>>;
+  using nested_list =
+      type_list<type_list_a, type_list<type_list_b, type_list_c>>;
 
-    static_assert(
-        std::is_same_v<
-            type_list_cat_t<type_list<type_list_a>,
-                            type_list<type_list_b, type_list_c>, type_list<>>,
-            type_list<type_list_a, type_list_b, type_list_c>>);
-    static_assert(type_list_size_v<type_list<>> == 0);
-    static_assert(type_list_size_v<nested_list> == 2);
-    static_assert(std::is_same_v<type_list_head_t<nested_list>, type_list_a>);
-    static_assert(std::is_same_v<to_type_list_t<nested_tuple>, nested_list>);
-    static_assert(type_list_contains_v<type_list_a, nested_list>);
-    static_assert(!type_list_contains_v<type_list_c, nested_list>);
-    static_assert(
-        std::is_same_v<
-            type_list_unique_t<type_list<type_list_a, type_list_b, type_list_a,
-                                         type_list_c, type_list_b>>,
-            type_list<type_list_a, type_list_b, type_list_c>>);
+  static_assert(
+      std::is_same_v<
+          type_list_cat_t<type_list<type_list_a>,
+                          type_list<type_list_b, type_list_c>, type_list<>>,
+          type_list<type_list_a, type_list_b, type_list_c>>);
+  static_assert(type_list_size_v<type_list<>> == 0);
+  static_assert(type_list_size_v<nested_list> == 2);
+  static_assert(std::is_same_v<type_list_head_t<nested_list>, type_list_a>);
+  static_assert(std::is_same_v<to_type_list_t<nested_tuple>, nested_list>);
+  static_assert(type_list_contains_v<type_list_a, nested_list>);
+  static_assert(!type_list_contains_v<type_list_c, nested_list>);
+  static_assert(
+      std::is_same_v<
+          type_list_unique_t<type_list<type_list_a, type_list_b, type_list_a,
+                                       type_list_c, type_list_b>>,
+          type_list<type_list_a, type_list_b, type_list_c>>);
 }
 
 TEST(type_list_test, for_each_visits_types_in_order) {
-    std::vector<int> visited;
+  std::vector<int> visited;
 
-    for_each(type_list<type_list_a, type_list_b, type_list_c>{}, [&](auto type) {
-        using current = typename decltype(type)::type;
-        if constexpr (std::is_same_v<current, type_list_a>)
-            visited.push_back(1);
-        else if constexpr (std::is_same_v<current, type_list_b>)
-            visited.push_back(2);
-        else if constexpr (std::is_same_v<current, type_list_c>)
-            visited.push_back(3);
-    });
+  for_each(type_list<type_list_a, type_list_b, type_list_c>{}, [&](auto type) {
+    using current = typename decltype(type)::type;
+    if constexpr (std::is_same_v<current, type_list_a>)
+      visited.push_back(1);
+    else if constexpr (std::is_same_v<current, type_list_b>)
+      visited.push_back(2);
+    else if constexpr (std::is_same_v<current, type_list_c>)
+      visited.push_back(3);
+  });
 
-    ASSERT_EQ(visited, (std::vector<int>{1, 2, 3}));
+  ASSERT_EQ(visited, (std::vector<int>{1, 2, 3}));
 
-    bool called = false;
-    for_each(type_list<>{}, [&](auto) { called = true; });
-    ASSERT_FALSE(called);
+  bool called = false;
+  for_each(type_list<>{}, [&](auto) { called = true; });
+  ASSERT_FALSE(called);
 }
 
 TEST(type_list_test, for_type_matches_first_type_only) {
-    using test_rtti = rtti<typeid_provider>;
+  using test_rtti = rtti<typeid_provider>;
 
-    int called = 0;
-    const auto matched = for_type<test_rtti>(
-        type_list<type_list_a, type_list_b, type_list_a>{},
-        test_rtti::get_type_index<type_list_a>(), [&](auto type) {
-            ++called;
-            using current = typename decltype(type)::type;
-            ASSERT_TRUE((std::is_same_v<current, type_list_a>));
-        });
+  int called = 0;
+  const auto matched = for_type<test_rtti>(
+      type_list<type_list_a, type_list_b, type_list_a>{},
+      test_rtti::get_type_index<type_list_a>(), [&](auto type) {
+        ++called;
+        using current = typename decltype(type)::type;
+        ASSERT_TRUE((std::is_same_v<current, type_list_a>));
+      });
 
-    ASSERT_TRUE(matched);
-    ASSERT_EQ(called, 1);
+  ASSERT_TRUE(matched);
+  ASSERT_EQ(called, 1);
 
-    called = 0;
-    const auto missing = for_type<test_rtti>(
-        type_list<type_list_a, type_list_b>{},
-        test_rtti::get_type_index<type_list_c>(),
-        [&](auto) { ++called; });
+  called = 0;
+  const auto missing = for_type<test_rtti>(
+      type_list<type_list_a, type_list_b>{},
+      test_rtti::get_type_index<type_list_c>(), [&](auto) { ++called; });
 
-    ASSERT_FALSE(missing);
-    ASSERT_EQ(called, 0);
+  ASSERT_FALSE(missing);
+  ASSERT_EQ(called, 0);
 
-    const auto empty = for_type<test_rtti>(
-        type_list<>{}, test_rtti::get_type_index<type_list_a>(),
-        [&](auto) { ++called; });
+  const auto empty = for_type<test_rtti>(
+      type_list<>{}, test_rtti::get_type_index<type_list_a>(),
+      [&](auto) { ++called; });
 
-    ASSERT_FALSE(empty);
-    ASSERT_EQ(called, 0);
+  ASSERT_FALSE(empty);
+  ASSERT_EQ(called, 0);
 }
 
 } // namespace

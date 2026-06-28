@@ -13,7 +13,7 @@
 
 ////
 struct IAnimal {
-    virtual ~IAnimal() {}
+  virtual ~IAnimal() {}
 };
 
 struct Dog : IAnimal {};
@@ -21,25 +21,25 @@ struct Cat : IAnimal {};
 
 ////
 int main() {
-    using namespace dingo;
-    ////
-    // Declare traits with std::string based index
-    struct container_traits : dynamic_container_traits {
-        using index_definition_type = indexes<
-            index<IAnimal, std::string, index_type::unordered_map>>;
-    };
+  using namespace dingo;
+  ////
+  // Declare traits with std::string based index
+  struct container_traits : dynamic_container_traits {
+    using index_definition_type =
+        indexes<index<IAnimal, std::string, index_type::unordered_map>>;
+  };
 
-    container<container_traits> container;
-    container.template register_indexed_type<scope<shared>, storage<Dog>,
-                                             interfaces<IAnimal>>(
-        std::string("dog"));
+  container<container_traits> container;
+  container.template register_indexed_type<scope<shared>, storage<Dog>,
+                                           interfaces<IAnimal>>(
+      std::string("dog"));
 
-    container.template register_indexed_type<scope<shared>, storage<Cat>,
-                                             interfaces<IAnimal>>(
-        std::string("cat"));
+  container.template register_indexed_type<scope<shared>, storage<Cat>,
+                                           interfaces<IAnimal>>(
+      std::string("cat"));
 
-    // Resolve an instance of a dog
-    auto dog = container.template resolve<IAnimal>(std::string("dog"));
-    ////
-    (void)dog;
+  // Resolve an instance of a dog
+  auto dog = container.template resolve<IAnimal>(std::string("dog"));
+  ////
+  (void)dog;
 }

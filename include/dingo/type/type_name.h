@@ -14,9 +14,9 @@
 namespace dingo {
 
 template <typename T> std::string type_name() {
-    std::string name;
-    append_type_name(name, describe_type<T>());
-    return name;
+  std::string name;
+  append_type_name(name, describe_type<T>());
+  return name;
 }
 
 } // namespace dingo

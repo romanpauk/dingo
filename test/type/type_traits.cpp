@@ -18,10 +18,10 @@
 #include "support/custom_wrappers.h"
 
 namespace dingo {
-static_assert(!std::is_copy_constructible_v<
-                  detail::recursion_guard<int, false>>);
-static_assert(!std::is_move_constructible_v<
-                  detail::recursion_guard<int, false>>);
+static_assert(
+    !std::is_copy_constructible_v<detail::recursion_guard<int, false>>);
+static_assert(
+    !std::is_move_constructible_v<detail::recursion_guard<int, false>>);
 
 static_assert(is_interface_storage_rebindable_v<test_shared<Class>, IClass>);
 static_assert(is_interface_storage_rebindable_v<test_unique<Class>, IClass>);

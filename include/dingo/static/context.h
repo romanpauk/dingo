@@ -27,32 +27,32 @@ struct static_context_closure_selector;
 
 template <typename StaticRegistry>
 struct static_context_closure_selector<StaticRegistry, false> {
-    using execution_traits =
-        detail::basic_static_execution_traits<StaticRegistry, false>;
-    using type = detail::static_context_closure<
-        execution_traits::max_destructible_slots,
-        execution_traits::max_temporary_slots,
-        execution_traits::max_temporary_size == 0
-            ? 1
-            : execution_traits::max_temporary_size,
-        execution_traits::max_temporary_align == 0
-            ? alignof(std::max_align_t)
-            : execution_traits::max_temporary_align>;
+  using execution_traits =
+      detail::basic_static_execution_traits<StaticRegistry, false>;
+  using type = detail::static_context_closure<
+      execution_traits::max_destructible_slots,
+      execution_traits::max_temporary_slots,
+      execution_traits::max_temporary_size == 0
+          ? 1
+          : execution_traits::max_temporary_size,
+      execution_traits::max_temporary_align == 0
+          ? alignof(std::max_align_t)
+          : execution_traits::max_temporary_align>;
 };
 
 template <typename StaticRegistry>
 struct static_context_closure_selector<StaticRegistry, true> {
-    using execution_traits =
-        detail::basic_static_execution_traits<StaticRegistry, true>;
-    using type = detail::fixed_context_closure<
-        execution_traits::max_destructible_slots,
-        execution_traits::max_temporary_slots,
-        execution_traits::max_temporary_size == 0
-            ? 1
-            : execution_traits::max_temporary_size,
-        execution_traits::max_temporary_align == 0
-            ? alignof(std::max_align_t)
-            : execution_traits::max_temporary_align>;
+  using execution_traits =
+      detail::basic_static_execution_traits<StaticRegistry, true>;
+  using type = detail::fixed_context_closure<
+      execution_traits::max_destructible_slots,
+      execution_traits::max_temporary_slots,
+      execution_traits::max_temporary_size == 0
+          ? 1
+          : execution_traits::max_temporary_size,
+      execution_traits::max_temporary_align == 0
+          ? alignof(std::max_align_t)
+          : execution_traits::max_temporary_align>;
 };
 
 template <typename StaticRegistry>
@@ -62,160 +62,161 @@ using binding_context = basic_static_context<StaticRegistry, true>;
 
 template <typename StaticRegistry, bool RuntimeDependencies = false>
 class basic_static_context : public detail::context_path_state {
-    using execution_traits =
-        detail::basic_static_execution_traits<StaticRegistry,
-                                              RuntimeDependencies>;
-    static constexpr std::size_t closure_capacity_ =
-        execution_traits::max_preserved_closure_depth + 1;
-    static constexpr std::size_t destructible_capacity_ =
-        execution_traits::max_destructible_slots;
-    static constexpr std::size_t temporary_slot_capacity_ =
-        execution_traits::max_temporary_slots;
-    static constexpr std::size_t temporary_slot_size_ =
-        execution_traits::max_temporary_size == 0
-            ? 1
-            : execution_traits::max_temporary_size;
-    static constexpr std::size_t temporary_slot_align_ =
-        execution_traits::max_temporary_align == 0
-            ? alignof(std::max_align_t)
-            : execution_traits::max_temporary_align;
-    using closure_type = typename detail::static_context_closure_selector<
-        StaticRegistry, RuntimeDependencies>::type;
+  using execution_traits =
+      detail::basic_static_execution_traits<StaticRegistry,
+                                            RuntimeDependencies>;
+  static constexpr std::size_t closure_capacity_ =
+      execution_traits::max_preserved_closure_depth + 1;
+  static constexpr std::size_t destructible_capacity_ =
+      execution_traits::max_destructible_slots;
+  static constexpr std::size_t temporary_slot_capacity_ =
+      execution_traits::max_temporary_slots;
+  static constexpr std::size_t temporary_slot_size_ =
+      execution_traits::max_temporary_size == 0
+          ? 1
+          : execution_traits::max_temporary_size;
+  static constexpr std::size_t temporary_slot_align_ =
+      execution_traits::max_temporary_align == 0
+          ? alignof(std::max_align_t)
+          : execution_traits::max_temporary_align;
+  using closure_type = typename detail::static_context_closure_selector<
+      StaticRegistry, RuntimeDependencies>::type;
 
-  public:
-    basic_static_context() { closures_[0] = &closure_; }
+public:
+  basic_static_context() { closures_[0] = &closure_; }
 
-    ~basic_static_context() {
-        while (closure_count_ != 0) {
-            closures_[--closure_count_]->reset();
-        }
+  ~basic_static_context() {
+    while (closure_count_ != 0) {
+      closures_[--closure_count_]->reset();
+    }
+  }
+
+  template <typename T, typename Container> T resolve(Container &container) {
+    if constexpr (detail::is_selected_v<T>) {
+      using request_type = detail::selected_type_t<T>;
+      using selector_type = detail::selected_selector_t<T>;
+      if constexpr (detail::is_type_selector_v<selector_type>) {
+        using key_type = detail::type_selector_type_t<selector_type>;
+        return T(container.template resolve<request_type, false, true>(
+            *this, key<key_type>{}));
+      } else if constexpr (detail::is_value_selector_v<selector_type>) {
+        return T(container.template resolve<request_type, false, true>(
+            *this, detail::is_value_selector<selector_type>::make()));
+      } else {
+        static_assert(detail::is_type_selector_v<selector_type> ||
+                          detail::is_value_selector_v<selector_type>,
+                      "detail::selected<T, Selector> requires a "
+                      "type_selector or value_selector");
+      }
+    } else if constexpr (is_keyed_v<T>) {
+      using request_type = keyed_type_t<T>;
+      using key_type = keyed_key_t<T>;
+      return T(container.template resolve<request_type, false, true>(
+          *this, key<key_type>{}));
+    } else if constexpr (is_indexed_v<T>) {
+      using request_type = indexed_type_t<T>;
+      using selector_type = indexed_selector_t<T>;
+      if constexpr (detail::is_key_value_v<selector_type>) {
+        using key_type =
+            typename detail::key_selector_value<selector_type>::type;
+        return T(container.template resolve<request_type, false, true>(
+            *this,
+            key_type{detail::key_selector_value<selector_type>::make()}));
+      } else {
+        static_assert(detail::is_key_value_v<selector_type>,
+                      "dingo::indexed<T, dingo::key<Key>> constructor "
+                      "injection requires dingo::key<Key, Value>");
+      }
+    } else {
+      return container.template resolve<T, false>(*this);
+    }
+  }
+
+  template <typename T, typename DetectionTag, typename Container>
+  T construct_temporary(Container &container) {
+    using temporary_type = normalized_type_t<T>;
+
+    auto *instance = allocate_temporary_storage<temporary_type>();
+    detail::default_constructor_detection<temporary_type, DetectionTag>()
+        .template construct<temporary_type>(instance, *this, container);
+    if constexpr (!std::is_trivially_destructible_v<temporary_type>) {
+      register_destructor(instance);
     }
 
-    template <typename T, typename Container> T resolve(Container& container) {
-        if constexpr (detail::is_selected_v<T>) {
-            using request_type = detail::selected_type_t<T>;
-            using selector_type = detail::selected_selector_t<T>;
-            if constexpr (detail::is_type_selector_v<selector_type>) {
-                using key_type = detail::type_selector_type_t<selector_type>;
-                return T(container.template resolve<request_type, false, true>(
-                    *this, key<key_type>{}));
-            } else if constexpr (detail::is_value_selector_v<selector_type>) {
-                return T(container.template resolve<request_type, false, true>(
-                    *this, detail::is_value_selector<selector_type>::make()));
-            } else {
-                static_assert(detail::is_type_selector_v<selector_type> ||
-                                  detail::is_value_selector_v<selector_type>,
-                              "detail::selected<T, Selector> requires a type_selector or value_selector");
-            }
-        } else if constexpr (is_keyed_v<T>) {
-            using request_type = keyed_type_t<T>;
-            using key_type = keyed_key_t<T>;
-            return T(container.template resolve<request_type, false, true>(
-                *this, key<key_type>{}));
-        } else if constexpr (is_indexed_v<T>) {
-            using request_type = indexed_type_t<T>;
-            using selector_type = indexed_selector_t<T>;
-            if constexpr (detail::is_key_value_v<selector_type>) {
-                using key_type =
-                    typename detail::key_selector_value<selector_type>::type;
-                return T(container.template resolve<request_type, false, true>(
-                    *this,
-                    key_type{
-                        detail::key_selector_value<selector_type>::make()}));
-            } else {
-                static_assert(detail::is_key_value_v<selector_type>,
-                              "dingo::indexed<T, dingo::key<Key>> constructor injection requires dingo::key<Key, Value>");
-            }
-        } else {
-            return container.template resolve<T, false>(*this);
-        }
+    if constexpr (std::is_lvalue_reference_v<T>) {
+      return *instance;
+    } else {
+      return std::move(*instance);
     }
+  }
 
-    template <typename T, typename DetectionTag, typename Container>
-    T construct_temporary(Container& container) {
-        using temporary_type = normalized_type_t<T>;
-
-        auto* instance = allocate_temporary_storage<temporary_type>();
-        detail::default_constructor_detection<temporary_type, DetectionTag>()
-            .template construct<temporary_type>(instance, *this, container);
-        if constexpr (!std::is_trivially_destructible_v<temporary_type>) {
-            register_destructor(instance);
-        }
-
-        if constexpr (std::is_lvalue_reference_v<T>) {
-            return *instance;
-        } else {
-            return std::move(*instance);
-        }
+  template <typename T, typename... Args> T &construct(Args &&...args) {
+    auto *instance = allocate_temporary_storage<T>();
+    new (instance) T(std::forward<Args>(args)...);
+    if constexpr (!std::is_trivially_destructible_v<T>) {
+      register_destructor(instance);
     }
+    return *instance;
+  }
 
-    template <typename T, typename... Args> T& construct(Args&&... args) {
-        auto* instance = allocate_temporary_storage<T>();
-        new (instance) T(std::forward<Args>(args)...);
-        if constexpr (!std::is_trivially_destructible_v<T>) {
-            register_destructor(instance);
-        }
-        return *instance;
+  template <typename T> T *allocate() {
+    return allocate_temporary_storage<T>();
+  }
+
+  void push(closure_type *closure) {
+    assert(!contains(closure));
+    assert(closure_count_ < closures_.size());
+    closures_[closure_count_++] = closure;
+  }
+
+  void pop() {
+    assert(closure_count_ != 0);
+    --closure_count_;
+  }
+
+  bool contains(const closure_type *candidate) const {
+    for (std::size_t index = 0; index < closure_count_; ++index) {
+      if (closures_[index] == candidate) {
+        return true;
+      }
     }
+    return false;
+  }
 
-    template <typename T> T* allocate() {
-        return allocate_temporary_storage<T>();
-    }
+private:
+  template <typename T> T *allocate_temporary_storage() {
+    static_assert(sizeof(T) <= temporary_slot_size_,
+                  "static_context temporary size must fit the compile-time "
+                  "temporary slot bound");
+    static_assert(alignof(T) <= temporary_slot_align_,
+                  "static_context temporary alignment must fit the "
+                  "compile-time temporary slot bound");
+    static_assert(temporary_slot_capacity_ != 0,
+                  "static_context requires at least one compile-time "
+                  "temporary slot for this resolution path");
 
-    void push(closure_type* closure) {
-        assert(!contains(closure));
-        assert(closure_count_ < closures_.size());
-        closures_[closure_count_++] = closure;
-    }
+    auto *fixed = active_closure().template try_allocate_temporary<T>();
+    assert(fixed != nullptr);
+    return fixed;
+  }
 
-    void pop() {
-        assert(closure_count_ != 0);
-        --closure_count_;
-    }
+  closure_type &active_closure() {
+    assert(closure_count_ != 0);
+    return *closures_[closure_count_ - 1];
+  }
 
-    bool contains(const closure_type* candidate) const {
-        for (std::size_t index = 0; index < closure_count_; ++index) {
-            if (closures_[index] == candidate) {
-                return true;
-            }
-        }
-        return false;
-    }
+  template <typename T> void register_destructor(T *instance) {
+    static_assert(!std::is_trivially_destructible_v<T>);
+    active_closure().add_destructor(instance, &destructor<T>);
+  }
 
-  private:
-    template <typename T> T* allocate_temporary_storage() {
-        static_assert(sizeof(T) <= temporary_slot_size_,
-                      "static_context temporary size must fit the compile-time "
-                      "temporary slot bound");
-        static_assert(alignof(T) <= temporary_slot_align_,
-                      "static_context temporary alignment must fit the "
-                      "compile-time temporary slot bound");
-        static_assert(temporary_slot_capacity_ != 0,
-                      "static_context requires at least one compile-time "
-                      "temporary slot for this resolution path");
+  template <typename T> static void destructor(void *ptr) {
+    reinterpret_cast<T *>(ptr)->~T();
+  }
 
-        auto* fixed = active_closure().template try_allocate_temporary<T>();
-        assert(fixed != nullptr);
-        return fixed;
-    }
-
-    closure_type& active_closure() {
-        assert(closure_count_ != 0);
-        return *closures_[closure_count_ - 1];
-    }
-
-    template <typename T> void register_destructor(T* instance) {
-        static_assert(!std::is_trivially_destructible_v<T>);
-        active_closure().add_destructor(instance, &destructor<T>);
-    }
-
-    template <typename T> static void destructor(void* ptr) {
-        reinterpret_cast<T*>(ptr)->~T();
-    }
-
-    std::array<closure_type*, closure_capacity_> closures_{};
-    std::size_t closure_count_ = 1;
-    closure_type closure_;
+  std::array<closure_type *, closure_capacity_> closures_{};
+  std::size_t closure_count_ = 1;
+  closure_type closure_;
 };
 
 template <typename StaticRegistry>

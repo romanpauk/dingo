@@ -21,29 +21,28 @@ template <size_t N> struct array {};
 namespace detail {
 template <typename Key, typename Value, typename Allocator, size_t N>
 struct index_storage<index_type::array<N>, Key, Value, Allocator> {
-    static_assert(std::is_integral_v<Key> && std::is_unsigned_v<Key>);
+  static_assert(std::is_integral_v<Key> && std::is_unsigned_v<Key>);
 
-    explicit index_storage(Allocator&) {}
+  explicit index_storage(Allocator &) {}
 
-    bool emplace(Key key, Value value) {
-        if (key >= array_.size())
-            throw detail::make_type_index_out_of_range_exception(
-                key, array_.size());
-        if (!array_[key]) {
-            array_[key] = value;
-            return true;
-        }
-        return false;
+  bool emplace(Key key, Value value) {
+    if (key >= array_.size())
+      throw detail::make_type_index_out_of_range_exception(key, array_.size());
+    if (!array_[key]) {
+      array_[key] = value;
+      return true;
     }
+    return false;
+  }
 
-    Value* find(Key key) {
-        if (key < array_.size() && array_[key])
-            return &array_[key];
-        return nullptr;
-    }
+  Value *find(Key key) {
+    if (key < array_.size() && array_[key])
+      return &array_[key];
+    return nullptr;
+  }
 
-  private:
-    std::array<Value, N> array_{};
+private:
+  std::array<Value, N> array_{};
 };
 } // namespace detail
 

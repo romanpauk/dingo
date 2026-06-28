@@ -15,12 +15,12 @@ namespace incomplete_resolve_test {
 struct service;
 
 struct consumer {
-    explicit consumer(service& value);
+  explicit consumer(service &value);
 
-    service* value;
+  service *value;
 };
 
-void register_service(container<>& container);
+void register_service(container<> &container);
 
 } // namespace incomplete_resolve_test
 } // namespace dingo

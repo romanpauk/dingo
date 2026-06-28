@@ -13,13 +13,13 @@ struct A {};
 ////
 
 int main() {
-    using namespace dingo;
+  using namespace dingo;
 
-    ////
-    container<> container;
-    // Register struct A with shared scope
-    container.register_type<scope<shared>, storage<A>>();
-    // Resolution will always return the same A instance
-    assert(container.resolve<A*>() == &container.resolve<A&>());
-    ////
+  ////
+  container<> container;
+  // Register struct A with shared scope
+  container.register_type<scope<shared>, storage<A>>();
+  // Resolution will always return the same A instance
+  assert(container.resolve<A *>() == &container.resolve<A &>());
+  ////
 }

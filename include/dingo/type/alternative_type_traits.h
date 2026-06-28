@@ -17,7 +17,7 @@
 
 namespace dingo {
 template <typename T, typename = void> struct alternative_type_traits {
-    static constexpr bool enabled = false;
+  static constexpr bool enabled = false;
 };
 
 template <typename T>
@@ -29,30 +29,31 @@ template <typename List, typename Selected> struct type_list_count;
 
 template <typename Selected, typename... Alternatives>
 struct type_list_count<type_list<Alternatives...>, Selected>
-    : std::integral_constant<size_t,
-                             (0u + ... + (std::is_same_v<Selected, Alternatives> ? 1u
-                                                                                 : 0u))> {};
+    : std::integral_constant<
+          size_t,
+          (0u + ... + (std::is_same_v<Selected, Alternatives> ? 1u : 0u))> {};
 
 template <typename List> struct type_list_has_duplicates;
 
 template <typename... Alternatives>
 struct type_list_has_duplicates<type_list<Alternatives...>>
-    : std::bool_constant<
-          ((type_list_count<type_list<Alternatives...>, Alternatives>::value > 1) ||
-           ...)> {};
+    : std::bool_constant<((type_list_count<type_list<Alternatives...>,
+                                           Alternatives>::value > 1) ||
+                          ...)> {};
 
 template <typename Type, typename = void>
 struct alternative_type_alternatives {};
 
 template <typename Type>
 struct alternative_type_alternatives<
-    Type,
-    std::enable_if_t<alternative_type_traits<std::remove_cv_t<Type>>::enabled>> {
-    using type = typename alternative_type_traits<std::remove_cv_t<Type>>::alternatives;
+    Type, std::enable_if_t<
+              alternative_type_traits<std::remove_cv_t<Type>>::enabled>> {
+  using type =
+      typename alternative_type_traits<std::remove_cv_t<Type>>::alternatives;
 
-    static_assert(
-        !type_list_has_duplicates<type>::value,
-        "alternative_type_traits<T>::alternatives must not contain duplicate types");
+  static_assert(!type_list_has_duplicates<type>::value,
+                "alternative_type_traits<T>::alternatives must not contain "
+                "duplicate types");
 };
 
 template <typename Type>
@@ -74,35 +75,34 @@ struct alternative_type_interface_types {};
 
 template <typename Type>
 struct alternative_type_interface_types<
-    Type,
-    std::enable_if_t<alternative_type_traits<std::remove_cv_t<Type>>::enabled>> {
-    using type =
-        type_list_cat_t<type_list<std::remove_cv_t<Type>>,
-                        alternative_type_alternatives_t<Type>>;
+    Type, std::enable_if_t<
+              alternative_type_traits<std::remove_cv_t<Type>>::enabled>> {
+  using type = type_list_cat_t<type_list<std::remove_cv_t<Type>>,
+                               alternative_type_alternatives_t<Type>>;
 };
 } // namespace detail
 
 template <typename... Alternatives>
 struct alternative_type_traits<std::variant<Alternatives...>> {
-    static constexpr bool enabled = true;
+  static constexpr bool enabled = true;
 
-    using alternatives = type_list<Alternatives...>;
+  using alternatives = type_list<Alternatives...>;
 
-    template <typename Selected, typename Value>
-    static std::variant<Alternatives...> wrap(Value&& value) {
-        return std::variant<Alternatives...>(std::in_place_type<Selected>,
-                                             std::forward<Value>(value));
-    }
+  template <typename Selected, typename Value>
+  static std::variant<Alternatives...> wrap(Value &&value) {
+    return std::variant<Alternatives...>(std::in_place_type<Selected>,
+                                         std::forward<Value>(value));
+  }
 
-    template <typename Selected>
-    static Selected* get(std::variant<Alternatives...>& value) {
-        return std::get_if<Selected>(&value);
-    }
+  template <typename Selected>
+  static Selected *get(std::variant<Alternatives...> &value) {
+    return std::get_if<Selected>(&value);
+  }
 
-    template <typename Selected>
-    static const Selected* get(const std::variant<Alternatives...>& value) {
-        return std::get_if<Selected>(&value);
-    }
+  template <typename Selected>
+  static const Selected *get(const std::variant<Alternatives...> &value) {
+    return std::get_if<Selected>(&value);
+  }
 };
 
 template <typename Type, typename Interface>

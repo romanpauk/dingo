@@ -3,6 +3,6 @@
 #include <dingo/container.h>
 
 int main() {
-    dingo::container<> container;
-    return container.template resolve<int>();
+  dingo::container<> container;
+  return container.template resolve<int>();
 }

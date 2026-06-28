@@ -16,39 +16,39 @@ struct primary_tag {};
 struct replica_tag {};
 
 struct database {
-    int id;
+  int id;
 };
 
 struct repository {
-    repository(dingo::annotated<database&, primary_tag> primary_db,
-               dingo::annotated<database&, replica_tag> replica_db)
-        : primary(primary_db), replica(replica_db) {}
+  repository(dingo::annotated<database &, primary_tag> primary_db,
+             dingo::annotated<database &, replica_tag> replica_db)
+      : primary(primary_db), replica(replica_db) {}
 
-    database& primary;
-    database& replica;
+  database &primary;
+  database &replica;
 };
 
 ////
 int main() {
-    using namespace dingo;
+  using namespace dingo;
 
-////
-    database primary{1};
-    database replica{2};
-    container<> container;
+  ////
+  database primary{1};
+  database replica{2};
+  container<> container;
 
-    container.register_type<scope<external>, storage<database*>,
-                            interfaces<annotated<database, primary_tag>>>(
-        &primary);
-    container.register_type<scope<external>, storage<database*>,
-                            interfaces<annotated<database, replica_tag>>>(
-        &replica);
-    container.register_type<scope<unique>, storage<repository>>();
+  container.register_type<scope<external>, storage<database *>,
+                          interfaces<annotated<database, primary_tag>>>(
+      &primary);
+  container.register_type<scope<external>, storage<database *>,
+                          interfaces<annotated<database, replica_tag>>>(
+      &replica);
+  container.register_type<scope<unique>, storage<repository>>();
 
-    [[maybe_unused]] auto repo = container.resolve<repository>();
-    assert(&repo.primary == &primary);
-    assert(&repo.replica == &replica);
-////
+  [[maybe_unused]] auto repo = container.resolve<repository>();
+  assert(&repo.primary == &primary);
+  assert(&repo.replica == &replica);
+  ////
 
-    return 0;
+  return 0;
 }

@@ -15,12 +15,12 @@
 namespace dingo {
 
 template <typename T> struct invoke {
-    template <typename Context, typename Container, typename Callable>
-    static decltype(auto) construct(Context& ctx, Container& container,
-                                    Callable&& callable) {
-        return detail::callable_invoke<detail::callable_signature_t<T>>::
-            construct(std::forward<Callable>(callable), ctx, container);
-    }
+  template <typename Context, typename Container, typename Callable>
+  static decltype(auto) construct(Context &ctx, Container &container,
+                                  Callable &&callable) {
+    return detail::callable_invoke<detail::callable_signature_t<T>>::construct(
+        std::forward<Callable>(callable), ctx, container);
+  }
 };
 
 } // namespace dingo

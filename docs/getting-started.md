@@ -70,13 +70,13 @@ Example code included from
 ```c++
 // User types do not need Dingo-specific base classes or macros.
 struct A {
-    A() {}
+  A() {}
 };
 struct B {
-    B(A&, std::shared_ptr<A>) {}
+  B(A &, std::shared_ptr<A>) {}
 };
 struct C {
-    C(B*, std::unique_ptr<B>&, A&) {}
+  C(B *, std::unique_ptr<B> &, A &) {}
 };
 
 container<> container;
@@ -92,15 +92,15 @@ container.register_type<scope<unique>, storage<C>>();
 C c = container.resolve<C>();
 
 struct D {
-    A& a;
-    B* b;
+  A &a;
+  B *b;
 };
 
 // Construct an unmanaged object using dependencies from the container.
 D d = container.construct<D>();
 
 // Or invoke a callable with resolved arguments.
-D e = container.invoke([&](A& a, B* b) { return D{a, b}; });
+D e = container.invoke([&](A &a, B *b) { return D{a, b}; });
 ```
 
 <!-- } -->
@@ -119,13 +119,13 @@ Example code included from
 
 ```c++
 struct A {
-    A() {}
+  A() {}
 };
 struct B {
-    B(A&, std::shared_ptr<A>) {}
+  B(A &, std::shared_ptr<A>) {}
 };
 struct C {
-    C(B*, std::unique_ptr<B>&, A&) {}
+  C(B *, std::unique_ptr<B> &, A &) {}
 };
 
 // Compile-time bindings declare the same storage and scope as runtime
@@ -140,13 +140,13 @@ container<app_bindings> container;
 C c = container.resolve<C>();
 
 struct D {
-    A& a;
-    B* b;
+  A &a;
+  B *b;
 };
 
 // construct() and invoke() work with compile-time registration, too.
 D d = container.construct<D>();
-D e = container.invoke([&](A& a, B* b) { return D{a, b}; });
+D e = container.invoke([&](A &a, B *b) { return D{a, b}; });
 ```
 
 <!-- } -->
@@ -203,7 +203,7 @@ struct A {};
 
 // struct B that will be constructed using container
 struct B {
-    A& a;
+  A &a;
 };
 
 container<> container;
@@ -223,20 +223,20 @@ Example code included from
 ```c++
 // struct B that will be constructed using container
 struct B {
-    A& a;
-    static B factory(A& a) { return B{a}; }
+  A &a;
+  static B factory(A &a) { return B{a}; }
 };
 
 struct overloaded_factory {
-    B operator()(A& a) const { return B{a}; }
-    int operator()(int value) const { return value * 2; }
+  B operator()(A &a) const { return B{a}; }
+  int operator()(int value) const { return value * 2; }
 };
 // Construct instance of B, injecting shared instance of A
-B b1 = container.invoke([&](A& a) { return B{a}; });
-B b2 = container.invoke(std::function<B(A&)>([](auto& a) { return B{a}; }));
+B b1 = container.invoke([&](A &a) { return B{a}; });
+B b2 = container.invoke(std::function<B(A &)>([](auto &a) { return B{a}; }));
 B b3 = container.invoke(B::factory);
 // Use an explicit signature to disambiguate overloaded call operators.
-B b4 = container.invoke<B(A&)>(overloaded_factory{});
+B b4 = container.invoke<B(A &)>(overloaded_factory{});
 ```
 
 <!-- } -->

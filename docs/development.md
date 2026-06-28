@@ -22,6 +22,36 @@ options, including:
 - `DINGO_EXAMPLES_ENABLED`
 - `DINGO_LIT_TESTS_ENABLED`
 
+## C++ Formatting
+
+C++ sources are formatted with `clang-format` using the repository
+`.clang-format` file. The required formatter is pinned as `clang-format` 21 in
+the locked `uv` development environment.
+
+Configure CMake with the pinned executable if the system formatter is missing or
+has a different major version:
+
+```bash
+cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON \
+  -DDINGO_CLANG_FORMAT_EXE="$(uv run --locked python -c 'import shutil; print(shutil.which("clang-format"))')"
+```
+
+Development builds provide targets for updating and checking formatting:
+
+```bash
+cmake --build build -t format
+cmake --build build -t check-format
+```
+
+The older explicit target names remain available as aliases:
+`clang-format-update` and `clang-format-verify`.
+
+The aggregate `check` target runs the repository formatting checks used by CI:
+
+```bash
+cmake --build build -t check
+```
+
 ## Python Tooling
 
 Python helper tooling for development is declared in `pyproject.toml` and locked

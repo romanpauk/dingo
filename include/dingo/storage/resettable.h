@@ -11,8 +11,8 @@
 
 namespace dingo {
 class resettable {
-  public:
-    virtual ~resettable() = default;
-    virtual void reset() = 0;
+public:
+  virtual ~resettable() = default;
+  virtual void reset() = 0;
 };
 } // namespace dingo

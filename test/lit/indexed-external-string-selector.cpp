@@ -12,15 +12,15 @@
 #if __cplusplus >= 202002L
 
 template <std::size_t N> struct test_fixed_string {
-    char value[N];
+  char value[N];
 
-    constexpr test_fixed_string(const char (&text)[N]) {
-        for (std::size_t i = 0; i != N; ++i) {
-            value[i] = text[i];
-        }
+  constexpr test_fixed_string(const char (&text)[N]) {
+    for (std::size_t i = 0; i != N; ++i) {
+      value[i] = text[i];
     }
+  }
 
-    constexpr bool operator==(const test_fixed_string&) const = default;
+  constexpr bool operator==(const test_fixed_string &) const = default;
 };
 
 template <typename T, test_fixed_string Value> struct key_string {};
@@ -32,52 +32,51 @@ struct is_key_value<::key_string<T, Value>> : std::true_type {};
 
 template <typename T, ::test_fixed_string Value>
 struct key_selector_value<::key_string<T, Value>> {
-    using type = T;
+  using type = T;
 
-    static T make() {
-        constexpr auto size = sizeof(Value.value) - 1;
-        return T{std::string_view{Value.value, size}};
-    }
+  static T make() {
+    constexpr auto size = sizeof(Value.value) - 1;
+    return T{std::string_view{Value.value, size}};
+  }
 };
 
 } // namespace dingo::detail
 
 struct string_processor {
-    virtual ~string_processor() = default;
-    virtual int id() const = 0;
+  virtual ~string_processor() = default;
+  virtual int id() const = 0;
 };
 
 template <int Id> struct string_processor_impl : string_processor {
-    int id() const override { return Id; }
+  int id() const override { return Id; }
 };
 
 // This proves an external selector can feed a concrete std::string key into
 // indexed injection without adding a public dingo::key_string API.
 struct string_literal_consumer {
-    explicit string_literal_consumer(
-        dingo::indexed<string_processor&,
-                       key_string<std::string, "json">> selected)
-        : processor(selected) {}
+  explicit string_literal_consumer(
+      dingo::indexed<string_processor &, key_string<std::string, "json">>
+          selected)
+      : processor(selected) {}
 
-    string_processor& processor;
+  string_processor &processor;
 };
 
 struct traits : dingo::dynamic_container_traits {
-    using index_definition_type = dingo::indexes<
-        dingo::index<string_processor, dingo::key<std::string>,
-                     dingo::index_type::unordered_map>>;
+  using index_definition_type =
+      dingo::indexes<dingo::index<string_processor, dingo::key<std::string>,
+                                  dingo::index_type::unordered_map>>;
 };
 
 int main() {
-    dingo::container<traits> container;
-    container.template register_indexed_type<
-        dingo::scope<dingo::shared>,
-        dingo::storage<string_processor_impl<7>>,
-        dingo::interfaces<string_processor>>(std::string{"json"});
+  dingo::container<traits> container;
+  container.template register_indexed_type<
+      dingo::scope<dingo::shared>, dingo::storage<string_processor_impl<7>>,
+      dingo::interfaces<string_processor>>(std::string{"json"});
 
-    auto consumer = container.template construct<string_literal_consumer>();
+  auto consumer = container.template construct<string_literal_consumer>();
 
-    return consumer.processor.id() == 7 ? 0 : 1;
+  return consumer.processor.id() == 7 ? 0 : 1;
 }
 
 #else

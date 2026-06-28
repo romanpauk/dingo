@@ -24,13 +24,12 @@ template <typename T> struct is_static_context_argument : std::false_type {};
 
 template <typename StaticRegistry, bool RuntimeDependencies>
 struct is_static_context_argument<
-    basic_static_context<StaticRegistry, RuntimeDependencies>> : std::true_type {
-};
+    basic_static_context<StaticRegistry, RuntimeDependencies>>
+    : std::true_type {};
 
 template <typename T>
-inline constexpr bool is_static_context_argument_v =
-    is_static_context_argument<
-        std::remove_cv_t<std::remove_reference_t<T>>>::value;
+inline constexpr bool is_static_context_argument_v = is_static_context_argument<
+    std::remove_cv_t<std::remove_reference_t<T>>>::value;
 
 template <typename Container, typename Context, typename T,
           bool RemoveRvalueReferences, bool CheckCache, typename Selector,
@@ -41,17 +40,19 @@ template <typename Container, typename Context, typename T,
           bool RemoveRvalueReferences, bool CheckCache>
 struct is_context_resolve_supported<
     Container, Context, T, RemoveRvalueReferences, CheckCache, void,
-    std::void_t<decltype(std::declval<Container&>().template resolve<
-                         T, RemoveRvalueReferences, CheckCache>(
-        std::declval<Context&>()))>> : std::true_type {};
+    std::void_t<
+        decltype(std::declval<Container &>()
+                     .template resolve<T, RemoveRvalueReferences, CheckCache>(
+                         std::declval<Context &>()))>> : std::true_type {};
 
 template <typename Container, typename Context, typename T,
           bool RemoveRvalueReferences, bool CheckCache, typename Selector>
 struct is_context_resolve_supported<
     Container, Context, T, RemoveRvalueReferences, CheckCache, Selector,
-    std::void_t<decltype(std::declval<Container&>().template resolve<
-                         T, RemoveRvalueReferences, CheckCache>(
-        std::declval<Context&>(), std::declval<Selector>()))>>
+    std::void_t<
+        decltype(std::declval<Container &>()
+                     .template resolve<T, RemoveRvalueReferences, CheckCache>(
+                         std::declval<Context &>(), std::declval<Selector>()))>>
     : std::true_type {};
 
 template <typename Container, typename Context, typename T,

@@ -8,13 +8,13 @@ struct b {};
 
 using source =
     dingo::bindings<dingo::bind<dingo::scope<dingo::shared>, dingo::storage<a>,
-                                dingo::dependencies<b&>>,
+                                dingo::dependencies<b &>>,
                     dingo::bind<dingo::scope<dingo::shared>, dingo::storage<b>,
-                                dingo::dependencies<a&>>>;
+                                dingo::dependencies<a &>>>;
 
 int main() {
-    dingo::static_container<source> instance;
-    (void)instance;
+  dingo::static_container<source> instance;
+  (void)instance;
 }
 
 // CHECK: static_container requires a resolvable compile-time binding graph

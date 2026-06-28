@@ -32,13 +32,13 @@ Example code included from
 ```c++
 // User types do not need Dingo-specific base classes or macros.
 struct A {
-    A() {}
+  A() {}
 };
 struct B {
-    B(A&, std::shared_ptr<A>) {}
+  B(A &, std::shared_ptr<A>) {}
 };
 struct C {
-    C(B*, std::unique_ptr<B>&, A&) {}
+  C(B *, std::unique_ptr<B> &, A &) {}
 };
 
 container<> container;
@@ -54,15 +54,15 @@ container.register_type<scope<unique>, storage<C>>();
 C c = container.resolve<C>();
 
 struct D {
-    A& a;
-    B* b;
+  A &a;
+  B *b;
 };
 
 // Construct an unmanaged object using dependencies from the container.
 D d = container.construct<D>();
 
 // Or invoke a callable with resolved arguments.
-D e = container.invoke([&](A& a, B* b) { return D{a, b}; });
+D e = container.invoke([&](A &a, B *b) { return D{a, b}; });
 ```
 
 <!-- } -->
@@ -80,13 +80,13 @@ Example code included from
 
 ```c++
 struct A {
-    A() {}
+  A() {}
 };
 struct B {
-    B(A&, std::shared_ptr<A>) {}
+  B(A &, std::shared_ptr<A>) {}
 };
 struct C {
-    C(B*, std::unique_ptr<B>&, A&) {}
+  C(B *, std::unique_ptr<B> &, A &) {}
 };
 
 // Compile-time bindings declare the same storage and scope as runtime
@@ -101,13 +101,13 @@ container<app_bindings> container;
 C c = container.resolve<C>();
 
 struct D {
-    A& a;
-    B* b;
+  A &a;
+  B *b;
 };
 
 // construct() and invoke() work with compile-time registration, too.
 D d = container.construct<D>();
-D e = container.invoke([&](A& a, B* b) { return D{a, b}; });
+D e = container.invoke([&](A &a, B *b) { return D{a, b}; });
 ```
 
 <!-- } -->

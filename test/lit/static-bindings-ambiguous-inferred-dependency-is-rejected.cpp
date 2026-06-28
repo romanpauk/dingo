@@ -5,14 +5,14 @@
 #include <dingo/storage/unique.h>
 
 struct base {
-    virtual ~base() = default;
+  virtual ~base() = default;
 };
 
 struct left : base {};
 struct right : base {};
 
 struct service {
-    explicit service(base&) {}
+  explicit service(base &) {}
 };
 
 using source = dingo::bindings<
@@ -21,8 +21,9 @@ using source = dingo::bindings<
     dingo::bind<dingo::scope<dingo::unique>, dingo::storage<service>>>;
 
 int main() {
-    dingo::static_container<source> instance;
-    (void)instance;
+  dingo::static_container<source> instance;
+  (void)instance;
 }
 
-// CHECK: bindings<...> source requires every inferred constructor dependency to map to exactly one interface binding
+// CHECK: bindings<...> source requires every inferred constructor dependency to
+// map to exactly one interface binding

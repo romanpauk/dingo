@@ -19,17 +19,17 @@
 namespace dingo {
 
 template <typename Tag = void> struct static_container_traits {
-    template <typename TagT> using rebind_t = static_container_traits<TagT>;
+  template <typename TagT> using rebind_t = static_container_traits<TagT>;
 
-    using tag_type = Tag;
-    using rtti_type = rtti<static_provider>;
-    template <typename Value, typename Allocator>
-    using type_map_type = static_type_map<Value, Tag, Allocator>;
-    template <typename Value, typename Allocator>
-    using type_cache_type = static_type_cache<void*, Tag, Allocator>;
-    using allocator_type = static_allocator<char, Tag>;
-    using index_definition_type = std::tuple<>;
-    static constexpr bool cache_enabled = true;
+  using tag_type = Tag;
+  using rtti_type = rtti<static_provider>;
+  template <typename Value, typename Allocator>
+  using type_map_type = static_type_map<Value, Tag, Allocator>;
+  template <typename Value, typename Allocator>
+  using type_cache_type = static_type_cache<void *, Tag, Allocator>;
+  using allocator_type = static_allocator<char, Tag>;
+  using index_definition_type = std::tuple<>;
+  static constexpr bool cache_enabled = true;
 };
 
 template <typename StaticSource, typename ParentContainer = void>
@@ -43,7 +43,8 @@ class container_with_static_bindings;
 template <typename T> struct is_static_registry : std::false_type {};
 
 template <typename... Registrations>
-struct is_static_registry<static_registry<Registrations...>> : std::true_type {};
+struct is_static_registry<static_registry<Registrations...>> : std::true_type {
+};
 
 template <typename T>
 inline constexpr bool is_static_registry_v = is_static_registry<T>::value;
@@ -60,7 +61,7 @@ template <typename T> struct bindings_wrapper_registry;
 
 template <typename... Args>
 struct bindings_wrapper_registry<::dingo::bindings<Args...>> {
-    using type = typename ::dingo::bindings<Args...>::type;
+  using type = typename ::dingo::bindings<Args...>::type;
 };
 
 template <typename T>

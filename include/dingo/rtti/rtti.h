@@ -10,8 +10,8 @@
 #include <dingo/core/config.h>
 
 namespace dingo {
-    struct static_provider {};
-    struct typeid_provider {};
+struct static_provider {};
+struct typeid_provider {};
 
-    template< typename T > class rtti;
-}
+template <typename T> class rtti;
+} // namespace dingo

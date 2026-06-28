@@ -13,16 +13,15 @@ namespace dingo {
 namespace incomplete_resolve_test {
 
 struct service {
-    int value = 7;
+  int value = 7;
 };
 
-consumer::consumer(service& dependency)
-    : value(&dependency) {}
+consumer::consumer(service &dependency) : value(&dependency) {}
 
-void register_service(container<>& container) {
-    static service instance{};
-    container.template register_type<scope<external>, storage<service&>>(
-        instance);
+void register_service(container<> &container) {
+  static service instance{};
+  container.template register_type<scope<external>, storage<service &>>(
+      instance);
 }
 
 } // namespace incomplete_resolve_test

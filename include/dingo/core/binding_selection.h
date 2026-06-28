@@ -17,16 +17,16 @@ namespace dingo {
 namespace detail {
 
 enum class binding_selection_status {
-    found,
-    not_found,
-    ambiguous,
+  found,
+  not_found,
+  ambiguous,
 };
 
 template <binding_selection_status Status, typename Binding = void>
 struct binding_choice {
-    static constexpr binding_selection_status status = Status;
-    static constexpr bool found = Status == binding_selection_status::found;
-    using binding_type = Binding;
+  static constexpr binding_selection_status status = Status;
+  static constexpr bool found = Status == binding_selection_status::found;
+  using binding_type = Binding;
 };
 
 template <typename Binding>
@@ -42,16 +42,16 @@ using ambiguous_binding_choice_t =
 template <typename Bindings> struct static_binding;
 
 template <> struct static_binding<type_list<>> {
-    using type = missing_binding_choice_t;
+  using type = missing_binding_choice_t;
 };
 
 template <typename Binding> struct static_binding<type_list<Binding>> {
-    using type = found_binding_choice_t<Binding>;
+  using type = found_binding_choice_t<Binding>;
 };
 
 template <typename Binding0, typename Binding1, typename... Bindings>
 struct static_binding<type_list<Binding0, Binding1, Bindings...>> {
-    using type = ambiguous_binding_choice_t;
+  using type = ambiguous_binding_choice_t;
 };
 
 template <typename Bindings>
@@ -59,64 +59,64 @@ using static_binding_t = typename static_binding<Bindings>::type;
 
 template <typename Binding, typename State = std::nullptr_t>
 struct runtime_binding_selection {
-    binding_selection_status status = binding_selection_status::not_found;
-    Binding* binding = nullptr;
-    State state = nullptr;
+  binding_selection_status status = binding_selection_status::not_found;
+  Binding *binding = nullptr;
+  State state = nullptr;
 
-    constexpr bool found() const {
-        return status == binding_selection_status::found;
-    }
+  constexpr bool found() const {
+    return status == binding_selection_status::found;
+  }
 
-    constexpr bool ambiguous() const {
-        return status == binding_selection_status::ambiguous;
-    }
+  constexpr bool ambiguous() const {
+    return status == binding_selection_status::ambiguous;
+  }
 
-    static constexpr runtime_binding_selection found(Binding& binding,
-                                                     State state = nullptr) {
-        return {binding_selection_status::found, &binding, state};
-    }
+  static constexpr runtime_binding_selection found(Binding &binding,
+                                                   State state = nullptr) {
+    return {binding_selection_status::found, &binding, state};
+  }
 
-    static constexpr runtime_binding_selection miss() { return {}; }
+  static constexpr runtime_binding_selection miss() { return {}; }
 
-    static constexpr runtime_binding_selection ambiguity() {
-        return {binding_selection_status::ambiguous, nullptr, nullptr};
-    }
+  static constexpr runtime_binding_selection ambiguity() {
+    return {binding_selection_status::ambiguous, nullptr, nullptr};
+  }
 };
 
 template <typename Binding, typename State = std::nullptr_t>
 constexpr runtime_binding_selection<Binding, State>
-make_runtime_selection(Binding* binding, State state = nullptr) {
-    return binding ? runtime_binding_selection<Binding, State>::found(*binding,
-                                                                      state)
-                   : runtime_binding_selection<Binding, State>::miss();
+make_runtime_selection(Binding *binding, State state = nullptr) {
+  return binding
+             ? runtime_binding_selection<Binding, State>::found(*binding, state)
+             : runtime_binding_selection<Binding, State>::miss();
 }
 
 template <typename Binding, typename State = std::nullptr_t, typename Visitor>
 constexpr runtime_binding_selection<Binding, State>
-make_runtime_selection(Visitor&& visit_candidates) {
-    Binding* selected_binding = nullptr;
-    State selected_state = nullptr;
-    std::size_t matches = 0;
+make_runtime_selection(Visitor &&visit_candidates) {
+  Binding *selected_binding = nullptr;
+  State selected_state = nullptr;
+  std::size_t matches = 0;
 
-    std::forward<Visitor>(visit_candidates)(
-        [&](Binding& binding, State state = nullptr) {
-            ++matches;
-            if (matches == 1) {
-                selected_binding = &binding;
-                selected_state = state;
-            }
-        });
+  std::forward<Visitor>(visit_candidates)(
+      [&](Binding &binding, State state = nullptr) {
+        ++matches;
+        if (matches == 1) {
+          selected_binding = &binding;
+          selected_state = state;
+        }
+      });
 
-    if (matches == 0) {
-        return runtime_binding_selection<Binding, State>::miss();
-    }
+  if (matches == 0) {
+    return runtime_binding_selection<Binding, State>::miss();
+  }
 
-    if (matches == 1) {
-        return runtime_binding_selection<Binding, State>::found(
-            *selected_binding, selected_state);
-    }
+  if (matches == 1) {
+    return runtime_binding_selection<Binding, State>::found(*selected_binding,
+                                                            selected_state);
+  }
 
-    return runtime_binding_selection<Binding, State>::ambiguity();
+  return runtime_binding_selection<Binding, State>::ambiguity();
 }
 
 } // namespace detail
