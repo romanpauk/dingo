@@ -12,7 +12,7 @@ on:
     paths:
       - docker/ubuntu25-toolchains/**
       - .github/actions/linux-build/action.yaml
-      - .github/workflows/build-reusable.yaml
+      - .github/workflows/build-base.yaml
       - .github/workflows/images.yaml
   push:
     branches:
@@ -20,7 +20,7 @@ on:
     paths:
       - docker/ubuntu25-toolchains/**
       - .github/actions/linux-build/action.yaml
-      - .github/workflows/build-reusable.yaml
+      - .github/workflows/build-base.yaml
       - .github/workflows/images.yaml
 
 jobs:
@@ -42,7 +42,7 @@ jobs:
             build_dir: build-clang20
     steps:
       - name: Checkout workflow repo
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3.11.1
@@ -59,7 +59,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=toolchain-smoke-${{ matrix.compiler.toolchain }}
 
       - name: CCache
-        uses: hendrikmuhs/ccache-action@v1.2.22
+        uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: toolchain-smoke-${{ matrix.compiler.toolchain }}-std-23
           max-size: ${{ env.CCACHE_MAX_SIZE }}
@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload Failure Artifacts
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: failure-toolchain-smoke-${{ matrix.compiler.toolchain }}
           if-no-files-found: ignore
@@ -117,7 +117,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout workflow repo
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3.11.1
@@ -194,7 +194,7 @@ jobs:
       #
       # - name: Upload Failure Artifacts
       #   if: ${{ failure() }}
-      #   uses: actions/upload-artifact@v4.6.2
+      #   uses: actions/upload-artifact@v7.0.1
       #   with:
       #     name: failure-msvc-wine-smoke
       #     if-no-files-found: ignore

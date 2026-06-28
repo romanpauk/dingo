@@ -1,6 +1,8 @@
-build
-build*/
+build*
 .vscode
 .cache
 .venv
+.time-trace
 __pycache__
+compile_commands.json
+

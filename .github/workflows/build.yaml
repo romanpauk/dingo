@@ -14,4 +14,4 @@ on:
 
 jobs:
   build:
-    uses: ./.github/workflows/build-reusable.yaml
+    uses: ./.github/workflows/build-base.yaml
