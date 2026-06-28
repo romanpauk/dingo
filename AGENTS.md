@@ -10,6 +10,15 @@ This target verifies C++ formatting and Markdown formatting. Do not wire it into
 the default build; it is an explicit validation target for agents, local review,
 and CI.
 
+C++ formatting is pinned to `clang-format` 21 from the locked `uv`
+development environment. If the local system formatter differs, configure CMake
+with the locked executable:
+
+```bash
+cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON \
+  -DDINGO_CLANG_FORMAT_EXE="$(uv run --locked python -c 'import shutil; print(shutil.which("clang-format"))')"
+```
+
 For any C++ source or header edit, format before verification:
 
 ```bash

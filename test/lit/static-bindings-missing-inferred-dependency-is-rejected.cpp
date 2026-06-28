@@ -17,6 +17,6 @@ int main() {
   (void)instance;
 }
 
-// CHECK: {{(bindings<...> source requires every inferred constructor dependency
-// to map to an interface binding|static_container requires a resolvable
-// compile-time binding graph)}}
+// clang-format off
+// CHECK: {{(bindings<...> source requires every inferred constructor dependency to map to an interface binding|static_container requires a resolvable compile-time binding graph)}}
+// clang-format on

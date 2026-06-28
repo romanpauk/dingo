@@ -37,10 +37,21 @@ runs:
       run: |
         cd "${{ inputs.source_dir }}"
         uv run --locked python tools/release_flow_test.py
+    - name: Resolve clang-format
+      shell: bash
+      run: |
+        cd "${{ inputs.source_dir }}"
+        CLANG_FORMAT_EXE="$(uv run --locked python -c 'import shutil; print(shutil.which("clang-format") or "")')"
+        if [ -z "$CLANG_FORMAT_EXE" ]; then
+          echo "clang-format was not found in the locked uv environment" >&2
+          exit 1
+        fi
+        uv run --locked clang-format --version
+        echo "DINGO_CLANG_FORMAT_EXE=$CLANG_FORMAT_EXE" >> "$GITHUB_ENV"
     - name: Configure
       shell: bash
       run: |
-        cmake -S "${{ inputs.source_dir }}" -B "${{ inputs.build_dir }}" -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_TESTING_ENABLED=OFF -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF
+        cmake -S "${{ inputs.source_dir }}" -B "${{ inputs.build_dir }}" -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_TESTING_ENABLED=OFF -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF -DDINGO_CLANG_FORMAT_VERSION=21 -DDINGO_CLANG_FORMAT_EXE="$DINGO_CLANG_FORMAT_EXE"
     - name: Check Formatting
       shell: bash
       run: |

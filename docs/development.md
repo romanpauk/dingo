@@ -25,8 +25,18 @@ options, including:
 ## C++ Formatting
 
 C++ sources are formatted with `clang-format` using the repository
-`.clang-format` file. Development builds provide targets for updating and
-checking formatting:
+`.clang-format` file. The required formatter is pinned as `clang-format` 21 in
+the locked `uv` development environment.
+
+Configure CMake with the pinned executable if the system formatter is missing or
+has a different major version:
+
+```bash
+cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON \
+  -DDINGO_CLANG_FORMAT_EXE="$(uv run --locked python -c 'import shutil; print(shutil.which("clang-format"))')"
+```
+
+Development builds provide targets for updating and checking formatting:
 
 ```bash
 cmake --build build -t format
