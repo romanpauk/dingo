@@ -25,6 +25,9 @@ template <typename... Entries> struct indexes {};
 template <typename Interface, typename Key, typename Backend> struct index {};
 template <typename... Args> struct interfaces;
 template <typename T, auto... Values> struct key;
+namespace index_type {
+template <template <typename...> typename Container> struct associative {};
+} // namespace index_type
 
 namespace detail {
 template <typename...> inline constexpr bool index_dependent_false_v = false;
@@ -32,23 +35,39 @@ template <typename...> inline constexpr bool index_dependent_false_v = false;
 template <typename Backend, typename Key, typename Value, typename Allocator>
 struct index_storage;
 
+template <template <typename...> typename Container, typename Key,
+          typename Value, typename Allocator>
+struct associative_index_storage_type;
+
 template <typename Storage, typename Key, typename Value, typename = void>
 struct has_index_storage_contract : std::false_type {};
 
 template <typename Storage, typename Key, typename Value>
 struct has_index_storage_contract<
     Storage, Key, Value,
-    std::void_t<decltype(std::declval<Storage &>().emplace(
-                    std::declval<Key>(), std::declval<Value>())),
-                decltype(std::declval<Storage &>().find(
-                    std::declval<const Key &>()))>>
+    std::void_t<
+        decltype(std::declval<Storage &>()
+                     .emplace(std::declval<Key>(), std::declval<Value>())
+                     .second),
+        decltype(std::declval<Storage &>().find(std::declval<const Key &>())),
+        decltype(std::declval<Storage &>().end()),
+        decltype((*std::declval<Storage &>().find(std::declval<const Key &>()))
+                     .second)>>
     : std::bool_constant<
-          std::is_same_v<decltype(std::declval<Storage &>().emplace(
-                             std::declval<Key>(), std::declval<Value>())),
-                         bool> &&
-          std::is_same_v<decltype(std::declval<Storage &>().find(
-                             std::declval<const Key &>())),
-                         Value *>> {};
+          std::is_convertible_v<decltype(std::declval<Storage &>()
+                                             .emplace(std::declval<Key>(),
+                                                      std::declval<Value>())
+                                             .second),
+                                bool> &&
+          std::is_convertible_v<decltype(std::declval<Storage &>().find(
+                                             std::declval<const Key &>()) ==
+                                         std::declval<Storage &>().end()),
+                                bool> &&
+          std::is_same_v<std::remove_reference_t<
+                             decltype((*std::declval<Storage &>().find(
+                                           std::declval<const Key &>()))
+                                          .second)>,
+                         Value>> {};
 
 template <typename Storage, typename Key, typename Value>
 inline constexpr bool has_index_storage_contract_v =
@@ -238,8 +257,8 @@ struct index_holder {
                 "index backend must be constructible from Allocator&");
   static_assert(
       has_index_storage_contract_v<index_type, typename Entry::key, Value>,
-      "index backend must provide bool emplace(Key, Value) and Value* "
-      "find(Key)");
+      "index backend must satisfy an associative container contract: "
+      "emplace(Key, Value).second, find(Key), end(), and iterator::second");
 
   explicit index_holder(Allocator &allocator) : index_(allocator) {}
 

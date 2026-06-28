@@ -1,6 +1,7 @@
 option(DINGO_INSTALL "Generate the install target." ${PROJECT_IS_TOP_LEVEL})
 option(DINGO_DEVELOPMENT_MODE "Include additional targets for development" OFF)
 option(DINGO_CCACHE "Use ccache" OFF)
+option(DINGO_CLANG_TOOLS_ENABLED "Enable clang-format and clang-tidy targets" ON)
 
 if (DINGO_DEVELOPMENT_MODE)
     cmake_minimum_required(VERSION 3.25)
@@ -46,7 +47,9 @@ endif()
 if(DINGO_DEVELOPMENT_MODE)
     enable_testing()
     include(FetchContent)
-    include(cmake/clang-format.cmake)
+    if(DINGO_CLANG_TOOLS_ENABLED)
+        include(cmake/clang-format.cmake)
+    endif()
     if(WIN32)
         include(cmake/group-sources.cmake)
     endif()
@@ -114,6 +117,7 @@ if(DINGO_DEVELOPMENT_MODE)
         index/index.h
         index/array.h
         index/map.h
+        index/sequence.h
         index/unordered_map.h
         memory/aligned_storage.h
         memory/allocator.h
@@ -225,12 +229,16 @@ if(DINGO_DEVELOPMENT_MODE)
         add_subdirectory(examples)
     endif()
 
-    include(cmake/clang-tidy.cmake)
+    set(DINGO_CHECK_TARGETS md-verify)
 
-    set(DINGO_CHECK_TARGETS check-format md-verify)
-    if(NOT WIN32)
-        list(APPEND DINGO_CHECK_TARGETS check-tidy)
+    if(DINGO_CLANG_TOOLS_ENABLED)
+        include(cmake/clang-tidy.cmake)
+        list(APPEND DINGO_CHECK_TARGETS check-format)
+        if(NOT WIN32)
+            list(APPEND DINGO_CHECK_TARGETS check-tidy)
+        endif()
     endif()
+
     add_custom_target(check
         DEPENDS ${DINGO_CHECK_TARGETS}
     )

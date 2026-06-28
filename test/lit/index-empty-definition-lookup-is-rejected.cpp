@@ -1,4 +1,6 @@
 // RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
+// MSVC does not instantiate this empty-index diagnostic path reliably.
+// UNSUPPORTED: msvc
 
 #include <dingo/container.h>
 

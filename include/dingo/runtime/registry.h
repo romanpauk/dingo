@@ -303,14 +303,14 @@ protected:
                                                  resolve_root_type>) {
                   (void)data;
                 } else {
-                  auto indexed = data->template get_index<lookup_type, IdType>(
-                                         get_allocator())
-                                     .find(id);
+                  auto &index = data->template get_index<lookup_type, IdType>(
+                      get_allocator());
+                  auto indexed = index.find(id);
 
-                  if (indexed) {
-                    if (indexed->cache) {
+                  if (indexed != index.end()) {
+                    if ((*indexed).second.cache) {
                       return detail::convert_resolved_binding<
-                          request_interface_t<T>>(indexed->cache);
+                          request_interface_t<T>>((*indexed).second.cache);
                     }
                   }
                 }
@@ -507,6 +507,8 @@ protected:
 
     explicit index_data(runtime_binding_interface<container_type> *binding_ptr)
         : binding(binding_ptr) {}
+
+    bool is_empty() const { return binding == nullptr; }
 
     operator bool() const { return binding != nullptr; }
   };
@@ -826,11 +828,16 @@ private:
                                               binding_cache_state *>(nullptr,
                                                                      nullptr);
       } else {
-        auto indexed =
-            data ? data->template get_index<index_interface_type,
-                                            index_key_type>(get_allocator())
-                       .find(id)
-                 : nullptr;
+        index_data *indexed = nullptr;
+        if (data) {
+          auto &index =
+              data->template get_index<index_interface_type, index_key_type>(
+                  get_allocator());
+          auto it = index.find(id);
+          if (it != index.end()) {
+            indexed = std::addressof((*it).second);
+          }
+        }
         return detail::make_runtime_selection<runtime_binding_interface_type,
                                               binding_cache_state *>(
             indexed ? indexed->binding : nullptr, indexed);
@@ -977,18 +984,34 @@ private:
       }
     }
     auto binding_ptr = inserted_binding.first.binding.get();
-    runtime_bindings_present_ = true;
 
     if constexpr (!is_none_v<std::decay_t<IdType>>) {
-      if (!data.template get_index<TypeInterface, IdType>(get_allocator())
-               .emplace(std::forward<IdType>(id), index_data{binding_ptr})) {
-        bool erased = data.bindings.template erase<binding_registration_key>();
-        assert(erased);
-        (void)erased;
-        throw detail::make_type_index_already_registered_exception<
-            TypeInterface, typename TypeStorage::type, IdType>();
+      bool binding_registered = true;
+      try {
+        auto &index =
+            data.template get_index<TypeInterface, IdType>(get_allocator());
+        if (!index.emplace(std::forward<IdType>(id), index_data{binding_ptr})
+                 .second) {
+          bool erased =
+              data.bindings.template erase<binding_registration_key>();
+          assert(erased);
+          (void)erased;
+          binding_registered = false;
+          throw detail::make_type_index_already_registered_exception<
+              TypeInterface, typename TypeStorage::type, IdType>();
+        }
+      } catch (...) {
+        if (binding_registered) {
+          bool erased =
+              data.bindings.template erase<binding_registration_key>();
+          assert(erased);
+          (void)erased;
+        }
+        throw;
       }
     }
+
+    runtime_bindings_present_ = true;
   }
 
 #ifdef _MSC_VER

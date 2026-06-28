@@ -13,10 +13,12 @@
 #include <dingo/container.h>
 #include <dingo/index/array.h>
 #include <dingo/index/map.h>
+#include <dingo/index/sequence.h>
 #include <dingo/index/unordered_map.h>
 
 #include <cstddef>
 #include <string>
+#include <vector>
 
 namespace dingo::matrix {
 
@@ -57,6 +59,12 @@ struct indexed_dsl_container_traits : dingo::dynamic_container_traits {
   using index_definition_type = dingo::indexes<
       dingo::index<dingo::interfaces<element_interface>,
                    dingo::key<std::size_t>, dingo::index_type::map>>;
+};
+
+struct indexed_vector_container_traits : dingo::dynamic_container_traits {
+  using index_definition_type =
+      dingo::indexes<dingo::index<element_interface, std::size_t,
+                                  dingo::index_type::sequence<std::vector>>>;
 };
 
 } // namespace dingo::matrix

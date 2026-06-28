@@ -38,5 +38,4 @@ int main() {
                              dingo::interfaces<animal>>(std::size_t(1));
 }
 
-// CHECK: index backend must provide bool emplace(Key, Value) and Value*
-// find(Key)
+// CHECK: index backend must satisfy an associative container contract
