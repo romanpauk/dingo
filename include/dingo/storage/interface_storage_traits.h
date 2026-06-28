@@ -42,11 +42,9 @@ struct use_interface_as_stored_leaf<Storage, type_list<Interfaces...>>
 template <typename Storage, typename Interface>
 inline constexpr bool can_store_interface_as_leaf_v = [] {
   using interface_type = typename annotated_traits<Interface>::type;
-  if constexpr (!requires_complete_type_v<interface_type>) {
-    return false;
-  } else if constexpr (!is_complete_v<interface_type>) {
-    return false;
-  } else if constexpr (!std::is_class_v<interface_type>) {
+  if constexpr (!requires_complete_type_v<interface_type> ||
+                !is_complete_v<interface_type> ||
+                !std::is_class_v<interface_type>) {
     return false;
   } else {
     return std::has_virtual_destructor_v<interface_type> &&

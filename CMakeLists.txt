@@ -53,10 +53,6 @@ if(DINGO_DEVELOPMENT_MODE)
     include(cmake/md.cmake)
     include(cmake/sanitizers.cmake)
 
-    add_custom_target(check
-        DEPENDS check-format md-verify
-    )
-
     set(CMAKE_CXX_STANDARD 17 CACHE STRING "c++ standard")
     set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
     set(CMAKE_CXX_EXTENSIONS OFF)
@@ -424,6 +420,16 @@ if(DINGO_DEVELOPMENT_MODE)
     if(DINGO_EXAMPLES_ENABLED)
         add_subdirectory(examples)
     endif()
+
+    include(cmake/clang-tidy.cmake)
+
+    set(DINGO_CHECK_TARGETS check-format md-verify)
+    if(NOT WIN32)
+        list(APPEND DINGO_CHECK_TARGETS check-tidy)
+    endif()
+    add_custom_target(check
+        DEPENDS ${DINGO_CHECK_TARGETS}
+    )
 
     if(WIN32)
         group_sources(include)

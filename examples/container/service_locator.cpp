@@ -11,7 +11,7 @@
 ////
 // Interface that will be resolved
 struct IA {
-  virtual ~IA() {}
+  virtual ~IA() = default;
 };
 // Struct implementing the interface
 struct A : IA {};

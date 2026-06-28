@@ -15,7 +15,7 @@
 
 ////
 struct ProcessorBase {
-  virtual ~ProcessorBase() {}
+  virtual ~ProcessorBase() = default;
   virtual void process(const void *) = 0;
   virtual std::type_index type() = 0;
 };
@@ -70,7 +70,7 @@ int main() {
       scope<unique>,
       storage<std::map<std::type_index, std::unique_ptr<ProcessorBase>>>>(
       [](auto &collection, auto &&value) {
-        collection.emplace(value->type(), std::move(value));
+        collection.emplace(value->type(), std::forward<decltype(value)>(value));
       });
 
   auto dispatcher = container.construct<Dispatcher>();

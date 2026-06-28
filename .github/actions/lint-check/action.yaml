@@ -48,11 +48,27 @@ runs:
         fi
         uv run --locked clang-format --version
         echo "DINGO_CLANG_FORMAT_EXE=$CLANG_FORMAT_EXE" >> "$GITHUB_ENV"
+    - name: Install clang-tidy
+      if: ${{ inputs.setup_msvc != 'true' }}
+      shell: bash
+      run: |
+        if ! command -v clang-tidy-21 >/dev/null 2>&1; then
+          curl --fail --location --silent --show-error \
+            https://apt.llvm.org/llvm.sh --output /tmp/llvm.sh
+          chmod +x /tmp/llvm.sh
+          sudo /tmp/llvm.sh 21
+          sudo apt-get install -y clang-tidy-21
+        fi
+        clang-tidy-21 --version
     - name: Configure
       shell: bash
       run: |
-        cmake -S "${{ inputs.source_dir }}" -B "${{ inputs.build_dir }}" -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_TESTING_ENABLED=OFF -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF -DDINGO_CLANG_FORMAT_VERSION=21 -DDINGO_CLANG_FORMAT_EXE="$DINGO_CLANG_FORMAT_EXE"
-    - name: Check Formatting
+        DINGO_EXAMPLES_ENABLED=OFF
+        if [ "${{ inputs.setup_msvc }}" != "true" ]; then
+          DINGO_EXAMPLES_ENABLED=ON
+        fi
+        cmake -S "${{ inputs.source_dir }}" -B "${{ inputs.build_dir }}" -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_TESTING_ENABLED=OFF -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED="$DINGO_EXAMPLES_ENABLED" -DDINGO_CLANG_FORMAT_VERSION=21 -DDINGO_CLANG_FORMAT_EXE="$DINGO_CLANG_FORMAT_EXE" -DDINGO_CLANG_TIDY_VERSION=21
+    - name: Check Quality Gate
       shell: bash
       run: |
         cmake --build "${{ inputs.build_dir }}" -t check

@@ -13,7 +13,7 @@ int main() {
   using namespace dingo;
   ////
   struct A {
-    A() {}
+    A() = default;
   };
   struct B {
     B(A &, std::shared_ptr<A>) {}

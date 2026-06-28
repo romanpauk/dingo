@@ -15,7 +15,7 @@ template <std::size_t Len, std::size_t Alignment> struct aligned_storage {
   struct type {
     // TODO: force the storage type to be initialized to avoid warning
     // https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p3074r2.html
-    type() {}
+    type() = default;
 
   private:
     alignas(Alignment) std::uint8_t data[Len];

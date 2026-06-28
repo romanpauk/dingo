@@ -89,11 +89,11 @@ public:
   using index_definition_type = typename ContainerTraits::index_definition_type;
   runtime_registry() : allocator_base<allocator_type>(allocator_type()) {}
 
-  runtime_registry(allocator_type alloc)
+  runtime_registry(const allocator_type &alloc)
       : allocator_base<allocator_type>(alloc) {}
 
   runtime_registry(resolve_root_type *root,
-                   allocator_type alloc = allocator_type())
+                   const allocator_type &alloc = allocator_type())
       : allocator_base<allocator_type>(alloc), resolve_root_(root) {
 
     if constexpr (!std::is_same_v<void, ParentRegistry>) {
@@ -232,6 +232,7 @@ protected:
 
   template <typename T, typename IdType = none_t,
             typename R = request_result_t<T>>
+  // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
   R resolve_runtime_request(IdType &&id = IdType()) {
     if constexpr (detail::is_typed_key_v<IdType> &&
                   collection_traits<R>::is_collection) {
@@ -329,17 +330,16 @@ protected:
     runtime_context context;
     if constexpr (std::is_same_v<Factory, constructor<normalized_type_t<T>>>) {
       if (binding_status<T>() != detail::binding_selection_status::not_found) {
-        if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
+        if constexpr (!construct_normalized_request_v<T> ||
+                      ::dingo::rvalue_request_requires_explicit_conversion_v<
                           T>) {
           return resolve<T, false>(context, none_t{});
-        } else if constexpr (construct_normalized_request_v<T>) {
+        } else {
           return ::dingo::construct_request_or_wrap_normalized<T>(
               [&]() { return resolve<T, false>(context, none_t{}); },
               [&]() {
                 return resolve<normalized_type_t<T>, false>(context, none_t{});
               });
-        } else {
-          return resolve<T, false>(context, none_t{});
         }
       } else if (binding_status<normalized_type_t<T>>() !=
                  detail::binding_selection_status::not_found) {
@@ -776,6 +776,7 @@ protected:
 
 private:
   template <typename Request, typename IdType>
+  // NOLINTNEXTLINE(readability-function-cognitive-complexity)
   runtime_selection select_runtime_binding(runtime_type_bindings *data,
                                            IdType &&id) {
     if constexpr (is_none_v<std::decay_t<IdType>>) {
@@ -887,13 +888,13 @@ private:
               allocate_binding<registered_binding_type>(parent,
                                                         std::forward<Arg>(arg));
           register_type_binding<interface_type, storage_type>(
-              std::move(binding), std::move(id), key_id_type{});
+              std::move(binding), std::forward<IdType>(id), key_id_type{});
           return *binding_container;
         } else {
           auto &&[binding, binding_container] =
               allocate_binding<registered_binding_type>(parent);
           register_type_binding<interface_type, storage_type>(
-              std::move(binding), std::move(id), key_id_type{});
+              std::move(binding), std::forward<IdType>(id), key_id_type{});
           return *binding_container;
         }
       } else {

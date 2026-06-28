@@ -46,11 +46,26 @@ cmake --build build -t check-format
 The older explicit target names remain available as aliases:
 `clang-format-update` and `clang-format-verify`.
 
-The aggregate `check` target runs the repository formatting checks used by CI:
+The aggregate `check` target runs the repository checks used by CI:
 
 ```bash
 cmake --build build -t check
 ```
+
+## C++ Static Analysis
+
+Development builds also provide a clang-tidy target:
+
+```bash
+cmake --build build -t check-tidy
+```
+
+On non-Windows builds, `check` depends on `check-tidy`; Windows skips clang-tidy
+and still runs formatting and Markdown verification. `check-tidy` runs
+clang-tidy 21 against the example translation units, which gives the analyzer a
+concrete compile database for this header-only library without pulling tests or
+benchmarks into the lint gate. Configure non-Windows lint builds with
+`DINGO_EXAMPLES_ENABLED=ON` so those translation units exist.
 
 ## Python Tooling
 

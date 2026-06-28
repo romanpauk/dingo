@@ -76,6 +76,8 @@ struct callable_signature<R(Args...) noexcept, void> {
   APPLY(const volatile, &&, )                                                  \
   APPLY(const volatile, &&, noexcept)
 
+// NOLINTBEGIN(bugprone-macro-parentheses)
+
 #define DINGO_DEFINE_CALLABLE_SIGNATURE(cv_qualifier, ref_qualifier,           \
                                         noexcept_qualifier)                    \
   template <typename R, typename... Args>                                      \
@@ -173,6 +175,8 @@ DINGO_CALLABLE_SIGNATURE_VARIANTS(DINGO_DEFINE_CALLABLE_OPERATOR_SIGNATURE)
 
 #undef DINGO_DEFINE_CALLABLE_OPERATOR_SIGNATURE
 #undef DINGO_CALLABLE_SIGNATURE_VARIANTS
+
+// NOLINTEND(bugprone-macro-parentheses)
 
 template <typename T>
 struct callable_signature<T,

@@ -1,0 +1,95 @@
+Checks: >
+  -*,
+  readability-function-cognitive-complexity,
+  readability-function-size,
+  bugprone-assert-side-effect,
+  bugprone-assignment-in-if-condition,
+  bugprone-bool-pointer-implicit-conversion,
+  bugprone-branch-clone,
+  bugprone-copy-constructor-init,
+  bugprone-dangling-handle,
+  bugprone-empty-catch,
+  bugprone-exception-escape,
+  bugprone-fold-init-type,
+  bugprone-inaccurate-erase,
+  bugprone-inc-dec-in-conditions,
+  bugprone-implicit-widening-of-multiplication-result,
+  bugprone-infinite-loop,
+  bugprone-incorrect-enable-if,
+  bugprone-incorrect-roundings,
+  bugprone-macro-parentheses,
+  bugprone-macro-repeated-side-effects,
+  bugprone-misplaced-widening-cast,
+  bugprone-move-forwarding-reference,
+  bugprone-multiple-new-in-one-expression,
+  bugprone-multiple-statement-macro,
+  bugprone-narrowing-conversions,
+  bugprone-non-zero-enum-to-bool-conversion,
+  bugprone-redundant-branch-condition,
+  bugprone-signed-char-misuse,
+  bugprone-sizeof-container,
+  bugprone-sizeof-expression,
+  bugprone-standalone-empty,
+  bugprone-string-constructor,
+  bugprone-string-integer-assignment,
+  bugprone-suspicious-enum-usage,
+  bugprone-suspicious-include,
+  bugprone-suspicious-memory-comparison,
+  bugprone-suspicious-memset-usage,
+  bugprone-suspicious-missing-comma,
+  bugprone-suspicious-realloc-usage,
+  bugprone-string-literal-with-embedded-nul,
+  bugprone-suspicious-semicolon,
+  bugprone-suspicious-string-compare,
+  bugprone-suspicious-stringview-data-usage,
+  bugprone-stringview-nullptr,
+  bugprone-swapped-arguments,
+  bugprone-terminating-continue,
+  bugprone-throw-keyword-missing,
+  bugprone-too-small-loop-variable,
+  bugprone-undelegated-constructor,
+  bugprone-unhandled-self-assignment,
+  bugprone-unique-ptr-array-mismatch,
+  bugprone-unused-local-non-trivial-variable,
+  bugprone-unused-raii,
+  bugprone-unused-return-value,
+  bugprone-use-after-move,
+  bugprone-virtual-near-miss,
+  performance-*,
+  -performance-enum-size,
+  -performance-no-int-to-ptr,
+  readability-avoid-return-with-void-value,
+  readability-avoid-unconditional-preprocessor-if,
+  readability-delete-null-pointer,
+  readability-duplicate-include,
+  readability-misleading-indentation,
+  readability-misplaced-array-index,
+  readability-redundant-casting,
+  readability-redundant-control-flow,
+  readability-redundant-declaration,
+  readability-redundant-function-ptr-dereference,
+  readability-redundant-preprocessor,
+  readability-redundant-smartptr-get,
+  readability-redundant-string-cstr,
+  readability-redundant-string-init,
+  readability-reference-to-constructed-temporary,
+  readability-static-accessed-through-instance,
+  readability-string-compare,
+  readability-uniqueptr-delete-release
+CheckOptions:
+  - key: readability-function-cognitive-complexity.Threshold
+    value: 25
+  - key: readability-function-size.StatementThreshold
+    value: 120
+  - key: readability-function-size.BranchThreshold
+    value: 25
+  - key: readability-function-size.NestingThreshold
+    value: 5
+  - key: readability-function-size.ParameterThreshold
+    value: 8
+  - key: readability-function-size.VariableThreshold
+    value: 25
+WarningsAsErrors: '*'
+HeaderFilterRegex: '^(.*[/\\])?(include|test|benchmark|examples)/'
+FormatStyle: file
+SystemHeaders: false

@@ -125,12 +125,11 @@ template <typename T> T convert_resolved_binding(void *ptr) {
 
 template <typename T, typename Instance, typename Fn>
 decltype(auto) forward_resolved_binding(Instance &&instance, Fn &&fn) {
-  if constexpr (std::is_lvalue_reference_v<T>) {
+  if constexpr (std::is_lvalue_reference_v<T> || std::is_pointer_v<T>) {
     return std::forward<Fn>(fn)(instance);
   } else if constexpr (std::is_rvalue_reference_v<T>) {
-    return std::forward<Fn>(fn)(std::move(instance));
-  } else if constexpr (std::is_pointer_v<T>) {
-    return std::forward<Fn>(fn)(instance);
+    return std::forward<Fn>(fn)(
+        static_cast<std::remove_reference_t<Instance> &&>(instance));
   } else {
     return std::forward<Fn>(fn)(std::forward<Instance>(instance));
   }
@@ -138,17 +137,15 @@ decltype(auto) forward_resolved_binding(Instance &&instance, Fn &&fn) {
 
 template <typename T, typename Instance, typename Fn>
 decltype(auto) consume_resolved_binding(Instance &&instance, Fn &&fn) {
-  if constexpr (std::is_lvalue_reference_v<T>) {
+  if constexpr (std::is_lvalue_reference_v<T> || std::is_pointer_v<T>) {
     return std::forward<Fn>(fn)(instance);
-  } else if constexpr (std::is_rvalue_reference_v<T>) {
-    return std::forward<Fn>(fn)(std::move(instance));
-  } else if constexpr (std::is_pointer_v<T>) {
-    return std::forward<Fn>(fn)(instance);
-  } else if constexpr (is_copy_constructible_v<T>) {
+  } else if constexpr (!std::is_rvalue_reference_v<T> &&
+                       is_copy_constructible_v<T>) {
     using value_type = std::remove_reference_t<T>;
     return std::forward<Fn>(fn)(value_type(std::forward<Instance>(instance)));
   } else {
-    return std::forward<Fn>(fn)(std::move(instance));
+    return std::forward<Fn>(fn)(
+        static_cast<std::remove_reference_t<Instance> &&>(instance));
   }
 }
 
