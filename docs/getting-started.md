@@ -70,7 +70,7 @@ Example code included from
 ```c++
 // User types do not need Dingo-specific base classes or macros.
 struct A {
-  A() {}
+  A() = default;
 };
 struct B {
   B(A &, std::shared_ptr<A>) {}
@@ -119,7 +119,7 @@ Example code included from
 
 ```c++
 struct A {
-  A() {}
+  A() = default;
 };
 struct B {
   B(A &, std::shared_ptr<A>) {}

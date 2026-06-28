@@ -18,7 +18,7 @@ template <typename T, typename Tag> class static_allocator {
 public:
   using value_type = T;
 
-  static_allocator() noexcept {}
+  static_allocator() noexcept = default;
   template <typename U>
   static_allocator(const static_allocator<U, Tag> &) noexcept {}
 

@@ -52,11 +52,11 @@ public:
 
   runtime_container() : runtime_registry_(this) {}
 
-  explicit runtime_container(allocator_type alloc)
+  explicit runtime_container(const allocator_type &alloc)
       : runtime_registry_(this, alloc) {}
 
   runtime_container(parent_container_type *parent,
-                    allocator_type alloc = allocator_type())
+                    const allocator_type &alloc = allocator_type())
       : runtime_registry_(this, alloc), parent_(parent) {}
 
   registry_type &registry() { return runtime_registry_; }

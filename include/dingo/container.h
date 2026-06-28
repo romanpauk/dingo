@@ -616,12 +616,13 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
     if constexpr (std::is_same_v<Factory, constructor<normalized_type_t<T>>>) {
       if (runtime_registry_.template binding_status<T>() !=
           detail::binding_selection_status::not_found) {
-        if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
+        if constexpr (!construct_normalized_request_v<T> ||
+                      ::dingo::rvalue_request_requires_explicit_conversion_v<
                           T>) {
           return resolve_runtime_only<T, false,
                                       runtime_auto_constructible_v<T>>(
               context, none_t{});
-        } else if constexpr (construct_normalized_request_v<T>) {
+        } else {
           return ::dingo::construct_request_or_wrap_normalized<T>(
               [&]() {
                 return resolve_runtime_only<T, false,
@@ -634,10 +635,6 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
                     runtime_auto_constructible_v<normalized_type_t<T>>>(
                     context, none_t{});
               });
-        } else {
-          return resolve_runtime_only<T, false,
-                                      runtime_auto_constructible_v<T>>(
-              context, none_t{});
         }
       } else if (runtime_registry_
                      .template binding_status<normalized_type_t<T>>() !=
@@ -710,7 +707,7 @@ public:
         static_registry_(other.static_registry_),
         static_state_(other.static_state_), parent_(other.parent_) {}
 
-  container_with_static_bindings(self_type &&other)
+  container_with_static_bindings(self_type &&other) noexcept
       : runtime_registry_(std::move(other.runtime_registry_)),
         static_registry_(std::move(other.static_registry_)),
         static_state_(std::move(other.static_state_)), parent_(other.parent_) {}
@@ -725,7 +722,7 @@ public:
     return *this;
   }
 
-  self_type &operator=(self_type &&other) {
+  self_type &operator=(self_type &&other) noexcept {
     if (this != &other) {
       runtime_registry_ = std::move(other.runtime_registry_);
       static_registry_ = std::move(other.static_registry_);
@@ -745,6 +742,7 @@ public:
 
   template <typename T, typename IdType = none_t,
             typename R = request_result_t<T>>
+  // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
   DINGO_ALWAYS_INLINE R resolve(IdType &&id = IdType()) {
     if constexpr (detail::is_typed_key_v<IdType>) {
       using key_type = typename std::decay_t<IdType>::type;
@@ -826,6 +824,7 @@ public:
 
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
             typename R = request_result_t<T>>
+  // NOLINTNEXTLINE(readability-function-cognitive-complexity)
   DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
     using request_type = request_interface_t<T>;
     using normalized_request_type = request_value_t<T>;
@@ -1029,59 +1028,50 @@ public:
   template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
             typename R = resolve_result_t<T, RemoveRvalueReferences>>
   R resolve(static_context_type &context, none_t) {
-    if constexpr (has_static_resolve_request_v<T, RemoveRvalueReferences>) {
-      return resolve_static<T, RemoveRvalueReferences>(context);
-    } else if constexpr (has_parent_v) {
+    if constexpr (!has_static_resolve_request_v<T, RemoveRvalueReferences> &&
+                  has_parent_v) {
       if constexpr (static_resolve_status_v<T, RemoveRvalueReferences> ==
                     detail::binding_selection_status::not_found) {
         if (parent_) {
           return resolve_parent<T, RemoveRvalueReferences>();
         }
       }
-      return resolve_static<T, RemoveRvalueReferences>(context);
-    } else {
-      return resolve_static<T, RemoveRvalueReferences>(context);
     }
+    return resolve_static<T, RemoveRvalueReferences>(context);
   }
 
   template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
             typename Key = void,
             typename R = resolve_result_t<T, RemoveRvalueReferences>>
   R resolve(static_context_type &context) {
-    if constexpr (has_static_resolve_request_v<T, RemoveRvalueReferences,
-                                               Key>) {
-      return resolve_static<T, RemoveRvalueReferences, Key>(context);
-    } else if constexpr (has_parent_v) {
+    if constexpr (!has_static_resolve_request_v<T, RemoveRvalueReferences,
+                                                Key> &&
+                  has_parent_v) {
       if constexpr (static_resolve_status_v<T, RemoveRvalueReferences, Key> ==
                     detail::binding_selection_status::not_found) {
         if (parent_) {
           return resolve_parent<T, RemoveRvalueReferences, Key>();
         }
       }
-      return resolve_static<T, RemoveRvalueReferences, Key>(context);
-    } else {
-      return resolve_static<T, RemoveRvalueReferences, Key>(context);
     }
+    return resolve_static<T, RemoveRvalueReferences, Key>(context);
   }
 
   template <typename T, bool RemoveRvalueReferences, bool CheckCache,
             typename Key,
             typename R = resolve_request_t<T, RemoveRvalueReferences>>
   R resolve(static_context_type &context, key<Key>) {
-    if constexpr (has_static_resolve_request_v<T, RemoveRvalueReferences,
-                                               Key>) {
-      return resolve_static<T, RemoveRvalueReferences, Key>(context);
-    } else if constexpr (has_parent_v) {
+    if constexpr (!has_static_resolve_request_v<T, RemoveRvalueReferences,
+                                                Key> &&
+                  has_parent_v) {
       if constexpr (static_resolve_status_v<T, RemoveRvalueReferences, Key> ==
                     detail::binding_selection_status::not_found) {
         if (parent_) {
           return resolve_parent<T, RemoveRvalueReferences, Key>();
         }
       }
-      return resolve_static<T, RemoveRvalueReferences, Key>(context);
-    } else {
-      return resolve_static<T, RemoveRvalueReferences, Key>(context);
     }
+    return resolve_static<T, RemoveRvalueReferences, Key>(context);
   }
 
   template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,

@@ -57,7 +57,7 @@ constexpr size_t type_name_not_found = static_cast<size_t>(-1);
 
 constexpr size_t type_name_find(std::string_view haystack,
                                 std::string_view needle, size_t offset = 0) {
-  if (needle.size() == 0) {
+  if (needle.empty()) {
     return offset <= haystack.size() ? offset : type_name_not_found;
   }
 
@@ -190,7 +190,7 @@ inline void append_type_cv(std::string &name, type_cv_flags flags,
 
 inline void append_described_type_name(std::string &name,
                                        type_descriptor descriptor) {
-  if (descriptor.pointee) {
+  if (descriptor.pointee != nullptr) {
     append_described_type_name(name, descriptor.pointee());
     name += "*";
     append_type_cv(name, descriptor.cv);

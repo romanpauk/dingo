@@ -11,7 +11,7 @@
 
 ////
 struct IProcessor {
-  virtual ~IProcessor() {}
+  virtual ~IProcessor() = default;
 };
 
 template <size_t N> struct Processor : IProcessor {};

@@ -13,7 +13,7 @@
 
 ////
 struct IAnimal {
-  virtual ~IAnimal() {}
+  virtual ~IAnimal() = default;
 };
 
 struct Dog : IAnimal {};

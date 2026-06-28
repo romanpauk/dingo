@@ -1,0 +1,6 @@
+InheritParentConfig: true
+Checks: >
+  -bugprone-exception-escape
+CheckOptions:
+  - key: performance-unnecessary-value-param.AllowedTypes
+    value: '.*shared_ptr.*'

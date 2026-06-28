@@ -282,8 +282,9 @@ class storage<shared_cyclical, Type, StoredType, Factory, Conversions>
   struct rollback {
     explicit rollback(storage *storage) : storage_(storage) {}
     ~rollback() {
-      if (std::uncaught_exceptions())
+      if (std::uncaught_exceptions() != 0) {
         storage_->reset();
+      }
     }
 
   private:

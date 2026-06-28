@@ -161,7 +161,7 @@ struct B;
 
 // Declare struct A, note that its constructor is taking arguments of struct B
 struct A {
-  A(B &b, std::shared_ptr<B> bptr) : b_(b), bptr_(bptr) {}
+  A(B &b, std::shared_ptr<B> bptr) : b_(b), bptr_(std::move(bptr)) {}
   B &b_;
   std::shared_ptr<B> bptr_;
 };
@@ -332,10 +332,14 @@ assert(std::holds_alternative<A>(value));
 
 [[maybe_unused]] auto selected = unique_container.resolve<A>();
 
+bool rejected_wrong_alternative = false;
 try {
   unique_container.resolve<B>();
-  assert(false);
 } catch (const type_not_convertible_exception &) {
+  rejected_wrong_alternative = true;
+}
+if (!rejected_wrong_alternative) {
+  return 1;
 }
 
 std::variant<A, B> existing(std::in_place_type<A>, 9);
@@ -569,7 +573,7 @@ Example code included from
 ```c++
 // Interface that will be resolved
 struct IA {
-  virtual ~IA() {}
+  virtual ~IA() = default;
 };
 // Struct implementing the interface
 struct A : IA {};
@@ -605,7 +609,7 @@ Example code included from
 
 ```c++
 struct IProcessor {
-  virtual ~IProcessor() {}
+  virtual ~IProcessor() = default;
 };
 
 template <size_t N> struct Processor : IProcessor {};
@@ -634,7 +638,7 @@ Example code included from
 
 ```c++
 struct ProcessorBase {
-  virtual ~ProcessorBase() {}
+  virtual ~ProcessorBase() = default;
   virtual void process(const void *) = 0;
   virtual std::type_index type() = 0;
 };
@@ -685,7 +689,7 @@ container.register_type_collection<
     scope<unique>,
     storage<std::map<std::type_index, std::unique_ptr<ProcessorBase>>>>(
     [](auto &collection, auto &&value) {
-      collection.emplace(value->type(), std::move(value));
+      collection.emplace(value->type(), std::forward<decltype(value)>(value));
     });
 
 auto dispatcher = container.construct<Dispatcher>();

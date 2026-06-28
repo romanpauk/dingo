@@ -8,6 +8,8 @@
 #include <dingo/container.h>
 #include <dingo/storage/shared_cyclical.h>
 
+#include <utility>
+
 ////
 // Forward-declare structs that have cyclical dependency
 struct A;
@@ -15,7 +17,7 @@ struct B;
 
 // Declare struct A, note that its constructor is taking arguments of struct B
 struct A {
-  A(B &b, std::shared_ptr<B> bptr) : b_(b), bptr_(bptr) {}
+  A(B &b, std::shared_ptr<B> bptr) : b_(b), bptr_(std::move(bptr)) {}
   B &b_;
   std::shared_ptr<B> bptr_;
 };

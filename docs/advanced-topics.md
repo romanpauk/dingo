@@ -52,7 +52,7 @@ Example code included from
 
 ```c++
 struct IAnimal {
-  virtual ~IAnimal() {}
+  virtual ~IAnimal() = default;
 };
 
 struct Dog : IAnimal {};
@@ -107,7 +107,7 @@ private:
 
 // Declare message processor hierarchy with dependencies
 struct IProcessor {
-  virtual ~IProcessor() {}
+  virtual ~IProcessor() = default;
   virtual void process(const MessageWrapper &) = 0;
 };
 

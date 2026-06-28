@@ -1,6 +1,7 @@
 function(add_example source)
     get_filename_component(name ${source} NAME_WE)
     add_executable(dingo_example_${name} ${source})
+    set_property(GLOBAL APPEND PROPERTY DINGO_EXAMPLE_TARGETS dingo_example_${name})
     target_link_libraries(dingo_example_${name} dingo)
     add_test(NAME dingo_example_${name} COMMAND $<TARGET_FILE:dingo_example_${name}>)
 

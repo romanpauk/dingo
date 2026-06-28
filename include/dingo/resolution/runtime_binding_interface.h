@@ -41,7 +41,7 @@ struct instance_cache_sink {
 #pragma warning(disable : 4702)
 #endif
   void operator()(void *ptr) const {
-    if (store) {
+    if (store != nullptr) {
       store(context, ptr);
     }
   }

@@ -17,7 +17,7 @@ namespace dingo {
 template <typename Allocator> struct allocator_base : public Allocator {
   template <typename AllocatorT>
   allocator_base(AllocatorT &&alloc)
-      : Allocator(std::forward<Allocator>(alloc)) {}
+      : Allocator(std::forward<AllocatorT>(alloc)) {}
 
   Allocator &get_allocator() { return *this; }
 };
@@ -72,8 +72,9 @@ struct allocator_ptr
   allocator_ptr(const allocator_ptr &) = delete;
   allocator_ptr &operator=(const allocator_ptr &) = delete;
 
-  allocator_ptr(allocator_ptr &&other) noexcept : base(std::move(other)) {
-    std::swap(ptr_, other.ptr_);
+  allocator_ptr(allocator_ptr &&other) noexcept
+      : base(std::move(other.get_allocator())), ptr_(other.ptr_) {
+    other.ptr_ = nullptr;
   }
 
   allocator_ptr &operator=(allocator_ptr &&) = delete;

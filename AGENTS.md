@@ -6,9 +6,19 @@ Before finishing a non-trivial change, run the repository quality gate:
 cmake --build build -t check
 ```
 
-This target verifies C++ formatting and Markdown formatting. Do not wire it into
-the default build; it is an explicit validation target for agents, local review,
-and CI.
+This target verifies C++ formatting and Markdown formatting. On non-Windows
+builds it also runs clang-tidy through `check-tidy`; Windows skips clang-tidy.
+Do not wire it into the default build; it is an explicit validation target for
+agents, local review, and CI.
+
+Run clang-tidy directly when you want only static-analysis coverage:
+
+```bash
+cmake --build build -t check-tidy
+```
+
+This target requires `DINGO_EXAMPLES_ENABLED=ON` so clang-tidy can analyze real
+example translation units for this header-only library.
 
 C++ formatting is pinned to `clang-format` 21 from the locked `uv`
 development environment. If the local system formatter differs, configure CMake

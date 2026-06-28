@@ -40,12 +40,14 @@ struct context_closure_base {
 struct context_closure : context_closure_base {
   context_closure() : arena_(arena_buffer_), destructibles_(arena_) {}
 
-  ~context_closure() { reset(); }
+  ~context_closure() { reset_impl(); }
 
   context_closure(const context_closure &) = delete;
   context_closure &operator=(const context_closure &) = delete;
 
-  void reset() override {
+  void reset() override { reset_impl(); }
+
+  void reset_impl() {
     if (!destructibles_.empty()) {
       for (auto it = destructibles_.rbegin(); it != destructibles_.rend();
            ++it) {
@@ -105,10 +107,9 @@ struct static_context_closure {
   }
 
   template <typename T> T *try_allocate_temporary() {
-    if constexpr (temporary_slot_capacity_ == 0) {
-      return nullptr;
-    } else if constexpr (sizeof(T) > TemporarySlotSize ||
-                         alignof(T) > TemporarySlotAlign) {
+    if constexpr (temporary_slot_capacity_ == 0 ||
+                  sizeof(T) > TemporarySlotSize ||
+                  alignof(T) > TemporarySlotAlign) {
       return nullptr;
     } else {
       if (temporary_count_ >= temporary_slot_capacity_) {
@@ -138,12 +139,14 @@ struct fixed_context_closure : context_closure_base {
 
   fixed_context_closure() : arena_(arena_buffer_) {}
 
-  ~fixed_context_closure() { reset(); }
+  ~fixed_context_closure() { reset_impl(); }
 
   fixed_context_closure(const fixed_context_closure &) = delete;
   fixed_context_closure &operator=(const fixed_context_closure &) = delete;
 
-  void reset() override {
+  void reset() override { reset_impl(); }
+
+  void reset_impl() {
     while (destructible_count_ != 0) {
       auto &destructible = destructibles_[--destructible_count_];
       destructible.dtor(destructible.instance);
@@ -160,10 +163,9 @@ struct fixed_context_closure : context_closure_base {
   }
 
   template <typename T> T *try_allocate_temporary() {
-    if constexpr (temporary_slot_capacity_ == 0) {
-      return nullptr;
-    } else if constexpr (sizeof(T) > TemporarySlotSize ||
-                         alignof(T) > TemporarySlotAlign) {
+    if constexpr (temporary_slot_capacity_ == 0 ||
+                  sizeof(T) > TemporarySlotSize ||
+                  alignof(T) > TemporarySlotAlign) {
       return nullptr;
     } else {
       if (temporary_count_ >= temporary_slot_capacity_) {
@@ -296,7 +298,7 @@ inline resolving_frame::resolving_frame(context_path_state &context,
 #endif
 
 inline resolving_frame::~resolving_frame() {
-  if (context_) {
+  if (context_ != nullptr) {
     // Frames unwind strictly LIFO; restoring parent_ pops this node from
     // the active type path without touching any arena-backed state.
     assert(context_->active_resolving_frame_ == this);
