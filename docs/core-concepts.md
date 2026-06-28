@@ -50,7 +50,8 @@ container<> container;
 container.register_type<scope<unique>, // using unique scope
                         factory<constructor<A>>,
                         // using constructor detection
-                        storage<std::unique_ptr<A>>, // stored as unique_ptr<A>
+                        storage<std::unique_ptr<A>>, // stored as
+                                                     // unique_ptr<A>
                         interfaces<A>                // resolvable as A
                         >();
 // As some policies can be deduced from the others, the above
@@ -109,9 +110,9 @@ struct A {};
 A instance;
 container<> container;
 // Register existing instance of A, stored as a pointer.
-container.register_type<scope<external>, storage<A*>>(&instance);
+container.register_type<scope<external>, storage<A *>>(&instance);
 // Resolution will return an existing instance of A casted to required type.
-assert(&container.resolve<A&>() == container.resolve<A*>());
+assert(&container.resolve<A &>() == container.resolve<A *>());
 ```
 
 <!-- } -->
@@ -143,7 +144,7 @@ container<> container;
 // Register struct A with shared scope
 container.register_type<scope<shared>, storage<A>>();
 // Resolution will always return the same A instance
-assert(container.resolve<A*>() == &container.resolve<A&>());
+assert(container.resolve<A *>() == &container.resolve<A &>());
 ```
 
 <!-- } -->
@@ -160,16 +161,16 @@ struct B;
 
 // Declare struct A, note that its constructor is taking arguments of struct B
 struct A {
-    A(B& b, std::shared_ptr<B> bptr) : b_(b), bptr_(bptr) {}
-    B& b_;
-    std::shared_ptr<B> bptr_;
+  A(B &b, std::shared_ptr<B> bptr) : b_(b), bptr_(bptr) {}
+  B &b_;
+  std::shared_ptr<B> bptr_;
 };
 
 // Declare struct B, note that its constructor is taking arguments of struct A
 struct B {
-    B(A& a, A* aptr) : a_(a), aptr_(aptr) {}
-    A& a_;
-    A* aptr_;
+  B(A &a, A *aptr) : a_(a), aptr_(aptr) {}
+  A &a_;
+  A *aptr_;
 };
 
 container<> container;
@@ -182,8 +183,8 @@ container.register_type<scope<shared_cyclical>, storage<std::shared_ptr<B>>>();
 // Returns instance of A that has correctly set b_ member to an instance of
 // B, and instance of B has correctly set a_ member to an instance of A.
 // Conversions are supported with cycles, too.
-A& a = container.resolve<A&>();
-B& b = container.resolve<B&>();
+A &a = container.resolve<A &>();
+B &b = container.resolve<B &>();
 // Check that the instances are constructed as promised
 assert(&a.b_ == &b);
 assert(&a.b_ == a.bptr_.get());
@@ -228,13 +229,13 @@ Example code included from
 using namespace dingo;
 
 struct cell {
-    cell() = default;
+  cell() = default;
 };
 
 struct row_consumer {
-    cell (*rows)[3];
+  cell (*rows)[3];
 
-    explicit row_consumer(cell (*init)[3]) : rows(init) {}
+  explicit row_consumer(cell (*init)[3]) : rows(init) {}
 };
 
 container<> raw_container;
@@ -242,8 +243,8 @@ container<> raw_container;
 raw_container.register_type<scope<shared>, storage<cell[2][3]>>();
 
 // Resolve row view, exact pointer view and inject the row view.
-auto* rows = raw_container.resolve<cell (*)[3]>();
-auto& exact = raw_container.resolve<cell (&)[2][3]>();
+auto *rows = raw_container.resolve<cell (*)[3]>();
+auto &exact = raw_container.resolve<cell (&)[2][3]>();
 row_consumer borrowed =
     raw_container
         .construct<row_consumer, constructor<row_consumer(cell (*)[3])>>();
@@ -298,13 +299,13 @@ Example code included from
 
 ```c++
 struct A {
-    explicit A(int init) : value(init) {}
-    int value;
+  explicit A(int init) : value(init) {}
+  int value;
 };
 
 struct B {
-    explicit B(float init) : value(init) {}
-    float value;
+  explicit B(float init) : value(init) {}
+  float value;
 };
 
 container<> construct_container;
@@ -332,21 +333,21 @@ assert(std::holds_alternative<A>(value));
 [[maybe_unused]] auto selected = unique_container.resolve<A>();
 
 try {
-    unique_container.resolve<B>();
-    assert(false);
-} catch (const type_not_convertible_exception&) {
+  unique_container.resolve<B>();
+  assert(false);
+} catch (const type_not_convertible_exception &) {
 }
 
 std::variant<A, B> existing(std::in_place_type<A>, 9);
 container<> external_container;
-external_container.register_type<scope<external>, storage<std::variant<A, B>&>>(
-    existing);
+external_container
+    .register_type<scope<external>, storage<std::variant<A, B> &>>(existing);
 
-[[maybe_unused]] auto& ref = external_container.resolve<std::variant<A, B>&>();
+[[maybe_unused]] auto &ref = external_container.resolve<std::variant<A, B> &>();
 assert(&ref == &existing);
 assert(std::holds_alternative<A>(ref));
 
-[[maybe_unused]] auto& held = external_container.resolve<A&>();
+[[maybe_unused]] auto &held = external_container.resolve<A &>();
 assert(&held == &std::get<A>(existing));
 ```
 
@@ -434,8 +435,8 @@ Example code included from
 
 ```c++
 struct A {
-    A(int); // Definition is not required as constructor is not called
-    A(double, double) {} // Definition is required as constructor is called
+  A(int); // Definition is not required as constructor is not called
+  A(double, double) {} // Definition is required as constructor is called
 };
 
 container<> container;
@@ -456,8 +457,8 @@ Example code included from
 
 ```c++
 struct A {
-    A(int);      // Definition is not required as constructor is not called
-    A(double) {} // Definition is required as constructor is called
+  A(int);      // Definition is not required as constructor is not called
+  A(double) {} // Definition is required as constructor is called
 };
 
 container<> container;
@@ -494,11 +495,11 @@ Example code included from
 ```c++
 // Declare struct A that has an inaccessible constructor
 struct A {
-    // Provide factory function to construct instance of A
-    static A factory() { return A(); }
+  // Provide factory function to construct instance of A
+  static A factory() { return A(); }
 
-  private:
-    A() = default;
+private:
+  A() = default;
 };
 
 container<> container;
@@ -516,12 +517,12 @@ Example code included from
 
 ```c++
 struct A {
-    int value;
+  int value;
 };
 
 struct overloaded_factory {
-    A operator()(int value) const { return A{value * 2}; }
-    A operator()(float value) const { return A{static_cast<int>(value) + 100}; }
+  A operator()(int value) const { return A{value * 2}; }
+  A operator()(float value) const { return A{static_cast<int>(value) + 100}; }
 };
 
 container<> container;
@@ -530,7 +531,7 @@ container.register_type<scope<external>, storage<int>>(2);
 // Register A that will be instantiated by calling provided lambda function
 // with arguments resolved using the container.
 container.register_type<scope<unique>, storage<A>>(callable([](int value) {
-    return A{value * 2};
+  return A{value * 2};
 }));
 assert(container.resolve<A>().value == 4);
 // Explicit signatures also work for overloaded functors.
@@ -568,7 +569,7 @@ Example code included from
 ```c++
 // Interface that will be resolved
 struct IA {
-    virtual ~IA() {}
+  virtual ~IA() {}
 };
 // Struct implementing the interface
 struct A : IA {};
@@ -578,8 +579,8 @@ container<> container;
 // Register struct A, resolvable as interface IA
 container.register_type<scope<shared>, storage<A>, interfaces<IA>>();
 // Resolve instance A through interface IA
-IA& instance = container.resolve<IA&>();
-assert(dynamic_cast<A*>(&instance));
+IA &instance = container.resolve<IA &>();
+assert(dynamic_cast<A *>(&instance));
 ```
 
 <!-- } -->
@@ -604,7 +605,7 @@ Example code included from
 
 ```c++
 struct IProcessor {
-    virtual ~IProcessor() {}
+  virtual ~IProcessor() {}
 };
 
 template <size_t N> struct Processor : IProcessor {};
@@ -612,7 +613,7 @@ template <size_t N> struct Processor : IProcessor {};
 container<> container;
 // Register multi-bindings collection
 container.template register_type_collection<
-    scope<shared>, storage<std::vector<IProcessor*>>>();
+    scope<shared>, storage<std::vector<IProcessor *>>>();
 
 // Register types under the same interface
 container.template register_type<scope<shared>, storage<Processor<0>>,
@@ -621,7 +622,7 @@ container.template register_type<scope<shared>, storage<Processor<1>>,
                                  interfaces<IProcessor>>();
 
 // Resolve the collection
-container.template resolve<std::vector<IProcessor*>>();
+container.template resolve<std::vector<IProcessor *>>();
 ```
 
 <!-- } -->
@@ -633,44 +634,44 @@ Example code included from
 
 ```c++
 struct ProcessorBase {
-    virtual ~ProcessorBase() {}
-    virtual void process(const void*) = 0;
-    virtual std::type_index type() = 0;
+  virtual ~ProcessorBase() {}
+  virtual void process(const void *) = 0;
+  virtual std::type_index type() = 0;
 };
 
 template <typename T, typename ProcessorT> struct Processor : ProcessorBase {
-    virtual std::type_index type() override { return typeid(T); }
+  virtual std::type_index type() override { return typeid(T); }
 
-    void process(const void* transaction) override {
-        static_cast<ProcessorT*>(this)->process_impl(
-            *reinterpret_cast<const T*>(transaction));
-    }
+  void process(const void *transaction) override {
+    static_cast<ProcessorT *>(this)->process_impl(
+        *reinterpret_cast<const T *>(transaction));
+  }
 };
 
 struct StringProcessor : Processor<std::string, StringProcessor> {
-    void process_impl([[maybe_unused]] const std::string& value) {};
+  void process_impl([[maybe_unused]] const std::string &value) {};
 };
 
 struct VectorIntProcessor : Processor<std::vector<int>, VectorIntProcessor> {
-    void process_impl([[maybe_unused]] const std::vector<int>& value) {};
+  void process_impl([[maybe_unused]] const std::vector<int> &value) {};
 };
 
 struct Dispatcher {
-    Dispatcher(
-        std::map<std::type_index, std::unique_ptr<ProcessorBase>>&& processors)
-        : processors_(std::move(processors)) {}
+  Dispatcher(
+      std::map<std::type_index, std::unique_ptr<ProcessorBase>> &&processors)
+      : processors_(std::move(processors)) {}
 
-    Dispatcher(const Dispatcher&) = delete;
-    Dispatcher& operator=(const Dispatcher&) = delete;
-    Dispatcher(Dispatcher&&) = default;
-    Dispatcher& operator=(Dispatcher&&) = default;
+  Dispatcher(const Dispatcher &) = delete;
+  Dispatcher &operator=(const Dispatcher &) = delete;
+  Dispatcher(Dispatcher &&) = default;
+  Dispatcher &operator=(Dispatcher &&) = default;
 
-    template <typename T> void process(const T& value) {
-        processors_.at(typeid(T))->process(&value);
-    }
+  template <typename T> void process(const T &value) {
+    processors_.at(typeid(T))->process(&value);
+  }
 
-  private:
-    std::map<std::type_index, std::unique_ptr<ProcessorBase>> processors_;
+private:
+  std::map<std::type_index, std::unique_ptr<ProcessorBase>> processors_;
 };
 
 container<> container;
@@ -683,8 +684,8 @@ container
 container.register_type_collection<
     scope<unique>,
     storage<std::map<std::type_index, std::unique_ptr<ProcessorBase>>>>(
-    [](auto& collection, auto&& value) {
-        collection.emplace(value->type(), std::move(value));
+    [](auto &collection, auto &&value) {
+      collection.emplace(value->type(), std::move(value));
     });
 
 auto dispatcher = container.construct<Dispatcher>();

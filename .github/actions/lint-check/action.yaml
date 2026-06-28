@@ -1,5 +1,5 @@
 name: lint-check
-description: Configure docs-only build metadata and verify Markdown formatting
+description: Configure lint metadata and verify source and Markdown formatting
 inputs:
   artifact_name:
     description: Failure artifact name
@@ -44,7 +44,7 @@ runs:
     - name: Check Formatting
       shell: bash
       run: |
-        cmake --build "${{ inputs.build_dir }}" -t md-verify
+        cmake --build "${{ inputs.build_dir }}" -t check
     - name: Upload Failure Artifacts
       if: ${{ failure() }}
       uses: actions/upload-artifact@v4.6.2

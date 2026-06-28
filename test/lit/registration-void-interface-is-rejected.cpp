@@ -4,11 +4,9 @@
 #include <dingo/storage/unique.h>
 
 int main() {
-    dingo::container<> container;
-    container.register_type<
-        dingo::scope<dingo::unique>,
-        dingo::storage<int>,
-        dingo::interfaces<void>>();
+  dingo::container<> container;
+  container.register_type<dingo::scope<dingo::unique>, dingo::storage<int>,
+                          dingo::interfaces<void>>();
 }
 
 // CHECK: interfaces<void> is not a valid registration target

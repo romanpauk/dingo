@@ -17,7 +17,7 @@
 namespace dingo {
 template <typename... Types> struct type_list {};
 template <typename T> struct type_list_iterator {
-    using type = T;
+  using type = T;
 };
 
 namespace detail {
@@ -25,18 +25,17 @@ template <typename Accumulated, typename... Lists> struct type_list_cat_impl;
 
 template <typename... Accumulated>
 struct type_list_cat_impl<type_list<Accumulated...>> {
-    using type = type_list<Accumulated...>;
+  using type = type_list<Accumulated...>;
 };
 
 template <typename... Accumulated, typename... Head, typename... Tail>
 struct type_list_cat_impl<type_list<Accumulated...>, type_list<Head...>,
                           Tail...>
-    : type_list_cat_impl<type_list<Accumulated..., Head...>, Tail...> {
-};
+    : type_list_cat_impl<type_list<Accumulated..., Head...>, Tail...> {};
 } // namespace detail
 
 template <typename... Lists> struct type_list_cat {
-    using type = typename detail::type_list_cat_impl<type_list<>, Lists...>::type;
+  using type = typename detail::type_list_cat_impl<type_list<>, Lists...>::type;
 };
 
 template <typename... Lists>
@@ -55,7 +54,7 @@ template <typename List> struct type_list_head;
 
 template <typename Head, typename... Tail>
 struct type_list_head<type_list<Head, Tail...>> {
-    using type = Head;
+  using type = Head;
 };
 
 template <typename List>
@@ -80,20 +79,21 @@ struct type_list_unique_impl;
 
 template <typename... Accumulated>
 struct type_list_unique_impl<type_list<Accumulated...>, type_list<>> {
-    using type = type_list<Accumulated...>;
+  using type = type_list<Accumulated...>;
 };
 
 template <typename... Accumulated, typename Head, typename... Tail>
 struct type_list_unique_impl<type_list<Accumulated...>,
                              type_list<Head, Tail...>> {
-  private:
-    using next_accumulated = std::conditional_t<
-        type_list_contains_v<Head, type_list<Accumulated...>>,
-        type_list<Accumulated...>, type_list<Accumulated..., Head>>;
+private:
+  using next_accumulated =
+      std::conditional_t<type_list_contains_v<Head, type_list<Accumulated...>>,
+                         type_list<Accumulated...>,
+                         type_list<Accumulated..., Head>>;
 
-  public:
-    using type = typename type_list_unique_impl<next_accumulated,
-                                                type_list<Tail...>>::type;
+public:
+  using type = typename type_list_unique_impl<next_accumulated,
+                                              type_list<Tail...>>::type;
 };
 } // namespace detail
 
@@ -102,30 +102,29 @@ using type_list_unique_t =
     typename detail::type_list_unique_impl<type_list<>, List>::type;
 
 template <typename T> struct to_type_list {
-    using type = T;
+  using type = T;
 };
 
 template <typename... Types> struct to_type_list<std::tuple<Types...>> {
-    using type = type_list<typename to_type_list<Types>::type...>;
+  using type = type_list<typename to_type_list<Types>::type...>;
 };
 
-template <typename T>
-using to_type_list_t = typename to_type_list<T>::type;
+template <typename T> using to_type_list_t = typename to_type_list<T>::type;
 
 template <typename RTTI, typename Function, typename... Types>
-bool for_type(type_list<Types...>, const typename RTTI::type_index& type,
-              Function&& fn) {
-    bool matched = false;
-    (void)std::initializer_list<int>{
-        (((!matched && RTTI::template get_type_index<Types>() == type)
-              ? (fn(type_list_iterator<Types>{}), matched = true, 0)
-              : 0))...};
-    return matched;
+bool for_type(type_list<Types...>, const typename RTTI::type_index &type,
+              Function &&fn) {
+  bool matched = false;
+  (void)std::initializer_list<int>{
+      (((!matched && RTTI::template get_type_index<Types>() == type)
+            ? (fn(type_list_iterator<Types>{}), matched = true, 0)
+            : 0))...};
+  return matched;
 }
 
 template <typename Function, typename... Types>
-void for_each(type_list<Types...>, Function&& fn) {
-    (fn(type_list_iterator<Types>{}), ...);
+void for_each(type_list<Types...>, Function &&fn) {
+  (fn(type_list_iterator<Types>{}), ...);
 }
 
 } // namespace dingo

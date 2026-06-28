@@ -21,27 +21,27 @@ struct unordered_map {};
 namespace detail {
 template <typename Key, typename Value, typename Allocator>
 struct index_storage<index_type::unordered_map, Key, Value, Allocator> {
-    static_assert(!is_static_allocator_v<Allocator>);
+  static_assert(!is_static_allocator_v<Allocator>);
 
-    explicit index_storage(Allocator& allocator) : map_(allocator) {}
+  explicit index_storage(Allocator &allocator) : map_(allocator) {}
 
-    bool emplace(Key key, Value value) {
-        auto pb = map_.emplace(std::move(key), value);
-        return pb.second;
-    }
+  bool emplace(Key key, Value value) {
+    auto pb = map_.emplace(std::move(key), value);
+    return pb.second;
+  }
 
-    Value* find(const Key& key) {
-        auto it = map_.find(key);
-        return it != map_.end() ? &it->second : nullptr;
-    }
+  Value *find(const Key &key) {
+    auto it = map_.find(key);
+    return it != map_.end() ? &it->second : nullptr;
+  }
 
-  private:
-    using allocator_type = typename std::allocator_traits<
-        Allocator>::template rebind_alloc<std::pair<const Key, Value>>;
+private:
+  using allocator_type = typename std::allocator_traits<
+      Allocator>::template rebind_alloc<std::pair<const Key, Value>>;
 
-    std::unordered_map<Key, Value, std::hash<Key>, std::equal_to<Key>,
-                       allocator_type>
-        map_;
+  std::unordered_map<Key, Value, std::hash<Key>, std::equal_to<Key>,
+                     allocator_type>
+      map_;
 };
 } // namespace detail
 } // namespace dingo

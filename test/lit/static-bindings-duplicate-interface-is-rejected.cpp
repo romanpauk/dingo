@@ -7,7 +7,7 @@
 struct duplicate_key : std::integral_constant<int, 0> {};
 
 struct interface {
-    virtual ~interface() = default;
+  virtual ~interface() = default;
 };
 struct service_a : interface {};
 struct service_b : interface {};
@@ -22,9 +22,10 @@ using selection = dingo::detail::static_binding_t<
     typename registry_type::template bindings<interface, duplicate_key>>;
 
 static_assert(registry_type::valid);
-static_assert(dingo::type_list_size_v<
-                  typename registry_type::template bindings<
-                      interface, duplicate_key>> == 2);
+static_assert(
+    dingo::type_list_size_v<
+        typename registry_type::template bindings<interface, duplicate_key>> ==
+    2);
 static_assert(selection::status ==
               dingo::detail::binding_selection_status::ambiguous);
 

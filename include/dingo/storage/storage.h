@@ -8,8 +8,8 @@
 #pragma once
 
 #include <dingo/core/config.h>
-#include <dingo/type/normalized_type.h>
 #include <dingo/factory/constructor.h>
+#include <dingo/type/normalized_type.h>
 
 namespace dingo {
 namespace detail {

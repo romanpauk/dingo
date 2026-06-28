@@ -3,8 +3,8 @@
 #include <dingo/container.h>
 
 int main() {
-    dingo::container<> container;
-    container.register_type<dingo::scope<dingo::unique>, dingo::storage<int>>();
+  dingo::container<> container;
+  container.register_type<dingo::scope<dingo::unique>, dingo::storage<int>>();
 }
 
 // CHECK: registered storage tag must be complete

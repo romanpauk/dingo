@@ -18,27 +18,27 @@ namespace incomplete_resolve_test {
 
 struct service;
 
-void register_service(container<>& container);
+void register_service(container<> &container);
 
 TEST(container_test, resolve_incomplete_pointer_and_reference) {
-    container<> container;
-    register_service(container);
+  container<> container;
+  register_service(container);
 
-    auto* ptr = container.template resolve<service*>();
-    auto& ref = container.template resolve<service&>();
+  auto *ptr = container.template resolve<service *>();
+  auto &ref = container.template resolve<service &>();
 
-    EXPECT_EQ(ptr, std::addressof(ref));
+  EXPECT_EQ(ptr, std::addressof(ref));
 }
 
 TEST(container_test,
      construct_registered_type_with_incomplete_reference_dependency) {
-    container<> container;
-    register_service(container);
-    container.template register_type<scope<unique>, storage<consumer>>();
+  container<> container;
+  register_service(container);
+  container.template register_type<scope<unique>, storage<consumer>>();
 
-    auto built = container.template resolve<consumer>();
+  auto built = container.template resolve<consumer>();
 
-    EXPECT_EQ(built.value, container.template resolve<service*>());
+  EXPECT_EQ(built.value, container.template resolve<service *>());
 }
 
 } // namespace incomplete_resolve_test

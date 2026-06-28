@@ -22,6 +22,26 @@ options, including:
 - `DINGO_EXAMPLES_ENABLED`
 - `DINGO_LIT_TESTS_ENABLED`
 
+## C++ Formatting
+
+C++ sources are formatted with `clang-format` using the repository
+`.clang-format` file. Development builds provide targets for updating and
+checking formatting:
+
+```bash
+cmake --build build -t format
+cmake --build build -t check-format
+```
+
+The older explicit target names remain available as aliases:
+`clang-format-update` and `clang-format-verify`.
+
+The aggregate `check` target runs the repository formatting checks used by CI:
+
+```bash
+cmake --build build -t check
+```
+
 ## Python Tooling
 
 Python helper tooling for development is declared in `pyproject.toml` and locked

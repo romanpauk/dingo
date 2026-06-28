@@ -2,12 +2,10 @@
 
 #include <dingo/type/type_traits.h>
 
-using alternatives =
-    typename dingo::detail::alternative_type_alternatives<
-        std::variant<int, int>>::type;
+using alternatives = typename dingo::detail::alternative_type_alternatives<
+    std::variant<int, int>>::type;
 
-int main() {
-    return sizeof(alternatives);
-}
+int main() { return sizeof(alternatives); }
 
-// CHECK: alternative_type_traits<T>::alternatives must not contain duplicate types
+// CHECK: alternative_type_traits<T>::alternatives must not contain duplicate
+// types

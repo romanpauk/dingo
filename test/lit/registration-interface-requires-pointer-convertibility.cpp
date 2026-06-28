@@ -5,15 +5,13 @@
 
 struct service {};
 struct unrelated_interface {
-    virtual ~unrelated_interface() = default;
+  virtual ~unrelated_interface() = default;
 };
 
 int main() {
-    dingo::container<> container;
-    container.register_type<
-        dingo::scope<dingo::unique>,
-        dingo::storage<service>,
-        dingo::interfaces<unrelated_interface>>();
+  dingo::container<> container;
+  container.register_type<dingo::scope<dingo::unique>, dingo::storage<service>,
+                          dingo::interfaces<unrelated_interface>>();
 }
 
 // CHECK: registered type must be pointer-convertible to the interface

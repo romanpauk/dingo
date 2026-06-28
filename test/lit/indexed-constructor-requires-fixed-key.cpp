@@ -7,21 +7,22 @@
 #include <cstddef>
 
 struct processor {
-    virtual ~processor() = default;
+  virtual ~processor() = default;
 };
 
 struct consumer {
-    explicit consumer(dingo::indexed<processor&, dingo::key<std::size_t>>) {}
+  explicit consumer(dingo::indexed<processor &, dingo::key<std::size_t>>) {}
 };
 
 struct traits : dingo::dynamic_container_traits {
-    using index_definition_type = dingo::indexes<
-        dingo::index<processor, std::size_t, dingo::index_type::array<2>>>;
+  using index_definition_type = dingo::indexes<
+      dingo::index<processor, std::size_t, dingo::index_type::array<2>>>;
 };
 
 int main() {
-    dingo::container<traits> container;
-    (void)container.construct<consumer>();
+  dingo::container<traits> container;
+  (void)container.construct<consumer>();
 }
 
-// CHECK: dingo::indexed<T, dingo::key<Key>> constructor injection requires dingo::key<Key, Value>
+// CHECK: dingo::indexed<T, dingo::key<Key>> constructor injection requires
+// dingo::key<Key, Value>

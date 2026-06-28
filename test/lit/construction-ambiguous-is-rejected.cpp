@@ -3,14 +3,14 @@
 #include <dingo/container.h>
 
 struct ambiguous_type {
-    ambiguous_type(int) {}
-    ambiguous_type(float) {}
+  ambiguous_type(int) {}
+  ambiguous_type(float) {}
 };
 
 int main() {
-    dingo::container<> container;
-    auto value = container.construct<ambiguous_type>();
-    (void)value;
+  dingo::container<> container;
+  auto value = container.construct<ambiguous_type>();
+  (void)value;
 }
 
 // CHECK: class T construction not detected or ambiguous

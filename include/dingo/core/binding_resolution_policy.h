@@ -18,242 +18,239 @@
 namespace dingo::detail {
 
 enum class binding_resolution_policy {
-    prefer_primary,
-    ambiguous_on_conflict,
+  prefer_primary,
+  ambiguous_on_conflict,
 };
 
 enum class binding_result {
-    primary,
-    secondary,
-    missing,
-    ambiguous,
+  primary,
+  secondary,
+  missing,
+  ambiguous,
 };
 
 struct binding_source_selection {
-    binding_result result;
+  binding_result result;
 
-    constexpr bool found() const {
-        return result == binding_result::primary ||
-               result == binding_result::secondary;
-    }
+  constexpr bool found() const {
+    return result == binding_result::primary ||
+           result == binding_result::secondary;
+  }
 
-    constexpr bool ambiguous() const {
-        return result == binding_result::ambiguous;
-    }
+  constexpr bool ambiguous() const {
+    return result == binding_result::ambiguous;
+  }
 
-    constexpr bool primary() const {
-        return result == binding_result::primary;
-    }
+  constexpr bool primary() const { return result == binding_result::primary; }
 
-    constexpr bool secondary() const {
-        return result == binding_result::secondary;
-    }
+  constexpr bool secondary() const {
+    return result == binding_result::secondary;
+  }
 };
 
 constexpr binding_result resolve_binding(binding_selection_status primary,
                                          binding_selection_status secondary,
                                          binding_resolution_policy policy) {
-    const bool primary_ambiguous =
-        primary == binding_selection_status::ambiguous;
-    const bool secondary_ambiguous =
-        secondary == binding_selection_status::ambiguous;
-    const bool primary_found = primary == binding_selection_status::found;
-    const bool secondary_found = secondary == binding_selection_status::found;
+  const bool primary_ambiguous = primary == binding_selection_status::ambiguous;
+  const bool secondary_ambiguous =
+      secondary == binding_selection_status::ambiguous;
+  const bool primary_found = primary == binding_selection_status::found;
+  const bool secondary_found = secondary == binding_selection_status::found;
 
-    if (policy == binding_resolution_policy::prefer_primary) {
-        if (primary_ambiguous) {
-            return binding_result::ambiguous;
-        }
-
-        if (primary_found) {
-            return binding_result::primary;
-        }
-
-        if (secondary_ambiguous) {
-            return binding_result::ambiguous;
-        }
-
-        if (secondary_found) {
-            return binding_result::secondary;
-        }
-
-        return binding_result::missing;
-    }
-
-    if (primary_ambiguous || secondary_ambiguous ||
-        (primary_found && secondary_found)) {
-        return binding_result::ambiguous;
+  if (policy == binding_resolution_policy::prefer_primary) {
+    if (primary_ambiguous) {
+      return binding_result::ambiguous;
     }
 
     if (primary_found) {
-        return binding_result::primary;
+      return binding_result::primary;
+    }
+
+    if (secondary_ambiguous) {
+      return binding_result::ambiguous;
     }
 
     if (secondary_found) {
-        return binding_result::secondary;
+      return binding_result::secondary;
     }
 
     return binding_result::missing;
+  }
+
+  if (primary_ambiguous || secondary_ambiguous ||
+      (primary_found && secondary_found)) {
+    return binding_result::ambiguous;
+  }
+
+  if (primary_found) {
+    return binding_result::primary;
+  }
+
+  if (secondary_found) {
+    return binding_result::secondary;
+  }
+
+  return binding_result::missing;
 }
 
 constexpr binding_selection_status binding_status(binding_result resolution) {
-    switch (resolution) {
-    case binding_result::primary:
-    case binding_result::secondary:
-        return binding_selection_status::found;
-    case binding_result::ambiguous:
-        return binding_selection_status::ambiguous;
-    case binding_result::missing:
-    default:
-        return binding_selection_status::not_found;
-    }
+  switch (resolution) {
+  case binding_result::primary:
+  case binding_result::secondary:
+    return binding_selection_status::found;
+  case binding_result::ambiguous:
+    return binding_selection_status::ambiguous;
+  case binding_result::missing:
+  default:
+    return binding_selection_status::not_found;
+  }
 }
 
 template <binding_selection_status SecondaryStatus>
 constexpr binding_selection_status
 resolve_binding_status(binding_selection_status primary,
                        binding_resolution_policy policy) {
-    return binding_status(resolve_binding(primary, SecondaryStatus, policy));
+  return binding_status(resolve_binding(primary, SecondaryStatus, policy));
 }
 
 template <typename ErrorRequest, typename ResolveRequest = ErrorRequest,
           typename Context, typename Sources>
-ResolveRequest resolve_from_binding_sources(Context& context,
-                                            Sources& sources) {
-    auto selection = sources.select();
-    if (selection.ambiguous()) {
-        throw make_type_ambiguous_exception<ErrorRequest>(context);
-    }
+ResolveRequest resolve_from_binding_sources(Context &context,
+                                            Sources &sources) {
+  auto selection = sources.select();
+  if (selection.ambiguous()) {
+    throw make_type_ambiguous_exception<ErrorRequest>(context);
+  }
 
-    if (selection.found()) {
-        return sources.template resolve_selected<ResolveRequest>(context,
-                                                                 selection);
-    }
+  if (selection.found()) {
+    return sources.template resolve_selected<ResolveRequest>(context,
+                                                             selection);
+  }
 
-    return sources.template resolve_missing<ResolveRequest>(context);
+  return sources.template resolve_missing<ResolveRequest>(context);
 }
 
 template <typename PrimarySource, typename SecondarySource,
           typename MissingSource>
 struct two_binding_sources {
-    PrimarySource& primary;
-    SecondarySource& secondary;
-    MissingSource& missing;
-    binding_resolution_policy policy;
+  PrimarySource &primary;
+  SecondarySource &secondary;
+  MissingSource &missing;
+  binding_resolution_policy policy;
 
-    binding_source_selection select() {
-        return {resolve_binding(primary.status(), secondary.status(), policy)};
+  binding_source_selection select() {
+    return {resolve_binding(primary.status(), secondary.status(), policy)};
+  }
+
+  template <typename Request, typename Context>
+  decltype(auto) resolve_selected(Context &context,
+                                  binding_source_selection selection) {
+    if constexpr (PrimarySource::can_resolve) {
+      if (selection.primary()) {
+        return primary.template resolve<Request>(context);
+      }
     }
 
-    template <typename Request, typename Context>
-    decltype(auto) resolve_selected(Context& context,
-                                    binding_source_selection selection) {
-        if constexpr (PrimarySource::can_resolve) {
-            if (selection.primary()) {
-                return primary.template resolve<Request>(context);
-            }
-        }
-
-        if constexpr (SecondarySource::can_resolve) {
-            if (selection.secondary()) {
-                return secondary.template resolve<Request>(context);
-            }
-        }
-
-        return missing.template resolve<Request>(context);
+    if constexpr (SecondarySource::can_resolve) {
+      if (selection.secondary()) {
+        return secondary.template resolve<Request>(context);
+      }
     }
 
-    template <typename Request, typename Context>
-    decltype(auto) resolve_missing(Context& context) {
-        return missing.template resolve<Request>(context);
-    }
+    return missing.template resolve<Request>(context);
+  }
+
+  template <typename Request, typename Context>
+  decltype(auto) resolve_missing(Context &context) {
+    return missing.template resolve<Request>(context);
+  }
 };
 
 template <typename PrimarySource, typename SecondarySource,
           typename MissingSource>
 two_binding_sources<PrimarySource, SecondarySource, MissingSource>
-make_two_binding_sources(PrimarySource& primary, SecondarySource& secondary,
-                         MissingSource& missing,
+make_two_binding_sources(PrimarySource &primary, SecondarySource &secondary,
+                         MissingSource &missing,
                          binding_resolution_policy policy) {
-    return {primary, secondary, missing, policy};
+  return {primary, secondary, missing, policy};
 }
 
 template <typename Source, typename MissingSource> struct one_binding_source {
-    Source& source;
-    MissingSource& missing;
+  Source &source;
+  MissingSource &missing;
 
-    binding_source_selection select() {
-        const auto status = source.status();
-        if (status == binding_selection_status::ambiguous) {
-            return {binding_result::ambiguous};
-        }
-        if (status == binding_selection_status::found) {
-            return {binding_result::primary};
-        }
-        return {binding_result::missing};
+  binding_source_selection select() {
+    const auto status = source.status();
+    if (status == binding_selection_status::ambiguous) {
+      return {binding_result::ambiguous};
+    }
+    if (status == binding_selection_status::found) {
+      return {binding_result::primary};
+    }
+    return {binding_result::missing};
+  }
+
+  template <typename Request, typename Context>
+  decltype(auto) resolve_selected(Context &context,
+                                  binding_source_selection selection) {
+    if constexpr (Source::can_resolve) {
+      if (selection.found()) {
+        return source.template resolve<Request>(context);
+      }
     }
 
-    template <typename Request, typename Context>
-    decltype(auto) resolve_selected(Context& context,
-                                    binding_source_selection selection) {
-        if constexpr (Source::can_resolve) {
-            if (selection.found()) {
-                return source.template resolve<Request>(context);
-            }
-        }
+    return missing.template resolve<Request>(context);
+  }
 
-        return missing.template resolve<Request>(context);
-    }
-
-    template <typename Request, typename Context>
-    decltype(auto) resolve_missing(Context& context) {
-        return missing.template resolve<Request>(context);
-    }
+  template <typename Request, typename Context>
+  decltype(auto) resolve_missing(Context &context) {
+    return missing.template resolve<Request>(context);
+  }
 };
 
 template <typename Source, typename MissingSource>
 one_binding_source<Source, MissingSource>
-make_one_binding_source(Source& source, MissingSource& missing) {
-    return {source, missing};
+make_one_binding_source(Source &source, MissingSource &missing) {
+  return {source, missing};
 }
 
 template <typename SelectedSource, typename MissingSource>
 struct selected_binding_sources {
-    SelectedSource& selected;
-    MissingSource& missing;
+  SelectedSource &selected;
+  MissingSource &missing;
 
-    decltype(auto) select() { return selected.select(); }
+  decltype(auto) select() { return selected.select(); }
 
-    template <typename Request, typename Context, typename Selection>
-    decltype(auto) resolve_selected(Context& context, Selection selection) {
-        return selected.template resolve<Request>(context, selection);
-    }
+  template <typename Request, typename Context, typename Selection>
+  decltype(auto) resolve_selected(Context &context, Selection selection) {
+    return selected.template resolve<Request>(context, selection);
+  }
 
-    template <typename Request, typename Context>
-    decltype(auto) resolve_missing(Context& context) {
-        return missing.template resolve<Request>(context);
-    }
+  template <typename Request, typename Context>
+  decltype(auto) resolve_missing(Context &context) {
+    return missing.template resolve<Request>(context);
+  }
 };
 
 template <typename SelectedSource, typename MissingSource>
 selected_binding_sources<SelectedSource, MissingSource>
-make_selected_binding_sources(SelectedSource& selected,
-                              MissingSource& missing) {
-    return {selected, missing};
+make_selected_binding_sources(SelectedSource &selected,
+                              MissingSource &missing) {
+  return {selected, missing};
 }
 
 template <typename LookupRequest> struct missing_binding_source {
-    template <typename ResolveRequest, typename Context>
-    ResolveRequest resolve(Context& context) {
-        (void)context;
-        throw make_type_not_found_exception<LookupRequest>();
-    }
+  template <typename ResolveRequest, typename Context>
+  ResolveRequest resolve(Context &context) {
+    (void)context;
+    throw make_type_not_found_exception<LookupRequest>();
+  }
 
-    template <typename ResolveRequest, typename Context>
-    ResolveRequest resolve_missing(Context& context) {
-        (void)context;
-        throw make_type_not_found_exception<LookupRequest>();
-    }
+  template <typename ResolveRequest, typename Context>
+  ResolveRequest resolve_missing(Context &context) {
+    (void)context;
+    throw make_type_not_found_exception<LookupRequest>();
+  }
 };
 
 } // namespace dingo::detail

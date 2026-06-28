@@ -38,45 +38,45 @@ struct has_index_storage_contract : std::false_type {};
 template <typename Storage, typename Key, typename Value>
 struct has_index_storage_contract<
     Storage, Key, Value,
-    std::void_t<decltype(std::declval<Storage&>().emplace(
+    std::void_t<decltype(std::declval<Storage &>().emplace(
                     std::declval<Key>(), std::declval<Value>())),
-                decltype(std::declval<Storage&>().find(
-                    std::declval<const Key&>()))>>
+                decltype(std::declval<Storage &>().find(
+                    std::declval<const Key &>()))>>
     : std::bool_constant<
-          std::is_same_v<decltype(std::declval<Storage&>().emplace(
+          std::is_same_v<decltype(std::declval<Storage &>().emplace(
                              std::declval<Key>(), std::declval<Value>())),
                          bool> &&
-          std::is_same_v<decltype(std::declval<Storage&>().find(
-                             std::declval<const Key&>())),
-                         Value*>> {};
+          std::is_same_v<decltype(std::declval<Storage &>().find(
+                             std::declval<const Key &>())),
+                         Value *>> {};
 
 template <typename Storage, typename Key, typename Value>
 inline constexpr bool has_index_storage_contract_v =
     has_index_storage_contract<Storage, Key, Value>::value;
 
 template <typename Interface, typename Key, typename Tag> struct index_entry {
-    using interface_type = Interface;
-    using key = Key;
-    using tag = Tag;
+  using interface_type = Interface;
+  using key = Key;
+  using tag = Tag;
 };
 
 template <typename T> struct index_interface_arg {
-    using type = type_list<T>;
+  using type = type_list<T>;
 };
 
 template <typename... Types> struct index_interface_arg<interfaces<Types...>> {
-    using type = type_list<Types...>;
+  using type = type_list<Types...>;
 };
 
 template <typename T> struct index_key_arg {
-    using type = T;
+  using type = T;
 };
 
 template <typename T, auto... Values> struct index_key_arg<key<T, Values...>> {
-    static_assert(sizeof...(Values) == 0,
-                  "index definitions require dingo::key<Key>, not "
-                  "dingo::key<Key, Value>");
-    using type = T;
+  static_assert(sizeof...(Values) == 0,
+                "index definitions require dingo::key<Key>, not "
+                "dingo::key<Key, Value>");
+  using type = T;
 };
 
 template <typename T> using normalized_index_interface_t = normalized_type_t<T>;
@@ -90,8 +90,8 @@ struct normalize_index_interfaces;
 
 template <typename... Interfaces, typename Key, typename Tag>
 struct normalize_index_interfaces<type_list<Interfaces...>, Key, Tag> {
-    using type = type_list<index_entry<normalized_index_interface_t<Interfaces>,
-                                       normalized_index_key_t<Key>, Tag>...>;
+  using type = type_list<index_entry<normalized_index_interface_t<Interfaces>,
+                                     normalized_index_key_t<Key>, Tag>...>;
 };
 
 template <typename Definition> struct normalize_index_definition;
@@ -105,20 +105,20 @@ template <typename DefinitionList> struct normalize_index_definitions;
 
 template <typename... Definitions>
 struct normalize_index_definitions<type_list<Definitions...>> {
-    using type = type_list_cat_t<
-        typename normalize_index_definition<Definitions>::type...>;
+  using type = type_list_cat_t<
+      typename normalize_index_definition<Definitions>::type...>;
 };
 
 template <> struct normalize_index_definitions<std::tuple<>> {
-    using type = type_list<>;
+  using type = type_list<>;
 };
 
 template <typename Definition, typename... Definitions>
 struct normalize_index_definitions<std::tuple<Definition, Definitions...>> {
-    static_assert(index_dependent_false_v<Definition, Definitions...>,
-                  "legacy std::tuple index definitions are no longer "
-                  "supported; use "
-                  "dingo::indexes<dingo::index<Interface, Key, Backend>>");
+  static_assert(index_dependent_false_v<Definition, Definitions...>,
+                "legacy std::tuple index definitions are no longer "
+                "supported; use "
+                "dingo::indexes<dingo::index<Interface, Key, Backend>>");
 };
 
 template <typename... Definitions>
@@ -169,31 +169,31 @@ struct index_entry_for;
 
 template <typename Interface, typename Key>
 struct index_entry_for<Interface, Key, type_list<>> {
-    using type = void;
+  using type = void;
 };
 
 template <typename Interface, typename Key, typename Head, typename... Tail>
 struct index_entry_for<Interface, Key, type_list<Head, Tail...>> {
-  private:
-    static constexpr bool exact =
-        std::is_same_v<typename Head::interface_type, Interface> &&
-        std::is_same_v<typename Head::key, Key>;
+private:
+  static constexpr bool exact =
+      std::is_same_v<typename Head::interface_type, Interface> &&
+      std::is_same_v<typename Head::key, Key>;
 
-  public:
-    using type = std::conditional_t<
-        exact, Head,
-        typename index_entry_for<Interface, Key, type_list<Tail...>>::type>;
+public:
+  using type = std::conditional_t<
+      exact, Head,
+      typename index_entry_for<Interface, Key, type_list<Tail...>>::type>;
 };
 
 template <typename Interface, typename Key, typename Entries>
 struct selected_index_entry {
-  private:
-    using normalized_interface = normalized_index_interface_t<Interface>;
-    using normalized_key = normalized_index_key_t<Key>;
+private:
+  using normalized_interface = normalized_index_interface_t<Interface>;
+  using normalized_key = normalized_index_key_t<Key>;
 
-  public:
-    using type = typename index_entry_for<normalized_interface, normalized_key,
-                                          Entries>::type;
+public:
+  using type = typename index_entry_for<normalized_interface, normalized_key,
+                                        Entries>::type;
 };
 
 template <typename Interface, typename Key, typename Entries>
@@ -201,58 +201,57 @@ using selected_index_entry_t =
     typename selected_index_entry<Interface, Key, Entries>::type;
 
 template <typename Entry> struct index_entry_tag {
-    using type = typename Entry::tag;
+  using type = typename Entry::tag;
 };
 
 template <> struct index_entry_tag<void> {
-    using type = void;
+  using type = void;
 };
 
 template <typename Arg> struct index_lookup_arg {
-    using interface_type = void;
-    using key = Arg;
+  using interface_type = void;
+  using key = Arg;
 };
 
 template <typename Interface, typename Key>
 struct index_lookup_arg<type_list<Interface, Key>> {
-    using interface_type = Interface;
-    using key = Key;
+  using interface_type = Interface;
+  using key = Key;
 };
 
 template <typename Arg, typename Definitions> struct index_tag_impl {
-  private:
-    using lookup = index_lookup_arg<Arg>;
-    using entries = normalize_index_definitions_t<Definitions>;
-    using entry = selected_index_entry_t<typename lookup::interface_type,
-                                         typename lookup::key, entries>;
+private:
+  using lookup = index_lookup_arg<Arg>;
+  using entries = normalize_index_definitions_t<Definitions>;
+  using entry = selected_index_entry_t<typename lookup::interface_type,
+                                       typename lookup::key, entries>;
 
-  public:
-    using type = typename index_entry_tag<entry>::type;
+public:
+  using type = typename index_entry_tag<entry>::type;
 };
 
 template <typename Entry, typename Value, typename Allocator>
 struct index_holder {
-    using index_type = index_storage<typename Entry::tag, typename Entry::key,
-                                     Value, Allocator>;
-    static_assert(std::is_constructible_v<index_type, Allocator&>,
-                  "index backend must be constructible from Allocator&");
-    static_assert(
-        has_index_storage_contract_v<index_type, typename Entry::key, Value>,
-        "index backend must provide bool emplace(Key, Value) and Value* "
-        "find(Key)");
+  using index_type =
+      index_storage<typename Entry::tag, typename Entry::key, Value, Allocator>;
+  static_assert(std::is_constructible_v<index_type, Allocator &>,
+                "index backend must be constructible from Allocator&");
+  static_assert(
+      has_index_storage_contract_v<index_type, typename Entry::key, Value>,
+      "index backend must provide bool emplace(Key, Value) and Value* "
+      "find(Key)");
 
-    explicit index_holder(Allocator& allocator)
-        : index_(allocator) {}
+  explicit index_holder(Allocator &allocator) : index_(allocator) {}
 
-    index_type& get(Allocator& allocator) {
-        if (!index_) {
-            index_.emplace(allocator);
-        }
-        return *index_;
+  index_type &get(Allocator &allocator) {
+    if (!index_) {
+      index_.emplace(allocator);
     }
+    return *index_;
+  }
 
-  private:
-    allocator_ptr<index_type, Allocator> index_;
+private:
+  allocator_ptr<index_type, Allocator> index_;
 };
 
 template <typename Entries, typename Value, typename Allocator>
@@ -260,73 +259,72 @@ struct index_bindings_impl;
 
 template <typename Value, typename Allocator>
 struct index_bindings_impl<type_list<>, Value, Allocator> {
-    index_bindings_impl(Allocator&) {}
+  index_bindings_impl(Allocator &) {}
 
-    template <typename Interface, typename Key> void get_index(Allocator&) {
-        static_assert(index_dependent_false_v<Interface, Key>,
-                      "indexed registration or lookup has no matching "
-                      "dingo index definition for interface/key");
-    }
+  template <typename Interface, typename Key> void get_index(Allocator &) {
+    static_assert(index_dependent_false_v<Interface, Key>,
+                  "indexed registration or lookup has no matching "
+                  "dingo index definition for interface/key");
+  }
 };
 
 template <typename Value, typename Allocator, typename... Entries>
 struct index_bindings_impl<type_list<Entries...>, Value, Allocator> {
-    index_bindings_impl(Allocator& allocator)
-        : indexes_(index_holder<Entries, Value, Allocator>(allocator)...) {
-        static_assert(!has_duplicate_index_slot_v<type_list<Entries...>>,
-                      "duplicate dingo index definition for interface/key");
-    }
+  index_bindings_impl(Allocator &allocator)
+      : indexes_(index_holder<Entries, Value, Allocator>(allocator)...) {
+    static_assert(!has_duplicate_index_slot_v<type_list<Entries...>>,
+                  "duplicate dingo index definition for interface/key");
+  }
 
-    template <typename Interface, typename Key>
-    decltype(auto) get_index(Allocator& allocator) {
-        using entry =
-            selected_index_entry_t<Interface, Key, type_list<Entries...>>;
-        if constexpr (std::is_void_v<entry>) {
-            static_assert(!std::is_void_v<entry>,
-                          "indexed registration or lookup has no matching "
-                          "dingo index definition for interface/key");
-        } else {
-            return std::get<index_holder<entry, Value, Allocator>>(indexes_)
-                .get(allocator);
-        }
+  template <typename Interface, typename Key>
+  decltype(auto) get_index(Allocator &allocator) {
+    using entry = selected_index_entry_t<Interface, Key, type_list<Entries...>>;
+    if constexpr (std::is_void_v<entry>) {
+      static_assert(!std::is_void_v<entry>,
+                    "indexed registration or lookup has no matching "
+                    "dingo index definition for interface/key");
+    } else {
+      return std::get<index_holder<entry, Value, Allocator>>(indexes_).get(
+          allocator);
     }
+  }
 
-  private:
-    std::tuple<index_holder<Entries, Value, Allocator>...> indexes_;
+private:
+  std::tuple<index_holder<Entries, Value, Allocator>...> indexes_;
 };
 
 template <typename Definitions, typename Value, typename Allocator>
 struct index_bindings
     : index_bindings_impl<normalize_index_definitions_t<Definitions>, Value,
                           Allocator> {
-    using base = index_bindings_impl<normalize_index_definitions_t<Definitions>,
-                                     Value, Allocator>;
-    using base::base;
+  using base = index_bindings_impl<normalize_index_definitions_t<Definitions>,
+                                   Value, Allocator>;
+  using base::base;
 };
 
 template <typename Value, typename Allocator> struct empty_index_bindings {
-    empty_index_bindings(Allocator&) {}
+  empty_index_bindings(Allocator &) {}
 
-    template <typename Interface, typename Key> struct empty_index {
-        Value* find(const Key&) { return nullptr; }
-    };
+  template <typename Interface, typename Key> struct empty_index {
+    Value *find(const Key &) { return nullptr; }
+  };
 
-    template <typename Interface, typename Key>
-    empty_index<Interface, Key> get_index(Allocator&) {
-        return {};
-    }
+  template <typename Interface, typename Key>
+  empty_index<Interface, Key> get_index(Allocator &) {
+    return {};
+  }
 };
 
 template <typename Value, typename Allocator>
 struct index_bindings<std::tuple<>, Value, Allocator>
     : empty_index_bindings<Value, Allocator> {
-    using empty_index_bindings<Value, Allocator>::empty_index_bindings;
+  using empty_index_bindings<Value, Allocator>::empty_index_bindings;
 };
 
 template <typename Value, typename Allocator>
 struct index_bindings<::dingo::indexes<>, Value, Allocator>
     : empty_index_bindings<Value, Allocator> {
-    using empty_index_bindings<Value, Allocator>::empty_index_bindings;
+  using empty_index_bindings<Value, Allocator>::empty_index_bindings;
 };
 } // namespace detail
 

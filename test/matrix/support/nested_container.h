@@ -10,15 +10,15 @@
 namespace dingo::matrix {
 
 struct nested_value_type {
-    explicit nested_value_type(int dependency) : value(dependency) {}
+  explicit nested_value_type(int dependency) : value(dependency) {}
 
-    int value;
+  int value;
 };
 
 struct nested_parent_value_type {
-    explicit nested_parent_value_type(int dependency) : value(dependency) {}
+  explicit nested_parent_value_type(int dependency) : value(dependency) {}
 
-    int value;
+  int value;
 };
 
 } // namespace dingo::matrix

@@ -9,8 +9,8 @@
 
 #include <dingo/core/config.h>
 
-#include <dingo/registration/annotated.h>
 #include <dingo/core/keyed.h>
+#include <dingo/registration/annotated.h>
 #include <dingo/type/type_traits.h>
 
 #include <type_traits>
@@ -19,29 +19,26 @@ namespace dingo {
 template <class T, class = void> struct normalized_type : std::decay<T> {};
 
 template <class T> struct normalized_type<const T> : normalized_type<T> {};
-template <class T, size_t N>
-struct normalized_type<T (*)[N], void> {
-    using type = T[N];
+template <class T, size_t N> struct normalized_type<T (*)[N], void> {
+  using type = T[N];
+};
+template <class T, size_t N> struct normalized_type<const T (*)[N], void> {
+  using type = T[N];
+};
+template <class T, size_t N> struct normalized_type<T (&)[N], void> {
+  using type = T[N];
+};
+template <class T, size_t N> struct normalized_type<const T (&)[N], void> {
+  using type = T[N];
 };
 template <class T, size_t N>
-struct normalized_type<const T (*)[N], void> {
-    using type = T[N];
-};
-template <class T, size_t N>
-struct normalized_type<T (&)[N], void> {
-    using type = T[N];
-};
-template <class T, size_t N>
-struct normalized_type<const T (&)[N], void> {
-    using type = T[N];
-};
-template <class T, size_t N> struct normalized_type<T[N]> : normalized_type<T> {};
+struct normalized_type<T[N]> : normalized_type<T> {};
 template <class T> struct normalized_type<T[]> : normalized_type<T> {};
-template <class T> struct normalized_type<T*> : normalized_type<T> {};
-template <class T> struct normalized_type<const T*> : normalized_type<T> {};
-template <class T> struct normalized_type<T&> : normalized_type<T> {};
-template <class T> struct normalized_type<const T&> : normalized_type<T> {};
-template <class T> struct normalized_type<T&&> : normalized_type<T> {};
+template <class T> struct normalized_type<T *> : normalized_type<T> {};
+template <class T> struct normalized_type<const T *> : normalized_type<T> {};
+template <class T> struct normalized_type<T &> : normalized_type<T> {};
+template <class T> struct normalized_type<const T &> : normalized_type<T> {};
+template <class T> struct normalized_type<T &&> : normalized_type<T> {};
 
 template <class T>
 struct normalized_type<
@@ -58,7 +55,8 @@ struct normalized_type<keyed<T, Key>, void>
 
 template <class T, class Selector>
 struct normalized_type<detail::selected<T, Selector>, void>
-    : std::decay<detail::selected<typename normalized_type<T>::type, Selector>> {};
+    : std::decay<
+          detail::selected<typename normalized_type<T>::type, Selector>> {};
 
 template <class T> using normalized_type_t = typename normalized_type<T>::type;
 } // namespace dingo

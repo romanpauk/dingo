@@ -11,20 +11,20 @@
 
 ////
 struct A {
-    A(int);      // Definition is not required as constructor is not called
-    A(double) {} // Definition is required as constructor is called
+  A(int);      // Definition is not required as constructor is not called
+  A(double) {} // Definition is required as constructor is called
 };
 
 ////
 int main() {
-    using namespace dingo;
-    ////
-    container<> container;
-    container.register_type<scope<external>, storage<double>>(1.1);
+  using namespace dingo;
+  ////
+  container<> container;
+  container.register_type<scope<external>, storage<double>>(1.1);
 
-    // Register A with the explicitly selected A(double) constructor.
-    // Manual disambiguation is required to avoid a compile-time assertion.
-    container.register_type<scope<unique>, storage<A>,
-                            factory<constructor<A(double)>>>();
-    ////
+  // Register A with the explicitly selected A(double) constructor.
+  // Manual disambiguation is required to avoid a compile-time assertion.
+  container.register_type<scope<unique>, storage<A>,
+                          factory<constructor<A(double)>>>();
+  ////
 }

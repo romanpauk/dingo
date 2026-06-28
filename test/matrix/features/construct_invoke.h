@@ -14,14 +14,14 @@
 namespace dingo::matrix {
 
 template <typename Case> void run_construct_invoke() {
-    Case::with_container([](auto& container) {
-        auto constructed = container.template construct<dependent_type>();
-        ASSERT_EQ(constructed.value, 3);
+  Case::with_container([](auto &container) {
+    auto constructed = container.template construct<dependent_type>();
+    ASSERT_EQ(constructed.value, 3);
 
-        auto invoked = container.invoke(
-            [](value_type& dependency) { return dependency.marker(); });
-        ASSERT_EQ(invoked, 3);
-    });
+    auto invoked = container.invoke(
+        [](value_type &dependency) { return dependency.marker(); });
+    ASSERT_EQ(invoked, 3);
+  });
 }
 
 } // namespace dingo::matrix

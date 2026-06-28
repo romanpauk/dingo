@@ -52,7 +52,7 @@ Example code included from
 
 ```c++
 struct IAnimal {
-    virtual ~IAnimal() {}
+  virtual ~IAnimal() {}
 };
 
 struct Dog : IAnimal {};
@@ -60,8 +60,8 @@ struct Cat : IAnimal {};
 
 // Declare traits with std::string based index
 struct container_traits : dynamic_container_traits {
-    using index_definition_type =
-        indexes<index<IAnimal, std::string, index_type::unordered_map>>;
+  using index_definition_type =
+      indexes<index<IAnimal, std::string, index_type::unordered_map>>;
 };
 
 container<container_traits> container;
@@ -86,58 +86,57 @@ Example code included from
 // Declare Messages and a wrapper that can hold one of the messages,
 // resembling protobuf structure
 struct MessageA {
-    int value;
+  int value;
 };
 struct MessageB {
-    float value;
+  float value;
 };
 
 struct MessageWrapper {
-    template <typename T> MessageWrapper(T&& message) {
-        messages_ = std::forward<T>(message);
-    }
+  template <typename T> MessageWrapper(T &&message) {
+    messages_ = std::forward<T>(message);
+  }
 
-    size_t id() const { return messages_.index(); }
-    const MessageA& GetA() const { return std::get<MessageA>(messages_); }
-    const MessageB& GetB() const { return std::get<MessageB>(messages_); }
+  size_t id() const { return messages_.index(); }
+  const MessageA &GetA() const { return std::get<MessageA>(messages_); }
+  const MessageB &GetB() const { return std::get<MessageB>(messages_); }
 
-  private:
-    std::variant<std::monostate, MessageA, MessageB> messages_;
+private:
+  std::variant<std::monostate, MessageA, MessageB> messages_;
 };
 
 // Declare message processor hierarchy with dependencies
 struct IProcessor {
-    virtual ~IProcessor() {}
-    virtual void process(const MessageWrapper&) = 0;
+  virtual ~IProcessor() {}
+  virtual void process(const MessageWrapper &) = 0;
 };
 
 struct RepositoryA {};
 struct ProcessorA : IProcessor {
-    ProcessorA(RepositoryA&) {}
-    void process(const MessageWrapper& message) override { message.GetA(); }
+  ProcessorA(RepositoryA &) {}
+  void process(const MessageWrapper &message) override { message.GetA(); }
 };
 
 struct RepositoryB {};
 struct ProcessorB : IProcessor {
-    ProcessorB(RepositoryB&) {}
-    void process(const MessageWrapper& message) override { message.GetB(); }
+  ProcessorB(RepositoryB &) {}
+  void process(const MessageWrapper &message) override { message.GetB(); }
 };
 
 struct Pipeline {
-    Pipeline(
-        dingo::indexed<IProcessor&, dingo::key<size_t, 1>> first_processor,
-        dingo::indexed<IProcessor&, dingo::key<size_t, 2>> second_processor)
-        : first(first_processor), second(second_processor) {}
+  Pipeline(dingo::indexed<IProcessor &, dingo::key<size_t, 1>> first_processor,
+           dingo::indexed<IProcessor &, dingo::key<size_t, 2>> second_processor)
+      : first(first_processor), second(second_processor) {}
 
-    IProcessor& first;
-    IProcessor& second;
+  IProcessor &first;
+  IProcessor &second;
 };
 
 // Define traits type with a single index using size_t as a key,
 // backed by a std::array of size 10
 struct container_traits : static_container_traits<void> {
-    using index_definition_type =
-        indexes<index<IProcessor, size_t, index_type::array<10>>>;
+  using index_definition_type =
+      indexes<index<IProcessor, size_t, index_type::array<10>>>;
 };
 
 container<container_traits> container;
@@ -158,14 +157,14 @@ auto pipeline = container.construct<Pipeline>();
 
 // Invokes the processor for MessageA that is stateful
 {
-    MessageWrapper msg((MessageA{1}));
-    container.template resolve<IProcessor&>(msg.id()).process(msg);
+  MessageWrapper msg((MessageA{1}));
+  container.template resolve<IProcessor &>(msg.id()).process(msg);
 }
 
 // Invokes the processor for MessageB that is stateless
 {
-    MessageWrapper msg((MessageB{1.1f}));
-    container.template resolve<IProcessor&>(msg.id()).process(msg);
+  MessageWrapper msg((MessageB{1.1f}));
+  container.template resolve<IProcessor &>(msg.id()).process(msg);
 }
 ```
 
@@ -196,25 +195,25 @@ struct primary_tag {};
 struct replica_tag {};
 
 struct database {
-    int id;
+  int id;
 };
 
 struct repository {
-    repository(dingo::annotated<database&, primary_tag> primary_db,
-               dingo::annotated<database&, replica_tag> replica_db)
-        : primary(primary_db), replica(replica_db) {}
+  repository(dingo::annotated<database &, primary_tag> primary_db,
+             dingo::annotated<database &, replica_tag> replica_db)
+      : primary(primary_db), replica(replica_db) {}
 
-    database& primary;
-    database& replica;
+  database &primary;
+  database &replica;
 };
 
 database primary{1};
 database replica{2};
 container<> container;
 
-container.register_type<scope<external>, storage<database*>,
+container.register_type<scope<external>, storage<database *>,
                         interfaces<annotated<database, primary_tag>>>(&primary);
-container.register_type<scope<external>, storage<database*>,
+container.register_type<scope<external>, storage<database *>,
                         interfaces<annotated<database, replica_tag>>>(&replica);
 container.register_type<scope<unique>, storage<repository>>();
 
@@ -290,10 +289,10 @@ Example code included from
 
 ```c++
 struct A {
-    int value;
+  int value;
 };
 struct B {
-    int value;
+  int value;
 };
 
 container<> base_container;

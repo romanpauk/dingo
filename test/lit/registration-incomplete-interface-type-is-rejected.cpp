@@ -7,11 +7,9 @@ struct service {};
 struct incomplete_interface;
 
 int main() {
-    dingo::container<> container;
-    container.register_type<
-        dingo::scope<dingo::unique>,
-        dingo::storage<service>,
-        dingo::interfaces<incomplete_interface>>();
+  dingo::container<> container;
+  container.register_type<dingo::scope<dingo::unique>, dingo::storage<service>,
+                          dingo::interfaces<incomplete_interface>>();
 }
 
 // CHECK: registered interfaces must be complete

@@ -53,6 +53,10 @@ if(DINGO_DEVELOPMENT_MODE)
     include(cmake/md.cmake)
     include(cmake/sanitizers.cmake)
 
+    add_custom_target(check
+        DEPENDS check-format md-verify
+    )
+
     set(CMAKE_CXX_STANDARD 17 CACHE STRING "c++ standard")
     set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
     set(CMAKE_CXX_EXTENSIONS OFF)

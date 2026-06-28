@@ -6,22 +6,23 @@
 struct b;
 
 struct a {
-    explicit a(b&) {}
+  explicit a(b &) {}
 };
 
 struct b {
-    explicit b(a&) {}
+  explicit b(a &) {}
 };
 
 int main() {
-    dingo::container<> container;
-    container.register_type<
-        dingo::scope<dingo::shared>, dingo::storage<int>,
-        dingo::bindings<
-            dingo::bind<dingo::scope<dingo::shared>, dingo::storage<a>,
-                        dingo::dependencies<b&>>,
-            dingo::bind<dingo::scope<dingo::shared>, dingo::storage<b>,
-                        dingo::dependencies<a&>>>>();
+  dingo::container<> container;
+  container.register_type<
+      dingo::scope<dingo::shared>, dingo::storage<int>,
+      dingo::bindings<
+          dingo::bind<dingo::scope<dingo::shared>, dingo::storage<a>,
+                      dingo::dependencies<b &>>,
+          dingo::bind<dingo::scope<dingo::shared>, dingo::storage<b>,
+                      dingo::dependencies<a &>>>>();
 }
 
-// CHECK: register_type bindings<...> requires a resolvable compile-time binding graph
+// CHECK: register_type bindings<...> requires a resolvable compile-time binding
+// graph

@@ -5,16 +5,17 @@
 
 struct dependency {};
 struct service {
-    explicit service(dependency&) {}
+  explicit service(dependency &) {}
 };
 
 using source = dingo::bindings<
     dingo::bind<dingo::scope<dingo::unique>, dingo::storage<service>,
-                dingo::dependencies<dependency&>>>;
+                dingo::dependencies<dependency &>>>;
 
 int main() {
-    dingo::static_container<source> instance;
-    (void)instance;
+  dingo::static_container<source> instance;
+  (void)instance;
 }
 
-// CHECK: bindings<...> source requires every declared dependency to map to an interface binding
+// CHECK: bindings<...> source requires every declared dependency to map to an
+// interface binding

@@ -14,15 +14,15 @@
 namespace dingo::matrix {
 
 struct variant_a {
-    explicit variant_a(value_type& dependency) : value(dependency.marker()) {}
+  explicit variant_a(value_type &dependency) : value(dependency.marker()) {}
 
-    int value;
+  int value;
 };
 
 struct variant_b {
-    explicit variant_b(int init) : value(init) {}
+  explicit variant_b(int init) : value(init) {}
 
-    int value;
+  int value;
 };
 
 } // namespace dingo::matrix

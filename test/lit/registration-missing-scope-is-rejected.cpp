@@ -5,8 +5,6 @@
 using registration = dingo::type_registration<dingo::storage<int>>;
 using scope_type = typename registration::scope_type;
 
-int main() {
-    return sizeof(scope_type);
-}
+int main() { return sizeof(scope_type); }
 
 // CHECK: failed to deduce a scope type

@@ -16,12 +16,12 @@
 namespace dingo {
 
 template <typename T> struct test : public testing::Test {
-    virtual void SetUp() {
-        ClassTag<0>::ClearStats();
-        ClassTag<1>::ClearStats();
-        ClassTag<2>::ClearStats();
-    }
+  virtual void SetUp() {
+    ClassTag<0>::ClearStats();
+    ClassTag<1>::ClearStats();
+    ClassTag<2>::ClearStats();
+  }
 
-    virtual void TearDown() {}
+  virtual void TearDown() {}
 };
 } // namespace dingo

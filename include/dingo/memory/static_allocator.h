@@ -7,42 +7,42 @@
 
 #pragma once
 
-#include <dingo/memory/aligned_storage.h>
 #include <dingo/core/config.h>
+#include <dingo/memory/aligned_storage.h>
 
 #include <cassert>
 
 namespace dingo {
 
 template <typename T, typename Tag> class static_allocator {
-  public:
-    using value_type = T;
+public:
+  using value_type = T;
 
-    static_allocator() noexcept {}
-    template <typename U>
-    static_allocator(const static_allocator<U, Tag>&) noexcept {}
+  static_allocator() noexcept {}
+  template <typename U>
+  static_allocator(const static_allocator<U, Tag> &) noexcept {}
 
-    value_type* allocate(std::size_t n) {
-        (void)n;
-        assert(n == 1);
-        if (used_)
-            return nullptr;
-        used_ = true;
-        return reinterpret_cast<value_type*>(&storage_);
-    }
+  value_type *allocate(std::size_t n) {
+    (void)n;
+    assert(n == 1);
+    if (used_)
+      return nullptr;
+    used_ = true;
+    return reinterpret_cast<value_type *>(&storage_);
+  }
 
-    void deallocate(value_type* p, std::size_t n) noexcept {
-        (void)p;
-        (void)n;
-        assert(used_);
-        assert(n == 1);
-        assert(p == reinterpret_cast<value_type*>(&storage_));
-        used_ = false;
-    }
+  void deallocate(value_type *p, std::size_t n) noexcept {
+    (void)p;
+    (void)n;
+    assert(used_);
+    assert(n == 1);
+    assert(p == reinterpret_cast<value_type *>(&storage_));
+    used_ = false;
+  }
 
-  private:
-    static dingo::aligned_storage_t<sizeof(T), alignof(T)> storage_;
-    static bool used_;
+private:
+  static dingo::aligned_storage_t<sizeof(T), alignof(T)> storage_;
+  static bool used_;
 };
 
 template <typename T, typename Tag> bool static_allocator<T, Tag>::used_;

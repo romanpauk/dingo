@@ -6,11 +6,9 @@
 struct service {};
 
 int main() {
-    dingo::container<> container;
-    container.register_type<
-        dingo::scope<dingo::unique>,
-        dingo::storage<service>,
-        dingo::interfaces<service&>>();
+  dingo::container<> container;
+  container.register_type<dingo::scope<dingo::unique>, dingo::storage<service>,
+                          dingo::interfaces<service &>>();
 }
 
 // CHECK: interfaces must not contain reference types

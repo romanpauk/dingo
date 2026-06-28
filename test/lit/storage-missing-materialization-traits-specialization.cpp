@@ -5,8 +5,9 @@
 struct custom_storage_tag {};
 
 int main() {
-    return dingo::storage_materialization_traits<custom_storage_tag, int>::
-        preserves_closure(0);
+  return dingo::storage_materialization_traits<custom_storage_tag,
+                                               int>::preserves_closure(0);
 }
 
-// CHECK: storage_materialization_traits must be specialized for this storage tag
+// CHECK: storage_materialization_traits must be specialized for this storage
+// tag
