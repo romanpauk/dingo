@@ -1,5 +1,6 @@
 InheritParentConfig: true
 Checks: >
+  -bugprone-empty-catch,
   -bugprone-exception-escape
 CheckOptions:
   - key: performance-unnecessary-value-param.AllowedTypes
