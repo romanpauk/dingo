@@ -363,7 +363,6 @@ jobs:
       vs_label: vs2022
       cross_runner: windows-2022
       cross_generator: Visual Studio 17 2022
-      native_generator: Visual Studio 17 2022
       config_id: ${{ matrix.config.id }}
       config_label: ${{ matrix.config.label }}
       std: ${{ matrix.std }}
