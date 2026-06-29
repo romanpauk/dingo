@@ -1,7 +1,6 @@
 // RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
 
 #include <dingo/container.h>
-#include <dingo/index/array.h>
 #include <dingo/storage/shared.h>
 
 #include <cstddef>
@@ -15,8 +14,8 @@ struct consumer {
 };
 
 struct traits : dingo::dynamic_container_traits {
-  using index_definition_type = dingo::indexes<
-      dingo::index<processor, std::size_t, dingo::index_type::array<2>>>;
+  using index_definition_type =
+      dingo::selectors<dingo::associative<processor, std::size_t>>;
 };
 
 int main() {

@@ -156,12 +156,12 @@ fixture type needed by that case.
 - `static_container<bindings<...>>`
 - `container<bindings<...>>` using only static bindings
 - `container<bindings<...>>` using static and runtime registrations
-- `runtime_container<indexed_traits<map>>`
-- `container<indexed_traits<map>>`
-- `runtime_container<indexed_traits<unordered_map>>`
-- `container<indexed_traits<unordered_map>>`
-- `runtime_container<indexed_traits<array>>`
-- `container<indexed_traits<array>>`
+- `runtime_container<indexed_traits<std::size_t>>`
+- `container<indexed_traits<std::size_t>>`
+- `runtime_container<indexed_traits<int>>`
+- `container<indexed_traits<int>>`
+- `runtime_container<indexed_traits<std::string>>`
+- `container<indexed_traits<std::string>>`
 - `runtime_container<indexed_dsl_traits>`
 - `container<indexed_dsl_traits>`
 - allocator-parameterized `container`

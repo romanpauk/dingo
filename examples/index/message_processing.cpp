@@ -6,7 +6,6 @@
 //
 
 #include <dingo/container.h>
-#include <dingo/index/array.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 
@@ -67,12 +66,12 @@ int main() {
   using namespace dingo;
 
   ////
-  // Define traits type with a single index using size_t as a key,
-  // backed by a std::array of size 10
-  struct container_traits : dynamic_container_traits {
-    using index_definition_type =
-        indexes<index<IProcessor, size_t, index_type::array<10>>>;
+  // Define traits type with a single selector using size_t as a key
+  struct container_traits : static_container_traits<void> {
+    using index_definition_type = selectors<associative<IProcessor, size_t>>;
   };
+  // Runtime selector projections use dynamic internal storage even when this
+  // example uses static_container_traits for the rest of the container.
 
   container<container_traits> container;
 

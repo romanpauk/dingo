@@ -609,10 +609,11 @@ struct IProcessor {
 
 template <size_t N> struct Processor : IProcessor {};
 
-container<> container;
-// Register multi-bindings collection
-container.template register_type_collection<
-    scope<shared>, storage<std::vector<IProcessor *>>>();
+struct container_traits : dynamic_container_traits {
+  using index_definition_type = selectors<collection<IProcessor>>;
+};
+
+container<container_traits> container;
 
 // Register types under the same interface
 container.template register_type<scope<shared>, storage<Processor<0>>,

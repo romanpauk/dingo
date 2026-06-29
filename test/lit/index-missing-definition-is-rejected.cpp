@@ -1,7 +1,6 @@
 // RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
 
 #include <dingo/container.h>
-#include <dingo/index/array.h>
 #include <dingo/storage/shared.h>
 
 #include <cstddef>
@@ -10,8 +9,8 @@ struct processor {};
 struct animal {};
 
 struct traits : dingo::dynamic_container_traits {
-  using index_definition_type = dingo::indexes<
-      dingo::index<animal, std::size_t, dingo::index_type::array<2>>>;
+  using index_definition_type =
+      dingo::selectors<dingo::associative<animal, std::size_t>>;
 };
 
 int main() {
@@ -21,5 +20,5 @@ int main() {
                                   dingo::interfaces<processor>>(std::size_t(1));
 }
 
-// CHECK: indexed registration or lookup has no matching dingo index definition
-// for interface/key
+// CHECK: indexed registration or lookup has no matching dingo selector
+// definition for interface/key

@@ -115,10 +115,6 @@ if(DINGO_DEVELOPMENT_MODE)
         factory/function.h
         factory/invoke.h
         index/index.h
-        index/array.h
-        index/map.h
-        index/sequence.h
-        index/unordered_map.h
         memory/aligned_storage.h
         memory/allocator.h
         memory/arena_allocator.h

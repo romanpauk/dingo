@@ -12,23 +12,57 @@ Use indexes when:
 
 - multiple implementations share the same interface
 - the caller chooses the implementation by name or numeric ID
-- the lookup structure should be a specific container type
-
-Built-in index backends:
-
-- `index_type::associative<std::map>`
-- `index_type::associative<std::unordered_map>`
-- `index_type::sequence<std::vector>`
-- `index_type::array<N>`
+- the binding should remain separate from unkeyed resolution
 
 Index definitions are scoped to the interface they serve. Every indexed
-registration or lookup requires a matching `(Interface, Key)` definition.
+registration or lookup requires a matching selector definition.
 
-Custom backends can specialize
-`dingo::detail::index_storage<Backend, Key, Value, Allocator>`. The
-specialization must satisfy an associative container contract:
-`emplace(Key, Value)` returning a result with `.second`, `find(Key)`, `end()`,
-and iterators whose dereferenced value has `.second`.
+Selector definitions can also make unkeyed runtime registrations explicit for an
+interface:
+
+```c++
+struct container_traits : dynamic_container_traits {
+  using index_definition_type = selectors<collection<IProcessor>>;
+};
+```
+
+`collection<I>` makes unkeyed collection membership explicit:
+`resolve<std::vector<I *>>()` enumerates the registrations in registration
+order, while singular `resolve<I &>()` succeeds only when exactly one
+registration matches. If no `no_key` selector is declared for an interface,
+unkeyed registration and collection resolution keep their existing behavior.
+
+Runtime-keyed lookups use `associative<I, K>` for unique lookup and
+`associative<I, K, many>` for keyed collections:
+
+```c++
+struct container_traits : dynamic_container_traits {
+  using index_definition_type =
+      selectors<associative<IProcessor, std::size_t>,
+                associative<IHandler, std::string, many>>;
+};
+```
+
+Typed-key registrations can also use explicit selector projections:
+
+```c++
+struct container_traits : dynamic_container_traits {
+  using index_definition_type =
+      selectors<selector<IProcessor, typed_key<Primary>, one>>;
+};
+```
+
+`selector<I, typed_key<K>, one>` gives `register_type<interfaces<I>, key<K>>()`
+singular identity for that interface and key type.
+`selector<I, typed_key<K>, many>` makes `resolve<std::vector<I *>>(key<K>{})`
+enumerate keyed collection members in registration order. A singular typed-key
+resolve succeeds only when the matching `many` projection contains exactly one
+registration. If no `typed_key` selector is declared for an interface/key pair,
+typed-key registration and resolution keep their existing behavior.
+
+Selector projection storage is internal and backend-independent. Applications
+should declare the interface, key domain, and cardinality they need instead of
+selecting storage for the projection.
 
 Constructor dependencies can also bind to a fixed indexed key:
 
@@ -39,10 +73,10 @@ struct Pipeline {
 };
 ```
 
-This is backend-independent. `indexed<IProcessor&, key<std::size_t, 1>>`
-resolves the same object as `container.resolve<IProcessor&>(std::size_t{1})`;
-the configured `(IProcessor, std::size_t)` index can be a sequence, associative
-container, fixed array, or a custom backend.
+`indexed<IProcessor&, key<std::size_t, 1>>` resolves the same object as
+`container.resolve<IProcessor&>(std::size_t{1})`; the configured
+`(IProcessor, std::size_t)` selector determines the lookup domain and
+cardinality, while the projection storage remains an implementation detail.
 
 The value in `key<T, Value>` must be a valid non-type template parameter and
 must be usable as `T{Value}`. Class-type values such as `key<MyKey, MyKey{1}>`
@@ -61,10 +95,9 @@ struct IAnimal {
 struct Dog : IAnimal {};
 struct Cat : IAnimal {};
 
-// Declare traits with std::string based index
+// Declare traits with a std::string based selector
 struct container_traits : dynamic_container_traits {
-  using index_definition_type = indexes<
-      index<IAnimal, std::string, index_type::associative<std::unordered_map>>>;
+  using index_definition_type = selectors<associative<IAnimal, std::string>>;
 };
 
 container<container_traits> container;
@@ -135,12 +168,12 @@ struct Pipeline {
   IProcessor &second;
 };
 
-// Define traits type with a single index using size_t as a key,
-// backed by a std::array of size 10
-struct container_traits : dynamic_container_traits {
-  using index_definition_type =
-      indexes<index<IProcessor, size_t, index_type::array<10>>>;
+// Define traits type with a single selector using size_t as a key
+struct container_traits : static_container_traits<void> {
+  using index_definition_type = selectors<associative<IProcessor, size_t>>;
 };
+// Runtime selector projections use dynamic internal storage even when this
+// example uses static_container_traits for the rest of the container.
 
 container<container_traits> container;
 
@@ -176,10 +209,6 @@ auto pipeline = container.construct<Pipeline>();
 See:
 
 - [include/dingo/index/index.h](../include/dingo/index/index.h)
-- [include/dingo/index/map.h](../include/dingo/index/map.h)
-- [include/dingo/index/unordered_map.h](../include/dingo/index/unordered_map.h)
-- [include/dingo/index/sequence.h](../include/dingo/index/sequence.h)
-- [include/dingo/index/array.h](../include/dingo/index/array.h)
 
 ## Annotated Types
 

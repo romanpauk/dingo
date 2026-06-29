@@ -6,7 +6,6 @@
 //
 
 #include <dingo/container.h>
-#include <dingo/index/unordered_map.h>
 #include <dingo/storage/shared.h>
 
 #include <string>
@@ -23,11 +22,9 @@ struct Cat : IAnimal {};
 int main() {
   using namespace dingo;
   ////
-  // Declare traits with std::string based index
+  // Declare traits with a std::string based selector
   struct container_traits : dynamic_container_traits {
-    using index_definition_type =
-        indexes<index<IAnimal, std::string,
-                      index_type::associative<std::unordered_map>>>;
+    using index_definition_type = selectors<associative<IAnimal, std::string>>;
   };
 
   container<container_traits> container;

@@ -2,7 +2,6 @@
 // RUN: %dingo_cxx %s -o %t && %t
 
 #include <dingo/container.h>
-#include <dingo/index/unordered_map.h>
 #include <dingo/storage/shared.h>
 
 #include <cstddef>
@@ -64,8 +63,7 @@ struct string_literal_consumer {
 
 struct traits : dingo::dynamic_container_traits {
   using index_definition_type =
-      dingo::indexes<dingo::index<string_processor, dingo::key<std::string>,
-                                  dingo::index_type::unordered_map>>;
+      dingo::selectors<dingo::associative<string_processor, std::string>>;
 };
 
 int main() {

@@ -161,7 +161,7 @@ PROBE_LIMITS = {
         "default": 0x420,
         "clang": 0x940,
         "clang_arm64": 0x740,
-        "gcc15": 0x440,
+        "gcc15": 0x460,
         "gcc_arm64": 0x500,
     },
     "probe_runtime_resolution_mixed_container_external_wrapper_storage": {

@@ -15,5 +15,5 @@ int main() {
   return container.resolve<processor>(std::size_t(1)).value;
 }
 
-// CHECK: indexed registration or lookup has no matching dingo index definition
-// CHECK: for interface/key
+// CHECK: indexed registration or lookup has no matching dingo selector
+// CHECK: definition for interface/key

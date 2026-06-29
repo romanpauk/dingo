@@ -6,9 +6,6 @@
 //
 
 #include <dingo/container.h>
-#include <dingo/index/array.h>
-#include <dingo/index/map.h>
-#include <dingo/index/unordered_map.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
@@ -96,50 +93,28 @@ static void index_ptr_shared(benchmark::State &state) {
   state.SetBytesProcessed(state.iterations());
 }
 
-template <typename IndexType>
-struct dynamic_container_traits : dingo::dynamic_container_traits {
+struct static_container_traits : dingo::static_container_traits<void> {
   using index_definition_type =
-      dingo::indexes<dingo::index<IProcessor, size_t, IndexType>>;
+      dingo::selectors<dingo::associative<IProcessor, size_t>>;
 };
 
-BENCHMARK_TEMPLATE(
-    index_value_shared,
-    dingo::container<dynamic_container_traits<dingo::index_type::array<10>>>)
+BENCHMARK_TEMPLATE(index_value_shared,
+                   dingo::container<static_container_traits>)
     ->UseRealTime();
-BENCHMARK_TEMPLATE(
-    index_value_shared,
-    dingo::container<dynamic_container_traits<dingo::index_type::map>>)
-    ->UseRealTime();
-BENCHMARK_TEMPLATE(
-    index_value_shared,
-    dingo::container<
-        dynamic_container_traits<dingo::index_type::unordered_map>>)
+BENCHMARK_TEMPLATE(index_ptr_shared, dingo::container<static_container_traits>)
     ->UseRealTime();
 
-BENCHMARK_TEMPLATE(
-    index_ptr_shared,
-    dingo::container<dynamic_container_traits<dingo::index_type::array<10>>>)
-    ->UseRealTime();
-BENCHMARK_TEMPLATE(
-    index_ptr_shared,
-    dingo::container<dynamic_container_traits<dingo::index_type::map>>)
-    ->UseRealTime();
-BENCHMARK_TEMPLATE(
-    index_ptr_shared,
-    dingo::container<
-        dynamic_container_traits<dingo::index_type::unordered_map>>)
+struct dynamic_container_traits : dingo::dynamic_container_traits {
+  using index_definition_type =
+      dingo::selectors<dingo::associative<IProcessor, size_t>>;
+};
+
+BENCHMARK_TEMPLATE(index_value_shared,
+                   dingo::container<dynamic_container_traits>)
     ->UseRealTime();
 
-BENCHMARK_TEMPLATE(
-    index_ptr_unique,
-    dingo::container<dynamic_container_traits<dingo::index_type::array<10>>>)
+BENCHMARK_TEMPLATE(index_ptr_shared, dingo::container<dynamic_container_traits>)
     ->UseRealTime();
-BENCHMARK_TEMPLATE(
-    index_ptr_unique,
-    dingo::container<dynamic_container_traits<dingo::index_type::map>>)
-    ->UseRealTime();
-BENCHMARK_TEMPLATE(
-    index_ptr_unique,
-    dingo::container<
-        dynamic_container_traits<dingo::index_type::unordered_map>>)
+
+BENCHMARK_TEMPLATE(index_ptr_unique, dingo::container<dynamic_container_traits>)
     ->UseRealTime();
