@@ -16,16 +16,19 @@ Use indexes when:
 
 Built-in index backends:
 
-- `std::map`
-- `std::unordered_map`
-- `std::array`
+- `index_type::associative<std::map>`
+- `index_type::associative<std::unordered_map>`
+- `index_type::sequence<std::vector>`
+- `index_type::array<N>`
 
 Index definitions are scoped to the interface they serve. Every indexed
 registration or lookup requires a matching `(Interface, Key)` definition.
 
 Custom backends can specialize
 `dingo::detail::index_storage<Backend, Key, Value, Allocator>`. The
-specialization must provide `bool emplace(Key, Value)` and `Value* find(Key)`.
+specialization must satisfy an associative container contract:
+`emplace(Key, Value)` returning a result with `.second`, `find(Key)`, `end()`,
+and iterators whose dereferenced value has `.second`.
 
 Constructor dependencies can also bind to a fixed indexed key:
 
@@ -38,8 +41,8 @@ struct Pipeline {
 
 This is backend-independent. `indexed<IProcessor&, key<std::size_t, 1>>`
 resolves the same object as `container.resolve<IProcessor&>(std::size_t{1})`;
-the configured `(IProcessor, std::size_t)` index can be `array`, `map`,
-`unordered_map`, or a custom backend.
+the configured `(IProcessor, std::size_t)` index can be a sequence, associative
+container, fixed array, or a custom backend.
 
 The value in `key<T, Value>` must be a valid non-type template parameter and
 must be usable as `T{Value}`. Class-type values such as `key<MyKey, MyKey{1}>`
@@ -60,8 +63,8 @@ struct Cat : IAnimal {};
 
 // Declare traits with std::string based index
 struct container_traits : dynamic_container_traits {
-  using index_definition_type =
-      indexes<index<IAnimal, std::string, index_type::unordered_map>>;
+  using index_definition_type = indexes<
+      index<IAnimal, std::string, index_type::associative<std::unordered_map>>>;
 };
 
 container<container_traits> container;
@@ -175,6 +178,7 @@ See:
 - [include/dingo/index/index.h](../include/dingo/index/index.h)
 - [include/dingo/index/map.h](../include/dingo/index/map.h)
 - [include/dingo/index/unordered_map.h](../include/dingo/index/unordered_map.h)
+- [include/dingo/index/sequence.h](../include/dingo/index/sequence.h)
 - [include/dingo/index/array.h](../include/dingo/index/array.h)
 
 ## Annotated Types

@@ -30,6 +30,46 @@ struct context_destructible {
   void (*dtor)(void *);
 };
 
+template <typename T, typename Context, typename Container>
+T resolve_context_request(Context &context, Container &container) {
+  if constexpr (is_selected_v<T>) {
+    using request_type = selected_type_t<T>;
+    using selector_type = selected_selector_t<T>;
+    if constexpr (is_type_selector_v<selector_type>) {
+      using key_type = type_selector_type_t<selector_type>;
+      return T(container.template resolve<request_type, false, true>(
+          context, key<key_type>{}));
+    } else if constexpr (is_value_selector_v<selector_type>) {
+      return T(container.template resolve<request_type, false, true>(
+          context, is_value_selector<selector_type>::make()));
+    } else {
+      static_assert(is_type_selector_v<selector_type> ||
+                        is_value_selector_v<selector_type>,
+                    "detail::selected<T, Selector> requires a type_selector "
+                    "or value_selector");
+    }
+  } else if constexpr (is_keyed_v<T>) {
+    using request_type = keyed_type_t<T>;
+    using key_type = keyed_key_t<T>;
+    return T(container.template resolve<request_type, false, true>(
+        context, key<key_type>{}));
+  } else if constexpr (is_indexed_v<T>) {
+    using request_type = indexed_type_t<T>;
+    using selector_type = indexed_selector_t<T>;
+    if constexpr (is_key_value_v<selector_type>) {
+      using key_type = typename key_selector_value<selector_type>::type;
+      return T(container.template resolve<request_type, false, true>(
+          context, key_type{key_selector_value<selector_type>::make()}));
+    } else {
+      static_assert(is_key_value_v<selector_type>,
+                    "dingo::indexed<T, dingo::key<Key>> constructor injection "
+                    "requires dingo::key<Key, Value>");
+    }
+  } else {
+    return container.template resolve<T, false>(context);
+  }
+}
+
 struct context_closure_base {
   virtual ~context_closure_base() = default;
   virtual void reset() = 0;

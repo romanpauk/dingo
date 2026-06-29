@@ -26,7 +26,8 @@ int main() {
   // Declare traits with std::string based index
   struct container_traits : dynamic_container_traits {
     using index_definition_type =
-        indexes<index<IAnimal, std::string, index_type::unordered_map>>;
+        indexes<index<IAnimal, std::string,
+                      index_type::associative<std::unordered_map>>>;
   };
 
   container<container_traits> container;

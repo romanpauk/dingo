@@ -26,15 +26,26 @@ struct indexed_definition_key_arg<dingo::key<T, Values...>> {
 };
 
 template <typename Definition> struct indexed_definition_key;
+template <typename Definition> struct indexed_definition_backend;
 
 template <typename Interface, typename Key, typename Backend>
 struct indexed_definition_key<dingo::index<Interface, Key, Backend>> {
   using type = typename indexed_definition_key_arg<Key>::type;
 };
 
+template <typename Interface, typename Key, typename Backend>
+struct indexed_definition_backend<dingo::index<Interface, Key, Backend>> {
+  using type = Backend;
+};
+
 template <typename Head, typename... Tail>
 struct indexed_definition_key<dingo::indexes<Head, Tail...>> {
   using type = typename indexed_definition_key<Head>::type;
+};
+
+template <typename Head, typename... Tail>
+struct indexed_definition_backend<dingo::indexes<Head, Tail...>> {
+  using type = typename indexed_definition_backend<Head>::type;
 };
 
 template <typename Container> struct indexed_key {
@@ -44,6 +55,14 @@ template <typename Container> struct indexed_key {
 
 template <typename Container>
 using indexed_key_t = typename indexed_key<Container>::type;
+
+template <typename Container> struct indexed_backend {
+  using type = typename indexed_definition_backend<
+      typename std::remove_reference_t<Container>::index_definition_type>::type;
+};
+
+template <typename Container>
+using indexed_backend_t = typename indexed_backend<Container>::type;
 
 template <typename T> T indexed_value(int value) {
   if constexpr (std::is_same_v<T, std::string>) {
@@ -82,9 +101,43 @@ struct fixed_indexed_dependency_check<Container, Key, true> {
   }
 };
 
+template <typename Backend> struct is_array_index_backend : std::false_type {};
+
+template <std::size_t N>
+struct is_array_index_backend<dingo::index_type::array<N>> : std::true_type {};
+
+template <typename Container, typename Key, typename Backend,
+          bool Supported = is_array_index_backend<Backend>::value>
+struct array_index_failure_check {
+  static void run(Container &) {}
+};
+
+template <typename Container, typename Key, typename Backend>
+struct array_index_failure_check<Container, Key, Backend, true> {
+  static void run(Container &container) {
+    ASSERT_THROW(
+        (container.template register_indexed_type<
+            dingo::scope<dingo::shared>,
+            dingo::storage<std::shared_ptr<element_type<4>>>,
+            dingo::interfaces<element_interface>>(indexed_value<Key>(8))),
+        type_index_out_of_range_exception);
+
+    container.template register_indexed_type<
+        dingo::scope<dingo::shared>,
+        dingo::storage<std::shared_ptr<element_type<4>>>,
+        dingo::interfaces<element_interface>>(indexed_value<Key>(4));
+
+    ASSERT_EQ(
+        container.template resolve<element_interface &>(indexed_value<Key>(4))
+            .id(),
+        4);
+  }
+};
+
 template <typename Container>
 void exercise_indexed_registration_container(Container &container) {
   using key_type = indexed_key_t<Container>;
+  using backend_type = indexed_backend_t<Container>;
 
   container.template register_indexed_type<
       dingo::scope<dingo::unique>,
@@ -145,6 +198,7 @@ void exercise_indexed_registration_container(Container &container) {
                type_not_found_exception);
 
   fixed_indexed_dependency_check<Container, key_type>::run(container);
+  array_index_failure_check<Container, key_type, backend_type>::run(container);
 }
 
 template <typename Container>

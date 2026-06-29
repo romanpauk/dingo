@@ -9,39 +9,25 @@
 
 #include <dingo/core/config.h>
 
-#include <dingo/index/index.h>
+#include <dingo/index/map.h>
 
 #include <unordered_map>
 
 namespace dingo {
 namespace index_type {
-struct unordered_map {};
+using unordered_map = associative<std::unordered_map>;
 } // namespace index_type
 
 namespace detail {
 template <typename Key, typename Value, typename Allocator>
-struct index_storage<index_type::unordered_map, Key, Value, Allocator> {
+struct associative_index_storage_type<std::unordered_map, Key, Value,
+                                      Allocator> {
   static_assert(!is_static_allocator_v<Allocator>);
 
-  explicit index_storage(Allocator &allocator) : map_(allocator) {}
-
-  bool emplace(Key key, Value value) {
-    auto pb = map_.emplace(std::move(key), value);
-    return pb.second;
-  }
-
-  Value *find(const Key &key) {
-    auto it = map_.find(key);
-    return it != map_.end() ? &it->second : nullptr;
-  }
-
-private:
   using allocator_type = typename std::allocator_traits<
       Allocator>::template rebind_alloc<std::pair<const Key, Value>>;
-
-  std::unordered_map<Key, Value, std::hash<Key>, std::equal_to<Key>,
-                     allocator_type>
-      map_;
+  using type = std::unordered_map<Key, Value, std::hash<Key>,
+                                  std::equal_to<Key>, allocator_type>;
 };
 } // namespace detail
 } // namespace dingo

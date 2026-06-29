@@ -26,7 +26,8 @@ else:
     python = os.environ.get('PYTHON', 'python3')
 
 cxx = os.environ.get('CXX', 'cl' if platform.system() == 'Windows' else 'c++')
-config.environment['DINGO_CXX_ID'] = os.path.basename(cxx)
+cxx_id = os.path.basename(cxx).lower()
+config.environment['DINGO_CXX_ID'] = cxx_id
 
 def windows_msvc_target_arch(cxx_path):
     parts = cxx_path.replace('\\', '/').lower().split('/')
@@ -68,8 +69,13 @@ def read_compiler_output(*args):
 compiler_version_text = read_compiler_output('--version').lower()
 if 'clang' in compiler_version_text:
     config.environment['DINGO_CXX_FAMILY'] = 'clang'
+    config.available_features.add('clang')
 elif 'gcc' in compiler_version_text or 'g++' in compiler_version_text:
     config.environment['DINGO_CXX_FAMILY'] = 'gcc'
+    config.available_features.add('gcc')
+elif cxx_id in ('cl', 'cl.exe') or 'microsoft' in compiler_version_text:
+    config.environment['DINGO_CXX_FAMILY'] = 'msvc'
+    config.available_features.add('msvc')
 
 compiler_full_version = read_compiler_output('-dumpfullversion')
 if compiler_full_version:

@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 
 #include <cstddef>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -78,29 +79,33 @@ template <typename Key, typename Value, typename Allocator>
 struct index_storage<index_type::test_vector, Key, Value, Allocator> {
   index_storage(Allocator &allocator) : values_(allocator) {}
 
-  bool emplace(Key key, Value value) {
-    for (auto &&entry : values_) {
-      if (entry.first == key) {
-        return false;
+  using allocator_type = typename std::allocator_traits<
+      Allocator>::template rebind_alloc<std::pair<Key, Value>>;
+  using iterator =
+      typename std::vector<std::pair<Key, Value>, allocator_type>::iterator;
+
+  std::pair<iterator, bool> emplace(Key key, Value value) {
+    for (auto it = values_.begin(); it != values_.end(); ++it) {
+      if (it->first == key) {
+        return {it, false};
       }
     }
     values_.emplace_back(std::move(key), value);
-    return true;
+    return {std::prev(values_.end()), true};
   }
 
-  Value *find(const Key &key) {
-    for (auto &&entry : values_) {
-      if (entry.first == key) {
-        return &entry.second;
+  iterator find(const Key &key) {
+    for (auto it = values_.begin(); it != values_.end(); ++it) {
+      if (it->first == key) {
+        return it;
       }
     }
-    return nullptr;
+    return values_.end();
   }
 
-private:
-  using allocator_type = typename std::allocator_traits<
-      Allocator>::template rebind_alloc<std::pair<Key, Value>>;
+  iterator end() { return values_.end(); }
 
+private:
   std::vector<std::pair<Key, Value>, allocator_type> values_;
 };
 
@@ -110,29 +115,33 @@ struct index_storage<index_type::test_allocator_vector, Key, Value, Allocator> {
     allocator.record_backend_constructed();
   }
 
-  bool emplace(Key key, Value value) {
-    for (auto &&entry : values_) {
-      if (entry.first == key) {
-        return false;
+  using allocator_type = typename std::allocator_traits<
+      Allocator>::template rebind_alloc<std::pair<Key, Value>>;
+  using iterator =
+      typename std::vector<std::pair<Key, Value>, allocator_type>::iterator;
+
+  std::pair<iterator, bool> emplace(Key key, Value value) {
+    for (auto it = values_.begin(); it != values_.end(); ++it) {
+      if (it->first == key) {
+        return {it, false};
       }
     }
     values_.emplace_back(std::move(key), value);
-    return true;
+    return {std::prev(values_.end()), true};
   }
 
-  Value *find(const Key &key) {
-    for (auto &&entry : values_) {
-      if (entry.first == key) {
-        return &entry.second;
+  iterator find(const Key &key) {
+    for (auto it = values_.begin(); it != values_.end(); ++it) {
+      if (it->first == key) {
+        return it;
       }
     }
-    return nullptr;
+    return values_.end();
   }
 
-private:
-  using allocator_type = typename std::allocator_traits<
-      Allocator>::template rebind_alloc<std::pair<Key, Value>>;
+  iterator end() { return values_.end(); }
 
+private:
   std::vector<std::pair<Key, Value>, allocator_type> values_;
 };
 } // namespace detail
