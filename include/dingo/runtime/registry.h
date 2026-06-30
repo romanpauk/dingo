@@ -25,6 +25,7 @@
 #include <dingo/resolution/runtime_binding.h>
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
+#include <dingo/runtime/selector_table.h>
 #include <dingo/static/local_resolution.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/normalized_type.h>
@@ -41,12 +42,15 @@
 #include <type_traits>
 #include <typeindex>
 #include <variant>
+#include <vector>
 
 namespace dingo {
 namespace detail {
 
 template <typename StaticRegistry, typename ParentContainer>
 class container_with_static_bindings;
+
+template <typename Registry> struct runtime_selector_identity_probe;
 
 } // namespace detail
 
@@ -63,6 +67,8 @@ class runtime_registry : public allocator_base<Allocator> {
   template <typename ContainerTraitsT, typename AllocatorT,
             typename ParentRegistryT, typename ResolveRootT>
   friend class runtime_registry;
+  template <typename RegistryT>
+  friend struct detail::runtime_selector_identity_probe;
 
   template <typename ContainerTraitsT, typename AllocatorT,
             typename ParentRegistryT, typename ResolveRootT>
@@ -380,7 +386,8 @@ protected:
     T results;
     runtime_context context;
     const std::size_t count = count_runtime_collection<T>(id);
-    if (count == 0) {
+    if (count == 0 &&
+        !has_explicit_collection_selector<T>(std::forward<IdType>(id))) {
       throw detail::make_collection_type_not_found_exception<T, resolve_type>();
     }
 
@@ -402,7 +409,8 @@ protected:
     runtime_context context;
     const std::size_t count =
         count_runtime_collection<T>(collection_key<Key>());
-    if (count == 0) {
+    if (count == 0 &&
+        !has_explicit_collection_selector<T>(collection_key<Key>())) {
       throw detail::make_collection_type_not_found_exception<T, resolve_type>();
     }
 
@@ -494,20 +502,49 @@ protected:
     void *cache = nullptr;
   };
 
+  struct registered_binding_entry;
+  using selector_table_type =
+      detail::runtime_selector_table<rtti_type, allocator_type,
+                                     registered_binding_entry>;
+  using selector_identity = typename selector_table_type::selector_identity;
+  using selector_identity_allocator =
+      typename selector_table_type::identity_allocator;
+  using selector_identity_storage =
+      typename selector_table_type::identity_storage;
+  using selector_identity_key_domain = typename selector_table_type::key_domain;
+  using selector_identity_cardinality =
+      typename selector_table_type::cardinality;
+
+  template <typename Cardinality>
+  static constexpr selector_identity_cardinality selector_cardinality() {
+    return detail::runtime_selector_cardinality_value<Cardinality>();
+  }
+
+  template <typename IndexEntry>
+  using selector_entry_cardinality =
+      detail::runtime_selector_entry_cardinality<IndexEntry>;
+
   struct registered_binding_entry : binding_cache_state {
     runtime_binding_ptr<runtime_binding_interface<container_type>> binding;
     typename rtti_type::type_index storage_type;
     std::optional<typename rtti_type::type_index> key_type;
+    selector_identity_storage selector_identities;
 
     registered_binding_entry(
         runtime_binding_ptr<runtime_binding_interface<container_type>>
             &&binding_ptr,
         typename rtti_type::type_index resolved_storage_type,
-        std::optional<typename rtti_type::type_index> resolved_key_type =
-            std::nullopt)
+        std::optional<typename rtti_type::type_index> resolved_key_type,
+        selector_identity &&resolved_selector_identity,
+        allocator_type &allocator)
         : binding(std::move(binding_ptr)),
           storage_type(std::move(resolved_storage_type)),
-          key_type(std::move(resolved_key_type)) {}
+          key_type(std::move(resolved_key_type)),
+          selector_identities(detail::make_selector_storage_allocator<
+                              selector_identity_allocator>(allocator)) {
+      selector_identities.reserve(1);
+      selector_identities.emplace_back(std::move(resolved_selector_identity));
+    }
 
     registered_binding_entry(const registered_binding_entry &) = delete;
     registered_binding_entry &
@@ -516,7 +553,8 @@ protected:
     registered_binding_entry(registered_binding_entry &&other) noexcept
         : binding_cache_state{other.cache}, binding(std::move(other.binding)),
           storage_type(std::move(other.storage_type)),
-          key_type(std::move(other.key_type)) {
+          key_type(std::move(other.key_type)),
+          selector_identities(std::move(other.selector_identities)) {
       other.cache = nullptr;
     }
 
@@ -528,33 +566,64 @@ protected:
         binding = std::move(other.binding);
         storage_type = std::move(other.storage_type);
         key_type = std::move(other.key_type);
+        selector_identities = std::move(other.selector_identities);
       }
       return *this;
     }
   };
 
-  using index_bindings_type =
-      detail::index_bindings<index_definition_type, registered_binding_entry *,
-                             allocator_type>;
-
-  struct runtime_type_bindings : index_bindings_type {
-    using indexed_binding_allocator = typename std::conditional_t<
+  struct runtime_type_bindings {
+    using entry_allocator = typename std::conditional_t<
         ::dingo::is_static_allocator_v<allocator_type>,
         std::allocator<registered_binding_entry>,
         typename std::allocator_traits<allocator_type>::template rebind_alloc<
             registered_binding_entry>>;
-    using indexed_binding_list =
-        std::list<registered_binding_entry, indexed_binding_allocator>;
+    using entry_list = std::list<registered_binding_entry, entry_allocator>;
+    using entry_iterator = typename entry_list::iterator;
 
     runtime_type_bindings(allocator_type &allocator)
-        : index_bindings_type(allocator), bindings(allocator),
-          indexed_bindings(detail::make_selector_storage_allocator<
-                           indexed_binding_allocator>(allocator)) {}
+        : allocator_(std::addressof(allocator)), bindings(allocator),
+          entries(detail::make_selector_storage_allocator<entry_allocator>(
+              allocator)),
+          selector_table(allocator) {
+      using entries_type =
+          detail::normalize_index_definitions_t<index_definition_type>;
+      static_assert(!detail::has_duplicate_index_definition_v<entries_type>,
+                    "duplicate dingo selector definition for interface/key "
+                    "domain/cardinality");
+      static_assert(!detail::has_duplicate_index_slot_v<entries_type>,
+                    "conflicting dingo selector definitions for interface/key "
+                    "domain");
+    }
 
-    typename ContainerTraits::template type_map_type<registered_binding_entry,
+    template <typename Binding>
+    entry_iterator emplace_entry(
+        Binding &&binding, typename rtti_type::type_index resolved_storage_type,
+        std::optional<typename rtti_type::type_index> resolved_key_type,
+        selector_identity &&resolved_selector_identity) {
+      entries.emplace_back(std::forward<Binding>(binding),
+                           std::move(resolved_storage_type),
+                           std::move(resolved_key_type),
+                           std::move(resolved_selector_identity), *allocator_);
+      return std::prev(entries.end());
+    }
+
+    void erase_entry(entry_iterator entry) { entries.erase(entry); }
+
+    bool insert_selector_rows(entry_iterator entry) {
+      return selector_table.insert(*entry);
+    }
+
+    void erase_selector_rows(registered_binding_entry *entry) {
+      selector_table.erase(*entry);
+    }
+
+    allocator_type *allocator_;
+    typename ContainerTraits::template type_map_type<registered_binding_entry *,
                                                      allocator_type>
         bindings;
-    indexed_binding_list indexed_bindings;
+    entry_list entries;
+    selector_table_type selector_table;
   };
 
   struct runtime_bindings_state {
@@ -573,6 +642,43 @@ protected:
   using runtime_selection =
       detail::runtime_binding_selection<runtime_binding_interface_type,
                                         binding_cache_state *>;
+
+  static std::size_t
+  selector_identity_count(const registered_binding_entry &entry) {
+    return entry.selector_identities.size();
+  }
+
+  static const selector_identity &
+  selector_identity_at(const registered_binding_entry &entry,
+                       std::size_t index) {
+    return entry.selector_identities[index];
+  }
+
+  static const typename rtti_type::type_index &
+  selector_identity_interface_type(const selector_identity &identity) {
+    return identity.interface_type;
+  }
+
+  static selector_identity_key_domain
+  selector_identity_domain(const selector_identity &identity) {
+    return identity.domain;
+  }
+
+  static selector_identity_cardinality
+  selector_identity_cardinality_value(const selector_identity &identity) {
+    return identity.selector_cardinality;
+  }
+
+  static const std::optional<typename rtti_type::type_index> &
+  selector_identity_key_type(const selector_identity &identity) {
+    return identity.key_type;
+  }
+
+  static bool
+  selector_identity_has_runtime_key_storage(const selector_identity &identity) {
+    return static_cast<bool>(identity.runtime_key);
+  }
+
   template <typename Key>
   using collection_key_t =
       std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>;
@@ -580,6 +686,36 @@ protected:
 protected:
   template <typename Key> static collection_key_t<Key> collection_key() {
     return {};
+  }
+
+  template <typename T, typename IdType>
+  static constexpr bool has_explicit_collection_selector(IdType &&) {
+    using collection_type = collection_traits<T>;
+    using resolve_type = typename collection_type::resolve_type;
+    using index_interface_type = normalized_type_t<resolve_type>;
+    using entries =
+        detail::normalize_index_definitions_t<index_definition_type>;
+
+    if constexpr (is_none_v<std::decay_t<IdType>>) {
+      using many_entry =
+          detail::selected_no_key_index_entry_t<index_interface_type,
+                                                ::dingo::many, entries>;
+      return !std::is_void_v<many_entry>;
+    } else if constexpr (detail::is_typed_key_v<IdType>) {
+      using key_type = typename std::decay_t<IdType>::type;
+      using many_entry = detail::selected_typed_key_index_entry_t<
+          index_interface_type, key_type, ::dingo::many, entries>;
+      return !std::is_void_v<many_entry>;
+    } else {
+      using index_key_type = std::decay_t<IdType>;
+      using index_entry =
+          detail::selected_index_entry_t<index_interface_type, index_key_type,
+                                         entries>;
+      return !std::is_void_v<index_entry> &&
+             std::is_same_v<
+                 typename selector_entry_cardinality<index_entry>::type,
+                 ::dingo::many>;
+    }
   }
 
   template <typename T, bool CheckCache, typename IdType>
@@ -741,13 +877,13 @@ protected:
 
     std::size_t count = 0;
     for (auto &&p : data.bindings) {
-      auto &entry = p.second;
-      if (!runtime_collection_entry_matches(entry, id)) {
+      auto *entry = p.second;
+      if (!runtime_collection_entry_matches(*entry, id)) {
         continue;
       }
       ++count;
       fn(results,
-         resolve_collection_type<resolve_type>(*entry.binding, context));
+         resolve_collection_type<resolve_type>(*entry->binding, context));
     }
     return count;
   }
@@ -771,23 +907,17 @@ protected:
       (void)fn;
       return 0;
     } else {
-      auto &index =
-          data.template get_index<index_interface_type, index_key_type>(
-              get_allocator());
-      auto it = index.find(id);
-      if (it == index.end()) {
-        return 0;
-      }
-
       if constexpr (std::is_same_v<typename index_entry::cardinality,
                                    ::dingo::many>) {
-        std::size_t count = 0;
-        for (auto *entry : it->second) {
-          ++count;
+        auto matches = [&](const auto &identity) {
+          return selector_table_type::template matches_runtime_key<
+              index_interface_type, index_key_type, ::dingo::many>(identity,
+                                                                   id);
+        };
+        return data.selector_table.for_each(matches, [&](auto &entry) {
           fn(results,
-             resolve_collection_type<resolve_type>(*entry->binding, context));
-        }
-        return count;
+             resolve_collection_type<resolve_type>(*entry.binding, context));
+        });
       } else {
         (void)results;
         (void)context;
@@ -824,21 +954,14 @@ protected:
         return 0;
       }
     } else {
-      auto &index =
-          data.template get_no_key_index<index_interface_type, ::dingo::many>(
-              get_allocator());
-      auto it = index.find(detail::no_key_selector_value{});
-      if (it == index.end()) {
-        return 0;
-      }
-
-      std::size_t count = 0;
-      for (auto *entry : it->second) {
-        ++count;
+      auto matches = [](const auto &identity) {
+        return selector_table_type::template matches_no_key<
+            index_interface_type, ::dingo::many>(identity);
+      };
+      return data.selector_table.for_each(matches, [&](auto &entry) {
         fn(results,
-           resolve_collection_type<resolve_type>(*entry->binding, context));
-      }
-      return count;
+           resolve_collection_type<resolve_type>(*entry.binding, context));
+      });
     }
   }
 
@@ -872,21 +995,14 @@ protected:
         return 0;
       }
     } else {
-      auto &index =
-          data.template get_typed_key_index<index_interface_type, key_type,
-                                            ::dingo::many>(get_allocator());
-      auto it = index.find(detail::typed_key_selector_value{});
-      if (it == index.end()) {
-        return 0;
-      }
-
-      std::size_t count = 0;
-      for (auto *entry : it->second) {
-        ++count;
+      auto matches = [](const auto &identity) {
+        return selector_table_type::template matches_typed_key<
+            index_interface_type, key_type, ::dingo::many>(identity);
+      };
+      return data.selector_table.for_each(matches, [&](auto &entry) {
         fn(results,
-           resolve_collection_type<resolve_type>(*entry->binding, context));
-      }
-      return count;
+           resolve_collection_type<resolve_type>(*entry.binding, context));
+      });
     }
   }
 
@@ -895,7 +1011,7 @@ protected:
                                               IdType id) {
     std::size_t count = 0;
     for (auto &&p : data.bindings) {
-      if (runtime_collection_entry_matches(p.second, id)) {
+      if (runtime_collection_entry_matches(*p.second, id)) {
         ++count;
       }
     }
@@ -916,17 +1032,14 @@ protected:
     if constexpr (std::is_void_v<index_entry>) {
       return 0;
     } else {
-      auto &index =
-          data.template get_index<index_interface_type, index_key_type>(
-              get_allocator());
-      auto it = index.find(id);
-      if (it == index.end()) {
-        return 0;
-      }
-
       if constexpr (std::is_same_v<typename index_entry::cardinality,
                                    ::dingo::many>) {
-        return it->second.size();
+        auto matches = [&](const auto &identity) {
+          return selector_table_type::template matches_runtime_key<
+              index_interface_type, index_key_type, ::dingo::many>(identity,
+                                                                   id);
+        };
+        return data.selector_table.count(matches);
       } else {
         return 0;
       }
@@ -954,11 +1067,11 @@ protected:
         return 0;
       }
     } else {
-      auto &index =
-          data.template get_no_key_index<index_interface_type, ::dingo::many>(
-              get_allocator());
-      auto it = index.find(detail::no_key_selector_value{});
-      return it == index.end() ? 0 : it->second.size();
+      auto matches = [](const auto &identity) {
+        return selector_table_type::template matches_no_key<
+            index_interface_type, ::dingo::many>(identity);
+      };
+      return data.selector_table.count(matches);
     }
   }
 
@@ -986,11 +1099,11 @@ protected:
         return 0;
       }
     } else {
-      auto &index =
-          data.template get_typed_key_index<index_interface_type, key_type,
-                                            ::dingo::many>(get_allocator());
-      auto it = index.find(detail::typed_key_selector_value{});
-      return it == index.end() ? 0 : it->second.size();
+      auto matches = [](const auto &identity) {
+        return selector_table_type::template matches_typed_key<
+            index_interface_type, key_type, ::dingo::many>(identity);
+      };
+      return data.selector_table.count(matches);
     }
   }
 
@@ -1049,38 +1162,15 @@ private:
                                                 ::dingo::many, entries>;
 
       if constexpr (!std::is_void_v<one_entry>) {
-        registered_binding_entry *selected = nullptr;
-        if (data) {
-          auto &index =
-              data->template get_no_key_index<index_interface_type,
-                                              ::dingo::one>(get_allocator());
-          auto it = index.find(detail::no_key_selector_value{});
-          if (it != index.end()) {
-            selected = it->second;
-          }
-        }
-        return detail::make_runtime_selection<runtime_binding_interface_type,
-                                              binding_cache_state *>(
-            selected ? selected->binding.get() : nullptr, selected);
+        return select_selector_table_binding(data, [](const auto &identity) {
+          return selector_table_type::template matches_no_key<
+              index_interface_type, ::dingo::one>(identity);
+        });
       } else if constexpr (!std::is_void_v<many_entry>) {
-        registered_binding_entry *selected = nullptr;
-        if (data) {
-          auto &index =
-              data->template get_no_key_index<index_interface_type,
-                                              ::dingo::many>(get_allocator());
-          auto it = index.find(detail::no_key_selector_value{});
-          if (it != index.end()) {
-            if (it->second.size() > 1) {
-              return runtime_selection::ambiguity();
-            }
-            if (it->second.size() == 1) {
-              selected = it->second.front();
-            }
-          }
-        }
-        return detail::make_runtime_selection<runtime_binding_interface_type,
-                                              binding_cache_state *>(
-            selected ? selected->binding.get() : nullptr, selected);
+        return select_selector_table_binding(data, [](const auto &identity) {
+          return selector_table_type::template matches_no_key<
+              index_interface_type, ::dingo::many>(identity);
+        });
       } else {
         return detail::make_runtime_selection<runtime_binding_interface_type,
                                               binding_cache_state *>(
@@ -1090,8 +1180,8 @@ private:
               }
 
               for (auto &&p : data->bindings) {
-                auto &entry = p.second;
-                select(*entry.binding, &entry);
+                auto *entry = p.second;
+                select(*entry->binding, entry);
               }
             });
       }
@@ -1107,37 +1197,15 @@ private:
           index_interface_type, key_type, ::dingo::many, entries>;
 
       if constexpr (!std::is_void_v<one_entry>) {
-        registered_binding_entry *selected = nullptr;
-        if (data) {
-          auto &index =
-              data->template get_typed_key_index<index_interface_type, key_type,
-                                                 ::dingo::one>(get_allocator());
-          auto it = index.find(detail::typed_key_selector_value{});
-          if (it != index.end()) {
-            selected = it->second;
-          }
-        }
-        return detail::make_runtime_selection<runtime_binding_interface_type,
-                                              binding_cache_state *>(
-            selected ? selected->binding.get() : nullptr, selected);
+        return select_selector_table_binding(data, [](const auto &identity) {
+          return selector_table_type::template matches_typed_key<
+              index_interface_type, key_type, ::dingo::one>(identity);
+        });
       } else if constexpr (!std::is_void_v<many_entry>) {
-        registered_binding_entry *selected = nullptr;
-        if (data) {
-          auto &index = data->template get_typed_key_index<
-              index_interface_type, key_type, ::dingo::many>(get_allocator());
-          auto it = index.find(detail::typed_key_selector_value{});
-          if (it != index.end()) {
-            if (it->second.size() > 1) {
-              return runtime_selection::ambiguity();
-            }
-            if (it->second.size() == 1) {
-              selected = it->second.front();
-            }
-          }
-        }
-        return detail::make_runtime_selection<runtime_binding_interface_type,
-                                              binding_cache_state *>(
-            selected ? selected->binding.get() : nullptr, selected);
+        return select_selector_table_binding(data, [](const auto &identity) {
+          return selector_table_type::template matches_typed_key<
+              index_interface_type, key_type, ::dingo::many>(identity);
+        });
       } else {
         return detail::make_runtime_selection<runtime_binding_interface_type,
                                               binding_cache_state *>(
@@ -1147,14 +1215,14 @@ private:
               }
 
               for (auto &&p : data->bindings) {
-                auto &entry = p.second;
-                if (!entry.key_type ||
-                    !(*entry.key_type ==
+                auto *entry = p.second;
+                if (!entry->key_type ||
+                    !(*entry->key_type ==
                       rtti_type::template get_type_index<key_id_type>())) {
                   continue;
                 }
 
-                select(*entry.binding, &entry);
+                select(*entry->binding, entry);
               }
             });
       }
@@ -1164,38 +1232,44 @@ private:
       using index_entry = detail::selected_index_entry_t<
           index_interface_type, index_key_type,
           detail::normalize_index_definitions_t<index_definition_type>>;
-      if constexpr (std::is_void_v<index_entry> &&
-                    !std::is_same_v<void, ParentRegistry> &&
-                    !std::is_base_of_v<registry_type, resolve_root_type>) {
-        return detail::make_runtime_selection<runtime_binding_interface_type,
-                                              binding_cache_state *>(nullptr,
-                                                                     nullptr);
-      } else {
-        registered_binding_entry *indexed = nullptr;
-        if (data) {
-          auto &index =
-              data->template get_index<index_interface_type, index_key_type>(
-                  get_allocator());
-          auto it = index.find(id);
-          if (it != index.end()) {
-            if constexpr (std::is_same_v<typename index_entry::cardinality,
-                                         ::dingo::many>) {
-              if (it->second.size() > 1) {
-                return runtime_selection::ambiguity();
-              }
-              if (it->second.size() == 1) {
-                indexed = it->second.front();
-              }
-            } else {
-              indexed = it->second;
-            }
-          }
+      if constexpr (std::is_void_v<index_entry>) {
+        if constexpr (!std::is_same_v<void, ParentRegistry> &&
+                      !std::is_base_of_v<registry_type, resolve_root_type>) {
+          return detail::make_runtime_selection<runtime_binding_interface_type,
+                                                binding_cache_state *>(nullptr,
+                                                                       nullptr);
+        } else {
+          static_assert(!std::is_void_v<index_entry>,
+                        "indexed registration or lookup has no matching "
+                        "dingo selector definition for interface/key");
         }
-        return detail::make_runtime_selection<runtime_binding_interface_type,
-                                              binding_cache_state *>(
-            indexed ? indexed->binding.get() : nullptr, indexed);
+      } else {
+        using index_cardinality = typename index_entry::cardinality;
+        return select_selector_table_binding(data, [&](const auto &identity) {
+          return selector_table_type::template matches_runtime_key<
+              index_interface_type, index_key_type, index_cardinality>(identity,
+                                                                       id);
+        });
       }
     }
+  }
+
+  template <typename Matcher>
+  runtime_selection select_selector_table_binding(runtime_type_bindings *data,
+                                                  Matcher &&matches) {
+    registered_binding_entry *selected = nullptr;
+    bool ambiguous = false;
+    if (data) {
+      selected = data->selector_table.find_singular(
+          std::forward<Matcher>(matches), ambiguous);
+    }
+
+    if (ambiguous) {
+      return runtime_selection::ambiguity();
+    }
+    return detail::make_runtime_selection<runtime_binding_interface_type,
+                                          binding_cache_state *>(
+        selected ? selected->binding.get() : nullptr, selected);
   }
 
   template <typename... TypeArgs, typename Parent, typename Arg,
@@ -1328,50 +1402,37 @@ private:
       }();
       auto resolved_storage_type =
           rtti_type::template get_type_index<typename TypeStorage::type>();
-      data.indexed_bindings.emplace_back(std::forward<Binding>(binding),
-                                         std::move(resolved_storage_type),
-                                         std::move(resolved_key_type));
-      auto inserted_entry = std::prev(data.indexed_bindings.end());
+      using index_entry = detail::selected_index_entry_t<
+          TypeInterface, IdType,
+          detail::normalize_index_definitions_t<index_definition_type>>;
+      static_assert(!std::is_void_v<index_entry>,
+                    "indexed registration or lookup has no matching "
+                    "dingo selector definition for interface/key");
+      using selector_cardinality_type =
+          typename selector_entry_cardinality<index_entry>::type;
+      auto selector_id =
+          selector_table_type::template make_runtime_key_identity<
+              TypeInterface, IdType, selector_cardinality_type>(get_allocator(),
+                                                                id);
+      auto inserted_entry = data.emplace_entry(
+          std::forward<Binding>(binding), std::move(resolved_storage_type),
+          std::move(resolved_key_type), std::move(selector_id));
       bool binding_registered = true;
+      bool selector_rows_registered = false;
       try {
-        using index_entry = detail::selected_index_entry_t<
-            TypeInterface, IdType,
-            detail::normalize_index_definitions_t<index_definition_type>>;
-        if constexpr (std::is_void_v<index_entry>) {
-          data.template get_index<TypeInterface, IdType>(get_allocator());
-        } else {
-          auto &index =
-              data.template get_index<TypeInterface, IdType>(get_allocator());
-          if constexpr (std::is_same_v<typename index_entry::cardinality,
-                                       ::dingo::many>) {
-            auto existing = index.find(id);
-            if (existing != index.end()) {
-              for (auto *entry : existing->second) {
-                if (entry->storage_type == inserted_entry->storage_type) {
-                  data.indexed_bindings.erase(inserted_entry);
-                  binding_registered = false;
-                  throw detail::make_type_index_already_registered_exception<
-                      TypeInterface, typename TypeStorage::type, IdType>();
-                }
-              }
-            }
-            index.emplace(std::forward<IdType>(id),
-                          std::addressof(*inserted_entry));
-          } else {
-            if (!index
-                     .emplace(std::forward<IdType>(id),
-                              std::addressof(*inserted_entry))
-                     .second) {
-              data.indexed_bindings.erase(inserted_entry);
-              binding_registered = false;
-              throw detail::make_type_index_already_registered_exception<
-                  TypeInterface, typename TypeStorage::type, IdType>();
-            }
-          }
+        if (!data.insert_selector_rows(inserted_entry)) {
+          data.erase_entry(inserted_entry);
+          binding_registered = false;
+          throw detail::make_type_index_already_registered_exception<
+              TypeInterface, typename TypeStorage::type, IdType>();
         }
+        selector_rows_registered = true;
       } catch (...) {
         if (binding_registered) {
-          data.indexed_bindings.erase(inserted_entry);
+          if (selector_rows_registered) {
+            data.erase_selector_rows(std::addressof(*inserted_entry));
+          }
+          data.erase_entry(inserted_entry);
         }
         throw;
       }
@@ -1388,59 +1449,71 @@ private:
       if constexpr (!std::is_void_v<one_entry> || !std::is_void_v<many_entry>) {
         auto resolved_storage_type =
             rtti_type::template get_type_index<typename TypeStorage::type>();
-        data.indexed_bindings.emplace_back(std::forward<Binding>(binding),
-                                           std::move(resolved_storage_type),
-                                           std::nullopt);
-        auto inserted_entry = std::prev(data.indexed_bindings.end());
+        using selector_cardinality_type =
+            std::conditional_t<!std::is_void_v<one_entry>, ::dingo::one,
+                               ::dingo::many>;
+        auto selector_id = selector_table_type::template make_no_key_identity<
+            TypeInterface, selector_cardinality_type>();
+        auto inserted_entry = data.emplace_entry(
+            std::forward<Binding>(binding), std::move(resolved_storage_type),
+            std::nullopt, std::move(selector_id));
         bool binding_registered = true;
+        bool selector_rows_registered = false;
         try {
-          if constexpr (!std::is_void_v<one_entry>) {
-            auto &index =
-                data.template get_no_key_index<TypeInterface, ::dingo::one>(
-                    get_allocator());
-            if (!index
-                     .emplace(detail::no_key_selector_value{},
-                              std::addressof(*inserted_entry))
-                     .second) {
-              data.indexed_bindings.erase(inserted_entry);
-              binding_registered = false;
-              throw detail::make_type_already_registered_exception<
-                  TypeInterface, typename TypeStorage::type>();
-            }
-          } else {
-            auto &index =
-                data.template get_no_key_index<TypeInterface, ::dingo::many>(
-                    get_allocator());
-            auto existing = index.find(detail::no_key_selector_value{});
-            if (existing != index.end()) {
-              for (auto *entry : existing->second) {
-                if (entry->storage_type == inserted_entry->storage_type) {
-                  data.indexed_bindings.erase(inserted_entry);
-                  binding_registered = false;
-                  throw detail::make_type_already_registered_exception<
-                      TypeInterface, typename TypeStorage::type>();
-                }
-              }
-            }
-            index.emplace(detail::no_key_selector_value{},
-                          std::addressof(*inserted_entry));
+          if (!data.insert_selector_rows(inserted_entry)) {
+            data.erase_entry(inserted_entry);
+            binding_registered = false;
+            throw detail::make_type_already_registered_exception<
+                TypeInterface, typename TypeStorage::type>();
           }
+          selector_rows_registered = true;
         } catch (...) {
           if (binding_registered) {
-            data.indexed_bindings.erase(inserted_entry);
+            if (selector_rows_registered) {
+              data.erase_selector_rows(std::addressof(*inserted_entry));
+            }
+            data.erase_entry(inserted_entry);
           }
           throw;
         }
       } else {
         auto resolved_storage_type =
             rtti_type::template get_type_index<typename TypeStorage::type>();
-        auto inserted_binding =
-            data.bindings.template insert<binding_registration_key>(
-                std::forward<Binding>(binding),
-                std::move(resolved_storage_type), std::nullopt);
-        if (!inserted_binding.second) {
-          throw detail::make_type_already_registered_exception<
-              TypeInterface, typename TypeStorage::type>();
+        auto selector_id =
+            selector_table_type::template make_legacy_no_key_identity<
+                TypeInterface, ::dingo::one>();
+        auto inserted_entry = data.emplace_entry(
+            std::forward<Binding>(binding), std::move(resolved_storage_type),
+            std::nullopt, std::move(selector_id));
+        bool binding_registered = true;
+        bool selector_rows_registered = false;
+        try {
+          if (!data.insert_selector_rows(inserted_entry)) {
+            data.erase_entry(inserted_entry);
+            binding_registered = false;
+            throw detail::make_type_already_registered_exception<
+                TypeInterface, typename TypeStorage::type>();
+          }
+          selector_rows_registered = true;
+          auto inserted_binding =
+              data.bindings.template insert<binding_registration_key>(
+                  std::addressof(*inserted_entry));
+          if (!inserted_binding.second) {
+            data.erase_selector_rows(std::addressof(*inserted_entry));
+            data.erase_entry(inserted_entry);
+            binding_registered = false;
+            selector_rows_registered = false;
+            throw detail::make_type_already_registered_exception<
+                TypeInterface, typename TypeStorage::type>();
+          }
+        } catch (...) {
+          if (binding_registered) {
+            if (selector_rows_registered) {
+              data.erase_selector_rows(std::addressof(*inserted_entry));
+            }
+            data.erase_entry(inserted_entry);
+          }
+          throw;
         }
       }
     } else {
@@ -1455,61 +1528,77 @@ private:
       if constexpr (!std::is_void_v<one_entry> || !std::is_void_v<many_entry>) {
         auto resolved_storage_type =
             rtti_type::template get_type_index<typename TypeStorage::type>();
-        data.indexed_bindings.emplace_back(
+        using selector_cardinality_type =
+            std::conditional_t<!std::is_void_v<one_entry>, ::dingo::one,
+                               ::dingo::many>;
+        auto selector_id =
+            selector_table_type::template make_typed_key_identity<
+                TypeInterface, typed_key_type, selector_cardinality_type>();
+        auto inserted_entry = data.emplace_entry(
             std::forward<Binding>(binding), std::move(resolved_storage_type),
-            rtti_type::template get_type_index<std::decay_t<KeyIdType>>());
-        auto inserted_entry = std::prev(data.indexed_bindings.end());
+            rtti_type::template get_type_index<std::decay_t<KeyIdType>>(),
+            std::move(selector_id));
         bool binding_registered = true;
+        bool selector_rows_registered = false;
         try {
-          if constexpr (!std::is_void_v<one_entry>) {
-            auto &index = data.template get_typed_key_index<
-                TypeInterface, typed_key_type, ::dingo::one>(get_allocator());
-            if (!index
-                     .emplace(detail::typed_key_selector_value{},
-                              std::addressof(*inserted_entry))
-                     .second) {
-              data.indexed_bindings.erase(inserted_entry);
-              binding_registered = false;
-              throw detail::make_type_index_already_registered_exception<
-                  TypeInterface, typename TypeStorage::type,
-                  std::decay_t<KeyIdType>>();
-            }
-          } else {
-            auto &index = data.template get_typed_key_index<
-                TypeInterface, typed_key_type, ::dingo::many>(get_allocator());
-            auto existing = index.find(detail::typed_key_selector_value{});
-            if (existing != index.end()) {
-              for (auto *entry : existing->second) {
-                if (entry->storage_type == inserted_entry->storage_type) {
-                  data.indexed_bindings.erase(inserted_entry);
-                  binding_registered = false;
-                  throw detail::make_type_index_already_registered_exception<
-                      TypeInterface, typename TypeStorage::type,
-                      std::decay_t<KeyIdType>>();
-                }
-              }
-            }
-            index.emplace(detail::typed_key_selector_value{},
-                          std::addressof(*inserted_entry));
+          if (!data.insert_selector_rows(inserted_entry)) {
+            data.erase_entry(inserted_entry);
+            binding_registered = false;
+            throw detail::make_type_index_already_registered_exception<
+                TypeInterface, typename TypeStorage::type,
+                std::decay_t<KeyIdType>>();
           }
+          selector_rows_registered = true;
         } catch (...) {
           if (binding_registered) {
-            data.indexed_bindings.erase(inserted_entry);
+            if (selector_rows_registered) {
+              data.erase_selector_rows(std::addressof(*inserted_entry));
+            }
+            data.erase_entry(inserted_entry);
           }
           throw;
         }
       } else {
-        auto inserted_binding = [&]() {
-          auto resolved_storage_type =
-              rtti_type::template get_type_index<typename TypeStorage::type>();
-          return data.bindings.template insert<binding_registration_key>(
-              std::forward<Binding>(binding), std::move(resolved_storage_type),
-              rtti_type::template get_type_index<std::decay_t<KeyIdType>>());
-        }();
-        if (!inserted_binding.second) {
-          throw detail::make_type_index_already_registered_exception<
-              TypeInterface, typename TypeStorage::type,
-              std::decay_t<KeyIdType>>();
+        auto resolved_storage_type =
+            rtti_type::template get_type_index<typename TypeStorage::type>();
+        auto selector_id =
+            selector_table_type::template make_legacy_typed_key_identity<
+                TypeInterface, typed_key_type, ::dingo::one>();
+        auto inserted_entry = data.emplace_entry(
+            std::forward<Binding>(binding), std::move(resolved_storage_type),
+            rtti_type::template get_type_index<std::decay_t<KeyIdType>>(),
+            std::move(selector_id));
+        bool binding_registered = true;
+        bool selector_rows_registered = false;
+        try {
+          if (!data.insert_selector_rows(inserted_entry)) {
+            data.erase_entry(inserted_entry);
+            binding_registered = false;
+            throw detail::make_type_index_already_registered_exception<
+                TypeInterface, typename TypeStorage::type,
+                std::decay_t<KeyIdType>>();
+          }
+          selector_rows_registered = true;
+          auto inserted_binding =
+              data.bindings.template insert<binding_registration_key>(
+                  std::addressof(*inserted_entry));
+          if (!inserted_binding.second) {
+            data.erase_selector_rows(std::addressof(*inserted_entry));
+            data.erase_entry(inserted_entry);
+            binding_registered = false;
+            selector_rows_registered = false;
+            throw detail::make_type_index_already_registered_exception<
+                TypeInterface, typename TypeStorage::type,
+                std::decay_t<KeyIdType>>();
+          }
+        } catch (...) {
+          if (binding_registered) {
+            if (selector_rows_registered) {
+              data.erase_selector_rows(std::addressof(*inserted_entry));
+            }
+            data.erase_entry(inserted_entry);
+          }
+          throw;
         }
       }
     }
@@ -1686,5 +1775,86 @@ void runtime_registry<ContainerTraits, Allocator, ParentRegistry,
     runtime_bindings_constructed_ = false;
   }
 }
+
+namespace detail {
+
+template <typename Registry> struct runtime_selector_identity_probe {
+  template <typename Request, typename Interface, typename Cardinality,
+            typename IdType = none_t>
+  static bool selected_no_key_identity_matches(Registry &registry,
+                                               IdType &&id = IdType()) {
+    using key_domain = typename Registry::selector_identity_key_domain;
+    return selected_identity_matches<Request, Interface, Cardinality, void>(
+        registry, key_domain::no_key, false, std::forward<IdType>(id));
+  }
+
+  template <typename Request, typename Interface, typename Key,
+            typename Cardinality, typename IdType>
+  static bool selected_typed_key_identity_matches(Registry &registry,
+                                                  IdType &&id) {
+    using key_domain = typename Registry::selector_identity_key_domain;
+    return selected_identity_matches<Request, Interface, Cardinality, Key>(
+        registry, key_domain::typed_key, false, std::forward<IdType>(id));
+  }
+
+  template <typename Request, typename Interface, typename Key,
+            typename Cardinality, typename IdType>
+  static bool selected_runtime_key_identity_matches(Registry &registry,
+                                                    IdType &&id) {
+    using key_domain = typename Registry::selector_identity_key_domain;
+    return selected_identity_matches<Request, Interface, Cardinality, Key>(
+        registry, key_domain::runtime_key, true, std::forward<IdType>(id));
+  }
+
+private:
+  template <typename Request, typename Interface, typename Cardinality,
+            typename Key, typename IdType>
+  static bool selected_identity_matches(
+      Registry &registry,
+      typename Registry::selector_identity_key_domain domain,
+      bool expects_runtime_key_storage, IdType &&id) {
+    auto selection = registry.template runtime_source_select<Request>(
+        std::forward<IdType>(id));
+    if (!selection.found() || !selection.state) {
+      return false;
+    }
+
+    auto *entry = static_cast<typename Registry::registered_binding_entry *>(
+        selection.state);
+    if (Registry::selector_identity_count(*entry) != 1) {
+      return false;
+    }
+
+    const auto &identity = Registry::selector_identity_at(*entry, 0);
+    if (!(Registry::selector_identity_interface_type(identity) ==
+          Registry::rtti_type::template get_type_index<Interface>())) {
+      return false;
+    }
+    if (Registry::selector_identity_domain(identity) != domain) {
+      return false;
+    }
+    if (Registry::selector_identity_cardinality_value(identity) !=
+        Registry::template selector_cardinality<Cardinality>()) {
+      return false;
+    }
+
+    const auto &key_type = Registry::selector_identity_key_type(identity);
+    if constexpr (std::is_void_v<Key>) {
+      if (key_type) {
+        return false;
+      }
+    } else {
+      if (!key_type ||
+          !(*key_type == Registry::rtti_type::template get_type_index<Key>())) {
+        return false;
+      }
+    }
+
+    return Registry::selector_identity_has_runtime_key_storage(identity) ==
+           expects_runtime_key_storage;
+  }
+};
+
+} // namespace detail
 
 } // namespace dingo

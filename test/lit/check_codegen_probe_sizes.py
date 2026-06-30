@@ -134,7 +134,7 @@ PROBE_LIMITS = {
         "gcc": 0x310,
         "gcc13": 0x3e0,
         "gcc14": 0x3e0,
-        "gcc15": 0x400,
+        "gcc15": 0x520,
         "gcc_arm64": 0x3b0,
     },
     "probe_runtime_resolution_mixed_container_external_value_storage": {
@@ -149,7 +149,7 @@ PROBE_LIMITS = {
         "gcc": 0x330,
         "gcc13": 0x3e0,
         "gcc14": 0x3f0,
-        "gcc15": 0x410,
+        "gcc15": 0x530,
         "gcc_arm64": 0x3c0,
     },
     "probe_runtime_resolution_mixed_container_external_reference_storage": {

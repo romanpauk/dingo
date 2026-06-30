@@ -23,6 +23,7 @@ namespace dingo {
 struct test_allocator_state {
   int allocations = 0;
   int deallocations = 0;
+  std::size_t largest_allocation_bytes = 0;
 };
 
 template <typename T> class test_allocator {
@@ -39,6 +40,10 @@ public:
   value_type *allocate(std::size_t n) {
     if (state_) {
       ++state_->allocations;
+      const auto allocation_bytes = n * sizeof(value_type);
+      if (allocation_bytes > state_->largest_allocation_bytes) {
+        state_->largest_allocation_bytes = allocation_bytes;
+      }
     }
     return static_cast<value_type *>(::operator new(n * sizeof(value_type)));
   }
@@ -79,6 +84,30 @@ struct typed_key_cached_processor_impl : typed_key_cached_processor {
   int id() const override { return 42; }
 
   inline static int constructions = 0;
+};
+
+template <typename Container>
+using selector_identity_probe =
+    detail::runtime_selector_identity_probe<typename Container::registry_type>;
+
+struct selector_table_test_entry;
+using selector_table_test_rtti = rtti<typeid_provider>;
+using selector_table_test_allocator = std::allocator<char>;
+using selector_table_test_table =
+    detail::runtime_selector_table<selector_table_test_rtti,
+                                   selector_table_test_allocator,
+                                   selector_table_test_entry>;
+
+struct selector_table_test_entry {
+  explicit selector_table_test_entry(selector_table_test_allocator &allocator)
+      : storage_type(selector_table_test_rtti::template get_type_index<
+                     selector_table_test_entry>()),
+        selector_identities(
+            detail::make_selector_storage_allocator<
+                selector_table_test_table::identity_allocator>(allocator)) {}
+
+  typename selector_table_test_rtti::type_index storage_type;
+  selector_table_test_table::identity_storage selector_identities;
 };
 
 struct fixed_injection_processor {
@@ -286,6 +315,38 @@ TEST(index_test, same_runtime_key_rejects_same_storage_for_associative_one) {
       type_index_already_registered_exception);
 }
 
+TEST(index_test,
+     failed_runtime_key_one_registration_preserves_existing_entry_cache) {
+  struct second_processor : typed_key_cached_processor {
+    int id() const override { return 2; }
+  };
+
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<associative<typed_key_cached_processor, std::size_t>>;
+  };
+
+  typed_key_cached_processor_impl::constructions = 0;
+
+  container<traits> container;
+  container.template register_indexed_type<
+      scope<shared>, storage<typed_key_cached_processor_impl>,
+      interfaces<typed_key_cached_processor>>(std::size_t(7));
+
+  auto &before =
+      container.template resolve<typed_key_cached_processor &>(std::size_t(7));
+  EXPECT_THROW((container.template register_indexed_type<
+                   scope<shared>, storage<second_processor>,
+                   interfaces<typed_key_cached_processor>>(std::size_t(7))),
+               type_index_already_registered_exception);
+  auto &after =
+      container.template resolve<typed_key_cached_processor &>(std::size_t(7));
+
+  ASSERT_EQ(&after, &before);
+  ASSERT_EQ(after.id(), 42);
+  ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
+}
+
 TEST(index_test, unkeyed_resolve_does_not_select_indexed_binding) {
   struct processor {
     virtual ~processor() = default;
@@ -310,8 +371,23 @@ TEST(index_test, unkeyed_resolve_does_not_select_indexed_binding) {
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(0)).id(), 1);
 }
 
-TEST(index_test,
-     runtime_keyed_collection_requires_associative_many_projection) {
+TEST(index_test, normal_unkeyed_shared_registration_reuses_entry_cache) {
+  typed_key_cached_processor_impl::constructions = 0;
+
+  container<> container;
+  container.template register_type<scope<shared>,
+                                   storage<typed_key_cached_processor_impl>,
+                                   interfaces<typed_key_cached_processor>>();
+
+  auto &first = container.template resolve<typed_key_cached_processor &>();
+  auto &second = container.template resolve<typed_key_cached_processor &>();
+
+  ASSERT_EQ(&second, &first);
+  ASSERT_EQ(first.id(), 42);
+  ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
+}
+
+TEST(index_test, runtime_keyed_collection_requires_associative_many_selector) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -334,6 +410,353 @@ TEST(index_test,
       (container.template resolve<std::vector<processor *>>(std::size_t(0))),
       type_not_found_exception);
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(0)).id(), 1);
+}
+
+TEST(index_test, legacy_typed_key_registration_reuses_entry_cache) {
+  struct processor_key {};
+
+  typed_key_cached_processor_impl::constructions = 0;
+
+  container<> container;
+  container.template register_type<
+      scope<shared>, storage<typed_key_cached_processor_impl>,
+      interfaces<typed_key_cached_processor>, key<processor_key>>();
+
+  auto &first = container.template resolve<typed_key_cached_processor &>(
+      key<processor_key>{});
+  auto &second = container.template resolve<typed_key_cached_processor &>(
+      key<processor_key>{});
+
+  ASSERT_EQ(&second, &first);
+  ASSERT_EQ(first.id(), 42);
+  ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
+}
+
+TEST(index_test, legacy_normal_unkeyed_registration_records_no_key_one) {
+  runtime_container<> container;
+  container.template register_type<scope<shared>,
+                                   storage<typed_key_cached_processor_impl>,
+                                   interfaces<typed_key_cached_processor>>();
+
+  using probe = selector_identity_probe<decltype(container)>;
+  ASSERT_TRUE((probe::template selected_no_key_identity_matches<
+               typed_key_cached_processor, typed_key_cached_processor, one>(
+      container.registry())));
+}
+
+TEST(index_test, explicit_collection_registration_records_no_key_many) {
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<collection<typed_key_cached_processor>>;
+  };
+
+  runtime_container<traits> container;
+  container.template register_type<scope<shared>,
+                                   storage<typed_key_cached_processor_impl>,
+                                   interfaces<typed_key_cached_processor>>();
+
+  using probe = selector_identity_probe<decltype(container)>;
+  ASSERT_TRUE((probe::template selected_no_key_identity_matches<
+               typed_key_cached_processor, typed_key_cached_processor, many>(
+      container.registry())));
+}
+
+TEST(index_test, legacy_typed_key_registration_records_typed_key_one) {
+  struct processor_key {};
+
+  runtime_container<> container;
+  container.template register_type<
+      scope<shared>, storage<typed_key_cached_processor_impl>,
+      interfaces<typed_key_cached_processor>, key<processor_key>>();
+
+  using probe = selector_identity_probe<decltype(container)>;
+  ASSERT_TRUE(
+      (probe::template selected_typed_key_identity_matches<
+          typed_key_cached_processor, typed_key_cached_processor, processor_key,
+          one>(container.registry(), key<processor_key>{})));
+}
+
+TEST(index_test, explicit_typed_key_many_registration_records_typed_key_many) {
+  struct processor_key {};
+  struct traits : dynamic_container_traits {
+    using index_definition_type = selectors<
+        selector<typed_key_cached_processor, typed_key<processor_key>, many>>;
+  };
+
+  runtime_container<traits> container;
+  container.template register_type<
+      scope<shared>, storage<typed_key_cached_processor_impl>,
+      interfaces<typed_key_cached_processor>, key<processor_key>>();
+
+  using probe = selector_identity_probe<decltype(container)>;
+  ASSERT_TRUE(
+      (probe::template selected_typed_key_identity_matches<
+          typed_key_cached_processor, typed_key_cached_processor, processor_key,
+          many>(container.registry(), key<processor_key>{})));
+}
+
+TEST(index_test, associative_one_registration_records_runtime_key_one) {
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<associative<typed_key_cached_processor, std::size_t>>;
+  };
+
+  runtime_container<traits> container;
+  container.template register_indexed_type<
+      scope<shared>, storage<typed_key_cached_processor_impl>,
+      interfaces<typed_key_cached_processor>>(std::size_t(7));
+
+  using probe = selector_identity_probe<decltype(container)>;
+  ASSERT_TRUE((probe::template selected_runtime_key_identity_matches<
+               typed_key_cached_processor, typed_key_cached_processor,
+               std::size_t, one>(container.registry(), std::size_t(7))));
+}
+
+TEST(index_test, runtime_key_one_lookup_uses_equal_distinct_key_object) {
+  struct comparable_key {
+    int value;
+    bool operator==(const comparable_key &other) const {
+      return value == other.value;
+    }
+  };
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<associative<typed_key_cached_processor, comparable_key>>;
+  };
+
+  typed_key_cached_processor_impl::constructions = 0;
+
+  runtime_container<traits> container;
+  comparable_key registration_key{7};
+  container.template register_indexed_type<
+      scope<shared>, storage<typed_key_cached_processor_impl>,
+      interfaces<typed_key_cached_processor>>(registration_key);
+
+  comparable_key first_lookup_key{7};
+  comparable_key second_lookup_key{7};
+  auto &first = container.template resolve<typed_key_cached_processor &>(
+      first_lookup_key);
+  auto &second = container.template resolve<typed_key_cached_processor &>(
+      second_lookup_key);
+
+  ASSERT_EQ(&second, &first);
+  ASSERT_EQ(first.id(), 42);
+  ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
+}
+
+TEST(index_test, associative_many_registration_records_runtime_key_many) {
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<associative<typed_key_cached_processor, std::size_t, many>>;
+  };
+
+  runtime_container<traits> container;
+  container.template register_indexed_type<
+      scope<shared>, storage<typed_key_cached_processor_impl>,
+      interfaces<typed_key_cached_processor>>(std::size_t(7));
+
+  using probe = selector_identity_probe<decltype(container)>;
+  ASSERT_TRUE((probe::template selected_runtime_key_identity_matches<
+               typed_key_cached_processor, typed_key_cached_processor,
+               std::size_t, many>(container.registry(), std::size_t(7))));
+}
+
+TEST(index_test, selector_table_counts_multi_identity_entry_once) {
+  struct processor {};
+  struct processor_key {};
+
+  selector_table_test_allocator allocator;
+  selector_table_test_table table(allocator);
+  selector_table_test_entry entry(allocator);
+  entry.selector_identities.emplace_back(
+      selector_table_test_table::template make_no_key_identity<processor,
+                                                               many>());
+  entry.selector_identities.emplace_back(
+      selector_table_test_table::template make_typed_key_identity<
+          processor, processor_key, many>());
+
+  ASSERT_TRUE(table.insert(entry));
+
+  auto matches_processor = [](const auto &identity) {
+    return selector_table_test_table::template matches_no_key<processor, many>(
+               identity) ||
+           selector_table_test_table::template matches_typed_key<
+               processor, processor_key, many>(identity);
+  };
+  bool ambiguous = false;
+  auto *selected = table.find_singular(matches_processor, ambiguous);
+  ASSERT_FALSE(ambiguous);
+  ASSERT_EQ(selected, &entry);
+  ASSERT_EQ(table.count(matches_processor), 1U);
+
+  std::size_t visits = 0;
+  ASSERT_EQ(table.for_each(matches_processor,
+                           [&](auto &selected_entry) {
+                             ++visits;
+                             ASSERT_EQ(&selected_entry, &entry);
+                           }),
+            1U);
+  ASSERT_EQ(visits, 1U);
+
+  table.erase(entry);
+  ASSERT_EQ(table.count(matches_processor), 0U);
+}
+
+TEST(index_test, no_key_many_selector_covers_empty_exact_ambiguous) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct first_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct second_processor : processor {
+    int id() const override { return 2; }
+  };
+  struct traits : dynamic_container_traits {
+    using index_definition_type = selectors<collection<processor>>;
+  };
+
+  runtime_container<traits> empty_container;
+
+  auto empty_processors =
+      empty_container.template resolve<std::vector<processor *>>();
+  ASSERT_TRUE(empty_processors.empty());
+  EXPECT_THROW((empty_container.template resolve<processor &>()),
+               type_not_found_exception);
+
+  runtime_container<traits> exact_container;
+  exact_container.template register_type<
+      scope<shared>, storage<first_processor>, interfaces<processor>>();
+  auto exact_processors =
+      exact_container.template resolve<std::vector<processor *>>();
+  ASSERT_EQ(exact_processors.size(), 1U);
+  ASSERT_EQ(exact_processors[0]->id(), 1);
+  ASSERT_EQ(exact_container.template resolve<processor &>().id(), 1);
+
+  runtime_container<traits> ambiguous_container;
+  ambiguous_container.template register_type<
+      scope<shared>, storage<first_processor>, interfaces<processor>>();
+  ambiguous_container.template register_type<
+      scope<shared>, storage<second_processor>, interfaces<processor>>();
+  auto ambiguous_processors =
+      ambiguous_container.template resolve<std::vector<processor *>>();
+  ASSERT_EQ(ambiguous_processors.size(), 2U);
+  ASSERT_EQ(ambiguous_processors[0]->id(), 1);
+  ASSERT_EQ(ambiguous_processors[1]->id(), 2);
+  EXPECT_THROW((ambiguous_container.template resolve<processor &>()),
+               type_ambiguous_exception);
+}
+
+TEST(index_test, typed_key_many_selector_covers_collection_order) {
+  struct processor_key {};
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct first_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct second_processor : processor {
+    int id() const override { return 2; }
+  };
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<selector<processor, typed_key<processor_key>, many>>;
+  };
+
+  runtime_container<traits> container;
+
+  auto empty_processors = container.template resolve<std::vector<processor *>>(
+      key<processor_key>{});
+  ASSERT_TRUE(empty_processors.empty());
+  EXPECT_THROW((container.template resolve<processor &>(key<processor_key>{})),
+               type_not_found_exception);
+
+  container.template register_type<scope<shared>, storage<first_processor>,
+                                   interfaces<processor>, key<processor_key>>();
+  container.template register_type<scope<shared>, storage<second_processor>,
+                                   interfaces<processor>, key<processor_key>>();
+
+  auto processors = container.template resolve<std::vector<processor *>>(
+      key<processor_key>{});
+  ASSERT_EQ(processors.size(), 2U);
+  ASSERT_EQ(processors[0]->id(), 1);
+  ASSERT_EQ(processors[1]->id(), 2);
+  EXPECT_THROW((container.template resolve<processor &>(key<processor_key>{})),
+               type_ambiguous_exception);
+}
+
+TEST(index_test, runtime_key_many_selector_uses_value_semantics) {
+  struct comparable_key {
+    int value;
+    bool operator==(const comparable_key &other) const {
+      return value == other.value;
+    }
+  };
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct first_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct second_processor : processor {
+    int id() const override { return 2; }
+  };
+  struct third_processor : processor {
+    int id() const override { return 3; }
+  };
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<associative<processor, comparable_key, many>>;
+  };
+
+  runtime_container<traits> container;
+
+  container.template register_indexed_type<
+      scope<shared>, storage<first_processor>, interfaces<processor>>(
+      comparable_key{7});
+  container.template register_indexed_type<
+      scope<shared>, storage<second_processor>, interfaces<processor>>(
+      comparable_key{7});
+  container.template register_indexed_type<
+      scope<shared>, storage<third_processor>, interfaces<processor>>(
+      comparable_key{8});
+
+  auto values =
+      container.template resolve<std::vector<processor *>>(comparable_key{7});
+  ASSERT_EQ(values.size(), 2);
+  ASSERT_EQ(values[0]->id(), 1);
+  ASSERT_EQ(values[1]->id(), 2);
+  EXPECT_THROW((container.template resolve<processor &>(comparable_key{7})),
+               type_ambiguous_exception);
+  ASSERT_EQ(container.template resolve<processor &>(comparable_key{8}).id(), 3);
+}
+
+TEST(index_test, runtime_key_many_selector_resolves_empty_collection) {
+  struct comparable_key {
+    int value;
+    bool operator==(const comparable_key &other) const {
+      return value == other.value;
+    }
+  };
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<associative<processor, comparable_key, many>>;
+  };
+
+  runtime_container<traits> container;
+
+  auto processors =
+      container.template resolve<std::vector<processor *>>(comparable_key{7});
+  ASSERT_TRUE(processors.empty());
+  EXPECT_THROW((container.template resolve<processor &>(comparable_key{7})),
+               type_not_found_exception);
 }
 
 TEST(index_test, associative_alias_behaves_like_runtime_key_one) {
@@ -423,6 +846,199 @@ TEST(index_test, associative_many_alias_behaves_like_runtime_key_many) {
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(8)).id(), 3);
 }
 
+TEST(index_test,
+     runtime_key_one_same_storage_at_different_keys_has_distinct_cache_state) {
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<associative<typed_key_cached_processor, std::size_t>>;
+  };
+
+  typed_key_cached_processor_impl::constructions = 0;
+
+  container<traits> container;
+  container.template register_indexed_type<
+      scope<shared>, storage<typed_key_cached_processor_impl>,
+      interfaces<typed_key_cached_processor>>(std::size_t(7));
+  container.template register_indexed_type<
+      scope<shared>, storage<typed_key_cached_processor_impl>,
+      interfaces<typed_key_cached_processor>>(std::size_t(8));
+
+  auto &first_key_first =
+      container.template resolve<typed_key_cached_processor &>(std::size_t(7));
+  auto &first_key_second =
+      container.template resolve<typed_key_cached_processor &>(std::size_t(7));
+  auto &second_key =
+      container.template resolve<typed_key_cached_processor &>(std::size_t(8));
+
+  ASSERT_EQ(&first_key_second, &first_key_first);
+  ASSERT_NE(&second_key, &first_key_first);
+  ASSERT_EQ(typed_key_cached_processor_impl::constructions, 2);
+}
+
+TEST(index_test, empty_child_runtime_key_one_selector_falls_back_to_parent) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct parent_processor : processor {
+    int id() const override { return 1; }
+  };
+
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<associative<processor, std::size_t>>;
+  };
+
+  container<traits> parent;
+  container<traits, std::allocator<char>, decltype(parent)> child(&parent);
+  parent.template register_indexed_type<
+      scope<shared>, storage<parent_processor>, interfaces<processor>>(
+      std::size_t(7));
+
+  ASSERT_EQ(child.template resolve<processor &>(std::size_t(7)).id(), 1);
+}
+
+TEST(index_test, child_runtime_key_one_selector_shadows_parent) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct parent_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct child_processor : processor {
+    int id() const override { return 2; }
+  };
+
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<associative<processor, std::size_t>>;
+  };
+
+  container<traits> parent;
+  container<traits, std::allocator<char>, decltype(parent)> child(&parent);
+  parent.template register_indexed_type<
+      scope<shared>, storage<parent_processor>, interfaces<processor>>(
+      std::size_t(7));
+  child.template register_indexed_type<scope<shared>, storage<child_processor>,
+                                       interfaces<processor>>(std::size_t(7));
+
+  ASSERT_EQ(child.template resolve<processor &>(std::size_t(7)).id(), 2);
+}
+
+TEST(index_test,
+     empty_child_runtime_key_many_selector_collection_falls_back_to_parent) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct first_parent_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct second_parent_processor : processor {
+    int id() const override { return 2; }
+  };
+
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<associative<processor, std::size_t, many>>;
+  };
+
+  container<traits> parent;
+  container<traits, std::allocator<char>, decltype(parent)> child(&parent);
+  parent.template register_indexed_type<
+      scope<shared>, storage<first_parent_processor>, interfaces<processor>>(
+      std::size_t(7));
+  parent.template register_indexed_type<
+      scope<shared>, storage<second_parent_processor>, interfaces<processor>>(
+      std::size_t(7));
+
+  auto values =
+      child.template resolve<std::vector<processor *>>(std::size_t(7));
+
+  ASSERT_EQ(values.size(), 2);
+  ASSERT_EQ(values[0]->id(), 1);
+  ASSERT_EQ(values[1]->id(), 2);
+  EXPECT_THROW((child.template resolve<processor &>(std::size_t(7))),
+               type_ambiguous_exception);
+}
+
+TEST(index_test,
+     child_runtime_key_many_selector_collection_does_not_merge_parent) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct parent_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct child_processor : processor {
+    int id() const override { return 2; }
+  };
+
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<associative<processor, std::size_t, many>>;
+  };
+
+  container<traits> parent;
+  container<traits, std::allocator<char>, decltype(parent)> child(&parent);
+  parent.template register_indexed_type<
+      scope<shared>, storage<parent_processor>, interfaces<processor>>(
+      std::size_t(7));
+  child.template register_indexed_type<scope<shared>, storage<child_processor>,
+                                       interfaces<processor>>(std::size_t(7));
+
+  auto values =
+      child.template resolve<std::vector<processor *>>(std::size_t(7));
+
+  ASSERT_EQ(values.size(), 1);
+  ASSERT_EQ(values[0]->id(), 2);
+  ASSERT_EQ(child.template resolve<processor &>(std::size_t(7)).id(), 2);
+}
+
+TEST(index_test, child_runtime_key_many_selector_ambiguity_does_not_fallback) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct parent_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct first_child_processor : processor {
+    int id() const override { return 2; }
+  };
+  struct second_child_processor : processor {
+    int id() const override { return 3; }
+  };
+
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<associative<processor, std::size_t, many>>;
+  };
+
+  container<traits> parent;
+  container<traits, std::allocator<char>, decltype(parent)> child(&parent);
+  parent.template register_indexed_type<
+      scope<shared>, storage<parent_processor>, interfaces<processor>>(
+      std::size_t(7));
+  child.template register_indexed_type<
+      scope<shared>, storage<first_child_processor>, interfaces<processor>>(
+      std::size_t(7));
+  child.template register_indexed_type<
+      scope<shared>, storage<second_child_processor>, interfaces<processor>>(
+      std::size_t(7));
+
+  auto values =
+      child.template resolve<std::vector<processor *>>(std::size_t(7));
+
+  ASSERT_EQ(values.size(), 2);
+  ASSERT_EQ(values[0]->id(), 2);
+  ASSERT_EQ(values[1]->id(), 3);
+  EXPECT_THROW((child.template resolve<processor &>(std::size_t(7))),
+               type_ambiguous_exception);
+}
+
 TEST(index_test, no_key_one_replaces_unkeyed_singular_identity) {
   struct processor {
     virtual ~processor() = default;
@@ -464,6 +1080,10 @@ TEST(index_test, no_key_one_rejects_same_storage_duplicate) {
   };
 
   container<traits> container;
+
+  EXPECT_THROW((container.template resolve<processor &>()),
+               type_not_found_exception);
+
   container.template register_type<scope<shared>, storage<processor_impl>,
                                    interfaces<processor>>();
 
@@ -606,6 +1226,35 @@ TEST(index_test, no_key_many_rejects_same_storage_duplicate) {
       type_already_registered_exception);
 }
 
+TEST(index_test,
+     failed_no_key_many_registration_preserves_existing_selector_rows) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct processor_impl : processor {
+    int id() const override { return 1; }
+  };
+
+  struct traits : dynamic_container_traits {
+    using index_definition_type = selectors<collection<processor>>;
+  };
+
+  container<traits> container;
+  container.template register_type<scope<shared>, storage<processor_impl>,
+                                   interfaces<processor>>();
+
+  EXPECT_THROW(
+      (container.template register_type<scope<shared>, storage<processor_impl>,
+                                        interfaces<processor>>()),
+      type_already_registered_exception);
+
+  ASSERT_EQ(container.template resolve<processor &>().id(), 1);
+  auto processors = container.template resolve<std::vector<processor *>>();
+  ASSERT_EQ(processors.size(), 1U);
+  ASSERT_EQ(processors[0]->id(), 1);
+}
+
 TEST(index_test, empty_child_no_key_one_selector_falls_back_to_parent) {
   struct processor {
     virtual ~processor() = default;
@@ -625,6 +1274,32 @@ TEST(index_test, empty_child_no_key_one_selector_falls_back_to_parent) {
                                 interfaces<processor>>();
 
   ASSERT_EQ(child.template resolve<processor &>().id(), 1);
+}
+
+TEST(index_test, child_no_key_one_selector_shadows_parent) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct parent_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct child_processor : processor {
+    int id() const override { return 2; }
+  };
+
+  struct traits : dynamic_container_traits {
+    using index_definition_type = selectors<selector<processor, no_key, one>>;
+  };
+
+  container<traits> parent;
+  container<traits, std::allocator<char>, decltype(parent)> child(&parent);
+  parent.template register_type<scope<shared>, storage<parent_processor>,
+                                interfaces<processor>>();
+  child.template register_type<scope<shared>, storage<child_processor>,
+                               interfaces<processor>>();
+
+  ASSERT_EQ(child.template resolve<processor &>().id(), 2);
 }
 
 TEST(index_test, empty_child_no_key_many_selector_falls_back_to_parent) {
@@ -655,6 +1330,73 @@ TEST(index_test, empty_child_no_key_many_selector_falls_back_to_parent) {
   ASSERT_EQ(processors.size(), 2U);
   ASSERT_EQ(processors[0]->id(), 1);
   ASSERT_EQ(processors[1]->id(), 2);
+}
+
+TEST(index_test, child_no_key_many_selector_collection_does_not_merge_parent) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct parent_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct child_processor : processor {
+    int id() const override { return 2; }
+  };
+
+  struct traits : dynamic_container_traits {
+    using index_definition_type = selectors<collection<processor>>;
+  };
+
+  container<traits> parent;
+  container<traits, std::allocator<char>, decltype(parent)> child(&parent);
+  parent.template register_type<scope<shared>, storage<parent_processor>,
+                                interfaces<processor>>();
+  child.template register_type<scope<shared>, storage<child_processor>,
+                               interfaces<processor>>();
+
+  auto processors = child.template resolve<std::vector<processor *>>();
+
+  ASSERT_EQ(processors.size(), 1U);
+  ASSERT_EQ(processors[0]->id(), 2);
+  ASSERT_EQ(child.template resolve<processor &>().id(), 2);
+}
+
+TEST(index_test, child_no_key_many_selector_ambiguity_does_not_fallback) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct parent_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct first_child_processor : processor {
+    int id() const override { return 2; }
+  };
+  struct second_child_processor : processor {
+    int id() const override { return 3; }
+  };
+
+  struct traits : dynamic_container_traits {
+    using index_definition_type = selectors<collection<processor>>;
+  };
+
+  container<traits> parent;
+  container<traits, std::allocator<char>, decltype(parent)> child(&parent);
+  parent.template register_type<scope<shared>, storage<parent_processor>,
+                                interfaces<processor>>();
+  child.template register_type<scope<shared>, storage<first_child_processor>,
+                               interfaces<processor>>();
+  child.template register_type<scope<shared>, storage<second_child_processor>,
+                               interfaces<processor>>();
+
+  auto processors = child.template resolve<std::vector<processor *>>();
+
+  ASSERT_EQ(processors.size(), 2U);
+  ASSERT_EQ(processors[0]->id(), 2);
+  ASSERT_EQ(processors[1]->id(), 3);
+  EXPECT_THROW((child.template resolve<processor &>()),
+               type_ambiguous_exception);
 }
 
 TEST(index_test, typed_key_one_replaces_keyed_singular_identity) {
@@ -763,6 +1505,9 @@ TEST(index_test, typed_key_many_singular_resolve_requires_exactly_one_binding) {
   };
 
   container<traits> container;
+  EXPECT_THROW((container.template resolve<processor &>(key<processor_key>{})),
+               type_not_found_exception);
+
   container.template register_type<scope<shared>, storage<processor_impl>,
                                    interfaces<processor>, key<processor_key>>();
 
@@ -798,6 +1543,40 @@ TEST(index_test, typed_key_many_rejects_same_storage_duplicate) {
                                         interfaces<processor>,
                                         key<processor_key>>()),
       type_index_already_registered_exception);
+}
+
+TEST(index_test,
+     failed_typed_key_many_registration_preserves_existing_selector_rows) {
+  struct processor_key {};
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct processor_impl : processor {
+    int id() const override { return 1; }
+  };
+
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<selector<processor, typed_key<processor_key>, many>>;
+  };
+
+  container<traits> container;
+  container.template register_type<scope<shared>, storage<processor_impl>,
+                                   interfaces<processor>, key<processor_key>>();
+
+  EXPECT_THROW(
+      (container.template register_type<scope<shared>, storage<processor_impl>,
+                                        interfaces<processor>,
+                                        key<processor_key>>()),
+      type_index_already_registered_exception);
+
+  ASSERT_EQ(container.template resolve<processor &>(key<processor_key>{}).id(),
+            1);
+  auto processors = container.template resolve<std::vector<processor *>>(
+      key<processor_key>{});
+  ASSERT_EQ(processors.size(), 1U);
+  ASSERT_EQ(processors[0]->id(), 1);
 }
 
 TEST(index_test, empty_child_typed_key_one_selector_falls_back_to_parent) {
@@ -959,7 +1738,7 @@ TEST(index_test,
                type_ambiguous_exception);
 }
 
-TEST(index_test, typed_key_one_selector_reuses_projection_entry_cache) {
+TEST(index_test, typed_key_one_selector_reuses_entry_cache) {
   struct processor_key {};
 
   struct traits : dynamic_container_traits {
@@ -1163,20 +1942,44 @@ TEST(index_test, explicit_selector_resolves_with_custom_container_allocator) {
   ASSERT_EQ(container.template resolve<animal &>(std::string("dog")).id(), 11);
 }
 
-TEST(index_test, selector_projection_storage_uses_rebound_allocator) {
+TEST(index_test, runtime_key_selector_payload_uses_rebound_allocator) {
+  struct allocator_visible_key {
+    explicit allocator_visible_key(int resolved_value)
+        : value(resolved_value) {}
+
+    bool operator==(const allocator_visible_key &other) const {
+      return value == other.value;
+    }
+
+    int value;
+    char padding[4096] = {};
+  };
+  struct animal {
+    virtual ~animal() = default;
+    virtual int id() const = 0;
+  };
+  struct dog : animal {
+    int id() const override { return 11; }
+  };
+
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<associative<animal, allocator_visible_key>>;
+  };
+
   test_allocator_state state;
   {
     test_allocator<char> allocator(&state);
-    detail::unique_selector_projection<int, int, test_allocator<char>>
-        unique_projection(allocator);
-    detail::multi_selector_projection<int, int, test_allocator<char>>
-        multi_projection(allocator);
+    container<traits, test_allocator<char>> container(allocator);
 
-    unique_projection.emplace(1, 10);
-    multi_projection.emplace(2, 20);
+    container.template register_indexed_type<scope<shared>, storage<dog>,
+                                             interfaces<animal>>(
+        allocator_visible_key{7});
 
-    ASSERT_GE(state.allocations, 2);
-    ASSERT_LT(state.deallocations, state.allocations);
+    ASSERT_GE(state.largest_allocation_bytes, sizeof(allocator_visible_key));
+    ASSERT_EQ(
+        container.template resolve<animal &>(allocator_visible_key{7}).id(),
+        11);
   }
 
   ASSERT_EQ(state.deallocations, state.allocations);
@@ -1260,6 +2063,8 @@ TEST(index_test,
   EXPECT_THROW((container.template resolve<processor &>(std::size_t(7))),
                type_ambiguous_exception);
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(8)).id(), 3);
+  EXPECT_THROW((container.template resolve<processor &>(std::size_t(9))),
+               type_not_found_exception);
 }
 
 TEST(index_test, associative_many_rejects_same_storage_for_same_runtime_key) {
@@ -1291,6 +2096,39 @@ TEST(index_test, associative_many_rejects_same_storage_for_same_runtime_key) {
       scope<shared>, storage<processor_impl>, interfaces<processor>>(
       std::size_t(8));
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(8)).id(), 1);
+}
+
+TEST(index_test,
+     failed_runtime_key_many_registration_preserves_existing_selector_rows) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct processor_impl : processor {
+    int id() const override { return 1; }
+  };
+
+  struct traits : dynamic_container_traits {
+    using index_definition_type =
+        selectors<associative<processor, std::size_t, many>>;
+  };
+
+  container<traits> container;
+  container.template register_indexed_type<
+      scope<shared>, storage<processor_impl>, interfaces<processor>>(
+      std::size_t(7));
+
+  EXPECT_THROW(
+      (container.template register_indexed_type<
+          scope<shared>, storage<processor_impl>, interfaces<processor>>(
+          std::size_t(7))),
+      type_index_already_registered_exception);
+
+  ASSERT_EQ(container.template resolve<processor &>(std::size_t(7)).id(), 1);
+  auto values =
+      container.template resolve<std::vector<processor *>>(std::size_t(7));
+  ASSERT_EQ(values.size(), 1);
+  ASSERT_EQ(values[0]->id(), 1);
 }
 
 TEST(index_test,
