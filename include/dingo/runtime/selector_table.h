@@ -166,8 +166,8 @@ public:
 
     Allocator *allocator_ = nullptr;
     erased_runtime_selector_key *ptr_ = nullptr;
-    void (*destroy_)(Allocator &, erased_runtime_selector_key *) noexcept =
-        nullptr;
+    void (*destroy_)(Allocator &,
+                     erased_runtime_selector_key *) noexcept = nullptr;
   };
 
   struct selector_identity {
@@ -197,16 +197,17 @@ public:
     selector_identity &operator=(selector_identity &&) noexcept = default;
   };
 
-  using identity_allocator = typename std::conditional_t<
-      ::dingo::is_static_allocator_v<Allocator>,
-      std::allocator<selector_identity>,
-      typename std::allocator_traits<Allocator>::template rebind_alloc<
-          selector_identity>>;
+  using identity_allocator =
+      typename std::conditional_t<::dingo::is_static_allocator_v<Allocator>,
+                                  std::allocator<selector_identity>,
+                                  typename std::allocator_traits<Allocator>::
+                                      template rebind_alloc<selector_identity>>;
   using identity_storage = std::vector<selector_identity, identity_allocator>;
 
   using row_allocator = typename std::conditional_t<
       ::dingo::is_static_allocator_v<Allocator>, std::allocator<Entry *>,
-      typename std::allocator_traits<Allocator>::template rebind_alloc<Entry *>>;
+      typename std::allocator_traits<Allocator>::template rebind_alloc<
+          Entry *>>;
   using row_storage = std::vector<Entry *, row_allocator>;
 
   explicit runtime_selector_table(Allocator &allocator)
@@ -214,10 +215,9 @@ public:
 
   template <typename Interface, typename Cardinality>
   static selector_identity make_no_key_identity() {
-    return selector_identity{Rtti::template get_type_index<Interface>(),
-                             key_domain::no_key,
-                             runtime_selector_cardinality_value<Cardinality>(),
-                             std::nullopt};
+    return selector_identity{
+        Rtti::template get_type_index<Interface>(), key_domain::no_key,
+        runtime_selector_cardinality_value<Cardinality>(), std::nullopt};
   }
 
   template <typename Interface, typename Cardinality>
@@ -256,12 +256,11 @@ public:
     auto erased_key =
         runtime_selector_key_owner::template make<stored_key_type>(
             allocator, std::forward<KeyValue>(key_value));
-    return selector_identity{
-        Rtti::template get_type_index<Interface>(),
-        key_domain::runtime_key,
-        runtime_selector_cardinality_value<Cardinality>(),
-        Rtti::template get_type_index<stored_key_type>(),
-        std::move(erased_key)};
+    return selector_identity{Rtti::template get_type_index<Interface>(),
+                             key_domain::runtime_key,
+                             runtime_selector_cardinality_value<Cardinality>(),
+                             Rtti::template get_type_index<stored_key_type>(),
+                             std::move(erased_key)};
   }
 
   bool insert(Entry &entry) {
@@ -287,7 +286,8 @@ public:
 
   void erase(Entry &entry) {
     auto *entry_ptr = std::addressof(entry);
-    rows_.erase(std::remove(rows_.begin(), rows_.end(), entry_ptr), rows_.end());
+    rows_.erase(std::remove(rows_.begin(), rows_.end(), entry_ptr),
+                rows_.end());
   }
 
   template <typename Matcher> Entry *find_singular(Matcher &&matches) const {
@@ -331,7 +331,8 @@ public:
 
   template <typename Interface, typename Cardinality>
   static bool matches_no_key(const selector_identity &identity) {
-    return identity.interface_type == Rtti::template get_type_index<Interface>() &&
+    return identity.interface_type ==
+               Rtti::template get_type_index<Interface>() &&
            identity.domain == key_domain::no_key &&
            identity.selector_cardinality ==
                runtime_selector_cardinality_value<Cardinality>() &&
@@ -340,7 +341,8 @@ public:
 
   template <typename Interface, typename Key, typename Cardinality>
   static bool matches_typed_key(const selector_identity &identity) {
-    return identity.interface_type == Rtti::template get_type_index<Interface>() &&
+    return identity.interface_type ==
+               Rtti::template get_type_index<Interface>() &&
            identity.domain == key_domain::typed_key &&
            identity.selector_cardinality ==
                runtime_selector_cardinality_value<Cardinality>() &&
@@ -360,7 +362,8 @@ public:
           identity.selector_cardinality ==
               runtime_selector_cardinality_value<Cardinality>() &&
           identity.key_type &&
-          *identity.key_type == Rtti::template get_type_index<stored_key_type>() &&
+          *identity.key_type ==
+              Rtti::template get_type_index<stored_key_type>() &&
           identity.runtime_key)) {
       return false;
     }

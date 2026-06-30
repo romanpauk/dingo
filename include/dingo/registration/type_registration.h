@@ -541,9 +541,6 @@ public:
                 "failed to deduce an interface type");
 
   using key_type = detail::registration_key_t<parsed_args>;
-  static_assert(
-      !detail::is_key_value_v<key_type>,
-      "dingo::key<T, V> cannot be used as a typed-key registration key");
 
   // Conversions are deduced from Storage and Scope
   using conversions_type = detail::registration_conversions_t<parsed_args>;

@@ -297,8 +297,14 @@ template <typename Request, typename CapabilityTypes>
 struct request_capability_match;
 
 template <typename Capability>
-using unwrapped_static_capability_t =
-    typename annotated_traits<keyed_type_t<Capability>>::type;
+using unwrapped_static_capability_t = typename annotated_traits<
+    std::conditional_t<is_indexed_v<Capability>, indexed_type_t<Capability>,
+                       keyed_type_t<Capability>>>::type;
+
+template <typename Request>
+using unwrapped_static_request_t = typename annotated_traits<
+    std::conditional_t<is_indexed_v<Request>, indexed_type_t<Request>,
+                       keyed_type_t<Request>>>::type;
 
 template <typename Request>
 struct request_capability_match<Request, type_list<>> {
@@ -311,7 +317,7 @@ struct request_capability_match<Request, type_list<Head, Tail...>> {
       std::is_same_v<lookup_type_t<Head>, request_lookup_type_t<Request>> ||
           std::is_same_v<
               request_lookup_type_t<unwrapped_static_capability_t<Head>>,
-              request_lookup_type_t<Request>>,
+              request_lookup_type_t<unwrapped_static_request_t<Request>>>,
       Head,
       typename request_capability_match<Request, type_list<Tail...>>::type>;
 };

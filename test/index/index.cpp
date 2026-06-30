@@ -7,6 +7,7 @@
 
 #include <dingo/container.h>
 #include <dingo/storage/shared.h>
+#include <dingo/storage/unique.h>
 #include <dingo/type/type_name.h>
 
 #include <gtest/gtest.h>
@@ -120,7 +121,7 @@ struct fixed_injection_processor_impl : fixed_injection_processor {
   int id() const override { return Id; }
 };
 
-template <std::size_t Id> struct fixed_injection_consumer {
+template <auto Id> struct fixed_injection_consumer {
   explicit fixed_injection_consumer(
       indexed<fixed_injection_processor &, key<std::size_t, Id>> selected)
       : processor(selected) {}
@@ -2215,6 +2216,235 @@ TEST(index_test, constructor_injects_fixed_indexed_associative_bindings) {
 
   ASSERT_EQ(first_consumer.processor.id(), 0);
   ASSERT_EQ(second_consumer.processor.id(), 1);
+}
+
+TEST(index_test, static_container_resolves_fixed_indexed_associative_bindings) {
+  using source = bindings<
+      bind<scope<shared>, storage<fixed_injection_processor_impl<0>>,
+           interfaces<fixed_injection_processor>, key<std::size_t, 0>>,
+      bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
+           interfaces<fixed_injection_processor>, key<std::size_t, 1>>>;
+
+  struct traits : static_container_traits<> {
+    using index_definition_type =
+        selectors<associative<fixed_injection_processor, std::size_t>>;
+  };
+
+  static_container<source, traits> container;
+
+  auto &first = container.template resolve<
+      indexed<fixed_injection_processor &, key<std::size_t, 0>>>();
+  auto &second = container.template resolve<
+      indexed<fixed_injection_processor &, key<std::size_t, 1>>>();
+
+  ASSERT_EQ(first.id(), 0);
+  ASSERT_EQ(second.id(), 1);
+}
+
+TEST(index_test,
+     static_container_keeps_fixed_associative_cache_entries_distinct) {
+  using source = bindings<
+      bind<scope<shared>, storage<fixed_injection_processor_impl<7>>,
+           interfaces<fixed_injection_processor>, key<std::size_t, 0>>,
+      bind<scope<shared>, storage<fixed_injection_processor_impl<7>>,
+           interfaces<fixed_injection_processor>, key<std::size_t, 1>>>;
+
+  struct traits : static_container_traits<> {
+    using index_definition_type =
+        selectors<associative<fixed_injection_processor, std::size_t>>;
+  };
+
+  static_container<source, traits> container;
+
+  auto &first = container.template resolve<
+      indexed<fixed_injection_processor &, key<std::size_t, 0>>>();
+  auto &first_again = container.template resolve<
+      indexed<fixed_injection_processor &, key<std::size_t, 0>>>();
+  auto &second = container.template resolve<
+      indexed<fixed_injection_processor &, key<std::size_t, 1>>>();
+
+  ASSERT_EQ(&first, &first_again);
+  ASSERT_NE(&first, &second);
+  ASSERT_EQ(first.id(), 7);
+  ASSERT_EQ(second.id(), 7);
+}
+
+TEST(index_test, static_container_injects_fixed_indexed_dependency) {
+  using source =
+      bindings<bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
+                    interfaces<fixed_injection_processor>, key<std::size_t, 1>>,
+               bind<scope<unique>, storage<fixed_injection_consumer<1>>,
+                    dependencies<indexed<fixed_injection_processor &,
+                                         key<std::size_t, 1>>>>>;
+
+  struct traits : static_container_traits<> {
+    using index_definition_type =
+        selectors<associative<fixed_injection_processor, std::size_t>>;
+  };
+
+  static_container<source, traits> container;
+
+  auto consumer = container.template resolve<fixed_injection_consumer<1>>();
+
+  ASSERT_EQ(consumer.processor.id(), 1);
+}
+
+TEST(index_test, static_container_preserves_typed_key_resolution) {
+  struct static_typed_key {};
+  using source = bindings<
+      bind<scope<shared>, storage<fixed_injection_processor_impl<4>>,
+           interfaces<fixed_injection_processor>, key<static_typed_key>>>;
+
+  static_container<source> container;
+
+  auto &processor = container.template resolve<fixed_injection_processor &>(
+      key<static_typed_key>{});
+
+  ASSERT_EQ(processor.id(), 4);
+}
+
+TEST(index_test, static_container_resolves_fixed_runtime_key_many_collection) {
+  using source = bindings<
+      bind<scope<shared>, storage<fixed_injection_processor_impl<0>>,
+           interfaces<fixed_injection_processor>, key<std::size_t, 7>>,
+      bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
+           interfaces<fixed_injection_processor>, key<std::size_t, 7>>,
+      bind<scope<shared>, storage<fixed_injection_processor_impl<2>>,
+           interfaces<fixed_injection_processor>, key<std::size_t, 8>>>;
+
+  struct traits : static_container_traits<> {
+    using index_definition_type =
+        selectors<associative<fixed_injection_processor, std::size_t, many>>;
+  };
+
+  static_container<source, traits> container;
+
+  auto processors =
+      container.template resolve<std::vector<fixed_injection_processor *>>(
+          key<std::size_t, 7>{});
+  auto constructed = container.template construct_collection<
+      std::vector<fixed_injection_processor *>>(key<std::size_t, 7>{});
+
+  ASSERT_EQ(
+      (container.template count_collection<
+          std::vector<fixed_injection_processor *>, key<std::size_t, 7>>()),
+      2U);
+  ASSERT_EQ(processors.size(), 2U);
+  ASSERT_EQ(processors[0]->id(), 0);
+  ASSERT_EQ(processors[1]->id(), 1);
+  ASSERT_EQ(constructed.size(), 2U);
+  ASSERT_EQ(constructed[0]->id(), 0);
+  ASSERT_EQ(constructed[1]->id(), 1);
+}
+
+TEST(index_test, static_container_resolves_fixed_runtime_key_many_exactly_one) {
+  using source = bindings<
+      bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
+           interfaces<fixed_injection_processor>, key<std::size_t, 7>>>;
+
+  struct traits : static_container_traits<> {
+    using index_definition_type =
+        selectors<associative<fixed_injection_processor, std::size_t, many>>;
+  };
+
+  static_container<source, traits> container;
+
+  auto &processor = container.template resolve<
+      indexed<fixed_injection_processor &, key<std::size_t, 7>>>();
+
+  ASSERT_EQ(processor.id(), 1);
+}
+
+TEST(index_test,
+     static_fixed_runtime_key_many_allows_same_storage_different_key) {
+  using source = bindings<
+      bind<scope<shared>, storage<fixed_injection_processor_impl<9>>,
+           interfaces<fixed_injection_processor>, key<std::size_t, 7>>,
+      bind<scope<shared>, storage<fixed_injection_processor_impl<9>>,
+           interfaces<fixed_injection_processor>, key<std::size_t, 8>>>;
+
+  struct traits : static_container_traits<> {
+    using index_definition_type =
+        selectors<associative<fixed_injection_processor, std::size_t, many>>;
+  };
+
+  static_container<source, traits> container;
+
+  auto &first = container.template resolve<
+      indexed<fixed_injection_processor &, key<std::size_t, 7>>>();
+  auto &second = container.template resolve<
+      indexed<fixed_injection_processor &, key<std::size_t, 8>>>();
+
+  ASSERT_EQ(first.id(), 9);
+  ASSERT_EQ(second.id(), 9);
+  ASSERT_NE(&first, &second);
+}
+
+TEST(index_test, static_container_fixed_runtime_key_many_parent_fallback) {
+  using parent_source = bindings<
+      bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
+           interfaces<fixed_injection_processor>, key<std::size_t, 7>>,
+      bind<scope<shared>, storage<fixed_injection_processor_impl<2>>,
+           interfaces<fixed_injection_processor>, key<std::size_t, 7>>>;
+  using child_source = bindings<>;
+
+  struct traits : static_container_traits<> {
+    using index_definition_type =
+        selectors<associative<fixed_injection_processor, std::size_t, many>>;
+  };
+
+  static_container<parent_source, traits> parent;
+  static_container<child_source, decltype(parent)> child(&parent);
+
+  auto processors =
+      child.template resolve<std::vector<fixed_injection_processor *>>(
+          key<std::size_t, 7>{});
+
+  ASSERT_EQ(processors.size(), 2U);
+  ASSERT_EQ(processors[0]->id(), 1);
+  ASSERT_EQ(processors[1]->id(), 2);
+}
+
+TEST(index_test, static_container_fixed_runtime_key_many_child_does_not_merge) {
+  using parent_source = bindings<
+      bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
+           interfaces<fixed_injection_processor>, key<std::size_t, 7>>>;
+  using child_source = bindings<
+      bind<scope<shared>, storage<fixed_injection_processor_impl<2>>,
+           interfaces<fixed_injection_processor>, key<std::size_t, 7>>>;
+
+  struct traits : static_container_traits<> {
+    using index_definition_type =
+        selectors<associative<fixed_injection_processor, std::size_t, many>>;
+  };
+
+  static_container<parent_source, traits> parent;
+  static_container<child_source, decltype(parent)> child(&parent);
+
+  auto processors =
+      child.template resolve<std::vector<fixed_injection_processor *>>(
+          key<std::size_t, 7>{});
+
+  ASSERT_EQ(processors.size(), 1U);
+  ASSERT_EQ(processors[0]->id(), 2);
+}
+
+TEST(index_test, static_fixed_runtime_key_resolves_indexed_reference) {
+  using source = bindings<
+      bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
+           interfaces<fixed_injection_processor>, key<std::size_t, 0>>>;
+
+  struct traits : static_container_traits<> {
+    using index_definition_type =
+        selectors<associative<fixed_injection_processor, std::size_t>>;
+  };
+
+  static_container<source, traits> container;
+
+  auto &processor = container.template resolve<
+      indexed<fixed_injection_processor &, key<std::size_t, 0>>>();
+
+  ASSERT_EQ(processor.id(), 1);
 }
 
 TEST(index_test, constructor_injects_fixed_indexed_associative_binding) {

@@ -45,11 +45,14 @@ struct static_container_dependency_diagnostics_base<
     static_registry<Registrations...>, true>
     : static_container_no_dependency_diagnostics {};
 
-template <typename StaticRegistry, typename ParentContainer = void>
+template <typename StaticRegistry, typename ParentContainer = void,
+          typename ContainerTraits = static_container_traits<>>
 class static_container_impl;
 
-template <typename ParentContainer, typename... Registrations>
-class static_container_impl<static_registry<Registrations...>, ParentContainer>
+template <typename ParentContainer, typename ContainerTraits,
+          typename... Registrations>
+class static_container_impl<static_registry<Registrations...>, ParentContainer,
+                            ContainerTraits>
     : private static_container_dependency_diagnostics_base<
           static_registry<Registrations...>, !std::is_void_v<ParentContainer>> {
   template <typename T, typename Context, typename Container>
@@ -61,11 +64,19 @@ class static_container_impl<static_registry<Registrations...>, ParentContainer>
       has_parent_v, graph_analysis<registry_type_, true>,
       typename static_container_graph_type<
           registry_type_, registry_type_::dependencies_are_resolved>::type>;
-  using self_type = static_container_impl<registry_type_, ParentContainer>;
+  using self_type =
+      static_container_impl<registry_type_, ParentContainer, ContainerTraits>;
   using parent_container_type = ParentContainer;
   using state_type = static_storage_state<Registrations...>;
   using scope_ref = static_binding_scope_ref<state_type, Registrations...>;
   using context_type = static_context<registry_type_>;
+  using index_entries_ = detail::normalize_index_definitions_t<
+      typename ContainerTraits::index_definition_type>;
+
+  template <typename Collection, typename Fn>
+  using collection_insert_invocable =
+      std::is_invocable<Fn &, Collection &,
+                        typename collection_traits<Collection>::resolve_type>;
 
   template <typename Request, typename LookupRequest, typename Key>
   struct diagnostic_static_binding_source {
@@ -146,11 +157,24 @@ class static_container_impl<static_registry<Registrations...>, ParentContainer>
 public:
   using source_type = registry_type_;
   using static_source_type = registry_type_;
+  using container_traits_type = ContainerTraits;
   using rtti_type = typename scope_ref::rtti_type;
 
   static_assert(static_source_type::valid,
                 "static_container requires a valid compile-time bindings "
                 "source");
+  static_assert(detail::fixed_runtime_key_bindings_are_declared<
+                    typename static_source_type::interface_bindings,
+                    index_entries_>::value,
+                "static_container fixed dingo::key<Key, Value> bindings "
+                "require selector<Interface, runtime_key<Key>, one> or "
+                "selector<Interface, runtime_key<Key>, many>");
+  static_assert(detail::fixed_runtime_key_bindings_are_unique<
+                    typename static_source_type::interface_bindings,
+                    index_entries_>::value,
+                "static_container fixed runtime-key selector bindings must be "
+                "unique for one selectors and unique by storage for many "
+                "selectors");
   static_assert(graph_type_::resolvable,
                 "static_container requires a resolvable compile-time binding "
                 "graph");
@@ -216,6 +240,20 @@ public:
       }
       context_type context;
       return resolve<T, false, Key>(context);
+    }
+  }
+
+  template <typename T, typename IdType, typename R = request_result_t<T>,
+            std::enable_if_t<!is_none_v<std::decay_t<IdType>> &&
+                                 !detail::is_typed_key_v<IdType>,
+                             int> = 0>
+  R resolve(IdType &&) {
+    if constexpr (detail::is_key_value_v<IdType>) {
+      return resolve<T>(key<std::decay_t<IdType>>{});
+    } else {
+      static_assert(detail::container_dependent_false_v<T, IdType>,
+                    "static_container fixed runtime-key lookup requires "
+                    "dingo::key<Key, Value>");
     }
   }
 
@@ -288,7 +326,12 @@ public:
             *this, context);
   }
 
-  template <typename T, typename Fn> T construct_collection(Fn &&fn) {
+  template <typename T, typename Fn,
+            std::enable_if_t<
+                !detail::is_key_value_v<Fn> &&
+                    collection_insert_invocable<T, std::decay_t<Fn>>::value,
+                int> = 0>
+  T construct_collection(Fn &&fn) {
     context_type context;
     auto state = state_ref();
     return state
@@ -302,6 +345,25 @@ public:
     return state
         .template construct_static_collection<T, Key, static_source_type>(
             *this, context);
+  }
+
+  template <typename T, typename IdType,
+            std::enable_if_t<detail::is_key_value_v<IdType>, int> = 0>
+  T construct_collection(IdType &&) {
+    return construct_collection<T>(key<std::decay_t<IdType>>{});
+  }
+
+  template <
+      typename T, typename IdType,
+      std::enable_if_t<
+          !is_none_v<std::decay_t<IdType>> && !detail::is_typed_key_v<IdType> &&
+              !detail::is_key_value_v<IdType> &&
+              !collection_insert_invocable<T, std::decay_t<IdType>>::value,
+          int> = 0>
+  T construct_collection(IdType &&) {
+    static_assert(detail::container_dependent_false_v<T, IdType>,
+                  "static_container fixed runtime-key collection lookup "
+                  "requires dingo::key<Key, Value>");
   }
 
   template <typename T, typename Fn, typename Key>
@@ -377,10 +439,14 @@ public:
             std::enable_if_t<!is_none_v<std::decay_t<IdType>> &&
                                  !detail::is_typed_key_v<IdType>,
                              int> = 0>
-  R resolve(context_type &, IdType &&) {
-    static_assert(detail::container_dependent_false_v<T, IdType>,
-                  "dingo::indexed<T, dingo::key<Key, Value>> constructor "
-                  "injection requires a runtime index");
+  R resolve(context_type &context, IdType &&) {
+    if constexpr (detail::is_key_value_v<IdType>) {
+      return resolve<T, RemoveRvalueReferences, std::decay_t<IdType>>(context);
+    } else {
+      static_assert(detail::container_dependent_false_v<T, IdType>,
+                    "dingo::indexed<T, dingo::key<Key, Value>> constructor "
+                    "injection requires a runtime index");
+    }
   }
 
 private:
@@ -394,10 +460,22 @@ private:
 template <typename StaticSource, typename ParentContainer>
 class static_container
     : public detail::static_container_impl<
-          static_bindings_source_t<StaticSource>, ParentContainer> {
-  using base_type =
-      detail::static_container_impl<static_bindings_source_t<StaticSource>,
-                                    ParentContainer>;
+          static_bindings_source_t<StaticSource>,
+          std::conditional_t<
+              detail::is_static_container_traits_v<ParentContainer>, void,
+              ParentContainer>,
+          std::conditional_t<
+              detail::is_static_container_traits_v<ParentContainer>,
+              ParentContainer,
+              detail::static_container_traits_of_t<ParentContainer>>> {
+  using base_type = detail::static_container_impl<
+      static_bindings_source_t<StaticSource>,
+      std::conditional_t<detail::is_static_container_traits_v<ParentContainer>,
+                         void, ParentContainer>,
+      std::conditional_t<
+          detail::is_static_container_traits_v<ParentContainer>,
+          ParentContainer,
+          detail::static_container_traits_of_t<ParentContainer>>>;
 
 public:
   using base_type::base_type;

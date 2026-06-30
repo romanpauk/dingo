@@ -5,16 +5,16 @@ registration and resolution flow is already in place.
 
 ## Indexed Resolution
 
-Container traits can define one or more indexes so that a registration is
-resolved by both type and a user-supplied key.
+Container traits can define one or more selectors so that a registration is
+resolved by interface, key domain, and cardinality.
 
-Use indexes when:
+Use selectors when:
 
 - multiple implementations share the same interface
 - the caller chooses the implementation by name or numeric ID
 - the binding should remain separate from unkeyed resolution
 
-Index definitions are scoped to the interface they serve. Every indexed
+Selector definitions are scoped to the interface they serve. Every indexed
 registration or lookup requires a matching selector definition.
 
 Selector definitions can also make unkeyed runtime registrations explicit for an
@@ -43,7 +43,7 @@ struct container_traits : dynamic_container_traits {
 };
 ```
 
-Typed-key registrations can also use explicit selector projections:
+Typed-key registrations can also use explicit selectors:
 
 ```c++
 struct container_traits : dynamic_container_traits {
@@ -56,13 +56,13 @@ struct container_traits : dynamic_container_traits {
 singular identity for that interface and key type.
 `selector<I, typed_key<K>, many>` makes `resolve<std::vector<I *>>(key<K>{})`
 enumerate keyed collection members in registration order. A singular typed-key
-resolve succeeds only when the matching `many` projection contains exactly one
+resolve succeeds only when the matching `many` selector contains exactly one
 registration. If no `typed_key` selector is declared for an interface/key pair,
 typed-key registration and resolution keep their existing behavior.
 
-Selector projection storage is internal and backend-independent. Applications
-should declare the interface, key domain, and cardinality they need instead of
-selecting storage for the projection.
+Selector lookup storage is internal. Applications should declare the interface,
+key domain, and cardinality they need instead of selecting storage for lookup
+rows.
 
 Constructor dependencies can also bind to a fixed indexed key:
 
@@ -76,11 +76,66 @@ struct Pipeline {
 `indexed<IProcessor&, key<std::size_t, 1>>` resolves the same object as
 `container.resolve<IProcessor&>(std::size_t{1})`; the configured
 `(IProcessor, std::size_t)` selector determines the lookup domain and
-cardinality, while the projection storage remains an implementation detail.
+cardinality, while the lookup storage remains an implementation detail.
 
 The value in `key<T, Value>` must be a valid non-type template parameter and
 must be usable as `T{Value}`. Class-type values such as `key<MyKey, MyKey{1}>`
 require C++20 structural non-type template parameter support.
+
+Static containers can use the same `associative<I, K>` selectors when the key
+value is fixed in the type:
+
+- `key<K>` remains a typed key and maps to `selector<I, typed_key<K>, ...>`.
+- `key<K, Value>` maps to `selector<I, runtime_key<K>, ...>` when
+  `associative<I, K>` or `associative<I, K, many>` is declared.
+- Static lookup is type-encoded: use `indexed<I &, key<K, Value>>` or
+  `resolve<Collection>(key<K, Value>{})`; `resolve<I &>(K{...})` is runtime
+  lookup and is not supported by `static_container`.
+- Static fixed runtime-key bindings require `static_container` with traits that
+  declare the selector. `container<bindings<...>>` rejects them because that
+  mixed form cannot carry custom selector traits.
+
+<!-- { include("../examples/index/static_fixed.cpp", scope="////") -->
+
+Example code included from
+[../examples/index/static_fixed.cpp](../examples/index/static_fixed.cpp):
+
+```c++
+struct IProcessor {
+  virtual ~IProcessor() = default;
+  virtual int id() const = 0;
+};
+
+template <int Id> struct Processor : IProcessor {
+  int id() const override { return Id; }
+};
+
+struct Pipeline {
+  explicit Pipeline(
+      dingo::indexed<IProcessor &, dingo::key<std::size_t, 0>> first_processor)
+      : first(first_processor) {}
+
+  IProcessor &first;
+};
+
+using source = bindings<bind<scope<shared>, storage<Processor<0>>,
+                             interfaces<IProcessor>, key<std::size_t, 0>>,
+                        bind<scope<shared>, storage<Processor<1>>,
+                             interfaces<IProcessor>, key<std::size_t, 1>>>;
+
+struct container_traits : static_container_traits<> {
+  using index_definition_type = selectors<associative<IProcessor, std::size_t>>;
+};
+
+static_container<source, container_traits> container;
+
+auto &first = container.resolve<indexed<IProcessor &, key<std::size_t, 0>>>();
+auto pipeline = container.construct<Pipeline>();
+
+return first.id() == 0 && &pipeline.first == &first ? 0 : 1;
+```
+
+<!-- } -->
 
 <!-- { include("../examples/index/index.cpp", scope="////") -->
 
@@ -172,7 +227,7 @@ struct Pipeline {
 struct container_traits : static_container_traits<void> {
   using index_definition_type = selectors<associative<IProcessor, size_t>>;
 };
-// Runtime selector projections use dynamic internal storage even when this
+// Runtime selector lookup uses dynamic internal storage even when this
 // example uses static_container_traits for the rest of the container.
 
 container<container_traits> container;

@@ -13,9 +13,47 @@
 #include <type_traits>
 
 namespace dingo {
+template <typename T, typename Key> struct keyed;
+template <typename T, typename Selector> struct indexed;
 
 template <typename Request> struct request_interface {
   using type = typename annotated_traits<Request>::type;
+};
+
+template <typename T, typename Key> struct request_interface<keyed<T, Key>> {
+  using type = T;
+};
+
+template <typename T, typename Key> struct request_interface<keyed<T, Key> &> {
+  using type = T &;
+};
+
+template <typename T, typename Key> struct request_interface<keyed<T, Key> &&> {
+  using type = T &&;
+};
+
+template <typename T, typename Key> struct request_interface<keyed<T, Key> *> {
+  using type = T *;
+};
+
+template <typename T, typename Selector>
+struct request_interface<indexed<T, Selector>> {
+  using type = T;
+};
+
+template <typename T, typename Selector>
+struct request_interface<indexed<T, Selector> &> {
+  using type = T &;
+};
+
+template <typename T, typename Selector>
+struct request_interface<indexed<T, Selector> &&> {
+  using type = T &&;
+};
+
+template <typename T, typename Selector>
+struct request_interface<indexed<T, Selector> *> {
+  using type = T *;
 };
 
 template <typename T, typename Selector>

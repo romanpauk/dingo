@@ -1281,6 +1281,9 @@ private:
         std::conditional_t<!is_none_v<std::decay_t<Arg>>,
                            type_registration<TypeArgs..., factory<Arg>>,
                            type_registration<TypeArgs...>>;
+    static_assert(!detail::is_key_value_v<typename registration::key_type>,
+                  "dingo::key<T, V> registration keys require a static fixed "
+                  "runtime-key selector");
     using binding_model = detail::binding_model<registration>;
     using bindings_type = typename binding_model::bindings_type;
     using instance_container_type = registration_container_type<registration>;

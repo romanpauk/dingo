@@ -70,7 +70,7 @@ int main() {
   struct container_traits : static_container_traits<void> {
     using index_definition_type = selectors<associative<IProcessor, size_t>>;
   };
-  // Runtime selector projections use dynamic internal storage even when this
+  // Runtime selector lookup uses dynamic internal storage even when this
   // example uses static_container_traits for the rest of the container.
 
   container<container_traits> container;

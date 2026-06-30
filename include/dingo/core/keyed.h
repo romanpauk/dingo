@@ -177,6 +177,13 @@ template <typename T, auto Value> struct key_selector_value<key<T, Value>> {
   static T make() { return key_value<T, Value>::make(); }
 };
 
+template <typename Left, typename Right>
+struct key_selector_same_value : std::false_type {};
+
+template <typename T, auto Left, auto Right>
+struct key_selector_same_value<key<T, Left>, key<T, Right>>
+    : std::bool_constant<(T{Left} == T{Right})> {};
+
 template <typename T, auto Value>
 struct is_value_selector<key<T, Value>> : std::true_type {
   using type = T;
