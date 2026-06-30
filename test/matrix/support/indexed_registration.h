@@ -29,18 +29,18 @@ template <typename Definition> struct indexed_definition_key;
 
 template <typename Interface, typename Key>
 struct indexed_definition_key<
-    dingo::selector<Interface, dingo::runtime_key<Key>, dingo::one>> {
+    dingo::lookup<Interface, dingo::runtime_key<Key>, dingo::one>> {
   using type = typename indexed_definition_key_arg<Key>::type;
 };
 
 template <typename Head, typename... Tail>
-struct indexed_definition_key<dingo::selectors<Head, Tail...>> {
+struct indexed_definition_key<dingo::lookups<Head, Tail...>> {
   using type = typename indexed_definition_key<Head>::type;
 };
 
 template <typename Container> struct indexed_key {
-  using type = typename indexed_definition_key<
-      typename std::remove_reference_t<Container>::index_definition_type>::type;
+  using type = typename indexed_definition_key<typename std::remove_reference_t<
+      Container>::lookup_definition_type>::type;
 };
 
 template <typename Container>

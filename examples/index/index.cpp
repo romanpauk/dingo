@@ -22,9 +22,9 @@ struct Cat : IAnimal {};
 int main() {
   using namespace dingo;
   ////
-  // Declare traits with a std::string based selector
+  // Declare traits with a std::string based lookup
   struct container_traits : dynamic_container_traits {
-    using index_definition_type = selectors<associative<IAnimal, std::string>>;
+    using lookup_definition_type = lookups<associative<IAnimal, std::string>>;
   };
 
   container<container_traits> container;

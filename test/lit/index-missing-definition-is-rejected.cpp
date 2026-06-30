@@ -9,8 +9,8 @@ struct processor {};
 struct animal {};
 
 struct traits : dingo::dynamic_container_traits {
-  using index_definition_type =
-      dingo::selectors<dingo::associative<animal, std::size_t>>;
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<animal, std::size_t>>;
 };
 
 int main() {
@@ -20,5 +20,5 @@ int main() {
                                   dingo::interfaces<processor>>(std::size_t(1));
 }
 
-// CHECK: indexed registration or lookup has no matching dingo selector
+// CHECK: indexed registration or lookup has no matching dingo lookup
 // definition for interface/key

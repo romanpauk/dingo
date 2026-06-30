@@ -8,9 +8,9 @@
 struct processor {};
 
 struct traits : dingo::dynamic_container_traits {
-  using index_definition_type = dingo::selectors<
+  using lookup_definition_type = dingo::lookups<
       dingo::associative<processor, std::size_t>,
-      dingo::selector<processor, dingo::runtime_key<std::size_t>, dingo::one>>;
+      dingo::lookup<processor, dingo::runtime_key<std::size_t>, dingo::one>>;
 };
 
 int main() {
@@ -20,4 +20,4 @@ int main() {
                                   dingo::interfaces<processor>>(std::size_t(1));
 }
 
-// CHECK: duplicate dingo selector definition for interface/key
+// CHECK: duplicate dingo lookup definition for interface/key

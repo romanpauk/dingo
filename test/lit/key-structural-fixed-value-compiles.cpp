@@ -10,6 +10,6 @@ struct structural_key {
 using key_type = dingo::key<structural_key, structural_key{1}>;
 
 int main() {
-  auto value = dingo::detail::key_selector_value<key_type>::make();
+  auto value = dingo::detail::key_value_traits<key_type>::make();
   return value.value == 1 ? 0 : 1;
 }

@@ -10,9 +10,9 @@ struct animal {
 struct dog : animal {};
 
 struct traits : dingo::dynamic_container_traits {
-  using index_definition_type =
-      dingo::selectors<dingo::selector<animal, dingo::no_key, dingo::one>,
-                       dingo::selector<animal, dingo::no_key, dingo::many>>;
+  using lookup_definition_type =
+      dingo::lookups<dingo::lookup<animal, dingo::no_key, dingo::one>,
+                     dingo::lookup<animal, dingo::no_key, dingo::many>>;
 };
 
 int main() {
@@ -21,4 +21,4 @@ int main() {
                           dingo::interfaces<animal>>();
 }
 
-// CHECK: conflicting dingo selector definitions for interface/key domain
+// CHECK: conflicting dingo lookup definitions for interface/key domain

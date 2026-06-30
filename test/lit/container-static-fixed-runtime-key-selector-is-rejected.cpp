@@ -22,5 +22,5 @@ int main() {
 }
 
 // CHECK: container fixed dingo::key<Key, Value> bindings require
-// CHECK: static_container with selector<Interface, runtime_key<Key>, one>
-// CHECK: selector<Interface, runtime_key<Key>, many>
+// CHECK: static_container with lookup<Interface, runtime_key<Key>, one>
+// CHECK: lookup<Interface, runtime_key<Key>, many>

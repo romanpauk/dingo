@@ -82,8 +82,8 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   using binding_resolution_ref =
       detail::binding_scope_ref<static_state, Registrations...>;
   using static_context_type = static_context<static_registry_type_>;
-  using index_entries_ = detail::normalize_index_definitions_t<
-      typename dynamic_container_traits::index_definition_type>;
+  using index_entries_ = detail::normalize_lookup_definitions_t<
+      typename dynamic_container_traits::lookup_definition_type>;
   static constexpr bool has_parent_v = !std::is_void_v<ParentContainer>;
   using parent_container_type = ParentContainer;
 
@@ -681,17 +681,17 @@ public:
 
   static_assert(static_source_type::valid,
                 "container requires a valid compile-time bindings source");
-  static_assert(detail::fixed_runtime_key_bindings_are_declared<
+  static_assert(detail::key_value_bindings_are_declared<
                     typename static_source_type::interface_bindings,
                     index_entries_>::value,
                 "container fixed dingo::key<Key, Value> bindings require "
-                "static_container with selector<Interface, runtime_key<Key>, "
-                "one> or selector<Interface, runtime_key<Key>, many>");
-  static_assert(detail::fixed_runtime_key_bindings_are_unique<
+                "static_container with lookup<Interface, runtime_key<Key>, "
+                "one> or lookup<Interface, runtime_key<Key>, many>");
+  static_assert(detail::key_value_bindings_are_unique<
                     typename static_source_type::interface_bindings,
                     index_entries_>::value,
-                "container fixed runtime-key selector bindings must be unique "
-                "for one selectors and unique by storage for many selectors");
+                "container fixed runtime-key lookup bindings must be unique "
+                "for one lookups and unique by storage for many lookups");
   static_assert(detail::graph_analysis<static_source_type, true>::resolvable,
                 "container requires a resolvable compile-time binding graph");
   static_assert(

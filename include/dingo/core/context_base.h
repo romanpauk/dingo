@@ -28,17 +28,16 @@ class basic_static_context;
 
 namespace detail {
 
-template <typename T> struct context_base_static_context : std::false_type {};
+template <typename T> struct is_basic_static_context : std::false_type {};
 
 template <typename StaticRegistry, bool RuntimeDependencies>
-struct context_base_static_context<
+struct is_basic_static_context<
     basic_static_context<StaticRegistry, RuntimeDependencies>>
     : std::true_type {};
 
 template <typename T>
-inline constexpr bool context_base_static_context_v =
-    context_base_static_context<
-        std::remove_cv_t<std::remove_reference_t<T>>>::value;
+inline constexpr bool is_basic_static_context_v = is_basic_static_context<
+    std::remove_cv_t<std::remove_reference_t<T>>>::value;
 
 struct context_destructible {
   void *instance;
@@ -72,13 +71,13 @@ T resolve_context_request(Context &context, Container &container) {
     using request_type = indexed_type_t<T>;
     using selector_type = indexed_selector_t<T>;
     if constexpr (is_key_value_v<selector_type>) {
-      if constexpr (context_base_static_context_v<Context>) {
+      if constexpr (is_basic_static_context_v<Context>) {
         return T(container.template resolve<request_type, false, true>(
             context, key<selector_type>{}));
       } else {
-        using key_type = typename key_selector_value<selector_type>::type;
+        using key_type = typename key_value_traits<selector_type>::type;
         return T(container.template resolve<request_type, false, true>(
-            context, key_type{key_selector_value<selector_type>::make()}));
+            context, key_type{key_value_traits<selector_type>::make()}));
       }
     } else {
       static_assert(is_key_value_v<selector_type>,

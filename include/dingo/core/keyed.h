@@ -169,19 +169,19 @@ struct is_key_value<key<T, Value>> : std::bool_constant<!std::is_void_v<T>> {};
 template <typename T>
 inline constexpr bool is_key_value_v = is_key_value<std::decay_t<T>>::value;
 
-template <typename Selector> struct key_selector_value;
+template <typename Selector> struct key_value_traits;
 
-template <typename T, auto Value> struct key_selector_value<key<T, Value>> {
+template <typename T, auto Value> struct key_value_traits<key<T, Value>> {
   using type = T;
 
   static T make() { return key_value<T, Value>::make(); }
 };
 
 template <typename Left, typename Right>
-struct key_selector_same_value : std::false_type {};
+struct is_same_key_value : std::false_type {};
 
 template <typename T, auto Left, auto Right>
-struct key_selector_same_value<key<T, Left>, key<T, Right>>
+struct is_same_key_value<key<T, Left>, key<T, Right>>
     : std::bool_constant<(T{Left} == T{Right})> {};
 
 template <typename T, auto Value>

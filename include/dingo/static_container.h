@@ -46,7 +46,7 @@ struct static_container_dependency_diagnostics_base<
     : static_container_no_dependency_diagnostics {};
 
 template <typename StaticRegistry, typename ParentContainer = void,
-          typename ContainerTraits = static_container_traits<>>
+          typename ContainerTraits = ::dingo::static_container_traits<>>
 class static_container_impl;
 
 template <typename ParentContainer, typename ContainerTraits,
@@ -70,8 +70,8 @@ class static_container_impl<static_registry<Registrations...>, ParentContainer,
   using state_type = static_storage_state<Registrations...>;
   using scope_ref = static_binding_scope_ref<state_type, Registrations...>;
   using context_type = static_context<registry_type_>;
-  using index_entries_ = detail::normalize_index_definitions_t<
-      typename ContainerTraits::index_definition_type>;
+  using index_entries_ = detail::normalize_lookup_definitions_t<
+      typename ContainerTraits::lookup_definition_type>;
 
   template <typename Collection, typename Fn>
   using collection_insert_invocable =
@@ -163,18 +163,18 @@ public:
   static_assert(static_source_type::valid,
                 "static_container requires a valid compile-time bindings "
                 "source");
-  static_assert(detail::fixed_runtime_key_bindings_are_declared<
+  static_assert(detail::key_value_bindings_are_declared<
                     typename static_source_type::interface_bindings,
                     index_entries_>::value,
                 "static_container fixed dingo::key<Key, Value> bindings "
-                "require selector<Interface, runtime_key<Key>, one> or "
-                "selector<Interface, runtime_key<Key>, many>");
-  static_assert(detail::fixed_runtime_key_bindings_are_unique<
+                "require lookup<Interface, runtime_key<Key>, one> or "
+                "lookup<Interface, runtime_key<Key>, many>");
+  static_assert(detail::key_value_bindings_are_unique<
                     typename static_source_type::interface_bindings,
                     index_entries_>::value,
-                "static_container fixed runtime-key selector bindings must be "
-                "unique for one selectors and unique by storage for many "
-                "selectors");
+                "static_container fixed runtime-key lookup bindings must be "
+                "unique for one lookups and unique by storage for many "
+                "lookups");
   static_assert(graph_type_::resolvable,
                 "static_container requires a resolvable compile-time binding "
                 "graph");
@@ -467,15 +467,14 @@ class static_container
           std::conditional_t<
               detail::is_static_container_traits_v<ParentContainer>,
               ParentContainer,
-              detail::static_container_traits_of_t<ParentContainer>>> {
+              detail::static_container_traits_t<ParentContainer>>> {
   using base_type = detail::static_container_impl<
       static_bindings_source_t<StaticSource>,
       std::conditional_t<detail::is_static_container_traits_v<ParentContainer>,
                          void, ParentContainer>,
-      std::conditional_t<
-          detail::is_static_container_traits_v<ParentContainer>,
-          ParentContainer,
-          detail::static_container_traits_of_t<ParentContainer>>>;
+      std::conditional_t<detail::is_static_container_traits_v<ParentContainer>,
+                         ParentContainer,
+                         detail::static_container_traits_t<ParentContainer>>>;
 
 public:
   using base_type::base_type;

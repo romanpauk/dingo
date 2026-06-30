@@ -20,177 +20,175 @@
 #include <type_traits>
 
 namespace dingo {
-template <typename... Projections> struct selectors {};
+template <typename... Definitions> struct lookups {};
 struct no_key {};
 template <typename Key> struct typed_key {};
 template <typename Key> struct runtime_key {};
 struct one {};
 struct many {};
 template <typename Interface, typename KeyDomain, typename Cardinality>
-struct selector {};
+struct lookup {};
 template <typename Interface>
-using collection = selector<Interface, no_key, many>;
+using collection = lookup<Interface, no_key, many>;
 template <typename Interface, typename Key, typename Cardinality = one>
-using associative = selector<Interface, runtime_key<Key>, Cardinality>;
-template <typename Interface, typename Key>
-using unique_index = selector<Interface, runtime_key<Key>, one>;
-template <typename Interface, typename Key>
-using multi_index = selector<Interface, runtime_key<Key>, many>;
+using associative = lookup<Interface, runtime_key<Key>, Cardinality>;
 template <typename... Args> struct interfaces;
 template <typename T, auto... Values> struct key;
 
 namespace detail {
 template <typename Interface, typename KeyDomain, typename Cardinality>
-struct index_entry {
+struct lookup_entry {
   using interface_type = Interface;
   using key_domain = KeyDomain;
   using cardinality = Cardinality;
 };
 
-template <typename T> struct index_interface_arg {
+template <typename T> struct lookup_interface_arg {
   using type = type_list<T>;
 };
 
-template <typename... Types> struct index_interface_arg<interfaces<Types...>> {
+template <typename... Types> struct lookup_interface_arg<interfaces<Types...>> {
   using type = type_list<Types...>;
 };
 
-template <typename T> struct index_key_arg {
+template <typename T> struct lookup_key_arg {
   using type = T;
 };
 
-template <typename T, auto... Values> struct index_key_arg<key<T, Values...>> {
+template <typename T, auto... Values> struct lookup_key_arg<key<T, Values...>> {
   static_assert(sizeof...(Values) == 0,
-                "index definitions require dingo::key<Key>, not "
+                "lookup definitions require dingo::key<Key>, not "
                 "dingo::key<Key, Value>");
   using type = T;
 };
 
-template <typename T> using normalized_index_interface_t = normalized_type_t<T>;
+template <typename T>
+using normalized_lookup_interface_t = normalized_type_t<T>;
 
 template <typename T>
-using normalized_index_key_t =
-    std::remove_cv_t<std::remove_reference_t<typename index_key_arg<T>::type>>;
+using normalized_lookup_key_t =
+    std::remove_cv_t<std::remove_reference_t<typename lookup_key_arg<T>::type>>;
 
 template <typename Interfaces, typename KeyDomain, typename Cardinality>
-struct normalize_index_interfaces;
+struct normalize_lookup_interfaces;
 
 template <typename... Interfaces, typename KeyDomain, typename Cardinality>
-struct normalize_index_interfaces<type_list<Interfaces...>, KeyDomain,
-                                  Cardinality> {
-  using type = type_list<index_entry<normalized_index_interface_t<Interfaces>,
-                                     KeyDomain, Cardinality>...>;
+struct normalize_lookup_interfaces<type_list<Interfaces...>, KeyDomain,
+                                   Cardinality> {
+  using type = type_list<lookup_entry<normalized_lookup_interface_t<Interfaces>,
+                                      KeyDomain, Cardinality>...>;
 };
 
-template <typename Definition> struct normalize_index_definition;
+template <typename Definition> struct normalize_lookup_definition;
 
 template <typename Interface, typename KeyDomain, typename Cardinality>
-struct normalize_index_definition<
-    ::dingo::selector<Interface, KeyDomain, Cardinality>>
-    : normalize_index_interfaces<typename index_interface_arg<Interface>::type,
-                                 KeyDomain, Cardinality> {};
+struct normalize_lookup_definition<
+    ::dingo::lookup<Interface, KeyDomain, Cardinality>>
+    : normalize_lookup_interfaces<
+          typename lookup_interface_arg<Interface>::type, KeyDomain,
+          Cardinality> {};
 
-template <typename DefinitionList> struct normalize_index_definitions;
+template <typename DefinitionList> struct normalize_lookup_definitions;
 
 template <typename... Definitions>
-struct normalize_index_definitions<type_list<Definitions...>> {
+struct normalize_lookup_definitions<type_list<Definitions...>> {
   using type = type_list_cat_t<
-      typename normalize_index_definition<Definitions>::type...>;
+      typename normalize_lookup_definition<Definitions>::type...>;
 };
 
-template <> struct normalize_index_definitions<std::tuple<>> {
+template <> struct normalize_lookup_definitions<std::tuple<>> {
   using type = type_list<>;
 };
 
 template <typename... Definitions>
-struct normalize_index_definitions<::dingo::selectors<Definitions...>>
-    : normalize_index_definitions<type_list<Definitions...>> {};
+struct normalize_lookup_definitions<::dingo::lookups<Definitions...>>
+    : normalize_lookup_definitions<type_list<Definitions...>> {};
 
 template <typename Definitions>
-using normalize_index_definitions_t =
-    typename normalize_index_definitions<Definitions>::type;
+using normalize_lookup_definitions_t =
+    typename normalize_lookup_definitions<Definitions>::type;
 
 template <typename Candidate, typename Entry>
-struct same_index_slot
+struct same_lookup_slot
     : std::bool_constant<std::is_same_v<typename Candidate::interface_type,
                                         typename Entry::interface_type> &&
                          std::is_same_v<typename Candidate::key_domain,
                                         typename Entry::key_domain>> {};
 
 template <typename Candidate, typename Entry>
-struct same_index_definition
-    : std::bool_constant<same_index_slot<Candidate, Entry>::value &&
+struct same_lookup_definition
+    : std::bool_constant<same_lookup_slot<Candidate, Entry>::value &&
                          std::is_same_v<typename Candidate::cardinality,
                                         typename Entry::cardinality>> {};
 
-template <typename Candidate, typename List> struct contains_index_slot;
+template <typename Candidate, typename List> struct contains_lookup_slot;
 
 template <typename Candidate>
-struct contains_index_slot<Candidate, type_list<>> : std::false_type {};
+struct contains_lookup_slot<Candidate, type_list<>> : std::false_type {};
 
 template <typename Candidate, typename Head, typename... Tail>
-struct contains_index_slot<Candidate, type_list<Head, Tail...>>
+struct contains_lookup_slot<Candidate, type_list<Head, Tail...>>
     : std::bool_constant<
-          same_index_slot<Candidate, Head>::value ||
-          contains_index_slot<Candidate, type_list<Tail...>>::value> {};
+          same_lookup_slot<Candidate, Head>::value ||
+          contains_lookup_slot<Candidate, type_list<Tail...>>::value> {};
 
-template <typename Candidate, typename List> struct contains_index_definition;
+template <typename Candidate, typename List> struct contains_lookup_definition;
 
 template <typename Candidate>
-struct contains_index_definition<Candidate, type_list<>> : std::false_type {};
+struct contains_lookup_definition<Candidate, type_list<>> : std::false_type {};
 
 template <typename Candidate, typename Head, typename... Tail>
-struct contains_index_definition<Candidate, type_list<Head, Tail...>>
+struct contains_lookup_definition<Candidate, type_list<Head, Tail...>>
     : std::bool_constant<
-          same_index_definition<Candidate, Head>::value ||
-          contains_index_definition<Candidate, type_list<Tail...>>::value> {};
+          same_lookup_definition<Candidate, Head>::value ||
+          contains_lookup_definition<Candidate, type_list<Tail...>>::value> {};
 
-template <typename Seen, typename Remaining> struct has_duplicate_index_slot;
+template <typename Seen, typename Remaining> struct has_duplicate_lookup_slot;
 
 template <typename... Seen>
-struct has_duplicate_index_slot<type_list<Seen...>, type_list<>>
+struct has_duplicate_lookup_slot<type_list<Seen...>, type_list<>>
     : std::false_type {};
 
 template <typename... Seen, typename Head, typename... Tail>
-struct has_duplicate_index_slot<type_list<Seen...>, type_list<Head, Tail...>>
-    : std::bool_constant<contains_index_slot<Head, type_list<Seen...>>::value ||
-                         has_duplicate_index_slot<type_list<Seen..., Head>,
-                                                  type_list<Tail...>>::value> {
-};
+struct has_duplicate_lookup_slot<type_list<Seen...>, type_list<Head, Tail...>>
+    : std::bool_constant<
+          contains_lookup_slot<Head, type_list<Seen...>>::value ||
+          has_duplicate_lookup_slot<type_list<Seen..., Head>,
+                                    type_list<Tail...>>::value> {};
 
 template <typename Entries>
-inline constexpr bool has_duplicate_index_slot_v =
-    has_duplicate_index_slot<type_list<>, Entries>::value;
+inline constexpr bool has_duplicate_lookup_slot_v =
+    has_duplicate_lookup_slot<type_list<>, Entries>::value;
 
 template <typename Seen, typename Remaining>
-struct has_duplicate_index_definition;
+struct has_duplicate_lookup_definition;
 
 template <typename... Seen>
-struct has_duplicate_index_definition<type_list<Seen...>, type_list<>>
+struct has_duplicate_lookup_definition<type_list<Seen...>, type_list<>>
     : std::false_type {};
 
 template <typename... Seen, typename Head, typename... Tail>
-struct has_duplicate_index_definition<type_list<Seen...>,
-                                      type_list<Head, Tail...>>
+struct has_duplicate_lookup_definition<type_list<Seen...>,
+                                       type_list<Head, Tail...>>
     : std::bool_constant<
-          contains_index_definition<Head, type_list<Seen...>>::value ||
-          has_duplicate_index_definition<type_list<Seen..., Head>,
-                                         type_list<Tail...>>::value> {};
+          contains_lookup_definition<Head, type_list<Seen...>>::value ||
+          has_duplicate_lookup_definition<type_list<Seen..., Head>,
+                                          type_list<Tail...>>::value> {};
 
 template <typename Entries>
-inline constexpr bool has_duplicate_index_definition_v =
-    has_duplicate_index_definition<type_list<>, Entries>::value;
+inline constexpr bool has_duplicate_lookup_definition_v =
+    has_duplicate_lookup_definition<type_list<>, Entries>::value;
 
 template <typename Interface, typename Key, typename Entries>
-struct index_entry_for;
+struct matching_lookup_entry;
 
 template <typename Interface, typename Key>
-struct index_entry_for<Interface, Key, type_list<>> {
+struct matching_lookup_entry<Interface, Key, type_list<>> {
   using type = void;
 };
 
 template <typename Interface, typename Key, typename Head, typename... Tail>
-struct index_entry_for<Interface, Key, type_list<Head, Tail...>> {
+struct matching_lookup_entry<Interface, Key, type_list<Head, Tail...>> {
 private:
   static constexpr bool exact =
       std::is_same_v<typename Head::interface_type, Interface> &&
@@ -199,36 +197,36 @@ private:
 public:
   using type = std::conditional_t<
       exact, Head,
-      typename index_entry_for<Interface, Key, type_list<Tail...>>::type>;
+      typename matching_lookup_entry<Interface, Key, type_list<Tail...>>::type>;
 };
 
 template <typename Interface, typename Key, typename Entries>
-struct selected_index_entry {
+struct selected_lookup_entry {
 private:
-  using normalized_interface = normalized_index_interface_t<Interface>;
-  using normalized_key = normalized_index_key_t<Key>;
+  using normalized_interface = normalized_lookup_interface_t<Interface>;
+  using normalized_key = normalized_lookup_key_t<Key>;
 
 public:
-  using type = typename index_entry_for<normalized_interface, normalized_key,
-                                        Entries>::type;
+  using type = typename matching_lookup_entry<normalized_interface,
+                                              normalized_key, Entries>::type;
 };
 
 template <typename Interface, typename Key, typename Entries>
-using selected_index_entry_t =
-    typename selected_index_entry<Interface, Key, Entries>::type;
+using selected_lookup_entry_t =
+    typename selected_lookup_entry<Interface, Key, Entries>::type;
 
 template <typename Interface, typename Cardinality, typename Entries>
-struct no_key_index_entry_for;
+struct matching_no_key_lookup_entry;
 
 template <typename Interface, typename Cardinality>
-struct no_key_index_entry_for<Interface, Cardinality, type_list<>> {
+struct matching_no_key_lookup_entry<Interface, Cardinality, type_list<>> {
   using type = void;
 };
 
 template <typename Interface, typename Cardinality, typename Head,
           typename... Tail>
-struct no_key_index_entry_for<Interface, Cardinality,
-                              type_list<Head, Tail...>> {
+struct matching_no_key_lookup_entry<Interface, Cardinality,
+                                    type_list<Head, Tail...>> {
 private:
   static constexpr bool exact =
       std::is_same_v<typename Head::interface_type, Interface> &&
@@ -238,37 +236,40 @@ private:
 public:
   using type =
       std::conditional_t<exact, Head,
-                         typename no_key_index_entry_for<
+                         typename matching_no_key_lookup_entry<
                              Interface, Cardinality, type_list<Tail...>>::type>;
 };
 
 template <typename Interface, typename Cardinality, typename Entries>
-struct selected_no_key_index_entry {
+struct selected_no_key_lookup_entry {
 private:
-  using normalized_interface = normalized_index_interface_t<Interface>;
+  using normalized_interface = normalized_lookup_interface_t<Interface>;
 
 public:
-  using type = typename no_key_index_entry_for<normalized_interface,
-                                               Cardinality, Entries>::type;
+  using type =
+      typename matching_no_key_lookup_entry<normalized_interface, Cardinality,
+                                            Entries>::type;
 };
 
 template <typename Interface, typename Cardinality, typename Entries>
-using selected_no_key_index_entry_t =
-    typename selected_no_key_index_entry<Interface, Cardinality, Entries>::type;
+using selected_no_key_lookup_entry_t =
+    typename selected_no_key_lookup_entry<Interface, Cardinality,
+                                          Entries>::type;
 
 template <typename Interface, typename Key, typename Cardinality,
           typename Entries>
-struct typed_key_index_entry_for;
+struct matching_typed_key_lookup_entry;
 
 template <typename Interface, typename Key, typename Cardinality>
-struct typed_key_index_entry_for<Interface, Key, Cardinality, type_list<>> {
+struct matching_typed_key_lookup_entry<Interface, Key, Cardinality,
+                                       type_list<>> {
   using type = void;
 };
 
 template <typename Interface, typename Key, typename Cardinality, typename Head,
           typename... Tail>
-struct typed_key_index_entry_for<Interface, Key, Cardinality,
-                                 type_list<Head, Tail...>> {
+struct matching_typed_key_lookup_entry<Interface, Key, Cardinality,
+                                       type_list<Head, Tail...>> {
 private:
   static constexpr bool exact =
       std::is_same_v<typename Head::interface_type, Interface> &&
@@ -278,36 +279,35 @@ private:
 public:
   using type = std::conditional_t<
       exact, Head,
-      typename typed_key_index_entry_for<Interface, Key, Cardinality,
-                                         type_list<Tail...>>::type>;
+      typename matching_typed_key_lookup_entry<Interface, Key, Cardinality,
+                                               type_list<Tail...>>::type>;
 };
 
 template <typename Interface, typename Key, typename Cardinality,
           typename Entries>
-struct selected_typed_key_index_entry {
+struct selected_typed_key_lookup_entry {
 private:
-  using normalized_interface = normalized_index_interface_t<Interface>;
-  using normalized_key = normalized_index_key_t<Key>;
+  using normalized_interface = normalized_lookup_interface_t<Interface>;
+  using normalized_key = normalized_lookup_key_t<Key>;
 
 public:
-  using type =
-      typename typed_key_index_entry_for<normalized_interface, normalized_key,
-                                         Cardinality, Entries>::type;
+  using type = typename matching_typed_key_lookup_entry<
+      normalized_interface, normalized_key, Cardinality, Entries>::type;
 };
 
 template <typename Interface, typename Key, typename Cardinality,
           typename Entries>
-using selected_typed_key_index_entry_t =
-    typename selected_typed_key_index_entry<Interface, Key, Cardinality,
-                                            Entries>::type;
+using selected_typed_key_lookup_entry_t =
+    typename selected_typed_key_lookup_entry<Interface, Key, Cardinality,
+                                             Entries>::type;
 
 template <typename Value, typename Allocator>
-using selector_storage_allocator_t = std::conditional_t<
+using lookup_storage_allocator_t = std::conditional_t<
     ::dingo::is_static_allocator_v<Allocator>, std::allocator<Value>,
     typename std::allocator_traits<Allocator>::template rebind_alloc<Value>>;
 
 template <typename StorageAllocator, typename Allocator>
-StorageAllocator make_selector_storage_allocator(Allocator &allocator) {
+StorageAllocator make_lookup_storage_allocator(Allocator &allocator) {
   if constexpr (::dingo::is_static_allocator_v<Allocator>) {
     (void)allocator;
     return StorageAllocator{};

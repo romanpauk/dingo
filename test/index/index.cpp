@@ -88,27 +88,27 @@ struct typed_key_cached_processor_impl : typed_key_cached_processor {
 };
 
 template <typename Container>
-using selector_identity_probe =
-    detail::runtime_selector_identity_probe<typename Container::registry_type>;
+using lookup_identity_probe =
+    detail::runtime_lookup_identity_probe<typename Container::registry_type>;
 
-struct selector_table_test_entry;
-using selector_table_test_rtti = rtti<typeid_provider>;
-using selector_table_test_allocator = std::allocator<char>;
-using selector_table_test_table =
-    detail::runtime_selector_table<selector_table_test_rtti,
-                                   selector_table_test_allocator,
-                                   selector_table_test_entry>;
+struct lookup_table_test_entry;
+using lookup_table_test_rtti = rtti<typeid_provider>;
+using lookup_table_test_allocator = std::allocator<char>;
+using lookup_table_test_table =
+    detail::runtime_lookup_table<lookup_table_test_rtti,
+                                 lookup_table_test_allocator,
+                                 lookup_table_test_entry>;
 
-struct selector_table_test_entry {
-  explicit selector_table_test_entry(selector_table_test_allocator &allocator)
-      : storage_type(selector_table_test_rtti::template get_type_index<
-                     selector_table_test_entry>()),
-        selector_identities(
-            detail::make_selector_storage_allocator<
-                selector_table_test_table::identity_allocator>(allocator)) {}
+struct lookup_table_test_entry {
+  explicit lookup_table_test_entry(lookup_table_test_allocator &allocator)
+      : storage_type(lookup_table_test_rtti::template get_type_index<
+                     lookup_table_test_entry>()),
+        lookup_identities(
+            detail::make_lookup_storage_allocator<
+                lookup_table_test_table::identity_allocator>(allocator)) {}
 
-  typename selector_table_test_rtti::type_index storage_type;
-  selector_table_test_table::identity_storage selector_identities;
+  typename lookup_table_test_rtti::type_index storage_type;
+  lookup_table_test_table::identity_storage lookup_identities;
 };
 
 struct fixed_injection_processor {
@@ -194,7 +194,7 @@ template <typename T, ::dingo::external_fixed_string Value>
 struct is_key_value<::dingo::external_key_string<T, Value>> : std::true_type {};
 
 template <typename T, ::dingo::external_fixed_string Value>
-struct key_selector_value<::dingo::external_key_string<T, Value>> {
+struct key_value_traits<::dingo::external_key_string<T, Value>> {
   using type = T;
 
   static T make() {
@@ -240,8 +240,7 @@ TEST(index_test, same_storage_at_different_runtime_keys_is_distinct) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t>>;
+    using lookup_definition_type = lookups<associative<processor, std::size_t>>;
   };
 
   container<traits> container;
@@ -274,8 +273,7 @@ TEST(index_test,
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t>>;
+    using lookup_definition_type = lookups<associative<processor, std::size_t>>;
   };
 
   container<traits> container;
@@ -300,8 +298,7 @@ TEST(index_test, same_runtime_key_rejects_same_storage_for_associative_one) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t>>;
+    using lookup_definition_type = lookups<associative<processor, std::size_t>>;
   };
 
   container<traits> container;
@@ -323,8 +320,8 @@ TEST(index_test,
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<typed_key_cached_processor, std::size_t>>;
+    using lookup_definition_type =
+        lookups<associative<typed_key_cached_processor, std::size_t>>;
   };
 
   typed_key_cached_processor_impl::constructions = 0;
@@ -358,8 +355,7 @@ TEST(index_test, unkeyed_resolve_does_not_select_indexed_binding) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t>>;
+    using lookup_definition_type = lookups<associative<processor, std::size_t>>;
   };
 
   container<traits> container;
@@ -388,7 +384,7 @@ TEST(index_test, normal_unkeyed_shared_registration_reuses_entry_cache) {
   ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
 }
 
-TEST(index_test, runtime_keyed_collection_requires_associative_many_selector) {
+TEST(index_test, runtime_keyed_collection_requires_associative_many_lookup) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -398,8 +394,7 @@ TEST(index_test, runtime_keyed_collection_requires_associative_many_selector) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t>>;
+    using lookup_definition_type = lookups<associative<processor, std::size_t>>;
   };
 
   container<traits> container;
@@ -439,7 +434,7 @@ TEST(index_test, legacy_normal_unkeyed_registration_records_no_key_one) {
                                    storage<typed_key_cached_processor_impl>,
                                    interfaces<typed_key_cached_processor>>();
 
-  using probe = selector_identity_probe<decltype(container)>;
+  using probe = lookup_identity_probe<decltype(container)>;
   ASSERT_TRUE((probe::template selected_no_key_identity_matches<
                typed_key_cached_processor, typed_key_cached_processor, one>(
       container.registry())));
@@ -447,8 +442,8 @@ TEST(index_test, legacy_normal_unkeyed_registration_records_no_key_one) {
 
 TEST(index_test, explicit_collection_registration_records_no_key_many) {
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<collection<typed_key_cached_processor>>;
+    using lookup_definition_type =
+        lookups<collection<typed_key_cached_processor>>;
   };
 
   runtime_container<traits> container;
@@ -456,7 +451,7 @@ TEST(index_test, explicit_collection_registration_records_no_key_many) {
                                    storage<typed_key_cached_processor_impl>,
                                    interfaces<typed_key_cached_processor>>();
 
-  using probe = selector_identity_probe<decltype(container)>;
+  using probe = lookup_identity_probe<decltype(container)>;
   ASSERT_TRUE((probe::template selected_no_key_identity_matches<
                typed_key_cached_processor, typed_key_cached_processor, many>(
       container.registry())));
@@ -470,7 +465,7 @@ TEST(index_test, legacy_typed_key_registration_records_typed_key_one) {
       scope<shared>, storage<typed_key_cached_processor_impl>,
       interfaces<typed_key_cached_processor>, key<processor_key>>();
 
-  using probe = selector_identity_probe<decltype(container)>;
+  using probe = lookup_identity_probe<decltype(container)>;
   ASSERT_TRUE(
       (probe::template selected_typed_key_identity_matches<
           typed_key_cached_processor, typed_key_cached_processor, processor_key,
@@ -480,8 +475,8 @@ TEST(index_test, legacy_typed_key_registration_records_typed_key_one) {
 TEST(index_test, explicit_typed_key_many_registration_records_typed_key_many) {
   struct processor_key {};
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<
-        selector<typed_key_cached_processor, typed_key<processor_key>, many>>;
+    using lookup_definition_type = lookups<
+        lookup<typed_key_cached_processor, typed_key<processor_key>, many>>;
   };
 
   runtime_container<traits> container;
@@ -489,7 +484,7 @@ TEST(index_test, explicit_typed_key_many_registration_records_typed_key_many) {
       scope<shared>, storage<typed_key_cached_processor_impl>,
       interfaces<typed_key_cached_processor>, key<processor_key>>();
 
-  using probe = selector_identity_probe<decltype(container)>;
+  using probe = lookup_identity_probe<decltype(container)>;
   ASSERT_TRUE(
       (probe::template selected_typed_key_identity_matches<
           typed_key_cached_processor, typed_key_cached_processor, processor_key,
@@ -498,8 +493,8 @@ TEST(index_test, explicit_typed_key_many_registration_records_typed_key_many) {
 
 TEST(index_test, associative_one_registration_records_runtime_key_one) {
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<typed_key_cached_processor, std::size_t>>;
+    using lookup_definition_type =
+        lookups<associative<typed_key_cached_processor, std::size_t>>;
   };
 
   runtime_container<traits> container;
@@ -507,7 +502,7 @@ TEST(index_test, associative_one_registration_records_runtime_key_one) {
       scope<shared>, storage<typed_key_cached_processor_impl>,
       interfaces<typed_key_cached_processor>>(std::size_t(7));
 
-  using probe = selector_identity_probe<decltype(container)>;
+  using probe = lookup_identity_probe<decltype(container)>;
   ASSERT_TRUE((probe::template selected_runtime_key_identity_matches<
                typed_key_cached_processor, typed_key_cached_processor,
                std::size_t, one>(container.registry(), std::size_t(7))));
@@ -521,8 +516,8 @@ TEST(index_test, runtime_key_one_lookup_uses_equal_distinct_key_object) {
     }
   };
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<typed_key_cached_processor, comparable_key>>;
+    using lookup_definition_type =
+        lookups<associative<typed_key_cached_processor, comparable_key>>;
   };
 
   typed_key_cached_processor_impl::constructions = 0;
@@ -547,8 +542,8 @@ TEST(index_test, runtime_key_one_lookup_uses_equal_distinct_key_object) {
 
 TEST(index_test, associative_many_registration_records_runtime_key_many) {
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<typed_key_cached_processor, std::size_t, many>>;
+    using lookup_definition_type =
+        lookups<associative<typed_key_cached_processor, std::size_t, many>>;
   };
 
   runtime_container<traits> container;
@@ -556,32 +551,32 @@ TEST(index_test, associative_many_registration_records_runtime_key_many) {
       scope<shared>, storage<typed_key_cached_processor_impl>,
       interfaces<typed_key_cached_processor>>(std::size_t(7));
 
-  using probe = selector_identity_probe<decltype(container)>;
+  using probe = lookup_identity_probe<decltype(container)>;
   ASSERT_TRUE((probe::template selected_runtime_key_identity_matches<
                typed_key_cached_processor, typed_key_cached_processor,
                std::size_t, many>(container.registry(), std::size_t(7))));
 }
 
-TEST(index_test, selector_table_counts_multi_identity_entry_once) {
+TEST(index_test, lookup_table_counts_multi_identity_entry_once) {
   struct processor {};
   struct processor_key {};
 
-  selector_table_test_allocator allocator;
-  selector_table_test_table table(allocator);
-  selector_table_test_entry entry(allocator);
-  entry.selector_identities.emplace_back(
-      selector_table_test_table::template make_no_key_identity<processor,
-                                                               many>());
-  entry.selector_identities.emplace_back(
-      selector_table_test_table::template make_typed_key_identity<
+  lookup_table_test_allocator allocator;
+  lookup_table_test_table table(allocator);
+  lookup_table_test_entry entry(allocator);
+  entry.lookup_identities.emplace_back(
+      lookup_table_test_table::template make_no_key_identity<processor,
+                                                             many>());
+  entry.lookup_identities.emplace_back(
+      lookup_table_test_table::template make_typed_key_identity<
           processor, processor_key, many>());
 
   ASSERT_TRUE(table.insert(entry));
 
   auto matches_processor = [](const auto &identity) {
-    return selector_table_test_table::template matches_no_key<processor, many>(
+    return lookup_table_test_table::template matches_no_key<processor, many>(
                identity) ||
-           selector_table_test_table::template matches_typed_key<
+           lookup_table_test_table::template matches_typed_key<
                processor, processor_key, many>(identity);
   };
   bool ambiguous = false;
@@ -603,7 +598,7 @@ TEST(index_test, selector_table_counts_multi_identity_entry_once) {
   ASSERT_EQ(table.count(matches_processor), 0U);
 }
 
-TEST(index_test, no_key_many_selector_covers_empty_exact_ambiguous) {
+TEST(index_test, no_key_many_lookup_covers_empty_exact_ambiguous) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -615,7 +610,7 @@ TEST(index_test, no_key_many_selector_covers_empty_exact_ambiguous) {
     int id() const override { return 2; }
   };
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<collection<processor>>;
+    using lookup_definition_type = lookups<collection<processor>>;
   };
 
   runtime_container<traits> empty_container;
@@ -649,7 +644,7 @@ TEST(index_test, no_key_many_selector_covers_empty_exact_ambiguous) {
                type_ambiguous_exception);
 }
 
-TEST(index_test, typed_key_many_selector_covers_collection_order) {
+TEST(index_test, typed_key_many_lookup_covers_collection_order) {
   struct processor_key {};
   struct processor {
     virtual ~processor() = default;
@@ -662,8 +657,8 @@ TEST(index_test, typed_key_many_selector_covers_collection_order) {
     int id() const override { return 2; }
   };
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<selector<processor, typed_key<processor_key>, many>>;
+    using lookup_definition_type =
+        lookups<lookup<processor, typed_key<processor_key>, many>>;
   };
 
   runtime_container<traits> container;
@@ -688,7 +683,7 @@ TEST(index_test, typed_key_many_selector_covers_collection_order) {
                type_ambiguous_exception);
 }
 
-TEST(index_test, runtime_key_many_selector_uses_value_semantics) {
+TEST(index_test, runtime_key_many_lookup_uses_value_semantics) {
   struct comparable_key {
     int value;
     bool operator==(const comparable_key &other) const {
@@ -709,8 +704,8 @@ TEST(index_test, runtime_key_many_selector_uses_value_semantics) {
     int id() const override { return 3; }
   };
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, comparable_key, many>>;
+    using lookup_definition_type =
+        lookups<associative<processor, comparable_key, many>>;
   };
 
   runtime_container<traits> container;
@@ -735,7 +730,7 @@ TEST(index_test, runtime_key_many_selector_uses_value_semantics) {
   ASSERT_EQ(container.template resolve<processor &>(comparable_key{8}).id(), 3);
 }
 
-TEST(index_test, runtime_key_many_selector_resolves_empty_collection) {
+TEST(index_test, runtime_key_many_lookup_resolves_empty_collection) {
   struct comparable_key {
     int value;
     bool operator==(const comparable_key &other) const {
@@ -747,8 +742,8 @@ TEST(index_test, runtime_key_many_selector_resolves_empty_collection) {
     virtual int id() const = 0;
   };
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, comparable_key, many>>;
+    using lookup_definition_type =
+        lookups<associative<processor, comparable_key, many>>;
   };
 
   runtime_container<traits> container;
@@ -774,13 +769,10 @@ TEST(index_test, associative_alias_behaves_like_runtime_key_one) {
 
   static_assert(
       std::is_same_v<associative<processor, std::size_t>,
-                     selector<processor, runtime_key<std::size_t>, one>>);
-  static_assert(std::is_same_v<unique_index<processor, std::size_t>,
-                               associative<processor, std::size_t>>);
+                     lookup<processor, runtime_key<std::size_t>, one>>);
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t>>;
+    using lookup_definition_type = lookups<associative<processor, std::size_t>>;
   };
 
   container<traits> container;
@@ -816,13 +808,11 @@ TEST(index_test, associative_many_alias_behaves_like_runtime_key_many) {
 
   static_assert(
       std::is_same_v<associative<processor, std::size_t, many>,
-                     selector<processor, runtime_key<std::size_t>, many>>);
-  static_assert(std::is_same_v<multi_index<processor, std::size_t>,
-                               associative<processor, std::size_t, many>>);
+                     lookup<processor, runtime_key<std::size_t>, many>>);
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t, many>>;
+    using lookup_definition_type =
+        lookups<associative<processor, std::size_t, many>>;
   };
 
   container<traits> container;
@@ -850,8 +840,8 @@ TEST(index_test, associative_many_alias_behaves_like_runtime_key_many) {
 TEST(index_test,
      runtime_key_one_same_storage_at_different_keys_has_distinct_cache_state) {
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<typed_key_cached_processor, std::size_t>>;
+    using lookup_definition_type =
+        lookups<associative<typed_key_cached_processor, std::size_t>>;
   };
 
   typed_key_cached_processor_impl::constructions = 0;
@@ -876,7 +866,7 @@ TEST(index_test,
   ASSERT_EQ(typed_key_cached_processor_impl::constructions, 2);
 }
 
-TEST(index_test, empty_child_runtime_key_one_selector_falls_back_to_parent) {
+TEST(index_test, empty_child_runtime_key_one_lookup_falls_back_to_parent) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -886,8 +876,7 @@ TEST(index_test, empty_child_runtime_key_one_selector_falls_back_to_parent) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t>>;
+    using lookup_definition_type = lookups<associative<processor, std::size_t>>;
   };
 
   container<traits> parent;
@@ -899,7 +888,7 @@ TEST(index_test, empty_child_runtime_key_one_selector_falls_back_to_parent) {
   ASSERT_EQ(child.template resolve<processor &>(std::size_t(7)).id(), 1);
 }
 
-TEST(index_test, child_runtime_key_one_selector_shadows_parent) {
+TEST(index_test, child_runtime_key_one_lookup_shadows_parent) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -912,8 +901,7 @@ TEST(index_test, child_runtime_key_one_selector_shadows_parent) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t>>;
+    using lookup_definition_type = lookups<associative<processor, std::size_t>>;
   };
 
   container<traits> parent;
@@ -928,7 +916,7 @@ TEST(index_test, child_runtime_key_one_selector_shadows_parent) {
 }
 
 TEST(index_test,
-     empty_child_runtime_key_many_selector_collection_falls_back_to_parent) {
+     empty_child_runtime_key_many_lookup_collection_falls_back_to_parent) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -941,8 +929,8 @@ TEST(index_test,
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t, many>>;
+    using lookup_definition_type =
+        lookups<associative<processor, std::size_t, many>>;
   };
 
   container<traits> parent;
@@ -965,7 +953,7 @@ TEST(index_test,
 }
 
 TEST(index_test,
-     child_runtime_key_many_selector_collection_does_not_merge_parent) {
+     child_runtime_key_many_lookup_collection_does_not_merge_parent) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -978,8 +966,8 @@ TEST(index_test,
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t, many>>;
+    using lookup_definition_type =
+        lookups<associative<processor, std::size_t, many>>;
   };
 
   container<traits> parent;
@@ -998,7 +986,7 @@ TEST(index_test,
   ASSERT_EQ(child.template resolve<processor &>(std::size_t(7)).id(), 2);
 }
 
-TEST(index_test, child_runtime_key_many_selector_ambiguity_does_not_fallback) {
+TEST(index_test, child_runtime_key_many_lookup_ambiguity_does_not_fallback) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1014,8 +1002,8 @@ TEST(index_test, child_runtime_key_many_selector_ambiguity_does_not_fallback) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t, many>>;
+    using lookup_definition_type =
+        lookups<associative<processor, std::size_t, many>>;
   };
 
   container<traits> parent;
@@ -1053,7 +1041,7 @@ TEST(index_test, no_key_one_replaces_unkeyed_singular_identity) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<selector<processor, no_key, one>>;
+    using lookup_definition_type = lookups<lookup<processor, no_key, one>>;
   };
 
   container<traits> container;
@@ -1077,7 +1065,7 @@ TEST(index_test, no_key_one_rejects_same_storage_duplicate) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<selector<processor, no_key, one>>;
+    using lookup_definition_type = lookups<lookup<processor, no_key, one>>;
   };
 
   container<traits> container;
@@ -1104,7 +1092,7 @@ TEST(index_test, no_key_one_does_not_satisfy_collection_lookup) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<selector<processor, no_key, one>>;
+    using lookup_definition_type = lookups<lookup<processor, no_key, one>>;
   };
 
   container<traits> container;
@@ -1129,7 +1117,7 @@ TEST(index_test, no_key_many_enumerates_unkeyed_collection_in_order) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<collection<processor>>;
+    using lookup_definition_type = lookups<collection<processor>>;
   };
 
   container<traits> container;
@@ -1147,7 +1135,7 @@ TEST(index_test, no_key_many_enumerates_unkeyed_collection_in_order) {
                type_ambiguous_exception);
 }
 
-TEST(index_test, collection_alias_behaves_like_no_key_many_selector) {
+TEST(index_test, collection_alias_behaves_like_no_key_many_lookup) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1160,10 +1148,10 @@ TEST(index_test, collection_alias_behaves_like_no_key_many_selector) {
   };
 
   static_assert(
-      std::is_same_v<collection<processor>, selector<processor, no_key, many>>);
+      std::is_same_v<collection<processor>, lookup<processor, no_key, many>>);
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<collection<processor>>;
+    using lookup_definition_type = lookups<collection<processor>>;
   };
 
   container<traits> container;
@@ -1191,7 +1179,7 @@ TEST(index_test, no_key_many_singular_resolve_requires_exactly_one_binding) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<collection<processor>>;
+    using lookup_definition_type = lookups<collection<processor>>;
   };
 
   container<traits> container;
@@ -1214,7 +1202,7 @@ TEST(index_test, no_key_many_rejects_same_storage_duplicate) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<collection<processor>>;
+    using lookup_definition_type = lookups<collection<processor>>;
   };
 
   container<traits> container;
@@ -1228,7 +1216,7 @@ TEST(index_test, no_key_many_rejects_same_storage_duplicate) {
 }
 
 TEST(index_test,
-     failed_no_key_many_registration_preserves_existing_selector_rows) {
+     failed_no_key_many_registration_preserves_existing_lookup_rows) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1238,7 +1226,7 @@ TEST(index_test,
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<collection<processor>>;
+    using lookup_definition_type = lookups<collection<processor>>;
   };
 
   container<traits> container;
@@ -1256,7 +1244,7 @@ TEST(index_test,
   ASSERT_EQ(processors[0]->id(), 1);
 }
 
-TEST(index_test, empty_child_no_key_one_selector_falls_back_to_parent) {
+TEST(index_test, empty_child_no_key_one_lookup_falls_back_to_parent) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1266,7 +1254,7 @@ TEST(index_test, empty_child_no_key_one_selector_falls_back_to_parent) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<selector<processor, no_key, one>>;
+    using lookup_definition_type = lookups<lookup<processor, no_key, one>>;
   };
 
   container<traits> parent;
@@ -1277,7 +1265,7 @@ TEST(index_test, empty_child_no_key_one_selector_falls_back_to_parent) {
   ASSERT_EQ(child.template resolve<processor &>().id(), 1);
 }
 
-TEST(index_test, child_no_key_one_selector_shadows_parent) {
+TEST(index_test, child_no_key_one_lookup_shadows_parent) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1290,7 +1278,7 @@ TEST(index_test, child_no_key_one_selector_shadows_parent) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<selector<processor, no_key, one>>;
+    using lookup_definition_type = lookups<lookup<processor, no_key, one>>;
   };
 
   container<traits> parent;
@@ -1303,7 +1291,7 @@ TEST(index_test, child_no_key_one_selector_shadows_parent) {
   ASSERT_EQ(child.template resolve<processor &>().id(), 2);
 }
 
-TEST(index_test, empty_child_no_key_many_selector_falls_back_to_parent) {
+TEST(index_test, empty_child_no_key_many_lookup_falls_back_to_parent) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1316,7 +1304,7 @@ TEST(index_test, empty_child_no_key_many_selector_falls_back_to_parent) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<collection<processor>>;
+    using lookup_definition_type = lookups<collection<processor>>;
   };
 
   container<traits> parent;
@@ -1333,7 +1321,7 @@ TEST(index_test, empty_child_no_key_many_selector_falls_back_to_parent) {
   ASSERT_EQ(processors[1]->id(), 2);
 }
 
-TEST(index_test, child_no_key_many_selector_collection_does_not_merge_parent) {
+TEST(index_test, child_no_key_many_lookup_collection_does_not_merge_parent) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1346,7 +1334,7 @@ TEST(index_test, child_no_key_many_selector_collection_does_not_merge_parent) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<collection<processor>>;
+    using lookup_definition_type = lookups<collection<processor>>;
   };
 
   container<traits> parent;
@@ -1363,7 +1351,7 @@ TEST(index_test, child_no_key_many_selector_collection_does_not_merge_parent) {
   ASSERT_EQ(child.template resolve<processor &>().id(), 2);
 }
 
-TEST(index_test, child_no_key_many_selector_ambiguity_does_not_fallback) {
+TEST(index_test, child_no_key_many_lookup_ambiguity_does_not_fallback) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1379,7 +1367,7 @@ TEST(index_test, child_no_key_many_selector_ambiguity_does_not_fallback) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<collection<processor>>;
+    using lookup_definition_type = lookups<collection<processor>>;
   };
 
   container<traits> parent;
@@ -1414,8 +1402,8 @@ TEST(index_test, typed_key_one_replaces_keyed_singular_identity) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<selector<processor, typed_key<processor_key>, one>>;
+    using lookup_definition_type =
+        lookups<lookup<processor, typed_key<processor_key>, one>>;
   };
 
   container<traits> container;
@@ -1441,8 +1429,8 @@ TEST(index_test, typed_key_one_does_not_satisfy_collection_lookup) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<selector<processor, typed_key<processor_key>, one>>;
+    using lookup_definition_type =
+        lookups<lookup<processor, typed_key<processor_key>, one>>;
   };
 
   container<traits> container;
@@ -1470,8 +1458,8 @@ TEST(index_test, typed_key_many_enumerates_keyed_collection_in_order) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<selector<processor, typed_key<processor_key>, many>>;
+    using lookup_definition_type =
+        lookups<lookup<processor, typed_key<processor_key>, many>>;
   };
 
   container<traits> container;
@@ -1501,8 +1489,8 @@ TEST(index_test, typed_key_many_singular_resolve_requires_exactly_one_binding) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<selector<processor, typed_key<processor_key>, many>>;
+    using lookup_definition_type =
+        lookups<lookup<processor, typed_key<processor_key>, many>>;
   };
 
   container<traits> container;
@@ -1531,8 +1519,8 @@ TEST(index_test, typed_key_many_rejects_same_storage_duplicate) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<selector<processor, typed_key<processor_key>, many>>;
+    using lookup_definition_type =
+        lookups<lookup<processor, typed_key<processor_key>, many>>;
   };
 
   container<traits> container;
@@ -1547,7 +1535,7 @@ TEST(index_test, typed_key_many_rejects_same_storage_duplicate) {
 }
 
 TEST(index_test,
-     failed_typed_key_many_registration_preserves_existing_selector_rows) {
+     failed_typed_key_many_registration_preserves_existing_lookup_rows) {
   struct processor_key {};
   struct processor {
     virtual ~processor() = default;
@@ -1558,8 +1546,8 @@ TEST(index_test,
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<selector<processor, typed_key<processor_key>, many>>;
+    using lookup_definition_type =
+        lookups<lookup<processor, typed_key<processor_key>, many>>;
   };
 
   container<traits> container;
@@ -1580,7 +1568,7 @@ TEST(index_test,
   ASSERT_EQ(processors[0]->id(), 1);
 }
 
-TEST(index_test, empty_child_typed_key_one_selector_falls_back_to_parent) {
+TEST(index_test, empty_child_typed_key_one_lookup_falls_back_to_parent) {
   struct processor_key {};
   struct processor {
     virtual ~processor() = default;
@@ -1591,8 +1579,8 @@ TEST(index_test, empty_child_typed_key_one_selector_falls_back_to_parent) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<selector<processor, typed_key<processor_key>, one>>;
+    using lookup_definition_type =
+        lookups<lookup<processor, typed_key<processor_key>, one>>;
   };
 
   container<traits> parent;
@@ -1603,7 +1591,7 @@ TEST(index_test, empty_child_typed_key_one_selector_falls_back_to_parent) {
   ASSERT_EQ(child.template resolve<processor &>(key<processor_key>{}).id(), 1);
 }
 
-TEST(index_test, child_typed_key_one_selector_shadows_parent) {
+TEST(index_test, child_typed_key_one_lookup_shadows_parent) {
   struct processor_key {};
   struct processor {
     virtual ~processor() = default;
@@ -1617,8 +1605,8 @@ TEST(index_test, child_typed_key_one_selector_shadows_parent) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<selector<processor, typed_key<processor_key>, one>>;
+    using lookup_definition_type =
+        lookups<lookup<processor, typed_key<processor_key>, one>>;
   };
 
   container<traits> parent;
@@ -1632,7 +1620,7 @@ TEST(index_test, child_typed_key_one_selector_shadows_parent) {
 }
 
 TEST(index_test,
-     empty_child_typed_key_many_selector_collection_falls_back_to_parent) {
+     empty_child_typed_key_many_lookup_collection_falls_back_to_parent) {
   struct processor_key {};
   struct processor {
     virtual ~processor() = default;
@@ -1646,8 +1634,8 @@ TEST(index_test,
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<selector<processor, typed_key<processor_key>, many>>;
+    using lookup_definition_type =
+        lookups<lookup<processor, typed_key<processor_key>, many>>;
   };
 
   container<traits> parent;
@@ -1665,8 +1653,7 @@ TEST(index_test,
   ASSERT_EQ(processors[1]->id(), 2);
 }
 
-TEST(index_test,
-     child_typed_key_many_selector_collection_does_not_merge_parent) {
+TEST(index_test, child_typed_key_many_lookup_collection_does_not_merge_parent) {
   struct processor_key {};
   struct processor {
     virtual ~processor() = default;
@@ -1683,8 +1670,8 @@ TEST(index_test,
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<selector<processor, typed_key<processor_key>, many>>;
+    using lookup_definition_type =
+        lookups<lookup<processor, typed_key<processor_key>, many>>;
   };
 
   container<traits> parent;
@@ -1705,7 +1692,7 @@ TEST(index_test,
 }
 
 TEST(index_test,
-     child_typed_key_many_selector_singular_ambiguity_does_not_fall_back) {
+     child_typed_key_many_lookup_singular_ambiguity_does_not_fall_back) {
   struct processor_key {};
   struct processor {
     virtual ~processor() = default;
@@ -1722,8 +1709,8 @@ TEST(index_test,
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<selector<processor, typed_key<processor_key>, many>>;
+    using lookup_definition_type =
+        lookups<lookup<processor, typed_key<processor_key>, many>>;
   };
 
   container<traits> parent;
@@ -1739,12 +1726,12 @@ TEST(index_test,
                type_ambiguous_exception);
 }
 
-TEST(index_test, typed_key_one_selector_reuses_entry_cache) {
+TEST(index_test, typed_key_one_lookup_reuses_entry_cache) {
   struct processor_key {};
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<
-        selector<typed_key_cached_processor, typed_key<processor_key>, one>>;
+    using lookup_definition_type = lookups<
+        lookup<typed_key_cached_processor, typed_key<processor_key>, one>>;
   };
 
   typed_key_cached_processor_impl::constructions = 0;
@@ -1772,7 +1759,7 @@ TEST(index_test, exception_message_index_out_of_range_negative) {
   ASSERT_STREQ(e.what(), expected.c_str());
 }
 
-TEST(index_test, same_key_type_can_use_different_selectors_per_interface) {
+TEST(index_test, same_key_type_can_use_different_lookups_per_interface) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1789,8 +1776,8 @@ TEST(index_test, same_key_type_can_use_different_selectors_per_interface) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<associative<processor, std::size_t>,
-                                            associative<animal, std::size_t>>;
+    using lookup_definition_type = lookups<associative<processor, std::size_t>,
+                                           associative<animal, std::size_t>>;
   };
 
   container<traits> container;
@@ -1805,7 +1792,7 @@ TEST(index_test, same_key_type_can_use_different_selectors_per_interface) {
 }
 
 TEST(index_test,
-     constructor_injects_dependencies_from_two_associative_selectors) {
+     constructor_injects_dependencies_from_two_associative_lookups) {
   struct source {
     virtual ~source() = default;
     virtual int source_id() const = 0;
@@ -1836,9 +1823,8 @@ TEST(index_test,
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<source, std::size_t>,
-                  associative<processor, std::size_t>>;
+    using lookup_definition_type = lookups<associative<source, std::size_t>,
+                                           associative<processor, std::size_t>>;
   };
 
   container<traits> container;
@@ -1875,8 +1861,8 @@ TEST(index_test, multi_interface_registration_inserts_each_interface_index) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<associative<processor, std::size_t>,
-                                            associative<animal, std::size_t>>;
+    using lookup_definition_type = lookups<associative<processor, std::size_t>,
+                                           associative<animal, std::size_t>>;
   };
 
   container<traits> container;
@@ -1904,8 +1890,8 @@ TEST(index_test, same_interface_can_use_multiple_key_types) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<associative<animal, std::size_t>,
-                                            associative<animal, std::string>>;
+    using lookup_definition_type = lookups<associative<animal, std::size_t>,
+                                           associative<animal, std::string>>;
   };
 
   container<traits> container;
@@ -1919,7 +1905,7 @@ TEST(index_test, same_interface_can_use_multiple_key_types) {
   ASSERT_EQ(container.template resolve<animal &>(std::string("cat")).id(), 2);
 }
 
-TEST(index_test, explicit_selector_resolves_with_custom_container_allocator) {
+TEST(index_test, explicit_lookup_resolves_with_custom_container_allocator) {
   struct animal {
     virtual ~animal() = default;
     virtual int id() const = 0;
@@ -1929,7 +1915,7 @@ TEST(index_test, explicit_selector_resolves_with_custom_container_allocator) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<associative<animal, std::string>>;
+    using lookup_definition_type = lookups<associative<animal, std::string>>;
   };
 
   test_allocator_state state;
@@ -1943,7 +1929,7 @@ TEST(index_test, explicit_selector_resolves_with_custom_container_allocator) {
   ASSERT_EQ(container.template resolve<animal &>(std::string("dog")).id(), 11);
 }
 
-TEST(index_test, runtime_key_selector_payload_uses_rebound_allocator) {
+TEST(index_test, runtime_key_lookup_payload_uses_rebound_allocator) {
   struct allocator_visible_key {
     explicit allocator_visible_key(int resolved_value)
         : value(resolved_value) {}
@@ -1964,8 +1950,8 @@ TEST(index_test, runtime_key_selector_payload_uses_rebound_allocator) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<animal, allocator_visible_key>>;
+    using lookup_definition_type =
+        lookups<associative<animal, allocator_visible_key>>;
   };
 
   test_allocator_state state;
@@ -1999,8 +1985,8 @@ TEST(index_test, indexed_container_releases_rebound_allocator_storage) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t, many>>;
+    using lookup_definition_type =
+        lookups<associative<processor, std::size_t, many>>;
   };
 
   test_allocator_state state;
@@ -2040,8 +2026,8 @@ TEST(index_test,
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t, many>>;
+    using lookup_definition_type =
+        lookups<associative<processor, std::size_t, many>>;
   };
 
   container<traits> container;
@@ -2078,8 +2064,8 @@ TEST(index_test, associative_many_rejects_same_storage_for_same_runtime_key) {
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t, many>>;
+    using lookup_definition_type =
+        lookups<associative<processor, std::size_t, many>>;
   };
 
   container<traits> container;
@@ -2100,7 +2086,7 @@ TEST(index_test, associative_many_rejects_same_storage_for_same_runtime_key) {
 }
 
 TEST(index_test,
-     failed_runtime_key_many_registration_preserves_existing_selector_rows) {
+     failed_runtime_key_many_registration_preserves_existing_lookup_rows) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -2110,8 +2096,8 @@ TEST(index_test,
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t, many>>;
+    using lookup_definition_type =
+        lookups<associative<processor, std::size_t, many>>;
   };
 
   container<traits> container;
@@ -2143,8 +2129,8 @@ TEST(index_test,
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::size_t, many>>;
+    using lookup_definition_type =
+        lookups<associative<processor, std::size_t, many>>;
   };
 
   container<traits> container;
@@ -2162,8 +2148,7 @@ TEST(index_test,
 }
 
 #if __cplusplus >= 202002L
-TEST(index_test,
-     external_selector_constructs_string_key_for_indexed_injection) {
+TEST(index_test, external_lookup_constructs_string_key_for_indexed_injection) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -2180,8 +2165,7 @@ TEST(index_test,
   };
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<processor, std::string>>;
+    using lookup_definition_type = lookups<associative<processor, std::string>>;
   };
 
   container<traits> container;
@@ -2197,8 +2181,8 @@ TEST(index_test,
 
 TEST(index_test, constructor_injects_fixed_indexed_associative_bindings) {
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<fixed_injection_processor, std::size_t>>;
+    using lookup_definition_type =
+        lookups<associative<fixed_injection_processor, std::size_t>>;
   };
 
   container<traits> container;
@@ -2226,8 +2210,8 @@ TEST(index_test, static_container_resolves_fixed_indexed_associative_bindings) {
            interfaces<fixed_injection_processor>, key<std::size_t, 1>>>;
 
   struct traits : static_container_traits<> {
-    using index_definition_type =
-        selectors<associative<fixed_injection_processor, std::size_t>>;
+    using lookup_definition_type =
+        lookups<associative<fixed_injection_processor, std::size_t>>;
   };
 
   static_container<source, traits> container;
@@ -2250,8 +2234,8 @@ TEST(index_test,
            interfaces<fixed_injection_processor>, key<std::size_t, 1>>>;
 
   struct traits : static_container_traits<> {
-    using index_definition_type =
-        selectors<associative<fixed_injection_processor, std::size_t>>;
+    using lookup_definition_type =
+        lookups<associative<fixed_injection_processor, std::size_t>>;
   };
 
   static_container<source, traits> container;
@@ -2278,8 +2262,8 @@ TEST(index_test, static_container_injects_fixed_indexed_dependency) {
                                          key<std::size_t, 1>>>>>;
 
   struct traits : static_container_traits<> {
-    using index_definition_type =
-        selectors<associative<fixed_injection_processor, std::size_t>>;
+    using lookup_definition_type =
+        lookups<associative<fixed_injection_processor, std::size_t>>;
   };
 
   static_container<source, traits> container;
@@ -2303,7 +2287,7 @@ TEST(index_test, static_container_preserves_typed_key_resolution) {
   ASSERT_EQ(processor.id(), 4);
 }
 
-TEST(index_test, static_container_resolves_fixed_runtime_key_many_collection) {
+TEST(index_test, static_container_resolves_key_value_many_collection) {
   using source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<0>>,
            interfaces<fixed_injection_processor>, key<std::size_t, 7>>,
@@ -2313,8 +2297,8 @@ TEST(index_test, static_container_resolves_fixed_runtime_key_many_collection) {
            interfaces<fixed_injection_processor>, key<std::size_t, 8>>>;
 
   struct traits : static_container_traits<> {
-    using index_definition_type =
-        selectors<associative<fixed_injection_processor, std::size_t, many>>;
+    using lookup_definition_type =
+        lookups<associative<fixed_injection_processor, std::size_t, many>>;
   };
 
   static_container<source, traits> container;
@@ -2337,14 +2321,14 @@ TEST(index_test, static_container_resolves_fixed_runtime_key_many_collection) {
   ASSERT_EQ(constructed[1]->id(), 1);
 }
 
-TEST(index_test, static_container_resolves_fixed_runtime_key_many_exactly_one) {
+TEST(index_test, static_container_resolves_key_value_many_exactly_one) {
   using source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
            interfaces<fixed_injection_processor>, key<std::size_t, 7>>>;
 
   struct traits : static_container_traits<> {
-    using index_definition_type =
-        selectors<associative<fixed_injection_processor, std::size_t, many>>;
+    using lookup_definition_type =
+        lookups<associative<fixed_injection_processor, std::size_t, many>>;
   };
 
   static_container<source, traits> container;
@@ -2355,8 +2339,7 @@ TEST(index_test, static_container_resolves_fixed_runtime_key_many_exactly_one) {
   ASSERT_EQ(processor.id(), 1);
 }
 
-TEST(index_test,
-     static_fixed_runtime_key_many_allows_same_storage_different_key) {
+TEST(index_test, static_key_value_many_allows_same_storage_different_key) {
   using source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<9>>,
            interfaces<fixed_injection_processor>, key<std::size_t, 7>>,
@@ -2364,8 +2347,8 @@ TEST(index_test,
            interfaces<fixed_injection_processor>, key<std::size_t, 8>>>;
 
   struct traits : static_container_traits<> {
-    using index_definition_type =
-        selectors<associative<fixed_injection_processor, std::size_t, many>>;
+    using lookup_definition_type =
+        lookups<associative<fixed_injection_processor, std::size_t, many>>;
   };
 
   static_container<source, traits> container;
@@ -2380,7 +2363,7 @@ TEST(index_test,
   ASSERT_NE(&first, &second);
 }
 
-TEST(index_test, static_container_fixed_runtime_key_many_parent_fallback) {
+TEST(index_test, static_container_key_value_many_parent_fallback) {
   using parent_source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
            interfaces<fixed_injection_processor>, key<std::size_t, 7>>,
@@ -2389,8 +2372,8 @@ TEST(index_test, static_container_fixed_runtime_key_many_parent_fallback) {
   using child_source = bindings<>;
 
   struct traits : static_container_traits<> {
-    using index_definition_type =
-        selectors<associative<fixed_injection_processor, std::size_t, many>>;
+    using lookup_definition_type =
+        lookups<associative<fixed_injection_processor, std::size_t, many>>;
   };
 
   static_container<parent_source, traits> parent;
@@ -2405,7 +2388,7 @@ TEST(index_test, static_container_fixed_runtime_key_many_parent_fallback) {
   ASSERT_EQ(processors[1]->id(), 2);
 }
 
-TEST(index_test, static_container_fixed_runtime_key_many_child_does_not_merge) {
+TEST(index_test, static_container_key_value_many_child_does_not_merge) {
   using parent_source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
            interfaces<fixed_injection_processor>, key<std::size_t, 7>>>;
@@ -2414,8 +2397,8 @@ TEST(index_test, static_container_fixed_runtime_key_many_child_does_not_merge) {
            interfaces<fixed_injection_processor>, key<std::size_t, 7>>>;
 
   struct traits : static_container_traits<> {
-    using index_definition_type =
-        selectors<associative<fixed_injection_processor, std::size_t, many>>;
+    using lookup_definition_type =
+        lookups<associative<fixed_injection_processor, std::size_t, many>>;
   };
 
   static_container<parent_source, traits> parent;
@@ -2429,14 +2412,14 @@ TEST(index_test, static_container_fixed_runtime_key_many_child_does_not_merge) {
   ASSERT_EQ(processors[0]->id(), 2);
 }
 
-TEST(index_test, static_fixed_runtime_key_resolves_indexed_reference) {
+TEST(index_test, static_key_value_resolves_indexed_reference) {
   using source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
            interfaces<fixed_injection_processor>, key<std::size_t, 0>>>;
 
   struct traits : static_container_traits<> {
-    using index_definition_type =
-        selectors<associative<fixed_injection_processor, std::size_t>>;
+    using lookup_definition_type =
+        lookups<associative<fixed_injection_processor, std::size_t>>;
   };
 
   static_container<source, traits> container;
@@ -2449,8 +2432,8 @@ TEST(index_test, static_fixed_runtime_key_resolves_indexed_reference) {
 
 TEST(index_test, constructor_injects_fixed_indexed_associative_binding) {
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<fixed_injection_processor, std::size_t>>;
+    using lookup_definition_type =
+        lookups<associative<fixed_injection_processor, std::size_t>>;
   };
 
   container<traits> container;
@@ -2465,7 +2448,7 @@ TEST(index_test, constructor_injects_fixed_indexed_associative_binding) {
 
 TEST(index_test, constructor_injects_fixed_indexed_enum_key) {
   struct traits : dynamic_container_traits {
-    using index_definition_type = selectors<
+    using lookup_definition_type = lookups<
         associative<fixed_injection_processor, fixed_injection_processor_id>>;
   };
 
@@ -2483,8 +2466,8 @@ TEST(index_test, constructor_injects_fixed_indexed_enum_key) {
 
 TEST(index_test, constructor_fixed_indexed_missing_key_throws_type_not_found) {
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<fixed_injection_processor, std::size_t>>;
+    using lookup_definition_type =
+        lookups<associative<fixed_injection_processor, std::size_t>>;
   };
 
   container<traits> container;
@@ -2498,8 +2481,8 @@ TEST(index_test, constructor_fixed_indexed_missing_key_throws_type_not_found) {
 
 TEST(index_test, registered_consumer_resolves_fixed_indexed_dependency) {
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<fixed_injection_processor, std::size_t>>;
+    using lookup_definition_type =
+        lookups<associative<fixed_injection_processor, std::size_t>>;
   };
 
   container<traits> container;
@@ -2532,8 +2515,8 @@ TEST(index_test, selected_type_selector_registers_and_injects_keyed_binding) {
 
 TEST(index_test, selected_value_selector_injects_indexed_binding) {
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<fixed_injection_processor, std::size_t>>;
+    using lookup_definition_type =
+        lookups<associative<fixed_injection_processor, std::size_t>>;
   };
 
   container<traits> container;
@@ -2555,13 +2538,13 @@ TEST(index_test, annotated_interfaces_keep_independent_indexes) {
       annotated<fixed_injection_processor &, annotated_index_replica_tag>;
 
   struct traits : dynamic_container_traits {
-    using index_definition_type =
-        selectors<associative<annotated<fixed_injection_processor,
-                                        annotated_index_primary_tag>,
-                              std::size_t>,
-                  associative<annotated<fixed_injection_processor,
-                                        annotated_index_replica_tag>,
-                              std::size_t>>;
+    using lookup_definition_type =
+        lookups<associative<annotated<fixed_injection_processor,
+                                      annotated_index_primary_tag>,
+                            std::size_t>,
+                associative<annotated<fixed_injection_processor,
+                                      annotated_index_replica_tag>,
+                            std::size_t>>;
   };
 
   container<traits> container;
@@ -2592,7 +2575,7 @@ TEST(index_test, annotated_interfaces_keep_independent_indexes) {
 TEST(index_test,
      DISABLED_constructor_injects_string_literal_key_into_string_index) {
   struct traits : dingo::dynamic_container_traits {
-    using index_definition_type = dingo::selectors<
+    using lookup_definition_type = dingo::lookups<
         dingo::associative<dingo::interfaces<string_processor>, std::string>>;
   };
 

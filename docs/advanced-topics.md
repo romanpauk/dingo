@@ -5,31 +5,31 @@ registration and resolution flow is already in place.
 
 ## Indexed Resolution
 
-Container traits can define one or more selectors so that a registration is
+Container traits can define one or more lookups so that a registration is
 resolved by interface, key domain, and cardinality.
 
-Use selectors when:
+Use lookups when:
 
 - multiple implementations share the same interface
 - the caller chooses the implementation by name or numeric ID
 - the binding should remain separate from unkeyed resolution
 
 Selector definitions are scoped to the interface they serve. Every indexed
-registration or lookup requires a matching selector definition.
+registration or lookup requires a matching lookup definition.
 
 Selector definitions can also make unkeyed runtime registrations explicit for an
 interface:
 
 ```c++
 struct container_traits : dynamic_container_traits {
-  using index_definition_type = selectors<collection<IProcessor>>;
+  using lookup_definition_type = lookups<collection<IProcessor>>;
 };
 ```
 
 `collection<I>` makes unkeyed collection membership explicit:
 `resolve<std::vector<I *>>()` enumerates the registrations in registration
 order, while singular `resolve<I &>()` succeeds only when exactly one
-registration matches. If no `no_key` selector is declared for an interface,
+registration matches. If no `no_key` lookup is declared for an interface,
 unkeyed registration and collection resolution keep their existing behavior.
 
 Runtime-keyed lookups use `associative<I, K>` for unique lookup and
@@ -37,27 +37,27 @@ Runtime-keyed lookups use `associative<I, K>` for unique lookup and
 
 ```c++
 struct container_traits : dynamic_container_traits {
-  using index_definition_type =
-      selectors<associative<IProcessor, std::size_t>,
+  using lookup_definition_type =
+      lookups<associative<IProcessor, std::size_t>,
                 associative<IHandler, std::string, many>>;
 };
 ```
 
-Typed-key registrations can also use explicit selectors:
+Typed-key registrations can also use explicit lookups:
 
 ```c++
 struct container_traits : dynamic_container_traits {
-  using index_definition_type =
-      selectors<selector<IProcessor, typed_key<Primary>, one>>;
+  using lookup_definition_type =
+      lookups<lookup<IProcessor, typed_key<Primary>, one>>;
 };
 ```
 
-`selector<I, typed_key<K>, one>` gives `register_type<interfaces<I>, key<K>>()`
+`lookup<I, typed_key<K>, one>` gives `register_type<interfaces<I>, key<K>>()`
 singular identity for that interface and key type.
-`selector<I, typed_key<K>, many>` makes `resolve<std::vector<I *>>(key<K>{})`
+`lookup<I, typed_key<K>, many>` makes `resolve<std::vector<I *>>(key<K>{})`
 enumerate keyed collection members in registration order. A singular typed-key
-resolve succeeds only when the matching `many` selector contains exactly one
-registration. If no `typed_key` selector is declared for an interface/key pair,
+resolve succeeds only when the matching `many` lookup contains exactly one
+registration. If no `typed_key` lookup is declared for an interface/key pair,
 typed-key registration and resolution keep their existing behavior.
 
 Selector lookup storage is internal. Applications should declare the interface,
@@ -75,25 +75,25 @@ struct Pipeline {
 
 `indexed<IProcessor&, key<std::size_t, 1>>` resolves the same object as
 `container.resolve<IProcessor&>(std::size_t{1})`; the configured
-`(IProcessor, std::size_t)` selector determines the lookup domain and
-cardinality, while the lookup storage remains an implementation detail.
+`(IProcessor, std::size_t)` lookup determines the lookup domain and cardinality,
+while the lookup storage remains an implementation detail.
 
 The value in `key<T, Value>` must be a valid non-type template parameter and
 must be usable as `T{Value}`. Class-type values such as `key<MyKey, MyKey{1}>`
 require C++20 structural non-type template parameter support.
 
-Static containers can use the same `associative<I, K>` selectors when the key
+Static containers can use the same `associative<I, K>` lookups when the key
 value is fixed in the type:
 
-- `key<K>` remains a typed key and maps to `selector<I, typed_key<K>, ...>`.
-- `key<K, Value>` maps to `selector<I, runtime_key<K>, ...>` when
+- `key<K>` remains a typed key and maps to `lookup<I, typed_key<K>, ...>`.
+- `key<K, Value>` maps to `lookup<I, runtime_key<K>, ...>` when
   `associative<I, K>` or `associative<I, K, many>` is declared.
 - Static lookup is type-encoded: use `indexed<I &, key<K, Value>>` or
   `resolve<Collection>(key<K, Value>{})`; `resolve<I &>(K{...})` is runtime
   lookup and is not supported by `static_container`.
 - Static fixed runtime-key bindings require `static_container` with traits that
-  declare the selector. `container<bindings<...>>` rejects them because that
-  mixed form cannot carry custom selector traits.
+  declare the lookup. `container<bindings<...>>` rejects them because that mixed
+  form cannot carry custom lookup traits.
 
 <!-- { include("../examples/index/static_fixed.cpp", scope="////") -->
 
@@ -118,18 +118,22 @@ struct Pipeline {
   IProcessor &first;
 };
 
-using source = bindings<bind<scope<shared>, storage<Processor<0>>,
-                             interfaces<IProcessor>, key<std::size_t, 0>>,
-                        bind<scope<shared>, storage<Processor<1>>,
-                             interfaces<IProcessor>, key<std::size_t, 1>>>;
+using source = dingo::bindings<
+    dingo::bind<dingo::scope<dingo::shared>, dingo::storage<Processor<0>>,
+                dingo::interfaces<IProcessor>, dingo::key<std::size_t, 0>>,
+    dingo::bind<dingo::scope<dingo::shared>, dingo::storage<Processor<1>>,
+                dingo::interfaces<IProcessor>, dingo::key<std::size_t, 1>>>;
 
-struct container_traits : static_container_traits<> {
-  using index_definition_type = selectors<associative<IProcessor, std::size_t>>;
+struct container_traits : dingo::static_container_traits<> {
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<IProcessor, std::size_t>>;
 };
 
-static_container<source, container_traits> container;
+dingo::static_container<source, container_traits> container;
 
-auto &first = container.resolve<indexed<IProcessor &, key<std::size_t, 0>>>();
+auto &first =
+    container
+        .resolve<dingo::indexed<IProcessor &, dingo::key<std::size_t, 0>>>();
 auto pipeline = container.construct<Pipeline>();
 
 return first.id() == 0 && &pipeline.first == &first ? 0 : 1;
@@ -150,9 +154,9 @@ struct IAnimal {
 struct Dog : IAnimal {};
 struct Cat : IAnimal {};
 
-// Declare traits with a std::string based selector
+// Declare traits with a std::string based lookup
 struct container_traits : dynamic_container_traits {
-  using index_definition_type = selectors<associative<IAnimal, std::string>>;
+  using lookup_definition_type = lookups<associative<IAnimal, std::string>>;
 };
 
 container<container_traits> container;
@@ -223,11 +227,11 @@ struct Pipeline {
   IProcessor &second;
 };
 
-// Define traits type with a single selector using size_t as a key
+// Define traits type with a single lookup using size_t as a key
 struct container_traits : static_container_traits<void> {
-  using index_definition_type = selectors<associative<IProcessor, size_t>>;
+  using lookup_definition_type = lookups<associative<IProcessor, size_t>>;
 };
-// Runtime selector lookup uses dynamic internal storage even when this
+// Runtime lookup lookup uses dynamic internal storage even when this
 // example uses static_container_traits for the rest of the container.
 
 container<container_traits> container;

@@ -37,7 +37,7 @@ public:
       std::conditional_t<std::is_same_v<void, ParentContainer>, container_type,
                          ParentContainer>;
   using rtti_type = typename registry_type::rtti_type;
-  using index_definition_type = typename registry_type::index_definition_type;
+  using lookup_definition_type = typename registry_type::lookup_definition_type;
 
   template <typename ContainerTraitsT, typename AllocatorT,
             typename ParentContainerT>

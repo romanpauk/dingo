@@ -14,4 +14,4 @@ int main() {
 }
 
 // CHECK: dingo::key<T, V> registration keys require a static fixed
-// CHECK: runtime-key selector
+// CHECK: runtime-key lookup

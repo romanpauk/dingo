@@ -16,8 +16,8 @@ using source = dingo::bindings<
                 dingo::interfaces<processor>, dingo::key<std::size_t, 1>>>;
 
 struct traits : dingo::static_container_traits<> {
-  using index_definition_type =
-      dingo::selectors<dingo::associative<processor, std::size_t, dingo::many>>;
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<processor, std::size_t, dingo::many>>;
 };
 
 int main() {

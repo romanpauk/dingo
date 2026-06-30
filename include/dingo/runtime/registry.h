@@ -25,7 +25,7 @@
 #include <dingo/resolution/runtime_binding.h>
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
-#include <dingo/runtime/selector_table.h>
+#include <dingo/runtime/lookup_table.h>
 #include <dingo/static/local_resolution.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/normalized_type.h>
@@ -50,7 +50,7 @@ namespace detail {
 template <typename StaticRegistry, typename ParentContainer>
 class container_with_static_bindings;
 
-template <typename Registry> struct runtime_selector_identity_probe;
+template <typename Registry> struct runtime_lookup_identity_probe;
 
 } // namespace detail
 
@@ -68,7 +68,7 @@ class runtime_registry : public allocator_base<Allocator> {
             typename ParentRegistryT, typename ResolveRootT>
   friend class runtime_registry;
   template <typename RegistryT>
-  friend struct detail::runtime_selector_identity_probe;
+  friend struct detail::runtime_lookup_identity_probe;
 
   template <typename ContainerTraitsT, typename AllocatorT,
             typename ParentRegistryT, typename ResolveRootT>
@@ -96,7 +96,8 @@ public:
   using container_traits_type = ContainerTraits;
   using allocator_type = Allocator;
   using rtti_type = typename ContainerTraits::rtti_type;
-  using index_definition_type = typename ContainerTraits::index_definition_type;
+  using lookup_definition_type =
+      typename ContainerTraits::lookup_definition_type;
   runtime_registry() : allocator_base<allocator_type>(allocator_type()) {}
 
   runtime_registry(const allocator_type &alloc)
@@ -387,7 +388,7 @@ protected:
     runtime_context context;
     const std::size_t count = count_runtime_collection<T>(id);
     if (count == 0 &&
-        !has_explicit_collection_selector<T>(std::forward<IdType>(id))) {
+        !has_explicit_collection_lookup<T>(std::forward<IdType>(id))) {
       throw detail::make_collection_type_not_found_exception<T, resolve_type>();
     }
 
@@ -410,7 +411,7 @@ protected:
     const std::size_t count =
         count_runtime_collection<T>(collection_key<Key>());
     if (count == 0 &&
-        !has_explicit_collection_selector<T>(collection_key<Key>())) {
+        !has_explicit_collection_lookup<T>(collection_key<Key>())) {
       throw detail::make_collection_type_not_found_exception<T, resolve_type>();
     }
 
@@ -503,47 +504,45 @@ protected:
   };
 
   struct registered_binding_entry;
-  using selector_table_type =
-      detail::runtime_selector_table<rtti_type, allocator_type,
-                                     registered_binding_entry>;
-  using selector_identity = typename selector_table_type::selector_identity;
-  using selector_identity_allocator =
-      typename selector_table_type::identity_allocator;
-  using selector_identity_storage =
-      typename selector_table_type::identity_storage;
-  using selector_identity_key_domain = typename selector_table_type::key_domain;
-  using selector_identity_cardinality =
-      typename selector_table_type::cardinality;
+  using lookup_table_type =
+      detail::runtime_lookup_table<rtti_type, allocator_type,
+                                   registered_binding_entry>;
+  using lookup_identity = typename lookup_table_type::lookup_identity;
+  using lookup_identity_allocator =
+      typename lookup_table_type::identity_allocator;
+  using lookup_identity_storage = typename lookup_table_type::identity_storage;
+  using lookup_identity_key_domain = typename lookup_table_type::key_domain;
+  using lookup_identity_cardinality = typename lookup_table_type::cardinality;
 
   template <typename Cardinality>
-  static constexpr selector_identity_cardinality selector_cardinality() {
-    return detail::runtime_selector_cardinality_value<Cardinality>();
+  static constexpr lookup_identity_cardinality lookup_cardinality() {
+    return detail::runtime_lookup_cardinality_value<Cardinality>();
   }
 
   template <typename IndexEntry>
-  using selector_entry_cardinality =
-      detail::runtime_selector_entry_cardinality<IndexEntry>;
+  using lookup_entry_cardinality =
+      detail::runtime_lookup_entry_cardinality<IndexEntry>;
 
   struct registered_binding_entry : binding_cache_state {
     runtime_binding_ptr<runtime_binding_interface<container_type>> binding;
     typename rtti_type::type_index storage_type;
     std::optional<typename rtti_type::type_index> key_type;
-    selector_identity_storage selector_identities;
+    lookup_identity_storage lookup_identities;
 
     registered_binding_entry(
         runtime_binding_ptr<runtime_binding_interface<container_type>>
             &&binding_ptr,
         typename rtti_type::type_index resolved_storage_type,
         std::optional<typename rtti_type::type_index> resolved_key_type,
-        selector_identity &&resolved_selector_identity,
-        allocator_type &allocator)
+        lookup_identity &&resolved_lookup_identity, allocator_type &allocator)
         : binding(std::move(binding_ptr)),
           storage_type(std::move(resolved_storage_type)),
           key_type(std::move(resolved_key_type)),
-          selector_identities(detail::make_selector_storage_allocator<
-                              selector_identity_allocator>(allocator)) {
-      selector_identities.reserve(1);
-      selector_identities.emplace_back(std::move(resolved_selector_identity));
+          lookup_identities(
+              detail::make_lookup_storage_allocator<lookup_identity_allocator>(
+                  allocator)) {
+      lookup_identities.reserve(1);
+      lookup_identities.emplace_back(std::move(resolved_lookup_identity));
     }
 
     registered_binding_entry(const registered_binding_entry &) = delete;
@@ -554,7 +553,7 @@ protected:
         : binding_cache_state{other.cache}, binding(std::move(other.binding)),
           storage_type(std::move(other.storage_type)),
           key_type(std::move(other.key_type)),
-          selector_identities(std::move(other.selector_identities)) {
+          lookup_identities(std::move(other.lookup_identities)) {
       other.cache = nullptr;
     }
 
@@ -566,7 +565,7 @@ protected:
         binding = std::move(other.binding);
         storage_type = std::move(other.storage_type);
         key_type = std::move(other.key_type);
-        selector_identities = std::move(other.selector_identities);
+        lookup_identities = std::move(other.lookup_identities);
       }
       return *this;
     }
@@ -583,16 +582,16 @@ protected:
 
     runtime_type_bindings(allocator_type &allocator)
         : allocator_(std::addressof(allocator)), bindings(allocator),
-          entries(detail::make_selector_storage_allocator<entry_allocator>(
+          entries(detail::make_lookup_storage_allocator<entry_allocator>(
               allocator)),
-          selector_table(allocator) {
+          lookup_table(allocator) {
       using entries_type =
-          detail::normalize_index_definitions_t<index_definition_type>;
-      static_assert(!detail::has_duplicate_index_definition_v<entries_type>,
-                    "duplicate dingo selector definition for interface/key "
+          detail::normalize_lookup_definitions_t<lookup_definition_type>;
+      static_assert(!detail::has_duplicate_lookup_definition_v<entries_type>,
+                    "duplicate dingo lookup definition for interface/key "
                     "domain/cardinality");
-      static_assert(!detail::has_duplicate_index_slot_v<entries_type>,
-                    "conflicting dingo selector definitions for interface/key "
+      static_assert(!detail::has_duplicate_lookup_slot_v<entries_type>,
+                    "conflicting dingo lookup definitions for interface/key "
                     "domain");
     }
 
@@ -600,22 +599,22 @@ protected:
     entry_iterator emplace_entry(
         Binding &&binding, typename rtti_type::type_index resolved_storage_type,
         std::optional<typename rtti_type::type_index> resolved_key_type,
-        selector_identity &&resolved_selector_identity) {
+        lookup_identity &&resolved_lookup_identity) {
       entries.emplace_back(std::forward<Binding>(binding),
                            std::move(resolved_storage_type),
                            std::move(resolved_key_type),
-                           std::move(resolved_selector_identity), *allocator_);
+                           std::move(resolved_lookup_identity), *allocator_);
       return std::prev(entries.end());
     }
 
     void erase_entry(entry_iterator entry) { entries.erase(entry); }
 
-    bool insert_selector_rows(entry_iterator entry) {
-      return selector_table.insert(*entry);
+    bool insert_lookup_rows(entry_iterator entry) {
+      return lookup_table.insert(*entry);
     }
 
-    void erase_selector_rows(registered_binding_entry *entry) {
-      selector_table.erase(*entry);
+    void erase_lookup_rows(registered_binding_entry *entry) {
+      lookup_table.erase(*entry);
     }
 
     allocator_type *allocator_;
@@ -623,7 +622,7 @@ protected:
                                                      allocator_type>
         bindings;
     entry_list entries;
-    selector_table_type selector_table;
+    lookup_table_type lookup_table;
   };
 
   struct runtime_bindings_state {
@@ -644,38 +643,37 @@ protected:
                                         binding_cache_state *>;
 
   static std::size_t
-  selector_identity_count(const registered_binding_entry &entry) {
-    return entry.selector_identities.size();
+  lookup_identity_count(const registered_binding_entry &entry) {
+    return entry.lookup_identities.size();
   }
 
-  static const selector_identity &
-  selector_identity_at(const registered_binding_entry &entry,
-                       std::size_t index) {
-    return entry.selector_identities[index];
+  static const lookup_identity &
+  lookup_identity_at(const registered_binding_entry &entry, std::size_t index) {
+    return entry.lookup_identities[index];
   }
 
   static const typename rtti_type::type_index &
-  selector_identity_interface_type(const selector_identity &identity) {
+  lookup_identity_interface_type(const lookup_identity &identity) {
     return identity.interface_type;
   }
 
-  static selector_identity_key_domain
-  selector_identity_domain(const selector_identity &identity) {
+  static lookup_identity_key_domain
+  lookup_identity_domain(const lookup_identity &identity) {
     return identity.domain;
   }
 
-  static selector_identity_cardinality
-  selector_identity_cardinality_value(const selector_identity &identity) {
-    return identity.selector_cardinality;
+  static lookup_identity_cardinality
+  lookup_identity_cardinality_value(const lookup_identity &identity) {
+    return identity.lookup_cardinality;
   }
 
   static const std::optional<typename rtti_type::type_index> &
-  selector_identity_key_type(const selector_identity &identity) {
+  lookup_identity_key_type(const lookup_identity &identity) {
     return identity.key_type;
   }
 
   static bool
-  selector_identity_has_runtime_key_storage(const selector_identity &identity) {
+  lookup_identity_has_runtime_key_storage(const lookup_identity &identity) {
     return static_cast<bool>(identity.runtime_key);
   }
 
@@ -689,31 +687,31 @@ protected:
   }
 
   template <typename T, typename IdType>
-  static constexpr bool has_explicit_collection_selector(IdType &&) {
+  static constexpr bool has_explicit_collection_lookup(IdType &&) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
     using index_interface_type = normalized_type_t<resolve_type>;
     using entries =
-        detail::normalize_index_definitions_t<index_definition_type>;
+        detail::normalize_lookup_definitions_t<lookup_definition_type>;
 
     if constexpr (is_none_v<std::decay_t<IdType>>) {
       using many_entry =
-          detail::selected_no_key_index_entry_t<index_interface_type,
-                                                ::dingo::many, entries>;
+          detail::selected_no_key_lookup_entry_t<index_interface_type,
+                                                 ::dingo::many, entries>;
       return !std::is_void_v<many_entry>;
     } else if constexpr (detail::is_typed_key_v<IdType>) {
       using key_type = typename std::decay_t<IdType>::type;
-      using many_entry = detail::selected_typed_key_index_entry_t<
+      using many_entry = detail::selected_typed_key_lookup_entry_t<
           index_interface_type, key_type, ::dingo::many, entries>;
       return !std::is_void_v<many_entry>;
     } else {
       using index_key_type = std::decay_t<IdType>;
-      using index_entry =
-          detail::selected_index_entry_t<index_interface_type, index_key_type,
-                                         entries>;
-      return !std::is_void_v<index_entry> &&
+      using lookup_entry =
+          detail::selected_lookup_entry_t<index_interface_type, index_key_type,
+                                          entries>;
+      return !std::is_void_v<lookup_entry> &&
              std::is_same_v<
-                 typename selector_entry_cardinality<index_entry>::type,
+                 typename lookup_entry_cardinality<lookup_entry>::type,
                  ::dingo::many>;
     }
   }
@@ -897,24 +895,24 @@ protected:
     using resolve_type = typename collection_type::resolve_type;
     using index_key_type = std::decay_t<IdType>;
     using index_interface_type = normalized_type_t<resolve_type>;
-    using index_entry = detail::selected_index_entry_t<
+    using lookup_entry = detail::selected_lookup_entry_t<
         index_interface_type, index_key_type,
-        detail::normalize_index_definitions_t<index_definition_type>>;
+        detail::normalize_lookup_definitions_t<lookup_definition_type>>;
 
-    if constexpr (std::is_void_v<index_entry>) {
+    if constexpr (std::is_void_v<lookup_entry>) {
       (void)results;
       (void)context;
       (void)fn;
       return 0;
     } else {
-      if constexpr (std::is_same_v<typename index_entry::cardinality,
+      if constexpr (std::is_same_v<typename lookup_entry::cardinality,
                                    ::dingo::many>) {
         auto matches = [&](const auto &identity) {
-          return selector_table_type::template matches_runtime_key<
+          return lookup_table_type::template matches_runtime_key<
               index_interface_type, index_key_type, ::dingo::many>(identity,
                                                                    id);
         };
-        return data.selector_table.for_each(matches, [&](auto &entry) {
+        return data.lookup_table.for_each(matches, [&](auto &entry) {
           fn(results,
              resolve_collection_type<resolve_type>(*entry.binding, context));
         });
@@ -935,13 +933,13 @@ protected:
     using resolve_type = typename collection_type::resolve_type;
     using index_interface_type = normalized_type_t<resolve_type>;
     using entries =
-        detail::normalize_index_definitions_t<index_definition_type>;
+        detail::normalize_lookup_definitions_t<lookup_definition_type>;
     using many_entry =
-        detail::selected_no_key_index_entry_t<index_interface_type,
-                                              ::dingo::many, entries>;
+        detail::selected_no_key_lookup_entry_t<index_interface_type,
+                                               ::dingo::many, entries>;
     using one_entry =
-        detail::selected_no_key_index_entry_t<index_interface_type,
-                                              ::dingo::one, entries>;
+        detail::selected_no_key_lookup_entry_t<index_interface_type,
+                                               ::dingo::one, entries>;
 
     if constexpr (std::is_void_v<many_entry>) {
       if constexpr (std::is_void_v<one_entry>) {
@@ -955,10 +953,11 @@ protected:
       }
     } else {
       auto matches = [](const auto &identity) {
-        return selector_table_type::template matches_no_key<
-            index_interface_type, ::dingo::many>(identity);
+        return lookup_table_type::template matches_no_key<index_interface_type,
+                                                          ::dingo::many>(
+            identity);
       };
-      return data.selector_table.for_each(matches, [&](auto &entry) {
+      return data.lookup_table.for_each(matches, [&](auto &entry) {
         fn(results,
            resolve_collection_type<resolve_type>(*entry.binding, context));
       });
@@ -976,13 +975,11 @@ protected:
     using key_type = typename key_id_type::type;
     using index_interface_type = normalized_type_t<resolve_type>;
     using entries =
-        detail::normalize_index_definitions_t<index_definition_type>;
-    using many_entry =
-        detail::selected_typed_key_index_entry_t<index_interface_type, key_type,
-                                                 ::dingo::many, entries>;
-    using one_entry =
-        detail::selected_typed_key_index_entry_t<index_interface_type, key_type,
-                                                 ::dingo::one, entries>;
+        detail::normalize_lookup_definitions_t<lookup_definition_type>;
+    using many_entry = detail::selected_typed_key_lookup_entry_t<
+        index_interface_type, key_type, ::dingo::many, entries>;
+    using one_entry = detail::selected_typed_key_lookup_entry_t<
+        index_interface_type, key_type, ::dingo::one, entries>;
 
     if constexpr (std::is_void_v<many_entry>) {
       if constexpr (std::is_void_v<one_entry>) {
@@ -996,10 +993,10 @@ protected:
       }
     } else {
       auto matches = [](const auto &identity) {
-        return selector_table_type::template matches_typed_key<
+        return lookup_table_type::template matches_typed_key<
             index_interface_type, key_type, ::dingo::many>(identity);
       };
-      return data.selector_table.for_each(matches, [&](auto &entry) {
+      return data.lookup_table.for_each(matches, [&](auto &entry) {
         fn(results,
            resolve_collection_type<resolve_type>(*entry.binding, context));
       });
@@ -1025,21 +1022,21 @@ protected:
     using resolve_type = typename collection_type::resolve_type;
     using index_key_type = std::decay_t<IdType>;
     using index_interface_type = normalized_type_t<resolve_type>;
-    using index_entry = detail::selected_index_entry_t<
+    using lookup_entry = detail::selected_lookup_entry_t<
         index_interface_type, index_key_type,
-        detail::normalize_index_definitions_t<index_definition_type>>;
+        detail::normalize_lookup_definitions_t<lookup_definition_type>>;
 
-    if constexpr (std::is_void_v<index_entry>) {
+    if constexpr (std::is_void_v<lookup_entry>) {
       return 0;
     } else {
-      if constexpr (std::is_same_v<typename index_entry::cardinality,
+      if constexpr (std::is_same_v<typename lookup_entry::cardinality,
                                    ::dingo::many>) {
         auto matches = [&](const auto &identity) {
-          return selector_table_type::template matches_runtime_key<
+          return lookup_table_type::template matches_runtime_key<
               index_interface_type, index_key_type, ::dingo::many>(identity,
                                                                    id);
         };
-        return data.selector_table.count(matches);
+        return data.lookup_table.count(matches);
       } else {
         return 0;
       }
@@ -1052,13 +1049,13 @@ protected:
     using resolve_type = typename collection_type::resolve_type;
     using index_interface_type = normalized_type_t<resolve_type>;
     using entries =
-        detail::normalize_index_definitions_t<index_definition_type>;
+        detail::normalize_lookup_definitions_t<lookup_definition_type>;
     using many_entry =
-        detail::selected_no_key_index_entry_t<index_interface_type,
-                                              ::dingo::many, entries>;
+        detail::selected_no_key_lookup_entry_t<index_interface_type,
+                                               ::dingo::many, entries>;
     using one_entry =
-        detail::selected_no_key_index_entry_t<index_interface_type,
-                                              ::dingo::one, entries>;
+        detail::selected_no_key_lookup_entry_t<index_interface_type,
+                                               ::dingo::one, entries>;
 
     if constexpr (std::is_void_v<many_entry>) {
       if constexpr (std::is_void_v<one_entry>) {
@@ -1068,10 +1065,11 @@ protected:
       }
     } else {
       auto matches = [](const auto &identity) {
-        return selector_table_type::template matches_no_key<
-            index_interface_type, ::dingo::many>(identity);
+        return lookup_table_type::template matches_no_key<index_interface_type,
+                                                          ::dingo::many>(
+            identity);
       };
-      return data.selector_table.count(matches);
+      return data.lookup_table.count(matches);
     }
   }
 
@@ -1084,13 +1082,11 @@ protected:
     using key_type = typename key_id_type::type;
     using index_interface_type = normalized_type_t<resolve_type>;
     using entries =
-        detail::normalize_index_definitions_t<index_definition_type>;
-    using many_entry =
-        detail::selected_typed_key_index_entry_t<index_interface_type, key_type,
-                                                 ::dingo::many, entries>;
-    using one_entry =
-        detail::selected_typed_key_index_entry_t<index_interface_type, key_type,
-                                                 ::dingo::one, entries>;
+        detail::normalize_lookup_definitions_t<lookup_definition_type>;
+    using many_entry = detail::selected_typed_key_lookup_entry_t<
+        index_interface_type, key_type, ::dingo::many, entries>;
+    using one_entry = detail::selected_typed_key_lookup_entry_t<
+        index_interface_type, key_type, ::dingo::one, entries>;
 
     if constexpr (std::is_void_v<many_entry>) {
       if constexpr (std::is_void_v<one_entry>) {
@@ -1100,10 +1096,10 @@ protected:
       }
     } else {
       auto matches = [](const auto &identity) {
-        return selector_table_type::template matches_typed_key<
+        return lookup_table_type::template matches_typed_key<
             index_interface_type, key_type, ::dingo::many>(identity);
       };
-      return data.selector_table.count(matches);
+      return data.lookup_table.count(matches);
     }
   }
 
@@ -1153,22 +1149,22 @@ private:
     if constexpr (is_none_v<std::decay_t<IdType>>) {
       using index_interface_type = normalized_type_t<Request>;
       using entries =
-          detail::normalize_index_definitions_t<index_definition_type>;
+          detail::normalize_lookup_definitions_t<lookup_definition_type>;
       using one_entry =
-          detail::selected_no_key_index_entry_t<index_interface_type,
-                                                ::dingo::one, entries>;
+          detail::selected_no_key_lookup_entry_t<index_interface_type,
+                                                 ::dingo::one, entries>;
       using many_entry =
-          detail::selected_no_key_index_entry_t<index_interface_type,
-                                                ::dingo::many, entries>;
+          detail::selected_no_key_lookup_entry_t<index_interface_type,
+                                                 ::dingo::many, entries>;
 
       if constexpr (!std::is_void_v<one_entry>) {
-        return select_selector_table_binding(data, [](const auto &identity) {
-          return selector_table_type::template matches_no_key<
+        return select_lookup_table_binding(data, [](const auto &identity) {
+          return lookup_table_type::template matches_no_key<
               index_interface_type, ::dingo::one>(identity);
         });
       } else if constexpr (!std::is_void_v<many_entry>) {
-        return select_selector_table_binding(data, [](const auto &identity) {
-          return selector_table_type::template matches_no_key<
+        return select_lookup_table_binding(data, [](const auto &identity) {
+          return lookup_table_type::template matches_no_key<
               index_interface_type, ::dingo::many>(identity);
         });
       } else {
@@ -1190,20 +1186,20 @@ private:
       using key_type = typename key_id_type::type;
       using index_interface_type = normalized_type_t<Request>;
       using entries =
-          detail::normalize_index_definitions_t<index_definition_type>;
-      using one_entry = detail::selected_typed_key_index_entry_t<
+          detail::normalize_lookup_definitions_t<lookup_definition_type>;
+      using one_entry = detail::selected_typed_key_lookup_entry_t<
           index_interface_type, key_type, ::dingo::one, entries>;
-      using many_entry = detail::selected_typed_key_index_entry_t<
+      using many_entry = detail::selected_typed_key_lookup_entry_t<
           index_interface_type, key_type, ::dingo::many, entries>;
 
       if constexpr (!std::is_void_v<one_entry>) {
-        return select_selector_table_binding(data, [](const auto &identity) {
-          return selector_table_type::template matches_typed_key<
+        return select_lookup_table_binding(data, [](const auto &identity) {
+          return lookup_table_type::template matches_typed_key<
               index_interface_type, key_type, ::dingo::one>(identity);
         });
       } else if constexpr (!std::is_void_v<many_entry>) {
-        return select_selector_table_binding(data, [](const auto &identity) {
-          return selector_table_type::template matches_typed_key<
+        return select_lookup_table_binding(data, [](const auto &identity) {
+          return lookup_table_type::template matches_typed_key<
               index_interface_type, key_type, ::dingo::many>(identity);
         });
       } else {
@@ -1229,24 +1225,24 @@ private:
     } else {
       using index_key_type = std::decay_t<IdType>;
       using index_interface_type = normalized_type_t<Request>;
-      using index_entry = detail::selected_index_entry_t<
+      using lookup_entry = detail::selected_lookup_entry_t<
           index_interface_type, index_key_type,
-          detail::normalize_index_definitions_t<index_definition_type>>;
-      if constexpr (std::is_void_v<index_entry>) {
+          detail::normalize_lookup_definitions_t<lookup_definition_type>>;
+      if constexpr (std::is_void_v<lookup_entry>) {
         if constexpr (!std::is_same_v<void, ParentRegistry> &&
                       !std::is_base_of_v<registry_type, resolve_root_type>) {
           return detail::make_runtime_selection<runtime_binding_interface_type,
                                                 binding_cache_state *>(nullptr,
                                                                        nullptr);
         } else {
-          static_assert(!std::is_void_v<index_entry>,
+          static_assert(!std::is_void_v<lookup_entry>,
                         "indexed registration or lookup has no matching "
-                        "dingo selector definition for interface/key");
+                        "dingo lookup definition for interface/key");
         }
       } else {
-        using index_cardinality = typename index_entry::cardinality;
-        return select_selector_table_binding(data, [&](const auto &identity) {
-          return selector_table_type::template matches_runtime_key<
+        using index_cardinality = typename lookup_entry::cardinality;
+        return select_lookup_table_binding(data, [&](const auto &identity) {
+          return lookup_table_type::template matches_runtime_key<
               index_interface_type, index_key_type, index_cardinality>(identity,
                                                                        id);
         });
@@ -1255,12 +1251,12 @@ private:
   }
 
   template <typename Matcher>
-  runtime_selection select_selector_table_binding(runtime_type_bindings *data,
-                                                  Matcher &&matches) {
+  runtime_selection select_lookup_table_binding(runtime_type_bindings *data,
+                                                Matcher &&matches) {
     registered_binding_entry *selected = nullptr;
     bool ambiguous = false;
     if (data) {
-      selected = data->selector_table.find_singular(
+      selected = data->lookup_table.find_singular(
           std::forward<Matcher>(matches), ambiguous);
     }
 
@@ -1283,7 +1279,7 @@ private:
                            type_registration<TypeArgs...>>;
     static_assert(!detail::is_key_value_v<typename registration::key_type>,
                   "dingo::key<T, V> registration keys require a static fixed "
-                  "runtime-key selector");
+                  "runtime-key lookup");
     using binding_model = detail::binding_model<registration>;
     using bindings_type = typename binding_model::bindings_type;
     using instance_container_type = registration_container_type<registration>;
@@ -1405,35 +1401,33 @@ private:
       }();
       auto resolved_storage_type =
           rtti_type::template get_type_index<typename TypeStorage::type>();
-      using index_entry = detail::selected_index_entry_t<
+      using lookup_entry = detail::selected_lookup_entry_t<
           TypeInterface, IdType,
-          detail::normalize_index_definitions_t<index_definition_type>>;
-      static_assert(!std::is_void_v<index_entry>,
+          detail::normalize_lookup_definitions_t<lookup_definition_type>>;
+      static_assert(!std::is_void_v<lookup_entry>,
                     "indexed registration or lookup has no matching "
-                    "dingo selector definition for interface/key");
-      using selector_cardinality_type =
-          typename selector_entry_cardinality<index_entry>::type;
-      auto selector_id =
-          selector_table_type::template make_runtime_key_identity<
-              TypeInterface, IdType, selector_cardinality_type>(get_allocator(),
-                                                                id);
+                    "dingo lookup definition for interface/key");
+      using lookup_cardinality_type =
+          typename lookup_entry_cardinality<lookup_entry>::type;
+      auto lookup_id = lookup_table_type::template make_runtime_key_identity<
+          TypeInterface, IdType, lookup_cardinality_type>(get_allocator(), id);
       auto inserted_entry = data.emplace_entry(
           std::forward<Binding>(binding), std::move(resolved_storage_type),
-          std::move(resolved_key_type), std::move(selector_id));
+          std::move(resolved_key_type), std::move(lookup_id));
       bool binding_registered = true;
-      bool selector_rows_registered = false;
+      bool lookup_rows_registered = false;
       try {
-        if (!data.insert_selector_rows(inserted_entry)) {
+        if (!data.insert_lookup_rows(inserted_entry)) {
           data.erase_entry(inserted_entry);
           binding_registered = false;
           throw detail::make_type_index_already_registered_exception<
               TypeInterface, typename TypeStorage::type, IdType>();
         }
-        selector_rows_registered = true;
+        lookup_rows_registered = true;
       } catch (...) {
         if (binding_registered) {
-          if (selector_rows_registered) {
-            data.erase_selector_rows(std::addressof(*inserted_entry));
+          if (lookup_rows_registered) {
+            data.erase_lookup_rows(std::addressof(*inserted_entry));
           }
           data.erase_entry(inserted_entry);
         }
@@ -1441,39 +1435,39 @@ private:
       }
     } else if constexpr (is_none_v<std::decay_t<KeyIdType>>) {
       using entries =
-          detail::normalize_index_definitions_t<index_definition_type>;
+          detail::normalize_lookup_definitions_t<lookup_definition_type>;
       using one_entry =
-          detail::selected_no_key_index_entry_t<TypeInterface, ::dingo::one,
-                                                entries>;
+          detail::selected_no_key_lookup_entry_t<TypeInterface, ::dingo::one,
+                                                 entries>;
       using many_entry =
-          detail::selected_no_key_index_entry_t<TypeInterface, ::dingo::many,
-                                                entries>;
+          detail::selected_no_key_lookup_entry_t<TypeInterface, ::dingo::many,
+                                                 entries>;
 
       if constexpr (!std::is_void_v<one_entry> || !std::is_void_v<many_entry>) {
         auto resolved_storage_type =
             rtti_type::template get_type_index<typename TypeStorage::type>();
-        using selector_cardinality_type =
+        using lookup_cardinality_type =
             std::conditional_t<!std::is_void_v<one_entry>, ::dingo::one,
                                ::dingo::many>;
-        auto selector_id = selector_table_type::template make_no_key_identity<
-            TypeInterface, selector_cardinality_type>();
+        auto lookup_id = lookup_table_type::template make_no_key_identity<
+            TypeInterface, lookup_cardinality_type>();
         auto inserted_entry = data.emplace_entry(
             std::forward<Binding>(binding), std::move(resolved_storage_type),
-            std::nullopt, std::move(selector_id));
+            std::nullopt, std::move(lookup_id));
         bool binding_registered = true;
-        bool selector_rows_registered = false;
+        bool lookup_rows_registered = false;
         try {
-          if (!data.insert_selector_rows(inserted_entry)) {
+          if (!data.insert_lookup_rows(inserted_entry)) {
             data.erase_entry(inserted_entry);
             binding_registered = false;
             throw detail::make_type_already_registered_exception<
                 TypeInterface, typename TypeStorage::type>();
           }
-          selector_rows_registered = true;
+          lookup_rows_registered = true;
         } catch (...) {
           if (binding_registered) {
-            if (selector_rows_registered) {
-              data.erase_selector_rows(std::addressof(*inserted_entry));
+            if (lookup_rows_registered) {
+              data.erase_lookup_rows(std::addressof(*inserted_entry));
             }
             data.erase_entry(inserted_entry);
           }
@@ -1482,37 +1476,37 @@ private:
       } else {
         auto resolved_storage_type =
             rtti_type::template get_type_index<typename TypeStorage::type>();
-        auto selector_id =
-            selector_table_type::template make_legacy_no_key_identity<
+        auto lookup_id =
+            lookup_table_type::template make_legacy_no_key_identity<
                 TypeInterface, ::dingo::one>();
         auto inserted_entry = data.emplace_entry(
             std::forward<Binding>(binding), std::move(resolved_storage_type),
-            std::nullopt, std::move(selector_id));
+            std::nullopt, std::move(lookup_id));
         bool binding_registered = true;
-        bool selector_rows_registered = false;
+        bool lookup_rows_registered = false;
         try {
-          if (!data.insert_selector_rows(inserted_entry)) {
+          if (!data.insert_lookup_rows(inserted_entry)) {
             data.erase_entry(inserted_entry);
             binding_registered = false;
             throw detail::make_type_already_registered_exception<
                 TypeInterface, typename TypeStorage::type>();
           }
-          selector_rows_registered = true;
+          lookup_rows_registered = true;
           auto inserted_binding =
               data.bindings.template insert<binding_registration_key>(
                   std::addressof(*inserted_entry));
           if (!inserted_binding.second) {
-            data.erase_selector_rows(std::addressof(*inserted_entry));
+            data.erase_lookup_rows(std::addressof(*inserted_entry));
             data.erase_entry(inserted_entry);
             binding_registered = false;
-            selector_rows_registered = false;
+            lookup_rows_registered = false;
             throw detail::make_type_already_registered_exception<
                 TypeInterface, typename TypeStorage::type>();
           }
         } catch (...) {
           if (binding_registered) {
-            if (selector_rows_registered) {
-              data.erase_selector_rows(std::addressof(*inserted_entry));
+            if (lookup_rows_registered) {
+              data.erase_lookup_rows(std::addressof(*inserted_entry));
             }
             data.erase_entry(inserted_entry);
           }
@@ -1522,40 +1516,39 @@ private:
     } else {
       using typed_key_type = typename std::decay_t<KeyIdType>::type;
       using entries =
-          detail::normalize_index_definitions_t<index_definition_type>;
-      using one_entry = detail::selected_typed_key_index_entry_t<
+          detail::normalize_lookup_definitions_t<lookup_definition_type>;
+      using one_entry = detail::selected_typed_key_lookup_entry_t<
           TypeInterface, typed_key_type, ::dingo::one, entries>;
-      using many_entry = detail::selected_typed_key_index_entry_t<
+      using many_entry = detail::selected_typed_key_lookup_entry_t<
           TypeInterface, typed_key_type, ::dingo::many, entries>;
 
       if constexpr (!std::is_void_v<one_entry> || !std::is_void_v<many_entry>) {
         auto resolved_storage_type =
             rtti_type::template get_type_index<typename TypeStorage::type>();
-        using selector_cardinality_type =
+        using lookup_cardinality_type =
             std::conditional_t<!std::is_void_v<one_entry>, ::dingo::one,
                                ::dingo::many>;
-        auto selector_id =
-            selector_table_type::template make_typed_key_identity<
-                TypeInterface, typed_key_type, selector_cardinality_type>();
+        auto lookup_id = lookup_table_type::template make_typed_key_identity<
+            TypeInterface, typed_key_type, lookup_cardinality_type>();
         auto inserted_entry = data.emplace_entry(
             std::forward<Binding>(binding), std::move(resolved_storage_type),
             rtti_type::template get_type_index<std::decay_t<KeyIdType>>(),
-            std::move(selector_id));
+            std::move(lookup_id));
         bool binding_registered = true;
-        bool selector_rows_registered = false;
+        bool lookup_rows_registered = false;
         try {
-          if (!data.insert_selector_rows(inserted_entry)) {
+          if (!data.insert_lookup_rows(inserted_entry)) {
             data.erase_entry(inserted_entry);
             binding_registered = false;
             throw detail::make_type_index_already_registered_exception<
                 TypeInterface, typename TypeStorage::type,
                 std::decay_t<KeyIdType>>();
           }
-          selector_rows_registered = true;
+          lookup_rows_registered = true;
         } catch (...) {
           if (binding_registered) {
-            if (selector_rows_registered) {
-              data.erase_selector_rows(std::addressof(*inserted_entry));
+            if (lookup_rows_registered) {
+              data.erase_lookup_rows(std::addressof(*inserted_entry));
             }
             data.erase_entry(inserted_entry);
           }
@@ -1564,40 +1557,40 @@ private:
       } else {
         auto resolved_storage_type =
             rtti_type::template get_type_index<typename TypeStorage::type>();
-        auto selector_id =
-            selector_table_type::template make_legacy_typed_key_identity<
+        auto lookup_id =
+            lookup_table_type::template make_legacy_typed_key_identity<
                 TypeInterface, typed_key_type, ::dingo::one>();
         auto inserted_entry = data.emplace_entry(
             std::forward<Binding>(binding), std::move(resolved_storage_type),
             rtti_type::template get_type_index<std::decay_t<KeyIdType>>(),
-            std::move(selector_id));
+            std::move(lookup_id));
         bool binding_registered = true;
-        bool selector_rows_registered = false;
+        bool lookup_rows_registered = false;
         try {
-          if (!data.insert_selector_rows(inserted_entry)) {
+          if (!data.insert_lookup_rows(inserted_entry)) {
             data.erase_entry(inserted_entry);
             binding_registered = false;
             throw detail::make_type_index_already_registered_exception<
                 TypeInterface, typename TypeStorage::type,
                 std::decay_t<KeyIdType>>();
           }
-          selector_rows_registered = true;
+          lookup_rows_registered = true;
           auto inserted_binding =
               data.bindings.template insert<binding_registration_key>(
                   std::addressof(*inserted_entry));
           if (!inserted_binding.second) {
-            data.erase_selector_rows(std::addressof(*inserted_entry));
+            data.erase_lookup_rows(std::addressof(*inserted_entry));
             data.erase_entry(inserted_entry);
             binding_registered = false;
-            selector_rows_registered = false;
+            lookup_rows_registered = false;
             throw detail::make_type_index_already_registered_exception<
                 TypeInterface, typename TypeStorage::type,
                 std::decay_t<KeyIdType>>();
           }
         } catch (...) {
           if (binding_registered) {
-            if (selector_rows_registered) {
-              data.erase_selector_rows(std::addressof(*inserted_entry));
+            if (lookup_rows_registered) {
+              data.erase_lookup_rows(std::addressof(*inserted_entry));
             }
             data.erase_entry(inserted_entry);
           }
@@ -1781,12 +1774,12 @@ void runtime_registry<ContainerTraits, Allocator, ParentRegistry,
 
 namespace detail {
 
-template <typename Registry> struct runtime_selector_identity_probe {
+template <typename Registry> struct runtime_lookup_identity_probe {
   template <typename Request, typename Interface, typename Cardinality,
             typename IdType = none_t>
   static bool selected_no_key_identity_matches(Registry &registry,
                                                IdType &&id = IdType()) {
-    using key_domain = typename Registry::selector_identity_key_domain;
+    using key_domain = typename Registry::lookup_identity_key_domain;
     return selected_identity_matches<Request, Interface, Cardinality, void>(
         registry, key_domain::no_key, false, std::forward<IdType>(id));
   }
@@ -1795,7 +1788,7 @@ template <typename Registry> struct runtime_selector_identity_probe {
             typename Cardinality, typename IdType>
   static bool selected_typed_key_identity_matches(Registry &registry,
                                                   IdType &&id) {
-    using key_domain = typename Registry::selector_identity_key_domain;
+    using key_domain = typename Registry::lookup_identity_key_domain;
     return selected_identity_matches<Request, Interface, Cardinality, Key>(
         registry, key_domain::typed_key, false, std::forward<IdType>(id));
   }
@@ -1804,7 +1797,7 @@ template <typename Registry> struct runtime_selector_identity_probe {
             typename Cardinality, typename IdType>
   static bool selected_runtime_key_identity_matches(Registry &registry,
                                                     IdType &&id) {
-    using key_domain = typename Registry::selector_identity_key_domain;
+    using key_domain = typename Registry::lookup_identity_key_domain;
     return selected_identity_matches<Request, Interface, Cardinality, Key>(
         registry, key_domain::runtime_key, true, std::forward<IdType>(id));
   }
@@ -1813,8 +1806,7 @@ private:
   template <typename Request, typename Interface, typename Cardinality,
             typename Key, typename IdType>
   static bool selected_identity_matches(
-      Registry &registry,
-      typename Registry::selector_identity_key_domain domain,
+      Registry &registry, typename Registry::lookup_identity_key_domain domain,
       bool expects_runtime_key_storage, IdType &&id) {
     auto selection = registry.template runtime_source_select<Request>(
         std::forward<IdType>(id));
@@ -1824,24 +1816,24 @@ private:
 
     auto *entry = static_cast<typename Registry::registered_binding_entry *>(
         selection.state);
-    if (Registry::selector_identity_count(*entry) != 1) {
+    if (Registry::lookup_identity_count(*entry) != 1) {
       return false;
     }
 
-    const auto &identity = Registry::selector_identity_at(*entry, 0);
-    if (!(Registry::selector_identity_interface_type(identity) ==
+    const auto &identity = Registry::lookup_identity_at(*entry, 0);
+    if (!(Registry::lookup_identity_interface_type(identity) ==
           Registry::rtti_type::template get_type_index<Interface>())) {
       return false;
     }
-    if (Registry::selector_identity_domain(identity) != domain) {
+    if (Registry::lookup_identity_domain(identity) != domain) {
       return false;
     }
-    if (Registry::selector_identity_cardinality_value(identity) !=
-        Registry::template selector_cardinality<Cardinality>()) {
+    if (Registry::lookup_identity_cardinality_value(identity) !=
+        Registry::template lookup_cardinality<Cardinality>()) {
       return false;
     }
 
-    const auto &key_type = Registry::selector_identity_key_type(identity);
+    const auto &key_type = Registry::lookup_identity_key_type(identity);
     if constexpr (std::is_void_v<Key>) {
       if (key_type) {
         return false;
@@ -1853,7 +1845,7 @@ private:
       }
     }
 
-    return Registry::selector_identity_has_runtime_key_storage(identity) ==
+    return Registry::lookup_identity_has_runtime_key_storage(identity) ==
            expects_runtime_key_storage;
   }
 };

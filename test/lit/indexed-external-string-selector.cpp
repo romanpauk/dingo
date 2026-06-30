@@ -30,7 +30,7 @@ template <typename T, ::test_fixed_string Value>
 struct is_key_value<::key_string<T, Value>> : std::true_type {};
 
 template <typename T, ::test_fixed_string Value>
-struct key_selector_value<::key_string<T, Value>> {
+struct key_value_traits<::key_string<T, Value>> {
   using type = T;
 
   static T make() {
@@ -50,7 +50,7 @@ template <int Id> struct string_processor_impl : string_processor {
   int id() const override { return Id; }
 };
 
-// This proves an external selector can feed a concrete std::string key into
+// This proves an external lookup can feed a concrete std::string key into
 // indexed injection without adding a public dingo::key_string API.
 struct string_literal_consumer {
   explicit string_literal_consumer(
@@ -62,8 +62,8 @@ struct string_literal_consumer {
 };
 
 struct traits : dingo::dynamic_container_traits {
-  using index_definition_type =
-      dingo::selectors<dingo::associative<string_processor, std::string>>;
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<string_processor, std::string>>;
 };
 
 int main() {

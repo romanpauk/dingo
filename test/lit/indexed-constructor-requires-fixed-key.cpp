@@ -14,8 +14,8 @@ struct consumer {
 };
 
 struct traits : dingo::dynamic_container_traits {
-  using index_definition_type =
-      dingo::selectors<dingo::associative<processor, std::size_t>>;
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<processor, std::size_t>>;
 };
 
 int main() {

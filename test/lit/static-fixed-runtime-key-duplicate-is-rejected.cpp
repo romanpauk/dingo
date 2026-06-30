@@ -20,8 +20,8 @@ using source = dingo::bindings<
                 dingo::key<std::size_t, std::size_t{0}>>>;
 
 struct traits : dingo::static_container_traits<> {
-  using index_definition_type =
-      dingo::selectors<dingo::associative<processor, std::size_t>>;
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<processor, std::size_t>>;
 };
 
 int main() {
@@ -30,5 +30,5 @@ int main() {
   return 0;
 }
 
-// CHECK: static_container fixed runtime-key selector bindings must be
-// CHECK: unique for one selectors and unique by storage for many selectors
+// CHECK: static_container fixed runtime-key lookup bindings must be
+// CHECK: unique for one lookups and unique by storage for many lookups

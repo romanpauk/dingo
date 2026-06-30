@@ -352,8 +352,8 @@ struct binding_matches
            std::is_same_v<Key, typename InterfaceBinding::key_type> ||
            (is_key_value_v<Key> &&
             is_key_value_v<typename InterfaceBinding::key_type> &&
-            key_selector_same_value<
-                Key, typename InterfaceBinding::key_type>::value))> {};
+            is_same_key_value<Key,
+                              typename InterfaceBinding::key_type>::value))> {};
 
 template <typename Interface, typename Key, typename InterfaceBindings>
 struct bindings;
@@ -419,18 +419,18 @@ using binding_t =
     typename binding_lookup<Interface, Key, InterfaceBindings>::type;
 
 template <typename InterfaceBinding, typename Entries,
-          bool HasFixedRuntimeKey =
+          bool HasKeyValue =
               is_key_value_v<typename InterfaceBinding::key_type>>
-struct fixed_runtime_key_binding_is_declared : std::true_type {};
+struct key_value_binding_is_declared : std::true_type {};
 
 template <typename InterfaceBinding, typename Entries>
-struct fixed_runtime_key_binding_is_declared<InterfaceBinding, Entries, true> {
+struct key_value_binding_is_declared<InterfaceBinding, Entries, true> {
 private:
   using key_type = typename InterfaceBinding::key_type;
-  using key_domain = typename key_selector_value<key_type>::type;
+  using key_domain = typename key_value_traits<key_type>::type;
   using entry =
-      selected_index_entry_t<typename InterfaceBinding::interface_type,
-                             key_domain, Entries>;
+      selected_lookup_entry_t<typename InterfaceBinding::interface_type,
+                              key_domain, Entries>;
 
   template <typename Entry, bool Found = !std::is_void_v<Entry>>
   struct entry_is_supported : std::false_type {};
@@ -446,35 +446,34 @@ public:
 };
 
 template <typename InterfaceBindings, typename Entries>
-struct fixed_runtime_key_bindings_are_declared;
+struct key_value_bindings_are_declared;
 
 template <typename Entries>
-struct fixed_runtime_key_bindings_are_declared<type_list<>, Entries>
-    : std::true_type {};
+struct key_value_bindings_are_declared<type_list<>, Entries> : std::true_type {
+};
 
 template <typename Head, typename... Tail, typename Entries>
-struct fixed_runtime_key_bindings_are_declared<type_list<Head, Tail...>,
-                                               Entries>
+struct key_value_bindings_are_declared<type_list<Head, Tail...>, Entries>
     : std::bool_constant<
-          fixed_runtime_key_binding_is_declared<Head, Entries>::value &&
-          fixed_runtime_key_bindings_are_declared<type_list<Tail...>,
-                                                  Entries>::value> {};
+          key_value_binding_is_declared<Head, Entries>::value &&
+          key_value_bindings_are_declared<type_list<Tail...>, Entries>::value> {
+};
 
 template <typename InterfaceBinding, typename Entries,
-          bool HasFixedRuntimeKey =
+          bool HasKeyValue =
               is_key_value_v<typename InterfaceBinding::key_type>>
-struct fixed_runtime_key_selector_cardinality {
+struct key_value_lookup_cardinality {
   using type = void;
 };
 
 template <typename InterfaceBinding, typename Entries>
-struct fixed_runtime_key_selector_cardinality<InterfaceBinding, Entries, true> {
+struct key_value_lookup_cardinality<InterfaceBinding, Entries, true> {
 private:
   using key_type = typename InterfaceBinding::key_type;
-  using key_domain = typename key_selector_value<key_type>::type;
+  using key_domain = typename key_value_traits<key_type>::type;
   using entry =
-      selected_index_entry_t<typename InterfaceBinding::interface_type,
-                             key_domain, Entries>;
+      selected_lookup_entry_t<typename InterfaceBinding::interface_type,
+                              key_domain, Entries>;
 
   template <typename Entry, bool Found = !std::is_void_v<Entry>>
   struct entry_cardinality {
@@ -490,12 +489,11 @@ public:
 };
 
 template <typename InterfaceBinding, typename Entries>
-using fixed_runtime_key_selector_cardinality_t =
-    typename fixed_runtime_key_selector_cardinality<InterfaceBinding,
-                                                    Entries>::type;
+using key_value_lookup_cardinality_t =
+    typename key_value_lookup_cardinality<InterfaceBinding, Entries>::type;
 
 template <typename InterfaceBinding, typename Other>
-struct fixed_runtime_key_duplicate_storage
+struct key_value_duplicate_storage
     : std::bool_constant<
           std::is_same_v<typename InterfaceBinding::interface_type,
                          typename Other::interface_type> &&
@@ -504,52 +502,48 @@ struct fixed_runtime_key_duplicate_storage
               typename Other::binding_model_type::storage_type::type> &&
           is_key_value_v<typename InterfaceBinding::key_type> &&
           is_key_value_v<typename Other::key_type> &&
-          key_selector_same_value<typename InterfaceBinding::key_type,
-                                  typename Other::key_type>::value> {};
+          is_same_key_value<typename InterfaceBinding::key_type,
+                            typename Other::key_type>::value> {};
 
 template <typename InterfaceBinding, typename InterfaceBindings>
-struct fixed_runtime_key_duplicate_storage_count;
+struct key_value_duplicate_storage_count;
 
 template <typename InterfaceBinding>
-struct fixed_runtime_key_duplicate_storage_count<InterfaceBinding, type_list<>>
+struct key_value_duplicate_storage_count<InterfaceBinding, type_list<>>
     : std::integral_constant<size_t, 0> {};
 
 template <typename InterfaceBinding, typename Head, typename... Tail>
-struct fixed_runtime_key_duplicate_storage_count<InterfaceBinding,
-                                                 type_list<Head, Tail...>>
+struct key_value_duplicate_storage_count<InterfaceBinding,
+                                         type_list<Head, Tail...>>
     : std::integral_constant<
           size_t,
-          (fixed_runtime_key_duplicate_storage<InterfaceBinding, Head>::value
-               ? 1
-               : 0) +
-              fixed_runtime_key_duplicate_storage_count<
-                  InterfaceBinding, type_list<Tail...>>::value> {};
+          (key_value_duplicate_storage<InterfaceBinding, Head>::value ? 1 : 0) +
+              key_value_duplicate_storage_count<InterfaceBinding,
+                                                type_list<Tail...>>::value> {};
 
 template <typename InterfaceBindings, typename Entries>
-struct fixed_runtime_key_bindings_are_unique;
+struct key_value_bindings_are_unique;
 
 template <typename Entries>
-struct fixed_runtime_key_bindings_are_unique<type_list<>, Entries>
-    : std::true_type {};
+struct key_value_bindings_are_unique<type_list<>, Entries> : std::true_type {};
 
 template <typename Head, typename... Tail, typename Entries>
-struct fixed_runtime_key_bindings_are_unique<type_list<Head, Tail...>,
-                                             Entries> {
+struct key_value_bindings_are_unique<type_list<Head, Tail...>, Entries> {
 private:
-  using cardinality = fixed_runtime_key_selector_cardinality_t<Head, Entries>;
+  using cardinality = key_value_lookup_cardinality_t<Head, Entries>;
   static constexpr bool head_unique =
       !is_key_value_v<typename Head::key_type> ||
       (std::is_same_v<cardinality, one> &&
        binding_count_v<typename Head::interface_type, typename Head::key_type,
                        type_list<Head, Tail...>> == 1) ||
       (std::is_same_v<cardinality, many> &&
-       fixed_runtime_key_duplicate_storage_count<
-           Head, type_list<Head, Tail...>>::value == 1);
+       key_value_duplicate_storage_count<Head,
+                                         type_list<Head, Tail...>>::value == 1);
 
 public:
   static constexpr bool value =
       head_unique &&
-      fixed_runtime_key_bindings_are_unique<type_list<Tail...>, Entries>::value;
+      key_value_bindings_are_unique<type_list<Tail...>, Entries>::value;
 };
 
 template <typename DependencyList, typename InterfaceBindings>
@@ -699,7 +693,7 @@ template <typename Left, typename Right>
 struct binding_keys_match
     : std::bool_constant<std::is_same_v<Left, Right> ||
                          (is_key_value_v<Left> && is_key_value_v<Right> &&
-                          key_selector_same_value<Left, Right>::value)> {};
+                          is_same_key_value<Left, Right>::value)> {};
 
 template <typename InterfaceBinding, typename InterfaceBindings>
 struct binding_shadowed_by {

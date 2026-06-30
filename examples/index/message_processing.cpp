@@ -66,11 +66,11 @@ int main() {
   using namespace dingo;
 
   ////
-  // Define traits type with a single selector using size_t as a key
+  // Define traits type with a single lookup using size_t as a key
   struct container_traits : static_container_traits<void> {
-    using index_definition_type = selectors<associative<IProcessor, size_t>>;
+    using lookup_definition_type = lookups<associative<IProcessor, size_t>>;
   };
-  // Runtime selector lookup uses dynamic internal storage even when this
+  // Runtime lookup lookup uses dynamic internal storage even when this
   // example uses static_container_traits for the rest of the container.
 
   container<container_traits> container;

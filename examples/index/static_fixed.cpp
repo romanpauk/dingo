@@ -30,21 +30,23 @@ struct Pipeline {
 
 ////
 int main() {
-  using namespace dingo;
   ////
-  using source = bindings<bind<scope<shared>, storage<Processor<0>>,
-                               interfaces<IProcessor>, key<std::size_t, 0>>,
-                          bind<scope<shared>, storage<Processor<1>>,
-                               interfaces<IProcessor>, key<std::size_t, 1>>>;
+  using source = dingo::bindings<
+      dingo::bind<dingo::scope<dingo::shared>, dingo::storage<Processor<0>>,
+                  dingo::interfaces<IProcessor>, dingo::key<std::size_t, 0>>,
+      dingo::bind<dingo::scope<dingo::shared>, dingo::storage<Processor<1>>,
+                  dingo::interfaces<IProcessor>, dingo::key<std::size_t, 1>>>;
 
-  struct container_traits : static_container_traits<> {
-    using index_definition_type =
-        selectors<associative<IProcessor, std::size_t>>;
+  struct container_traits : dingo::static_container_traits<> {
+    using lookup_definition_type =
+        dingo::lookups<dingo::associative<IProcessor, std::size_t>>;
   };
 
-  static_container<source, container_traits> container;
+  dingo::static_container<source, container_traits> container;
 
-  auto &first = container.resolve<indexed<IProcessor &, key<std::size_t, 0>>>();
+  auto &first =
+      container
+          .resolve<dingo::indexed<IProcessor &, dingo::key<std::size_t, 0>>>();
   auto pipeline = container.construct<Pipeline>();
 
   return first.id() == 0 && &pipeline.first == &first ? 0 : 1;
