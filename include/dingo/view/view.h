@@ -7,70 +7,26 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
-
 #include <dingo/core/exceptions.h>
-#include <dingo/memory/allocator.h>
-#include <dingo/memory/static_allocator.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/type_list.h>
+#include <dingo/view/array.h>
+#include <dingo/view/collection.h>
+#include <dingo/view/ordered.h>
+#include <dingo/view/unordered.h>
 
-#include <cstddef>
-#include <memory>
 #include <tuple>
 #include <type_traits>
 
 namespace dingo {
-namespace detail {
-template <typename Key, typename Rows, typename Allocator>
-class linear_lookup_storage;
-template <typename Key, typename Rows, typename Allocator>
-class ordered_lookup_storage;
-template <typename Key, typename Rows, typename Allocator>
-class unordered_lookup_storage;
-template <typename Key, typename Rows, typename Allocator, std::size_t Size>
-class array_lookup_storage;
-} // namespace detail
-
-struct linear {
-  template <typename Key, typename Rows, typename Allocator>
-  using storage = detail::linear_lookup_storage<Key, Rows, Allocator>;
-};
-struct ordered {
-  template <typename Key, typename Rows, typename Allocator>
-  using storage = detail::ordered_lookup_storage<Key, Rows, Allocator>;
-};
-struct unordered {
-  template <typename Key, typename Rows, typename Allocator>
-  using storage = detail::unordered_lookup_storage<Key, Rows, Allocator>;
-};
-template <std::size_t Size> struct array {
-  template <typename Key, typename Rows, typename Allocator>
-  using storage = detail::array_lookup_storage<Key, Rows, Allocator, Size>;
-};
-
-template <typename... Definitions> struct queries {};
-struct no_key {};
-template <typename Key> struct typed_key {};
-template <typename Key> struct runtime_key {};
-struct one {};
-struct many {};
-namespace detail {
-struct no_lookup_backend {};
-template <typename Interface, typename KeyDomain, typename Cardinality,
-          typename Backend = no_lookup_backend>
-struct query_definition {};
-} // namespace detail
 template <typename Interface>
-using single = detail::query_definition<Interface, no_key, one>;
-template <typename Interface>
-using collection = detail::query_definition<Interface, no_key, many>;
+using single = detail::view_definition<Interface, no_key, one>;
 template <typename Key, typename Interface, typename Cardinality = one,
           typename Backend = ordered>
 using associative =
-    detail::query_definition<Interface, runtime_key<Key>, Cardinality, Backend>;
-template <typename Interface, typename Key, typename Cardinality = one>
-using typed = detail::query_definition<Interface, typed_key<Key>, Cardinality>;
+    detail::view_definition<Interface, runtime_key<Key>, Cardinality, Backend>;
+template <typename Key, typename Interface, typename Cardinality = one>
+using typed = detail::view_definition<Interface, typed_key<Key>, Cardinality>;
 template <typename... Args> struct interfaces;
 template <typename T, auto... Values> struct key;
 
@@ -98,7 +54,7 @@ template <typename T> struct lookup_key_arg {
 
 template <typename T, auto... Values> struct lookup_key_arg<key<T, Values...>> {
   static_assert(sizeof...(Values) == 0,
-                "query definitions require dingo::key<Key>, not "
+                "view definitions require dingo::key<Key>, not "
                 "dingo::key<Key, Value>");
   using type = T;
 };
@@ -127,7 +83,7 @@ template <typename Definition> struct normalize_lookup_definition;
 template <typename Interface, typename KeyDomain, typename Cardinality,
           typename Backend>
 struct normalize_lookup_definition<
-    query_definition<Interface, KeyDomain, Cardinality, Backend>>
+    view_definition<Interface, KeyDomain, Cardinality, Backend>>
     : normalize_lookup_interfaces<
           typename lookup_interface_arg<Interface>::type, KeyDomain,
           Cardinality, Backend> {};
@@ -145,7 +101,7 @@ template <> struct normalize_lookup_definitions<std::tuple<>> {
 };
 
 template <typename... Definitions>
-struct normalize_lookup_definitions<::dingo::queries<Definitions...>>
+struct normalize_lookup_definitions<::dingo::views<Definitions...>>
     : normalize_lookup_definitions<type_list<Definitions...>> {};
 
 template <typename Definitions>
@@ -344,21 +300,6 @@ template <typename Interface, typename Key, typename Cardinality,
 using selected_typed_key_lookup_entry_t =
     typename selected_typed_key_lookup_entry<Interface, Key, Cardinality,
                                              Entries>::type;
-
-template <typename Value, typename Allocator>
-using lookup_storage_allocator_t = std::conditional_t<
-    ::dingo::is_static_allocator_v<Allocator>, std::allocator<Value>,
-    typename std::allocator_traits<Allocator>::template rebind_alloc<Value>>;
-
-template <typename StorageAllocator, typename Allocator>
-StorageAllocator make_lookup_storage_allocator(Allocator &allocator) {
-  if constexpr (::dingo::is_static_allocator_v<Allocator>) {
-    (void)allocator;
-    return StorageAllocator{};
-  } else {
-    return StorageAllocator(allocator);
-  }
-}
 
 } // namespace detail
 

@@ -94,8 +94,8 @@ static void index_ptr_shared(benchmark::State &state) {
 }
 
 struct static_container_traits : dingo::static_container_traits<void> {
-  using query_definition_type =
-      dingo::queries<dingo::associative<size_t, IProcessor>>;
+  using view_definition_type =
+      dingo::views<dingo::associative<size_t, IProcessor>>;
 };
 
 BENCHMARK_TEMPLATE(index_value_shared,
@@ -105,8 +105,8 @@ BENCHMARK_TEMPLATE(index_ptr_shared, dingo::container<static_container_traits>)
     ->UseRealTime();
 
 struct dynamic_container_traits : dingo::dynamic_container_traits {
-  using query_definition_type =
-      dingo::queries<dingo::associative<size_t, IProcessor>>;
+  using view_definition_type =
+      dingo::views<dingo::associative<size_t, IProcessor>>;
 };
 
 BENCHMARK_TEMPLATE(index_value_shared,

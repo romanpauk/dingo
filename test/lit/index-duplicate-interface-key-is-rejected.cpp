@@ -8,9 +8,9 @@
 struct processor {};
 
 struct traits : dingo::dynamic_container_traits {
-  using query_definition_type =
-      dingo::queries<dingo::associative<std::size_t, processor>,
-                     dingo::associative<std::size_t, processor, dingo::one>>;
+  using view_definition_type =
+      dingo::views<dingo::associative<std::size_t, processor>,
+                   dingo::associative<std::size_t, processor, dingo::one>>;
 };
 
 int main() {
@@ -20,4 +20,4 @@ int main() {
                                   dingo::interfaces<processor>>(std::size_t(1));
 }
 
-// CHECK: duplicate dingo query definition for interface/key
+// CHECK: duplicate dingo view definition for interface/key

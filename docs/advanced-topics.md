@@ -3,28 +3,28 @@
 This page covers the parts of Dingo that usually matter only after the basic
 registration and resolution flow is already in place.
 
-## Query Resolution
+## View Resolution
 
-Container traits can define one or more queries so that a registration is
-resolved by interface, key domain, and cardinality.
+Container traits can define one or more views so that a registration is resolved
+by interface, key domain, and cardinality.
 
-Use queries when:
+Use views when:
 
 - multiple implementations share the same interface
 - the caller chooses the implementation by name or numeric ID
 - the binding should remain separate from unkeyed resolution
 
-Query definitions are scoped to the interface they serve. Every keyed
-registration or runtime query requires a matching query definition.
+View definitions are scoped to the interface they serve. Every keyed
+registration or runtime request requires a matching view definition.
 
-Unkeyed runtime registrations without an explicit query are treated as
+Unkeyed runtime registrations without an explicit view are treated as
 `no_key`/`one`: a second registration for the same interface is rejected,
 regardless of storage type. Declare `collection<I>` when an interface is meant
 to have multiple unkeyed implementations:
 
 ```c++
 struct container_traits : dynamic_container_traits {
-  using query_definition_type = queries<collection<IProcessor>>;
+  using view_definition_type = views<collection<IProcessor>>;
 };
 ```
 
@@ -33,13 +33,13 @@ struct container_traits : dynamic_container_traits {
 order, while singular `resolve<I &>()` succeeds only when exactly one
 registration matches.
 
-Runtime-keyed queries use `associative<K, I>` for unique queries and
+Runtime-keyed views use `associative<K, I>` for unique bindings and
 `associative<K, I, many>` for keyed collections:
 
 ```c++
 struct container_traits : dynamic_container_traits {
-  using query_definition_type =
-      queries<associative<std::size_t, IProcessor>,
+  using view_definition_type =
+      views<associative<std::size_t, IProcessor>,
                 associative<std::string, IHandler, many>>;
 };
 ```
@@ -51,16 +51,14 @@ built-in backend tags are:
 - `ordered`: map-like lookup by runtime key, `O(log N)` plus rows for the key.
 - `unordered`: hash-map-like lookup by runtime key, average `O(1)` plus rows for
   the key.
-- `linear`: scans keys with equality comparison and is useful when keys are not
-  orderable or hashable.
 - `array<N>`: direct indexed lookup for dense integral or enum keys in `[0, N)`.
 
 For example:
 
 ```c++
 struct container_traits : dynamic_container_traits {
-  using query_definition_type =
-      queries<associative<std::size_t, IProcessor, many, unordered>,
+  using view_definition_type =
+      views<associative<std::size_t, IProcessor, many, unordered>,
               associative<MessageId, IHandler, one, array<32>>>;
 };
 ```
@@ -69,64 +67,64 @@ Custom backends can be used as `associative<MyKey, IService, many, my_backend>`.
 A backend tag provides `Backend::template storage<Key, Rows, Allocator>`, where
 `Rows` is the library-owned row collection. The storage is constructed with the
 container allocator and should look like an STL associative container:
-`find(key)`, `end()`, `begin()`, `erase(iterator)`, and either `operator[](key)`
-or `try_emplace(key, rows-constructor-args...)`. When both insertion operations
+`find(key)`, `end()`, `erase(iterator)`, and either `operator[](key)` or
+`try_emplace(key, rows-constructor-args...)`. When both insertion operations
 exist, Dingo uses `try_emplace` so the internal row collection is constructed
 with the container allocator.
 
-Typed-key registrations can also use explicit queries:
+Typed-key registrations can also use explicit views:
 
 ```c++
 struct container_traits : dynamic_container_traits {
-  using query_definition_type =
-      queries<typed<IProcessor, Primary, one>>;
+  using view_definition_type =
+      views<typed<Primary, IProcessor, one>>;
 };
 ```
 
-`typed<I, K, one>` gives `register_type<interfaces<I>, key<K>>()` singular
-identity for that interface and key type. `typed<I, K, many>` makes
+`typed<K, I, one>` gives `register_type<interfaces<I>, key<K>>()` singular
+identity for that interface and key type. `typed<K, I, many>` makes
 `resolve<std::vector<I *>>(key<K>{})` enumerate keyed collection members in
 registration order. A singular typed-key resolve succeeds only when the matching
-`many` query contains exactly one registration.
+`many` view contains exactly one registration.
 
-When no explicit typed-key query is declared, `key<K>` registrations still use
+When no explicit typed-key view is declared, `key<K>` registrations still use
 implicit `typed_key<K>`/`one`: a second registration for the same interface and
-key type is rejected, regardless of storage type. Use `typed<I, K, many>` when
+key type is rejected, regardless of storage type. Use `typed<K, I, many>` when
 one typed key should hold multiple implementations.
 
-No-key and typed-key queries use the library's internal row storage; only
-runtime-keyed `associative` queries have configurable storage backends.
+No-key and typed-key views use the library's internal row storage; only
+runtime-keyed `associative` views have configurable storage backends.
 
-Constructor dependencies can also bind to a fixed query key:
+Constructor dependencies can also bind to a fixed request key:
 
 ```c++
 struct Pipeline {
-    Pipeline(dingo::query<IProcessor&, dingo::key<std::size_t, 1>> first,
-             dingo::query<IProcessor&, dingo::key<std::size_t, 2>> second);
+    Pipeline(dingo::request<IProcessor&, dingo::key<std::size_t, 1>> first,
+             dingo::request<IProcessor&, dingo::key<std::size_t, 2>> second);
 };
 ```
 
-`query<IProcessor&, key<std::size_t, 1>>` resolves the same object as
+`request<IProcessor&, key<std::size_t, 1>>` resolves the same object as
 `container.resolve<IProcessor&>(std::size_t{1})`; the configured
-`associative<std::size_t, IProcessor>` query determines the key domain and
-cardinality, while the query storage remains an implementation detail.
+`associative<std::size_t, IProcessor>` view determines the key domain and
+cardinality, while the view storage remains an implementation detail.
 
 The value in `key<T, Value>` must be a valid non-type template parameter and
 must be usable as `T{Value}`. Class-type values such as `key<MyKey, MyKey{1}>`
 require C++20 structural non-type template parameter support.
 
-Static containers can use the same `associative<K, I>` queries when the key
-value is fixed in the type:
+Static containers can use the same `associative<K, I>` views when the key value
+is fixed in the type:
 
-- `key<K>` remains a typed key and maps to `typed<I, K, ...>`.
+- `key<K>` remains a typed key and maps to `typed<K, I, ...>`.
 - `key<K, Value>` maps to `associative<K, I, ...>` when `associative<K, I>` or
   `associative<K, I, many>` is declared.
-- Static query is type-encoded: use `query<I &, key<K, Value>>` or
-  `resolve<Collection>(key<K, Value>{})`; `resolve<I &>(K{...})` is runtime
-  query and is not supported by `static_container`.
+- Static request selection is type-encoded: use `request<I &, key<K, Value>>` or
+  `resolve<Collection>(key<K, Value>{})`; `resolve<I &>(K{...})` is runtime key
+  lookup and is not supported by `static_container`.
 - Static fixed runtime-key bindings require `static_container` with traits that
-  declare the query. `container<bindings<...>>` rejects them because that mixed
-  form cannot carry custom query traits.
+  declare the view. `container<bindings<...>>` rejects them because that mixed
+  form cannot carry custom view traits.
 
 <!-- { include("../examples/index/static_fixed.cpp", scope="////") -->
 
@@ -145,7 +143,7 @@ template <int Id> struct Processor : IProcessor {
 
 struct Pipeline {
   explicit Pipeline(
-      dingo::query<IProcessor &, dingo::key<std::size_t, 0>> first_processor)
+      dingo::request<IProcessor &, dingo::key<std::size_t, 0>> first_processor)
       : first(first_processor) {}
 
   IProcessor &first;
@@ -158,14 +156,15 @@ using source = dingo::bindings<
                 dingo::interfaces<IProcessor>, dingo::key<std::size_t, 1>>>;
 
 struct container_traits : dingo::static_container_traits<> {
-  using query_definition_type =
-      dingo::queries<dingo::associative<std::size_t, IProcessor>>;
+  using view_definition_type =
+      dingo::views<dingo::associative<std::size_t, IProcessor>>;
 };
 
 dingo::static_container<source, container_traits> container;
 
 auto &first =
-    container.resolve<dingo::query<IProcessor &, dingo::key<std::size_t, 0>>>();
+    container
+        .resolve<dingo::request<IProcessor &, dingo::key<std::size_t, 0>>>();
 auto pipeline = container.construct<Pipeline>();
 
 return first.id() == 0 && &pipeline.first == &first ? 0 : 1;
@@ -186,9 +185,9 @@ struct IAnimal {
 struct Dog : IAnimal {};
 struct Cat : IAnimal {};
 
-// Declare traits with a std::string based query
+// Declare traits with a std::string based view
 struct container_traits : dynamic_container_traits {
-  using query_definition_type = queries<associative<std::string, IAnimal>>;
+  using view_definition_type = views<associative<std::string, IAnimal>>;
 };
 
 container<container_traits> container;
@@ -251,19 +250,19 @@ struct ProcessorB : IProcessor {
 };
 
 struct Pipeline {
-  Pipeline(dingo::query<IProcessor &, dingo::key<size_t, 1>> first_processor,
-           dingo::query<IProcessor &, dingo::key<size_t, 2>> second_processor)
+  Pipeline(dingo::request<IProcessor &, dingo::key<size_t, 1>> first_processor,
+           dingo::request<IProcessor &, dingo::key<size_t, 2>> second_processor)
       : first(first_processor), second(second_processor) {}
 
   IProcessor &first;
   IProcessor &second;
 };
 
-// Define traits type with a single query using size_t as a key
+// Define traits type with a single view using size_t as a key
 struct container_traits : static_container_traits<void> {
-  using query_definition_type = queries<associative<size_t, IProcessor>>;
+  using view_definition_type = views<associative<size_t, IProcessor>>;
 };
-// Runtime query storage is dynamic even when this
+// Runtime view storage is dynamic even when this
 // example uses static_container_traits for the rest of the container.
 
 container<container_traits> container;
@@ -299,15 +298,15 @@ auto pipeline = container.construct<Pipeline>();
 
 See:
 
-- [include/dingo/index/index.h](../include/dingo/index/index.h)
+- [include/dingo/view/view.h](../include/dingo/view/view.h)
 
 ## Annotated Types
 
 Annotations support multiple implementations for the same interface and
 disambiguate them with a tag type.
 
-Use annotations when type-based registration is not enough but runtime key
-queries would be the wrong abstraction.
+Use annotations when type-based registration is not enough but runtime key views
+would be the wrong abstraction.
 
 <!-- { include("../examples/registration/annotated.cpp", scope="////") -->
 
@@ -378,7 +377,7 @@ Compile-time bindings make sense when:
 
 - the participating types are known and stable at compile time
 - missing dependencies and unsupported cycles should fail during compilation
-- queries should avoid mutable runtime registration state
+- views should avoid mutable runtime registration state
 
 See:
 

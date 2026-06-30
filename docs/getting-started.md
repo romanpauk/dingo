@@ -245,5 +245,5 @@ B b4 = container.invoke<B(A &)>(overloaded_factory{});
 
 - [Core Concepts](core-concepts.md) for understanding how registration policies
   interact.
-- [Advanced Topics](advanced-topics.md) for queries, nesting, or custom traits.
+- [Advanced Topics](advanced-topics.md) for views, nesting, or custom traits.
 - [Examples](examples.md) for learning from runnable programs.

@@ -46,8 +46,6 @@ struct custom_lookup_backend {
 
     iterator find(const Key &key) { return values_.find(key); }
     const_iterator find(const Key &key) const { return values_.find(key); }
-    iterator begin() { return values_.begin(); }
-    const_iterator begin() const { return values_.begin(); }
     iterator end() { return values_.end(); }
     const_iterator end() const { return values_.end(); }
 
@@ -84,8 +82,6 @@ struct operator_lookup_backend {
 
     iterator find(const Key &key) { return values_.find(key); }
     const_iterator find(const Key &key) const { return values_.find(key); }
-    iterator begin() { return values_.begin(); }
-    const_iterator begin() const { return values_.begin(); }
     iterator end() { return values_.end(); }
     const_iterator end() const { return values_.end(); }
 
@@ -119,8 +115,8 @@ TEST(associative_backend_test, unordered_one_uses_runtime_key_lookup) {
   };
 
   struct traits : dynamic_container_traits {
-    using query_definition_type =
-        queries<associative<std::size_t, processor, one, unordered>>;
+    using view_definition_type =
+        views<associative<std::size_t, processor, one, unordered>>;
   };
 
   container<traits> container;
@@ -149,8 +145,8 @@ TEST(associative_backend_test, unordered_many_preserves_key_order) {
   };
 
   struct traits : dynamic_container_traits {
-    using query_definition_type =
-        queries<associative<std::size_t, processor, many, unordered>>;
+    using view_definition_type =
+        views<associative<std::size_t, processor, many, unordered>>;
   };
 
   container<traits> container;
@@ -184,8 +180,8 @@ TEST(associative_backend_test, array_one_uses_dense_key_lookup) {
   };
 
   struct traits : dynamic_container_traits {
-    using query_definition_type =
-        queries<associative<std::size_t, processor, one, array<4>>>;
+    using view_definition_type =
+        views<associative<std::size_t, processor, one, array<4>>>;
   };
 
   container<traits> container;
@@ -219,8 +215,8 @@ TEST(associative_backend_test, array_many_uses_dense_key_rows) {
   };
 
   struct traits : dynamic_container_traits {
-    using query_definition_type =
-        queries<associative<std::size_t, processor, many, array<4>>>;
+    using view_definition_type =
+        views<associative<std::size_t, processor, many, array<4>>>;
   };
 
   container<traits> container;
@@ -265,8 +261,8 @@ TEST(associative_backend_test, custom_backend_uses_stl_like_try_emplace) {
   };
 
   struct traits : dynamic_container_traits {
-    using query_definition_type =
-        queries<associative<int, processor, one, custom_lookup_backend>>;
+    using view_definition_type =
+        views<associative<int, processor, one, custom_lookup_backend>>;
   };
 
   custom_lookup_backend_constructions = 0;
@@ -292,8 +288,8 @@ TEST(associative_backend_test,
   };
 
   struct traits : dynamic_container_traits {
-    using query_definition_type =
-        queries<associative<int, processor, one, operator_lookup_backend>>;
+    using view_definition_type =
+        views<associative<int, processor, one, operator_lookup_backend>>;
   };
 
   operator_lookup_backend_insertions = 0;

@@ -114,7 +114,6 @@ if(DINGO_DEVELOPMENT_MODE)
         factory/constructor.h
         factory/function.h
         factory/invoke.h
-        index/index.h
         memory/aligned_storage.h
         memory/allocator.h
         memory/arena_allocator.h
@@ -153,6 +152,13 @@ if(DINGO_DEVELOPMENT_MODE)
         type/type_descriptor.h
         type/type_list.h
         type/type_map.h
+        view/array.h
+        view/collection.h
+        view/ordered.h
+        view/storage.h
+        view/tags.h
+        view/unordered.h
+        view/view.h
         type/type_name.h
         type/type_traits.h
         resolution/type_conversion.h

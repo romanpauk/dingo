@@ -96,16 +96,16 @@ struct is_value_selector<key<T, Value>> : std::true_type {
   static T make() { return key_value<T, Value>::make(); }
 };
 
-template <typename Selector> struct query_selector {
+template <typename Selector> struct request_selector {
   using type = Selector;
 };
 
-template <typename T> struct query_selector<key<T>> {
+template <typename T> struct request_selector<key<T>> {
   using type = type_selector<T>;
 };
 
 template <typename Selector>
-using query_selector_t = typename query_selector<Selector>::type;
+using request_selector_t = typename request_selector<Selector>::type;
 
 template <typename Identity, typename Binding>
 struct keyed_binding_identity : Binding {
@@ -115,6 +115,6 @@ struct keyed_binding_identity : Binding {
 } // namespace detail
 
 template <typename T, typename Selector>
-using query = detail::selected<T, detail::query_selector_t<Selector>>;
+using request = detail::selected<T, detail::request_selector_t<Selector>>;
 
 } // namespace dingo

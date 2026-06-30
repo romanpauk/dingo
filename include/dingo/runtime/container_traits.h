@@ -29,7 +29,7 @@ struct dynamic_container_traits {
   template <typename Value, typename Allocator>
   using type_cache_type = dynamic_type_cache<Value, rtti_type, Allocator>;
   using allocator_type = std::allocator<char>;
-  using query_definition_type = std::tuple<>;
+  using view_definition_type = std::tuple<>;
   static constexpr bool cache_enabled = true;
 };
 
@@ -40,10 +40,9 @@ struct is_runtime_container_traits : std::false_type {};
 
 template <typename T>
 struct is_runtime_container_traits<
-    T,
-    std::void_t<typename T::tag_type, typename T::rtti_type,
-                typename T::allocator_type, typename T::query_definition_type,
-                typename T::template rebind_t<void>>> : std::true_type {};
+    T, std::void_t<typename T::tag_type, typename T::rtti_type,
+                   typename T::allocator_type, typename T::view_definition_type,
+                   typename T::template rebind_t<void>>> : std::true_type {};
 
 template <typename T>
 inline constexpr bool is_runtime_container_traits_v =

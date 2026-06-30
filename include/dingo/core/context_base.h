@@ -64,7 +64,7 @@ T resolve_context_request(Context &context, Container &container) {
     } else {
       static_assert(is_type_selector_v<selector_type> ||
                         is_value_selector_v<selector_type>,
-                    "dingo::query<T, Selector> requires dingo::key<Key> or "
+                    "dingo::request<T, Selector> requires dingo::key<Key> or "
                     "dingo::key<Key, Value>");
     }
   } else {

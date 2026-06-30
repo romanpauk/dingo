@@ -26,7 +26,7 @@ template <typename T, test_fixed_string Value> struct key_string {};
 
 namespace dingo::detail {
 
-// Internal regression hook: custom value selectors currently opt into query
+// Internal regression hook: custom value selectors currently opt into request
 // injection through detail traits. This is not a documented public extension.
 template <typename T, ::test_fixed_string Value>
 struct is_key_value<::key_string<T, Value>> : std::true_type {};
@@ -59,11 +59,11 @@ template <int Id> struct string_processor_impl : string_processor {
   int id() const override { return Id; }
 };
 
-// This proves an external query can feed a concrete std::string key into
+// This proves an external request can feed a concrete std::string key into
 // constructor injection without adding a public dingo::key_string API.
 struct string_literal_consumer {
   explicit string_literal_consumer(
-      dingo::query<string_processor &, key_string<std::string, "json">>
+      dingo::request<string_processor &, key_string<std::string, "json">>
           selected)
       : processor(selected) {}
 
@@ -71,8 +71,8 @@ struct string_literal_consumer {
 };
 
 struct traits : dingo::dynamic_container_traits {
-  using query_definition_type =
-      dingo::queries<dingo::associative<std::string, string_processor>>;
+  using view_definition_type =
+      dingo::views<dingo::associative<std::string, string_processor>>;
 };
 
 int main() {

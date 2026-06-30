@@ -10,11 +10,11 @@
 #include <dingo/core/binding_model.h>
 #include <dingo/core/factory_traits.h>
 #include <dingo/core/keyed.h>
-#include <dingo/index/index.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/type_list.h>
+#include <dingo/view/view.h>
 
 #include <type_traits>
 
@@ -68,8 +68,8 @@ struct keyed_request_types<Key, type_list<RequestTypes...>> {
   using type = std::conditional_t<
       std::is_void_v<Key>, type_list<RequestTypes...>,
       std::conditional_t<is_key_value_v<Key>,
-                         type_list<query<RequestTypes, Key>...>,
-                         type_list<query<RequestTypes, key<Key>>...>>>;
+                         type_list<request<RequestTypes, Key>...>,
+                         type_list<request<RequestTypes, key<Key>>...>>>;
 };
 
 template <typename Request>

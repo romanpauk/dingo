@@ -20,8 +20,8 @@ using source = dingo::bindings<
                 dingo::key<std::size_t, std::size_t{0}>>>;
 
 struct traits : dingo::static_container_traits<> {
-  using query_definition_type =
-      dingo::queries<dingo::associative<std::size_t, processor>>;
+  using view_definition_type =
+      dingo::views<dingo::associative<std::size_t, processor>>;
 };
 
 int main() {
@@ -30,5 +30,5 @@ int main() {
   return 0;
 }
 
-// CHECK: static_container fixed runtime-key query bindings must be
-// CHECK: unique for one queries and unique by storage for many queries
+// CHECK: static_container fixed runtime-key view bindings must be
+// CHECK: unique for one views and unique by storage for many views

@@ -53,8 +53,8 @@ struct ProcessorB : IProcessor {
 };
 
 struct Pipeline {
-  Pipeline(dingo::query<IProcessor &, dingo::key<size_t, 1>> first_processor,
-           dingo::query<IProcessor &, dingo::key<size_t, 2>> second_processor)
+  Pipeline(dingo::request<IProcessor &, dingo::key<size_t, 1>> first_processor,
+           dingo::request<IProcessor &, dingo::key<size_t, 2>> second_processor)
       : first(first_processor), second(second_processor) {}
 
   IProcessor &first;
@@ -66,11 +66,11 @@ int main() {
   using namespace dingo;
 
   ////
-  // Define traits type with a single query using size_t as a key
+  // Define traits type with a single view using size_t as a key
   struct container_traits : static_container_traits<void> {
-    using query_definition_type = queries<associative<size_t, IProcessor>>;
+    using view_definition_type = views<associative<size_t, IProcessor>>;
   };
-  // Runtime query storage is dynamic even when this
+  // Runtime view storage is dynamic even when this
   // example uses static_container_traits for the rest of the container.
 
   container<container_traits> container;

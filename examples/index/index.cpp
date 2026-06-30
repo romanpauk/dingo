@@ -22,9 +22,9 @@ struct Cat : IAnimal {};
 int main() {
   using namespace dingo;
   ////
-  // Declare traits with a std::string based query
+  // Declare traits with a std::string based view
   struct container_traits : dynamic_container_traits {
-    using query_definition_type = queries<associative<std::string, IAnimal>>;
+    using view_definition_type = views<associative<std::string, IAnimal>>;
   };
 
   container<container_traits> container;

@@ -10,8 +10,8 @@ struct animal {
 struct dog : animal {};
 
 struct traits : dingo::dynamic_container_traits {
-  using query_definition_type =
-      dingo::queries<dingo::single<animal>, dingo::collection<animal>>;
+  using view_definition_type =
+      dingo::views<dingo::single<animal>, dingo::collection<animal>>;
 };
 
 int main() {
@@ -20,4 +20,4 @@ int main() {
                           dingo::interfaces<animal>>();
 }
 
-// CHECK: conflicting dingo query definitions for interface/key domain
+// CHECK: conflicting dingo view definitions for interface/key domain

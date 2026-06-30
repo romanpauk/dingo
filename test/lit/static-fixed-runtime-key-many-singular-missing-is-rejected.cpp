@@ -16,14 +16,14 @@ using source = dingo::bindings<
                 dingo::interfaces<processor>, dingo::key<std::size_t, 1>>>;
 
 struct traits : dingo::static_container_traits<> {
-  using query_definition_type =
-      dingo::queries<dingo::associative<std::size_t, processor, dingo::many>>;
+  using view_definition_type =
+      dingo::views<dingo::associative<std::size_t, processor, dingo::many>>;
 };
 
 int main() {
   dingo::static_container<source, traits> container;
   (void)container
-      .resolve<dingo::query<processor &, dingo::key<std::size_t, 0>>>();
+      .resolve<dingo::request<processor &, dingo::key<std::size_t, 0>>>();
   return 0;
 }
 

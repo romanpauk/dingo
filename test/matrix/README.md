@@ -15,9 +15,9 @@ are an output of axis selection.
 - `nested_wrappers`: resolve nested smart-pointer, variant, and array wrapper
   combinations.
 - `resolve_collection`: resolve all unkeyed bindings for an interface.
-- `resolve_keyed`: resolve one typed-key query binding.
+- `resolve_keyed`: resolve one typed-key view binding.
 - `resolve_keyed_collection`: resolve all bindings for a key.
-- `resolve_indexed`: resolve one runtime-key query binding.
+- `resolve_indexed`: resolve one runtime-key view binding.
 - `construct`: construct an unregistered type from registered dependencies.
 - `invoke`: invoke a callable from registered dependencies.
 - `construct_collection`: construct a collection with default or custom insertion.
@@ -105,7 +105,7 @@ fixture type needed by that case.
 - annotated interface
 - collection of interfaces
 - keyed collection of interfaces
-- runtime-key query interface
+- runtime-key view interface
 - local binding target
 - local binding override target
 - local and host collection target
@@ -134,10 +134,10 @@ fixture type needed by that case.
 - custom inserted collection forms such as `std::map<int, std::shared_ptr<I>>`
 - typed-key `T`, `T&`, and collection requests through `resolve(...,
   key<Key>{})`
-- `query<T, key<Key>>` constructor and invocation dependencies
-- `query<std::vector<std::shared_ptr<I>>, key<Key>>` constructor and
+- `request<T, key<Key>>` constructor and invocation dependencies
+- `request<std::vector<std::shared_ptr<I>>, key<Key>>` constructor and
   invocation dependencies
-- runtime-key query requests
+- runtime-key requests
 - `T (*)[N]`
 - `T (&)[M][N]`
 - `std::unique_ptr<T[]>`
@@ -180,7 +180,7 @@ Then it should keep only rows that satisfy all rules below.
 - Runtime-only containers cannot use static bindings.
 - Mixed containers require at least one static binding and may add runtime
   bindings.
-- Runtime-key query features require query container traits.
+- Runtime-key view features require view container traits.
 - Runtime-key registration is runtime-only unless static fixed-key bindings are added
   to the library.
 - `external` scope requires caller-supplied storage.

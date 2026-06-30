@@ -71,7 +71,7 @@ class static_container_impl<static_registry<Registrations...>, ParentContainer,
   using scope_ref = static_binding_scope_ref<state_type, Registrations...>;
   using context_type = static_context<registry_type_>;
   using index_entries_ = detail::normalize_lookup_definitions_t<
-      typename ContainerTraits::query_definition_type>;
+      typename ContainerTraits::view_definition_type>;
 
   template <typename Collection, typename Fn>
   using collection_insert_invocable =
@@ -172,9 +172,9 @@ public:
   static_assert(detail::key_value_bindings_are_unique<
                     typename static_source_type::interface_bindings,
                     index_entries_>::value,
-                "static_container fixed runtime-key query bindings must be "
-                "unique for one queries and unique by storage for many "
-                "queries");
+                "static_container fixed runtime-key view bindings must be "
+                "unique for one views and unique by storage for many "
+                "views");
   static_assert(graph_type_::resolvable,
                 "static_container requires a resolvable compile-time binding "
                 "graph");
@@ -252,7 +252,7 @@ public:
       return resolve<T>(key<std::decay_t<IdType>>{});
     } else {
       static_assert(detail::container_dependent_false_v<T, IdType>,
-                    "static_container fixed runtime-key query requires "
+                    "static_container fixed runtime-key request requires "
                     "dingo::key<Key, Value>");
     }
   }
@@ -362,7 +362,7 @@ public:
           int> = 0>
   T construct_collection(IdType &&) {
     static_assert(detail::container_dependent_false_v<T, IdType>,
-                  "static_container fixed runtime-key collection query "
+                  "static_container fixed runtime-key collection request "
                   "requires dingo::key<Key, Value>");
   }
 
@@ -444,8 +444,8 @@ public:
       return resolve<T, RemoveRvalueReferences, std::decay_t<IdType>>(context);
     } else {
       static_assert(detail::container_dependent_false_v<T, IdType>,
-                    "dingo::query<T, dingo::key<Key, Value>> constructor "
-                    "injection requires a fixed query key");
+                    "dingo::request<T, dingo::key<Key, Value>> constructor "
+                    "injection requires a fixed request key");
     }
   }
 

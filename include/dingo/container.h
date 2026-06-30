@@ -20,7 +20,6 @@
 #include <dingo/detail/container_traits.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/invoke.h>
-#include <dingo/index/index.h>
 #include <dingo/memory/allocator.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
@@ -42,6 +41,7 @@
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/request_traits.h>
 #include <dingo/type/type_map.h>
+#include <dingo/view/view.h>
 
 #include <algorithm>
 #include <functional>
@@ -83,7 +83,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
       detail::binding_scope_ref<static_state, Registrations...>;
   using static_context_type = static_context<static_registry_type_>;
   using index_entries_ = detail::normalize_lookup_definitions_t<
-      typename dynamic_container_traits::query_definition_type>;
+      typename dynamic_container_traits::view_definition_type>;
   static constexpr bool has_parent_v = !std::is_void_v<ParentContainer>;
   using parent_container_type = ParentContainer;
 
@@ -690,8 +690,8 @@ public:
   static_assert(detail::key_value_bindings_are_unique<
                     typename static_source_type::interface_bindings,
                     index_entries_>::value,
-                "container fixed runtime-key query bindings must be unique "
-                "for one queries and unique by storage for many queries");
+                "container fixed runtime-key view bindings must be unique "
+                "for one views and unique by storage for many views");
   static_assert(detail::graph_analysis<static_source_type, true>::resolvable,
                 "container requires a resolvable compile-time binding graph");
   static_assert(
