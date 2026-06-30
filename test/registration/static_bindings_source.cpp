@@ -222,10 +222,10 @@ TEST(static_bindings_source_test,
   static_assert(registry_type::valid);
   static_assert(std::is_same_v<typename registry_type::dependencies<service>,
                                type_list<query<config &, key<first_key>>>>);
-  static_assert(std::is_same_v <
-                    typename registry_type::dependency_bindings<service>,
-                type_list<typename registry_type::template binding<
-                    query<config, key<first_key>>>>);
+  static_assert(
+      std::is_same_v<typename registry_type::dependency_bindings<service>,
+                     type_list<typename registry_type::template binding<
+                         query<config, key<first_key>>>>>);
   static_assert(std::is_same_v<
                 typename registry_type::template binding<
                     query<config, key<first_key>>>,

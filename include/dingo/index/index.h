@@ -15,11 +15,40 @@
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/type_list.h>
 
+#include <cstddef>
 #include <memory>
 #include <tuple>
 #include <type_traits>
 
 namespace dingo {
+namespace detail {
+template <typename Key, typename Rows, typename Allocator>
+class linear_lookup_storage;
+template <typename Key, typename Rows, typename Allocator>
+class ordered_lookup_storage;
+template <typename Key, typename Rows, typename Allocator>
+class unordered_lookup_storage;
+template <typename Key, typename Rows, typename Allocator, std::size_t Size>
+class array_lookup_storage;
+} // namespace detail
+
+struct linear {
+  template <typename Key, typename Rows, typename Allocator>
+  using storage = detail::linear_lookup_storage<Key, Rows, Allocator>;
+};
+struct ordered {
+  template <typename Key, typename Rows, typename Allocator>
+  using storage = detail::ordered_lookup_storage<Key, Rows, Allocator>;
+};
+struct unordered {
+  template <typename Key, typename Rows, typename Allocator>
+  using storage = detail::unordered_lookup_storage<Key, Rows, Allocator>;
+};
+template <std::size_t Size> struct array {
+  template <typename Key, typename Rows, typename Allocator>
+  using storage = detail::array_lookup_storage<Key, Rows, Allocator, Size>;
+};
+
 template <typename... Definitions> struct queries {};
 struct no_key {};
 template <typename Key> struct typed_key {};
@@ -27,27 +56,32 @@ template <typename Key> struct runtime_key {};
 struct one {};
 struct many {};
 namespace detail {
-template <typename Interface, typename KeyDomain, typename Cardinality>
+struct no_lookup_backend {};
+template <typename Interface, typename KeyDomain, typename Cardinality,
+          typename Backend = no_lookup_backend>
 struct query_definition {};
 } // namespace detail
 template <typename Interface>
 using single = detail::query_definition<Interface, no_key, one>;
 template <typename Interface>
 using collection = detail::query_definition<Interface, no_key, many>;
-template <typename Key, typename Interface, typename Cardinality = one>
+template <typename Key, typename Interface, typename Cardinality = one,
+          typename Backend = ordered>
 using associative =
-    detail::query_definition<Interface, runtime_key<Key>, Cardinality>;
+    detail::query_definition<Interface, runtime_key<Key>, Cardinality, Backend>;
 template <typename Interface, typename Key, typename Cardinality = one>
 using typed = detail::query_definition<Interface, typed_key<Key>, Cardinality>;
 template <typename... Args> struct interfaces;
 template <typename T, auto... Values> struct key;
 
 namespace detail {
-template <typename Interface, typename KeyDomain, typename Cardinality>
+template <typename Interface, typename KeyDomain, typename Cardinality,
+          typename Backend>
 struct lookup_entry {
   using interface_type = Interface;
   using key_domain = KeyDomain;
   using cardinality = Cardinality;
+  using backend_type = Backend;
 };
 
 template <typename T> struct lookup_interface_arg {
@@ -76,24 +110,27 @@ template <typename T>
 using normalized_lookup_key_t =
     std::remove_cv_t<std::remove_reference_t<typename lookup_key_arg<T>::type>>;
 
-template <typename Interfaces, typename KeyDomain, typename Cardinality>
+template <typename Interfaces, typename KeyDomain, typename Cardinality,
+          typename Backend>
 struct normalize_lookup_interfaces;
 
-template <typename... Interfaces, typename KeyDomain, typename Cardinality>
+template <typename... Interfaces, typename KeyDomain, typename Cardinality,
+          typename Backend>
 struct normalize_lookup_interfaces<type_list<Interfaces...>, KeyDomain,
-                                   Cardinality> {
+                                   Cardinality, Backend> {
   using type = type_list<lookup_entry<normalized_lookup_interface_t<Interfaces>,
-                                      KeyDomain, Cardinality>...>;
+                                      KeyDomain, Cardinality, Backend>...>;
 };
 
 template <typename Definition> struct normalize_lookup_definition;
 
-template <typename Interface, typename KeyDomain, typename Cardinality>
+template <typename Interface, typename KeyDomain, typename Cardinality,
+          typename Backend>
 struct normalize_lookup_definition<
-    query_definition<Interface, KeyDomain, Cardinality>>
+    query_definition<Interface, KeyDomain, Cardinality, Backend>>
     : normalize_lookup_interfaces<
           typename lookup_interface_arg<Interface>::type, KeyDomain,
-          Cardinality> {};
+          Cardinality, Backend> {};
 
 template <typename DefinitionList> struct normalize_lookup_definitions;
 

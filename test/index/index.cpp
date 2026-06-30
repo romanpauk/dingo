@@ -800,8 +800,8 @@ TEST(index_test, runtime_key_one_lookup_uses_equal_distinct_key_object) {
     }
   };
   struct traits : dynamic_container_traits {
-    using query_definition_type =
-        queries<associative<comparable_key, typed_key_cached_processor>>;
+    using query_definition_type = queries<
+        associative<comparable_key, typed_key_cached_processor, one, linear>>;
   };
 
   typed_key_cached_processor_impl::constructions = 0;
@@ -986,7 +986,7 @@ TEST(index_test, runtime_key_many_lookup_uses_value_semantics) {
   };
   struct traits : dynamic_container_traits {
     using query_definition_type =
-        queries<associative<comparable_key, processor, many>>;
+        queries<associative<comparable_key, processor, many, linear>>;
   };
 
   runtime_container<traits> container;
@@ -1024,7 +1024,7 @@ TEST(index_test, runtime_key_many_lookup_resolves_empty_collection) {
   };
   struct traits : dynamic_container_traits {
     using query_definition_type =
-        queries<associative<comparable_key, processor, many>>;
+        queries<associative<comparable_key, processor, many, linear>>;
   };
 
   runtime_container<traits> container;
@@ -1049,9 +1049,9 @@ TEST(index_test, associative_alias_behaves_like_runtime_key_one) {
   };
 
   static_assert(
-      std::is_same_v<
-          associative<std::size_t, processor>,
-          detail::query_definition<processor, runtime_key<std::size_t>, one>>);
+      std::is_same_v<associative<std::size_t, processor>,
+                     detail::query_definition<
+                         processor, runtime_key<std::size_t>, one, ordered>>);
 
   struct traits : dynamic_container_traits {
     using query_definition_type = queries<associative<std::size_t, processor>>;
@@ -1089,9 +1089,9 @@ TEST(index_test, associative_many_alias_behaves_like_runtime_key_many) {
   };
 
   static_assert(
-      std::is_same_v<
-          associative<std::size_t, processor, many>,
-          detail::query_definition<processor, runtime_key<std::size_t>, many>>);
+      std::is_same_v<associative<std::size_t, processor, many>,
+                     detail::query_definition<
+                         processor, runtime_key<std::size_t>, many, ordered>>);
 
   struct traits : dynamic_container_traits {
     using query_definition_type =
@@ -2235,7 +2235,7 @@ TEST(index_test, runtime_key_lookup_payload_uses_rebound_allocator) {
 
   struct traits : dynamic_container_traits {
     using query_definition_type =
-        queries<associative<allocator_visible_key, animal>>;
+        queries<associative<allocator_visible_key, animal, one, linear>>;
   };
 
   test_allocator_state state;

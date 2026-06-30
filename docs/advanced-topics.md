@@ -44,6 +44,36 @@ struct container_traits : dynamic_container_traits {
 };
 ```
 
+`associative<K, I>` uses the `ordered` backend by default:
+`associative<Key, Interface, Cardinality = one, Backend = ordered>`. The
+built-in backend tags are:
+
+- `ordered`: map-like lookup by runtime key, `O(log N)` plus rows for the key.
+- `unordered`: hash-map-like lookup by runtime key, average `O(1)` plus rows for
+  the key.
+- `linear`: scans keys with equality comparison and is useful when keys are not
+  orderable or hashable.
+- `array<N>`: direct indexed lookup for dense integral or enum keys in `[0, N)`.
+
+For example:
+
+```c++
+struct container_traits : dynamic_container_traits {
+  using query_definition_type =
+      queries<associative<std::size_t, IProcessor, many, unordered>,
+              associative<MessageId, IHandler, one, array<32>>>;
+};
+```
+
+Custom backends can be used as `associative<MyKey, IService, many, my_backend>`.
+A backend tag provides `Backend::template storage<Key, Rows, Allocator>`, where
+`Rows` is the library-owned row collection. The storage is constructed with the
+container allocator and should look like an STL associative container:
+`find(key)`, `end()`, `begin()`, `erase(iterator)`, and either `operator[](key)`
+or `try_emplace(key, rows-constructor-args...)`. When both insertion operations
+exist, Dingo uses `try_emplace` so the internal row collection is constructed
+with the container allocator.
+
 Typed-key registrations can also use explicit queries:
 
 ```c++
@@ -64,8 +94,8 @@ implicit `typed_key<K>`/`one`: a second registration for the same interface and
 key type is rejected, regardless of storage type. Use `typed<I, K, many>` when
 one typed key should hold multiple implementations.
 
-Query storage is internal. Applications should declare the interface, key
-domain, and cardinality they need instead of selecting storage.
+No-key and typed-key queries use the library's internal row storage; only
+runtime-keyed `associative` queries have configurable storage backends.
 
 Constructor dependencies can also bind to a fixed query key:
 

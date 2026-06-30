@@ -242,6 +242,22 @@ struct binding_activation {
     return resolve<T, RemoveRvalueReferences>(context, key<Key>{});
   }
 
+  template <typename T, bool RemoveRvalueReferences, bool CheckCache,
+            typename Context, typename IdType,
+            std::enable_if_t<is_key_value_v<IdType>, int> = 0>
+  decltype(auto) resolve(Context &context, IdType) {
+    (void)CheckCache;
+    using local_bindings = typename BindingModel::bindings_type;
+    if constexpr (std::is_void_v<local_bindings>) {
+      return host.template resolve<T, RemoveRvalueReferences, CheckCache>(
+          context, IdType{});
+    } else {
+      return state.template resolve_local_binding<
+          T, RemoveRvalueReferences, local_bindings, BindingModel, IdType>(
+          host, context);
+    }
+  }
+
   template <typename T, typename Context>
   decltype(auto) resolve(Context &context) {
     return state.template resolve_binding_type<T, BindingModel>(host, context);
