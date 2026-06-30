@@ -29,7 +29,7 @@ struct custom_rtti_container_traits {
   using type_cache_type =
       dingo::dynamic_type_cache<Value, rtti_type, Allocator>;
   using allocator_type = std::allocator<char>;
-  using lookup_definition_type = std::tuple<>;
+  using query_definition_type = std::tuple<>;
   static constexpr bool cache_enabled = true;
 };
 

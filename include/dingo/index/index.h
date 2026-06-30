@@ -20,18 +20,25 @@
 #include <type_traits>
 
 namespace dingo {
-template <typename... Definitions> struct lookups {};
+template <typename... Definitions> struct queries {};
 struct no_key {};
 template <typename Key> struct typed_key {};
 template <typename Key> struct runtime_key {};
 struct one {};
 struct many {};
+namespace detail {
 template <typename Interface, typename KeyDomain, typename Cardinality>
-struct lookup {};
+struct query_definition {};
+} // namespace detail
 template <typename Interface>
-using collection = lookup<Interface, no_key, many>;
+using single = detail::query_definition<Interface, no_key, one>;
+template <typename Interface>
+using collection = detail::query_definition<Interface, no_key, many>;
+template <typename Key, typename Interface, typename Cardinality = one>
+using associative =
+    detail::query_definition<Interface, runtime_key<Key>, Cardinality>;
 template <typename Interface, typename Key, typename Cardinality = one>
-using associative = lookup<Interface, runtime_key<Key>, Cardinality>;
+using typed = detail::query_definition<Interface, typed_key<Key>, Cardinality>;
 template <typename... Args> struct interfaces;
 template <typename T, auto... Values> struct key;
 
@@ -57,7 +64,7 @@ template <typename T> struct lookup_key_arg {
 
 template <typename T, auto... Values> struct lookup_key_arg<key<T, Values...>> {
   static_assert(sizeof...(Values) == 0,
-                "lookup definitions require dingo::key<Key>, not "
+                "query definitions require dingo::key<Key>, not "
                 "dingo::key<Key, Value>");
   using type = T;
 };
@@ -83,7 +90,7 @@ template <typename Definition> struct normalize_lookup_definition;
 
 template <typename Interface, typename KeyDomain, typename Cardinality>
 struct normalize_lookup_definition<
-    ::dingo::lookup<Interface, KeyDomain, Cardinality>>
+    query_definition<Interface, KeyDomain, Cardinality>>
     : normalize_lookup_interfaces<
           typename lookup_interface_arg<Interface>::type, KeyDomain,
           Cardinality> {};
@@ -101,7 +108,7 @@ template <> struct normalize_lookup_definitions<std::tuple<>> {
 };
 
 template <typename... Definitions>
-struct normalize_lookup_definitions<::dingo::lookups<Definitions...>>
+struct normalize_lookup_definitions<::dingo::queries<Definitions...>>
     : normalize_lookup_definitions<type_list<Definitions...>> {};
 
 template <typename Definitions>

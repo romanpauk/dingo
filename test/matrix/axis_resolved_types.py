@@ -508,7 +508,7 @@ RESOLVED_TYPES = (
             (
                 "invoke",
                 (
-                    "auto invoked = container.invoke([](dingo::keyed<value_type&, key_a> dependency) {",
+                    "auto invoked = container.invoke([](dingo::query<value_type&, dingo::key<key_a>> dependency) {",
                     "    return static_cast<value_type&>(dependency).marker();",
                     "});",
                     "ASSERT_EQ(invoked, 3);",
@@ -594,7 +594,7 @@ RESOLVED_TYPES = (
             (
                 "invoke",
                 (
-                    "auto invoked = container.invoke([](dingo::keyed<std::vector<std::shared_ptr<element_interface>>, key_a> elements) {",
+                    "auto invoked = container.invoke([](dingo::query<std::vector<std::shared_ptr<element_interface>>, dingo::key<key_a>> elements) {",
                     "    auto values = static_cast<std::vector<std::shared_ptr<element_interface>>>(elements);",
                     "    return values.size();",
                     "});",

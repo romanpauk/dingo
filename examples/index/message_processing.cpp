@@ -53,8 +53,8 @@ struct ProcessorB : IProcessor {
 };
 
 struct Pipeline {
-  Pipeline(dingo::indexed<IProcessor &, dingo::key<size_t, 1>> first_processor,
-           dingo::indexed<IProcessor &, dingo::key<size_t, 2>> second_processor)
+  Pipeline(dingo::query<IProcessor &, dingo::key<size_t, 1>> first_processor,
+           dingo::query<IProcessor &, dingo::key<size_t, 2>> second_processor)
       : first(first_processor), second(second_processor) {}
 
   IProcessor &first;
@@ -66,16 +66,16 @@ int main() {
   using namespace dingo;
 
   ////
-  // Define traits type with a single lookup using size_t as a key
+  // Define traits type with a single query using size_t as a key
   struct container_traits : static_container_traits<void> {
-    using lookup_definition_type = lookups<associative<IProcessor, size_t>>;
+    using query_definition_type = queries<associative<size_t, IProcessor>>;
   };
-  // Runtime lookup lookup uses dynamic internal storage even when this
+  // Runtime query storage is dynamic even when this
   // example uses static_container_traits for the rest of the container.
 
   container<container_traits> container;
 
-  // Register processors into the container, indexed by the type they process
+  // Register processors into the container, keyed by the type they process
   container.register_indexed_type<scope<shared>,
                                   storage<std::shared_ptr<ProcessorA>>,
                                   interfaces<IProcessor>>(size_t(1));

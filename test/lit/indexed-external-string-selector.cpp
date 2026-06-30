@@ -26,6 +26,8 @@ template <typename T, test_fixed_string Value> struct key_string {};
 
 namespace dingo::detail {
 
+// Internal regression hook: custom value selectors currently opt into query
+// injection through detail traits. This is not a documented public extension.
 template <typename T, ::test_fixed_string Value>
 struct is_key_value<::key_string<T, Value>> : std::true_type {};
 
@@ -39,6 +41,13 @@ struct key_value_traits<::key_string<T, Value>> {
   }
 };
 
+template <typename T, ::test_fixed_string Value>
+struct is_value_selector<::key_string<T, Value>> : std::true_type {
+  using type = T;
+
+  static T make() { return key_value_traits<::key_string<T, Value>>::make(); }
+};
+
 } // namespace dingo::detail
 
 struct string_processor {
@@ -50,11 +59,11 @@ template <int Id> struct string_processor_impl : string_processor {
   int id() const override { return Id; }
 };
 
-// This proves an external lookup can feed a concrete std::string key into
-// indexed injection without adding a public dingo::key_string API.
+// This proves an external query can feed a concrete std::string key into
+// constructor injection without adding a public dingo::key_string API.
 struct string_literal_consumer {
   explicit string_literal_consumer(
-      dingo::indexed<string_processor &, key_string<std::string, "json">>
+      dingo::query<string_processor &, key_string<std::string, "json">>
           selected)
       : processor(selected) {}
 
@@ -62,8 +71,8 @@ struct string_literal_consumer {
 };
 
 struct traits : dingo::dynamic_container_traits {
-  using lookup_definition_type =
-      dingo::lookups<dingo::associative<string_processor, std::string>>;
+  using query_definition_type =
+      dingo::queries<dingo::associative<std::string, string_processor>>;
 };
 
 int main() {

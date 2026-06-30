@@ -56,8 +56,8 @@ private:
 };
 
 struct traits : dingo::dynamic_container_traits {
-  using lookup_definition_type =
-      dingo::lookups<dingo::collection<ProcessorBase>>;
+  using query_definition_type =
+      dingo::queries<dingo::collection<ProcessorBase>>;
 };
 
 ////

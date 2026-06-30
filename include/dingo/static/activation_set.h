@@ -298,13 +298,12 @@ struct request_capability_match;
 
 template <typename Capability>
 using unwrapped_static_capability_t = typename annotated_traits<
-    std::conditional_t<is_indexed_v<Capability>, indexed_type_t<Capability>,
-                       keyed_type_t<Capability>>>::type;
+    std::conditional_t<is_selected_v<Capability>, selected_type_t<Capability>,
+                       Capability>>::type;
 
 template <typename Request>
-using unwrapped_static_request_t = typename annotated_traits<
-    std::conditional_t<is_indexed_v<Request>, indexed_type_t<Request>,
-                       keyed_type_t<Request>>>::type;
+using unwrapped_static_request_t = typename annotated_traits<std::conditional_t<
+    is_selected_v<Request>, selected_type_t<Request>, Request>>::type;
 
 template <typename Request>
 struct request_capability_match<Request, type_list<>> {

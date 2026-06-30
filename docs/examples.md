@@ -63,7 +63,7 @@ the relevant feature and start there.
 - [examples/registration/annotated.cpp](../examples/registration/annotated.cpp):
   disambiguate same-type dependencies with annotation tags
 - [examples/index/message_processing.cpp](../examples/index/message_processing.cpp):
-  dispatch messages to indexed handlers
+  dispatch messages to keyed handlers
 
 ## Construction Helpers
 

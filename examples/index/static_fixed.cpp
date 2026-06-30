@@ -22,7 +22,7 @@ template <int Id> struct Processor : IProcessor {
 
 struct Pipeline {
   explicit Pipeline(
-      dingo::indexed<IProcessor &, dingo::key<std::size_t, 0>> first_processor)
+      dingo::query<IProcessor &, dingo::key<std::size_t, 0>> first_processor)
       : first(first_processor) {}
 
   IProcessor &first;
@@ -38,15 +38,15 @@ int main() {
                   dingo::interfaces<IProcessor>, dingo::key<std::size_t, 1>>>;
 
   struct container_traits : dingo::static_container_traits<> {
-    using lookup_definition_type =
-        dingo::lookups<dingo::associative<IProcessor, std::size_t>>;
+    using query_definition_type =
+        dingo::queries<dingo::associative<std::size_t, IProcessor>>;
   };
 
   dingo::static_container<source, container_traits> container;
 
   auto &first =
       container
-          .resolve<dingo::indexed<IProcessor &, dingo::key<std::size_t, 0>>>();
+          .resolve<dingo::query<IProcessor &, dingo::key<std::size_t, 0>>>();
   auto pipeline = container.construct<Pipeline>();
 
   return first.id() == 0 && &pipeline.first == &first ? 0 : 1;

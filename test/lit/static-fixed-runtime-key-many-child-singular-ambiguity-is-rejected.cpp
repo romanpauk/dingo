@@ -26,15 +26,14 @@ using child_source = dingo::bindings<
                 dingo::interfaces<processor>, dingo::key<std::size_t, 0>>>;
 
 struct traits : dingo::static_container_traits<> {
-  using lookup_definition_type =
-      dingo::lookups<dingo::associative<processor, std::size_t, dingo::many>>;
+  using query_definition_type =
+      dingo::queries<dingo::associative<std::size_t, processor, dingo::many>>;
 };
 
 int main() {
   dingo::static_container<parent_source, traits> parent;
   dingo::static_container<child_source, decltype(parent)> child(&parent);
-  (void)
-      child.resolve<dingo::indexed<processor &, dingo::key<std::size_t, 0>>>();
+  (void)child.resolve<dingo::query<processor &, dingo::key<std::size_t, 0>>>();
   return 0;
 }
 

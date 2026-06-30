@@ -56,100 +56,6 @@ inline constexpr bool is_key_value_usable_v =
 
 } // namespace detail
 
-template <typename T, typename Key>
-struct keyed : detail::selected<T, detail::type_selector<Key>> {
-  using detail::selected<T, detail::type_selector<Key>>::selected;
-};
-
-template <typename T, typename Key>
-struct keyed<T &, Key> : detail::selected<T &, detail::type_selector<Key>> {
-  using detail::selected<T &, detail::type_selector<Key>>::selected;
-};
-
-template <typename T, typename Selector>
-struct indexed : detail::selected<T, Selector> {
-  using detail::selected<T, Selector>::selected;
-};
-
-template <typename T, typename Selector>
-struct indexed<T &, Selector> : detail::selected<T &, Selector> {
-  using detail::selected<T &, Selector>::selected;
-};
-
-template <typename T> struct keyed_traits {
-  using type = T;
-  using key_type = void;
-};
-
-template <typename T, typename Key> struct keyed_traits<keyed<T, Key>> {
-  using type = T;
-  using key_type = Key;
-};
-
-template <typename T, typename Key> struct keyed_traits<keyed<T, Key> &> {
-  using type = T &;
-  using key_type = Key;
-};
-
-template <typename T, typename Key> struct keyed_traits<keyed<T, Key> &&> {
-  using type = T &&;
-  using key_type = Key;
-};
-
-template <typename T, typename Key> struct keyed_traits<keyed<T, Key> *> {
-  using type = T *;
-  using key_type = Key;
-};
-
-template <typename T> using keyed_type_t = typename keyed_traits<T>::type;
-
-template <typename T> using keyed_key_t = typename keyed_traits<T>::key_type;
-
-template <typename T>
-struct is_keyed : std::bool_constant<!std::is_void_v<keyed_key_t<T>>> {};
-
-template <typename T> inline constexpr bool is_keyed_v = is_keyed<T>::value;
-
-template <typename T> struct indexed_traits {
-  using type = T;
-  using selector_type = void;
-};
-
-template <typename T, typename Selector>
-struct indexed_traits<indexed<T, Selector>> {
-  using type = T;
-  using selector_type = Selector;
-};
-
-template <typename T, typename Selector>
-struct indexed_traits<indexed<T, Selector> &> {
-  using type = T &;
-  using selector_type = Selector;
-};
-
-template <typename T, typename Selector>
-struct indexed_traits<indexed<T, Selector> &&> {
-  using type = T &&;
-  using selector_type = Selector;
-};
-
-template <typename T, typename Selector>
-struct indexed_traits<indexed<T, Selector> *> {
-  using type = T *;
-  using selector_type = Selector;
-};
-
-template <typename T> using indexed_type_t = typename indexed_traits<T>::type;
-
-template <typename T>
-using indexed_selector_t = typename indexed_traits<T>::selector_type;
-
-template <typename T>
-struct is_indexed : std::bool_constant<!std::is_void_v<indexed_selector_t<T>>> {
-};
-
-template <typename T> inline constexpr bool is_indexed_v = is_indexed<T>::value;
-
 namespace detail {
 
 template <typename T> struct is_typed_key : std::false_type {};
@@ -190,11 +96,25 @@ struct is_value_selector<key<T, Value>> : std::true_type {
   static T make() { return key_value<T, Value>::make(); }
 };
 
+template <typename Selector> struct query_selector {
+  using type = Selector;
+};
+
+template <typename T> struct query_selector<key<T>> {
+  using type = type_selector<T>;
+};
+
+template <typename Selector>
+using query_selector_t = typename query_selector<Selector>::type;
+
 template <typename Identity, typename Binding>
 struct keyed_binding_identity : Binding {
   using Binding::Binding;
 };
 
 } // namespace detail
+
+template <typename T, typename Selector>
+using query = detail::selected<T, detail::query_selector_t<Selector>>;
 
 } // namespace dingo

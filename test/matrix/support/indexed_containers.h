@@ -18,23 +18,23 @@
 namespace dingo::matrix {
 
 struct indexed_container_traits : dingo::dynamic_container_traits {
-  using lookup_definition_type =
-      dingo::lookups<dingo::associative<element_interface, std::size_t>>;
+  using query_definition_type =
+      dingo::queries<dingo::associative<std::size_t, element_interface>>;
 };
 
 struct indexed_int_container_traits : dingo::dynamic_container_traits {
-  using lookup_definition_type =
-      dingo::lookups<dingo::associative<element_interface, int>>;
+  using query_definition_type =
+      dingo::queries<dingo::associative<int, element_interface>>;
 };
 
 struct indexed_string_container_traits : dingo::dynamic_container_traits {
-  using lookup_definition_type =
-      dingo::lookups<dingo::associative<element_interface, std::string>>;
+  using query_definition_type =
+      dingo::queries<dingo::associative<std::string, element_interface>>;
 };
 
 struct indexed_dsl_container_traits : dingo::dynamic_container_traits {
-  using lookup_definition_type = dingo::lookups<
-      dingo::associative<dingo::interfaces<element_interface>, std::size_t>>;
+  using query_definition_type = dingo::queries<
+      dingo::associative<std::size_t, dingo::interfaces<element_interface>>>;
 };
 
 } // namespace dingo::matrix

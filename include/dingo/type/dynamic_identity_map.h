@@ -20,10 +20,11 @@ template <typename Key, typename Value, typename Allocator,
           typename Compare = std::less<Key>>
 class dynamic_identity_map {
   using storage_value = std::pair<const Key, Value>;
-  using storage_allocator = std::conditional_t<
-      ::dingo::is_static_allocator_v<Allocator>, std::allocator<storage_value>,
-      typename std::allocator_traits<Allocator>::template rebind_alloc<
-          storage_value>>;
+  using storage_allocator =
+      std::conditional_t<::dingo::is_static_allocator_v<Allocator>,
+                         std::allocator<storage_value>,
+                         typename std::allocator_traits<
+                             Allocator>::template rebind_alloc<storage_value>>;
   using storage_type = std::map<Key, Value, Compare, storage_allocator>;
 
 public:
@@ -35,10 +36,10 @@ public:
 
   template <typename KeyArg, typename... Args>
   std::pair<Value &, bool> insert(KeyArg &&key, Args &&...args) {
-    auto pb = values_.emplace(
-        std::piecewise_construct,
-        std::forward_as_tuple(std::forward<KeyArg>(key)),
-        std::forward_as_tuple(std::forward<Args>(args)...));
+    auto pb =
+        values_.emplace(std::piecewise_construct,
+                        std::forward_as_tuple(std::forward<KeyArg>(key)),
+                        std::forward_as_tuple(std::forward<Args>(args)...));
     return {pb.first->second, pb.second};
   }
 

@@ -27,20 +27,19 @@ struct indexed_definition_key_arg<dingo::key<T, Values...>> {
 
 template <typename Definition> struct indexed_definition_key;
 
-template <typename Interface, typename Key>
-struct indexed_definition_key<
-    dingo::lookup<Interface, dingo::runtime_key<Key>, dingo::one>> {
+template <typename Key, typename Interface>
+struct indexed_definition_key<dingo::associative<Key, Interface, dingo::one>> {
   using type = typename indexed_definition_key_arg<Key>::type;
 };
 
 template <typename Head, typename... Tail>
-struct indexed_definition_key<dingo::lookups<Head, Tail...>> {
+struct indexed_definition_key<dingo::queries<Head, Tail...>> {
   using type = typename indexed_definition_key<Head>::type;
 };
 
 template <typename Container> struct indexed_key {
-  using type = typename indexed_definition_key<typename std::remove_reference_t<
-      Container>::lookup_definition_type>::type;
+  using type = typename indexed_definition_key<
+      typename std::remove_reference_t<Container>::query_definition_type>::type;
 };
 
 template <typename Container>
@@ -56,7 +55,7 @@ template <typename T> T indexed_value(int value) {
 
 template <typename Key, Key Value> struct fixed_indexed_dependency_consumer {
   explicit fixed_indexed_dependency_consumer(
-      dingo::indexed<element_interface &, dingo::key<Key, Value>> value)
+      dingo::query<element_interface &, dingo::key<Key, Value>> value)
       : dependency(value) {}
 
   element_interface &dependency;

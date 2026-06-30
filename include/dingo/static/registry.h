@@ -68,14 +68,14 @@ struct keyed_request_types<Key, type_list<RequestTypes...>> {
   using type = std::conditional_t<
       std::is_void_v<Key>, type_list<RequestTypes...>,
       std::conditional_t<is_key_value_v<Key>,
-                         type_list<indexed<RequestTypes, Key>...>,
-                         type_list<keyed<RequestTypes, Key>...>>>;
+                         type_list<query<RequestTypes, Key>...>,
+                         type_list<query<RequestTypes, key<Key>>...>>>;
 };
 
 template <typename Request>
 using binding_request_unwrapped_t =
-    std::conditional_t<is_indexed_v<Request>, indexed_type_t<Request>,
-                       keyed_type_t<Request>>;
+    std::conditional_t<is_selected_v<Request>, selected_type_t<Request>,
+                       Request>;
 
 template <typename Request>
 using binding_request_interface_t =
@@ -85,26 +85,22 @@ template <typename Request>
 using binding_exact_request_interface_t = std::remove_cv_t<
     std::remove_reference_t<binding_request_unwrapped_t<Request>>>;
 
-template <typename Request> struct binding_request_key {
-  using type = keyed_key_t<Request>;
+template <typename Request, typename Selector = selected_selector_t<Request>,
+          typename = void>
+struct binding_request_key {
+  using type = void;
 };
 
-template <typename T, typename Selector>
-struct binding_request_key<indexed<T, Selector>> {
-  using type = std::conditional_t<is_key_value_v<Selector>, Selector, void>;
+template <typename Request, typename Key>
+struct binding_request_key<Request, type_selector<Key>> {
+  using type = Key;
 };
 
-template <typename T, typename Selector>
-struct binding_request_key<indexed<T, Selector> &>
-    : binding_request_key<indexed<T, Selector>> {};
-
-template <typename T, typename Selector>
-struct binding_request_key<indexed<T, Selector> &&>
-    : binding_request_key<indexed<T, Selector>> {};
-
-template <typename T, typename Selector>
-struct binding_request_key<indexed<T, Selector> *>
-    : binding_request_key<indexed<T, Selector>> {};
+template <typename Request, typename Selector>
+struct binding_request_key<Request, Selector,
+                           std::enable_if_t<is_key_value_v<Selector>>> {
+  using type = Selector;
+};
 
 template <typename Request>
 using binding_request_key_t = typename binding_request_key<Request>::type;

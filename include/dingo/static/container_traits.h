@@ -28,7 +28,7 @@ template <typename Tag = void> struct static_container_traits {
   template <typename Value, typename Allocator>
   using type_cache_type = static_type_cache<void *, Tag, Allocator>;
   using allocator_type = static_allocator<char, Tag>;
-  using lookup_definition_type = std::tuple<>;
+  using query_definition_type = std::tuple<>;
   static constexpr bool cache_enabled = true;
 };
 
@@ -54,7 +54,7 @@ struct is_static_container_traits : std::false_type {};
 
 template <typename T>
 struct is_static_container_traits<
-    T, std::void_t<typename T::lookup_definition_type,
+    T, std::void_t<typename T::query_definition_type,
                    typename T::allocator_type, typename T::rtti_type>>
     : std::true_type {};
 

@@ -20,7 +20,7 @@ int main() {
   using namespace dingo;
   ////
   struct container_traits : dynamic_container_traits {
-    using lookup_definition_type = lookups<collection<IProcessor>>;
+    using query_definition_type = queries<collection<IProcessor>>;
   };
 
   container<container_traits> container;

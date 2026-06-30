@@ -3,28 +3,28 @@
 This page covers the parts of Dingo that usually matter only after the basic
 registration and resolution flow is already in place.
 
-## Indexed Resolution
+## Query Resolution
 
-Container traits can define one or more lookups so that a registration is
+Container traits can define one or more queries so that a registration is
 resolved by interface, key domain, and cardinality.
 
-Use lookups when:
+Use queries when:
 
 - multiple implementations share the same interface
 - the caller chooses the implementation by name or numeric ID
 - the binding should remain separate from unkeyed resolution
 
-Lookup definitions are scoped to the interface they serve. Every indexed
-registration or lookup requires a matching lookup definition.
+Query definitions are scoped to the interface they serve. Every keyed
+registration or runtime query requires a matching query definition.
 
-Unkeyed runtime registrations without an explicit lookup are treated as
+Unkeyed runtime registrations without an explicit query are treated as
 `no_key`/`one`: a second registration for the same interface is rejected,
 regardless of storage type. Declare `collection<I>` when an interface is meant
 to have multiple unkeyed implementations:
 
 ```c++
 struct container_traits : dynamic_container_traits {
-  using lookup_definition_type = lookups<collection<IProcessor>>;
+  using query_definition_type = queries<collection<IProcessor>>;
 };
 ```
 
@@ -33,72 +33,70 @@ struct container_traits : dynamic_container_traits {
 order, while singular `resolve<I &>()` succeeds only when exactly one
 registration matches.
 
-Runtime-keyed lookups use `associative<I, K>` for unique lookup and
-`associative<I, K, many>` for keyed collections:
+Runtime-keyed queries use `associative<K, I>` for unique queries and
+`associative<K, I, many>` for keyed collections:
 
 ```c++
 struct container_traits : dynamic_container_traits {
-  using lookup_definition_type =
-      lookups<associative<IProcessor, std::size_t>,
-                associative<IHandler, std::string, many>>;
+  using query_definition_type =
+      queries<associative<std::size_t, IProcessor>,
+                associative<std::string, IHandler, many>>;
 };
 ```
 
-Typed-key registrations can also use explicit lookups:
+Typed-key registrations can also use explicit queries:
 
 ```c++
 struct container_traits : dynamic_container_traits {
-  using lookup_definition_type =
-      lookups<lookup<IProcessor, typed_key<Primary>, one>>;
+  using query_definition_type =
+      queries<typed<IProcessor, Primary, one>>;
 };
 ```
 
-`lookup<I, typed_key<K>, one>` gives `register_type<interfaces<I>, key<K>>()`
-singular identity for that interface and key type.
-`lookup<I, typed_key<K>, many>` makes `resolve<std::vector<I *>>(key<K>{})`
-enumerate keyed collection members in registration order. A singular typed-key
-resolve succeeds only when the matching `many` lookup contains exactly one
-registration.
+`typed<I, K, one>` gives `register_type<interfaces<I>, key<K>>()` singular
+identity for that interface and key type. `typed<I, K, many>` makes
+`resolve<std::vector<I *>>(key<K>{})` enumerate keyed collection members in
+registration order. A singular typed-key resolve succeeds only when the matching
+`many` query contains exactly one registration.
 
-When no explicit typed-key lookup is declared, `key<K>` registrations still use
+When no explicit typed-key query is declared, `key<K>` registrations still use
 implicit `typed_key<K>`/`one`: a second registration for the same interface and
-key type is rejected, regardless of storage type. Use
-`lookup<I, typed_key<K>, many>` when one typed key should hold multiple
-implementations.
+key type is rejected, regardless of storage type. Use `typed<I, K, many>` when
+one typed key should hold multiple implementations.
 
-Lookup storage is internal. Applications should declare the interface, key
-domain, and cardinality they need instead of selecting storage for lookup rows.
+Query storage is internal. Applications should declare the interface, key
+domain, and cardinality they need instead of selecting storage.
 
-Constructor dependencies can also bind to a fixed indexed key:
+Constructor dependencies can also bind to a fixed query key:
 
 ```c++
 struct Pipeline {
-    Pipeline(dingo::indexed<IProcessor&, dingo::key<std::size_t, 1>> first,
-             dingo::indexed<IProcessor&, dingo::key<std::size_t, 2>> second);
+    Pipeline(dingo::query<IProcessor&, dingo::key<std::size_t, 1>> first,
+             dingo::query<IProcessor&, dingo::key<std::size_t, 2>> second);
 };
 ```
 
-`indexed<IProcessor&, key<std::size_t, 1>>` resolves the same object as
+`query<IProcessor&, key<std::size_t, 1>>` resolves the same object as
 `container.resolve<IProcessor&>(std::size_t{1})`; the configured
-`(IProcessor, std::size_t)` lookup determines the lookup domain and cardinality,
-while the lookup storage remains an implementation detail.
+`associative<std::size_t, IProcessor>` query determines the key domain and
+cardinality, while the query storage remains an implementation detail.
 
 The value in `key<T, Value>` must be a valid non-type template parameter and
 must be usable as `T{Value}`. Class-type values such as `key<MyKey, MyKey{1}>`
 require C++20 structural non-type template parameter support.
 
-Static containers can use the same `associative<I, K>` lookups when the key
+Static containers can use the same `associative<K, I>` queries when the key
 value is fixed in the type:
 
-- `key<K>` remains a typed key and maps to `lookup<I, typed_key<K>, ...>`.
-- `key<K, Value>` maps to `lookup<I, runtime_key<K>, ...>` when
-  `associative<I, K>` or `associative<I, K, many>` is declared.
-- Static lookup is type-encoded: use `indexed<I &, key<K, Value>>` or
+- `key<K>` remains a typed key and maps to `typed<I, K, ...>`.
+- `key<K, Value>` maps to `associative<K, I, ...>` when `associative<K, I>` or
+  `associative<K, I, many>` is declared.
+- Static query is type-encoded: use `query<I &, key<K, Value>>` or
   `resolve<Collection>(key<K, Value>{})`; `resolve<I &>(K{...})` is runtime
-  lookup and is not supported by `static_container`.
+  query and is not supported by `static_container`.
 - Static fixed runtime-key bindings require `static_container` with traits that
-  declare the lookup. `container<bindings<...>>` rejects them because that mixed
-  form cannot carry custom lookup traits.
+  declare the query. `container<bindings<...>>` rejects them because that mixed
+  form cannot carry custom query traits.
 
 <!-- { include("../examples/index/static_fixed.cpp", scope="////") -->
 
@@ -117,7 +115,7 @@ template <int Id> struct Processor : IProcessor {
 
 struct Pipeline {
   explicit Pipeline(
-      dingo::indexed<IProcessor &, dingo::key<std::size_t, 0>> first_processor)
+      dingo::query<IProcessor &, dingo::key<std::size_t, 0>> first_processor)
       : first(first_processor) {}
 
   IProcessor &first;
@@ -130,15 +128,14 @@ using source = dingo::bindings<
                 dingo::interfaces<IProcessor>, dingo::key<std::size_t, 1>>>;
 
 struct container_traits : dingo::static_container_traits<> {
-  using lookup_definition_type =
-      dingo::lookups<dingo::associative<IProcessor, std::size_t>>;
+  using query_definition_type =
+      dingo::queries<dingo::associative<std::size_t, IProcessor>>;
 };
 
 dingo::static_container<source, container_traits> container;
 
 auto &first =
-    container
-        .resolve<dingo::indexed<IProcessor &, dingo::key<std::size_t, 0>>>();
+    container.resolve<dingo::query<IProcessor &, dingo::key<std::size_t, 0>>>();
 auto pipeline = container.construct<Pipeline>();
 
 return first.id() == 0 && &pipeline.first == &first ? 0 : 1;
@@ -159,9 +156,9 @@ struct IAnimal {
 struct Dog : IAnimal {};
 struct Cat : IAnimal {};
 
-// Declare traits with a std::string based lookup
+// Declare traits with a std::string based query
 struct container_traits : dynamic_container_traits {
-  using lookup_definition_type = lookups<associative<IAnimal, std::string>>;
+  using query_definition_type = queries<associative<std::string, IAnimal>>;
 };
 
 container<container_traits> container;
@@ -224,24 +221,24 @@ struct ProcessorB : IProcessor {
 };
 
 struct Pipeline {
-  Pipeline(dingo::indexed<IProcessor &, dingo::key<size_t, 1>> first_processor,
-           dingo::indexed<IProcessor &, dingo::key<size_t, 2>> second_processor)
+  Pipeline(dingo::query<IProcessor &, dingo::key<size_t, 1>> first_processor,
+           dingo::query<IProcessor &, dingo::key<size_t, 2>> second_processor)
       : first(first_processor), second(second_processor) {}
 
   IProcessor &first;
   IProcessor &second;
 };
 
-// Define traits type with a single lookup using size_t as a key
+// Define traits type with a single query using size_t as a key
 struct container_traits : static_container_traits<void> {
-  using lookup_definition_type = lookups<associative<IProcessor, size_t>>;
+  using query_definition_type = queries<associative<size_t, IProcessor>>;
 };
-// Runtime lookup lookup uses dynamic internal storage even when this
+// Runtime query storage is dynamic even when this
 // example uses static_container_traits for the rest of the container.
 
 container<container_traits> container;
 
-// Register processors into the container, indexed by the type they process
+// Register processors into the container, keyed by the type they process
 container
     .register_indexed_type<scope<shared>, storage<std::shared_ptr<ProcessorA>>,
                            interfaces<IProcessor>>(size_t(1));
@@ -280,7 +277,7 @@ Annotations support multiple implementations for the same interface and
 disambiguate them with a tag type.
 
 Use annotations when type-based registration is not enough but runtime key
-lookup would be the wrong abstraction.
+queries would be the wrong abstraction.
 
 <!-- { include("../examples/registration/annotated.cpp", scope="////") -->
 
@@ -351,7 +348,7 @@ Compile-time bindings make sense when:
 
 - the participating types are known and stable at compile time
 - missing dependencies and unsupported cycles should fail during compilation
-- lookup should avoid mutable runtime registration state
+- queries should avoid mutable runtime registration state
 
 See:
 

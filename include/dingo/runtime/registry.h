@@ -96,8 +96,7 @@ public:
   using container_traits_type = ContainerTraits;
   using allocator_type = Allocator;
   using rtti_type = typename ContainerTraits::rtti_type;
-  using lookup_definition_type =
-      typename ContainerTraits::lookup_definition_type;
+  using query_definition_type = typename ContainerTraits::query_definition_type;
   runtime_registry() : allocator_base<allocator_type>(allocator_type()) {}
 
   runtime_registry(const allocator_type &alloc)
@@ -586,12 +585,12 @@ protected:
               allocator)),
           lookup_table(allocator) {
       using entries_type =
-          detail::normalize_lookup_definitions_t<lookup_definition_type>;
+          detail::normalize_lookup_definitions_t<query_definition_type>;
       static_assert(!detail::has_duplicate_lookup_definition_v<entries_type>,
-                    "duplicate dingo lookup definition for interface/key "
+                    "duplicate dingo query definition for interface/key "
                     "domain/cardinality");
       static_assert(!detail::has_duplicate_lookup_slot_v<entries_type>,
-                    "conflicting dingo lookup definitions for interface/key "
+                    "conflicting dingo query definitions for interface/key "
                     "domain");
     }
 
@@ -689,7 +688,7 @@ protected:
     using resolve_type = typename collection_type::resolve_type;
     using index_interface_type = normalized_type_t<resolve_type>;
     using entries =
-        detail::normalize_lookup_definitions_t<lookup_definition_type>;
+        detail::normalize_lookup_definitions_t<query_definition_type>;
 
     if constexpr (is_none_v<std::decay_t<IdType>>) {
       using many_entry =
@@ -894,7 +893,7 @@ protected:
     using index_interface_type = normalized_type_t<resolve_type>;
     using lookup_entry = detail::selected_lookup_entry_t<
         index_interface_type, index_key_type,
-        detail::normalize_lookup_definitions_t<lookup_definition_type>>;
+        detail::normalize_lookup_definitions_t<query_definition_type>>;
 
     if constexpr (std::is_void_v<lookup_entry>) {
       (void)results;
@@ -927,7 +926,7 @@ protected:
     using resolve_type = typename collection_type::resolve_type;
     using index_interface_type = normalized_type_t<resolve_type>;
     using entries =
-        detail::normalize_lookup_definitions_t<lookup_definition_type>;
+        detail::normalize_lookup_definitions_t<query_definition_type>;
     using many_entry =
         detail::selected_no_key_lookup_entry_t<index_interface_type,
                                                ::dingo::many, entries>;
@@ -966,7 +965,7 @@ protected:
     using key_type = typename key_id_type::type;
     using index_interface_type = normalized_type_t<resolve_type>;
     using entries =
-        detail::normalize_lookup_definitions_t<lookup_definition_type>;
+        detail::normalize_lookup_definitions_t<query_definition_type>;
     using many_entry = detail::selected_typed_key_lookup_entry_t<
         index_interface_type, key_type, ::dingo::many, entries>;
     using one_entry = detail::selected_typed_key_lookup_entry_t<
@@ -1020,7 +1019,7 @@ protected:
     using index_interface_type = normalized_type_t<resolve_type>;
     using lookup_entry = detail::selected_lookup_entry_t<
         index_interface_type, index_key_type,
-        detail::normalize_lookup_definitions_t<lookup_definition_type>>;
+        detail::normalize_lookup_definitions_t<query_definition_type>>;
 
     if constexpr (std::is_void_v<lookup_entry>) {
       return 0;
@@ -1041,7 +1040,7 @@ protected:
     using resolve_type = typename collection_type::resolve_type;
     using index_interface_type = normalized_type_t<resolve_type>;
     using entries =
-        detail::normalize_lookup_definitions_t<lookup_definition_type>;
+        detail::normalize_lookup_definitions_t<query_definition_type>;
     using many_entry =
         detail::selected_no_key_lookup_entry_t<index_interface_type,
                                                ::dingo::many, entries>;
@@ -1070,7 +1069,7 @@ protected:
     using key_type = typename key_id_type::type;
     using index_interface_type = normalized_type_t<resolve_type>;
     using entries =
-        detail::normalize_lookup_definitions_t<lookup_definition_type>;
+        detail::normalize_lookup_definitions_t<query_definition_type>;
     using many_entry = detail::selected_typed_key_lookup_entry_t<
         index_interface_type, key_type, ::dingo::many, entries>;
     using one_entry = detail::selected_typed_key_lookup_entry_t<
@@ -1134,7 +1133,7 @@ private:
     if constexpr (is_none_v<std::decay_t<IdType>>) {
       using index_interface_type = normalized_type_t<Request>;
       using entries =
-          detail::normalize_lookup_definitions_t<lookup_definition_type>;
+          detail::normalize_lookup_definitions_t<query_definition_type>;
       using many_entry =
           detail::selected_no_key_lookup_entry_t<index_interface_type,
                                                  ::dingo::many, entries>;
@@ -1151,7 +1150,7 @@ private:
       using key_type = typename key_id_type::type;
       using index_interface_type = normalized_type_t<Request>;
       using entries =
-          detail::normalize_lookup_definitions_t<lookup_definition_type>;
+          detail::normalize_lookup_definitions_t<query_definition_type>;
       using one_entry = detail::selected_typed_key_lookup_entry_t<
           index_interface_type, key_type, ::dingo::one, entries>;
       using many_entry = detail::selected_typed_key_lookup_entry_t<
@@ -1171,7 +1170,7 @@ private:
       using index_interface_type = normalized_type_t<Request>;
       using lookup_entry = detail::selected_lookup_entry_t<
           index_interface_type, index_key_type,
-          detail::normalize_lookup_definitions_t<lookup_definition_type>>;
+          detail::normalize_lookup_definitions_t<query_definition_type>>;
       if constexpr (std::is_void_v<lookup_entry>) {
         if constexpr (!std::is_same_v<void, ParentRegistry> &&
                       !std::is_base_of_v<registry_type, resolve_root_type>) {
@@ -1180,8 +1179,8 @@ private:
                                                                        nullptr);
         } else {
           static_assert(!std::is_void_v<lookup_entry>,
-                        "indexed registration or lookup has no matching "
-                        "dingo lookup definition for interface/key");
+                        "keyed registration or query has no matching "
+                        "dingo query definition for interface/key");
         }
       } else {
         using index_cardinality = typename lookup_entry::cardinality;
@@ -1259,7 +1258,7 @@ private:
                            type_registration<TypeArgs...>>;
     static_assert(!detail::is_key_value_v<typename registration::key_type>,
                   "dingo::key<T, V> registration keys require a static fixed "
-                  "runtime-key lookup");
+                  "runtime-key query");
     using binding_model = detail::binding_model<registration>;
     using bindings_type = typename binding_model::bindings_type;
     using instance_container_type = registration_container_type<registration>;
@@ -1378,10 +1377,10 @@ private:
           rtti_type::template get_type_index<typename TypeStorage::type>();
       using lookup_entry = detail::selected_lookup_entry_t<
           TypeInterface, IdType,
-          detail::normalize_lookup_definitions_t<lookup_definition_type>>;
+          detail::normalize_lookup_definitions_t<query_definition_type>>;
       static_assert(!std::is_void_v<lookup_entry>,
-                    "indexed registration or lookup has no matching "
-                    "dingo lookup definition for interface/key");
+                    "keyed registration or query has no matching "
+                    "dingo query definition for interface/key");
       using lookup_cardinality_type =
           typename lookup_entry_cardinality<lookup_entry>::type;
       auto lookup_id = lookup_table_type::template make_runtime_key_identity<
@@ -1410,7 +1409,7 @@ private:
       }
     } else if constexpr (is_none_v<std::decay_t<KeyIdType>>) {
       using entries =
-          detail::normalize_lookup_definitions_t<lookup_definition_type>;
+          detail::normalize_lookup_definitions_t<query_definition_type>;
       using one_entry =
           detail::selected_no_key_lookup_entry_t<TypeInterface, ::dingo::one,
                                                  entries>;
@@ -1480,7 +1479,7 @@ private:
     } else {
       using typed_key_type = typename std::decay_t<KeyIdType>::type;
       using entries =
-          detail::normalize_lookup_definitions_t<lookup_definition_type>;
+          detail::normalize_lookup_definitions_t<query_definition_type>;
       using one_entry = detail::selected_typed_key_lookup_entry_t<
           TypeInterface, typed_key_type, ::dingo::one, entries>;
       using many_entry = detail::selected_typed_key_lookup_entry_t<

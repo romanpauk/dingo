@@ -25,7 +25,7 @@ struct static_container_with_dynamic_rtti_traits {
   template <typename Value, typename Allocator>
   using type_cache_type = dingo::static_type_cache<Value, Tag, Allocator>;
   using allocator_type = dingo::static_allocator<char, Tag>;
-  using lookup_definition_type = std::tuple<>;
+  using query_definition_type = std::tuple<>;
   static constexpr bool cache_enabled = true;
 };
 
@@ -49,7 +49,7 @@ struct dynamic_container_with_static_rtti_traits {
   using type_cache_type =
       dingo::dynamic_type_cache<Value, rtti_type, Allocator>;
   using allocator_type = std::allocator<char>;
-  using lookup_definition_type = std::tuple<>;
+  using query_definition_type = std::tuple<>;
   static constexpr bool cache_enabled = true;
 };
 
