@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace dingo {
@@ -86,6 +87,31 @@ struct typed_key_cached_processor_impl : typed_key_cached_processor {
 
   inline static int constructions = 0;
 };
+
+template <typename T> struct tracked_collection {
+  using value_type = T;
+
+  std::vector<T> values;
+  std::size_t reserve_count = 0;
+};
+
+namespace detail {
+template <typename T> struct collection_traits<tracked_collection<T>> {
+  static const bool is_collection = true;
+  static const bool has_fixed_size_construct = false;
+  using resolve_type = T;
+
+  static void reserve(tracked_collection<T> &collection, std::size_t size) {
+    collection.reserve_count = size;
+    collection.values.reserve(size);
+  }
+
+  template <typename U>
+  static void add(tracked_collection<T> &collection, U &&value) {
+    collection.values.emplace_back(std::forward<U>(value));
+  }
+};
+} // namespace detail
 
 template <typename Container>
 using lookup_identity_probe =
@@ -384,6 +410,161 @@ TEST(index_test, normal_unkeyed_shared_registration_reuses_entry_cache) {
   ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
 }
 
+TEST(index_test, normal_unkeyed_duplicate_storage_rejects_no_key_one_row) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct first_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct second_processor : processor {
+    int id() const override { return 2; }
+  };
+
+  container<> container;
+  container.template register_type<scope<shared>, storage<first_processor>,
+                                   interfaces<processor>>();
+
+  ASSERT_EQ(container.template resolve<processor &>().id(), 1);
+
+  EXPECT_THROW(
+      (container.template register_type<
+          scope<shared>, storage<second_processor>, interfaces<processor>>()),
+      type_already_registered_exception);
+
+  auto processors =
+      container.template resolve<tracked_collection<processor *>>();
+  ASSERT_EQ(processors.reserve_count, 1U);
+  ASSERT_EQ(processors.values.size(), 1U);
+  ASSERT_EQ(processors.values[0]->id(), 1);
+  ASSERT_EQ(container.template resolve<processor &>().id(), 1);
+}
+
+TEST(index_test, normal_unkeyed_collection_uses_no_key_one_rows) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct first_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct second_processor : processor {
+    int id() const override { return 2; }
+  };
+
+  container<> container;
+  container.template register_type<scope<shared>, storage<first_processor>,
+                                   interfaces<processor>>();
+  EXPECT_THROW(
+      (container.template register_type<
+          scope<shared>, storage<second_processor>, interfaces<processor>>()),
+      type_already_registered_exception);
+
+  auto processors =
+      container.template resolve<tracked_collection<processor *>>();
+
+  ASSERT_EQ(processors.reserve_count, 1U);
+  ASSERT_EQ(processors.values.size(), 1U);
+  ASSERT_EQ(processors.values[0]->id(), 1);
+}
+
+TEST(index_test, failed_normal_unkeyed_registration_preserves_lookup_rows) {
+  typed_key_cached_processor_impl::constructions = 0;
+
+  container<> container;
+  container.template register_type<scope<shared>,
+                                   storage<typed_key_cached_processor_impl>,
+                                   interfaces<typed_key_cached_processor>>();
+
+  auto &before = container.template resolve<typed_key_cached_processor &>();
+
+  EXPECT_THROW((container.template register_type<
+                   scope<shared>, storage<typed_key_cached_processor_impl>,
+                   interfaces<typed_key_cached_processor>>()),
+               type_already_registered_exception);
+
+  auto &after = container.template resolve<typed_key_cached_processor &>();
+  ASSERT_EQ(&after, &before);
+  ASSERT_EQ(after.id(), 42);
+  ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
+}
+
+TEST(index_test, failed_normal_unkeyed_registration_preserves_collection_rows) {
+  typed_key_cached_processor_impl::constructions = 0;
+
+  container<> container;
+  container.template register_type<scope<shared>,
+                                   storage<typed_key_cached_processor_impl>,
+                                   interfaces<typed_key_cached_processor>>();
+
+  EXPECT_THROW((container.template register_type<
+                   scope<shared>, storage<typed_key_cached_processor_impl>,
+                   interfaces<typed_key_cached_processor>>()),
+               type_already_registered_exception);
+
+  auto processors =
+      container
+          .template resolve<tracked_collection<typed_key_cached_processor *>>();
+  ASSERT_EQ(processors.reserve_count, 1U);
+  ASSERT_EQ(processors.values.size(), 1U);
+  ASSERT_EQ(processors.values[0]->id(), 42);
+  ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
+}
+
+TEST(index_test, child_normal_unkeyed_lookup_shadows_parent) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct parent_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct child_processor : processor {
+    int id() const override { return 2; }
+  };
+
+  container<> parent;
+  container<dynamic_container_traits, std::allocator<char>, decltype(parent)>
+      child(&parent);
+  parent.template register_type<scope<shared>, storage<parent_processor>,
+                                interfaces<processor>>();
+
+  ASSERT_EQ(child.template resolve<processor &>().id(), 1);
+
+  child.template register_type<scope<shared>, storage<child_processor>,
+                               interfaces<processor>>();
+
+  ASSERT_EQ(child.template resolve<processor &>().id(), 2);
+}
+
+TEST(index_test, child_normal_unkeyed_collection_does_not_merge_parent) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct parent_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct child_processor : processor {
+    int id() const override { return 2; }
+  };
+
+  container<> parent;
+  container<dynamic_container_traits, std::allocator<char>, decltype(parent)>
+      child(&parent);
+  parent.template register_type<scope<shared>, storage<parent_processor>,
+                                interfaces<processor>>();
+  child.template register_type<scope<shared>, storage<child_processor>,
+                               interfaces<processor>>();
+
+  auto processors = child.template resolve<tracked_collection<processor *>>();
+
+  ASSERT_EQ(processors.reserve_count, 1U);
+  ASSERT_EQ(processors.values.size(), 1U);
+  ASSERT_EQ(processors.values[0]->id(), 2);
+}
+
 TEST(index_test, runtime_keyed_collection_requires_associative_many_lookup) {
   struct processor {
     virtual ~processor() = default;
@@ -408,7 +589,7 @@ TEST(index_test, runtime_keyed_collection_requires_associative_many_lookup) {
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(0)).id(), 1);
 }
 
-TEST(index_test, legacy_typed_key_registration_reuses_entry_cache) {
+TEST(index_test, implicit_typed_key_registration_reuses_entry_cache) {
   struct processor_key {};
 
   typed_key_cached_processor_impl::constructions = 0;
@@ -428,7 +609,98 @@ TEST(index_test, legacy_typed_key_registration_reuses_entry_cache) {
   ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
 }
 
-TEST(index_test, legacy_normal_unkeyed_registration_records_no_key_one) {
+TEST(index_test,
+     implicit_typed_key_duplicate_storage_rejects_typed_key_one_row) {
+  struct processor_key {};
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct first_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct second_processor : processor {
+    int id() const override { return 2; }
+  };
+
+  container<> container;
+  container.template register_type<scope<shared>, storage<first_processor>,
+                                   interfaces<processor>, key<processor_key>>();
+
+  ASSERT_EQ(container.template resolve<processor &>(key<processor_key>{}).id(),
+            1);
+
+  EXPECT_THROW((container.template register_type<
+                   scope<shared>, storage<second_processor>,
+                   interfaces<processor>, key<processor_key>>()),
+               type_index_already_registered_exception);
+
+  auto processors = container.template resolve<tracked_collection<processor *>>(
+      key<processor_key>{});
+
+  ASSERT_EQ(processors.reserve_count, 1U);
+  ASSERT_EQ(processors.values.size(), 1U);
+  ASSERT_EQ(processors.values[0]->id(), 1);
+  ASSERT_EQ(container.template resolve<processor &>(key<processor_key>{}).id(),
+            1);
+}
+
+TEST(index_test,
+     failed_implicit_typed_key_registration_preserves_collection_rows) {
+  struct processor_key {};
+  typed_key_cached_processor_impl::constructions = 0;
+
+  container<> container;
+  container.template register_type<
+      scope<shared>, storage<typed_key_cached_processor_impl>,
+      interfaces<typed_key_cached_processor>, key<processor_key>>();
+
+  EXPECT_THROW(
+      (container.template register_type<
+          scope<shared>, storage<typed_key_cached_processor_impl>,
+          interfaces<typed_key_cached_processor>, key<processor_key>>()),
+      type_index_already_registered_exception);
+
+  auto processors =
+      container
+          .template resolve<tracked_collection<typed_key_cached_processor *>>(
+              key<processor_key>{});
+  ASSERT_EQ(processors.reserve_count, 1U);
+  ASSERT_EQ(processors.values.size(), 1U);
+  ASSERT_EQ(processors.values[0]->id(), 42);
+  ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
+}
+
+TEST(index_test, child_implicit_typed_key_collection_does_not_merge_parent) {
+  struct processor_key {};
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct parent_processor : processor {
+    int id() const override { return 1; }
+  };
+  struct child_processor : processor {
+    int id() const override { return 2; }
+  };
+
+  container<> parent;
+  container<dynamic_container_traits, std::allocator<char>, decltype(parent)>
+      child(&parent);
+  parent.template register_type<scope<shared>, storage<parent_processor>,
+                                interfaces<processor>, key<processor_key>>();
+  child.template register_type<scope<shared>, storage<child_processor>,
+                               interfaces<processor>, key<processor_key>>();
+
+  auto processors = child.template resolve<tracked_collection<processor *>>(
+      key<processor_key>{});
+
+  ASSERT_EQ(processors.reserve_count, 1U);
+  ASSERT_EQ(processors.values.size(), 1U);
+  ASSERT_EQ(processors.values[0]->id(), 2);
+}
+
+TEST(index_test, implicit_unkeyed_registration_records_no_key_one) {
   runtime_container<> container;
   container.template register_type<scope<shared>,
                                    storage<typed_key_cached_processor_impl>,
@@ -457,7 +729,7 @@ TEST(index_test, explicit_collection_registration_records_no_key_many) {
       container.registry())));
 }
 
-TEST(index_test, legacy_typed_key_registration_records_typed_key_one) {
+TEST(index_test, implicit_typed_key_registration_records_typed_key_one) {
   struct processor_key {};
 
   runtime_container<> container;
@@ -557,7 +829,7 @@ TEST(index_test, associative_many_registration_records_runtime_key_many) {
                std::size_t, many>(container.registry(), std::size_t(7))));
 }
 
-TEST(index_test, lookup_table_counts_multi_identity_entry_once) {
+TEST(index_test, lookup_table_indexes_multi_identity_entry_in_each_bucket) {
   struct processor {};
   struct processor_key {};
 
@@ -573,29 +845,26 @@ TEST(index_test, lookup_table_counts_multi_identity_entry_once) {
 
   ASSERT_TRUE(table.insert(entry));
 
-  auto matches_processor = [](const auto &identity) {
-    return lookup_table_test_table::template matches_no_key<processor, many>(
-               identity) ||
-           lookup_table_test_table::template matches_typed_key<
-               processor, processor_key, many>(identity);
-  };
   bool ambiguous = false;
-  auto *selected = table.find_singular(matches_processor, ambiguous);
+  auto *selected =
+      table.template find_singular_no_key<processor, many>(ambiguous);
   ASSERT_FALSE(ambiguous);
   ASSERT_EQ(selected, &entry);
-  ASSERT_EQ(table.count(matches_processor), 1U);
+  ASSERT_EQ((table.template count_no_key<processor, many>()), 1U);
 
   std::size_t visits = 0;
-  ASSERT_EQ(table.for_each(matches_processor,
-                           [&](auto &selected_entry) {
-                             ++visits;
-                             ASSERT_EQ(&selected_entry, &entry);
-                           }),
+  ASSERT_EQ((table.template for_each_typed_key<processor, processor_key, many>(
+                [&](auto &selected_entry) {
+                  ++visits;
+                  ASSERT_EQ(&selected_entry, &entry);
+                })),
             1U);
   ASSERT_EQ(visits, 1U);
 
   table.erase(entry);
-  ASSERT_EQ(table.count(matches_processor), 0U);
+  ASSERT_EQ((table.template count_no_key<processor, many>()), 0U);
+  ASSERT_EQ((table.template count_typed_key<processor, processor_key, many>()),
+            0U);
 }
 
 TEST(index_test, no_key_many_lookup_covers_empty_exact_ambiguous) {
@@ -1470,10 +1739,16 @@ TEST(index_test, typed_key_many_enumerates_keyed_collection_in_order) {
 
   auto processors = container.template resolve<std::vector<processor *>>(
       key<processor_key>{});
+  auto tracked = container.template resolve<tracked_collection<processor *>>(
+      key<processor_key>{});
 
   ASSERT_EQ(processors.size(), 2U);
   ASSERT_EQ(processors[0]->id(), 1);
   ASSERT_EQ(processors[1]->id(), 2);
+  ASSERT_EQ(tracked.reserve_count, 2U);
+  ASSERT_EQ(tracked.values.size(), 2U);
+  ASSERT_EQ(tracked.values[0]->id(), 1);
+  ASSERT_EQ(tracked.values[1]->id(), 2);
   EXPECT_THROW((container.template resolve<processor &>(key<processor_key>{})),
                type_ambiguous_exception);
 }

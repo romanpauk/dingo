@@ -674,7 +674,12 @@ private:
   std::map<std::type_index, std::unique_ptr<ProcessorBase>> processors_;
 };
 
-container<> container;
+struct traits : dingo::dynamic_container_traits {
+  using lookup_definition_type =
+      dingo::lookups<dingo::collection<ProcessorBase>>;
+};
+
+container<traits> container;
 container
     .register_type<scope<unique>, storage<std::unique_ptr<StringProcessor>>,
                    interfaces<ProcessorBase>>();

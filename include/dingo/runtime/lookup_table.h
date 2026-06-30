@@ -9,6 +9,7 @@
 
 #include <dingo/index/index.h>
 #include <dingo/memory/static_allocator.h>
+#include <dingo/type/dynamic_identity_map.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -209,8 +210,40 @@ public:
           Entry *>>;
   using row_storage = std::vector<Entry *, row_allocator>;
 
+  struct bucket_key {
+    type_index interface_type;
+    key_domain domain;
+    cardinality lookup_cardinality;
+    std::optional<type_index> key_type;
+  };
+
+  struct bucket_key_compare {
+    bool operator()(const bucket_key &lhs, const bucket_key &rhs) const {
+      std::less<type_index> less;
+      if (less(lhs.interface_type, rhs.interface_type)) {
+        return true;
+      }
+      if (less(rhs.interface_type, lhs.interface_type)) {
+        return false;
+      }
+      if (lhs.domain != rhs.domain) {
+        return lhs.domain < rhs.domain;
+      }
+      if (lhs.lookup_cardinality != rhs.lookup_cardinality) {
+        return lhs.lookup_cardinality < rhs.lookup_cardinality;
+      }
+      if (lhs.key_type && rhs.key_type) {
+        return less(*lhs.key_type, *rhs.key_type);
+      }
+      return lhs.key_type.has_value() < rhs.key_type.has_value();
+    }
+  };
+
+  using bucket_map = dynamic_identity_map<bucket_key, row_storage, Allocator,
+                                          bucket_key_compare>;
+
   explicit runtime_lookup_table(Allocator &allocator)
-      : rows_(make_lookup_storage_allocator<row_allocator>(allocator)) {}
+      : allocator_(std::addressof(allocator)), buckets_(allocator) {}
 
   template <typename Interface, typename Cardinality>
   static lookup_identity make_no_key_identity() {
@@ -219,32 +252,12 @@ public:
         runtime_lookup_cardinality_value<Cardinality>(), std::nullopt};
   }
 
-  template <typename Interface, typename Cardinality>
-  static lookup_identity make_legacy_no_key_identity() {
-    return lookup_identity{Rtti::template get_type_index<Interface>(),
-                           key_domain::no_key,
-                           runtime_lookup_cardinality_value<Cardinality>(),
-                           std::nullopt,
-                           runtime_lookup_key_owner{},
-                           false};
-  }
-
   template <typename Interface, typename Key, typename Cardinality>
   static lookup_identity make_typed_key_identity() {
     return lookup_identity{Rtti::template get_type_index<Interface>(),
                            key_domain::typed_key,
                            runtime_lookup_cardinality_value<Cardinality>(),
                            Rtti::template get_type_index<Key>()};
-  }
-
-  template <typename Interface, typename Key, typename Cardinality>
-  static lookup_identity make_legacy_typed_key_identity() {
-    return lookup_identity{Rtti::template get_type_index<Interface>(),
-                           key_domain::typed_key,
-                           runtime_lookup_cardinality_value<Cardinality>(),
-                           Rtti::template get_type_index<Key>(),
-                           runtime_lookup_key_owner{},
-                           false};
   }
 
   template <typename Interface, typename Key, typename Cardinality,
@@ -268,12 +281,11 @@ public:
       }
     }
 
-    if (entry.lookup_identities.empty()) {
-      return true;
-    }
-
     try {
-      rows_.emplace_back(std::addressof(entry));
+      for (const auto &identity : entry.lookup_identities) {
+        auto &rows = bucket(identity);
+        rows.emplace_back(std::addressof(entry));
+      }
     } catch (...) {
       erase(entry);
       throw;
@@ -284,47 +296,95 @@ public:
 
   void erase(Entry &entry) {
     auto *entry_ptr = std::addressof(entry);
-    rows_.erase(std::remove(rows_.begin(), rows_.end(), entry_ptr),
-                rows_.end());
-  }
-
-  template <typename Matcher> Entry *find_singular(Matcher &&matches) const {
-    bool ambiguous = false;
-    return find_singular(std::forward<Matcher>(matches), ambiguous);
-  }
-
-  template <typename Matcher>
-  Entry *find_singular(Matcher &&matches, bool &ambiguous) const {
-    Entry *selected = nullptr;
-    std::size_t match_count = 0;
-    for (auto *entry : rows_) {
-      if (!entry_matches(*entry, matches)) {
-        continue;
-      }
-      ++match_count;
-      if (match_count == 1) {
-        selected = entry;
+    for (auto it = buckets_.begin(); it != buckets_.end();) {
+      auto &rows = it->second;
+      rows.erase(std::remove(rows.begin(), rows.end(), entry_ptr), rows.end());
+      if (rows.empty()) {
+        it = buckets_.erase(it);
+      } else {
+        ++it;
       }
     }
-
-    ambiguous = match_count > 1;
-    return ambiguous ? nullptr : selected;
   }
 
-  template <typename Matcher, typename Fn>
-  std::size_t for_each(Matcher &&matches, Fn &&fn) const {
-    std::size_t count = 0;
-    for (auto *entry : rows_) {
-      if (entry_matches(*entry, matches)) {
-        ++count;
-        fn(*entry);
-      }
-    }
-    return count;
+  template <typename Interface, typename Cardinality>
+  Entry *find_singular_no_key(bool &ambiguous) const {
+    return find_singular_in_bucket(
+        make_no_key_bucket<Interface, Cardinality>(), ambiguous,
+        [](const auto &identity) {
+          return matches_no_key<Interface, Cardinality>(identity);
+        });
   }
 
-  template <typename Matcher> std::size_t count(Matcher &&matches) const {
-    return for_each(std::forward<Matcher>(matches), [](const Entry &) {});
+  template <typename Interface, typename Key, typename Cardinality>
+  Entry *find_singular_typed_key(bool &ambiguous) const {
+    return find_singular_in_bucket(
+        make_typed_key_bucket<Interface, Key, Cardinality>(), ambiguous,
+        [](const auto &identity) {
+          return matches_typed_key<Interface, Key, Cardinality>(identity);
+        });
+  }
+
+  template <typename Interface, typename Key, typename Cardinality,
+            typename KeyValue>
+  Entry *find_singular_runtime_key(const KeyValue &key_value,
+                                   bool &ambiguous) const {
+    return find_singular_in_bucket(
+        make_runtime_key_bucket<Interface, Key, Cardinality>(), ambiguous,
+        [&](const auto &identity) {
+          return matches_runtime_key<Interface, Key, Cardinality>(identity,
+                                                                  key_value);
+        });
+  }
+
+  template <typename Interface, typename Cardinality, typename Fn>
+  std::size_t for_each_no_key(Fn &&fn) const {
+    return for_each_in_bucket(
+        make_no_key_bucket<Interface, Cardinality>(),
+        [](const auto &identity) {
+          return matches_no_key<Interface, Cardinality>(identity);
+        },
+        std::forward<Fn>(fn));
+  }
+
+  template <typename Interface, typename Key, typename Cardinality, typename Fn>
+  std::size_t for_each_typed_key(Fn &&fn) const {
+    return for_each_in_bucket(
+        make_typed_key_bucket<Interface, Key, Cardinality>(),
+        [](const auto &identity) {
+          return matches_typed_key<Interface, Key, Cardinality>(identity);
+        },
+        std::forward<Fn>(fn));
+  }
+
+  template <typename Interface, typename Key, typename Cardinality,
+            typename KeyValue, typename Fn>
+  std::size_t for_each_runtime_key(const KeyValue &key_value, Fn &&fn) const {
+    return for_each_in_bucket(
+        make_runtime_key_bucket<Interface, Key, Cardinality>(),
+        [&](const auto &identity) {
+          return matches_runtime_key<Interface, Key, Cardinality>(identity,
+                                                                  key_value);
+        },
+        std::forward<Fn>(fn));
+  }
+
+  template <typename Interface, typename Cardinality>
+  std::size_t count_no_key() const {
+    return for_each_no_key<Interface, Cardinality>([](const Entry &) {});
+  }
+
+  template <typename Interface, typename Key, typename Cardinality>
+  std::size_t count_typed_key() const {
+    return for_each_typed_key<Interface, Key, Cardinality>(
+        [](const Entry &) {});
+  }
+
+  template <typename Interface, typename Key, typename Cardinality,
+            typename KeyValue>
+  std::size_t count_runtime_key(const KeyValue &key_value) const {
+    return for_each_runtime_key<Interface, Key, Cardinality>(
+        key_value, [](const Entry &) {});
   }
 
   template <typename Interface, typename Cardinality>
@@ -402,8 +462,87 @@ public:
   }
 
 private:
+  static bucket_key make_bucket(const lookup_identity &identity) {
+    return {identity.interface_type, identity.domain,
+            identity.lookup_cardinality, identity.key_type};
+  }
+
+  template <typename Interface, typename Cardinality>
+  static bucket_key make_no_key_bucket() {
+    return {Rtti::template get_type_index<Interface>(), key_domain::no_key,
+            runtime_lookup_cardinality_value<Cardinality>(), std::nullopt};
+  }
+
+  template <typename Interface, typename Key, typename Cardinality>
+  static bucket_key make_typed_key_bucket() {
+    return {Rtti::template get_type_index<Interface>(), key_domain::typed_key,
+            runtime_lookup_cardinality_value<Cardinality>(),
+            Rtti::template get_type_index<Key>()};
+  }
+
+  template <typename Interface, typename Key, typename Cardinality>
+  static bucket_key make_runtime_key_bucket() {
+    using stored_key_type = std::decay_t<Key>;
+    return {Rtti::template get_type_index<Interface>(), key_domain::runtime_key,
+            runtime_lookup_cardinality_value<Cardinality>(),
+            Rtti::template get_type_index<stored_key_type>()};
+  }
+
+  row_storage &bucket(const lookup_identity &identity) {
+    auto resolved_bucket = make_bucket(identity);
+    auto rows = buckets_.get(resolved_bucket);
+    if (rows) {
+      return *rows;
+    }
+    return buckets_
+        .insert(std::move(resolved_bucket),
+                make_lookup_storage_allocator<row_allocator>(*allocator_))
+        .first;
+  }
+
+  template <typename Matches>
+  Entry *find_singular_in_bucket(const bucket_key &resolved_bucket,
+                                 bool &ambiguous, Matches &&matches) const {
+    Entry *selected = nullptr;
+    std::size_t match_count = 0;
+    auto *rows = buckets_.get(resolved_bucket);
+    if (rows) {
+      for (auto *entry : *rows) {
+        if (!entry_matches(*entry, matches)) {
+          continue;
+        }
+        ++match_count;
+        if (match_count == 1) {
+          selected = entry;
+        }
+      }
+    }
+    ambiguous = match_count > 1;
+    return ambiguous ? nullptr : selected;
+  }
+
+  template <typename Matches, typename Fn>
+  std::size_t for_each_in_bucket(const bucket_key &resolved_bucket,
+                                 Matches &&matches, Fn &&fn) const {
+    std::size_t count = 0;
+    auto *rows = buckets_.get(resolved_bucket);
+    if (rows) {
+      for (auto *entry : *rows) {
+        if (entry_matches(*entry, matches)) {
+          ++count;
+          fn(*entry);
+        }
+      }
+    }
+    return count;
+  }
+
   bool conflicts(const Entry &entry, const lookup_identity &identity) const {
-    for (auto *existing_entry : rows_) {
+    auto *rows = buckets_.get(make_bucket(identity));
+    if (!rows) {
+      return false;
+    }
+    for (auto *existing_entry : *rows) {
       for (const auto &existing_identity : existing_entry->lookup_identities) {
         if (!identity_lookup_value_matches(identity, existing_identity)) {
           continue;
@@ -421,7 +560,8 @@ private:
     return false;
   }
 
-  row_storage rows_;
+  Allocator *allocator_;
+  bucket_map buckets_;
 };
 
 } // namespace dingo::detail

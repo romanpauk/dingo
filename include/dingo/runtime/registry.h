@@ -581,7 +581,7 @@ protected:
     using entry_iterator = typename entry_list::iterator;
 
     runtime_type_bindings(allocator_type &allocator)
-        : allocator_(std::addressof(allocator)), bindings(allocator),
+        : allocator_(std::addressof(allocator)),
           entries(detail::make_lookup_storage_allocator<entry_allocator>(
               allocator)),
           lookup_table(allocator) {
@@ -618,9 +618,6 @@ protected:
     }
 
     allocator_type *allocator_;
-    typename ContainerTraits::template type_map_type<registered_binding_entry *,
-                                                     allocator_type>
-        bindings;
     entry_list entries;
     lookup_table_type lookup_table;
   };
@@ -854,36 +851,36 @@ protected:
     return state ? state->type_bindings.template get<lookup_type>() : nullptr;
   }
 
-  template <typename Entry>
-  static bool runtime_collection_entry_matches(const Entry &, none_t) {
-    return true;
-  }
-
-  template <typename Entry, typename Key>
-  static bool runtime_collection_entry_matches(const Entry &entry, key<Key>) {
-    return entry.key_type &&
-           *entry.key_type == rtti_type::template get_type_index<key<Key>>();
-  }
-
-  template <typename T, typename Fn, typename IdType>
-  std::size_t append_normal_binding_collection(runtime_type_bindings &data,
-                                               T &results,
-                                               runtime_context &context,
-                                               Fn &&fn, IdType id) {
+  template <typename T, typename Fn>
+  std::size_t append_no_key_one_collection(runtime_type_bindings &data,
+                                           T &results, runtime_context &context,
+                                           Fn &&fn) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
+    using index_interface_type = normalized_type_t<resolve_type>;
 
-    std::size_t count = 0;
-    for (auto &&p : data.bindings) {
-      auto *entry = p.second;
-      if (!runtime_collection_entry_matches(*entry, id)) {
-        continue;
-      }
-      ++count;
-      fn(results,
-         resolve_collection_type<resolve_type>(*entry->binding, context));
-    }
-    return count;
+    return data.lookup_table
+        .template for_each_no_key<index_interface_type, ::dingo::one>(
+            [&](auto &entry) {
+              fn(results, resolve_collection_type<resolve_type>(*entry.binding,
+                                                                context));
+            });
+  }
+
+  template <typename T, typename Key, typename Fn>
+  std::size_t
+  append_typed_key_one_collection(runtime_type_bindings &data, T &results,
+                                  runtime_context &context, Fn &&fn) {
+    using collection_type = collection_traits<T>;
+    using resolve_type = typename collection_type::resolve_type;
+    using index_interface_type = normalized_type_t<resolve_type>;
+
+    return data.lookup_table
+        .template for_each_typed_key<index_interface_type, Key, ::dingo::one>(
+            [&](auto &entry) {
+              fn(results, resolve_collection_type<resolve_type>(*entry.binding,
+                                                                context));
+            });
   }
 
   template <typename T, typename Fn, typename IdType>
@@ -907,15 +904,12 @@ protected:
     } else {
       if constexpr (std::is_same_v<typename lookup_entry::cardinality,
                                    ::dingo::many>) {
-        auto matches = [&](const auto &identity) {
-          return lookup_table_type::template matches_runtime_key<
-              index_interface_type, index_key_type, ::dingo::many>(identity,
-                                                                   id);
-        };
-        return data.lookup_table.for_each(matches, [&](auto &entry) {
-          fn(results,
-             resolve_collection_type<resolve_type>(*entry.binding, context));
-        });
+        return data.lookup_table.template for_each_runtime_key<
+            index_interface_type, index_key_type, ::dingo::many>(
+            id, [&](auto &entry) {
+              fn(results, resolve_collection_type<resolve_type>(*entry.binding,
+                                                                context));
+            });
       } else {
         (void)results;
         (void)context;
@@ -943,8 +937,8 @@ protected:
 
     if constexpr (std::is_void_v<many_entry>) {
       if constexpr (std::is_void_v<one_entry>) {
-        return append_normal_binding_collection(data, results, context,
-                                                std::forward<Fn>(fn), none_t{});
+        return append_no_key_one_collection(data, results, context,
+                                            std::forward<Fn>(fn));
       } else {
         (void)results;
         (void)context;
@@ -952,15 +946,12 @@ protected:
         return 0;
       }
     } else {
-      auto matches = [](const auto &identity) {
-        return lookup_table_type::template matches_no_key<index_interface_type,
-                                                          ::dingo::many>(
-            identity);
-      };
-      return data.lookup_table.for_each(matches, [&](auto &entry) {
-        fn(results,
-           resolve_collection_type<resolve_type>(*entry.binding, context));
-      });
+      return data.lookup_table
+          .template for_each_no_key<index_interface_type, ::dingo::many>(
+              [&](auto &entry) {
+                fn(results, resolve_collection_type<resolve_type>(
+                                *entry.binding, context));
+              });
     }
   }
 
@@ -983,8 +974,8 @@ protected:
 
     if constexpr (std::is_void_v<many_entry>) {
       if constexpr (std::is_void_v<one_entry>) {
-        return append_normal_binding_collection(
-            data, results, context, std::forward<Fn>(fn), key_id_type{});
+        return append_typed_key_one_collection<T, key_type>(
+            data, results, context, std::forward<Fn>(fn));
       } else {
         (void)results;
         (void)context;
@@ -992,27 +983,32 @@ protected:
         return 0;
       }
     } else {
-      auto matches = [](const auto &identity) {
-        return lookup_table_type::template matches_typed_key<
-            index_interface_type, key_type, ::dingo::many>(identity);
-      };
-      return data.lookup_table.for_each(matches, [&](auto &entry) {
+      return data.lookup_table.template for_each_typed_key<
+          index_interface_type, key_type, ::dingo::many>([&](auto &entry) {
         fn(results,
            resolve_collection_type<resolve_type>(*entry.binding, context));
       });
     }
   }
 
-  template <typename T, typename IdType>
-  std::size_t count_normal_binding_collection(runtime_type_bindings &data,
-                                              IdType id) {
-    std::size_t count = 0;
-    for (auto &&p : data.bindings) {
-      if (runtime_collection_entry_matches(*p.second, id)) {
-        ++count;
-      }
-    }
-    return count;
+  template <typename T>
+  std::size_t count_no_key_one_collection(runtime_type_bindings &data) {
+    using collection_type = collection_traits<T>;
+    using resolve_type = typename collection_type::resolve_type;
+    using index_interface_type = normalized_type_t<resolve_type>;
+
+    return data.lookup_table
+        .template count_no_key<index_interface_type, ::dingo::one>();
+  }
+
+  template <typename T, typename Key>
+  std::size_t count_typed_key_one_collection(runtime_type_bindings &data) {
+    using collection_type = collection_traits<T>;
+    using resolve_type = typename collection_type::resolve_type;
+    using index_interface_type = normalized_type_t<resolve_type>;
+
+    return data.lookup_table
+        .template count_typed_key<index_interface_type, Key, ::dingo::one>();
   }
 
   template <typename T, typename IdType>
@@ -1031,12 +1027,8 @@ protected:
     } else {
       if constexpr (std::is_same_v<typename lookup_entry::cardinality,
                                    ::dingo::many>) {
-        auto matches = [&](const auto &identity) {
-          return lookup_table_type::template matches_runtime_key<
-              index_interface_type, index_key_type, ::dingo::many>(identity,
-                                                                   id);
-        };
-        return data.lookup_table.count(matches);
+        return data.lookup_table.template count_runtime_key<
+            index_interface_type, index_key_type, ::dingo::many>(id);
       } else {
         return 0;
       }
@@ -1059,17 +1051,13 @@ protected:
 
     if constexpr (std::is_void_v<many_entry>) {
       if constexpr (std::is_void_v<one_entry>) {
-        return data.bindings.size();
+        return count_no_key_one_collection<T>(data);
       } else {
         return 0;
       }
     } else {
-      auto matches = [](const auto &identity) {
-        return lookup_table_type::template matches_no_key<index_interface_type,
-                                                          ::dingo::many>(
-            identity);
-      };
-      return data.lookup_table.count(matches);
+      return data.lookup_table
+          .template count_no_key<index_interface_type, ::dingo::many>();
     }
   }
 
@@ -1090,16 +1078,13 @@ protected:
 
     if constexpr (std::is_void_v<many_entry>) {
       if constexpr (std::is_void_v<one_entry>) {
-        return count_normal_binding_collection<T>(data, key_id_type{});
+        return count_typed_key_one_collection<T, key_type>(data);
       } else {
         return 0;
       }
     } else {
-      auto matches = [](const auto &identity) {
-        return lookup_table_type::template matches_typed_key<
-            index_interface_type, key_type, ::dingo::many>(identity);
-      };
-      return data.lookup_table.count(matches);
+      return data.lookup_table.template count_typed_key<
+          index_interface_type, key_type, ::dingo::many>();
     }
   }
 
@@ -1150,36 +1135,16 @@ private:
       using index_interface_type = normalized_type_t<Request>;
       using entries =
           detail::normalize_lookup_definitions_t<lookup_definition_type>;
-      using one_entry =
-          detail::selected_no_key_lookup_entry_t<index_interface_type,
-                                                 ::dingo::one, entries>;
       using many_entry =
           detail::selected_no_key_lookup_entry_t<index_interface_type,
                                                  ::dingo::many, entries>;
 
-      if constexpr (!std::is_void_v<one_entry>) {
-        return select_lookup_table_binding(data, [](const auto &identity) {
-          return lookup_table_type::template matches_no_key<
-              index_interface_type, ::dingo::one>(identity);
-        });
-      } else if constexpr (!std::is_void_v<many_entry>) {
-        return select_lookup_table_binding(data, [](const auto &identity) {
-          return lookup_table_type::template matches_no_key<
-              index_interface_type, ::dingo::many>(identity);
-        });
+      if constexpr (!std::is_void_v<many_entry>) {
+        return select_no_key_lookup_table_binding<index_interface_type,
+                                                  ::dingo::many>(data);
       } else {
-        return detail::make_runtime_selection<runtime_binding_interface_type,
-                                              binding_cache_state *>(
-            [&](auto &&select) {
-              if (!data) {
-                return;
-              }
-
-              for (auto &&p : data->bindings) {
-                auto *entry = p.second;
-                select(*entry->binding, entry);
-              }
-            });
+        return select_no_key_lookup_table_binding<index_interface_type,
+                                                  ::dingo::one>(data);
       }
     } else if constexpr (detail::is_typed_key_v<IdType>) {
       using key_id_type = std::decay_t<IdType>;
@@ -1192,35 +1157,14 @@ private:
       using many_entry = detail::selected_typed_key_lookup_entry_t<
           index_interface_type, key_type, ::dingo::many, entries>;
 
-      if constexpr (!std::is_void_v<one_entry>) {
-        return select_lookup_table_binding(data, [](const auto &identity) {
-          return lookup_table_type::template matches_typed_key<
-              index_interface_type, key_type, ::dingo::one>(identity);
-        });
-      } else if constexpr (!std::is_void_v<many_entry>) {
-        return select_lookup_table_binding(data, [](const auto &identity) {
-          return lookup_table_type::template matches_typed_key<
-              index_interface_type, key_type, ::dingo::many>(identity);
-        });
+      if constexpr (std::is_void_v<one_entry> && !std::is_void_v<many_entry>) {
+        return select_typed_key_lookup_table_binding<index_interface_type,
+                                                     key_type, ::dingo::many>(
+            data);
       } else {
-        return detail::make_runtime_selection<runtime_binding_interface_type,
-                                              binding_cache_state *>(
-            [&](auto &&select) {
-              if (!data) {
-                return;
-              }
-
-              for (auto &&p : data->bindings) {
-                auto *entry = p.second;
-                if (!entry->key_type ||
-                    !(*entry->key_type ==
-                      rtti_type::template get_type_index<key_id_type>())) {
-                  continue;
-                }
-
-                select(*entry->binding, entry);
-              }
-            });
+        return select_typed_key_lookup_table_binding<index_interface_type,
+                                                     key_type, ::dingo::one>(
+            data);
       }
     } else {
       using index_key_type = std::decay_t<IdType>;
@@ -1241,25 +1185,61 @@ private:
         }
       } else {
         using index_cardinality = typename lookup_entry::cardinality;
-        return select_lookup_table_binding(data, [&](const auto &identity) {
-          return lookup_table_type::template matches_runtime_key<
-              index_interface_type, index_key_type, index_cardinality>(identity,
-                                                                       id);
-        });
+        return select_runtime_key_lookup_table_binding<
+            index_interface_type, index_key_type, index_cardinality>(data, id);
       }
     }
   }
 
-  template <typename Matcher>
-  runtime_selection select_lookup_table_binding(runtime_type_bindings *data,
-                                                Matcher &&matches) {
+  template <typename Interface, typename Cardinality>
+  runtime_selection
+  select_no_key_lookup_table_binding(runtime_type_bindings *data) {
     registered_binding_entry *selected = nullptr;
     bool ambiguous = false;
     if (data) {
-      selected = data->lookup_table.find_singular(
-          std::forward<Matcher>(matches), ambiguous);
+      selected =
+          data->lookup_table
+              .template find_singular_no_key<Interface, Cardinality>(ambiguous);
     }
 
+    return make_lookup_table_selection(selected, ambiguous);
+  }
+
+  template <typename Interface, typename Key, typename Cardinality>
+  runtime_selection
+  select_typed_key_lookup_table_binding(runtime_type_bindings *data) {
+    registered_binding_entry *selected = nullptr;
+    bool ambiguous = false;
+    if (data) {
+      selected =
+          data->lookup_table
+              .template find_singular_typed_key<Interface, Key, Cardinality>(
+                  ambiguous);
+    }
+
+    return make_lookup_table_selection(selected, ambiguous);
+  }
+
+  template <typename Interface, typename Key, typename Cardinality,
+            typename KeyValue>
+  runtime_selection
+  select_runtime_key_lookup_table_binding(runtime_type_bindings *data,
+                                          const KeyValue &key_value) {
+    registered_binding_entry *selected = nullptr;
+    bool ambiguous = false;
+    if (data) {
+      selected =
+          data->lookup_table
+              .template find_singular_runtime_key<Interface, Key, Cardinality>(
+                  key_value, ambiguous);
+    }
+
+    return make_lookup_table_selection(selected, ambiguous);
+  }
+
+  runtime_selection
+  make_lookup_table_selection(registered_binding_entry *selected,
+                              bool ambiguous) {
     if (ambiguous) {
       return runtime_selection::ambiguity();
     }
@@ -1384,11 +1364,6 @@ private:
         ensure_runtime_bindings().type_bindings.template insert<TypeInterface>(
             get_allocator());
     auto &data = pb.first;
-    using binding_registration_key =
-        std::conditional_t<is_none_v<std::decay_t<KeyIdType>>,
-                           type_list<TypeInterface, typename TypeStorage::type>,
-                           type_list<TypeInterface, typename TypeStorage::type,
-                                     std::decay_t<KeyIdType>>>;
 
     if constexpr (!is_none_v<std::decay_t<IdType>>) {
       auto resolved_key_type = [&]() {
@@ -1477,8 +1452,8 @@ private:
         auto resolved_storage_type =
             rtti_type::template get_type_index<typename TypeStorage::type>();
         auto lookup_id =
-            lookup_table_type::template make_legacy_no_key_identity<
-                TypeInterface, ::dingo::one>();
+            lookup_table_type::template make_no_key_identity<TypeInterface,
+                                                             ::dingo::one>();
         auto inserted_entry = data.emplace_entry(
             std::forward<Binding>(binding), std::move(resolved_storage_type),
             std::nullopt, std::move(lookup_id));
@@ -1492,17 +1467,6 @@ private:
                 TypeInterface, typename TypeStorage::type>();
           }
           lookup_rows_registered = true;
-          auto inserted_binding =
-              data.bindings.template insert<binding_registration_key>(
-                  std::addressof(*inserted_entry));
-          if (!inserted_binding.second) {
-            data.erase_lookup_rows(std::addressof(*inserted_entry));
-            data.erase_entry(inserted_entry);
-            binding_registered = false;
-            lookup_rows_registered = false;
-            throw detail::make_type_already_registered_exception<
-                TypeInterface, typename TypeStorage::type>();
-          }
         } catch (...) {
           if (binding_registered) {
             if (lookup_rows_registered) {
@@ -1557,9 +1521,8 @@ private:
       } else {
         auto resolved_storage_type =
             rtti_type::template get_type_index<typename TypeStorage::type>();
-        auto lookup_id =
-            lookup_table_type::template make_legacy_typed_key_identity<
-                TypeInterface, typed_key_type, ::dingo::one>();
+        auto lookup_id = lookup_table_type::template make_typed_key_identity<
+            TypeInterface, typed_key_type, ::dingo::one>();
         auto inserted_entry = data.emplace_entry(
             std::forward<Binding>(binding), std::move(resolved_storage_type),
             rtti_type::template get_type_index<std::decay_t<KeyIdType>>(),
@@ -1575,18 +1538,6 @@ private:
                 std::decay_t<KeyIdType>>();
           }
           lookup_rows_registered = true;
-          auto inserted_binding =
-              data.bindings.template insert<binding_registration_key>(
-                  std::addressof(*inserted_entry));
-          if (!inserted_binding.second) {
-            data.erase_lookup_rows(std::addressof(*inserted_entry));
-            data.erase_entry(inserted_entry);
-            binding_registered = false;
-            lookup_rows_registered = false;
-            throw detail::make_type_index_already_registered_exception<
-                TypeInterface, typename TypeStorage::type,
-                std::decay_t<KeyIdType>>();
-          }
         } catch (...) {
           if (binding_registered) {
             if (lookup_rows_registered) {

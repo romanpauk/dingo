@@ -14,11 +14,13 @@ Use lookups when:
 - the caller chooses the implementation by name or numeric ID
 - the binding should remain separate from unkeyed resolution
 
-Selector definitions are scoped to the interface they serve. Every indexed
+Lookup definitions are scoped to the interface they serve. Every indexed
 registration or lookup requires a matching lookup definition.
 
-Selector definitions can also make unkeyed runtime registrations explicit for an
-interface:
+Unkeyed runtime registrations without an explicit lookup are treated as
+`no_key`/`one`: a second registration for the same interface is rejected,
+regardless of storage type. Declare `collection<I>` when an interface is meant
+to have multiple unkeyed implementations:
 
 ```c++
 struct container_traits : dynamic_container_traits {
@@ -29,8 +31,7 @@ struct container_traits : dynamic_container_traits {
 `collection<I>` makes unkeyed collection membership explicit:
 `resolve<std::vector<I *>>()` enumerates the registrations in registration
 order, while singular `resolve<I &>()` succeeds only when exactly one
-registration matches. If no `no_key` lookup is declared for an interface,
-unkeyed registration and collection resolution keep their existing behavior.
+registration matches.
 
 Runtime-keyed lookups use `associative<I, K>` for unique lookup and
 `associative<I, K, many>` for keyed collections:
@@ -57,12 +58,16 @@ singular identity for that interface and key type.
 `lookup<I, typed_key<K>, many>` makes `resolve<std::vector<I *>>(key<K>{})`
 enumerate keyed collection members in registration order. A singular typed-key
 resolve succeeds only when the matching `many` lookup contains exactly one
-registration. If no `typed_key` lookup is declared for an interface/key pair,
-typed-key registration and resolution keep their existing behavior.
+registration.
 
-Selector lookup storage is internal. Applications should declare the interface,
-key domain, and cardinality they need instead of selecting storage for lookup
-rows.
+When no explicit typed-key lookup is declared, `key<K>` registrations still use
+implicit `typed_key<K>`/`one`: a second registration for the same interface and
+key type is rejected, regardless of storage type. Use
+`lookup<I, typed_key<K>, many>` when one typed key should hold multiple
+implementations.
+
+Lookup storage is internal. Applications should declare the interface, key
+domain, and cardinality they need instead of selecting storage for lookup rows.
 
 Constructor dependencies can also bind to a fixed indexed key:
 
