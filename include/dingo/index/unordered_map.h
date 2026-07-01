@@ -22,8 +22,6 @@ namespace detail {
 template <typename Key, typename Value, typename Allocator>
 struct associative_index_storage_type<std::unordered_map, Key, Value,
                                       Allocator> {
-  static_assert(!is_static_allocator_v<Allocator>);
-
   using allocator_type = typename std::allocator_traits<
       Allocator>::template rebind_alloc<std::pair<const Key, Value>>;
   using type = std::unordered_map<Key, Value, std::hash<Key>,

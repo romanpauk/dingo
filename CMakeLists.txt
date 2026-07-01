@@ -123,7 +123,6 @@ if(DINGO_DEVELOPMENT_MODE)
         memory/allocator.h
         memory/arena_allocator.h
         memory/object_lifetime.h
-        memory/static_allocator.h
         registration/annotated.h
         registration/collection_traits.h
         registration/constructor.h

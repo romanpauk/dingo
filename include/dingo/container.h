@@ -22,7 +22,6 @@
 #include <dingo/factory/invoke.h>
 #include <dingo/index/index.h>
 #include <dingo/memory/allocator.h>
-#include <dingo/memory/static_allocator.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/registration/requirements.h>

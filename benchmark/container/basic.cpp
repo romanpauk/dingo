@@ -9,7 +9,7 @@
 
 #include <dingo/container.h>
 #include <dingo/memory/aligned_storage.h>
-#include <dingo/rtti/static_provider.h>
+#include <dingo/rtti/typeid_provider.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 #include <dingo/type/type_map.h>
@@ -113,7 +113,10 @@ struct basic_unique_resolver {
 private:
   std::unique_ptr<basic_factory> factory_;
   void *(*resolve_call_)(void *);
-  dingo::static_type_map<void *, void, std::allocator<void>> cache_;
+  std::allocator<char> allocator_;
+  dingo::dynamic_type_map<void *, dingo::rtti<dingo::typeid_provider>,
+                          std::allocator<char>>
+      cache_{allocator_};
 };
 
 struct basic_shared_resolver {
@@ -159,7 +162,10 @@ private:
   std::unique_ptr<basic_factory> factory_;
   void *(*resolve_call_)(void *);
   void *cached_ = nullptr;
-  dingo::static_type_map<void *, void, std::allocator<void>> cache_;
+  std::allocator<char> allocator_;
+  dingo::dynamic_type_map<void *, dingo::rtti<dingo::typeid_provider>,
+                          std::allocator<char>>
+      cache_{allocator_};
 };
 
 bool is_empty(const std::string &val) { return val.empty(); }
@@ -304,7 +310,7 @@ BENCHMARK_TEMPLATE(basic_shared_resolve4, int)->UseRealTime();
 BENCHMARK_TEMPLATE(basic_shared_resolve4, std::string)->UseRealTime();
 
 template <bool Cache, typename Tag = void>
-struct container_traits : dingo::static_container_traits<Tag> {
+struct container_traits : dingo::dynamic_container_traits {
   static constexpr bool cache_enabled = Cache;
   template <typename TagT> using rebind_t = container_traits<Cache, TagT>;
   using tag_type = Tag;

@@ -10,7 +10,6 @@
 #include <dingo/core/config.h>
 
 #include <dingo/index/index.h>
-#include <dingo/memory/static_allocator.h>
 
 #include <map>
 
@@ -23,8 +22,6 @@ namespace detail {
 template <template <typename...> typename Container, typename Key,
           typename Value, typename Allocator>
 struct associative_index_storage_type {
-  static_assert(!is_static_allocator_v<Allocator>);
-
   using allocator_type = typename std::allocator_traits<
       Allocator>::template rebind_alloc<std::pair<const Key, Value>>;
   using type = Container<Key, Value, std::less<Key>, allocator_type>;
