@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <map>
 #include <memory>
@@ -25,13 +26,18 @@ inline int custom_lookup_backend_insertions = 0;
 inline int operator_lookup_backend_insertions = 0;
 
 struct custom_lookup_backend {
-  template <typename Key, typename Rows, typename Allocator> class storage {
-    using value_type = std::pair<const Key, Rows>;
+  template <typename Key, typename Mapped, typename Cardinality,
+            typename Allocator>
+  class storage {
+    using value_type = std::pair<const Key, Mapped>;
     using storage_allocator = typename std::conditional_t<
         is_static_allocator_v<Allocator>, std::allocator<value_type>,
         typename std::allocator_traits<Allocator>::template rebind_alloc<
             value_type>>;
-    using storage_type = std::map<Key, Rows, std::less<Key>, storage_allocator>;
+    using storage_type = std::conditional_t<
+        std::is_same_v<Cardinality, one>,
+        std::map<Key, Mapped, std::less<Key>, storage_allocator>,
+        std::multimap<Key, Mapped, std::less<Key>, storage_allocator>>;
 
   public:
     using iterator = typename storage_type::iterator;
@@ -49,13 +55,27 @@ struct custom_lookup_backend {
     iterator end() { return values_.end(); }
     const_iterator end() const { return values_.end(); }
 
-    template <typename... Args>
-    auto try_emplace(const Key &key, Args &&...args) {
-      ++custom_lookup_backend_insertions;
-      return values_.try_emplace(key, std::forward<Args>(args)...);
+    std::pair<iterator, iterator> equal_range(const Key &key) {
+      return values_.equal_range(key);
     }
 
-    iterator erase(iterator it) { return values_.erase(it); }
+    std::pair<const_iterator, const_iterator>
+    equal_range(const Key &key) const {
+      return values_.equal_range(key);
+    }
+
+    template <typename Value>
+    std::pair<iterator, bool> try_emplace(const Key &key, Value &&value) {
+      ++custom_lookup_backend_insertions;
+      return values_.try_emplace(key, std::forward<Value>(value));
+    }
+
+    template <typename Value> iterator emplace(const Key &key, Value &&value) {
+      ++custom_lookup_backend_insertions;
+      return values_.emplace(key, std::forward<Value>(value));
+    }
+
+    void erase(iterator handle) { values_.erase(handle); }
 
   private:
     storage_type values_;
@@ -63,13 +83,18 @@ struct custom_lookup_backend {
 };
 
 struct operator_lookup_backend {
-  template <typename Key, typename Rows, typename Allocator> class storage {
-    using value_type = std::pair<const Key, Rows>;
+  template <typename Key, typename Mapped, typename Cardinality,
+            typename Allocator>
+  class storage {
+    using value_type = std::pair<const Key, Mapped>;
     using storage_allocator = typename std::conditional_t<
         is_static_allocator_v<Allocator>, std::allocator<value_type>,
         typename std::allocator_traits<Allocator>::template rebind_alloc<
             value_type>>;
-    using storage_type = std::map<Key, Rows, std::less<Key>, storage_allocator>;
+    using storage_type = std::conditional_t<
+        std::is_same_v<Cardinality, one>,
+        std::map<Key, Mapped, std::less<Key>, storage_allocator>,
+        std::multimap<Key, Mapped, std::less<Key>, storage_allocator>>;
 
   public:
     using iterator = typename storage_type::iterator;
@@ -85,17 +110,30 @@ struct operator_lookup_backend {
     iterator end() { return values_.end(); }
     const_iterator end() const { return values_.end(); }
 
-    template <typename... Args>
-    auto try_emplace(const Key &key, Args &&...args) {
-      return values_.try_emplace(key, std::forward<Args>(args)...);
+    std::pair<iterator, iterator> equal_range(const Key &key) {
+      return values_.equal_range(key);
     }
 
-    Rows &operator[](const Key &key) {
+    std::pair<const_iterator, const_iterator>
+    equal_range(const Key &key) const {
+      return values_.equal_range(key);
+    }
+
+    template <typename Value>
+    std::pair<iterator, bool> try_emplace(const Key &key, Value &&value) {
+      return values_.try_emplace(key, std::forward<Value>(value));
+    }
+
+    template <typename Value> iterator emplace(const Key &key, Value &&value) {
+      return values_.emplace(key, std::forward<Value>(value));
+    }
+
+    void erase(iterator handle) { values_.erase(handle); }
+
+    Mapped &operator[](const Key &key) {
       ++operator_lookup_backend_insertions;
       return values_[key];
     }
-
-    iterator erase(iterator it) { return values_.erase(it); }
 
   private:
     storage_type values_;
@@ -132,7 +170,7 @@ TEST(associative_backend_test, unordered_one_uses_runtime_key_lookup) {
       type_index_already_registered_exception);
 }
 
-TEST(associative_backend_test, unordered_many_preserves_key_order) {
+TEST(associative_backend_test, unordered_many_resolves_duplicate_key_entries) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -161,8 +199,12 @@ TEST(associative_backend_test, unordered_many_preserves_key_order) {
       container.template resolve<std::vector<processor *>>(std::size_t(7));
 
   ASSERT_EQ(values.size(), 2);
-  ASSERT_EQ(values[0]->id(), 1);
-  ASSERT_EQ(values[1]->id(), 2);
+  std::vector<int> ids;
+  for (auto *value : values) {
+    ids.push_back(value->id());
+  }
+  std::sort(ids.begin(), ids.end());
+  ASSERT_EQ(ids, (std::vector<int>{1, 2}));
   EXPECT_THROW((container.template resolve<processor &>(std::size_t(7))),
                type_ambiguous_exception);
 }
@@ -231,15 +273,25 @@ TEST(associative_backend_test, array_many_uses_dense_key_rows) {
       container.template resolve<std::vector<processor *>>(std::size_t(2));
 
   ASSERT_EQ(values.size(), 2);
-  ASSERT_EQ(values[0]->id(), 1);
-  ASSERT_EQ(values[1]->id(), 2);
+  std::vector<int> ids;
+  for (auto *value : values) {
+    ids.push_back(value->id());
+  }
+  std::sort(ids.begin(), ids.end());
+  ASSERT_EQ(ids, (std::vector<int>{1, 2}));
   EXPECT_THROW((container.template resolve<processor &>(std::size_t(2))),
                type_ambiguous_exception);
-  EXPECT_THROW(
-      (container.template register_indexed_type<
-          scope<shared>, storage<first_processor>, interfaces<processor>>(
-          std::size_t(2))),
-      type_index_already_registered_exception);
+  container.template register_indexed_type<
+      scope<shared>, storage<first_processor>, interfaces<processor>>(
+      std::size_t(2));
+  values = container.template resolve<std::vector<processor *>>(std::size_t(2));
+  ASSERT_EQ(values.size(), 3);
+  ids.clear();
+  for (auto *value : values) {
+    ids.push_back(value->id());
+  }
+  std::sort(ids.begin(), ids.end());
+  ASSERT_EQ(ids, (std::vector<int>{1, 1, 2}));
 
   container.template register_indexed_type<
       scope<shared>, storage<first_processor>, interfaces<processor>>(
@@ -275,6 +327,43 @@ TEST(associative_backend_test, custom_backend_uses_stl_like_try_emplace) {
   ASSERT_GT(custom_lookup_backend_constructions, 0);
   ASSERT_GT(custom_lookup_backend_insertions, 0);
   ASSERT_EQ(container.template resolve<processor &>(7).id(), 1);
+}
+
+TEST(associative_backend_test, custom_backend_storage_uses_arbitrary_mapped) {
+  struct mapped_value {
+    int value;
+  };
+
+  custom_lookup_backend_constructions = 0;
+  custom_lookup_backend_insertions = 0;
+
+  std::allocator<char> allocator;
+  custom_lookup_backend::storage<int, mapped_value, one, std::allocator<char>>
+      one_storage(allocator);
+
+  auto [first_it, first_inserted] =
+      one_storage.try_emplace(7, mapped_value{11});
+  ASSERT_TRUE(first_inserted);
+  ASSERT_EQ(first_it->second.value, 11);
+  auto [second_it, second_inserted] =
+      one_storage.try_emplace(7, mapped_value{22});
+  ASSERT_FALSE(second_inserted);
+  ASSERT_EQ(second_it->second.value, 11);
+
+  custom_lookup_backend::storage<int, mapped_value, many, std::allocator<char>>
+      many_storage(allocator);
+  many_storage.emplace(7, mapped_value{11});
+  many_storage.emplace(7, mapped_value{22});
+
+  auto [first, last] = many_storage.equal_range(7);
+  std::vector<int> values;
+  for (auto it = first; it != last; ++it) {
+    values.push_back(it->second.value);
+  }
+  std::sort(values.begin(), values.end());
+  ASSERT_EQ(values, (std::vector<int>{11, 22}));
+  ASSERT_GT(custom_lookup_backend_constructions, 0);
+  ASSERT_GT(custom_lookup_backend_insertions, 0);
 }
 
 TEST(associative_backend_test,

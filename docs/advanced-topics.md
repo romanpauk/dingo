@@ -64,13 +64,15 @@ struct container_traits : dynamic_container_traits {
 ```
 
 Custom backends can be used as `associative<MyKey, IService, many, my_backend>`.
-A backend tag provides `Backend::template storage<Key, Rows, Allocator>`, where
-`Rows` is the library-owned row collection. The storage is constructed with the
-container allocator and should look like an STL associative container:
-`find(key)`, `end()`, `erase(iterator)`, and either `operator[](key)` or
-`try_emplace(key, rows-constructor-args...)`. When both insertion operations
-exist, Dingo uses `try_emplace` so the internal row collection is constructed
-with the container allocator.
+A backend tag provides
+`Backend::template storage<Key, Mapped, Cardinality, Allocator>`, where Dingo
+chooses `Mapped` for its internal lookup entry pointer. The storage is
+constructed with the container allocator and should expose an STL-like mapped
+container API. For `one`, Dingo uses `find(key)`, `end()`,
+`try_emplace(key, mapped)`, and `erase(iterator)`. For `many`, Dingo uses
+`equal_range(key)`, `emplace(key, mapped)`, and `erase(iterator)`. Collection
+iteration order is defined by the backend; `many` backends are not required to
+preserve registration order.
 
 Typed-key registrations can also use explicit views:
 
