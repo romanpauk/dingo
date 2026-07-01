@@ -63,6 +63,7 @@ add_executable(dingo_unit_test
     container/incomplete_resolve_fixture.cpp
     factory/constructor_detection.cpp
     index/index.cpp
+    memory/arena_allocator.cpp
     registration/binding_graph.cpp
     registration/static_bindings_source.cpp
     registration/static_parent_container.cpp
