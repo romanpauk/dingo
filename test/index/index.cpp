@@ -1045,6 +1045,92 @@ TEST(index_test, lookup_table_one_bucket_rejects_duplicate_without_row_growth) {
   ASSERT_EQ(state.deallocations, state.allocations);
 }
 
+TEST(index_test, selector_storage_no_key_one_rejects_duplicate_inline) {
+  struct processor {};
+  struct first_storage {};
+  struct second_storage {};
+  using lookup_entry = detail::lookup_entry<processor, no_key, one, ordered>;
+  using storage_type =
+      detail::selector_storage<lookup_entry, lookup_table_test_entry,
+                               lookup_table_test_allocator>;
+
+  test_allocator_state state;
+  lookup_table_test_allocator allocator(&state);
+  storage_type storage(allocator);
+  lookup_table_test_entry first_entry(
+      lookup_table_test_table::template make_no_key_identity<processor, one>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+  lookup_table_test_entry second_entry(
+      lookup_table_test_table::template make_no_key_identity<processor, one>(),
+      lookup_table_test_rtti::template get_type_index<second_storage>());
+
+  ASSERT_FALSE(storage.conflicts(first_entry));
+  storage.insert(first_entry);
+  ASSERT_EQ(state.allocations, 0);
+  ASSERT_TRUE(storage.conflicts(second_entry));
+  ASSERT_EQ(storage.count(), 1U);
+
+  bool ambiguous = false;
+  auto *selected = storage.find_singular(ambiguous);
+  ASSERT_FALSE(ambiguous);
+  ASSERT_EQ(selected, &first_entry);
+}
+
+TEST(index_test, selector_storage_typed_key_many_tracks_ambiguity_and_storage) {
+  struct processor {};
+  struct processor_key {};
+  struct first_storage {};
+  struct second_storage {};
+  using lookup_entry =
+      detail::lookup_entry<processor, typed_key<processor_key>, many, ordered>;
+  using storage_type =
+      detail::selector_storage<lookup_entry, lookup_table_test_entry,
+                               lookup_table_test_allocator>;
+
+  test_allocator_state state;
+  lookup_table_test_allocator allocator(&state);
+  storage_type storage(allocator);
+  lookup_table_test_entry first_entry(
+      lookup_table_test_table::template make_typed_key_identity<
+          processor, processor_key, many>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+  lookup_table_test_entry duplicate_storage_entry(
+      lookup_table_test_table::template make_typed_key_identity<
+          processor, processor_key, many>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+  lookup_table_test_entry second_entry(
+      lookup_table_test_table::template make_typed_key_identity<
+          processor, processor_key, many>(),
+      lookup_table_test_rtti::template get_type_index<second_storage>());
+
+  storage.insert(first_entry);
+  ASSERT_EQ(state.allocations, 0);
+  ASSERT_TRUE(storage.conflicts(duplicate_storage_entry));
+  ASSERT_FALSE(storage.conflicts(second_entry));
+
+  storage.insert(second_entry);
+  ASSERT_EQ(state.allocations, 1);
+  ASSERT_EQ(storage.count(), 2U);
+
+  bool ambiguous = false;
+  ASSERT_EQ(storage.find_singular(ambiguous), nullptr);
+  ASSERT_TRUE(ambiguous);
+
+  std::size_t visits = 0;
+  ASSERT_EQ(storage.for_each([&](auto &entry) {
+    ++visits;
+    ASSERT_TRUE(&entry == &first_entry || &entry == &second_entry);
+  }),
+            2U);
+  ASSERT_EQ(visits, 2U);
+
+  storage.erase(first_entry);
+  ASSERT_EQ(storage.count(), 1U);
+  ambiguous = true;
+  ASSERT_EQ(storage.find_singular(ambiguous), &second_entry);
+  ASSERT_FALSE(ambiguous);
+}
+
 TEST(index_test,
      lookup_table_runtime_key_one_rejects_duplicate_without_row_growth) {
   struct processor {};
