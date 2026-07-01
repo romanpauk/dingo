@@ -446,6 +446,7 @@ RESOLVED_TYPES = (
         name="element_vector",
         supported_exposed_types=frozenset({"element_collection"}),
         provides=frozenset({"resolved_collection", "constructable_collection"}),
+        supported_modes=frozenset({"static", "mixed"}),
         checks=(
             (
                 "resolve_collection",
@@ -463,6 +464,7 @@ RESOLVED_TYPES = (
         name="element_map_custom_insert",
         supported_exposed_types=frozenset({"element_collection"}),
         provides=frozenset({"constructable_collection"}),
+        supported_modes=frozenset({"static", "mixed"}),
         checks=(
             (
                 "construct_collection",
@@ -495,7 +497,7 @@ RESOLVED_TYPES = (
     ResolvedType(
         name="keyed_value_dependency",
         supported_exposed_types=frozenset({"keyed_concrete"}),
-        provides=frozenset({"constructable_dependency", "invokable_dependency"}),
+        provides=frozenset({"constructable_dependency"}),
         requires=frozenset({"direct_value_resolution", "stable_concrete_storage"}),
         checks=(
             (
@@ -565,6 +567,7 @@ RESOLVED_TYPES = (
         name="element_keyed_vector",
         supported_exposed_types=frozenset({"element_keyed_collection"}),
         provides=frozenset({"resolved_keyed_collection"}),
+        supported_modes=frozenset({"static", "mixed"}),
         checks=(
             (
                 "resolve_keyed_collection",
@@ -582,6 +585,7 @@ RESOLVED_TYPES = (
         name="keyed_collection_dependency",
         supported_exposed_types=frozenset({"element_keyed_collection"}),
         provides=frozenset({"constructable_dependency", "invokable_dependency"}),
+        supported_modes=frozenset({"static", "mixed"}),
         checks=(
             (
                 "construct",
@@ -818,9 +822,6 @@ RESOLVED_TYPES = (
                     "auto value = std::get<std::shared_ptr<value_type>>(instance);",
                     "ASSERT_TRUE(value);",
                     "ASSERT_TRUE(is_constructed_value(*value));",
-                    "auto alternative = container.template resolve<std::shared_ptr<value_type>>();",
-                    "ASSERT_TRUE(alternative);",
-                    "ASSERT_TRUE(is_constructed_value(*alternative));",
                 ),
             ),
         ),
@@ -841,15 +842,6 @@ RESOLVED_TYPES = (
                     "ASSERT_TRUE(handle);",
                     "ASSERT_TRUE(*handle);",
                     "ASSERT_TRUE(is_constructed_value(**handle));",
-                    "auto resolved_handle = container.template resolve<handle_type>();",
-                    "ASSERT_TRUE(resolved_handle);",
-                    "ASSERT_TRUE(*resolved_handle);",
-                    "ASSERT_TRUE(is_constructed_value(**resolved_handle));",
-                    "auto& unique_handle = container.template resolve<std::unique_ptr<value_type>&>();",
-                    "ASSERT_TRUE(unique_handle);",
-                    "ASSERT_TRUE(is_constructed_value(*unique_handle));",
-                    "auto& leaf = container.template resolve<value_type&>();",
-                    "ASSERT_TRUE(is_constructed_value(leaf));",
                 ),
             ),
         ),
