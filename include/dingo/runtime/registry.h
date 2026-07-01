@@ -18,7 +18,6 @@
 #include <dingo/factory/invoke.h>
 #include <dingo/lookup/lookup.h>
 #include <dingo/memory/allocator.h>
-#include <dingo/memory/static_allocator.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/registration/requirements.h>
@@ -534,11 +533,9 @@ protected:
     static constexpr std::size_t inline_slot_storage_alignment =
         alignof(std::max_align_t);
 
-    using entry_allocator = typename std::conditional_t<
-        ::dingo::is_static_allocator_v<allocator_type>,
-        std::allocator<registered_binding_entry>,
+    using entry_allocator =
         typename std::allocator_traits<allocator_type>::template rebind_alloc<
-            registered_binding_entry>>;
+            registered_binding_entry>;
     using entry_list = std::list<registered_binding_entry, entry_allocator>;
 
     struct entry_handle {
@@ -879,10 +876,9 @@ protected:
 
     template <typename Slot, typename... Args>
     void construct_slot(allocator_type &allocator, Args &&...args) {
-      using slot_allocator = typename std::conditional_t<
-          ::dingo::is_static_allocator_v<allocator_type>, std::allocator<Slot>,
+      using slot_allocator =
           typename std::allocator_traits<allocator_type>::template rebind_alloc<
-              Slot>>;
+              Slot>;
       using slot_allocator_traits = std::allocator_traits<slot_allocator>;
 
       Slot *slot = nullptr;
@@ -926,10 +922,9 @@ protected:
     template <typename Slot>
     static void destroy_allocated_slot(allocator_type &allocator,
                                        void *storage) noexcept {
-      using slot_allocator = typename std::conditional_t<
-          ::dingo::is_static_allocator_v<allocator_type>, std::allocator<Slot>,
+      using slot_allocator =
           typename std::allocator_traits<allocator_type>::template rebind_alloc<
-              Slot>>;
+              Slot>;
       using slot_allocator_traits = std::allocator_traits<slot_allocator>;
 
       auto slot_alloc =
@@ -1044,8 +1039,7 @@ protected:
   };
 
   static constexpr bool use_inline_runtime_bindings_state =
-      std::is_same_v<void, ParentRegistry> ||
-      is_static_allocator_v<allocator_type>;
+      std::is_same_v<void, ParentRegistry>;
   using runtime_bindings_state_storage = std::conditional_t<
       use_inline_runtime_bindings_state, inline_runtime_bindings_state_storage,
       allocated_runtime_bindings_state_storage>;

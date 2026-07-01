@@ -9,7 +9,6 @@
 
 #include <dingo/core/none.h>
 #include <dingo/lookup/lookup.h>
-#include <dingo/memory/static_allocator.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -73,9 +72,8 @@ template <typename LookupEntry, typename Entry, typename Allocator>
 class slot_storage;
 
 template <typename Entry, typename Allocator>
-using slot_storage_row_allocator_t = typename std::conditional_t<
-    ::dingo::is_static_allocator_v<Allocator>, std::allocator<Entry *>,
-    typename std::allocator_traits<Allocator>::template rebind_alloc<Entry *>>;
+using slot_storage_row_allocator_t =
+    typename std::allocator_traits<Allocator>::template rebind_alloc<Entry *>;
 
 template <typename Entry, typename Allocator, slot_cardinality Cardinality>
 class static_key_slot_storage;

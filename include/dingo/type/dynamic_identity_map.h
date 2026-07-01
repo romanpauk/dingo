@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <dingo/memory/static_allocator.h>
-
 #include <cstddef>
 #include <map>
 #include <memory>
@@ -21,10 +19,8 @@ template <typename Key, typename Value, typename Allocator,
 class dynamic_identity_map {
   using storage_value = std::pair<const Key, Value>;
   using storage_allocator =
-      std::conditional_t<::dingo::is_static_allocator_v<Allocator>,
-                         std::allocator<storage_value>,
-                         typename std::allocator_traits<
-                             Allocator>::template rebind_alloc<storage_value>>;
+      typename std::allocator_traits<
+          Allocator>::template rebind_alloc<storage_value>;
   using storage_type = std::map<Key, Value, Compare, storage_allocator>;
 
 public:
@@ -32,7 +28,7 @@ public:
   using const_iterator = typename storage_type::const_iterator;
 
   explicit dynamic_identity_map(Allocator &allocator)
-      : values_(Compare{}, make_storage_allocator(allocator)) {}
+      : values_(Compare{}, storage_allocator(allocator)) {}
 
   template <typename KeyArg, typename... Args>
   std::pair<Value &, bool> insert(KeyArg &&key, Args &&...args) {
@@ -69,15 +65,6 @@ public:
   const_iterator end() const { return values_.end(); }
 
 private:
-  static storage_allocator make_storage_allocator(Allocator &allocator) {
-    if constexpr (::dingo::is_static_allocator_v<Allocator>) {
-      (void)allocator;
-      return storage_allocator{};
-    } else {
-      return storage_allocator(allocator);
-    }
-  }
-
   storage_type values_;
 };
 

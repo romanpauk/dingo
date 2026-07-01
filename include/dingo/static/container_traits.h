@@ -8,12 +8,12 @@
 #pragma once
 
 #include <dingo/detail/container_traits.h>
-#include <dingo/memory/static_allocator.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/resolution/type_cache.h>
 #include <dingo/rtti/static_provider.h>
 #include <dingo/type/type_map.h>
 
+#include <memory>
 #include <tuple>
 #include <type_traits>
 
@@ -28,7 +28,7 @@ template <typename Tag = void> struct static_container_traits {
   using type_map_type = static_type_map<Value, Tag, Allocator>;
   template <typename Value, typename Allocator>
   using type_cache_type = static_type_cache<void *, Tag, Allocator>;
-  using allocator_type = static_allocator<char, Tag>;
+  using allocator_type = std::allocator<char>;
   using lookup_definition_type = std::tuple<>;
   static constexpr bool cache_enabled = true;
 };

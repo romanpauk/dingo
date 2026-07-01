@@ -13,6 +13,8 @@
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/type/type_map.h>
 
+#include <memory>
+
 template <typename Tag = void>
 struct static_container_with_dynamic_rtti_traits {
   template <typename TagT>
@@ -24,7 +26,7 @@ struct static_container_with_dynamic_rtti_traits {
   using type_map_type = dingo::static_type_map<Value, Tag, Allocator>;
   template <typename Value, typename Allocator>
   using type_cache_type = dingo::static_type_cache<Value, Tag, Allocator>;
-  using allocator_type = dingo::static_allocator<char, Tag>;
+  using allocator_type = std::allocator<char>;
   using lookup_definition_type = std::tuple<>;
   static constexpr bool cache_enabled = true;
 };

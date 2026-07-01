@@ -30,10 +30,9 @@ struct custom_lookup_backend {
             typename Allocator>
   class storage {
     using value_type = std::pair<const Key, Mapped>;
-    using storage_allocator = typename std::conditional_t<
-        is_static_allocator_v<Allocator>, std::allocator<value_type>,
+    using storage_allocator =
         typename std::allocator_traits<Allocator>::template rebind_alloc<
-            value_type>>;
+            value_type>;
     using storage_type = std::conditional_t<
         std::is_same_v<Cardinality, one>,
         std::map<Key, Mapped, std::less<Key>, storage_allocator>,
@@ -87,10 +86,9 @@ struct operator_lookup_backend {
             typename Allocator>
   class storage {
     using value_type = std::pair<const Key, Mapped>;
-    using storage_allocator = typename std::conditional_t<
-        is_static_allocator_v<Allocator>, std::allocator<value_type>,
+    using storage_allocator =
         typename std::allocator_traits<Allocator>::template rebind_alloc<
-            value_type>>;
+            value_type>;
     using storage_type = std::conditional_t<
         std::is_same_v<Cardinality, one>,
         std::map<Key, Mapped, std::less<Key>, storage_allocator>,
