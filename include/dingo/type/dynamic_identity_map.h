@@ -18,9 +18,8 @@ template <typename Key, typename Value, typename Allocator,
           typename Compare = std::less<Key>>
 class dynamic_identity_map {
   using storage_value = std::pair<const Key, Value>;
-  using storage_allocator =
-      typename std::allocator_traits<
-          Allocator>::template rebind_alloc<storage_value>;
+  using storage_allocator = typename std::allocator_traits<
+      Allocator>::template rebind_alloc<storage_value>;
   using storage_type = std::map<Key, Value, Compare, storage_allocator>;
 
 public:

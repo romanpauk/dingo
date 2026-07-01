@@ -37,7 +37,6 @@
 #include <list>
 #include <map>
 #include <memory>
-#include <new>
 #include <type_traits>
 #include <typeindex>
 #include <utility>
@@ -526,22 +525,13 @@ protected:
   struct runtime_type_bindings {
     template <typename RegistryT> friend struct detail::runtime_slot_probe;
 
-    static constexpr std::size_t inline_binding_storage_size = 512;
-    static constexpr std::size_t inline_binding_storage_alignment =
-        alignof(std::max_align_t);
-    static constexpr std::size_t inline_slot_storage_size = 1024;
-    static constexpr std::size_t inline_slot_storage_alignment =
-        alignof(std::max_align_t);
-
-    using entry_allocator =
-        typename std::allocator_traits<allocator_type>::template rebind_alloc<
-            registered_binding_entry>;
+    using entry_allocator = typename std::allocator_traits<
+        allocator_type>::template rebind_alloc<registered_binding_entry>;
     using entry_list = std::list<registered_binding_entry, entry_allocator>;
 
     struct entry_handle {
       registered_binding_entry *ptr = nullptr;
       typename entry_list::iterator list_iterator{};
-      bool inline_entry = false;
 
       registered_binding_entry &operator*() const { return *ptr; }
     };
@@ -579,14 +569,13 @@ protected:
 
     template <typename Binding, typename... Args>
     std::pair<entry_handle, typename Binding::container_type *>
-    emplace_inline_binding_entry(
+    emplace_binding_entry(
         typename rtti_type::type_index resolved_storage_type,
         std::optional<typename rtti_type::type_index> resolved_key_type,
         slot_key &&resolved_slot_key, Args &&...args) {
-      auto result =
-          entry_owner_->template emplace_inline_binding_entry<Binding>(
-              std::move(resolved_storage_type), std::move(resolved_key_type),
-              std::move(resolved_slot_key), std::forward<Args>(args)...);
+      auto result = entry_owner_->template emplace_binding_entry<Binding>(
+          std::move(resolved_storage_type), std::move(resolved_key_type),
+          std::move(resolved_slot_key), std::forward<Args>(args)...);
       return result;
     }
 
@@ -637,11 +626,6 @@ protected:
                     "domain");
     }
 
-    template <typename Binding>
-    static constexpr bool can_store_inline_binding =
-        sizeof(Binding) <= inline_binding_storage_size &&
-        alignof(Binding) <= inline_binding_storage_alignment;
-
     template <typename Binding, typename... Args>
     static std::pair<
         runtime_binding_ptr<runtime_binding_interface<container_type>>,
@@ -670,11 +654,7 @@ protected:
       lookup_entry_owner(const lookup_entry_owner &) = delete;
       lookup_entry_owner &operator=(const lookup_entry_owner &) = delete;
 
-      ~lookup_entry_owner() { erase_inline_entry(); }
-
-      bool empty() const {
-        return !inline_entry_constructed_ && entries.empty();
-      }
+      bool empty() const { return entries.empty(); }
 
       allocator_type *allocator() const { return allocator_; }
 
@@ -684,46 +664,19 @@ protected:
           typename rtti_type::type_index resolved_storage_type,
           std::optional<typename rtti_type::type_index> resolved_key_type,
           slot_key &&resolved_slot_key) {
-        if (!inline_entry_constructed_) {
-          new (inline_entry_storage_) registered_binding_entry(
-              std::forward<Binding>(binding), std::move(resolved_storage_type),
-              std::move(resolved_key_type), std::move(resolved_slot_key));
-          inline_entry_constructed_ = true;
-          return {inline_entry(), {}, true};
-        }
-
         entries.emplace_back(
             std::forward<Binding>(binding), std::move(resolved_storage_type),
             std::move(resolved_key_type), std::move(resolved_slot_key));
         auto entry = std::prev(entries.end());
-        return {std::addressof(*entry), entry, false};
+        return {std::addressof(*entry), entry};
       }
 
       template <typename Binding, typename... Args>
       std::pair<entry_handle, typename Binding::container_type *>
-      emplace_inline_binding_entry(
+      emplace_binding_entry(
           typename rtti_type::type_index resolved_storage_type,
           std::optional<typename rtti_type::type_index> resolved_key_type,
           slot_key &&resolved_slot_key, Args &&...args) {
-        if (!inline_entry_constructed_ && can_store_inline_binding<Binding>) {
-          auto *instance = reinterpret_cast<Binding *>(inline_binding_storage_);
-          new (instance) Binding(std::forward<Args>(args)...);
-          runtime_binding_ptr<runtime_binding_interface<container_type>>
-              binding(instance,
-                      &registry_type::template destroy_inline_binding<Binding>);
-          auto *binding_container = std::addressof(instance->get_container());
-          try {
-            new (inline_entry_storage_) registered_binding_entry(
-                std::move(binding), std::move(resolved_storage_type),
-                std::move(resolved_key_type), std::move(resolved_slot_key));
-            inline_entry_constructed_ = true;
-          } catch (...) {
-            binding.reset();
-            throw;
-          }
-          return {{inline_entry(), {}, true}, binding_container};
-        }
-
         auto &&[binding, binding_container] =
             runtime_type_bindings::make_allocated_binding<Binding>(
                 *allocator_, std::forward<Args>(args)...);
@@ -740,36 +693,12 @@ protected:
       }
 
       void erase_entry(entry_handle entry) {
-        if (entry.inline_entry) {
-          erase_inline_entry();
-          return;
-        }
         entries.erase(entry.list_iterator);
       }
 
     private:
       allocator_type *allocator_;
       entry_list entries;
-
-      registered_binding_entry *inline_entry() {
-        return inline_entry_constructed_
-                   ? std::launder(reinterpret_cast<registered_binding_entry *>(
-                         inline_entry_storage_))
-                   : nullptr;
-      }
-
-      void erase_inline_entry() noexcept {
-        if (auto *entry = inline_entry()) {
-          entry->~registered_binding_entry();
-          inline_entry_constructed_ = false;
-        }
-      }
-
-      alignas(inline_binding_storage_alignment) std::byte
-          inline_binding_storage_[inline_binding_storage_size];
-      alignas(registered_binding_entry) std::byte
-          inline_entry_storage_[sizeof(registered_binding_entry)];
-      bool inline_entry_constructed_ = false;
     };
 
     template <typename LookupEntry>
@@ -803,11 +732,11 @@ protected:
 
       template <typename Binding, typename... Args>
       std::pair<entry_handle, typename Binding::container_type *>
-      emplace_inline_binding_entry(
+      emplace_binding_entry(
           typename rtti_type::type_index resolved_storage_type,
           std::optional<typename rtti_type::type_index> resolved_key_type,
           slot_key &&resolved_slot_key, Args &&...args) {
-        return owner.template emplace_inline_binding_entry<Binding>(
+        return owner.template emplace_binding_entry<Binding>(
             std::move(resolved_storage_type), std::move(resolved_key_type),
             std::move(resolved_slot_key), std::forward<Args>(args)...);
       }
@@ -876,31 +805,22 @@ protected:
 
     template <typename Slot, typename... Args>
     void construct_slot(allocator_type &allocator, Args &&...args) {
-      using slot_allocator =
-          typename std::allocator_traits<allocator_type>::template rebind_alloc<
-              Slot>;
+      using slot_allocator = typename std::allocator_traits<
+          allocator_type>::template rebind_alloc<Slot>;
       using slot_allocator_traits = std::allocator_traits<slot_allocator>;
 
-      Slot *slot = nullptr;
-      if constexpr (sizeof(Slot) <= inline_slot_storage_size &&
-                    alignof(Slot) <= inline_slot_storage_alignment) {
-        slot = reinterpret_cast<Slot *>(inline_slot_storage_);
-        new (slot) Slot(allocator, std::forward<Args>(args)...);
-        destroy_ = &destroy_inline_slot<Slot>;
-      } else {
-        auto slot_alloc =
-            detail::make_lookup_storage_allocator<slot_allocator>(allocator);
-        slot = slot_allocator_traits::allocate(slot_alloc, 1);
-        try {
-          slot_allocator_traits::construct(slot_alloc, slot, allocator,
-                                           std::forward<Args>(args)...);
-        } catch (...) {
-          slot_allocator_traits::deallocate(slot_alloc, slot, 1);
-          throw;
-        }
-        destroy_ = &destroy_allocated_slot<Slot>;
+      auto slot_alloc =
+          detail::make_lookup_storage_allocator<slot_allocator>(allocator);
+      auto *slot = slot_allocator_traits::allocate(slot_alloc, 1);
+      try {
+        slot_allocator_traits::construct(slot_alloc, slot, allocator,
+                                         std::forward<Args>(args)...);
+      } catch (...) {
+        slot_allocator_traits::deallocate(slot_alloc, slot, 1);
+        throw;
       }
 
+      destroy_ = &destroy_allocated_slot<Slot>;
       storage_ = slot;
       storage_type_ = std::addressof(storage_type_token<Slot>());
       entry_owner_ = std::addressof(slot->owner);
@@ -914,17 +834,10 @@ protected:
     }
 
     template <typename Slot>
-    static void destroy_inline_slot(allocator_type &, void *storage) noexcept {
-      auto *slot = static_cast<Slot *>(storage);
-      slot->~Slot();
-    }
-
-    template <typename Slot>
     static void destroy_allocated_slot(allocator_type &allocator,
                                        void *storage) noexcept {
-      using slot_allocator =
-          typename std::allocator_traits<allocator_type>::template rebind_alloc<
-              Slot>;
+      using slot_allocator = typename std::allocator_traits<
+          allocator_type>::template rebind_alloc<Slot>;
       using slot_allocator_traits = std::allocator_traits<slot_allocator>;
 
       auto slot_alloc =
@@ -956,8 +869,6 @@ protected:
     lookup_entry_owner *entry_owner_ = nullptr;
     void (*destroy_)(allocator_type &, void *) noexcept = nullptr;
     const void *storage_type_ = nullptr;
-    alignas(inline_slot_storage_alignment) std::byte
-        inline_slot_storage_[inline_slot_storage_size];
   };
 
   struct runtime_bindings_state {
@@ -971,49 +882,14 @@ protected:
         type_cache;
   };
 
-  struct inline_runtime_bindings_state_storage {
-    runtime_bindings_state *get() {
-      return constructed_
-                 ? std::launder(reinterpret_cast<runtime_bindings_state *>(
-                       storage_))
-                 : nullptr;
-    }
-
-    const runtime_bindings_state *get() const {
-      return constructed_
-                 ? std::launder(
-                       reinterpret_cast<const runtime_bindings_state *>(
-                           storage_))
-                 : nullptr;
-    }
-
-    runtime_bindings_state &ensure(allocator_type &allocator) {
-      if (!constructed_) {
-        new (storage_) runtime_bindings_state(allocator);
-        constructed_ = true;
-      }
-      return *std::launder(reinterpret_cast<runtime_bindings_state *>(storage_));
-    }
-
-    void destroy(allocator_type &) {
-      if (auto *state = get()) {
-        state->~runtime_bindings_state();
-        constructed_ = false;
-      }
-    }
-
-    alignas(runtime_bindings_state) std::byte
-        storage_[sizeof(runtime_bindings_state)];
-    bool constructed_ = false;
-  };
-
-  struct allocated_runtime_bindings_state_storage {
+  struct runtime_bindings_state_storage {
     runtime_bindings_state *get() { return state_; }
     const runtime_bindings_state *get() const { return state_; }
 
     runtime_bindings_state &ensure(allocator_type &allocator) {
       if (!state_) {
-        auto alloc = allocator_traits::rebind<runtime_bindings_state>(allocator);
+        auto alloc =
+            allocator_traits::rebind<runtime_bindings_state>(allocator);
         auto *state = allocator_traits::allocate(alloc, 1);
         try {
           allocator_traits::construct(alloc, state, allocator);
@@ -1028,7 +904,8 @@ protected:
 
     void destroy(allocator_type &allocator) {
       if (state_) {
-        auto alloc = allocator_traits::rebind<runtime_bindings_state>(allocator);
+        auto alloc =
+            allocator_traits::rebind<runtime_bindings_state>(allocator);
         allocator_traits::destroy(alloc, state_);
         allocator_traits::deallocate(alloc, state_, 1);
         state_ = nullptr;
@@ -1037,12 +914,6 @@ protected:
 
     runtime_bindings_state *state_ = nullptr;
   };
-
-  static constexpr bool use_inline_runtime_bindings_state =
-      std::is_same_v<void, ParentRegistry>;
-  using runtime_bindings_state_storage = std::conditional_t<
-      use_inline_runtime_bindings_state, inline_runtime_bindings_state_storage,
-      allocated_runtime_bindings_state_storage>;
 
   using runtime_binding_interface_type =
       runtime_binding_interface<container_type>;
@@ -1908,7 +1779,7 @@ private:
         [&](auto &data, auto &&resolved_storage_type, auto &&resolved_key_type,
             auto &&lookup_id) {
           auto &&[inserted_entry, binding_container] =
-              data.template emplace_inline_binding_entry<Binding>(
+              data.template emplace_binding_entry<Binding>(
                   std::forward<decltype(resolved_storage_type)>(
                       resolved_storage_type),
                   std::forward<decltype(resolved_key_type)>(resolved_key_type),
@@ -2014,10 +1885,12 @@ private:
   allocate_binding(Args &&...args) {
     auto alloc = allocator_traits::rebind<U>(get_allocator());
     U *instance = allocator_traits::allocate(alloc, 1);
-    if (!instance)
-      return {nullptr, nullptr};
-
-    allocator_traits::construct(alloc, instance, std::forward<Args>(args)...);
+    try {
+      allocator_traits::construct(alloc, instance, std::forward<Args>(args)...);
+    } catch (...) {
+      allocator_traits::deallocate(alloc, instance, 1);
+      throw;
+    }
 
     return std::make_pair(
         runtime_binding_ptr<runtime_binding_interface<container_type>>(
@@ -2032,13 +1905,6 @@ private:
         allocator_traits::rebind<U>(instance->get_container().get_allocator());
     allocator_traits::destroy(alloc, instance);
     allocator_traits::deallocate(alloc, instance, 1);
-  }
-
-  template <typename U>
-  static void
-  destroy_inline_binding(runtime_binding_interface<container_type> *ptr) {
-    auto *instance = static_cast<U *>(ptr);
-    instance->~U();
   }
 
   resolve_root_type *resolve_root_ = nullptr;

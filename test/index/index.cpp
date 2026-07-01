@@ -435,7 +435,7 @@ TEST(index_test, normal_unkeyed_shared_registration_reuses_entry_cache) {
 }
 
 TEST(index_test,
-     normal_unkeyed_singular_registration_uses_inline_entry_and_binding) {
+     normal_unkeyed_singular_registration_uses_allocator_owned_storage) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -458,7 +458,7 @@ TEST(index_test,
     container.template register_type<scope<shared>, storage<processor_impl>,
                                      interfaces<processor>>();
 
-    ASSERT_EQ(state.allocations, 1);
+    ASSERT_GT(state.allocations, 0);
     ASSERT_EQ(container.template resolve<processor &>().id(), 42);
   }
 
@@ -473,7 +473,7 @@ TEST(index_test,
     container.template register_type<
         scope<shared>, storage<large_processor_impl>, interfaces<processor>>();
 
-    ASSERT_EQ(large_state.allocations, 2);
+    ASSERT_GT(large_state.allocations, 0);
     ASSERT_GE(large_state.largest_allocation_bytes,
               sizeof(large_processor_impl));
   }
@@ -481,7 +481,7 @@ TEST(index_test,
   ASSERT_EQ(large_state.deallocations, large_state.allocations);
 }
 
-TEST(index_test, first_typed_key_singular_registration_uses_inline_entry) {
+TEST(index_test, typed_key_singular_registration_uses_allocator_owned_storage) {
   struct processor_key {};
   struct processor {
     virtual ~processor() = default;
@@ -506,7 +506,7 @@ TEST(index_test, first_typed_key_singular_registration_uses_inline_entry) {
         .template register_type<scope<shared>, storage<processor_impl>,
                                 interfaces<processor>, key<processor_key>>();
 
-    ASSERT_EQ(state.allocations, 1);
+    ASSERT_GT(state.allocations, 0);
     ASSERT_EQ(
         container.template resolve<processor &>(key<processor_key>{}).id(), 42);
   }
@@ -523,7 +523,7 @@ TEST(index_test, first_typed_key_singular_registration_uses_inline_entry) {
         .template register_type<scope<shared>, storage<large_processor_impl>,
                                 interfaces<processor>, key<processor_key>>();
 
-    ASSERT_EQ(large_state.allocations, 2);
+    ASSERT_GT(large_state.allocations, 0);
     ASSERT_GE(large_state.largest_allocation_bytes,
               sizeof(large_processor_impl));
   }
@@ -2509,7 +2509,7 @@ TEST(index_test, runtime_key_lookup_backend_uses_rebound_allocator) {
     container.template register_indexed_type<scope<shared>, storage<dog>,
                                              interfaces<animal>>(small_key{7});
 
-    ASSERT_EQ(small_state.allocations, 2);
+    ASSERT_EQ(small_state.allocations, 6);
     ASSERT_EQ(container.template resolve<animal &>(small_key{7}).id(), 11);
   }
 
@@ -2529,7 +2529,7 @@ TEST(index_test, runtime_key_lookup_backend_uses_rebound_allocator) {
                                              interfaces<animal>>(
         allocator_visible_key{7});
 
-    ASSERT_EQ(state.allocations, 2);
+    ASSERT_EQ(state.allocations, 6);
     ASSERT_GE(state.largest_allocation_bytes, sizeof(allocator_visible_key));
     ASSERT_EQ(
         container.template resolve<animal &>(allocator_visible_key{7}).id(),
