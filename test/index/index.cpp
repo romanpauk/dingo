@@ -133,6 +133,9 @@ struct slot_test_entry;
 using slot_test_rtti = rtti<typeid_provider>;
 using slot_test_allocator = test_allocator<char>;
 using slot_test_key = detail::slot_key<slot_test_rtti>;
+static_assert(sizeof(slot_test_key) == sizeof(slot_test_rtti::type_index) * 2 +
+                                           sizeof(detail::slot_domain) +
+                                           sizeof(detail::slot_cardinality));
 
 struct slot_test_entry {
   explicit slot_test_entry(

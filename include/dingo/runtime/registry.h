@@ -1080,9 +1080,13 @@ protected:
     return key.cardinality;
   }
 
-  static const std::optional<typename rtti_type::type_index> &
+  static const typename rtti_type::type_index &
   slot_key_key_type(const slot_key &key) {
     return key.key_type;
+  }
+
+  static typename rtti_type::type_index no_slot_key_type() {
+    return detail::no_slot_key_type<rtti_type>();
   }
 
   template <typename Key>
@@ -2145,12 +2149,11 @@ private:
 
     const auto &key_type = Registry::slot_key_key_type(key);
     if constexpr (std::is_void_v<Key>) {
-      if (key_type) {
+      if (!(key_type == Registry::no_slot_key_type())) {
         return false;
       }
     } else {
-      if (!key_type ||
-          !(*key_type == Registry::rtti_type::template get_type_index<Key>())) {
+      if (!(key_type == Registry::rtti_type::template get_type_index<Key>())) {
         return false;
       }
     }

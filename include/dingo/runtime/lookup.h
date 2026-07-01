@@ -15,7 +15,6 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
-#include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -24,6 +23,23 @@ namespace dingo::detail {
 
 enum class slot_domain { no_key, typed_key, runtime_key };
 enum class slot_cardinality { one, many };
+
+template <typename Rtti> typename Rtti::type_index no_slot_key_type() {
+  return Rtti::template get_type_index<::dingo::none_t>();
+}
+
+template <typename Rtti> struct slot_key {
+  using type_index = typename Rtti::type_index;
+
+  type_index interface_type;
+  type_index key_type;
+  slot_domain domain;
+  slot_cardinality cardinality;
+};
+
+template <typename Rtti> bool has_slot_key_type(const slot_key<Rtti> &key) {
+  return !(key.key_type == no_slot_key_type<Rtti>());
+}
 
 template <typename Cardinality>
 constexpr slot_cardinality slot_cardinality_value() {
@@ -439,21 +455,12 @@ public:
   }
 
 private:
-  template <typename SlotKey> static bool matches(const SlotKey &key) {
+  template <typename Rtti> static bool matches(const slot_key<Rtti> &key) {
     return key.domain == slot_domain::runtime_key &&
-           key.cardinality == lookup_cardinality && key.key_type;
+           key.cardinality == lookup_cardinality && has_slot_key_type(key);
   }
 
   storage_type storage_;
-};
-
-template <typename Rtti> struct slot_key {
-  using type_index = typename Rtti::type_index;
-
-  type_index interface_type;
-  slot_domain domain;
-  slot_cardinality cardinality;
-  std::optional<type_index> key_type;
 };
 
 template <typename Rtti, typename Interface, typename KeyDomain,
@@ -463,8 +470,9 @@ struct make_slot_key_impl;
 template <typename Rtti, typename Interface, typename Cardinality>
 struct make_slot_key_impl<Rtti, Interface, ::dingo::no_key, Cardinality> {
   static slot_key<Rtti> make() {
-    return {Rtti::template get_type_index<Interface>(), slot_domain::no_key,
-            slot_cardinality_value<Cardinality>(), std::nullopt};
+    return {Rtti::template get_type_index<Interface>(),
+            no_slot_key_type<Rtti>(), slot_domain::no_key,
+            slot_cardinality_value<Cardinality>()};
   }
 };
 
@@ -472,9 +480,9 @@ template <typename Rtti, typename Interface, typename Key, typename Cardinality>
 struct make_slot_key_impl<Rtti, Interface, ::dingo::typed_key<Key>,
                           Cardinality> {
   static slot_key<Rtti> make() {
-    return {Rtti::template get_type_index<Interface>(), slot_domain::typed_key,
-            slot_cardinality_value<Cardinality>(),
-            Rtti::template get_type_index<Key>()};
+    return {Rtti::template get_type_index<Interface>(),
+            Rtti::template get_type_index<Key>(), slot_domain::typed_key,
+            slot_cardinality_value<Cardinality>()};
   }
 };
 
@@ -484,8 +492,8 @@ struct make_slot_key_impl<Rtti, Interface, ::dingo::runtime_key<Key>,
   static slot_key<Rtti> make() {
     using stored_key_type = std::decay_t<Key>;
     return {Rtti::template get_type_index<Interface>(),
-            slot_domain::runtime_key, slot_cardinality_value<Cardinality>(),
-            Rtti::template get_type_index<stored_key_type>()};
+            Rtti::template get_type_index<stored_key_type>(),
+            slot_domain::runtime_key, slot_cardinality_value<Cardinality>()};
   }
 };
 
