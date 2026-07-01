@@ -267,25 +267,7 @@ protected:
           }
         } else {
           if (auto *state = runtime_bindings_if_present()) {
-            using lookup_type = normalized_type_t<T>;
-            using exact_type = std::remove_cv_t<
-                std::remove_reference_t<request_interface_t<T>>>;
-            auto data = [&]() {
-              if constexpr (detail::is_typed_key_v<IdType>) {
-                return state->type_bindings.template get<exact_type>();
-              } else {
-                return state->type_bindings.template get<lookup_type>();
-              }
-            }();
-            if constexpr (!std::is_same_v<lookup_type, exact_type>) {
-              if (!data) {
-                if constexpr (detail::is_typed_key_v<IdType>) {
-                  data = state->type_bindings.template get<lookup_type>();
-                } else {
-                  data = state->type_bindings.template get<exact_type>();
-                }
-              }
-            }
+            auto *data = runtime_source_bindings<T, IdType>(state);
             if (data) {
               auto selection = select_runtime_binding<T>(data, id);
               if (selection.found() && selection.state->cache) {
@@ -440,31 +422,8 @@ protected:
 
   template <typename Request, typename IdType>
   detail::binding_selection_status binding_status_for_id(IdType &&id) {
-    using lookup_type = normalized_type_t<Request>;
-    using exact_type =
-        std::remove_cv_t<std::remove_reference_t<request_interface_t<Request>>>;
     auto *state = runtime_bindings_if_present();
-    auto *data = [&]() {
-      if (!state) {
-        return static_cast<runtime_type_bindings *>(nullptr);
-      }
-      if constexpr (!is_none_v<std::decay_t<IdType>> &&
-                    !detail::is_typed_key_v<IdType>) {
-        return state->type_bindings.template get<lookup_type>();
-      } else {
-        return state->type_bindings.template get<exact_type>();
-      }
-    }();
-    if constexpr (!std::is_same_v<lookup_type, exact_type>) {
-      if (!data && state) {
-        if constexpr (!is_none_v<std::decay_t<IdType>> &&
-                      !detail::is_typed_key_v<IdType>) {
-          data = state->type_bindings.template get<exact_type>();
-        } else {
-          data = state->type_bindings.template get<lookup_type>();
-        }
-      }
-    }
+    auto *data = runtime_source_bindings<Request, IdType>(state);
     auto selection =
         select_runtime_binding<Request>(data, std::forward<IdType>(id));
     return selection.status;
@@ -566,6 +525,23 @@ protected:
     }
   };
 
+  template <typename Interface, typename KeyDomain, typename Cardinality>
+  struct runtime_binding_slot {};
+
+  template <typename Interface, typename Cardinality>
+  using no_key_runtime_binding_slot =
+      runtime_binding_slot<Interface, ::dingo::no_key, Cardinality>;
+
+  template <typename Interface, typename Key, typename Cardinality>
+  using typed_key_runtime_binding_slot = runtime_binding_slot<
+      Interface, ::dingo::typed_key<detail::normalized_lookup_key_t<Key>>,
+      Cardinality>;
+
+  template <typename Interface, typename Key, typename Cardinality>
+  using runtime_key_runtime_binding_slot = runtime_binding_slot<
+      Interface, ::dingo::runtime_key<detail::normalized_lookup_key_t<Key>>,
+      Cardinality>;
+
   struct runtime_type_bindings {
     static constexpr std::size_t inline_binding_storage_size = 512;
     static constexpr std::size_t inline_binding_storage_alignment =
@@ -578,19 +554,337 @@ protected:
             registered_binding_entry>>;
     using entry_list = std::list<registered_binding_entry, entry_allocator>;
 
+    enum class slot_storage_kind {
+      no_key,
+      ordinary_one,
+      ordinary_many,
+      runtime_key
+    };
+
     struct entry_handle {
       registered_binding_entry *ptr = nullptr;
       typename entry_list::iterator list_iterator{};
       bool inline_entry = false;
+      slot_storage_kind storage_kind = slot_storage_kind::no_key;
 
       registered_binding_entry &operator*() const { return *ptr; }
     };
 
-    runtime_type_bindings(allocator_type &allocator)
-        : allocator_(std::addressof(allocator)),
-          entries(detail::make_lookup_storage_allocator<entry_allocator>(
-              allocator)),
-          lookup_table(allocator) {
+  private:
+    struct no_key_slot_storage;
+    template <detail::runtime_lookup_cardinality Cardinality,
+              slot_storage_kind Kind>
+    struct ordinary_slot_storage;
+    using ordinary_one_slot_storage =
+        ordinary_slot_storage<detail::runtime_lookup_cardinality::one,
+                              slot_storage_kind::ordinary_one>;
+    using ordinary_many_slot_storage =
+        ordinary_slot_storage<detail::runtime_lookup_cardinality::many,
+                              slot_storage_kind::ordinary_many>;
+    struct runtime_key_slot_storage;
+
+  public:
+    struct no_key_slot_tag {};
+    struct ordinary_one_slot_tag {};
+    struct ordinary_many_slot_tag {};
+    struct runtime_key_slot_tag {};
+
+    template <typename Cardinality>
+    using ordinary_slot_tag_t =
+        std::conditional_t<std::is_same_v<Cardinality, ::dingo::one>,
+                           ordinary_one_slot_tag, ordinary_many_slot_tag>;
+
+    runtime_type_bindings(allocator_type &allocator, no_key_slot_tag)
+        : storage_(std::in_place_type<no_key_slot_storage>, allocator) {
+      validate_lookup_definitions();
+    }
+
+    runtime_type_bindings(allocator_type &allocator, ordinary_one_slot_tag)
+        : storage_(std::in_place_type<ordinary_one_slot_storage>, allocator) {
+      validate_lookup_definitions();
+    }
+
+    runtime_type_bindings(allocator_type &allocator, ordinary_many_slot_tag)
+        : storage_(std::in_place_type<ordinary_many_slot_storage>, allocator) {
+      validate_lookup_definitions();
+    }
+
+    runtime_type_bindings(allocator_type &allocator, runtime_key_slot_tag)
+        : storage_(std::in_place_type<runtime_key_slot_storage>, allocator) {
+      validate_lookup_definitions();
+    }
+
+    runtime_type_bindings(const runtime_type_bindings &) = delete;
+    runtime_type_bindings &operator=(const runtime_type_bindings &) = delete;
+
+    ~runtime_type_bindings() = default;
+
+    bool has_no_key_singular_entry() const {
+      if (auto *storage = std::get_if<no_key_slot_storage>(&storage_)) {
+        return storage->has_no_key_singular_entry();
+      }
+      return false;
+    }
+
+    registered_binding_entry *no_key_singular_entry() {
+      if (auto *storage = std::get_if<no_key_slot_storage>(&storage_)) {
+        return storage->no_key_singular_entry();
+      }
+      return nullptr;
+    }
+
+    const registered_binding_entry *no_key_singular_entry() const {
+      if (auto *storage = std::get_if<no_key_slot_storage>(&storage_)) {
+        return storage->no_key_singular_entry();
+      }
+      return nullptr;
+    }
+
+    template <typename Binding, typename... Args>
+    typename Binding::container_type &emplace_no_key_singular_entry(
+        typename rtti_type::type_index resolved_storage_type,
+        lookup_identity &&resolved_lookup_identity, Args &&...args) {
+      return no_key_storage().template emplace_no_key_singular_entry<Binding>(
+          std::move(resolved_storage_type), std::move(resolved_lookup_identity),
+          std::forward<Args>(args)...);
+    }
+
+    template <typename Binding>
+    void emplace_no_key_singular_entry(
+        runtime_binding_ptr<runtime_binding_interface<container_type>>
+            &&binding,
+        typename rtti_type::type_index resolved_storage_type,
+        lookup_identity &&resolved_lookup_identity) {
+      no_key_storage().template emplace_no_key_singular_entry<Binding>(
+          std::move(binding), std::move(resolved_storage_type),
+          std::move(resolved_lookup_identity));
+    }
+
+    void erase_no_key_singular_entry() noexcept {
+      if (auto *storage = std::get_if<no_key_slot_storage>(&storage_)) {
+        storage->erase_no_key_singular_entry();
+      }
+    }
+
+    template <typename Binding>
+    entry_handle emplace_entry(
+        Binding &&binding, typename rtti_type::type_index resolved_storage_type,
+        std::optional<typename rtti_type::type_index> resolved_key_type,
+        lookup_identity &&resolved_lookup_identity) {
+      if (resolved_lookup_identity.domain ==
+          lookup_table_type::key_domain::runtime_key) {
+        return runtime_key_storage().emplace_entry(
+            std::forward<Binding>(binding), std::move(resolved_storage_type),
+            std::move(resolved_key_type), std::move(resolved_lookup_identity));
+      }
+      if (resolved_lookup_identity.lookup_cardinality ==
+          lookup_table_type::cardinality::one) {
+        return ordinary_one_storage().emplace_entry(
+            std::forward<Binding>(binding), std::move(resolved_storage_type),
+            std::move(resolved_key_type), std::move(resolved_lookup_identity));
+      }
+      return ordinary_many_storage().emplace_entry(
+          std::forward<Binding>(binding), std::move(resolved_storage_type),
+          std::move(resolved_key_type), std::move(resolved_lookup_identity));
+    }
+
+    template <typename Binding, typename... Args>
+    std::pair<entry_handle, typename Binding::container_type *>
+    emplace_inline_binding_entry(
+        typename rtti_type::type_index resolved_storage_type,
+        std::optional<typename rtti_type::type_index> resolved_key_type,
+        lookup_identity &&resolved_lookup_identity, Args &&...args) {
+      if (resolved_lookup_identity.domain ==
+          lookup_table_type::key_domain::runtime_key) {
+        return runtime_key_storage()
+            .template emplace_inline_binding_entry<Binding>(
+                std::move(resolved_storage_type), std::move(resolved_key_type),
+                std::move(resolved_lookup_identity),
+                std::forward<Args>(args)...);
+      }
+      if (resolved_lookup_identity.lookup_cardinality ==
+          lookup_table_type::cardinality::one) {
+        return ordinary_one_storage()
+            .template emplace_inline_binding_entry<Binding>(
+                std::move(resolved_storage_type), std::move(resolved_key_type),
+                std::move(resolved_lookup_identity),
+                std::forward<Args>(args)...);
+      }
+      return ordinary_many_storage()
+          .template emplace_inline_binding_entry<Binding>(
+              std::move(resolved_storage_type), std::move(resolved_key_type),
+              std::move(resolved_lookup_identity), std::forward<Args>(args)...);
+    }
+
+    void erase_entry(entry_handle entry) {
+      switch (entry.storage_kind) {
+      case slot_storage_kind::ordinary_one:
+        ordinary_one_storage().erase_entry(entry);
+        return;
+      case slot_storage_kind::ordinary_many:
+        ordinary_many_storage().erase_entry(entry);
+        return;
+      case slot_storage_kind::runtime_key:
+        runtime_key_storage().erase_entry(entry);
+        return;
+      case slot_storage_kind::no_key:
+        break;
+      }
+    }
+
+    bool insert_lookup_rows(entry_handle entry) {
+      switch (entry.storage_kind) {
+      case slot_storage_kind::ordinary_one:
+        return ordinary_one_storage().insert_lookup_rows(entry);
+      case slot_storage_kind::ordinary_many:
+        return ordinary_many_storage().insert_lookup_rows(entry);
+      case slot_storage_kind::runtime_key:
+        return runtime_key_storage().insert_lookup_rows(entry);
+      case slot_storage_kind::no_key:
+        return false;
+      }
+      return false;
+    }
+
+    void erase_lookup_rows(registered_binding_entry *entry) {
+      if (entry->identity.domain ==
+          lookup_table_type::key_domain::runtime_key) {
+        runtime_key_storage().erase_lookup_rows(entry);
+      } else if (entry->identity.lookup_cardinality ==
+                 lookup_table_type::cardinality::one) {
+        ordinary_one_storage().erase_lookup_rows(entry);
+      } else {
+        ordinary_many_storage().erase_lookup_rows(entry);
+      }
+    }
+
+    template <typename Interface, typename Cardinality>
+    registered_binding_entry *find_singular_no_key(bool &ambiguous) {
+      if constexpr (std::is_same_v<Cardinality, ::dingo::one>) {
+        if (auto *storage = std::get_if<ordinary_one_slot_storage>(&storage_)) {
+          return storage->find_singular(ambiguous);
+        }
+      } else {
+        if (auto *storage =
+                std::get_if<ordinary_many_slot_storage>(&storage_)) {
+          return storage->find_singular(ambiguous);
+        }
+      }
+      ambiguous = false;
+      return nullptr;
+    }
+
+    template <typename Interface, typename Key, typename Cardinality>
+    registered_binding_entry *find_singular_typed_key(bool &ambiguous) {
+      if constexpr (std::is_same_v<Cardinality, ::dingo::one>) {
+        if (auto *storage = std::get_if<ordinary_one_slot_storage>(&storage_)) {
+          return storage->find_singular(ambiguous);
+        }
+      } else {
+        if (auto *storage =
+                std::get_if<ordinary_many_slot_storage>(&storage_)) {
+          return storage->find_singular(ambiguous);
+        }
+      }
+      ambiguous = false;
+      return nullptr;
+    }
+
+    template <typename Interface, typename Key, typename Cardinality,
+              typename LookupEntry, typename KeyValue>
+    registered_binding_entry *find_singular_runtime_key(KeyValue &&key_value,
+                                                        bool &ambiguous) {
+      if (auto *storage = std::get_if<runtime_key_slot_storage>(&storage_)) {
+        return storage->template find_singular<LookupEntry>(
+            std::forward<KeyValue>(key_value), ambiguous);
+      }
+      ambiguous = false;
+      return nullptr;
+    }
+
+    template <typename Interface, typename Cardinality, typename Fn>
+    std::size_t for_each_no_key(Fn &&fn) {
+      if constexpr (std::is_same_v<Cardinality, ::dingo::one>) {
+        if (auto *storage = std::get_if<ordinary_one_slot_storage>(&storage_)) {
+          return storage->for_each(std::forward<Fn>(fn));
+        }
+      } else {
+        if (auto *storage =
+                std::get_if<ordinary_many_slot_storage>(&storage_)) {
+          return storage->for_each(std::forward<Fn>(fn));
+        }
+      }
+      return 0;
+    }
+
+    template <typename Interface, typename Key, typename Cardinality,
+              typename Fn>
+    std::size_t for_each_typed_key(Fn &&fn) {
+      if constexpr (std::is_same_v<Cardinality, ::dingo::one>) {
+        if (auto *storage = std::get_if<ordinary_one_slot_storage>(&storage_)) {
+          return storage->for_each(std::forward<Fn>(fn));
+        }
+      } else {
+        if (auto *storage =
+                std::get_if<ordinary_many_slot_storage>(&storage_)) {
+          return storage->for_each(std::forward<Fn>(fn));
+        }
+      }
+      return 0;
+    }
+
+    template <typename Interface, typename Key, typename Cardinality,
+              typename LookupEntry, typename KeyValue, typename Fn>
+    std::size_t for_each_runtime_key(KeyValue &&key_value, Fn &&fn) {
+      if (auto *storage = std::get_if<runtime_key_slot_storage>(&storage_)) {
+        return storage->template for_each<LookupEntry>(
+            std::forward<KeyValue>(key_value), std::forward<Fn>(fn));
+      }
+      return 0;
+    }
+
+    template <typename Interface, typename Cardinality>
+    std::size_t count_no_key() {
+      if constexpr (std::is_same_v<Cardinality, ::dingo::one>) {
+        if (auto *storage = std::get_if<ordinary_one_slot_storage>(&storage_)) {
+          return storage->count();
+        }
+      } else {
+        if (auto *storage =
+                std::get_if<ordinary_many_slot_storage>(&storage_)) {
+          return storage->count();
+        }
+      }
+      return 0;
+    }
+
+    template <typename Interface, typename Key, typename Cardinality>
+    std::size_t count_typed_key() {
+      if constexpr (std::is_same_v<Cardinality, ::dingo::one>) {
+        if (auto *storage = std::get_if<ordinary_one_slot_storage>(&storage_)) {
+          return storage->count();
+        }
+      } else {
+        if (auto *storage =
+                std::get_if<ordinary_many_slot_storage>(&storage_)) {
+          return storage->count();
+        }
+      }
+      return 0;
+    }
+
+    template <typename Interface, typename Key, typename Cardinality,
+              typename LookupEntry, typename KeyValue>
+    std::size_t count_runtime_key(KeyValue &&key_value) {
+      if (auto *storage = std::get_if<runtime_key_slot_storage>(&storage_)) {
+        return storage->template count<LookupEntry>(
+            std::forward<KeyValue>(key_value));
+      }
+      return 0;
+    }
+
+  private:
+    static void validate_lookup_definitions() {
       using entries_type = normalized_view_entries;
       static_assert(!detail::has_duplicate_lookup_definition_v<entries_type>,
                     "duplicate dingo view definition for interface/key "
@@ -600,203 +894,17 @@ protected:
                     "domain");
     }
 
-    runtime_type_bindings(const runtime_type_bindings &) = delete;
-    runtime_type_bindings &operator=(const runtime_type_bindings &) = delete;
-
-    ~runtime_type_bindings() {
-      erase_no_key_singular_entry();
-      erase_inline_entry();
-    }
-
-    bool has_no_key_singular_entry() const {
-      return no_key_singular_entry_constructed_;
-    }
-
-    registered_binding_entry *no_key_singular_entry() {
-      return no_key_singular_entry_constructed_
-                 ? std::launder(reinterpret_cast<registered_binding_entry *>(
-                       no_key_singular_entry_storage_))
-                 : nullptr;
-    }
-
-    const registered_binding_entry *no_key_singular_entry() const {
-      return no_key_singular_entry_constructed_
-                 ? std::launder(
-                       reinterpret_cast<const registered_binding_entry *>(
-                           no_key_singular_entry_storage_))
-                 : nullptr;
-    }
-
-    template <typename Binding, typename... Args>
-    typename Binding::container_type &emplace_no_key_singular_entry(
-        typename rtti_type::type_index resolved_storage_type,
-        lookup_identity &&resolved_lookup_identity, Args &&...args) {
-      auto &&[binding, binding_container] =
-          make_no_key_singular_binding<Binding>(std::forward<Args>(args)...);
-      try {
-        new (no_key_singular_entry_storage_) registered_binding_entry(
-            std::move(binding), std::move(resolved_storage_type), std::nullopt,
-            std::move(resolved_lookup_identity));
-        no_key_singular_entry_constructed_ = true;
-      } catch (...) {
-        binding.reset();
-        throw;
-      }
-      return *binding_container;
-    }
-
-    template <typename Binding>
-    void emplace_no_key_singular_entry(
-        runtime_binding_ptr<runtime_binding_interface<container_type>>
-            &&binding,
-        typename rtti_type::type_index resolved_storage_type,
-        lookup_identity &&resolved_lookup_identity) {
-      new (no_key_singular_entry_storage_) registered_binding_entry(
-          std::move(binding), std::move(resolved_storage_type), std::nullopt,
-          std::move(resolved_lookup_identity));
-      no_key_singular_entry_constructed_ = true;
-    }
-
-    void erase_no_key_singular_entry() noexcept {
-      if (auto *entry = no_key_singular_entry()) {
-        entry->~registered_binding_entry();
-        no_key_singular_entry_constructed_ = false;
-      }
-    }
-
-    template <typename Binding>
-    entry_handle emplace_entry(
-        Binding &&binding, typename rtti_type::type_index resolved_storage_type,
-        std::optional<typename rtti_type::type_index> resolved_key_type,
-        lookup_identity &&resolved_lookup_identity) {
-      if (!inline_entry_constructed_) {
-        new (inline_entry_storage_) registered_binding_entry(
-            std::forward<Binding>(binding), std::move(resolved_storage_type),
-            std::move(resolved_key_type), std::move(resolved_lookup_identity));
-        inline_entry_constructed_ = true;
-        return {inline_entry(), {}, true};
-      }
-
-      entries.emplace_back(
-          std::forward<Binding>(binding), std::move(resolved_storage_type),
-          std::move(resolved_key_type), std::move(resolved_lookup_identity));
-      auto entry = std::prev(entries.end());
-      return {std::addressof(*entry), entry, false};
-    }
-
-    template <typename Binding, typename... Args>
-    std::pair<entry_handle, typename Binding::container_type *>
-    emplace_inline_binding_entry(
-        typename rtti_type::type_index resolved_storage_type,
-        std::optional<typename rtti_type::type_index> resolved_key_type,
-        lookup_identity &&resolved_lookup_identity, Args &&...args) {
-      if (!inline_entry_constructed_ && can_store_inline_binding<Binding>) {
-        auto *instance =
-            reinterpret_cast<Binding *>(inline_entry_binding_storage_);
-        new (instance) Binding(std::forward<Args>(args)...);
-        runtime_binding_ptr<runtime_binding_interface<container_type>> binding(
-            instance, &registry_type::template destroy_inline_binding<Binding>);
-        auto *binding_container = std::addressof(instance->get_container());
-        try {
-          new (inline_entry_storage_) registered_binding_entry(
-              std::move(binding), std::move(resolved_storage_type),
-              std::move(resolved_key_type),
-              std::move(resolved_lookup_identity));
-          inline_entry_constructed_ = true;
-        } catch (...) {
-          binding.reset();
-          throw;
-        }
-        return {{inline_entry(), {}, true}, binding_container};
-      }
-
-      auto &&[binding, binding_container] =
-          make_allocated_binding<Binding>(std::forward<Args>(args)...);
-      try {
-        return {emplace_entry(std::move(binding),
-                              std::move(resolved_storage_type),
-                              std::move(resolved_key_type),
-                              std::move(resolved_lookup_identity)),
-                binding_container};
-      } catch (...) {
-        binding.reset();
-        throw;
-      }
-    }
-
-    void erase_entry(entry_handle entry) {
-      if (entry.inline_entry) {
-        erase_inline_entry();
-        return;
-      }
-      entries.erase(entry.list_iterator);
-    }
-
-    bool insert_lookup_rows(entry_handle entry) {
-      return lookup_table.insert(*entry);
-    }
-
-    void erase_lookup_rows(registered_binding_entry *entry) {
-      lookup_table.erase(*entry);
-    }
-
-    allocator_type *allocator_;
-    entry_list entries;
-    lookup_table_type lookup_table;
-
-  private:
-    registered_binding_entry *inline_entry() {
-      return inline_entry_constructed_
-                 ? std::launder(reinterpret_cast<registered_binding_entry *>(
-                       inline_entry_storage_))
-                 : nullptr;
-    }
-
-    void erase_inline_entry() noexcept {
-      if (auto *entry = inline_entry()) {
-        entry->~registered_binding_entry();
-        inline_entry_constructed_ = false;
-      }
-    }
-
     template <typename Binding>
     static constexpr bool can_store_inline_binding =
         sizeof(Binding) <= inline_binding_storage_size &&
         alignof(Binding) <= inline_binding_storage_alignment;
 
     template <typename Binding, typename... Args>
-    std::pair<runtime_binding_ptr<runtime_binding_interface<container_type>>,
-              typename Binding::container_type *>
-    make_no_key_singular_binding(Args &&...args) {
-      if constexpr (can_store_inline_binding<Binding>) {
-        auto *instance = reinterpret_cast<Binding *>(inline_binding_storage_);
-        new (instance) Binding(std::forward<Args>(args)...);
-        return {runtime_binding_ptr<runtime_binding_interface<container_type>>(
-                    instance,
-                    &registry_type::template destroy_inline_binding<Binding>),
-                &instance->get_container()};
-      } else {
-        auto alloc = allocator_traits::rebind<Binding>(*allocator_);
-        auto *instance = allocator_traits::allocate(alloc, 1);
-        try {
-          allocator_traits::construct(alloc, instance,
-                                      std::forward<Args>(args)...);
-        } catch (...) {
-          allocator_traits::deallocate(alloc, instance, 1);
-          throw;
-        }
-        return {
-            runtime_binding_ptr<runtime_binding_interface<container_type>>(
-                instance, &registry_type::template destroy_binding<Binding>),
-            &instance->get_container()};
-      }
-    }
-
-    template <typename Binding, typename... Args>
-    std::pair<runtime_binding_ptr<runtime_binding_interface<container_type>>,
-              typename Binding::container_type *>
-    make_allocated_binding(Args &&...args) {
-      auto alloc = allocator_traits::rebind<Binding>(*allocator_);
+    static std::pair<
+        runtime_binding_ptr<runtime_binding_interface<container_type>>,
+        typename Binding::container_type *>
+    make_allocated_binding(allocator_type &allocator, Args &&...args) {
+      auto alloc = allocator_traits::rebind<Binding>(allocator);
       auto *instance = allocator_traits::allocate(alloc, 1);
       try {
         allocator_traits::construct(alloc, instance,
@@ -810,16 +918,469 @@ protected:
               &instance->get_container()};
     }
 
-    alignas(registered_binding_entry) std::byte
-        no_key_singular_entry_storage_[sizeof(registered_binding_entry)];
-    alignas(inline_binding_storage_alignment) std::byte
-        inline_binding_storage_[inline_binding_storage_size];
-    alignas(inline_binding_storage_alignment) std::byte
-        inline_entry_binding_storage_[inline_binding_storage_size];
-    alignas(registered_binding_entry) std::byte
-        inline_entry_storage_[sizeof(registered_binding_entry)];
-    bool no_key_singular_entry_constructed_ = false;
-    bool inline_entry_constructed_ = false;
+    struct no_key_slot_storage {
+      explicit no_key_slot_storage(allocator_type &allocator)
+          : allocator_(std::addressof(allocator)) {}
+
+      no_key_slot_storage(const no_key_slot_storage &) = delete;
+      no_key_slot_storage &operator=(const no_key_slot_storage &) = delete;
+
+      ~no_key_slot_storage() { erase_no_key_singular_entry(); }
+
+      bool empty() const { return !no_key_singular_entry_constructed_; }
+
+      allocator_type *allocator() const { return allocator_; }
+
+      bool has_no_key_singular_entry() const {
+        return no_key_singular_entry_constructed_;
+      }
+
+      registered_binding_entry *no_key_singular_entry() {
+        return no_key_singular_entry_constructed_
+                   ? std::launder(reinterpret_cast<registered_binding_entry *>(
+                         no_key_singular_entry_storage_))
+                   : nullptr;
+      }
+
+      const registered_binding_entry *no_key_singular_entry() const {
+        return no_key_singular_entry_constructed_
+                   ? std::launder(
+                         reinterpret_cast<const registered_binding_entry *>(
+                             no_key_singular_entry_storage_))
+                   : nullptr;
+      }
+
+      template <typename Binding, typename... Args>
+      typename Binding::container_type &emplace_no_key_singular_entry(
+          typename rtti_type::type_index resolved_storage_type,
+          lookup_identity &&resolved_lookup_identity, Args &&...args) {
+        auto &&[binding, binding_container] =
+            make_no_key_singular_binding<Binding>(std::forward<Args>(args)...);
+        try {
+          new (no_key_singular_entry_storage_) registered_binding_entry(
+              std::move(binding), std::move(resolved_storage_type),
+              std::nullopt, std::move(resolved_lookup_identity));
+          no_key_singular_entry_constructed_ = true;
+        } catch (...) {
+          binding.reset();
+          throw;
+        }
+        return *binding_container;
+      }
+
+      template <typename Binding>
+      void emplace_no_key_singular_entry(
+          runtime_binding_ptr<runtime_binding_interface<container_type>>
+              &&binding,
+          typename rtti_type::type_index resolved_storage_type,
+          lookup_identity &&resolved_lookup_identity) {
+        new (no_key_singular_entry_storage_) registered_binding_entry(
+            std::move(binding), std::move(resolved_storage_type), std::nullopt,
+            std::move(resolved_lookup_identity));
+        no_key_singular_entry_constructed_ = true;
+      }
+
+      void erase_no_key_singular_entry() noexcept {
+        if (auto *entry = no_key_singular_entry()) {
+          entry->~registered_binding_entry();
+          no_key_singular_entry_constructed_ = false;
+        }
+      }
+
+      template <typename Binding, typename... Args>
+      std::pair<runtime_binding_ptr<runtime_binding_interface<container_type>>,
+                typename Binding::container_type *>
+      make_no_key_singular_binding(Args &&...args) {
+        if constexpr (can_store_inline_binding<Binding>) {
+          auto *instance = reinterpret_cast<Binding *>(inline_binding_storage_);
+          new (instance) Binding(std::forward<Args>(args)...);
+          return {
+              runtime_binding_ptr<runtime_binding_interface<container_type>>(
+                  instance,
+                  &registry_type::template destroy_inline_binding<Binding>),
+              &instance->get_container()};
+        }
+        return runtime_type_bindings::make_allocated_binding<Binding>(
+            *allocator_, std::forward<Args>(args)...);
+      }
+
+      allocator_type *allocator_;
+      alignas(registered_binding_entry) std::byte
+          no_key_singular_entry_storage_[sizeof(registered_binding_entry)];
+      alignas(inline_binding_storage_alignment) std::byte
+          inline_binding_storage_[inline_binding_storage_size];
+      bool no_key_singular_entry_constructed_ = false;
+    };
+
+    struct lookup_entry_owner {
+      explicit lookup_entry_owner(allocator_type &allocator)
+          : allocator_(std::addressof(allocator)),
+            entries(detail::make_lookup_storage_allocator<entry_allocator>(
+                allocator)) {}
+
+      lookup_entry_owner(const lookup_entry_owner &) = delete;
+      lookup_entry_owner &operator=(const lookup_entry_owner &) = delete;
+
+      ~lookup_entry_owner() { erase_inline_entry(); }
+
+      bool empty() const {
+        return !inline_entry_constructed_ && entries.empty();
+      }
+
+      allocator_type *allocator() const { return allocator_; }
+
+      template <typename Binding>
+      entry_handle emplace_entry(
+          Binding &&binding,
+          typename rtti_type::type_index resolved_storage_type,
+          std::optional<typename rtti_type::type_index> resolved_key_type,
+          lookup_identity &&resolved_lookup_identity) {
+        if (!inline_entry_constructed_) {
+          new (inline_entry_storage_) registered_binding_entry(
+              std::forward<Binding>(binding), std::move(resolved_storage_type),
+              std::move(resolved_key_type),
+              std::move(resolved_lookup_identity));
+          inline_entry_constructed_ = true;
+          return {inline_entry(), {}, true};
+        }
+
+        entries.emplace_back(
+            std::forward<Binding>(binding), std::move(resolved_storage_type),
+            std::move(resolved_key_type), std::move(resolved_lookup_identity));
+        auto entry = std::prev(entries.end());
+        return {std::addressof(*entry), entry, false,
+                slot_storage_kind::no_key};
+      }
+
+      template <typename Binding, typename... Args>
+      std::pair<entry_handle, typename Binding::container_type *>
+      emplace_inline_binding_entry(
+          typename rtti_type::type_index resolved_storage_type,
+          std::optional<typename rtti_type::type_index> resolved_key_type,
+          lookup_identity &&resolved_lookup_identity, Args &&...args) {
+        if (!inline_entry_constructed_ && can_store_inline_binding<Binding>) {
+          auto *instance = reinterpret_cast<Binding *>(inline_binding_storage_);
+          new (instance) Binding(std::forward<Args>(args)...);
+          runtime_binding_ptr<runtime_binding_interface<container_type>>
+              binding(instance,
+                      &registry_type::template destroy_inline_binding<Binding>);
+          auto *binding_container = std::addressof(instance->get_container());
+          try {
+            new (inline_entry_storage_) registered_binding_entry(
+                std::move(binding), std::move(resolved_storage_type),
+                std::move(resolved_key_type),
+                std::move(resolved_lookup_identity));
+            inline_entry_constructed_ = true;
+          } catch (...) {
+            binding.reset();
+            throw;
+          }
+          return {{inline_entry(), {}, true, slot_storage_kind::no_key},
+                  binding_container};
+        }
+
+        auto &&[binding, binding_container] =
+            runtime_type_bindings::make_allocated_binding<Binding>(
+                *allocator_, std::forward<Args>(args)...);
+        try {
+          return {emplace_entry(std::move(binding),
+                                std::move(resolved_storage_type),
+                                std::move(resolved_key_type),
+                                std::move(resolved_lookup_identity)),
+                  binding_container};
+        } catch (...) {
+          binding.reset();
+          throw;
+        }
+      }
+
+      void erase_entry(entry_handle entry) {
+        if (entry.inline_entry) {
+          erase_inline_entry();
+          return;
+        }
+        entries.erase(entry.list_iterator);
+      }
+
+    private:
+      allocator_type *allocator_;
+      entry_list entries;
+
+      registered_binding_entry *inline_entry() {
+        return inline_entry_constructed_
+                   ? std::launder(reinterpret_cast<registered_binding_entry *>(
+                         inline_entry_storage_))
+                   : nullptr;
+      }
+
+      void erase_inline_entry() noexcept {
+        if (auto *entry = inline_entry()) {
+          entry->~registered_binding_entry();
+          inline_entry_constructed_ = false;
+        }
+      }
+
+      alignas(inline_binding_storage_alignment) std::byte
+          inline_binding_storage_[inline_binding_storage_size];
+      alignas(registered_binding_entry) std::byte
+          inline_entry_storage_[sizeof(registered_binding_entry)];
+      bool inline_entry_constructed_ = false;
+    };
+
+    template <detail::runtime_lookup_cardinality Cardinality>
+    using row_storage_type =
+        typename lookup_table_type::template row_storage_type<Cardinality>;
+
+    static bool row_conflicts(
+        const row_storage_type<detail::runtime_lookup_cardinality::one> &rows,
+        const registered_binding_entry &) {
+      return !rows.empty();
+    }
+
+    static bool row_conflicts(
+        const row_storage_type<detail::runtime_lookup_cardinality::many> &rows,
+        const registered_binding_entry &entry) {
+      bool result = false;
+      rows.for_each([&](auto *existing_entry) {
+        if (existing_entry->storage_type == entry.storage_type) {
+          result = true;
+        }
+      });
+      return result;
+    }
+
+    template <detail::runtime_lookup_cardinality Cardinality>
+    static registered_binding_entry *
+    singular_row(const row_storage_type<Cardinality> &rows, bool &ambiguous) {
+      if (rows.empty()) {
+        ambiguous = false;
+        return nullptr;
+      }
+      ambiguous = rows.size() > 1;
+      return ambiguous ? nullptr : rows.front();
+    }
+
+    template <detail::runtime_lookup_cardinality Cardinality, typename Fn>
+    static std::size_t for_each_row(const row_storage_type<Cardinality> &rows,
+                                    Fn &&fn) {
+      rows.for_each([&](auto *entry) { fn(*entry); });
+      return rows.size();
+    }
+
+    template <detail::runtime_lookup_cardinality Cardinality,
+              slot_storage_kind Kind>
+    struct ordinary_slot_storage {
+      explicit ordinary_slot_storage(allocator_type &allocator)
+          : owner(allocator),
+            rows(detail::make_lookup_storage_allocator<
+                 typename lookup_table_type::row_allocator>(allocator)) {}
+
+      ordinary_slot_storage(const ordinary_slot_storage &) = delete;
+      ordinary_slot_storage &operator=(const ordinary_slot_storage &) = delete;
+
+      bool empty() const { return owner.empty() && rows.empty(); }
+
+      allocator_type *allocator() const { return owner.allocator(); }
+
+      template <typename Binding>
+      entry_handle emplace_entry(
+          Binding &&binding,
+          typename rtti_type::type_index resolved_storage_type,
+          std::optional<typename rtti_type::type_index> resolved_key_type,
+          lookup_identity &&resolved_lookup_identity) {
+        auto handle = owner.emplace_entry(
+            std::forward<Binding>(binding), std::move(resolved_storage_type),
+            std::move(resolved_key_type), std::move(resolved_lookup_identity));
+        handle.storage_kind = Kind;
+        return handle;
+      }
+
+      template <typename Binding, typename... Args>
+      std::pair<entry_handle, typename Binding::container_type *>
+      emplace_inline_binding_entry(
+          typename rtti_type::type_index resolved_storage_type,
+          std::optional<typename rtti_type::type_index> resolved_key_type,
+          lookup_identity &&resolved_lookup_identity, Args &&...args) {
+        auto result = owner.template emplace_inline_binding_entry<Binding>(
+            std::move(resolved_storage_type), std::move(resolved_key_type),
+            std::move(resolved_lookup_identity), std::forward<Args>(args)...);
+        result.first.storage_kind = Kind;
+        return result;
+      }
+
+      void erase_entry(entry_handle entry) { owner.erase_entry(entry); }
+
+      bool insert_lookup_rows(entry_handle entry) {
+        if (row_conflicts(rows, *entry)) {
+          return false;
+        }
+        try {
+          rows.emplace_back(std::addressof(*entry));
+        } catch (...) {
+          rows.erase(std::addressof(*entry));
+          throw;
+        }
+        return true;
+      }
+
+      void erase_lookup_rows(registered_binding_entry *entry) {
+        rows.erase(entry);
+      }
+
+      registered_binding_entry *find_singular(bool &ambiguous) {
+        return singular_row(rows, ambiguous);
+      }
+
+      template <typename Fn> std::size_t for_each(Fn &&fn) {
+        return for_each_row(rows, std::forward<Fn>(fn));
+      }
+
+      std::size_t count() const { return rows.size(); }
+
+      lookup_entry_owner owner;
+      row_storage_type<Cardinality> rows;
+    };
+
+    struct runtime_key_slot_storage {
+      using runtime_key_storages_type =
+          typename lookup_table_type::template runtime_key_storages<
+              typename detail::runtime_lookup_entries<
+                  normalized_view_entries>::type>;
+
+      explicit runtime_key_slot_storage(allocator_type &allocator)
+          : owner(allocator), runtime_key_buckets(allocator) {}
+
+      runtime_key_slot_storage(const runtime_key_slot_storage &) = delete;
+      runtime_key_slot_storage &
+      operator=(const runtime_key_slot_storage &) = delete;
+
+      bool empty() const { return owner.empty(); }
+
+      allocator_type *allocator() const { return owner.allocator(); }
+
+      template <typename Binding>
+      entry_handle emplace_entry(
+          Binding &&binding,
+          typename rtti_type::type_index resolved_storage_type,
+          std::optional<typename rtti_type::type_index> resolved_key_type,
+          lookup_identity &&resolved_lookup_identity) {
+        auto handle = owner.emplace_entry(
+            std::forward<Binding>(binding), std::move(resolved_storage_type),
+            std::move(resolved_key_type), std::move(resolved_lookup_identity));
+        handle.storage_kind = slot_storage_kind::runtime_key;
+        return handle;
+      }
+
+      template <typename Binding, typename... Args>
+      std::pair<entry_handle, typename Binding::container_type *>
+      emplace_inline_binding_entry(
+          typename rtti_type::type_index resolved_storage_type,
+          std::optional<typename rtti_type::type_index> resolved_key_type,
+          lookup_identity &&resolved_lookup_identity, Args &&...args) {
+        auto result = owner.template emplace_inline_binding_entry<Binding>(
+            std::move(resolved_storage_type), std::move(resolved_key_type),
+            std::move(resolved_lookup_identity), std::forward<Args>(args)...);
+        result.first.storage_kind = slot_storage_kind::runtime_key;
+        return result;
+      }
+
+      void erase_entry(entry_handle entry) { owner.erase_entry(entry); }
+
+      bool insert_lookup_rows(entry_handle entry) {
+        auto &registered_entry = *entry;
+        if (runtime_key_buckets.conflicts(registered_entry,
+                                          registered_entry.identity)) {
+          return false;
+        }
+        try {
+          if (!runtime_key_buckets.insert(registered_entry,
+                                          registered_entry.identity)) {
+            return false;
+          }
+        } catch (...) {
+          runtime_key_buckets.erase(registered_entry);
+          throw;
+        }
+        return true;
+      }
+
+      void erase_lookup_rows(registered_binding_entry *entry) {
+        runtime_key_buckets.erase(*entry);
+      }
+
+      template <typename LookupEntry, typename KeyValue>
+      registered_binding_entry *find_singular(const KeyValue &key_value,
+                                              bool &ambiguous) {
+        return runtime_key_buckets.template find_singular<LookupEntry>(
+            key_value, ambiguous);
+      }
+
+      template <typename LookupEntry, typename KeyValue, typename Fn>
+      std::size_t for_each(const KeyValue &key_value, Fn &&fn) {
+        return runtime_key_buckets.template for_each<LookupEntry>(
+            key_value, std::forward<Fn>(fn));
+      }
+
+      template <typename LookupEntry, typename KeyValue>
+      std::size_t count(const KeyValue &key_value) {
+        return runtime_key_buckets.template count<LookupEntry>(key_value);
+      }
+
+      lookup_entry_owner owner;
+      runtime_key_storages_type runtime_key_buckets;
+    };
+
+    no_key_slot_storage &no_key_storage() {
+      if (auto *storage = std::get_if<no_key_slot_storage>(&storage_)) {
+        return *storage;
+      }
+      if (auto *allocator = empty_storage_allocator()) {
+        storage_.template emplace<no_key_slot_storage>(*allocator);
+      }
+      return std::get<no_key_slot_storage>(storage_);
+    }
+
+    ordinary_one_slot_storage &ordinary_one_storage() {
+      if (auto *storage = std::get_if<ordinary_one_slot_storage>(&storage_)) {
+        return *storage;
+      }
+      if (auto *allocator = empty_storage_allocator()) {
+        storage_.template emplace<ordinary_one_slot_storage>(*allocator);
+      }
+      return std::get<ordinary_one_slot_storage>(storage_);
+    }
+
+    ordinary_many_slot_storage &ordinary_many_storage() {
+      if (auto *storage = std::get_if<ordinary_many_slot_storage>(&storage_)) {
+        return *storage;
+      }
+      if (auto *allocator = empty_storage_allocator()) {
+        storage_.template emplace<ordinary_many_slot_storage>(*allocator);
+      }
+      return std::get<ordinary_many_slot_storage>(storage_);
+    }
+
+    runtime_key_slot_storage &runtime_key_storage() {
+      if (auto *storage = std::get_if<runtime_key_slot_storage>(&storage_)) {
+        return *storage;
+      }
+      if (auto *allocator = empty_storage_allocator()) {
+        storage_.template emplace<runtime_key_slot_storage>(*allocator);
+      }
+      return std::get<runtime_key_slot_storage>(storage_);
+    }
+
+    allocator_type *empty_storage_allocator() {
+      return std::visit(
+          [](auto &storage) -> allocator_type * {
+            return storage.empty() ? storage.allocator() : nullptr;
+          },
+          storage_);
+    }
+
+    std::variant<no_key_slot_storage, ordinary_one_slot_storage,
+                 ordinary_many_slot_storage, runtime_key_slot_storage>
+        storage_;
   };
 
   struct runtime_bindings_state {
@@ -832,6 +1393,80 @@ protected:
     typename ContainerTraits::template type_cache_type<void *, allocator_type>
         type_cache;
   };
+
+  struct inline_runtime_bindings_state_storage {
+    runtime_bindings_state *get() {
+      return constructed_
+                 ? std::launder(reinterpret_cast<runtime_bindings_state *>(
+                       storage_))
+                 : nullptr;
+    }
+
+    const runtime_bindings_state *get() const {
+      return constructed_
+                 ? std::launder(
+                       reinterpret_cast<const runtime_bindings_state *>(
+                           storage_))
+                 : nullptr;
+    }
+
+    runtime_bindings_state &ensure(allocator_type &allocator) {
+      if (!constructed_) {
+        new (storage_) runtime_bindings_state(allocator);
+        constructed_ = true;
+      }
+      return *std::launder(reinterpret_cast<runtime_bindings_state *>(storage_));
+    }
+
+    void destroy(allocator_type &) {
+      if (auto *state = get()) {
+        state->~runtime_bindings_state();
+        constructed_ = false;
+      }
+    }
+
+    alignas(runtime_bindings_state) std::byte
+        storage_[sizeof(runtime_bindings_state)];
+    bool constructed_ = false;
+  };
+
+  struct allocated_runtime_bindings_state_storage {
+    runtime_bindings_state *get() { return state_; }
+    const runtime_bindings_state *get() const { return state_; }
+
+    runtime_bindings_state &ensure(allocator_type &allocator) {
+      if (!state_) {
+        auto alloc = allocator_traits::rebind<runtime_bindings_state>(allocator);
+        auto *state = allocator_traits::allocate(alloc, 1);
+        try {
+          allocator_traits::construct(alloc, state, allocator);
+        } catch (...) {
+          allocator_traits::deallocate(alloc, state, 1);
+          throw;
+        }
+        state_ = state;
+      }
+      return *state_;
+    }
+
+    void destroy(allocator_type &allocator) {
+      if (state_) {
+        auto alloc = allocator_traits::rebind<runtime_bindings_state>(allocator);
+        allocator_traits::destroy(alloc, state_);
+        allocator_traits::deallocate(alloc, state_, 1);
+        state_ = nullptr;
+      }
+    }
+
+    runtime_bindings_state *state_ = nullptr;
+  };
+
+  static constexpr bool use_inline_runtime_bindings_state =
+      std::is_same_v<void, ParentRegistry> ||
+      is_static_allocator_v<allocator_type>;
+  using runtime_bindings_state_storage = std::conditional_t<
+      use_inline_runtime_bindings_state, inline_runtime_bindings_state_storage,
+      allocated_runtime_bindings_state_storage>;
 
   using runtime_binding_interface_type =
       runtime_binding_interface<container_type>;
@@ -955,33 +1590,92 @@ protected:
     }
   };
 
-  template <typename Request, typename IdType = none_t>
-  runtime_selection runtime_source_select(IdType &&id = IdType()) {
+  template <typename Request, typename IdType, typename Interface>
+  runtime_type_bindings *
+  runtime_source_bindings_at_interface(runtime_bindings_state *state) {
+    if (!state) {
+      return nullptr;
+    }
+
+    if constexpr (is_none_v<std::decay_t<IdType>>) {
+      using entries = normalized_view_entries;
+      using many_entry =
+          detail::selected_no_key_lookup_entry_t<Interface, ::dingo::many,
+                                                 entries>;
+      using lookup_cardinality =
+          std::conditional_t<!std::is_void_v<many_entry>, ::dingo::many,
+                             ::dingo::one>;
+      using slot = no_key_runtime_binding_slot<Interface, lookup_cardinality>;
+      return state->type_bindings.template get<slot>();
+    } else if constexpr (detail::is_typed_key_v<IdType>) {
+      using key_id_type = std::decay_t<IdType>;
+      using key_type = typename key_id_type::type;
+      using entries = normalized_view_entries;
+      using one_entry =
+          detail::selected_typed_key_lookup_entry_t<Interface, key_type,
+                                                    ::dingo::one, entries>;
+      using many_entry =
+          detail::selected_typed_key_lookup_entry_t<Interface, key_type,
+                                                    ::dingo::many, entries>;
+      using lookup_cardinality =
+          std::conditional_t<std::is_void_v<one_entry> &&
+                                 !std::is_void_v<many_entry>,
+                             ::dingo::many, ::dingo::one>;
+      using slot = typed_key_runtime_binding_slot<Interface, key_type,
+                                                  lookup_cardinality>;
+      return state->type_bindings.template get<slot>();
+    } else {
+      using key_type = std::decay_t<IdType>;
+      using lookup_entry =
+          detail::selected_lookup_entry_t<Interface, key_type,
+                                          normalized_view_entries>;
+      if constexpr (std::is_void_v<lookup_entry>) {
+        (void)state;
+        return nullptr;
+      } else {
+        using slot = runtime_key_runtime_binding_slot<
+            Interface, key_type, typename lookup_entry::cardinality>;
+        return state->type_bindings.template get<slot>();
+      }
+    }
+  }
+
+  template <typename Request, typename IdType>
+  runtime_type_bindings *
+  runtime_source_bindings(runtime_bindings_state *state) {
     using lookup_type = normalized_type_t<Request>;
     using exact_type =
         std::remove_cv_t<std::remove_reference_t<request_interface_t<Request>>>;
-    auto *state = runtime_bindings_if_present();
     auto *data = [&]() {
-      if (!state) {
-        return static_cast<runtime_type_bindings *>(nullptr);
-      }
       if constexpr (!is_none_v<std::decay_t<IdType>> &&
                     !detail::is_typed_key_v<IdType>) {
-        return state->type_bindings.template get<lookup_type>();
+        return runtime_source_bindings_at_interface<Request, IdType,
+                                                    lookup_type>(state);
       } else {
-        return state->type_bindings.template get<exact_type>();
+        return runtime_source_bindings_at_interface<Request, IdType,
+                                                    exact_type>(state);
       }
     }();
     if constexpr (!std::is_same_v<lookup_type, exact_type>) {
-      if (!data && state) {
+      if (!data) {
         if constexpr (!is_none_v<std::decay_t<IdType>> &&
                       !detail::is_typed_key_v<IdType>) {
-          data = state->type_bindings.template get<exact_type>();
+          data =
+              runtime_source_bindings_at_interface<Request, IdType, exact_type>(
+                  state);
         } else {
-          data = state->type_bindings.template get<lookup_type>();
+          data = runtime_source_bindings_at_interface<Request, IdType,
+                                                      lookup_type>(state);
         }
       }
     }
+    return data;
+  }
+
+  template <typename Request, typename IdType = none_t>
+  runtime_selection runtime_source_select(IdType &&id = IdType()) {
+    auto *state = runtime_bindings_if_present();
+    auto *data = runtime_source_bindings<Request, IdType>(state);
     return select_runtime_binding<Request>(data, std::forward<IdType>(id));
   }
 
@@ -1053,13 +1747,13 @@ protected:
     }
   }
 
-  template <typename T> runtime_type_bindings *runtime_collection_bindings() {
+  template <typename T, typename IdType>
+  runtime_type_bindings *runtime_collection_bindings(IdType &&) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
-    using lookup_type = normalized_type_t<resolve_type>;
 
     auto *state = runtime_bindings_if_present();
-    return state ? state->type_bindings.template get<lookup_type>() : nullptr;
+    return runtime_source_bindings<resolve_type, IdType>(state);
   }
 
   template <typename T, typename Fn>
@@ -1078,12 +1772,11 @@ protected:
     }
 
     return inline_count +
-           data.lookup_table
-               .template for_each_no_key<index_interface_type, ::dingo::one>(
-                   [&](auto &entry) {
-                     fn(results, resolve_collection_type<resolve_type>(
-                                     *entry.binding, context));
-                   });
+           data.template for_each_no_key<index_interface_type, ::dingo::one>(
+               [&](auto &entry) {
+                 fn(results, resolve_collection_type<resolve_type>(
+                                 *entry.binding, context));
+               });
   }
 
   template <typename T, typename Key, typename Fn>
@@ -1094,12 +1787,11 @@ protected:
     using resolve_type = typename collection_type::resolve_type;
     using index_interface_type = normalized_type_t<resolve_type>;
 
-    return data.lookup_table
-        .template for_each_typed_key<index_interface_type, Key, ::dingo::one>(
-            [&](auto &entry) {
-              fn(results, resolve_collection_type<resolve_type>(*entry.binding,
-                                                                context));
-            });
+    return data.template for_each_typed_key<index_interface_type, Key,
+                                            ::dingo::one>([&](auto &entry) {
+      fn(results,
+         resolve_collection_type<resolve_type>(*entry.binding, context));
+    });
   }
 
   template <typename T, typename Fn, typename IdType>
@@ -1123,7 +1815,7 @@ protected:
     } else {
       if constexpr (std::is_same_v<typename lookup_entry::cardinality,
                                    ::dingo::many>) {
-        return data.lookup_table.template for_each_runtime_key<
+        return data.template for_each_runtime_key<
             index_interface_type, index_key_type, ::dingo::many, lookup_entry>(
             id, [&](auto &entry) {
               fn(results, resolve_collection_type<resolve_type>(*entry.binding,
@@ -1165,12 +1857,11 @@ protected:
         return 0;
       }
     } else {
-      return data.lookup_table
-          .template for_each_no_key<index_interface_type, ::dingo::many>(
-              [&](auto &entry) {
-                fn(results, resolve_collection_type<resolve_type>(
-                                *entry.binding, context));
-              });
+      return data.template for_each_no_key<index_interface_type, ::dingo::many>(
+          [&](auto &entry) {
+            fn(results,
+               resolve_collection_type<resolve_type>(*entry.binding, context));
+          });
     }
   }
 
@@ -1202,8 +1893,8 @@ protected:
         return 0;
       }
     } else {
-      return data.lookup_table.template for_each_typed_key<
-          index_interface_type, key_type, ::dingo::many>([&](auto &entry) {
+      return data.template for_each_typed_key<index_interface_type, key_type,
+                                              ::dingo::many>([&](auto &entry) {
         fn(results,
            resolve_collection_type<resolve_type>(*entry.binding, context));
       });
@@ -1217,8 +1908,7 @@ protected:
     using index_interface_type = normalized_type_t<resolve_type>;
 
     return (data.has_no_key_singular_entry() ? 1U : 0U) +
-           data.lookup_table
-               .template count_no_key<index_interface_type, ::dingo::one>();
+           data.template count_no_key<index_interface_type, ::dingo::one>();
   }
 
   template <typename T, typename Key>
@@ -1227,7 +1917,7 @@ protected:
     using resolve_type = typename collection_type::resolve_type;
     using index_interface_type = normalized_type_t<resolve_type>;
 
-    return data.lookup_table
+    return data
         .template count_typed_key<index_interface_type, Key, ::dingo::one>();
   }
 
@@ -1247,7 +1937,7 @@ protected:
     } else {
       if constexpr (std::is_same_v<typename lookup_entry::cardinality,
                                    ::dingo::many>) {
-        return data.lookup_table.template count_runtime_key<
+        return data.template count_runtime_key<
             index_interface_type, index_key_type, ::dingo::many, lookup_entry>(
             id);
       } else {
@@ -1277,8 +1967,7 @@ protected:
         return 0;
       }
     } else {
-      return data.lookup_table
-          .template count_no_key<index_interface_type, ::dingo::many>();
+      return data.template count_no_key<index_interface_type, ::dingo::many>();
     }
   }
 
@@ -1304,46 +1993,45 @@ protected:
         return 0;
       }
     } else {
-      return data.lookup_table.template count_typed_key<
-          index_interface_type, key_type, ::dingo::many>();
+      return data.template count_typed_key<index_interface_type, key_type,
+                                           ::dingo::many>();
     }
   }
 
   template <typename T, typename Fn, typename IdType>
   std::size_t append_runtime_collection(T &results, runtime_context &context,
                                         Fn &&fn, IdType id) {
-    auto data = runtime_collection_bindings<T>();
-    if (!data) {
-      return 0;
-    }
-
     if constexpr (!is_none_v<std::decay_t<IdType>> &&
                   !detail::is_typed_key_v<IdType>) {
-      return append_runtime_keyed_collection(*data, results, context,
-                                             std::forward<Fn>(fn), id);
+      auto *data = runtime_collection_bindings<T>(id);
+      return data ? append_runtime_keyed_collection(*data, results, context,
+                                                    std::forward<Fn>(fn), id)
+                  : 0;
     } else if constexpr (is_none_v<std::decay_t<IdType>>) {
-      return append_no_key_runtime_collection(*data, results, context,
-                                              std::forward<Fn>(fn));
+      auto *data = runtime_collection_bindings<T>(id);
+      return data ? append_no_key_runtime_collection(*data, results, context,
+                                                     std::forward<Fn>(fn))
+                  : 0;
     } else {
-      return append_typed_key_runtime_collection(*data, results, context,
-                                                 std::forward<Fn>(fn), id);
+      auto *data = runtime_collection_bindings<T>(id);
+      return data ? append_typed_key_runtime_collection(
+                        *data, results, context, std::forward<Fn>(fn), id)
+                  : 0;
     }
   }
 
   template <typename T, typename IdType>
   std::size_t count_runtime_collection(IdType id) {
-    auto data = runtime_collection_bindings<T>();
-    if (!data) {
-      return 0;
-    }
-
     if constexpr (!is_none_v<std::decay_t<IdType>> &&
                   !detail::is_typed_key_v<IdType>) {
-      return count_runtime_keyed_collection<T>(*data, id);
+      auto *data = runtime_collection_bindings<T>(id);
+      return data ? count_runtime_keyed_collection<T>(*data, id) : 0;
     } else if constexpr (is_none_v<std::decay_t<IdType>>) {
-      return count_no_key_runtime_collection<T>(*data);
+      auto *data = runtime_collection_bindings<T>(id);
+      return data ? count_no_key_runtime_collection<T>(*data) : 0;
     } else {
-      return count_typed_key_runtime_collection<T>(*data, id);
+      auto *data = runtime_collection_bindings<T>(id);
+      return data ? count_typed_key_runtime_collection<T>(*data, id) : 0;
     }
   }
 
@@ -1423,9 +2111,8 @@ private:
         selected = data->no_key_singular_entry();
       }
       if (!selected) {
-        selected = data->lookup_table
-                       .template find_singular_no_key<Interface, Cardinality>(
-                           ambiguous);
+        selected = data->template find_singular_no_key<Interface, Cardinality>(
+            ambiguous);
       }
     }
 
@@ -1439,9 +2126,8 @@ private:
     bool ambiguous = false;
     if (data) {
       selected =
-          data->lookup_table
-              .template find_singular_typed_key<Interface, Key, Cardinality>(
-                  ambiguous);
+          data->template find_singular_typed_key<Interface, Key, Cardinality>(
+              ambiguous);
     }
 
     return make_lookup_table_selection(selected, ambiguous);
@@ -1455,8 +2141,10 @@ private:
     registered_binding_entry *selected = nullptr;
     bool ambiguous = false;
     if (data) {
-      selected = data->lookup_table.template find_singular_runtime_key<
-          Interface, Key, Cardinality, LookupEntry>(key_value, ambiguous);
+      selected =
+          data->template find_singular_runtime_key<Interface, Key, Cardinality,
+                                                   LookupEntry>(key_value,
+                                                                ambiguous);
     }
 
     return make_lookup_table_selection(selected, ambiguous);
@@ -1585,6 +2273,14 @@ private:
     }
   }
 
+  template <typename TypeInterface, typename TypeStorage>
+  void reject_existing_no_key_singular(runtime_type_bindings &data) {
+    if (data.has_no_key_singular_entry()) {
+      throw detail::make_type_already_registered_exception<
+          TypeInterface, typename TypeStorage::type>();
+    }
+  }
+
   template <typename TypeInterface, typename TypeStorage, typename Binding,
             typename IdType, typename KeyIdType>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
@@ -1592,11 +2288,6 @@ private:
     check_interface_requirements<TypeStorage,
                                  typename annotated_traits<TypeInterface>::type,
                                  typename TypeStorage::type>();
-
-    auto pb =
-        ensure_runtime_bindings().type_bindings.template insert<TypeInterface>(
-            get_allocator());
-    auto &data = pb.first;
 
     if constexpr (!is_none_v<std::decay_t<IdType>>) {
       auto resolved_key_type = [&]() {
@@ -1617,6 +2308,15 @@ private:
                     "dingo view definition for interface/key");
       using lookup_cardinality_type =
           typename lookup_entry_cardinality<lookup_entry>::type;
+      using slot = runtime_key_runtime_binding_slot<TypeInterface, IdType,
+                                                    lookup_cardinality_type>;
+      auto &data =
+          ensure_runtime_bindings()
+              .type_bindings
+              .template insert<slot>(
+                  get_allocator(),
+                  typename runtime_type_bindings::runtime_key_slot_tag{})
+              .first;
       auto lookup_id = lookup_table_type::template make_runtime_key_identity<
           TypeInterface, IdType, lookup_cardinality_type>(get_allocator(), id);
       auto inserted_entry = data.emplace_entry(
@@ -1642,6 +2342,19 @@ private:
         using lookup_cardinality_type =
             std::conditional_t<!std::is_void_v<one_entry>, ::dingo::one,
                                ::dingo::many>;
+        using slot =
+            no_key_runtime_binding_slot<TypeInterface, lookup_cardinality_type>;
+        auto &data =
+            ensure_runtime_bindings()
+                .type_bindings
+                .template insert<slot>(
+                    get_allocator(),
+                    typename runtime_type_bindings::
+                        template ordinary_slot_tag_t<lookup_cardinality_type>{})
+                .first;
+        if constexpr (std::is_same_v<lookup_cardinality_type, ::dingo::one>) {
+          reject_existing_no_key_singular<TypeInterface, TypeStorage>(data);
+        }
         auto lookup_id = lookup_table_type::template make_no_key_identity<
             TypeInterface, lookup_cardinality_type>();
         auto inserted_entry = data.emplace_entry(
@@ -1655,6 +2368,15 @@ private:
       } else {
         auto resolved_storage_type =
             rtti_type::template get_type_index<typename TypeStorage::type>();
+        using slot = no_key_runtime_binding_slot<TypeInterface, ::dingo::one>;
+        auto &data = ensure_runtime_bindings()
+                         .type_bindings
+                         .template insert<slot>(
+                             get_allocator(),
+                             typename runtime_type_bindings::
+                                 template ordinary_slot_tag_t<::dingo::one>{})
+                         .first;
+        reject_existing_no_key_singular<TypeInterface, TypeStorage>(data);
         auto lookup_id =
             lookup_table_type::template make_no_key_identity<TypeInterface,
                                                              ::dingo::one>();
@@ -1681,6 +2403,17 @@ private:
         using lookup_cardinality_type =
             std::conditional_t<!std::is_void_v<one_entry>, ::dingo::one,
                                ::dingo::many>;
+        using slot =
+            typed_key_runtime_binding_slot<TypeInterface, typed_key_type,
+                                           lookup_cardinality_type>;
+        auto &data =
+            ensure_runtime_bindings()
+                .type_bindings
+                .template insert<slot>(
+                    get_allocator(),
+                    typename runtime_type_bindings::
+                        template ordinary_slot_tag_t<lookup_cardinality_type>{})
+                .first;
         auto lookup_id = lookup_table_type::template make_typed_key_identity<
             TypeInterface, typed_key_type, lookup_cardinality_type>();
         auto inserted_entry = data.emplace_entry(
@@ -1696,6 +2429,16 @@ private:
       } else {
         auto resolved_storage_type =
             rtti_type::template get_type_index<typename TypeStorage::type>();
+        using slot =
+            typed_key_runtime_binding_slot<TypeInterface, typed_key_type,
+                                           ::dingo::one>;
+        auto &data = ensure_runtime_bindings()
+                         .type_bindings
+                         .template insert<slot>(
+                             get_allocator(),
+                             typename runtime_type_bindings::
+                                 template ordinary_slot_tag_t<::dingo::one>{})
+                         .first;
         auto lookup_id = lookup_table_type::template make_typed_key_identity<
             TypeInterface, typed_key_type, ::dingo::one>();
         auto inserted_entry = data.emplace_entry(
@@ -1751,11 +2494,6 @@ private:
                                  typename annotated_traits<TypeInterface>::type,
                                  typename TypeStorage::type>();
 
-    auto &data =
-        ensure_runtime_bindings()
-            .type_bindings.template insert<TypeInterface>(get_allocator())
-            .first;
-
     if constexpr (!is_none_v<std::decay_t<IdType>>) {
       auto resolved_key_type = [&]() {
         if constexpr (is_none_v<std::decay_t<KeyIdType>>) {
@@ -1775,6 +2513,15 @@ private:
                     "dingo view definition for interface/key");
       using lookup_cardinality_type =
           typename lookup_entry_cardinality<lookup_entry>::type;
+      using slot = runtime_key_runtime_binding_slot<TypeInterface, IdType,
+                                                    lookup_cardinality_type>;
+      auto &data =
+          ensure_runtime_bindings()
+              .type_bindings
+              .template insert<slot>(
+                  get_allocator(),
+                  typename runtime_type_bindings::runtime_key_slot_tag{})
+              .first;
       auto lookup_id = lookup_table_type::template make_runtime_key_identity<
           TypeInterface, IdType, lookup_cardinality_type>(get_allocator(), id);
       auto &&[inserted_entry, binding_container] =
@@ -1803,6 +2550,19 @@ private:
         using lookup_cardinality_type =
             std::conditional_t<!std::is_void_v<one_entry>, ::dingo::one,
                                ::dingo::many>;
+        using slot =
+            no_key_runtime_binding_slot<TypeInterface, lookup_cardinality_type>;
+        auto &data =
+            ensure_runtime_bindings()
+                .type_bindings
+                .template insert<slot>(
+                    get_allocator(),
+                    typename runtime_type_bindings::
+                        template ordinary_slot_tag_t<lookup_cardinality_type>{})
+                .first;
+        if constexpr (std::is_same_v<lookup_cardinality_type, ::dingo::one>) {
+          reject_existing_no_key_singular<TypeInterface, TypeStorage>(data);
+        }
         auto lookup_id = lookup_table_type::template make_no_key_identity<
             TypeInterface, lookup_cardinality_type>();
         auto &&[inserted_entry, binding_container] =
@@ -1817,6 +2577,15 @@ private:
         runtime_bindings_present_ = true;
         return *binding_container;
       } else {
+        using slot = no_key_runtime_binding_slot<TypeInterface, ::dingo::one>;
+        auto &data = ensure_runtime_bindings()
+                         .type_bindings
+                         .template insert<slot>(
+                             get_allocator(),
+                             typename runtime_type_bindings::
+                                 template ordinary_slot_tag_t<::dingo::one>{})
+                         .first;
+        reject_existing_no_key_singular<TypeInterface, TypeStorage>(data);
         auto lookup_id =
             lookup_table_type::template make_no_key_identity<TypeInterface,
                                                              ::dingo::one>();
@@ -1848,6 +2617,17 @@ private:
         using lookup_cardinality_type =
             std::conditional_t<!std::is_void_v<one_entry>, ::dingo::one,
                                ::dingo::many>;
+        using slot =
+            typed_key_runtime_binding_slot<TypeInterface, typed_key_type,
+                                           lookup_cardinality_type>;
+        auto &data =
+            ensure_runtime_bindings()
+                .type_bindings
+                .template insert<slot>(
+                    get_allocator(),
+                    typename runtime_type_bindings::
+                        template ordinary_slot_tag_t<lookup_cardinality_type>{})
+                .first;
         auto lookup_id = lookup_table_type::template make_typed_key_identity<
             TypeInterface, typed_key_type, lookup_cardinality_type>();
         auto &&[inserted_entry, binding_container] =
@@ -1863,6 +2643,16 @@ private:
         runtime_bindings_present_ = true;
         return *binding_container;
       } else {
+        using slot =
+            typed_key_runtime_binding_slot<TypeInterface, typed_key_type,
+                                           ::dingo::one>;
+        auto &data = ensure_runtime_bindings()
+                         .type_bindings
+                         .template insert<slot>(
+                             get_allocator(),
+                             typename runtime_type_bindings::
+                                 template ordinary_slot_tag_t<::dingo::one>{})
+                         .first;
         auto lookup_id = lookup_table_type::template make_typed_key_identity<
             TypeInterface, typed_key_type, ::dingo::one>();
         auto &&[inserted_entry, binding_container] =
@@ -1890,17 +2680,17 @@ private:
                                  typename TypeStorage::type>();
 
     auto &state = ensure_runtime_bindings();
-    auto pb =
-        state.type_bindings.template insert<TypeInterface>(get_allocator());
+    using slot = no_key_runtime_binding_slot<TypeInterface, ::dingo::one>;
+    auto pb = state.type_bindings.template insert<slot>(
+        get_allocator(), typename runtime_type_bindings::no_key_slot_tag{});
     auto &data = pb.first;
 
     bool type_bindings_inserted = pb.second;
     try {
       bool ambiguous = false;
       auto *selected =
-          data.lookup_table
-              .template find_singular_no_key<TypeInterface, ::dingo::one>(
-                  ambiguous);
+          data.template find_singular_no_key<TypeInterface, ::dingo::one>(
+              ambiguous);
       if (data.has_no_key_singular_entry() || selected || ambiguous) {
         throw detail::make_type_already_registered_exception<
             TypeInterface, typename TypeStorage::type>();
@@ -1919,7 +2709,7 @@ private:
       return binding_container;
     } catch (...) {
       if (type_bindings_inserted) {
-        state.type_bindings.template erase<TypeInterface>();
+        state.type_bindings.template erase<slot>();
       }
       throw;
     }
@@ -2047,9 +2837,7 @@ private:
 
   resolve_root_type *resolve_root_ = nullptr;
 
-  alignas(runtime_bindings_state) std::byte
-      runtime_bindings_[sizeof(runtime_bindings_state)];
-  bool runtime_bindings_constructed_ = false;
+  runtime_bindings_state_storage runtime_bindings_;
 
   bool runtime_bindings_present_ = false;
 };
@@ -2059,11 +2847,7 @@ template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
 auto runtime_registry<ContainerTraits, Allocator, ParentRegistry,
                       ResolveRoot>::runtime_bindings_if_present()
     -> runtime_bindings_state * {
-  if (!runtime_bindings_constructed_) {
-    return nullptr;
-  }
-  return std::launder(
-      reinterpret_cast<runtime_bindings_state *>(runtime_bindings_));
+  return runtime_bindings_.get();
 }
 
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
@@ -2071,11 +2855,7 @@ template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
 auto runtime_registry<ContainerTraits, Allocator, ParentRegistry,
                       ResolveRoot>::runtime_bindings_if_present() const
     -> const runtime_bindings_state * {
-  if (!runtime_bindings_constructed_) {
-    return nullptr;
-  }
-  return std::launder(
-      reinterpret_cast<const runtime_bindings_state *>(runtime_bindings_));
+  return runtime_bindings_.get();
 }
 
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
@@ -2083,23 +2863,14 @@ template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
 auto runtime_registry<ContainerTraits, Allocator, ParentRegistry,
                       ResolveRoot>::ensure_runtime_bindings()
     -> runtime_bindings_state & {
-  if (!runtime_bindings_constructed_) {
-    new (runtime_bindings_) runtime_bindings_state(get_allocator());
-    runtime_bindings_constructed_ = true;
-  }
-  return *std::launder(
-      reinterpret_cast<runtime_bindings_state *>(runtime_bindings_));
+  return runtime_bindings_.ensure(get_allocator());
 }
 
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
           typename ResolveRoot>
 void runtime_registry<ContainerTraits, Allocator, ParentRegistry,
                       ResolveRoot>::destroy_runtime_bindings() {
-  if (runtime_bindings_constructed_) {
-    std::launder(reinterpret_cast<runtime_bindings_state *>(runtime_bindings_))
-        ->~runtime_bindings_state();
-    runtime_bindings_constructed_ = false;
-  }
+  runtime_bindings_.destroy(get_allocator());
 }
 
 namespace detail {
