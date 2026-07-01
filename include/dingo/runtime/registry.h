@@ -1702,6 +1702,57 @@ protected:
           detail::no_lookup_backend>,
       typed_key_lookup_entry_t<Interface, Key, Cardinality>>;
 
+  template <typename Interface, typename KeyDomain, typename Cardinality>
+  struct selected_ordinary_lookup_entry;
+
+  template <typename Interface, typename Cardinality>
+  struct selected_ordinary_lookup_entry<Interface, ::dingo::no_key,
+                                        Cardinality> {
+    using type = no_key_ordinary_lookup_entry_t<Interface, Cardinality>;
+  };
+
+  template <typename Interface, typename Key, typename Cardinality>
+  struct selected_ordinary_lookup_entry<Interface, ::dingo::typed_key<Key>,
+                                        Cardinality> {
+    using type = typed_key_ordinary_lookup_entry_t<Interface, Key, Cardinality>;
+  };
+
+  template <typename Interface, typename KeyDomain, typename Cardinality>
+  using selected_ordinary_lookup_entry_t =
+      typename selected_ordinary_lookup_entry<Interface, KeyDomain,
+                                              Cardinality>::type;
+
+  template <typename Interface, typename KeyDomain, typename Cardinality>
+  struct ordinary_runtime_binding_slot;
+
+  template <typename Interface, typename Cardinality>
+  struct ordinary_runtime_binding_slot<Interface, ::dingo::no_key,
+                                       Cardinality> {
+    using type = no_key_runtime_binding_slot<Interface, Cardinality>;
+  };
+
+  template <typename Interface, typename Key, typename Cardinality>
+  struct ordinary_runtime_binding_slot<Interface, ::dingo::typed_key<Key>,
+                                       Cardinality> {
+    using type = typed_key_runtime_binding_slot<Interface, Key, Cardinality>;
+  };
+
+  template <typename Interface, typename KeyDomain, typename Cardinality>
+  using ordinary_runtime_binding_slot_t =
+      typename ordinary_runtime_binding_slot<Interface, KeyDomain,
+                                             Cardinality>::type;
+
+  template <typename Interface, typename KeyDomain, typename Cardinality>
+  runtime_type_bindings *
+  ordinary_slot_bindings_at(runtime_bindings_state *state) {
+    if (!state) {
+      return nullptr;
+    }
+    using slot =
+        ordinary_runtime_binding_slot_t<Interface, KeyDomain, Cardinality>;
+    return state->type_bindings.template get<slot>();
+  }
+
   template <typename Interface, typename Key>
   using runtime_key_lookup_entry_t =
       detail::selected_lookup_entry_t<Interface, Key, normalized_view_entries>;
@@ -1779,16 +1830,15 @@ protected:
 
     if constexpr (is_none_v<std::decay_t<IdType>>) {
       using lookup_cardinality = no_key_lookup_cardinality_t<Interface>;
-      using slot = no_key_runtime_binding_slot<Interface, lookup_cardinality>;
-      return state->type_bindings.template get<slot>();
+      return ordinary_slot_bindings_at<Interface, ::dingo::no_key,
+                                       lookup_cardinality>(state);
     } else if constexpr (detail::is_typed_key_v<IdType>) {
       using key_id_type = std::decay_t<IdType>;
       using key_type = typename key_id_type::type;
       using lookup_cardinality =
           typed_key_lookup_cardinality_t<Interface, key_type>;
-      using slot = typed_key_runtime_binding_slot<Interface, key_type,
-                                                  lookup_cardinality>;
-      return state->type_bindings.template get<slot>();
+      return ordinary_slot_bindings_at<Interface, ::dingo::typed_key<key_type>,
+                                       lookup_cardinality>(state);
     } else {
       using key_type = std::decay_t<IdType>;
       using lookup_entry = runtime_key_lookup_entry_t<Interface, key_type>;
@@ -2400,6 +2450,33 @@ private:
     }
   }
 
+  template <typename Slot, typename Cardinality, typename LookupEntry>
+  runtime_type_bindings &ensure_ordinary_slot_bindings() {
+    static_assert(detail::is_ordinary_selector_lookup_entry_v<LookupEntry>,
+                  "ordinary slot bindings require an ordinary no_key or "
+                  "typed_key LookupEntry");
+    static_assert(
+        std::is_same_v<typename lookup_entry_cardinality<LookupEntry>::type,
+                       Cardinality>,
+        "ordinary slot LookupEntry cardinality must match slot cardinality");
+    return ensure_runtime_bindings()
+        .type_bindings
+        .template insert<Slot>(
+            get_allocator(),
+            typename runtime_type_bindings::template ordinary_slot_tag_t<
+                Cardinality, LookupEntry>{})
+        .first;
+  }
+
+  template <typename Interface, typename KeyDomain, typename Cardinality>
+  runtime_type_bindings &ensure_ordinary_slot_at() {
+    using lookup_entry =
+        selected_ordinary_lookup_entry_t<Interface, KeyDomain, Cardinality>;
+    using slot =
+        ordinary_runtime_binding_slot_t<Interface, KeyDomain, Cardinality>;
+    return ensure_ordinary_slot_bindings<slot, Cardinality, lookup_entry>();
+  }
+
   template <typename TypeInterface, typename TypeStorage,
             typename ExceptionFactory>
   void commit_registration_entry(
@@ -2431,6 +2508,24 @@ private:
     Result result;
   };
 
+  template <typename TypeInterface, typename TypeStorage, typename EntryFactory,
+            typename ExceptionFactory>
+  auto register_slot_binding_transaction(
+      runtime_type_bindings &data,
+      typename rtti_type::type_index resolved_storage_type,
+      std::optional<typename rtti_type::type_index> resolved_key_type,
+      lookup_identity &&lookup_id, EntryFactory &&entry_factory,
+      ExceptionFactory &&make_exception) {
+    auto insertion =
+        entry_factory(data, std::move(resolved_storage_type),
+                      std::move(resolved_key_type), std::move(lookup_id));
+    commit_registration_entry<TypeInterface, TypeStorage>(
+        data, insertion.inserted_entry,
+        std::forward<ExceptionFactory>(make_exception));
+    runtime_bindings_present_ = true;
+    return insertion;
+  }
+
   template <typename TypeInterface, typename TypeStorage, typename IdType,
             typename KeyIdType>
   static auto make_registration_duplicate_exception() {
@@ -2444,6 +2539,27 @@ private:
       return detail::make_type_index_already_registered_exception<
           TypeInterface, typename TypeStorage::type, std::decay_t<KeyIdType>>();
     }
+  }
+
+  template <typename TypeInterface, typename TypeStorage, typename KeyDomain,
+            typename Cardinality, typename IdType, typename KeyIdType,
+            typename EntryFactory>
+  auto register_ordinary_slot_binding(
+      typename rtti_type::type_index resolved_storage_type,
+      std::optional<typename rtti_type::type_index> resolved_key_type,
+      lookup_identity &&lookup_id, EntryFactory &&entry_factory) {
+    auto &data =
+        ensure_ordinary_slot_at<TypeInterface, KeyDomain, Cardinality>();
+    if constexpr (std::is_same_v<KeyDomain, ::dingo::no_key> &&
+                  std::is_same_v<Cardinality, ::dingo::one>) {
+      reject_existing_no_key_singular<TypeInterface, TypeStorage>(data);
+    }
+    return register_slot_binding_transaction<TypeInterface, TypeStorage>(
+        data, std::move(resolved_storage_type), std::move(resolved_key_type),
+        std::move(lookup_id), std::forward<EntryFactory>(entry_factory), [] {
+          return make_registration_duplicate_exception<
+              TypeInterface, TypeStorage, IdType, KeyIdType>();
+        });
   }
 
   template <typename TypeInterface, typename TypeStorage, typename IdType,
@@ -2484,79 +2600,36 @@ private:
       }();
       auto lookup_id = lookup_table_type::template make_runtime_key_identity<
           TypeInterface, IdType, lookup_cardinality_type>(get_allocator(), id);
-      auto insertion =
-          entry_factory(data, std::move(resolved_storage_type),
-                        std::move(resolved_key_type), std::move(lookup_id));
-      commit_registration_entry<TypeInterface, TypeStorage>(
-          data, insertion.inserted_entry, [] {
+      return register_slot_binding_transaction<TypeInterface, TypeStorage>(
+          data, std::move(resolved_storage_type), std::move(resolved_key_type),
+          std::move(lookup_id), std::forward<EntryFactory>(entry_factory), [] {
             return make_registration_duplicate_exception<
                 TypeInterface, TypeStorage, IdType, KeyIdType>();
           });
-      runtime_bindings_present_ = true;
-      return insertion;
     } else if constexpr (is_none_v<std::decay_t<KeyIdType>>) {
       using lookup_cardinality_type =
           no_key_lookup_cardinality_t<TypeInterface>;
-      using lookup_entry =
-          no_key_ordinary_lookup_entry_t<TypeInterface,
-                                         lookup_cardinality_type>;
-      using slot =
-          no_key_runtime_binding_slot<TypeInterface, lookup_cardinality_type>;
-      auto &data =
-          ensure_runtime_bindings()
-              .type_bindings
-              .template insert<slot>(
-                  get_allocator(),
-                  typename runtime_type_bindings::template ordinary_slot_tag_t<
-                      lookup_cardinality_type, lookup_entry>{})
-              .first;
-      if constexpr (std::is_same_v<lookup_cardinality_type, ::dingo::one>) {
-        reject_existing_no_key_singular<TypeInterface, TypeStorage>(data);
-      }
       auto lookup_id = lookup_table_type::template make_no_key_identity<
           TypeInterface, lookup_cardinality_type>();
-      auto insertion =
-          entry_factory(data, std::move(resolved_storage_type),
-                        std::optional<typename rtti_type::type_index>{},
-                        std::move(lookup_id));
-      commit_registration_entry<TypeInterface, TypeStorage>(
-          data, insertion.inserted_entry, [] {
-            return make_registration_duplicate_exception<
-                TypeInterface, TypeStorage, IdType, KeyIdType>();
-          });
-      runtime_bindings_present_ = true;
-      return insertion;
+      return register_ordinary_slot_binding<
+          TypeInterface, TypeStorage, ::dingo::no_key, lookup_cardinality_type,
+          IdType, KeyIdType>(std::move(resolved_storage_type),
+                             std::optional<typename rtti_type::type_index>{},
+                             std::move(lookup_id),
+                             std::forward<EntryFactory>(entry_factory));
     } else {
       using typed_key_type = typename std::decay_t<KeyIdType>::type;
       using lookup_cardinality_type =
           typed_key_lookup_cardinality_t<TypeInterface, typed_key_type>;
-      using lookup_entry =
-          typed_key_ordinary_lookup_entry_t<TypeInterface, typed_key_type,
-                                            lookup_cardinality_type>;
-      using slot = typed_key_runtime_binding_slot<TypeInterface, typed_key_type,
-                                                  lookup_cardinality_type>;
-      auto &data =
-          ensure_runtime_bindings()
-              .type_bindings
-              .template insert<slot>(
-                  get_allocator(),
-                  typename runtime_type_bindings::template ordinary_slot_tag_t<
-                      lookup_cardinality_type, lookup_entry>{})
-              .first;
       auto lookup_id = lookup_table_type::template make_typed_key_identity<
           TypeInterface, typed_key_type, lookup_cardinality_type>();
-      auto insertion = entry_factory(
-          data, std::move(resolved_storage_type),
+      return register_ordinary_slot_binding<
+          TypeInterface, TypeStorage, ::dingo::typed_key<typed_key_type>,
+          lookup_cardinality_type, IdType, KeyIdType>(
+          std::move(resolved_storage_type),
           std::optional<typename rtti_type::type_index>{
               rtti_type::template get_type_index<std::decay_t<KeyIdType>>()},
-          std::move(lookup_id));
-      commit_registration_entry<TypeInterface, TypeStorage>(
-          data, insertion.inserted_entry, [] {
-            return make_registration_duplicate_exception<
-                TypeInterface, TypeStorage, IdType, KeyIdType>();
-          });
-      runtime_bindings_present_ = true;
-      return insertion;
+          std::move(lookup_id), std::forward<EntryFactory>(entry_factory));
     }
   }
 

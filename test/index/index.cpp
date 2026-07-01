@@ -14,6 +14,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -137,6 +138,105 @@ struct lookup_table_test_entry {
   typename lookup_table_test_rtti::type_index storage_type;
   lookup_table_test_table::lookup_identity identity;
 };
+
+class prototype_lookup_entry_owner {
+  using entry_allocator =
+      typename std::allocator_traits<lookup_table_test_allocator>::
+          template rebind_alloc<lookup_table_test_entry>;
+
+public:
+  explicit prototype_lookup_entry_owner(lookup_table_test_allocator &allocator)
+      : spill_entries_(entry_allocator(allocator)) {}
+
+  lookup_table_test_entry &emplace_uncommitted(
+      lookup_table_test_table::lookup_identity &&identity,
+      typename lookup_table_test_rtti::type_index storage_type) {
+    if (!inline_entry_) {
+      inline_entry_.emplace(std::move(identity), std::move(storage_type));
+      uncommitted_entry_ = std::addressof(*inline_entry_);
+      uncommitted_is_inline_ = true;
+      return *uncommitted_entry_;
+    }
+
+    spill_entries_.emplace_back(std::move(identity), std::move(storage_type));
+    uncommitted_entry_ = std::addressof(spill_entries_.back());
+    uncommitted_is_inline_ = false;
+    return *uncommitted_entry_;
+  }
+
+  void commit_uncommitted() {
+    uncommitted_entry_ = nullptr;
+    uncommitted_is_inline_ = false;
+  }
+
+  void rollback_uncommitted() {
+    if (!uncommitted_entry_) {
+      return;
+    }
+
+    if (uncommitted_is_inline_) {
+      inline_entry_.reset();
+    } else {
+      spill_entries_.pop_back();
+    }
+
+    uncommitted_entry_ = nullptr;
+    uncommitted_is_inline_ = false;
+  }
+
+  std::size_t count() const {
+    return (inline_entry_ ? std::size_t{1} : std::size_t{0}) +
+           spill_entries_.size();
+  }
+
+private:
+  std::optional<lookup_table_test_entry> inline_entry_;
+  std::vector<lookup_table_test_entry, entry_allocator> spill_entries_;
+  lookup_table_test_entry *uncommitted_entry_ = nullptr;
+  bool uncommitted_is_inline_ = false;
+};
+
+template <typename... LookupEntries, typename Group>
+lookup_table_test_entry *prototype_register_owned_entry(
+    prototype_lookup_entry_owner &owner, Group &group,
+    lookup_table_test_table::lookup_identity &&identity,
+    typename lookup_table_test_rtti::type_index storage_type) {
+  auto &entry =
+      owner.emplace_uncommitted(std::move(identity), std::move(storage_type));
+
+  try {
+    if (!group.template insert<LookupEntries...>(entry)) {
+      owner.rollback_uncommitted();
+      return nullptr;
+    }
+  } catch (...) {
+    owner.rollback_uncommitted();
+    throw;
+  }
+
+  owner.commit_uncommitted();
+  return std::addressof(entry);
+}
+
+template <typename Container>
+struct registered_storage_candidate_access : Container::registry_type {
+  using registry_type = typename Container::registry_type;
+  using registered_binding_entry =
+      typename registry_type::registered_binding_entry;
+  using lookup_table_type = typename registry_type::lookup_table_type;
+};
+
+template <typename Access, typename Container, typename Storage,
+          typename LookupIdentity>
+typename Access::registered_binding_entry
+make_registered_binding_entry(LookupIdentity &&identity) {
+  using runtime_container_type = typename Container::container_type;
+  using rtti_type = typename runtime_container_type::rtti_type;
+  return typename Access::registered_binding_entry(
+      runtime_binding_ptr<runtime_binding_interface<runtime_container_type>>{},
+      rtti_type::template get_type_index<Storage>(), std::nullopt,
+      std::forward<LookupIdentity>(identity));
+}
 
 struct fixed_injection_processor {
   virtual ~fixed_injection_processor() = default;
@@ -1129,6 +1229,1473 @@ TEST(index_test, selector_storage_typed_key_many_tracks_ambiguity_and_storage) {
   ambiguous = true;
   ASSERT_EQ(storage.find_singular(ambiguous), &second_entry);
   ASSERT_FALSE(ambiguous);
+}
+
+TEST(index_test, selector_table_no_key_one_selects_single_entry) {
+  struct processor {};
+  struct first_storage {};
+  struct second_storage {};
+
+  using no_key_one_entry =
+      detail::lookup_entry<processor, no_key, one, ordered>;
+  using table_type =
+      detail::selector_table<lookup_table_test_entry,
+                             lookup_table_test_allocator, no_key_one_entry>;
+
+  lookup_table_test_allocator allocator;
+  table_type table(allocator);
+  lookup_table_test_entry first_entry(
+      lookup_table_test_table::template make_no_key_identity<processor, one>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+  lookup_table_test_entry second_entry(
+      lookup_table_test_table::template make_no_key_identity<processor, one>(),
+      lookup_table_test_rtti::template get_type_index<second_storage>());
+
+  ASSERT_FALSE(table.template conflicts<no_key_one_entry>(first_entry));
+  table.template insert<no_key_one_entry>(first_entry);
+  ASSERT_TRUE(table.template conflicts<no_key_one_entry>(second_entry));
+  ASSERT_EQ(table.template count<no_key_one_entry>(), 1U);
+
+  bool ambiguous = true;
+  ASSERT_EQ(table.template find_singular<no_key_one_entry>(ambiguous),
+            &first_entry);
+  ASSERT_FALSE(ambiguous);
+
+  table.template erase<no_key_one_entry>(first_entry);
+  ASSERT_EQ(table.template count<no_key_one_entry>(), 0U);
+}
+
+TEST(index_test, selector_table_no_key_many_reports_ambiguity) {
+  struct processor {};
+  struct first_storage {};
+  struct second_storage {};
+
+  using no_key_many_entry =
+      detail::lookup_entry<processor, no_key, many, ordered>;
+  using table_type =
+      detail::selector_table<lookup_table_test_entry,
+                             lookup_table_test_allocator, no_key_many_entry>;
+
+  lookup_table_test_allocator allocator;
+  table_type table(allocator);
+  lookup_table_test_entry first_entry(
+      lookup_table_test_table::template make_no_key_identity<processor, many>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+  lookup_table_test_entry second_entry(
+      lookup_table_test_table::template make_no_key_identity<processor, many>(),
+      lookup_table_test_rtti::template get_type_index<second_storage>());
+
+  table.template insert<no_key_many_entry>(first_entry);
+  ASSERT_FALSE(table.template conflicts<no_key_many_entry>(second_entry));
+  table.template insert<no_key_many_entry>(second_entry);
+  ASSERT_EQ(table.template count<no_key_many_entry>(), 2U);
+
+  bool ambiguous = false;
+  ASSERT_EQ(table.template find_singular<no_key_many_entry>(ambiguous),
+            nullptr);
+  ASSERT_TRUE(ambiguous);
+}
+
+TEST(index_test, selector_table_typed_key_one_and_many_are_distinct_rows) {
+  struct processor {};
+  struct processor_key {};
+  struct first_storage {};
+  struct second_storage {};
+  struct third_storage {};
+
+  using typed_key_one_entry =
+      detail::lookup_entry<processor, typed_key<processor_key>, one, ordered>;
+  using typed_key_many_entry =
+      detail::lookup_entry<processor, typed_key<processor_key>, many, ordered>;
+  using table_type =
+      detail::selector_table<lookup_table_test_entry,
+                             lookup_table_test_allocator, typed_key_one_entry,
+                             typed_key_many_entry>;
+
+  lookup_table_test_allocator allocator;
+  table_type table(allocator);
+  lookup_table_test_entry one_entry(
+      lookup_table_test_table::template make_typed_key_identity<
+          processor, processor_key, one>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+  lookup_table_test_entry first_many_entry(
+      lookup_table_test_table::template make_typed_key_identity<
+          processor, processor_key, many>(),
+      lookup_table_test_rtti::template get_type_index<second_storage>());
+  lookup_table_test_entry second_many_entry(
+      lookup_table_test_table::template make_typed_key_identity<
+          processor, processor_key, many>(),
+      lookup_table_test_rtti::template get_type_index<third_storage>());
+
+  table.template insert<typed_key_one_entry>(one_entry);
+  table.template insert<typed_key_many_entry>(first_many_entry);
+  table.template insert<typed_key_many_entry>(second_many_entry);
+
+  ASSERT_EQ(table.template count<typed_key_one_entry>(), 1U);
+  ASSERT_EQ(table.template count<typed_key_many_entry>(), 2U);
+
+  bool ambiguous = true;
+  ASSERT_EQ(table.template find_singular<typed_key_one_entry>(ambiguous),
+            &one_entry);
+  ASSERT_FALSE(ambiguous);
+
+  ambiguous = false;
+  ASSERT_EQ(table.template find_singular<typed_key_many_entry>(ambiguous),
+            nullptr);
+  ASSERT_TRUE(ambiguous);
+}
+
+TEST(index_test, selector_table_keeps_different_typed_keys_separate) {
+  struct processor {};
+  struct first_key {};
+  struct second_key {};
+  struct first_storage {};
+  struct second_storage {};
+
+  using first_lookup_entry =
+      detail::lookup_entry<processor, typed_key<first_key>, many, ordered>;
+  using second_lookup_entry =
+      detail::lookup_entry<processor, typed_key<second_key>, many, ordered>;
+  using table_type =
+      detail::selector_table<lookup_table_test_entry,
+                             lookup_table_test_allocator, first_lookup_entry,
+                             second_lookup_entry>;
+
+  lookup_table_test_allocator allocator;
+  table_type table(allocator);
+  lookup_table_test_entry first_entry(
+      lookup_table_test_table::template make_typed_key_identity<
+          processor, first_key, many>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+  lookup_table_test_entry second_entry(
+      lookup_table_test_table::template make_typed_key_identity<
+          processor, second_key, many>(),
+      lookup_table_test_rtti::template get_type_index<second_storage>());
+
+  table.template insert<first_lookup_entry>(first_entry);
+  ASSERT_EQ(table.template count<first_lookup_entry>(), 1U);
+  ASSERT_EQ(table.template count<second_lookup_entry>(), 0U);
+
+  table.template insert<second_lookup_entry>(second_entry);
+  ASSERT_EQ(table.template count<first_lookup_entry>(), 1U);
+  ASSERT_EQ(table.template count<second_lookup_entry>(), 1U);
+
+  std::size_t visits = 0;
+  ASSERT_EQ(
+      (table.template for_each<first_lookup_entry>([&](auto &selected_entry) {
+        ++visits;
+        ASSERT_EQ(&selected_entry, &first_entry);
+      })),
+      1U);
+  ASSERT_EQ(visits, 1U);
+}
+
+TEST(index_test, selector_table_for_each_and_count_cover_many_rows) {
+  struct processor {};
+  struct first_storage {};
+  struct second_storage {};
+  struct third_storage {};
+
+  using lookup_entry = detail::lookup_entry<processor, no_key, many, ordered>;
+  using table_type =
+      detail::selector_table<lookup_table_test_entry,
+                             lookup_table_test_allocator, lookup_entry>;
+
+  lookup_table_test_allocator allocator;
+  table_type table(allocator);
+  lookup_table_test_entry first_entry(
+      lookup_table_test_table::template make_no_key_identity<processor, many>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+  lookup_table_test_entry second_entry(
+      lookup_table_test_table::template make_no_key_identity<processor, many>(),
+      lookup_table_test_rtti::template get_type_index<second_storage>());
+  lookup_table_test_entry third_entry(
+      lookup_table_test_table::template make_no_key_identity<processor, many>(),
+      lookup_table_test_rtti::template get_type_index<third_storage>());
+
+  table.template insert<lookup_entry>(first_entry);
+  table.template insert<lookup_entry>(second_entry);
+  table.template insert<lookup_entry>(third_entry);
+
+  std::size_t visits = 0;
+  ASSERT_EQ(table.template for_each<lookup_entry>([&](auto &entry) {
+    ++visits;
+    ASSERT_TRUE(&entry == &first_entry || &entry == &second_entry ||
+                &entry == &third_entry);
+  }),
+            3U);
+  ASSERT_EQ(visits, 3U);
+  ASSERT_EQ(table.template count<lookup_entry>(), 3U);
+}
+
+TEST(index_test, selector_table_accepts_type_list_lookup_entries) {
+  struct processor {};
+  struct processor_key {};
+  struct no_key_storage {};
+  struct typed_key_storage {};
+
+  using no_key_lookup_entry =
+      detail::lookup_entry<processor, no_key, one, ordered>;
+  using typed_key_lookup_entry =
+      detail::lookup_entry<processor, typed_key<processor_key>, many, ordered>;
+  using lookup_entries = type_list<no_key_lookup_entry, typed_key_lookup_entry>;
+  using table_type =
+      detail::selector_table<lookup_table_test_entry,
+                             lookup_table_test_allocator, lookup_entries>;
+
+  static_assert(
+      std::is_constructible_v<table_type, lookup_table_test_allocator &>);
+
+  lookup_table_test_allocator allocator;
+  table_type table(allocator);
+  lookup_table_test_entry no_key_entry(
+      lookup_table_test_table::template make_no_key_identity<processor, one>(),
+      lookup_table_test_rtti::template get_type_index<no_key_storage>());
+  lookup_table_test_entry typed_key_entry(
+      lookup_table_test_table::template make_typed_key_identity<
+          processor, processor_key, many>(),
+      lookup_table_test_rtti::template get_type_index<typed_key_storage>());
+
+  table.template insert<no_key_lookup_entry>(no_key_entry);
+  table.template insert<typed_key_lookup_entry>(typed_key_entry);
+
+  ASSERT_EQ(table.template count<no_key_lookup_entry>(), 1U);
+  ASSERT_EQ(table.template count<typed_key_lookup_entry>(), 1U);
+
+  bool ambiguous = true;
+  ASSERT_EQ(table.template find_singular<no_key_lookup_entry>(ambiguous),
+            &no_key_entry);
+  ASSERT_FALSE(ambiguous);
+}
+
+TEST(index_test, ordinary_selector_materialization_builds_lookup_entries) {
+  struct processor {};
+  struct other_processor {};
+  struct processor_key {};
+  struct other_key {};
+
+  using implicit_no_key_one =
+      detail::lookup_entry<processor, no_key, one, detail::no_lookup_backend>;
+  using no_key_many = detail::lookup_entry<processor, no_key, many, ordered>;
+  using typed_key_one =
+      detail::lookup_entry<processor, typed_key<processor_key>, one, ordered>;
+  using typed_key_many =
+      detail::lookup_entry<processor, typed_key<processor_key>, many, ordered>;
+  using implicit_typed_key_one =
+      detail::lookup_entry<processor, typed_key<processor_key>, one,
+                           detail::no_lookup_backend>;
+  using other_interface_no_key_one =
+      detail::lookup_entry<other_processor, no_key, one,
+                           detail::no_lookup_backend>;
+  using other_key_typed_key_one =
+      detail::lookup_entry<processor, typed_key<other_key>, one,
+                           detail::no_lookup_backend>;
+
+  using empty_entries = type_list<>;
+
+  using implicit_no_key_entries =
+      detail::materialized_ordinary_selector_entries_t<
+          empty_entries,
+          type_list<detail::ordinary_selector_request<processor, no_key>>>;
+  static_assert(
+      std::is_same_v<implicit_no_key_entries, type_list<implicit_no_key_one>>);
+
+  using explicit_no_key_many_entries =
+      detail::materialized_ordinary_selector_entries_t<
+          type_list<no_key_many>,
+          type_list<detail::ordinary_selector_request<processor, no_key>>>;
+  static_assert(
+      std::is_same_v<explicit_no_key_many_entries, type_list<no_key_many>>);
+
+  using explicit_typed_key_entries =
+      detail::materialized_ordinary_selector_entries_t<
+          type_list<typed_key_many, typed_key_one>,
+          type_list<detail::ordinary_selector_request<
+              processor, typed_key<processor_key>>>>;
+  static_assert(
+      std::is_same_v<explicit_typed_key_entries, type_list<typed_key_one>>);
+
+  using implicit_typed_key_entries =
+      detail::materialized_ordinary_selector_entries_t<
+          empty_entries, type_list<detail::ordinary_selector_request<
+                             processor, typed_key<processor_key>>>>;
+  static_assert(std::is_same_v<implicit_typed_key_entries,
+                               type_list<implicit_typed_key_one>>);
+
+  using duplicate_request_entries =
+      detail::materialized_ordinary_selector_entries_t<
+          empty_entries,
+          type_list<detail::ordinary_selector_request<processor, no_key>,
+                    detail::ordinary_selector_request<processor, no_key>>>;
+  static_assert(type_list_size_v<duplicate_request_entries> == 1U);
+  static_assert(
+      type_list_contains_v<implicit_no_key_one, duplicate_request_entries>);
+
+  using separate_request_entries =
+      detail::materialized_ordinary_selector_entries_t<
+          empty_entries,
+          type_list<detail::ordinary_selector_request<processor, no_key>,
+                    detail::ordinary_selector_request<other_processor, no_key>,
+                    detail::ordinary_selector_request<processor,
+                                                      typed_key<processor_key>>,
+                    detail::ordinary_selector_request<processor,
+                                                      typed_key<other_key>>>>;
+  static_assert(type_list_size_v<separate_request_entries> == 4U);
+  static_assert(
+      type_list_contains_v<implicit_no_key_one, separate_request_entries>);
+  static_assert(type_list_contains_v<other_interface_no_key_one,
+                                     separate_request_entries>);
+  static_assert(
+      type_list_contains_v<implicit_typed_key_one, separate_request_entries>);
+  static_assert(
+      type_list_contains_v<other_key_typed_key_one, separate_request_entries>);
+}
+
+TEST(index_test, materialized_ordinary_selector_table_uses_selected_entries) {
+  struct processor {};
+  struct processor_key {};
+  struct other_key {};
+  struct first_storage {};
+  struct second_storage {};
+  struct third_storage {};
+
+  using empty_entries = type_list<>;
+  using implicit_no_key_one = detail::materialized_ordinary_selector_entry_t<
+      empty_entries, detail::ordinary_selector_request<processor, no_key>>;
+  using implicit_no_key_table = detail::materialized_ordinary_selector_table_t<
+      lookup_table_test_entry, lookup_table_test_allocator, empty_entries,
+      type_list<detail::ordinary_selector_request<processor, no_key>>>;
+
+  lookup_table_test_allocator allocator;
+  implicit_no_key_table implicit_table(allocator);
+  lookup_table_test_entry no_key_entry(
+      lookup_table_test_table::template make_no_key_identity<processor, one>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+
+  implicit_table.template insert<implicit_no_key_one>(no_key_entry);
+
+  bool ambiguous = true;
+  ASSERT_EQ(
+      implicit_table.template find_singular<implicit_no_key_one>(ambiguous),
+      &no_key_entry);
+  ASSERT_FALSE(ambiguous);
+
+  using explicit_no_key_many =
+      detail::lookup_entry<processor, no_key, many, ordered>;
+  using explicit_no_key_many_table =
+      detail::materialized_ordinary_selector_table_t<
+          lookup_table_test_entry, lookup_table_test_allocator,
+          type_list<explicit_no_key_many>,
+          type_list<detail::ordinary_selector_request<processor, no_key>>>;
+
+  explicit_no_key_many_table many_table(allocator);
+  lookup_table_test_entry first_many_entry(
+      lookup_table_test_table::template make_no_key_identity<processor, many>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+  lookup_table_test_entry second_many_entry(
+      lookup_table_test_table::template make_no_key_identity<processor, many>(),
+      lookup_table_test_rtti::template get_type_index<second_storage>());
+
+  many_table.template insert<explicit_no_key_many>(first_many_entry);
+  many_table.template insert<explicit_no_key_many>(second_many_entry);
+  ASSERT_EQ(many_table.template count<explicit_no_key_many>(), 2U);
+  ambiguous = false;
+  ASSERT_EQ(many_table.template find_singular<explicit_no_key_many>(ambiguous),
+            nullptr);
+  ASSERT_TRUE(ambiguous);
+
+  using processor_key_entry = detail::materialized_ordinary_selector_entry_t<
+      empty_entries,
+      detail::ordinary_selector_request<processor, typed_key<processor_key>>>;
+  using other_key_entry = detail::materialized_ordinary_selector_entry_t<
+      empty_entries,
+      detail::ordinary_selector_request<processor, typed_key<other_key>>>;
+  using typed_key_table = detail::materialized_ordinary_selector_table_t<
+      lookup_table_test_entry, lookup_table_test_allocator, empty_entries,
+      type_list<
+          detail::ordinary_selector_request<processor,
+                                            typed_key<processor_key>>,
+          detail::ordinary_selector_request<processor, typed_key<other_key>>>>;
+
+  typed_key_table typed_table(allocator);
+  lookup_table_test_entry processor_key_lookup_entry(
+      lookup_table_test_table::template make_typed_key_identity<
+          processor, processor_key, one>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+  lookup_table_test_entry other_key_lookup_entry(
+      lookup_table_test_table::template make_typed_key_identity<
+          processor, other_key, one>(),
+      lookup_table_test_rtti::template get_type_index<second_storage>());
+
+  typed_table.template insert<processor_key_entry>(processor_key_lookup_entry);
+  typed_table.template insert<other_key_entry>(other_key_lookup_entry);
+  ASSERT_EQ(typed_table.template count<processor_key_entry>(), 1U);
+  ASSERT_EQ(typed_table.template count<other_key_entry>(), 1U);
+
+  using duplicate_request_table =
+      detail::materialized_ordinary_selector_table_t<
+          lookup_table_test_entry, lookup_table_test_allocator, empty_entries,
+          type_list<detail::ordinary_selector_request<processor, no_key>,
+                    detail::ordinary_selector_request<processor, no_key>>>;
+
+  static_assert(std::is_constructible_v<duplicate_request_table,
+                                        lookup_table_test_allocator &>);
+
+  duplicate_request_table duplicate_table(allocator);
+  lookup_table_test_entry duplicate_entry(
+      lookup_table_test_table::template make_no_key_identity<processor, one>(),
+      lookup_table_test_rtti::template get_type_index<third_storage>());
+
+  duplicate_table.template insert<implicit_no_key_one>(duplicate_entry);
+  ASSERT_EQ(duplicate_table.template count<implicit_no_key_one>(), 1U);
+}
+
+TEST(index_test, ordinary_registration_selectors_collect_requests) {
+  struct processor {};
+  struct other_processor {};
+  struct processor_key {};
+  struct other_key {};
+
+  using no_key_request = detail::ordinary_selector_request<processor, no_key>;
+  using typed_key_request =
+      detail::ordinary_selector_request<processor, typed_key<processor_key>>;
+  using other_interface_request =
+      detail::ordinary_selector_request<other_processor, no_key>;
+  using other_key_request =
+      detail::ordinary_selector_request<processor, typed_key<other_key>>;
+
+  using no_key_requests = detail::ordinary_selector_requests_t<
+      type_list<detail::ordinary_registration_selector<processor, no_key>>>;
+  static_assert(std::is_same_v<no_key_requests, type_list<no_key_request>>);
+
+  using typed_key_requests = detail::ordinary_selector_requests_t<
+      type_list<detail::ordinary_registration_selector<
+          processor, typed_key<processor_key>>>>;
+  static_assert(
+      std::is_same_v<typed_key_requests, type_list<typed_key_request>>);
+
+  using duplicate_requests = detail::ordinary_selector_requests_t<
+      type_list<detail::ordinary_registration_selector<processor, no_key>,
+                detail::ordinary_registration_selector<processor, no_key>>>;
+  static_assert(type_list_size_v<duplicate_requests> == 1U);
+  static_assert(type_list_contains_v<no_key_request, duplicate_requests>);
+
+  using separate_interface_requests =
+      detail::ordinary_selector_requests_t<type_list<
+          detail::ordinary_registration_selector<processor, no_key>,
+          detail::ordinary_registration_selector<other_processor, no_key>>>;
+  static_assert(type_list_size_v<separate_interface_requests> == 2U);
+  static_assert(
+      type_list_contains_v<no_key_request, separate_interface_requests>);
+  static_assert(type_list_contains_v<other_interface_request,
+                                     separate_interface_requests>);
+
+  using separate_key_requests = detail::ordinary_selector_requests_t<type_list<
+      detail::ordinary_registration_selector<processor,
+                                             typed_key<processor_key>>,
+      detail::ordinary_registration_selector<processor, typed_key<other_key>>>>;
+  static_assert(type_list_size_v<separate_key_requests> == 2U);
+  static_assert(type_list_contains_v<typed_key_request, separate_key_requests>);
+  static_assert(type_list_contains_v<other_key_request, separate_key_requests>);
+
+  using collected_requests = detail::ordinary_selector_requests_t<
+      type_list<detail::ordinary_registration_selector<processor, no_key>,
+                detail::ordinary_registration_selector<
+                    processor, typed_key<processor_key>>>>;
+  using materialized_entries =
+      detail::materialized_ordinary_selector_entries_t<type_list<>,
+                                                       collected_requests>;
+  using implicit_no_key_one =
+      detail::lookup_entry<processor, no_key, one, detail::no_lookup_backend>;
+  using implicit_typed_key_one =
+      detail::lookup_entry<processor, typed_key<processor_key>, one,
+                           detail::no_lookup_backend>;
+
+  static_assert(type_list_size_v<materialized_entries> == 2U);
+  static_assert(
+      type_list_contains_v<implicit_no_key_one, materialized_entries>);
+  static_assert(
+      type_list_contains_v<implicit_typed_key_one, materialized_entries>);
+
+  using table_type = detail::materialized_ordinary_selector_table_t<
+      lookup_table_test_entry, lookup_table_test_allocator, type_list<>,
+      collected_requests>;
+  static_assert(
+      std::is_constructible_v<table_type, lookup_table_test_allocator &>);
+}
+
+TEST(index_test, ordinary_selector_prototype_pipeline_indexes_rows) {
+  struct collection_processor {};
+  struct single_processor {};
+  struct typed_processor {};
+  struct first_key {};
+  struct second_key {};
+  struct first_storage {};
+  struct second_storage {};
+  struct third_storage {};
+  struct fourth_storage {};
+
+  using explicit_collection_entry =
+      detail::lookup_entry<collection_processor, no_key, many, ordered>;
+  using explicit_entries = type_list<explicit_collection_entry>;
+  using registration_selectors = type_list<
+      detail::ordinary_registration_selector<collection_processor, no_key>,
+      detail::ordinary_registration_selector<collection_processor, no_key>,
+      detail::ordinary_registration_selector<single_processor, no_key>,
+      detail::ordinary_registration_selector<typed_processor,
+                                             typed_key<first_key>>,
+      detail::ordinary_registration_selector<typed_processor,
+                                             typed_key<second_key>>>;
+  using requests = detail::ordinary_selector_requests_t<registration_selectors>;
+  using materialized_entries =
+      detail::materialized_ordinary_selector_entries_t<explicit_entries,
+                                                       requests>;
+  using implicit_single_entry = detail::materialized_ordinary_selector_entry_t<
+      explicit_entries,
+      detail::ordinary_selector_request<single_processor, no_key>>;
+  using first_key_entry = detail::materialized_ordinary_selector_entry_t<
+      explicit_entries,
+      detail::ordinary_selector_request<typed_processor, typed_key<first_key>>>;
+  using second_key_entry = detail::materialized_ordinary_selector_entry_t<
+      explicit_entries, detail::ordinary_selector_request<
+                            typed_processor, typed_key<second_key>>>;
+  using table_type = detail::materialized_ordinary_selector_table_t<
+      lookup_table_test_entry, lookup_table_test_allocator, explicit_entries,
+      requests>;
+
+  static_assert(type_list_size_v<requests> == 4U);
+  static_assert(type_list_size_v<materialized_entries> == 4U);
+  static_assert(
+      type_list_contains_v<explicit_collection_entry, materialized_entries>);
+  static_assert(
+      type_list_contains_v<implicit_single_entry, materialized_entries>);
+  static_assert(type_list_contains_v<first_key_entry, materialized_entries>);
+  static_assert(type_list_contains_v<second_key_entry, materialized_entries>);
+
+  lookup_table_test_allocator allocator;
+  table_type table(allocator);
+  lookup_table_test_entry first_collection_entry(
+      lookup_table_test_table::template make_no_key_identity<
+          collection_processor, many>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+  lookup_table_test_entry second_collection_entry(
+      lookup_table_test_table::template make_no_key_identity<
+          collection_processor, many>(),
+      lookup_table_test_rtti::template get_type_index<second_storage>());
+  lookup_table_test_entry first_single_entry(
+      lookup_table_test_table::template make_no_key_identity<single_processor,
+                                                             one>(),
+      lookup_table_test_rtti::template get_type_index<third_storage>());
+  lookup_table_test_entry second_single_entry(
+      lookup_table_test_table::template make_no_key_identity<single_processor,
+                                                             one>(),
+      lookup_table_test_rtti::template get_type_index<fourth_storage>());
+  lookup_table_test_entry first_key_lookup_entry(
+      lookup_table_test_table::template make_typed_key_identity<
+          typed_processor, first_key, one>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+  lookup_table_test_entry second_key_lookup_entry(
+      lookup_table_test_table::template make_typed_key_identity<
+          typed_processor, second_key, one>(),
+      lookup_table_test_rtti::template get_type_index<second_storage>());
+
+  table.template insert<explicit_collection_entry>(first_collection_entry);
+  ASSERT_FALSE(table.template conflicts<explicit_collection_entry>(
+      second_collection_entry));
+  table.template insert<explicit_collection_entry>(second_collection_entry);
+
+  ASSERT_EQ(table.template count<explicit_collection_entry>(), 2U);
+  bool ambiguous = false;
+  ASSERT_EQ(table.template find_singular<explicit_collection_entry>(ambiguous),
+            nullptr);
+  ASSERT_TRUE(ambiguous);
+
+  std::size_t visits = 0;
+  ASSERT_EQ(
+      table.template for_each<explicit_collection_entry>([&](auto &entry) {
+        ++visits;
+        ASSERT_TRUE(&entry == &first_collection_entry ||
+                    &entry == &second_collection_entry);
+      }),
+      2U);
+  ASSERT_EQ(visits, 2U);
+
+  ASSERT_EQ(table.template count<implicit_single_entry>(), 0U);
+  table.template insert<implicit_single_entry>(first_single_entry);
+  ASSERT_TRUE(
+      table.template conflicts<implicit_single_entry>(second_single_entry));
+  ASSERT_EQ(table.template count<implicit_single_entry>(), 1U);
+
+  ambiguous = true;
+  ASSERT_EQ(table.template find_singular<implicit_single_entry>(ambiguous),
+            &first_single_entry);
+  ASSERT_FALSE(ambiguous);
+
+  table.template insert<first_key_entry>(first_key_lookup_entry);
+  ASSERT_EQ(table.template count<first_key_entry>(), 1U);
+  ASSERT_EQ(table.template count<second_key_entry>(), 0U);
+
+  table.template insert<second_key_entry>(second_key_lookup_entry);
+  ASSERT_EQ(table.template count<first_key_entry>(), 1U);
+  ASSERT_EQ(table.template count<second_key_entry>(), 1U);
+
+  ambiguous = true;
+  ASSERT_EQ(table.template find_singular<first_key_entry>(ambiguous),
+            &first_key_lookup_entry);
+  ASSERT_FALSE(ambiguous);
+  ambiguous = true;
+  ASSERT_EQ(table.template find_singular<second_key_entry>(ambiguous),
+            &second_key_lookup_entry);
+  ASSERT_FALSE(ambiguous);
+}
+
+TEST(index_test,
+     materialized_ordinary_selector_group_indexes_one_entry_in_multiple_rows) {
+  struct collection_processor {};
+  struct typed_processor {};
+  struct processor_key {};
+  struct first_storage {};
+
+  using no_key_many_entry =
+      detail::lookup_entry<collection_processor, no_key, many, ordered>;
+  using typed_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<no_key_many_entry>,
+      detail::ordinary_selector_request<typed_processor,
+                                        typed_key<processor_key>>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      lookup_table_test_entry, lookup_table_test_allocator,
+      type_list<no_key_many_entry>,
+      type_list<detail::ordinary_selector_request<collection_processor, no_key>,
+                detail::ordinary_selector_request<typed_processor,
+                                                  typed_key<processor_key>>>>;
+
+  lookup_table_test_allocator allocator;
+  group_type group(allocator);
+  lookup_table_test_entry entry(
+      lookup_table_test_table::template make_no_key_identity<
+          collection_processor, many>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+
+  ASSERT_TRUE(
+      (group.template insert<no_key_many_entry, typed_key_one_entry>(entry)));
+
+  ASSERT_EQ(group.template count<no_key_many_entry>(), 1U);
+  ASSERT_EQ(group.template count<typed_key_one_entry>(), 1U);
+
+  bool ambiguous = true;
+  ASSERT_EQ(group.template find_singular<typed_key_one_entry>(ambiguous),
+            &entry);
+  ASSERT_FALSE(ambiguous);
+
+  std::size_t visits = 0;
+  ASSERT_EQ(group.template for_each<no_key_many_entry>([&](auto &selected) {
+    ++visits;
+    ASSERT_EQ(&selected, &entry);
+  }),
+            1U);
+  ASSERT_EQ(visits, 1U);
+}
+
+TEST(index_test,
+     materialized_ordinary_selector_group_rolls_back_on_later_conflict) {
+  struct collection_processor {};
+  struct typed_processor {};
+  struct processor_key {};
+  struct first_storage {};
+  struct second_storage {};
+
+  using no_key_many_entry =
+      detail::lookup_entry<collection_processor, no_key, many, ordered>;
+  using typed_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<no_key_many_entry>,
+      detail::ordinary_selector_request<typed_processor,
+                                        typed_key<processor_key>>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      lookup_table_test_entry, lookup_table_test_allocator,
+      type_list<no_key_many_entry>,
+      type_list<detail::ordinary_selector_request<collection_processor, no_key>,
+                detail::ordinary_selector_request<typed_processor,
+                                                  typed_key<processor_key>>>>;
+
+  lookup_table_test_allocator allocator;
+  group_type group(allocator);
+  lookup_table_test_entry existing_typed_entry(
+      lookup_table_test_table::template make_typed_key_identity<
+          typed_processor, processor_key, one>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+  lookup_table_test_entry candidate_entry(
+      lookup_table_test_table::template make_no_key_identity<
+          collection_processor, many>(),
+      lookup_table_test_rtti::template get_type_index<second_storage>());
+
+  ASSERT_TRUE(group.template insert<typed_key_one_entry>(existing_typed_entry));
+  ASSERT_FALSE((group.template insert<no_key_many_entry, typed_key_one_entry>(
+      candidate_entry)));
+
+  ASSERT_EQ(group.template count<no_key_many_entry>(), 0U);
+  ASSERT_EQ(group.template count<typed_key_one_entry>(), 1U);
+
+  bool ambiguous = true;
+  ASSERT_EQ(group.template find_singular<typed_key_one_entry>(ambiguous),
+            &existing_typed_entry);
+  ASSERT_FALSE(ambiguous);
+}
+
+TEST(index_test, materialized_ordinary_selector_group_erases_inserted_rows) {
+  struct collection_processor {};
+  struct typed_processor {};
+  struct processor_key {};
+  struct first_storage {};
+
+  using no_key_many_entry =
+      detail::lookup_entry<collection_processor, no_key, many, ordered>;
+  using typed_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<no_key_many_entry>,
+      detail::ordinary_selector_request<typed_processor,
+                                        typed_key<processor_key>>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      lookup_table_test_entry, lookup_table_test_allocator,
+      type_list<no_key_many_entry>,
+      type_list<detail::ordinary_selector_request<collection_processor, no_key>,
+                detail::ordinary_selector_request<typed_processor,
+                                                  typed_key<processor_key>>>>;
+
+  lookup_table_test_allocator allocator;
+  group_type group(allocator);
+  lookup_table_test_entry entry(
+      lookup_table_test_table::template make_no_key_identity<
+          collection_processor, many>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+
+  ASSERT_TRUE(
+      (group.template insert<no_key_many_entry, typed_key_one_entry>(entry)));
+  group.template erase<no_key_many_entry, typed_key_one_entry>(entry);
+
+  ASSERT_EQ(group.template count<no_key_many_entry>(), 0U);
+  ASSERT_EQ(group.template count<typed_key_one_entry>(), 0U);
+
+  bool ambiguous = true;
+  ASSERT_EQ(group.template find_singular<typed_key_one_entry>(ambiguous),
+            nullptr);
+  ASSERT_FALSE(ambiguous);
+}
+
+TEST(index_test,
+     materialized_ordinary_selector_group_keeps_interfaces_and_keys_isolated) {
+  struct first_interface {};
+  struct second_interface {};
+  struct keyed_interface {};
+  struct first_key {};
+  struct second_key {};
+  struct first_storage {};
+  struct second_storage {};
+  struct third_storage {};
+
+  using first_interface_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<>, detail::ordinary_selector_request<first_interface, no_key>>;
+  using second_interface_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<>, detail::ordinary_selector_request<second_interface, no_key>>;
+  using first_key_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<>,
+      detail::ordinary_selector_request<keyed_interface, typed_key<first_key>>>;
+  using second_key_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<>, detail::ordinary_selector_request<keyed_interface,
+                                                     typed_key<second_key>>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      lookup_table_test_entry, lookup_table_test_allocator, type_list<>,
+      type_list<detail::ordinary_selector_request<first_interface, no_key>,
+                detail::ordinary_selector_request<second_interface, no_key>,
+                detail::ordinary_selector_request<keyed_interface,
+                                                  typed_key<first_key>>,
+                detail::ordinary_selector_request<keyed_interface,
+                                                  typed_key<second_key>>>>;
+
+  lookup_table_test_allocator allocator;
+  group_type group(allocator);
+  lookup_table_test_entry first_interface_entry_value(
+      lookup_table_test_table::template make_no_key_identity<first_interface,
+                                                             one>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+  lookup_table_test_entry first_key_entry_value(
+      lookup_table_test_table::template make_typed_key_identity<
+          keyed_interface, first_key, one>(),
+      lookup_table_test_rtti::template get_type_index<second_storage>());
+  lookup_table_test_entry second_key_entry_value(
+      lookup_table_test_table::template make_typed_key_identity<
+          keyed_interface, second_key, one>(),
+      lookup_table_test_rtti::template get_type_index<third_storage>());
+
+  ASSERT_TRUE(group.template insert<first_interface_entry>(
+      first_interface_entry_value));
+  ASSERT_TRUE(group.template insert<first_key_entry>(first_key_entry_value));
+  ASSERT_TRUE(group.template insert<second_key_entry>(second_key_entry_value));
+
+  ASSERT_EQ(group.template count<first_interface_entry>(), 1U);
+  ASSERT_EQ(group.template count<second_interface_entry>(), 0U);
+  ASSERT_EQ(group.template count<first_key_entry>(), 1U);
+  ASSERT_EQ(group.template count<second_key_entry>(), 1U);
+
+  bool ambiguous = true;
+  ASSERT_EQ(group.template find_singular<first_key_entry>(ambiguous),
+            &first_key_entry_value);
+  ASSERT_FALSE(ambiguous);
+  ambiguous = true;
+  ASSERT_EQ(group.template find_singular<second_key_entry>(ambiguous),
+            &second_key_entry_value);
+  ASSERT_FALSE(ambiguous);
+}
+
+TEST(index_test,
+     materialized_ordinary_selector_group_deduplicates_requested_rows) {
+  struct collection_processor {};
+  struct first_storage {};
+
+  using no_key_many_entry =
+      detail::lookup_entry<collection_processor, no_key, many, ordered>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      lookup_table_test_entry, lookup_table_test_allocator,
+      type_list<no_key_many_entry>,
+      type_list<
+          detail::ordinary_selector_request<collection_processor, no_key>,
+          detail::ordinary_selector_request<collection_processor, no_key>>>;
+
+  lookup_table_test_allocator allocator;
+  group_type group(allocator);
+  lookup_table_test_entry entry(
+      lookup_table_test_table::template make_no_key_identity<
+          collection_processor, many>(),
+      lookup_table_test_rtti::template get_type_index<first_storage>());
+
+  ASSERT_TRUE(
+      (group.template insert<no_key_many_entry, no_key_many_entry>(entry)));
+  ASSERT_EQ(group.template count<no_key_many_entry>(), 1U);
+
+  group.template erase<no_key_many_entry, no_key_many_entry>(entry);
+  ASSERT_EQ(group.template count<no_key_many_entry>(), 0U);
+}
+
+TEST(index_test,
+     ordinary_selector_group_indexes_inline_no_key_one_without_allocation) {
+  struct processor {};
+  struct first_storage {};
+
+  using no_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<>, detail::ordinary_selector_request<processor, no_key>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      lookup_table_test_entry, lookup_table_test_allocator, type_list<>,
+      type_list<detail::ordinary_selector_request<processor, no_key>>>;
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    group_type group(allocator);
+    std::optional<lookup_table_test_entry> inline_entry;
+    inline_entry.emplace(
+        lookup_table_test_table::template make_no_key_identity<processor,
+                                                               one>(),
+        lookup_table_test_rtti::template get_type_index<first_storage>());
+
+    ASSERT_EQ(state.allocations, 0);
+    ASSERT_TRUE(group.template insert<no_key_one_entry>(*inline_entry));
+    ASSERT_EQ(state.allocations, 0);
+    ASSERT_EQ(group.template count<no_key_one_entry>(), 1U);
+
+    bool ambiguous = true;
+    ASSERT_EQ(group.template find_singular<no_key_one_entry>(ambiguous),
+              std::addressof(*inline_entry));
+    ASSERT_FALSE(ambiguous);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+}
+
+TEST(index_test,
+     ordinary_selector_group_no_key_one_does_not_drive_many_row_allocation) {
+  struct processor {};
+  struct processor_key {};
+  struct first_storage {};
+  struct second_storage {};
+
+  using no_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<>, detail::ordinary_selector_request<processor, no_key>>;
+  using typed_key_many_entry =
+      detail::lookup_entry<processor, typed_key<processor_key>, many, ordered>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      lookup_table_test_entry, lookup_table_test_allocator,
+      type_list<typed_key_many_entry>,
+      type_list<detail::ordinary_selector_request<processor, no_key>,
+                detail::ordinary_selector_request<processor,
+                                                  typed_key<processor_key>>>>;
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    group_type group(allocator);
+    std::optional<lookup_table_test_entry> first_inline_entry;
+    std::optional<lookup_table_test_entry> second_inline_entry;
+    first_inline_entry.emplace(
+        lookup_table_test_table::template make_no_key_identity<processor,
+                                                               one>(),
+        lookup_table_test_rtti::template get_type_index<first_storage>());
+    second_inline_entry.emplace(
+        lookup_table_test_table::template make_typed_key_identity<
+            processor, processor_key, many>(),
+        lookup_table_test_rtti::template get_type_index<second_storage>());
+
+    ASSERT_TRUE((group.template insert<no_key_one_entry, typed_key_many_entry>(
+        *first_inline_entry)));
+    ASSERT_EQ(state.allocations, 0);
+
+    ASSERT_TRUE(
+        group.template insert<typed_key_many_entry>(*second_inline_entry));
+    ASSERT_EQ(state.allocations, 1);
+    ASSERT_EQ(group.template count<no_key_one_entry>(), 1U);
+    ASSERT_EQ(group.template count<typed_key_many_entry>(), 2U);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+}
+
+TEST(
+    index_test,
+    ordinary_selector_group_rollback_from_singular_conflict_does_not_allocate) {
+  struct no_key_processor {};
+  struct typed_processor {};
+  struct processor_key {};
+  struct first_storage {};
+  struct second_storage {};
+
+  using no_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<>, detail::ordinary_selector_request<no_key_processor, no_key>>;
+  using typed_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<>, detail::ordinary_selector_request<typed_processor,
+                                                     typed_key<processor_key>>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      lookup_table_test_entry, lookup_table_test_allocator, type_list<>,
+      type_list<detail::ordinary_selector_request<no_key_processor, no_key>,
+                detail::ordinary_selector_request<typed_processor,
+                                                  typed_key<processor_key>>>>;
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    group_type group(allocator);
+    std::optional<lookup_table_test_entry> existing_entry;
+    std::optional<lookup_table_test_entry> candidate_entry;
+    existing_entry.emplace(
+        lookup_table_test_table::template make_typed_key_identity<
+            typed_processor, processor_key, one>(),
+        lookup_table_test_rtti::template get_type_index<first_storage>());
+    candidate_entry.emplace(
+        lookup_table_test_table::template make_no_key_identity<no_key_processor,
+                                                               one>(),
+        lookup_table_test_rtti::template get_type_index<second_storage>());
+
+    ASSERT_TRUE(group.template insert<typed_key_one_entry>(*existing_entry));
+    ASSERT_EQ(state.allocations, 0);
+
+    ASSERT_FALSE((group.template insert<no_key_one_entry, typed_key_one_entry>(
+        *candidate_entry)));
+    ASSERT_EQ(state.allocations, 0);
+    ASSERT_EQ(group.template count<no_key_one_entry>(), 0U);
+    ASSERT_EQ(group.template count<typed_key_one_entry>(), 1U);
+
+    bool ambiguous = true;
+    ASSERT_EQ(group.template find_singular<typed_key_one_entry>(ambiguous),
+              std::addressof(*existing_entry));
+    ASSERT_FALSE(ambiguous);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+}
+
+TEST(index_test,
+     ordinary_selector_group_dedupes_no_key_one_without_duplicate_row_work) {
+  struct processor {};
+  struct first_storage {};
+
+  using no_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<>, detail::ordinary_selector_request<processor, no_key>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      lookup_table_test_entry, lookup_table_test_allocator, type_list<>,
+      type_list<detail::ordinary_selector_request<processor, no_key>,
+                detail::ordinary_selector_request<processor, no_key>>>;
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    group_type group(allocator);
+    std::optional<lookup_table_test_entry> inline_entry;
+    inline_entry.emplace(
+        lookup_table_test_table::template make_no_key_identity<processor,
+                                                               one>(),
+        lookup_table_test_rtti::template get_type_index<first_storage>());
+
+    ASSERT_TRUE((group.template insert<no_key_one_entry, no_key_one_entry>(
+        *inline_entry)));
+    ASSERT_EQ(state.allocations, 0);
+    ASSERT_EQ(group.template count<no_key_one_entry>(), 1U);
+
+    group.template erase<no_key_one_entry, no_key_one_entry>(*inline_entry);
+    ASSERT_EQ(state.allocations, 0);
+    ASSERT_EQ(group.template count<no_key_one_entry>(), 0U);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+}
+
+TEST(
+    index_test,
+    prototype_owned_registration_no_key_one_commits_inline_without_allocation) {
+  struct processor {};
+  struct first_storage {};
+
+  using no_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<>, detail::ordinary_selector_request<processor, no_key>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      lookup_table_test_entry, lookup_table_test_allocator, type_list<>,
+      type_list<detail::ordinary_selector_request<processor, no_key>>>;
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    prototype_lookup_entry_owner owner(allocator);
+    group_type group(allocator);
+
+    auto *entry = prototype_register_owned_entry<no_key_one_entry>(
+        owner, group,
+        lookup_table_test_table::template make_no_key_identity<processor,
+                                                               one>(),
+        lookup_table_test_rtti::template get_type_index<first_storage>());
+
+    ASSERT_NE(entry, nullptr);
+    ASSERT_EQ(state.allocations, 0);
+    ASSERT_EQ(owner.count(), 1U);
+    ASSERT_EQ(group.template count<no_key_one_entry>(), 1U);
+
+    bool ambiguous = true;
+    ASSERT_EQ(group.template find_singular<no_key_one_entry>(ambiguous), entry);
+    ASSERT_FALSE(ambiguous);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+}
+
+TEST(index_test,
+     prototype_owned_registration_rolls_back_failed_multi_row_insert) {
+  struct collection_processor {};
+  struct typed_processor {};
+  struct processor_key {};
+  struct first_storage {};
+  struct second_storage {};
+
+  using no_key_many_entry =
+      detail::lookup_entry<collection_processor, no_key, many, ordered>;
+  using typed_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<no_key_many_entry>,
+      detail::ordinary_selector_request<typed_processor,
+                                        typed_key<processor_key>>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      lookup_table_test_entry, lookup_table_test_allocator,
+      type_list<no_key_many_entry>,
+      type_list<detail::ordinary_selector_request<collection_processor, no_key>,
+                detail::ordinary_selector_request<typed_processor,
+                                                  typed_key<processor_key>>>>;
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    prototype_lookup_entry_owner owner(allocator);
+    group_type group(allocator);
+
+    auto *existing_entry = prototype_register_owned_entry<typed_key_one_entry>(
+        owner, group,
+        lookup_table_test_table::template make_typed_key_identity<
+            typed_processor, processor_key, one>(),
+        lookup_table_test_rtti::template get_type_index<first_storage>());
+
+    ASSERT_NE(existing_entry, nullptr);
+    ASSERT_EQ(state.allocations, 0);
+
+    auto *failed_entry =
+        (prototype_register_owned_entry<no_key_many_entry, typed_key_one_entry>(
+            owner, group,
+            lookup_table_test_table::template make_no_key_identity<
+                collection_processor, many>(),
+            lookup_table_test_rtti::template get_type_index<second_storage>()));
+
+    ASSERT_EQ(failed_entry, nullptr);
+    ASSERT_EQ(state.allocations, 1);
+    ASSERT_EQ(owner.count(), 1U);
+    ASSERT_EQ(group.template count<no_key_many_entry>(), 0U);
+    ASSERT_EQ(group.template count<typed_key_one_entry>(), 1U);
+
+    bool ambiguous = true;
+    ASSERT_EQ(group.template find_singular<typed_key_one_entry>(ambiguous),
+              existing_entry);
+    ASSERT_FALSE(ambiguous);
+
+    std::size_t visits = 0;
+    ASSERT_EQ(
+        group.template for_each<no_key_many_entry>([&](auto &) { ++visits; }),
+        0U);
+    ASSERT_EQ(visits, 0U);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+}
+
+TEST(index_test,
+     prototype_owned_registration_commits_one_entry_to_multiple_rows) {
+  struct collection_processor {};
+  struct typed_processor {};
+  struct processor_key {};
+  struct first_storage {};
+
+  using no_key_many_entry =
+      detail::lookup_entry<collection_processor, no_key, many, ordered>;
+  using typed_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<no_key_many_entry>,
+      detail::ordinary_selector_request<typed_processor,
+                                        typed_key<processor_key>>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      lookup_table_test_entry, lookup_table_test_allocator,
+      type_list<no_key_many_entry>,
+      type_list<detail::ordinary_selector_request<collection_processor, no_key>,
+                detail::ordinary_selector_request<typed_processor,
+                                                  typed_key<processor_key>>>>;
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    prototype_lookup_entry_owner owner(allocator);
+    group_type group(allocator);
+
+    auto *entry =
+        (prototype_register_owned_entry<no_key_many_entry, typed_key_one_entry>(
+            owner, group,
+            lookup_table_test_table::template make_no_key_identity<
+                collection_processor, many>(),
+            lookup_table_test_rtti::template get_type_index<first_storage>()));
+
+    ASSERT_NE(entry, nullptr);
+    ASSERT_EQ(state.allocations, 0);
+    ASSERT_EQ(owner.count(), 1U);
+    ASSERT_EQ(group.template count<no_key_many_entry>(), 1U);
+    ASSERT_EQ(group.template count<typed_key_one_entry>(), 1U);
+
+    bool ambiguous = true;
+    ASSERT_EQ(group.template find_singular<typed_key_one_entry>(ambiguous),
+              entry);
+    ASSERT_FALSE(ambiguous);
+
+    std::size_t visits = 0;
+    ASSERT_EQ(group.template for_each<no_key_many_entry>([&](auto &selected) {
+      ++visits;
+      ASSERT_EQ(std::addressof(selected), entry);
+    }),
+              1U);
+    ASSERT_EQ(visits, 1U);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+}
+
+TEST(index_test, prototype_owned_registration_dedupes_lookup_entries) {
+  struct processor {};
+  struct first_storage {};
+
+  using no_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<>, detail::ordinary_selector_request<processor, no_key>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      lookup_table_test_entry, lookup_table_test_allocator, type_list<>,
+      type_list<detail::ordinary_selector_request<processor, no_key>,
+                detail::ordinary_selector_request<processor, no_key>>>;
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    prototype_lookup_entry_owner owner(allocator);
+    group_type group(allocator);
+
+    auto *entry =
+        (prototype_register_owned_entry<no_key_one_entry, no_key_one_entry>(
+            owner, group,
+            lookup_table_test_table::template make_no_key_identity<processor,
+                                                                   one>(),
+            lookup_table_test_rtti::template get_type_index<first_storage>()));
+
+    ASSERT_NE(entry, nullptr);
+    ASSERT_EQ(state.allocations, 0);
+    ASSERT_EQ(owner.count(), 1U);
+    ASSERT_EQ(group.template count<no_key_one_entry>(), 1U);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+}
+
+TEST(index_test,
+     prototype_owned_registration_second_entry_spills_only_in_owner) {
+  struct first_processor {};
+  struct second_processor {};
+  struct first_storage {};
+  struct second_storage {};
+
+  using first_no_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<>, detail::ordinary_selector_request<first_processor, no_key>>;
+  using second_no_key_one_entry =
+      detail::materialized_ordinary_selector_entry_t<
+          type_list<>,
+          detail::ordinary_selector_request<second_processor, no_key>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      lookup_table_test_entry, lookup_table_test_allocator, type_list<>,
+      type_list<detail::ordinary_selector_request<first_processor, no_key>,
+                detail::ordinary_selector_request<second_processor, no_key>>>;
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    prototype_lookup_entry_owner owner(allocator);
+    group_type group(allocator);
+
+    auto *first_entry = prototype_register_owned_entry<first_no_key_one_entry>(
+        owner, group,
+        lookup_table_test_table::template make_no_key_identity<first_processor,
+                                                               one>(),
+        lookup_table_test_rtti::template get_type_index<first_storage>());
+
+    ASSERT_NE(first_entry, nullptr);
+    ASSERT_EQ(state.allocations, 0);
+
+    auto *second_entry =
+        prototype_register_owned_entry<second_no_key_one_entry>(
+            owner, group,
+            lookup_table_test_table::template make_no_key_identity<
+                second_processor, one>(),
+            lookup_table_test_rtti::template get_type_index<second_storage>());
+
+    ASSERT_NE(second_entry, nullptr);
+    ASSERT_EQ(state.allocations, 1);
+    ASSERT_EQ(owner.count(), 2U);
+    ASSERT_EQ(group.template count<first_no_key_one_entry>(), 1U);
+    ASSERT_EQ(group.template count<second_no_key_one_entry>(), 1U);
+
+    bool ambiguous = true;
+    ASSERT_EQ(group.template find_singular<first_no_key_one_entry>(ambiguous),
+              first_entry);
+    ASSERT_FALSE(ambiguous);
+    ambiguous = true;
+    ASSERT_EQ(group.template find_singular<second_no_key_one_entry>(ambiguous),
+              second_entry);
+    ASSERT_FALSE(ambiguous);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+}
+
+TEST(index_test,
+     registered_ordinary_selector_group_materializes_production_entries) {
+  struct collection_processor {};
+  struct typed_processor {};
+  struct processor_key {};
+  struct first_storage {};
+
+  struct traits : dynamic_container_traits {
+    using view_definition_type =
+        views<collection<collection_processor>,
+              typed<processor_key, typed_processor, one>>;
+  };
+  using container_type = container<traits, lookup_table_test_allocator>;
+  using access_type = registered_storage_candidate_access<container_type>;
+  using table_type = typename access_type::lookup_table_type;
+  using registered_entry = typename access_type::registered_binding_entry;
+
+  using no_key_many_entry =
+      detail::lookup_entry<collection_processor, no_key, many, ordered>;
+  using typed_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<no_key_many_entry>,
+      detail::ordinary_selector_request<typed_processor,
+                                        typed_key<processor_key>>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      registered_entry, lookup_table_test_allocator,
+      type_list<no_key_many_entry>,
+      type_list<detail::ordinary_selector_request<collection_processor, no_key>,
+                detail::ordinary_selector_request<typed_processor,
+                                                  typed_key<processor_key>>>>;
+
+  lookup_table_test_allocator allocator;
+  group_type group(allocator);
+  auto entry = make_registered_binding_entry<access_type, container_type,
+                                             first_storage>(
+      table_type::template make_no_key_identity<collection_processor, many>());
+
+  ASSERT_TRUE(
+      (group.template insert<no_key_many_entry, typed_key_one_entry>(entry)));
+  ASSERT_EQ(group.template count<no_key_many_entry>(), 1U);
+  ASSERT_EQ(group.template count<typed_key_one_entry>(), 1U);
+
+  bool ambiguous = true;
+  ASSERT_EQ(group.template find_singular<typed_key_one_entry>(ambiguous),
+            std::addressof(entry));
+  ASSERT_FALSE(ambiguous);
+
+  std::size_t visits = 0;
+  ASSERT_EQ(group.template for_each<no_key_many_entry>([&](auto &selected) {
+    ++visits;
+    ASSERT_EQ(std::addressof(selected), std::addressof(entry));
+  }),
+            1U);
+  ASSERT_EQ(visits, 1U);
+}
+
+TEST(index_test,
+     registered_ordinary_selector_group_no_key_one_is_pointer_only) {
+  struct processor {};
+  struct first_storage {};
+
+  struct traits : dynamic_container_traits {
+    using view_definition_type = views<single<processor>>;
+  };
+  using container_type = container<traits, lookup_table_test_allocator>;
+  using access_type = registered_storage_candidate_access<container_type>;
+  using table_type = typename access_type::lookup_table_type;
+  using registered_entry = typename access_type::registered_binding_entry;
+
+  using no_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<>, detail::ordinary_selector_request<processor, no_key>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      registered_entry, lookup_table_test_allocator, type_list<>,
+      type_list<detail::ordinary_selector_request<processor, no_key>>>;
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    group_type group(allocator);
+    auto entry = make_registered_binding_entry<access_type, container_type,
+                                               first_storage>(
+        table_type::template make_no_key_identity<processor, one>());
+
+    ASSERT_EQ(state.allocations, 0);
+    ASSERT_TRUE(group.template insert<no_key_one_entry>(entry));
+    ASSERT_EQ(state.allocations, 0);
+    ASSERT_EQ(group.template count<no_key_one_entry>(), 1U);
+
+    bool ambiguous = true;
+    ASSERT_EQ(group.template find_singular<no_key_one_entry>(ambiguous),
+              std::addressof(entry));
+    ASSERT_FALSE(ambiguous);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+}
+
+TEST(index_test, registered_ordinary_selector_group_rolls_back_partial_insert) {
+  struct collection_processor {};
+  struct typed_processor {};
+  struct processor_key {};
+  struct first_storage {};
+  struct second_storage {};
+
+  struct traits : dynamic_container_traits {
+    using view_definition_type =
+        views<collection<collection_processor>,
+              typed<processor_key, typed_processor, one>>;
+  };
+  using container_type = container<traits, lookup_table_test_allocator>;
+  using access_type = registered_storage_candidate_access<container_type>;
+  using table_type = typename access_type::lookup_table_type;
+  using registered_entry = typename access_type::registered_binding_entry;
+
+  using no_key_many_entry =
+      detail::lookup_entry<collection_processor, no_key, many, ordered>;
+  using typed_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<no_key_many_entry>,
+      detail::ordinary_selector_request<typed_processor,
+                                        typed_key<processor_key>>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      registered_entry, lookup_table_test_allocator,
+      type_list<no_key_many_entry>,
+      type_list<detail::ordinary_selector_request<collection_processor, no_key>,
+                detail::ordinary_selector_request<typed_processor,
+                                                  typed_key<processor_key>>>>;
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    group_type group(allocator);
+    auto existing_entry =
+        make_registered_binding_entry<access_type, container_type,
+                                      first_storage>(
+            table_type::template make_typed_key_identity<typed_processor,
+                                                         processor_key, one>());
+    auto candidate_entry =
+        make_registered_binding_entry<access_type, container_type,
+                                      second_storage>(
+            table_type::template make_no_key_identity<collection_processor,
+                                                      many>());
+
+    ASSERT_TRUE(group.template insert<typed_key_one_entry>(existing_entry));
+    ASSERT_EQ(state.allocations, 0);
+
+    ASSERT_FALSE((group.template insert<no_key_many_entry, typed_key_one_entry>(
+        candidate_entry)));
+    ASSERT_EQ(state.allocations, 0);
+    ASSERT_EQ(group.template count<no_key_many_entry>(), 0U);
+    ASSERT_EQ(group.template count<typed_key_one_entry>(), 1U);
+
+    bool ambiguous = true;
+    ASSERT_EQ(group.template find_singular<typed_key_one_entry>(ambiguous),
+              std::addressof(existing_entry));
+    ASSERT_FALSE(ambiguous);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+}
+
+TEST(index_test,
+     registered_ordinary_selector_group_erases_and_dedupes_row_arguments) {
+  struct processor {};
+  struct first_storage {};
+
+  struct traits : dynamic_container_traits {
+    using view_definition_type = views<single<processor>>;
+  };
+  using container_type = container<traits, lookup_table_test_allocator>;
+  using access_type = registered_storage_candidate_access<container_type>;
+  using table_type = typename access_type::lookup_table_type;
+  using registered_entry = typename access_type::registered_binding_entry;
+
+  using no_key_one_entry = detail::materialized_ordinary_selector_entry_t<
+      type_list<>, detail::ordinary_selector_request<processor, no_key>>;
+  using group_type = detail::materialized_ordinary_selector_group<
+      registered_entry, lookup_table_test_allocator, type_list<>,
+      type_list<detail::ordinary_selector_request<processor, no_key>,
+                detail::ordinary_selector_request<processor, no_key>>>;
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    group_type group(allocator);
+    auto entry = make_registered_binding_entry<access_type, container_type,
+                                               first_storage>(
+        table_type::template make_no_key_identity<processor, one>());
+
+    ASSERT_TRUE(
+        (group.template insert<no_key_one_entry, no_key_one_entry>(entry)));
+    ASSERT_EQ(state.allocations, 0);
+    ASSERT_EQ(group.template count<no_key_one_entry>(), 1U);
+
+    group.template erase<no_key_one_entry, no_key_one_entry>(entry);
+    ASSERT_EQ(state.allocations, 0);
+    ASSERT_EQ(group.template count<no_key_one_entry>(), 0U);
+
+    bool ambiguous = true;
+    ASSERT_EQ(group.template find_singular<no_key_one_entry>(ambiguous),
+              nullptr);
+    ASSERT_FALSE(ambiguous);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
 }
 
 TEST(index_test,

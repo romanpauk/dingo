@@ -19,6 +19,7 @@
 #include <initializer_list>
 #include <memory>
 #include <optional>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -348,6 +349,344 @@ class selector_storage<
 
 public:
   using base_type::base_type;
+};
+
+template <typename LookupEntry>
+struct is_ordinary_selector_lookup_entry : std::false_type {};
+
+template <typename Interface, typename Backend>
+struct is_ordinary_selector_lookup_entry<
+    lookup_entry<Interface, ::dingo::no_key, ::dingo::one, Backend>>
+    : std::true_type {};
+
+template <typename Interface, typename Backend>
+struct is_ordinary_selector_lookup_entry<
+    lookup_entry<Interface, ::dingo::no_key, ::dingo::many, Backend>>
+    : std::true_type {};
+
+template <typename Interface, typename Key, typename Backend>
+struct is_ordinary_selector_lookup_entry<
+    lookup_entry<Interface, ::dingo::typed_key<Key>, ::dingo::one, Backend>>
+    : std::true_type {};
+
+template <typename Interface, typename Key, typename Backend>
+struct is_ordinary_selector_lookup_entry<
+    lookup_entry<Interface, ::dingo::typed_key<Key>, ::dingo::many, Backend>>
+    : std::true_type {};
+
+template <typename LookupEntry>
+inline constexpr bool is_ordinary_selector_lookup_entry_v =
+    is_ordinary_selector_lookup_entry<LookupEntry>::value;
+
+template <typename Interface, typename KeyDomain>
+struct ordinary_selector_request {
+  using interface_type = normalized_lookup_interface_t<Interface>;
+  using key_domain = KeyDomain;
+};
+
+template <typename...>
+inline constexpr bool ordinary_selector_dependent_false_v = false;
+
+template <typename KeyDomain> struct normalized_ordinary_key_domain {
+  static_assert(ordinary_selector_dependent_false_v<KeyDomain>,
+                "ordinary selector requests support only no_key and typed_key "
+                "key domains");
+};
+
+template <> struct normalized_ordinary_key_domain<::dingo::no_key> {
+  using type = ::dingo::no_key;
+};
+
+template <typename Key>
+struct normalized_ordinary_key_domain<::dingo::typed_key<Key>> {
+  using type = ::dingo::typed_key<normalized_lookup_key_t<Key>>;
+};
+
+template <typename KeyDomain>
+using normalized_ordinary_key_domain_t =
+    typename normalized_ordinary_key_domain<KeyDomain>::type;
+
+template <typename Interface, typename KeyDomain>
+struct ordinary_registration_selector {
+  using interface_type = normalized_lookup_interface_t<Interface>;
+  using key_domain = normalized_ordinary_key_domain_t<KeyDomain>;
+};
+
+template <typename RegistrationSelector>
+struct ordinary_selector_request_from_registration_selector {
+  static_assert(ordinary_selector_dependent_false_v<RegistrationSelector>,
+                "ordinary selector request collection requires "
+                "ordinary_registration_selector descriptors");
+};
+
+template <typename Interface, typename KeyDomain>
+struct ordinary_selector_request_from_registration_selector<
+    ordinary_registration_selector<Interface, KeyDomain>> {
+  using type =
+      ordinary_selector_request<normalized_lookup_interface_t<Interface>,
+                                normalized_ordinary_key_domain_t<KeyDomain>>;
+};
+
+template <typename RegistrationSelector>
+using ordinary_selector_request_from_registration_selector_t =
+    typename ordinary_selector_request_from_registration_selector<
+        RegistrationSelector>::type;
+
+template <typename RegistrationSelectors> struct ordinary_selector_requests;
+
+template <typename... RegistrationSelectors>
+struct ordinary_selector_requests<type_list<RegistrationSelectors...>> {
+  using type = type_list_unique_t<
+      type_list<ordinary_selector_request_from_registration_selector_t<
+          RegistrationSelectors>...>>;
+};
+
+template <typename RegistrationSelectors>
+using ordinary_selector_requests_t =
+    typename ordinary_selector_requests<RegistrationSelectors>::type;
+
+template <typename ExplicitEntries, typename Request>
+struct materialized_ordinary_selector_entry;
+
+template <typename ExplicitEntries, typename Interface>
+struct materialized_ordinary_selector_entry<
+    ExplicitEntries, ordinary_selector_request<Interface, ::dingo::no_key>> {
+private:
+  using normalized_interface = normalized_lookup_interface_t<Interface>;
+  using explicit_one =
+      selected_no_key_lookup_entry_t<normalized_interface, ::dingo::one,
+                                     ExplicitEntries>;
+  using explicit_many =
+      selected_no_key_lookup_entry_t<normalized_interface, ::dingo::many,
+                                     ExplicitEntries>;
+  using implicit_one = lookup_entry<normalized_interface, ::dingo::no_key,
+                                    ::dingo::one, no_lookup_backend>;
+
+public:
+  using type =
+      std::conditional_t<!std::is_void_v<explicit_one>, explicit_one,
+                         std::conditional_t<!std::is_void_v<explicit_many>,
+                                            explicit_many, implicit_one>>;
+};
+
+template <typename ExplicitEntries, typename Interface, typename Key>
+struct materialized_ordinary_selector_entry<
+    ExplicitEntries,
+    ordinary_selector_request<Interface, ::dingo::typed_key<Key>>> {
+private:
+  using normalized_interface = normalized_lookup_interface_t<Interface>;
+  using normalized_key = normalized_lookup_key_t<Key>;
+  using explicit_one =
+      selected_typed_key_lookup_entry_t<normalized_interface, normalized_key,
+                                        ::dingo::one, ExplicitEntries>;
+  using explicit_many =
+      selected_typed_key_lookup_entry_t<normalized_interface, normalized_key,
+                                        ::dingo::many, ExplicitEntries>;
+  using implicit_one =
+      lookup_entry<normalized_interface, ::dingo::typed_key<normalized_key>,
+                   ::dingo::one, no_lookup_backend>;
+
+public:
+  using type =
+      std::conditional_t<!std::is_void_v<explicit_one>, explicit_one,
+                         std::conditional_t<!std::is_void_v<explicit_many>,
+                                            explicit_many, implicit_one>>;
+};
+
+template <typename ExplicitEntries, typename Request>
+using materialized_ordinary_selector_entry_t =
+    typename materialized_ordinary_selector_entry<ExplicitEntries,
+                                                  Request>::type;
+
+template <typename ExplicitEntries, typename Requests>
+struct materialized_ordinary_selector_entries;
+
+template <typename ExplicitEntries, typename... Requests>
+struct materialized_ordinary_selector_entries<ExplicitEntries,
+                                              type_list<Requests...>> {
+  using type = type_list_unique_t<type_list<
+      materialized_ordinary_selector_entry_t<ExplicitEntries, Requests>...>>;
+};
+
+template <typename ExplicitEntries, typename Requests>
+using materialized_ordinary_selector_entries_t =
+    typename materialized_ordinary_selector_entries<ExplicitEntries,
+                                                    Requests>::type;
+
+template <typename Entry, typename Allocator, typename... LookupEntries>
+class selector_table {
+  static_assert((is_ordinary_selector_lookup_entry_v<LookupEntries> && ...),
+                "selector_table currently supports only ordinary no_key and "
+                "typed_key lookup entries");
+  static_assert(
+      sizeof...(LookupEntries) ==
+          type_list_size_v<type_list_unique_t<type_list<LookupEntries...>>>,
+      "selector_table requires unique LookupEntry types");
+
+public:
+  explicit selector_table(Allocator &allocator)
+      : storages_(
+            selector_storage<LookupEntries, Entry, Allocator>(allocator)...) {}
+
+  template <typename LookupEntry> bool conflicts(const Entry &entry) const {
+    return storage<LookupEntry>().conflicts(entry);
+  }
+
+  template <typename LookupEntry> void insert(Entry &entry) {
+    storage<LookupEntry>().insert(entry);
+  }
+
+  template <typename LookupEntry> void erase(Entry &entry) {
+    storage<LookupEntry>().erase(entry);
+  }
+
+  template <typename LookupEntry> Entry *find_singular(bool &ambiguous) const {
+    return storage<LookupEntry>().find_singular(ambiguous);
+  }
+
+  template <typename LookupEntry, typename Fn>
+  std::size_t for_each(Fn &&fn) const {
+    return storage<LookupEntry>().for_each(std::forward<Fn>(fn));
+  }
+
+  template <typename LookupEntry> std::size_t count() const {
+    return storage<LookupEntry>().count();
+  }
+
+private:
+  template <typename LookupEntry>
+  static constexpr std::size_t lookup_entry_count =
+      (std::size_t{0} + ... +
+       (std::is_same_v<LookupEntry, LookupEntries> ? std::size_t{1}
+                                                   : std::size_t{0}));
+
+  template <typename LookupEntry> auto &storage() {
+    static_assert(lookup_entry_count<LookupEntry> == 1,
+                  "selector_table access requires a LookupEntry that appears "
+                  "exactly once in the table");
+    return std::get<selector_storage<LookupEntry, Entry, Allocator>>(storages_);
+  }
+
+  template <typename LookupEntry> const auto &storage() const {
+    static_assert(lookup_entry_count<LookupEntry> == 1,
+                  "selector_table access requires a LookupEntry that appears "
+                  "exactly once in the table");
+    return std::get<selector_storage<LookupEntry, Entry, Allocator>>(storages_);
+  }
+
+  std::tuple<selector_storage<LookupEntries, Entry, Allocator>...> storages_;
+};
+
+template <typename Entry, typename Allocator, typename... LookupEntries>
+class selector_table<Entry, Allocator, type_list<LookupEntries...>>
+    : public selector_table<Entry, Allocator, LookupEntries...> {
+  using base_type = selector_table<Entry, Allocator, LookupEntries...>;
+
+public:
+  using base_type::base_type;
+};
+
+template <typename Entry, typename Allocator, typename ExplicitEntries,
+          typename Requests>
+using materialized_ordinary_selector_table_t = selector_table<
+    Entry, Allocator,
+    materialized_ordinary_selector_entries_t<ExplicitEntries, Requests>>;
+
+template <typename Table, typename Entry, typename InsertedEntries,
+          typename RemainingEntries>
+struct ordinary_selector_group_inserter;
+
+template <typename Table, typename Entry, typename... InsertedEntries>
+struct ordinary_selector_group_inserter<
+    Table, Entry, type_list<InsertedEntries...>, type_list<>> {
+  static bool insert(Table &, Entry &) { return true; }
+};
+
+template <typename Table, typename Entry, typename... InsertedEntries,
+          typename HeadEntry, typename... TailEntries>
+struct ordinary_selector_group_inserter<Table, Entry,
+                                        type_list<InsertedEntries...>,
+                                        type_list<HeadEntry, TailEntries...>> {
+  static bool insert(Table &table, Entry &entry) {
+    if (table.template conflicts<HeadEntry>(entry)) {
+      rollback(table, entry);
+      return false;
+    }
+
+    try {
+      table.template insert<HeadEntry>(entry);
+    } catch (...) {
+      rollback(table, entry);
+      throw;
+    }
+
+    return ordinary_selector_group_inserter<
+        Table, Entry, type_list<InsertedEntries..., HeadEntry>,
+        type_list<TailEntries...>>::insert(table, entry);
+  }
+
+private:
+  static void rollback(Table &table, Entry &entry) {
+    (table.template erase<InsertedEntries>(entry), ...);
+  }
+};
+
+template <typename Table, typename Entry, typename LookupEntries>
+struct ordinary_selector_group_eraser;
+
+template <typename Table, typename Entry, typename... LookupEntries>
+struct ordinary_selector_group_eraser<Table, Entry,
+                                      type_list<LookupEntries...>> {
+  static void erase(Table &table, Entry &entry) {
+    (table.template erase<LookupEntries>(entry), ...);
+  }
+};
+
+template <typename Entry, typename Allocator, typename ExplicitEntries,
+          typename Requests>
+class materialized_ordinary_selector_group {
+public:
+  using table_type =
+      materialized_ordinary_selector_table_t<Entry, Allocator, ExplicitEntries,
+                                             Requests>;
+
+  explicit materialized_ordinary_selector_group(Allocator &allocator)
+      : table_(allocator) {}
+
+  template <typename... LookupEntries> bool insert(Entry &entry) {
+    static_assert(sizeof...(LookupEntries) > 0,
+                  "ordinary selector group insert requires at least one "
+                  "LookupEntry");
+    using unique_entries = type_list_unique_t<type_list<LookupEntries...>>;
+    return ordinary_selector_group_inserter<table_type, Entry, type_list<>,
+                                            unique_entries>::insert(table_,
+                                                                    entry);
+  }
+
+  template <typename... LookupEntries> void erase(Entry &entry) {
+    static_assert(sizeof...(LookupEntries) > 0,
+                  "ordinary selector group erase requires at least one "
+                  "LookupEntry");
+    using unique_entries = type_list_unique_t<type_list<LookupEntries...>>;
+    ordinary_selector_group_eraser<table_type, Entry, unique_entries>::erase(
+        table_, entry);
+  }
+
+  template <typename LookupEntry> Entry *find_singular(bool &ambiguous) const {
+    return table_.template find_singular<LookupEntry>(ambiguous);
+  }
+
+  template <typename LookupEntry, typename Fn>
+  std::size_t for_each(Fn &&fn) const {
+    return table_.template for_each<LookupEntry>(std::forward<Fn>(fn));
+  }
+
+  template <typename LookupEntry> std::size_t count() const {
+    return table_.template count<LookupEntry>();
+  }
+
+private:
+  table_type table_;
 };
 
 template <typename Rtti, typename Allocator, typename Entry,
