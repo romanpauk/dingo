@@ -15,5 +15,5 @@ int main() {
   return container.resolve<processor>(std::size_t(1)).value;
 }
 
-// CHECK: keyed registration or request has no matching dingo view
+// CHECK: keyed registration or request has no matching dingo lookup
 // CHECK: definition for interface/key

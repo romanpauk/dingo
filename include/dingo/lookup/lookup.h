@@ -8,25 +8,25 @@
 #pragma once
 
 #include <dingo/core/exceptions.h>
+#include <dingo/lookup/array.h>
+#include <dingo/lookup/collection.h>
+#include <dingo/lookup/ordered.h>
+#include <dingo/lookup/unordered.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/type_list.h>
-#include <dingo/view/array.h>
-#include <dingo/view/collection.h>
-#include <dingo/view/ordered.h>
-#include <dingo/view/unordered.h>
 
 #include <tuple>
 #include <type_traits>
 
 namespace dingo {
 template <typename Interface>
-using single = detail::view_definition<Interface, no_key, one>;
+using single = detail::lookup_definition<Interface, no_key, one>;
 template <typename Key, typename Interface, typename Cardinality = one,
           typename Backend = ordered>
-using associative =
-    detail::view_definition<Interface, runtime_key<Key>, Cardinality, Backend>;
+using associative = detail::lookup_definition<Interface, runtime_key<Key>,
+                                              Cardinality, Backend>;
 template <typename Key, typename Interface, typename Cardinality = one>
-using typed = detail::view_definition<Interface, typed_key<Key>, Cardinality>;
+using typed = detail::lookup_definition<Interface, typed_key<Key>, Cardinality>;
 template <typename... Args> struct interfaces;
 template <typename T, auto... Values> struct key;
 
@@ -54,7 +54,7 @@ template <typename T> struct lookup_key_arg {
 
 template <typename T, auto... Values> struct lookup_key_arg<key<T, Values...>> {
   static_assert(sizeof...(Values) == 0,
-                "view definitions require dingo::key<Key>, not "
+                "lookup definitions require dingo::key<Key>, not "
                 "dingo::key<Key, Value>");
   using type = T;
 };
@@ -83,7 +83,7 @@ template <typename Definition> struct normalize_lookup_definition;
 template <typename Interface, typename KeyDomain, typename Cardinality,
           typename Backend>
 struct normalize_lookup_definition<
-    view_definition<Interface, KeyDomain, Cardinality, Backend>>
+    lookup_definition<Interface, KeyDomain, Cardinality, Backend>>
     : normalize_lookup_interfaces<
           typename lookup_interface_arg<Interface>::type, KeyDomain,
           Cardinality, Backend> {};
@@ -101,7 +101,7 @@ template <> struct normalize_lookup_definitions<std::tuple<>> {
 };
 
 template <typename... Definitions>
-struct normalize_lookup_definitions<::dingo::views<Definitions...>>
+struct normalize_lookup_definitions<::dingo::lookups<Definitions...>>
     : normalize_lookup_definitions<type_list<Definitions...>> {};
 
 template <typename Definitions>

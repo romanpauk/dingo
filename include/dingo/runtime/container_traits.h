@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/core/none.h>
+#include <dingo/detail/container_traits.h>
 #include <dingo/resolution/type_cache.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/type/type_list.h>
@@ -29,7 +30,7 @@ struct dynamic_container_traits {
   template <typename Value, typename Allocator>
   using type_cache_type = dynamic_type_cache<Value, rtti_type, Allocator>;
   using allocator_type = std::allocator<char>;
-  using view_definition_type = std::tuple<>;
+  using lookup_definition_type = std::tuple<>;
   static constexpr bool cache_enabled = true;
 };
 
@@ -41,7 +42,8 @@ struct is_runtime_container_traits : std::false_type {};
 template <typename T>
 struct is_runtime_container_traits<
     T, std::void_t<typename T::tag_type, typename T::rtti_type,
-                   typename T::allocator_type, typename T::view_definition_type,
+                   typename T::allocator_type,
+                   container_lookup_definition_type_t<T>,
                    typename T::template rebind_t<void>>> : std::true_type {};
 
 template <typename T>

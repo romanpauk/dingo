@@ -15,9 +15,9 @@ are an output of axis selection.
 - `nested_wrappers`: resolve nested smart-pointer, variant, and array wrapper
   combinations.
 - `resolve_collection`: resolve all unkeyed bindings for an interface.
-- `resolve_keyed`: resolve one typed-key view binding.
+- `resolve_keyed`: resolve one typed-key lookup binding.
 - `resolve_keyed_collection`: resolve all bindings for a key.
-- `resolve_indexed`: resolve one runtime-key view binding.
+- `resolve_indexed`: resolve one runtime-key lookup binding.
 - `construct`: construct an unregistered type from registered dependencies.
 - `invoke`: invoke a callable from registered dependencies.
 - `construct_collection`: construct a collection with default or custom insertion.
@@ -105,7 +105,7 @@ fixture type needed by that case.
 - annotated interface
 - collection of interfaces
 - keyed collection of interfaces
-- runtime-key view interface
+- runtime-key lookup interface
 - local binding target
 - local binding override target
 - local and host collection target
@@ -180,7 +180,7 @@ Then it should keep only rows that satisfy all rules below.
 - Runtime-only containers cannot use static bindings.
 - Mixed containers require at least one static binding and may add runtime
   bindings.
-- Runtime-key view features require view container traits.
+- Runtime-key lookup features require lookup container traits.
 - Runtime-key registration is runtime-only unless static fixed-key bindings are added
   to the library.
 - `external` scope requires caller-supplied storage.

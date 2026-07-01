@@ -8,7 +8,7 @@
 #pragma once
 
 namespace dingo {
-template <typename... Definitions> struct views {};
+template <typename... Definitions> struct lookups {};
 struct no_key {};
 template <typename Key> struct typed_key {};
 template <typename Key> struct runtime_key {};
@@ -19,7 +19,7 @@ namespace detail {
 struct no_lookup_backend {};
 template <typename Interface, typename KeyDomain, typename Cardinality,
           typename Backend = no_lookup_backend>
-struct view_definition {};
+struct lookup_definition {};
 } // namespace detail
 
 } // namespace dingo

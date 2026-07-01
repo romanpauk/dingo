@@ -45,7 +45,7 @@ facade:
 
 Dingo also applies supported ownership and interface
 [conversions](architecture/conversion-model.md) automatically: a registration
-can satisfy references, pointers, smart pointers, and interface views when the
+can satisfy references, pointers, smart pointers, and interface lookups when the
 selected storage and scope allow it.
 
 ## Runtime Registration
@@ -245,5 +245,5 @@ B b4 = container.invoke<B(A &)>(overloaded_factory{});
 
 - [Core Concepts](core-concepts.md) for understanding how registration policies
   interact.
-- [Advanced Topics](advanced-topics.md) for views, nesting, or custom traits.
+- [Advanced Topics](advanced-topics.md) for lookups, nesting, or custom traits.
 - [Examples](examples.md) for learning from runnable programs.

@@ -5,26 +5,26 @@ registration and resolution flow is already in place.
 
 ## View Resolution
 
-Container traits can define one or more views so that a registration is resolved
-by interface, key domain, and cardinality.
+Container traits can define one or more lookups so that a registration is
+resolved by interface, key domain, and cardinality.
 
-Use views when:
+Use lookups when:
 
 - multiple implementations share the same interface
 - the caller chooses the implementation by name or numeric ID
 - the binding should remain separate from unkeyed resolution
 
 View definitions are scoped to the interface they serve. Every keyed
-registration or runtime request requires a matching view definition.
+registration or runtime request requires a matching lookup definition.
 
-Unkeyed runtime registrations without an explicit view are treated as
+Unkeyed runtime registrations without an explicit lookup are treated as
 `no_key`/`one`: a second registration for the same interface is rejected,
 regardless of storage type. Declare `collection<I>` when an interface is meant
 to have multiple unkeyed implementations:
 
 ```c++
 struct container_traits : dynamic_container_traits {
-  using view_definition_type = views<collection<IProcessor>>;
+  using lookup_definition_type = lookups<collection<IProcessor>>;
 };
 ```
 
@@ -33,13 +33,13 @@ struct container_traits : dynamic_container_traits {
 order, while singular `resolve<I &>()` succeeds only when exactly one
 registration matches.
 
-Runtime-keyed views use `associative<K, I>` for unique bindings and
+Runtime-keyed lookups use `associative<K, I>` for unique bindings and
 `associative<K, I, many>` for keyed collections:
 
 ```c++
 struct container_traits : dynamic_container_traits {
-  using view_definition_type =
-      views<associative<std::size_t, IProcessor>,
+  using lookup_definition_type =
+      lookups<associative<std::size_t, IProcessor>,
                 associative<std::string, IHandler, many>>;
 };
 ```
@@ -57,8 +57,8 @@ For example:
 
 ```c++
 struct container_traits : dynamic_container_traits {
-  using view_definition_type =
-      views<associative<std::size_t, IProcessor, many, unordered>,
+  using lookup_definition_type =
+      lookups<associative<std::size_t, IProcessor, many, unordered>,
               associative<MessageId, IHandler, one, array<32>>>;
 };
 ```
@@ -74,12 +74,12 @@ container API. For `one`, Dingo uses `find(key)`, `end()`,
 iteration order is defined by the backend; `many` backends are not required to
 preserve registration order.
 
-Typed-key registrations can also use explicit views:
+Typed-key registrations can also use explicit lookups:
 
 ```c++
 struct container_traits : dynamic_container_traits {
-  using view_definition_type =
-      views<typed<Primary, IProcessor, one>>;
+  using lookup_definition_type =
+      lookups<typed<Primary, IProcessor, one>>;
 };
 ```
 
@@ -87,15 +87,15 @@ struct container_traits : dynamic_container_traits {
 identity for that interface and key type. `typed<K, I, many>` makes
 `resolve<std::vector<I *>>(key<K>{})` enumerate keyed collection members in
 registration order. A singular typed-key resolve succeeds only when the matching
-`many` view contains exactly one registration.
+`many` lookup contains exactly one registration.
 
-When no explicit typed-key view is declared, `key<K>` registrations still use
+When no explicit typed-key lookup is declared, `key<K>` registrations still use
 implicit `typed_key<K>`/`one`: a second registration for the same interface and
 key type is rejected, regardless of storage type. Use `typed<K, I, many>` when
 one typed key should hold multiple implementations.
 
-No-key and typed-key views use the library's internal row storage; only
-runtime-keyed `associative` views have configurable storage backends.
+No-key and typed-key lookups use the library's internal row storage; only
+runtime-keyed `associative` lookups have configurable storage backends.
 
 Constructor dependencies can also bind to a fixed request key:
 
@@ -108,15 +108,15 @@ struct Pipeline {
 
 `request<IProcessor&, key<std::size_t, 1>>` resolves the same object as
 `container.resolve<IProcessor&>(std::size_t{1})`; the configured
-`associative<std::size_t, IProcessor>` view determines the key domain and
-cardinality, while the view storage remains an implementation detail.
+`associative<std::size_t, IProcessor>` lookup determines the key domain and
+cardinality, while the lookup storage remains an implementation detail.
 
 The value in `key<T, Value>` must be a valid non-type template parameter and
 must be usable as `T{Value}`. Class-type values such as `key<MyKey, MyKey{1}>`
 require C++20 structural non-type template parameter support.
 
-Static containers can use the same `associative<K, I>` views when the key value
-is fixed in the type:
+Static containers can use the same `associative<K, I>` lookups when the key
+value is fixed in the type:
 
 - `key<K>` remains a typed key and maps to `typed<K, I, ...>`.
 - `key<K, Value>` maps to `associative<K, I, ...>` when `associative<K, I>` or
@@ -125,8 +125,8 @@ is fixed in the type:
   `resolve<Collection>(key<K, Value>{})`; `resolve<I &>(K{...})` is runtime key
   lookup and is not supported by `static_container`.
 - Static fixed runtime-key bindings require `static_container` with traits that
-  declare the view. `container<bindings<...>>` rejects them because that mixed
-  form cannot carry custom view traits.
+  declare the lookup. `container<bindings<...>>` rejects them because that mixed
+  form cannot carry custom lookup traits.
 
 <!-- { include("../examples/index/static_fixed.cpp", scope="////") -->
 
@@ -158,8 +158,8 @@ using source = dingo::bindings<
                 dingo::interfaces<IProcessor>, dingo::key<std::size_t, 1>>>;
 
 struct container_traits : dingo::static_container_traits<> {
-  using view_definition_type =
-      dingo::views<dingo::associative<std::size_t, IProcessor>>;
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<std::size_t, IProcessor>>;
 };
 
 dingo::static_container<source, container_traits> container;
@@ -187,9 +187,9 @@ struct IAnimal {
 struct Dog : IAnimal {};
 struct Cat : IAnimal {};
 
-// Declare traits with a std::string based view
+// Declare traits with a std::string based lookup
 struct container_traits : dynamic_container_traits {
-  using view_definition_type = views<associative<std::string, IAnimal>>;
+  using lookup_definition_type = lookups<associative<std::string, IAnimal>>;
 };
 
 container<container_traits> container;
@@ -260,11 +260,11 @@ struct Pipeline {
   IProcessor &second;
 };
 
-// Define traits type with a single view using size_t as a key
+// Define traits type with a single lookup using size_t as a key
 struct container_traits : static_container_traits<void> {
-  using view_definition_type = views<associative<size_t, IProcessor>>;
+  using lookup_definition_type = lookups<associative<size_t, IProcessor>>;
 };
-// Runtime view storage is dynamic even when this
+// Runtime lookup storage is dynamic even when this
 // example uses static_container_traits for the rest of the container.
 
 container<container_traits> container;
@@ -300,15 +300,15 @@ auto pipeline = container.construct<Pipeline>();
 
 See:
 
-- [include/dingo/view/view.h](../include/dingo/view/view.h)
+- [include/dingo/lookup/lookup.h](../include/dingo/lookup/lookup.h)
 
 ## Annotated Types
 
 Annotations support multiple implementations for the same interface and
 disambiguate them with a tag type.
 
-Use annotations when type-based registration is not enough but runtime key views
-would be the wrong abstraction.
+Use annotations when type-based registration is not enough but runtime key
+lookups would be the wrong abstraction.
 
 <!-- { include("../examples/registration/annotated.cpp", scope="////") -->
 
@@ -379,7 +379,7 @@ Compile-time bindings make sense when:
 
 - the participating types are known and stable at compile time
 - missing dependencies and unsupported cycles should fail during compilation
-- views should avoid mutable runtime registration state
+- lookups should avoid mutable runtime registration state
 
 See:
 

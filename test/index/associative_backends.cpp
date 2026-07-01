@@ -153,8 +153,8 @@ TEST(associative_backend_test, unordered_one_uses_runtime_key_lookup) {
   };
 
   struct traits : dynamic_container_traits {
-    using view_definition_type =
-        views<associative<std::size_t, processor, one, unordered>>;
+    using lookup_definition_type =
+        lookups<associative<std::size_t, processor, one, unordered>>;
   };
 
   container<traits> container;
@@ -183,8 +183,8 @@ TEST(associative_backend_test, unordered_many_resolves_duplicate_key_entries) {
   };
 
   struct traits : dynamic_container_traits {
-    using view_definition_type =
-        views<associative<std::size_t, processor, many, unordered>>;
+    using lookup_definition_type =
+        lookups<associative<std::size_t, processor, many, unordered>>;
   };
 
   container<traits> container;
@@ -222,8 +222,8 @@ TEST(associative_backend_test, array_one_uses_dense_key_lookup) {
   };
 
   struct traits : dynamic_container_traits {
-    using view_definition_type =
-        views<associative<std::size_t, processor, one, array<4>>>;
+    using lookup_definition_type =
+        lookups<associative<std::size_t, processor, one, array<4>>>;
   };
 
   container<traits> container;
@@ -257,8 +257,8 @@ TEST(associative_backend_test, array_many_uses_dense_key_rows) {
   };
 
   struct traits : dynamic_container_traits {
-    using view_definition_type =
-        views<associative<std::size_t, processor, many, array<4>>>;
+    using lookup_definition_type =
+        lookups<associative<std::size_t, processor, many, array<4>>>;
   };
 
   container<traits> container;
@@ -313,8 +313,8 @@ TEST(associative_backend_test, custom_backend_uses_stl_like_try_emplace) {
   };
 
   struct traits : dynamic_container_traits {
-    using view_definition_type =
-        views<associative<int, processor, one, custom_lookup_backend>>;
+    using lookup_definition_type =
+        lookups<associative<int, processor, one, custom_lookup_backend>>;
   };
 
   custom_lookup_backend_constructions = 0;
@@ -377,8 +377,8 @@ TEST(associative_backend_test,
   };
 
   struct traits : dynamic_container_traits {
-    using view_definition_type =
-        views<associative<int, processor, one, operator_lookup_backend>>;
+    using lookup_definition_type =
+        lookups<associative<int, processor, one, operator_lookup_backend>>;
   };
 
   operator_lookup_backend_insertions = 0;

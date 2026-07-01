@@ -55,7 +55,7 @@ the relevant feature and start there.
 ## Interfaces, Collections, And Dispatch
 
 - [examples/container/service_locator.cpp](../examples/container/service_locator.cpp):
-  resolve a concrete type through an interface view
+  resolve a concrete type through an interface lookup
 - [examples/index/multibindings.cpp](../examples/index/multibindings.cpp):
   resolve multiple implementations through a single interface
 - [examples/registration/collection.cpp](../examples/registration/collection.cpp):

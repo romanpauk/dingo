@@ -33,13 +33,13 @@ struct indexed_definition_key<dingo::associative<Key, Interface, dingo::one>> {
 };
 
 template <typename Head, typename... Tail>
-struct indexed_definition_key<dingo::views<Head, Tail...>> {
+struct indexed_definition_key<dingo::lookups<Head, Tail...>> {
   using type = typename indexed_definition_key<Head>::type;
 };
 
 template <typename Container> struct indexed_key {
-  using type = typename indexed_definition_key<
-      typename std::remove_reference_t<Container>::view_definition_type>::type;
+  using type = typename indexed_definition_key<typename std::remove_reference_t<
+      Container>::lookup_definition_type>::type;
 };
 
 template <typename Container>

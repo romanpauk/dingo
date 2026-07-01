@@ -10,11 +10,11 @@
 #include <dingo/core/binding_model.h>
 #include <dingo/core/factory_traits.h>
 #include <dingo/core/keyed.h>
+#include <dingo/lookup/lookup.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/type_list.h>
-#include <dingo/view/view.h>
 
 #include <type_traits>
 

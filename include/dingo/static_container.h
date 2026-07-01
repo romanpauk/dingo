@@ -71,7 +71,7 @@ class static_container_impl<static_registry<Registrations...>, ParentContainer,
   using scope_ref = static_binding_scope_ref<state_type, Registrations...>;
   using context_type = static_context<registry_type_>;
   using index_entries_ = detail::normalize_lookup_definitions_t<
-      typename ContainerTraits::view_definition_type>;
+      detail::container_lookup_definition_type_t<ContainerTraits>>;
 
   template <typename Collection, typename Fn>
   using collection_insert_invocable =
@@ -172,9 +172,9 @@ public:
   static_assert(detail::key_value_bindings_are_unique<
                     typename static_source_type::interface_bindings,
                     index_entries_>::value,
-                "static_container fixed runtime-key view bindings must be "
-                "unique for one views and unique by storage for many "
-                "views");
+                "static_container fixed runtime-key lookup bindings must be "
+                "unique for one lookups and unique by storage for many "
+                "lookups");
   static_assert(graph_type_::resolvable,
                 "static_container requires a resolvable compile-time binding "
                 "graph");

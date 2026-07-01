@@ -38,8 +38,8 @@ int main() {
                   dingo::interfaces<IProcessor>, dingo::key<std::size_t, 1>>>;
 
   struct container_traits : dingo::static_container_traits<> {
-    using view_definition_type =
-        dingo::views<dingo::associative<std::size_t, IProcessor>>;
+    using lookup_definition_type =
+        dingo::lookups<dingo::associative<std::size_t, IProcessor>>;
   };
 
   dingo::static_container<source, container_traits> container;

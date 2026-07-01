@@ -610,7 +610,7 @@ struct IProcessor {
 template <size_t N> struct Processor : IProcessor {};
 
 struct container_traits : dynamic_container_traits {
-  using view_definition_type = views<collection<IProcessor>>;
+  using lookup_definition_type = lookups<collection<IProcessor>>;
 };
 
 container<container_traits> container;
@@ -675,7 +675,8 @@ private:
 };
 
 struct traits : dingo::dynamic_container_traits {
-  using view_definition_type = dingo::views<dingo::collection<ProcessorBase>>;
+  using lookup_definition_type =
+      dingo::lookups<dingo::collection<ProcessorBase>>;
 };
 
 container<traits> container;

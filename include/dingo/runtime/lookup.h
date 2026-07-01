@@ -8,8 +8,8 @@
 #pragma once
 
 #include <dingo/core/none.h>
+#include <dingo/lookup/lookup.h>
 #include <dingo/memory/static_allocator.h>
-#include <dingo/view/view.h>
 
 #include <algorithm>
 #include <cstddef>

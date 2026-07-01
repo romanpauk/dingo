@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include <dingo/view/storage.h>
-#include <dingo/view/tags.h>
+#include <dingo/lookup/storage.h>
+#include <dingo/lookup/tags.h>
 
 #include <algorithm>
 #include <array>

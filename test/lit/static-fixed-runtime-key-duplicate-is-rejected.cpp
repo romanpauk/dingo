@@ -20,8 +20,8 @@ using source = dingo::bindings<
                 dingo::key<std::size_t, std::size_t{0}>>>;
 
 struct traits : dingo::static_container_traits<> {
-  using view_definition_type =
-      dingo::views<dingo::associative<std::size_t, processor>>;
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<std::size_t, processor>>;
 };
 
 int main() {
@@ -30,5 +30,5 @@ int main() {
   return 0;
 }
 
-// CHECK: static_container fixed runtime-key view bindings must be
-// CHECK: unique for one views and unique by storage for many views
+// CHECK: static_container fixed runtime-key lookup bindings must be
+// CHECK: unique for one lookups and unique by storage for many lookups

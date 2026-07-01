@@ -26,8 +26,8 @@ using child_source = dingo::bindings<
                 dingo::interfaces<processor>, dingo::key<std::size_t, 0>>>;
 
 struct traits : dingo::static_container_traits<> {
-  using view_definition_type =
-      dingo::views<dingo::associative<std::size_t, processor, dingo::many>>;
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<std::size_t, processor, dingo::many>>;
 };
 
 int main() {

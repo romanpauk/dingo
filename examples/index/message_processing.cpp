@@ -66,11 +66,11 @@ int main() {
   using namespace dingo;
 
   ////
-  // Define traits type with a single view using size_t as a key
+  // Define traits type with a single lookup using size_t as a key
   struct container_traits : static_container_traits<void> {
-    using view_definition_type = views<associative<size_t, IProcessor>>;
+    using lookup_definition_type = lookups<associative<size_t, IProcessor>>;
   };
-  // Runtime view storage is dynamic even when this
+  // Runtime lookup storage is dynamic even when this
   // example uses static_container_traits for the rest of the container.
 
   container<container_traits> container;

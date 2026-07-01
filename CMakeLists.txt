@@ -127,6 +127,13 @@ if(DINGO_DEVELOPMENT_MODE)
         runtime/registration_api.h
         runtime/registry.h
         static_container.h
+        lookup/array.h
+        lookup/collection.h
+        lookup/lookup.h
+        lookup/ordered.h
+        lookup/storage.h
+        lookup/tags.h
+        lookup/unordered.h
         resolution/conversion_cache.h
         resolution/runtime_binding_interface.h
         resolution/runtime_binding.h
@@ -152,13 +159,6 @@ if(DINGO_DEVELOPMENT_MODE)
         type/type_descriptor.h
         type/type_list.h
         type/type_map.h
-        view/array.h
-        view/collection.h
-        view/ordered.h
-        view/storage.h
-        view/tags.h
-        view/unordered.h
-        view/view.h
         type/type_name.h
         type/type_traits.h
         resolution/type_conversion.h

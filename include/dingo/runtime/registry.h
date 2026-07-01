@@ -16,6 +16,7 @@
 #include <dingo/core/none.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/invoke.h>
+#include <dingo/lookup/lookup.h>
 #include <dingo/memory/allocator.h>
 #include <dingo/memory/static_allocator.h>
 #include <dingo/registration/annotated.h>
@@ -30,7 +31,6 @@
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/request_traits.h>
 #include <dingo/type/type_list.h>
-#include <dingo/view/view.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -97,7 +97,8 @@ public:
   using container_traits_type = ContainerTraits;
   using allocator_type = Allocator;
   using rtti_type = typename ContainerTraits::rtti_type;
-  using view_definition_type = typename ContainerTraits::view_definition_type;
+  using lookup_definition_type =
+      detail::container_lookup_definition_type_t<ContainerTraits>;
   runtime_registry() : allocator_base<allocator_type>(allocator_type()) {}
 
   runtime_registry(const allocator_type &alloc)
@@ -463,8 +464,8 @@ protected:
   };
 
   struct registered_binding_entry;
-  using normalized_view_entries =
-      detail::normalize_lookup_definitions_t<view_definition_type>;
+  using normalized_lookup_entries =
+      detail::normalize_lookup_definitions_t<lookup_definition_type>;
   using slot_key = detail::slot_key<rtti_type>;
   using slot_key_domain = detail::slot_domain;
   using slot_key_cardinality = detail::slot_cardinality;
@@ -630,12 +631,12 @@ protected:
 
   private:
     static void validate_lookup_definitions() {
-      using entries_type = normalized_view_entries;
+      using entries_type = normalized_lookup_entries;
       static_assert(!detail::has_duplicate_lookup_definition_v<entries_type>,
-                    "duplicate dingo view definition for interface/key "
+                    "duplicate dingo lookup definition for interface/key "
                     "domain/cardinality");
       static_assert(!detail::has_duplicate_lookup_slot_v<entries_type>,
-                    "conflicting dingo view definitions for interface/key "
+                    "conflicting dingo lookup definitions for interface/key "
                     "domain");
     }
 
@@ -1096,7 +1097,7 @@ protected:
   template <typename Interface, typename Cardinality>
   using no_key_lookup_entry_t =
       detail::selected_no_key_lookup_entry_t<Interface, Cardinality,
-                                             normalized_view_entries>;
+                                             normalized_lookup_entries>;
 
   template <typename Interface>
   static constexpr bool has_explicit_no_key_one_lookup_v =
@@ -1121,7 +1122,7 @@ protected:
   template <typename Interface, typename Key, typename Cardinality>
   using typed_key_lookup_entry_t =
       detail::selected_typed_key_lookup_entry_t<Interface, Key, Cardinality,
-                                                normalized_view_entries>;
+                                                normalized_lookup_entries>;
 
   template <typename Interface, typename Key>
   static constexpr bool has_explicit_typed_key_one_lookup_v =
@@ -1207,7 +1208,8 @@ protected:
 
   template <typename Interface, typename Key>
   using runtime_key_lookup_entry_t =
-      detail::selected_lookup_entry_t<Interface, Key, normalized_view_entries>;
+      detail::selected_lookup_entry_t<Interface, Key,
+                                      normalized_lookup_entries>;
 
   template <typename Interface, typename Key>
   using runtime_key_lookup_cardinality_t = typename lookup_entry_cardinality<
@@ -1545,7 +1547,7 @@ private:
       } else {
         static_assert(!std::is_void_v<lookup_entry>,
                       "keyed registration or request has no matching "
-                      "dingo view definition for interface/key");
+                      "dingo lookup definition for interface/key");
       }
     } else {
       if constexpr (!is_none_v<std::decay_t<IdType>> &&
@@ -1815,7 +1817,7 @@ private:
       using lookup_entry = runtime_key_lookup_entry_t<TypeInterface, IdType>;
       static_assert(!std::is_void_v<lookup_entry>,
                     "keyed registration or request has no matching "
-                    "dingo view definition for interface/key");
+                    "dingo lookup definition for interface/key");
       using lookup_cardinality_type =
           runtime_key_lookup_cardinality_t<TypeInterface, IdType>;
       using slot = lookup_runtime_binding_slot_t<

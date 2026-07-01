@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <dingo/view/tags.h>
+#include <dingo/lookup/tags.h>
 
 namespace dingo {
 template <typename Interface>
-using collection = detail::view_definition<Interface, no_key, many>;
+using collection = detail::lookup_definition<Interface, no_key, many>;
 
 } // namespace dingo

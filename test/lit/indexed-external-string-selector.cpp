@@ -71,8 +71,8 @@ struct string_literal_consumer {
 };
 
 struct traits : dingo::dynamic_container_traits {
-  using view_definition_type =
-      dingo::views<dingo::associative<std::string, string_processor>>;
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<std::string, string_processor>>;
 };
 
 int main() {

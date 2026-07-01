@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <dingo/detail/container_traits.h>
 #include <dingo/memory/static_allocator.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/resolution/type_cache.h>
@@ -28,7 +29,7 @@ template <typename Tag = void> struct static_container_traits {
   template <typename Value, typename Allocator>
   using type_cache_type = static_type_cache<void *, Tag, Allocator>;
   using allocator_type = static_allocator<char, Tag>;
-  using view_definition_type = std::tuple<>;
+  using lookup_definition_type = std::tuple<>;
   static constexpr bool cache_enabled = true;
 };
 
@@ -54,8 +55,9 @@ struct is_static_container_traits : std::false_type {};
 
 template <typename T>
 struct is_static_container_traits<
-    T, std::void_t<typename T::view_definition_type, typename T::allocator_type,
-                   typename T::rtti_type>> : std::true_type {};
+    T, std::void_t<container_lookup_definition_type_t<T>,
+                   typename T::allocator_type, typename T::rtti_type>>
+    : std::true_type {};
 
 template <typename T>
 inline constexpr bool is_static_container_traits_v =
