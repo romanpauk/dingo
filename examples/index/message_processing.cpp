@@ -69,7 +69,7 @@ int main() {
   ////
   // Define traits type with a single index using size_t as a key,
   // backed by a std::array of size 10
-  struct container_traits : static_container_traits<void> {
+  struct container_traits : dynamic_container_traits {
     using index_definition_type =
         indexes<index<IProcessor, size_t, index_type::array<10>>>;
   };

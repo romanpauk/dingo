@@ -211,52 +211,30 @@ static void register_type_arena_10(benchmark::State &state) {
 }
 
 BENCHMARK_TEMPLATE(resolve_container_unique_int,
-                   dingo::static_container_traits<>)
-    ->UseRealTime();
-BENCHMARK_TEMPLATE(resolve_container_unique_int,
                    dingo::dynamic_container_traits)
-    ->UseRealTime();
-BENCHMARK_TEMPLATE(resolve_container_unique_string,
-                   dingo::static_container_traits<>)
     ->UseRealTime();
 BENCHMARK_TEMPLATE(resolve_container_unique_string,
                    dingo::dynamic_container_traits)
     ->UseRealTime();
 
-BENCHMARK_TEMPLATE(resolve_container_shared, dingo::static_container_traits<>)
-    ->UseRealTime();
 BENCHMARK_TEMPLATE(resolve_container_shared, dingo::dynamic_container_traits)
     ->UseRealTime();
 
 BENCHMARK_TEMPLATE(resolve_container_shared_ptr,
-                   dingo::static_container_traits<>)
-    ->UseRealTime();
-BENCHMARK_TEMPLATE(resolve_container_shared_ptr,
                    dingo::dynamic_container_traits)
     ->UseRealTime();
 
-BENCHMARK_TEMPLATE(resolve_container_shared_ptr_conversion_storage,
-                   dingo::static_container_traits<>)
-    ->UseRealTime();
 BENCHMARK_TEMPLATE(resolve_container_shared_ptr_conversion_storage,
                    dingo::dynamic_container_traits)
     ->UseRealTime();
 
 BENCHMARK_TEMPLATE(resolve_container_shared_ptr_conversion_resolver,
-                   dingo::static_container_traits<>)
-    ->UseRealTime();
-BENCHMARK_TEMPLATE(resolve_container_shared_ptr_conversion_resolver,
                    dingo::dynamic_container_traits)
     ->UseRealTime();
 
-BENCHMARK_TEMPLATE(resolve_container_external, dingo::static_container_traits<>)
-    ->UseRealTime();
 BENCHMARK_TEMPLATE(resolve_container_external, dingo::dynamic_container_traits)
     ->UseRealTime();
 
-BENCHMARK_TEMPLATE(register_type,
-                   dingo::container<dingo::static_container_traits<>>)
-    ->UseRealTime();
 BENCHMARK_TEMPLATE(register_type,
                    dingo::container<dingo::dynamic_container_traits>)
     ->UseRealTime();
@@ -266,9 +244,6 @@ BENCHMARK_TEMPLATE(register_type_arena,
                                     dingo::arena_allocator<char>>)
     ->UseRealTime();
 
-BENCHMARK_TEMPLATE(register_type_10,
-                   dingo::container<dingo::static_container_traits<>>)
-    ->UseRealTime();
 BENCHMARK_TEMPLATE(register_type_10,
                    dingo::container<dingo::dynamic_container_traits>)
     ->UseRealTime();
