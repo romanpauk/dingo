@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -30,36 +31,42 @@ class arena
 
   static constexpr std::size_t MaxBlockSize = 1 << 21;
 
-  // TODO: all the state here is quite big
-
   struct block {
     block *next;
     uintptr_t size : 63;
     uintptr_t owned : 1;
+    intptr_t ptr;
+    intptr_t block_size;
   };
 
-  block *block_initial_ = nullptr;
-  std::size_t block_size_ = 0;
+  block *block_head_ = nullptr;
+  intptr_t initial_block_size_ = 0;
 
-  struct state {
-    block *block_head_ = nullptr;
-    intptr_t block_ptr_ = 0;
-    intptr_t block_end_ = 0;
-    intptr_t block_size_ = 0;
-  };
+  static intptr_t block_begin(block *head) {
+    return reinterpret_cast<intptr_t>(head) + sizeof(block);
+  }
 
-  state state_;
+  static intptr_t block_end(block *head) {
+    return reinterpret_cast<intptr_t>(head) + head->size;
+  }
+
+  static intptr_t checked_block_size(std::size_t block_size) {
+    assert(block_size <=
+           static_cast<std::size_t>(std::numeric_limits<intptr_t>::max()));
+    return static_cast<intptr_t>(block_size);
+  }
 
   bool request_block(intptr_t bytes) {
-    assert(state_.block_size_ > 0);
+    auto block_size =
+        block_head_ != nullptr ? block_head_->block_size : initial_block_size_;
+    assert(block_size > 0);
 
     // For large blocks, glibc's malloc is aligning large allocations
     // to the multiples of page size, also keeping space for chunk size.
     auto header_size = allocator_traits_type::header_size();
     auto page_size = allocator_traits_type::page_size();
     intptr_t size =
-        ((header_size +
-          std::max<intptr_t>(state_.block_size_, sizeof(block) + bytes) +
+        ((header_size + std::max<intptr_t>(block_size, sizeof(block) + bytes) +
           page_size - 1) &
          ~(page_size - 1)) -
         header_size;
@@ -69,9 +76,8 @@ class arena
     auto head = allocate_block(size);
     head->size = size;
     head->owned = true;
+    head->block_size = std::min<intptr_t>(block_size * 2, MaxBlockSize);
     push_block(head);
-    state_.block_size_ =
-        std::min<intptr_t>(state_.block_size_ * 2, MaxBlockSize);
     return true;
   }
 
@@ -83,10 +89,9 @@ class arena
   }
 
   void push_block(block *head) {
-    head->next = state_.block_head_;
-    state_.block_head_ = head;
-    state_.block_ptr_ = reinterpret_cast<intptr_t>(head) + sizeof(block);
-    state_.block_end_ = reinterpret_cast<intptr_t>(head) + head->size;
+    head->next = block_head_;
+    head->ptr = block_begin(head);
+    block_head_ = head;
   }
 
   void deallocate_block(block *ptr) {
@@ -96,24 +101,29 @@ class arena
   }
 
   void deallocate_blocks(block *end) {
-    auto head = state_.block_head_;
+    auto head = block_head_;
     while (head != end) {
+      assert(head != nullptr);
       assert(head->owned || !head->next);
       auto next = head->next;
       if (head->owned) {
         deallocate_block(head);
       } else {
         assert(head->next == nullptr);
+        head->ptr = block_begin(head);
+        block_head_ = head;
         break;
       }
       head = next;
     }
+    if (head == end) {
+      block_head_ = end;
+    }
   }
 
 public:
-  arena(std::size_t block_size) : block_size_(block_size) {
-    state_.block_size_ = block_size;
-  }
+  arena(std::size_t block_size)
+      : initial_block_size_(checked_block_size(block_size)) {}
 
   template <typename T, std::size_t N>
   arena(T (&buffer)[N], std::size_t block_size = N * sizeof(T))
@@ -134,9 +144,9 @@ public:
       : arena(block_size) {
     assert(size > sizeof(block));
     auto head = reinterpret_cast<block *>(buffer);
-    block_initial_ = head;
     head->owned = false;
     head->size = size;
+    head->block_size = initial_block_size_;
     push_block(head);
   }
 
@@ -144,30 +154,28 @@ public:
 
   void *allocate(intptr_t size, intptr_t alignment) {
     assert((alignment & (alignment - 1)) == 0);
-    intptr_t padding = -state_.block_ptr_ & (alignment - 1);
-    intptr_t capacity = state_.block_end_ - state_.block_ptr_ - padding;
+    intptr_t padding =
+        block_head_ != nullptr ? -block_head_->ptr & (alignment - 1) : 0;
+    intptr_t capacity = block_head_ != nullptr ? block_end(block_head_) -
+                                                     block_head_->ptr - padding
+                                               : 0;
     if (capacity < size) {
       if (std::numeric_limits<intptr_t>::max() - (alignment - 1) < size)
         return nullptr;
       if (!request_block(size + (alignment - 1)))
         return nullptr;
-      padding = -state_.block_ptr_ & (alignment - 1);
-      assert(size <= state_.block_end_ - state_.block_ptr_ - padding);
+      padding = -block_head_->ptr & (alignment - 1);
+      assert(size <= block_end(block_head_) - block_head_->ptr - padding);
     }
-    intptr_t ptr = state_.block_ptr_ + padding;
+    intptr_t ptr = block_head_->ptr + padding;
     assert((ptr & (alignment - 1)) == 0);
-    state_.block_ptr_ = ptr + size;
+    block_head_->ptr = ptr + size;
     return reinterpret_cast<void *>(ptr);
   }
 
   void deallocate(void *, std::size_t) {}
 
-  void reset() {
-    deallocate_blocks(nullptr);
-    state_.block_head_ = nullptr;
-    state_.block_size_ = block_size_;
-    push_block(block_initial_);
-  }
+  void reset() { deallocate_blocks(nullptr); }
 };
 
 template <typename T> struct arena_allocator_alignment {
