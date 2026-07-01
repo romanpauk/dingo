@@ -119,22 +119,23 @@ using lookup_identity_probe =
 
 struct lookup_table_test_entry;
 using lookup_table_test_rtti = rtti<typeid_provider>;
-using lookup_table_test_allocator = std::allocator<char>;
+using lookup_table_test_allocator = test_allocator<char>;
 using lookup_table_test_table =
     detail::runtime_lookup_table<lookup_table_test_rtti,
                                  lookup_table_test_allocator,
                                  lookup_table_test_entry>;
 
 struct lookup_table_test_entry {
-  explicit lookup_table_test_entry(lookup_table_test_allocator &allocator)
-      : storage_type(lookup_table_test_rtti::template get_type_index<
-                     lookup_table_test_entry>()),
-        lookup_identities(
-            detail::make_lookup_storage_allocator<
-                lookup_table_test_table::identity_allocator>(allocator)) {}
+  explicit lookup_table_test_entry(
+      lookup_table_test_table::lookup_identity &&resolved_identity,
+      typename lookup_table_test_rtti::type_index resolved_storage_type =
+          lookup_table_test_rtti::template get_type_index<
+              lookup_table_test_entry>())
+      : storage_type(std::move(resolved_storage_type)),
+        identity(std::move(resolved_identity)) {}
 
   typename lookup_table_test_rtti::type_index storage_type;
-  lookup_table_test_table::identity_storage lookup_identities;
+  lookup_table_test_table::lookup_identity identity;
 };
 
 struct fixed_injection_processor {
@@ -420,6 +421,103 @@ TEST(index_test, normal_unkeyed_shared_registration_reuses_entry_cache) {
   ASSERT_EQ(&second, &first);
   ASSERT_EQ(first.id(), 42);
   ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
+}
+
+TEST(index_test,
+     normal_unkeyed_singular_registration_uses_inline_entry_and_binding) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct processor_impl : processor {
+    int id() const override { return 42; }
+  };
+  struct large_processor_impl : processor {
+    char payload[1024] = {};
+
+    int id() const override { return 7; }
+  };
+
+  test_allocator_state state;
+  {
+    test_allocator<char> allocator(&state);
+    container<dynamic_container_traits, test_allocator<char>> container(
+        allocator);
+
+    container.template register_type<scope<shared>, storage<processor_impl>,
+                                     interfaces<processor>>();
+
+    ASSERT_EQ(state.allocations, 1);
+    ASSERT_EQ(container.template resolve<processor &>().id(), 42);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+
+  test_allocator_state large_state;
+  {
+    test_allocator<char> allocator(&large_state);
+    container<dynamic_container_traits, test_allocator<char>> container(
+        allocator);
+
+    container.template register_type<
+        scope<shared>, storage<large_processor_impl>, interfaces<processor>>();
+
+    ASSERT_EQ(large_state.allocations, 2);
+    ASSERT_GE(large_state.largest_allocation_bytes,
+              sizeof(large_processor_impl));
+  }
+
+  ASSERT_EQ(large_state.deallocations, large_state.allocations);
+}
+
+TEST(index_test, first_typed_key_singular_registration_uses_inline_entry) {
+  struct processor_key {};
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct processor_impl : processor {
+    int id() const override { return 42; }
+  };
+  struct large_processor_impl : processor {
+    char payload[1024] = {};
+
+    int id() const override { return 7; }
+  };
+
+  test_allocator_state state;
+  {
+    test_allocator<char> allocator(&state);
+    container<dynamic_container_traits, test_allocator<char>> container(
+        allocator);
+
+    container
+        .template register_type<scope<shared>, storage<processor_impl>,
+                                interfaces<processor>, key<processor_key>>();
+
+    ASSERT_EQ(state.allocations, 1);
+    ASSERT_EQ(
+        container.template resolve<processor &>(key<processor_key>{}).id(), 42);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+
+  test_allocator_state large_state;
+  {
+    test_allocator<char> allocator(&large_state);
+    container<dynamic_container_traits, test_allocator<char>> container(
+        allocator);
+
+    container
+        .template register_type<scope<shared>, storage<large_processor_impl>,
+                                interfaces<processor>, key<processor_key>>();
+
+    ASSERT_EQ(large_state.allocations, 2);
+    ASSERT_GE(large_state.largest_allocation_bytes,
+              sizeof(large_processor_impl));
+  }
+
+  ASSERT_EQ(large_state.deallocations, large_state.allocations);
 }
 
 TEST(index_test, normal_unkeyed_duplicate_storage_rejects_no_key_one_row) {
@@ -843,42 +941,202 @@ TEST(index_test, associative_many_registration_records_runtime_key_many) {
                std::size_t, many>(container.registry(), std::size_t(7))));
 }
 
-TEST(index_test, lookup_table_indexes_multi_identity_entry_in_each_bucket) {
+TEST(index_test, lookup_table_indexes_entries_by_identity_bucket) {
   struct processor {};
   struct processor_key {};
 
   lookup_table_test_allocator allocator;
   lookup_table_test_table table(allocator);
-  lookup_table_test_entry entry(allocator);
-  entry.lookup_identities.emplace_back(
+  lookup_table_test_entry no_key_entry(
       lookup_table_test_table::template make_no_key_identity<processor,
                                                              many>());
-  entry.lookup_identities.emplace_back(
+  lookup_table_test_entry typed_key_entry(
       lookup_table_test_table::template make_typed_key_identity<
           processor, processor_key, many>());
 
-  ASSERT_TRUE(table.insert(entry));
+  ASSERT_TRUE(table.insert(no_key_entry));
+  ASSERT_TRUE(table.insert(typed_key_entry));
 
   bool ambiguous = false;
   auto *selected =
       table.template find_singular_no_key<processor, many>(ambiguous);
   ASSERT_FALSE(ambiguous);
-  ASSERT_EQ(selected, &entry);
+  ASSERT_EQ(selected, &no_key_entry);
   ASSERT_EQ((table.template count_no_key<processor, many>()), 1U);
 
   std::size_t visits = 0;
   ASSERT_EQ((table.template for_each_typed_key<processor, processor_key, many>(
                 [&](auto &selected_entry) {
                   ++visits;
-                  ASSERT_EQ(&selected_entry, &entry);
+                  ASSERT_EQ(&selected_entry, &typed_key_entry);
                 })),
             1U);
   ASSERT_EQ(visits, 1U);
 
-  table.erase(entry);
+  table.erase(no_key_entry);
+  table.erase(typed_key_entry);
   ASSERT_EQ((table.template count_no_key<processor, many>()), 0U);
   ASSERT_EQ((table.template count_typed_key<processor, processor_key, many>()),
             0U);
+}
+
+TEST(index_test,
+     lookup_table_reuses_many_bucket_and_grows_rows_after_inline_capacity) {
+  struct processor {};
+  struct first_storage {};
+  struct second_storage {};
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    lookup_table_test_table table(allocator);
+    lookup_table_test_entry first_entry(
+        lookup_table_test_table::template make_no_key_identity<processor,
+                                                               many>(),
+        lookup_table_test_rtti::template get_type_index<first_storage>());
+    lookup_table_test_entry second_entry(
+        lookup_table_test_table::template make_no_key_identity<processor,
+                                                               many>(),
+        lookup_table_test_rtti::template get_type_index<second_storage>());
+
+    ASSERT_TRUE(table.insert(first_entry));
+    ASSERT_EQ(state.allocations, 0);
+
+    ASSERT_TRUE(table.insert(second_entry));
+    ASSERT_EQ(state.allocations, 1);
+    ASSERT_EQ((table.template count_no_key<processor, many>()), 2U);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+}
+
+TEST(index_test, lookup_table_one_bucket_rejects_duplicate_without_row_growth) {
+  struct processor {};
+  struct first_storage {};
+  struct second_storage {};
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    lookup_table_test_table table(allocator);
+    lookup_table_test_entry first_entry(
+        lookup_table_test_table::template make_no_key_identity<processor,
+                                                               one>(),
+        lookup_table_test_rtti::template get_type_index<first_storage>());
+    lookup_table_test_entry second_entry(
+        lookup_table_test_table::template make_no_key_identity<processor,
+                                                               one>(),
+        lookup_table_test_rtti::template get_type_index<second_storage>());
+
+    ASSERT_TRUE(table.insert(first_entry));
+    ASSERT_EQ(state.allocations, 0);
+
+    ASSERT_FALSE(table.insert(second_entry));
+    ASSERT_EQ(state.allocations, 0);
+    ASSERT_EQ((table.template count_no_key<processor, one>()), 1U);
+
+    bool ambiguous = false;
+    auto *selected =
+        table.template find_singular_no_key<processor, one>(ambiguous);
+    ASSERT_FALSE(ambiguous);
+    ASSERT_EQ(selected, &first_entry);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+}
+
+TEST(index_test,
+     lookup_table_runtime_key_one_rejects_duplicate_without_row_growth) {
+  struct processor {};
+  struct first_storage {};
+  struct second_storage {};
+  using runtime_lookup_entry =
+      detail::lookup_entry<processor, runtime_key<std::size_t>, one, ordered>;
+  struct entry;
+  using table_type =
+      detail::runtime_lookup_table<lookup_table_test_rtti,
+                                   lookup_table_test_allocator, entry,
+                                   type_list<runtime_lookup_entry>>;
+  struct entry {
+    entry(table_type::lookup_identity &&resolved_identity,
+          typename lookup_table_test_rtti::type_index resolved_storage_type)
+        : storage_type(std::move(resolved_storage_type)),
+          identity(std::move(resolved_identity)) {}
+
+    typename lookup_table_test_rtti::type_index storage_type;
+    table_type::lookup_identity identity;
+  };
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    table_type table(allocator);
+    entry first_entry(
+        table_type::template make_runtime_key_identity<processor, std::size_t,
+                                                       one>(allocator,
+                                                            std::size_t(7)),
+        lookup_table_test_rtti::template get_type_index<first_storage>());
+    entry second_entry(
+        table_type::template make_runtime_key_identity<processor, std::size_t,
+                                                       one>(allocator,
+                                                            std::size_t(7)),
+        lookup_table_test_rtti::template get_type_index<second_storage>());
+
+    ASSERT_TRUE(table.insert(first_entry));
+    const auto allocations_after_first_insert = state.allocations;
+
+    ASSERT_FALSE(table.insert(second_entry));
+    ASSERT_EQ(state.allocations, allocations_after_first_insert);
+    ASSERT_EQ((table.template count_runtime_key<processor, std::size_t, one,
+                                                runtime_lookup_entry>(
+                  std::size_t(7))),
+              1U);
+
+    bool ambiguous = false;
+    auto *selected =
+        table.template find_singular_runtime_key<processor, std::size_t, one,
+                                                 runtime_lookup_entry>(
+            std::size_t(7), ambiguous);
+    ASSERT_FALSE(ambiguous);
+    ASSERT_EQ(selected, &first_entry);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
+}
+
+TEST(index_test, lookup_table_spills_second_distinct_bucket_and_reuses_inline) {
+  struct processor {};
+  struct processor_key {};
+
+  test_allocator_state state;
+  {
+    lookup_table_test_allocator allocator(&state);
+    lookup_table_test_table table(allocator);
+    lookup_table_test_entry no_key_entry(
+        lookup_table_test_table::template make_no_key_identity<processor,
+                                                               many>());
+    lookup_table_test_entry typed_key_entry(
+        lookup_table_test_table::template make_typed_key_identity<
+            processor, processor_key, many>());
+
+    ASSERT_TRUE(table.insert(no_key_entry));
+    ASSERT_EQ(state.allocations, 0);
+
+    ASSERT_TRUE(table.insert(typed_key_entry));
+    ASSERT_EQ(state.allocations, 1);
+    ASSERT_EQ((table.template count_no_key<processor, many>()), 1U);
+    ASSERT_EQ(
+        (table.template count_typed_key<processor, processor_key, many>()), 1U);
+
+    table.erase(no_key_entry);
+    ASSERT_EQ((table.template count_no_key<processor, many>()), 0U);
+
+    ASSERT_TRUE(table.insert(no_key_entry));
+    ASSERT_EQ(state.allocations, 1);
+    ASSERT_EQ((table.template count_no_key<processor, many>()), 1U);
+  }
+
+  ASSERT_EQ(state.deallocations, state.allocations);
 }
 
 TEST(index_test, no_key_many_lookup_covers_empty_exact_ambiguous) {
@@ -2214,6 +2472,16 @@ TEST(index_test, explicit_lookup_resolves_with_custom_container_allocator) {
 }
 
 TEST(index_test, runtime_key_lookup_payload_uses_rebound_allocator) {
+  struct small_key {
+    explicit small_key(int resolved_value) : value(resolved_value) {}
+
+    bool operator==(const small_key &other) const {
+      return value == other.value;
+    }
+    bool operator<(const small_key &other) const { return value < other.value; }
+
+    int value;
+  };
   struct allocator_visible_key {
     explicit allocator_visible_key(int resolved_value)
         : value(resolved_value) {}
@@ -2235,8 +2503,25 @@ TEST(index_test, runtime_key_lookup_payload_uses_rebound_allocator) {
   struct dog : animal {
     int id() const override { return 11; }
   };
+  struct small_key_traits : dynamic_container_traits {
+    using view_definition_type = views<associative<small_key, animal>>;
+  };
 
-  struct traits : dynamic_container_traits {
+  test_allocator_state small_state;
+  {
+    test_allocator<char> allocator(&small_state);
+    container<small_key_traits, test_allocator<char>> container(allocator);
+
+    container.template register_indexed_type<scope<shared>, storage<dog>,
+                                             interfaces<animal>>(small_key{7});
+
+    ASSERT_EQ(small_state.allocations, 4);
+    ASSERT_EQ(container.template resolve<animal &>(small_key{7}).id(), 11);
+  }
+
+  ASSERT_EQ(small_state.deallocations, small_state.allocations);
+
+  struct large_key_traits : dynamic_container_traits {
     using view_definition_type =
         views<associative<allocator_visible_key, animal>>;
   };
@@ -2244,12 +2529,13 @@ TEST(index_test, runtime_key_lookup_payload_uses_rebound_allocator) {
   test_allocator_state state;
   {
     test_allocator<char> allocator(&state);
-    container<traits, test_allocator<char>> container(allocator);
+    container<large_key_traits, test_allocator<char>> container(allocator);
 
     container.template register_indexed_type<scope<shared>, storage<dog>,
                                              interfaces<animal>>(
         allocator_visible_key{7});
 
+    ASSERT_EQ(state.allocations, 5);
     ASSERT_GE(state.largest_allocation_bytes, sizeof(allocator_visible_key));
     ASSERT_EQ(
         container.template resolve<animal &>(allocator_visible_key{7}).id(),

@@ -20,11 +20,11 @@ namespace dingo {
 namespace detail {
 
 template <typename Key, bool IsEnum = std::is_enum_v<Key>>
-struct array_lookup_index_type {
+struct array_position_type {
   using type = Key;
 };
 
-template <typename Key> struct array_lookup_index_type<Key, true> {
+template <typename Key> struct array_position_type<Key, true> {
   using type = std::underlying_type_t<Key>;
 };
 
@@ -93,14 +93,14 @@ private:
     static_assert(std::is_integral_v<Key> || std::is_enum_v<Key>,
                   "dingo::array<N> associative backend requires an integral "
                   "or enum key");
-    using raw_index_type = typename array_lookup_index_type<Key>::type;
-    const auto raw_index = static_cast<raw_index_type>(key);
-    if constexpr (std::is_signed_v<raw_index_type>) {
-      if (raw_index < 0) {
+    using raw_position_type = typename array_position_type<Key>::type;
+    const auto raw_position = static_cast<raw_position_type>(key);
+    if constexpr (std::is_signed_v<raw_position_type>) {
+      if (raw_position < 0) {
         return std::nullopt;
       }
     }
-    const auto index = static_cast<std::size_t>(raw_index);
+    const auto index = static_cast<std::size_t>(raw_position);
     if (index >= Size) {
       return std::nullopt;
     }

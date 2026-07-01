@@ -7,13 +7,16 @@
 
 #pragma once
 
+#include <dingo/memory/aligned_storage.h>
 #include <dingo/memory/static_allocator.h>
 #include <dingo/type/dynamic_identity_map.h>
 #include <dingo/view/view.h>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <functional>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <type_traits>
@@ -34,13 +37,13 @@ constexpr runtime_lookup_cardinality runtime_lookup_cardinality_value() {
   }
 }
 
-template <typename IndexEntry, bool = std::is_void_v<IndexEntry>>
+template <typename LookupEntry, bool = std::is_void_v<LookupEntry>>
 struct runtime_lookup_entry_cardinality {
-  using type = typename IndexEntry::cardinality;
+  using type = typename LookupEntry::cardinality;
 };
 
-template <typename IndexEntry>
-struct runtime_lookup_entry_cardinality<IndexEntry, true> {
+template <typename LookupEntry>
+struct runtime_lookup_entry_cardinality<LookupEntry, true> {
   using type = ::dingo::one;
 };
 
@@ -68,6 +71,144 @@ private:
 
 public:
   using type = type_list_cat_t<head_type, tail_type>;
+};
+
+template <typename T, std::size_t InlineCapacity, typename InlineAllocator>
+class runtime_lookup_small_vector {
+  static_assert(InlineCapacity > 0);
+
+public:
+  using allocator_type = InlineAllocator;
+
+  explicit runtime_lookup_small_vector(
+      const allocator_type &allocator = allocator_type())
+      : dynamic_(allocator) {}
+
+  void emplace_back(T value) {
+    if (inline_size_ < InlineCapacity) {
+      inline_[inline_size_++] = std::move(value);
+      return;
+    }
+    dynamic_.emplace_back(std::move(value));
+  }
+
+  bool empty() const { return size() == 0; }
+
+  std::size_t size() const { return inline_size_ + dynamic_.size(); }
+
+  T front() const { return inline_.front(); }
+
+  void clear() {
+    inline_size_ = 0;
+    dynamic_.clear();
+  }
+
+  void erase(const T &value) {
+    for (std::size_t i = 0; i < inline_size_; ++i) {
+      if (inline_[i] == value) {
+        erase_inline(i);
+        return;
+      }
+    }
+
+    auto it = std::find(dynamic_.begin(), dynamic_.end(), value);
+    if (it != dynamic_.end()) {
+      dynamic_.erase(it);
+    }
+  }
+
+  template <typename Fn> void for_each(Fn &&fn) const {
+    for (std::size_t i = 0; i < inline_size_; ++i) {
+      fn(inline_[i]);
+    }
+    for (const auto &value : dynamic_) {
+      fn(value);
+    }
+  }
+
+private:
+  void erase_inline(std::size_t offset) {
+    for (std::size_t i = offset + 1; i < inline_size_; ++i) {
+      inline_[i - 1] = std::move(inline_[i]);
+    }
+
+    if (!dynamic_.empty()) {
+      inline_[inline_size_ - 1] = std::move(dynamic_.front());
+      dynamic_.erase(dynamic_.begin());
+      return;
+    }
+
+    --inline_size_;
+  }
+
+  std::array<T, InlineCapacity> inline_{};
+  std::size_t inline_size_ = 0;
+  std::vector<T, allocator_type> dynamic_;
+};
+
+template <typename Entry, typename RowAllocator,
+          runtime_lookup_cardinality Cardinality>
+class row_storage;
+
+template <typename Entry, typename RowAllocator>
+class row_storage<Entry, RowAllocator, runtime_lookup_cardinality::one> {
+public:
+  using allocator_type = RowAllocator;
+
+  explicit row_storage(const RowAllocator & = RowAllocator()) {}
+
+  void emplace_back(Entry *entry) { entry_ = entry; }
+
+  bool empty() const { return entry_ == nullptr; }
+
+  std::size_t size() const { return entry_ ? 1U : 0U; }
+
+  Entry *front() const { return entry_; }
+
+  void clear() { entry_ = nullptr; }
+
+  void erase(Entry *entry) {
+    if (entry_ == entry) {
+      entry_ = nullptr;
+    }
+  }
+
+  template <typename Fn> void for_each(Fn &&fn) const {
+    if (entry_) {
+      fn(entry_);
+    }
+  }
+
+private:
+  Entry *entry_ = nullptr;
+};
+
+template <typename Entry, typename RowAllocator>
+class row_storage<Entry, RowAllocator, runtime_lookup_cardinality::many> {
+public:
+  using allocator_type = RowAllocator;
+
+  explicit row_storage(const RowAllocator &allocator = RowAllocator())
+      : entries_(allocator) {}
+
+  void emplace_back(Entry *entry) { entries_.emplace_back(entry); }
+
+  bool empty() const { return entries_.empty(); }
+
+  std::size_t size() const { return entries_.size(); }
+
+  Entry *front() const { return entries_.front(); }
+
+  void clear() { entries_.clear(); }
+
+  void erase(Entry *entry) { entries_.erase(entry); }
+
+  template <typename Fn> void for_each(Fn &&fn) const {
+    entries_.for_each(std::forward<Fn>(fn));
+  }
+
+private:
+  runtime_lookup_small_vector<Entry *, 1, RowAllocator> entries_;
 };
 
 template <typename Rtti, typename Allocator, typename Entry,
@@ -113,24 +254,15 @@ public:
     runtime_lookup_key_owner &
     operator=(const runtime_lookup_key_owner &) = delete;
 
-    runtime_lookup_key_owner(runtime_lookup_key_owner &&other) noexcept
-        : allocator_(other.allocator_), ptr_(other.ptr_),
-          destroy_(other.destroy_) {
-      other.allocator_ = nullptr;
-      other.ptr_ = nullptr;
-      other.destroy_ = nullptr;
+    runtime_lookup_key_owner(runtime_lookup_key_owner &&other) noexcept {
+      move_from(other);
     }
 
     runtime_lookup_key_owner &
     operator=(runtime_lookup_key_owner &&other) noexcept {
       if (this != &other) {
         reset();
-        allocator_ = other.allocator_;
-        ptr_ = other.ptr_;
-        destroy_ = other.destroy_;
-        other.allocator_ = nullptr;
-        other.ptr_ = nullptr;
-        other.destroy_ = nullptr;
+        move_from(other);
       }
       return *this;
     }
@@ -145,7 +277,39 @@ public:
     static runtime_lookup_key_owner make(Allocator &allocator,
                                          KeyValue &&key_value) {
       using stored_key_type = std::decay_t<Key>;
-      using concrete_allocator = runtime_lookup_key_allocator<stored_key_type>;
+      using concrete_type = runtime_lookup_key_value<stored_key_type>;
+
+      if constexpr (can_store_inline<concrete_type>) {
+        runtime_lookup_key_owner owner;
+        auto *ptr = reinterpret_cast<concrete_type *>(
+            std::addressof(owner.inline_storage_));
+        new (ptr) concrete_type(std::forward<KeyValue>(key_value));
+        owner.allocator_ = std::addressof(allocator);
+        owner.ptr_ = ptr;
+        owner.destroy_ = &destroy_inline_key<stored_key_type>;
+        owner.move_ = &move_inline_key<stored_key_type>;
+        return owner;
+      } else {
+        return make_allocated<stored_key_type>(
+            allocator, std::forward<KeyValue>(key_value));
+      }
+    }
+
+  private:
+    static constexpr std::size_t inline_key_storage_size = 64;
+    static constexpr std::size_t inline_key_storage_alignment =
+        alignof(std::max_align_t);
+
+    template <typename Concrete>
+    static constexpr bool can_store_inline =
+        sizeof(Concrete) <= inline_key_storage_size &&
+        alignof(Concrete) <= inline_key_storage_alignment &&
+        std::is_nothrow_move_constructible_v<Concrete>;
+
+    template <typename Key, typename KeyValue>
+    static runtime_lookup_key_owner make_allocated(Allocator &allocator,
+                                                   KeyValue &&key_value) {
+      using concrete_allocator = runtime_lookup_key_allocator<Key>;
       using concrete_allocator_traits =
           std::allocator_traits<concrete_allocator>;
 
@@ -163,11 +327,10 @@ public:
       runtime_lookup_key_owner owner;
       owner.allocator_ = std::addressof(allocator);
       owner.ptr_ = ptr;
-      owner.destroy_ = &destroy_key<stored_key_type>;
+      owner.destroy_ = &destroy_key<Key>;
       return owner;
     }
 
-  private:
     template <typename Key>
     static void destroy_key(Allocator &allocator,
                             erased_runtime_lookup_key *ptr) noexcept {
@@ -183,53 +346,87 @@ public:
       concrete_allocator_traits::deallocate(concrete_alloc, typed_ptr, 1);
     }
 
+    template <typename Key>
+    static void destroy_inline_key(Allocator &,
+                                   erased_runtime_lookup_key *ptr) noexcept {
+      using concrete_type = runtime_lookup_key_value<Key>;
+      static_cast<concrete_type *>(ptr)->~concrete_type();
+    }
+
+    template <typename Key>
+    static void move_inline_key(runtime_lookup_key_owner &destination,
+                                runtime_lookup_key_owner &source) noexcept {
+      using concrete_type = runtime_lookup_key_value<Key>;
+      auto *source_ptr = static_cast<concrete_type *>(source.ptr_);
+      auto *destination_ptr = reinterpret_cast<concrete_type *>(
+          std::addressof(destination.inline_storage_));
+      new (destination_ptr) concrete_type(std::move(*source_ptr));
+      source_ptr->~concrete_type();
+
+      destination.allocator_ = source.allocator_;
+      destination.ptr_ = destination_ptr;
+      destination.destroy_ = source.destroy_;
+      destination.move_ = source.move_;
+      source.clear();
+    }
+
+    void move_from(runtime_lookup_key_owner &other) noexcept {
+      if (!other.ptr_) {
+        return;
+      }
+      if (other.move_) {
+        other.move_(*this, other);
+        return;
+      }
+
+      allocator_ = other.allocator_;
+      ptr_ = other.ptr_;
+      destroy_ = other.destroy_;
+      other.clear();
+    }
+
+    void clear() noexcept {
+      allocator_ = nullptr;
+      ptr_ = nullptr;
+      destroy_ = nullptr;
+      move_ = nullptr;
+    }
+
     void reset() noexcept {
       if (ptr_) {
         destroy_(*allocator_, ptr_);
-        allocator_ = nullptr;
-        ptr_ = nullptr;
-        destroy_ = nullptr;
+        clear();
       }
     }
 
+    dingo::aligned_storage_t<inline_key_storage_size,
+                             inline_key_storage_alignment>
+        inline_storage_;
     Allocator *allocator_ = nullptr;
     erased_runtime_lookup_key *ptr_ = nullptr;
     void (*destroy_)(Allocator &,
                      erased_runtime_lookup_key *) noexcept = nullptr;
+    void (*move_)(runtime_lookup_key_owner &,
+                  runtime_lookup_key_owner &) noexcept = nullptr;
   };
 
   struct lookup_identity {
-    using runtime_conflicts_function = bool (*)(const runtime_lookup_table &,
-                                                const Entry &,
-                                                const lookup_identity &);
-    using runtime_insert_function = bool (*)(runtime_lookup_table &, Entry &,
-                                             const lookup_identity &);
-
     type_index interface_type;
     key_domain domain;
     cardinality lookup_cardinality;
     std::optional<type_index> key_type;
     runtime_lookup_key_owner runtime_key;
-    bool enforces_lookup_duplicates;
-    runtime_conflicts_function runtime_conflicts = nullptr;
-    runtime_insert_function runtime_insert = nullptr;
 
-    lookup_identity(
-        type_index resolved_interface_type, key_domain resolved_domain,
-        cardinality resolved_cardinality,
-        std::optional<type_index> resolved_key_type,
-        runtime_lookup_key_owner &&resolved_runtime_key =
-            runtime_lookup_key_owner{},
-        bool resolved_enforces_lookup_duplicates = true,
-        runtime_conflicts_function resolved_runtime_conflicts = nullptr,
-        runtime_insert_function resolved_runtime_insert = nullptr)
+    lookup_identity(type_index resolved_interface_type,
+                    key_domain resolved_domain,
+                    cardinality resolved_cardinality,
+                    std::optional<type_index> resolved_key_type,
+                    runtime_lookup_key_owner &&resolved_runtime_key =
+                        runtime_lookup_key_owner{})
         : interface_type(std::move(resolved_interface_type)),
           domain(resolved_domain), lookup_cardinality(resolved_cardinality),
           key_type(std::move(resolved_key_type)),
-          runtime_key(std::move(resolved_runtime_key)),
-          enforces_lookup_duplicates(resolved_enforces_lookup_duplicates),
-          runtime_conflicts(resolved_runtime_conflicts),
-          runtime_insert(resolved_runtime_insert) {}
+          runtime_key(std::move(resolved_runtime_key)) {}
 
     lookup_identity(const lookup_identity &) = delete;
     lookup_identity &operator=(const lookup_identity &) = delete;
@@ -237,21 +434,15 @@ public:
     lookup_identity &operator=(lookup_identity &&) noexcept = default;
   };
 
-  using identity_allocator =
-      typename std::conditional_t<::dingo::is_static_allocator_v<Allocator>,
-                                  std::allocator<lookup_identity>,
-                                  typename std::allocator_traits<Allocator>::
-                                      template rebind_alloc<lookup_identity>>;
-  using identity_storage = std::vector<lookup_identity, identity_allocator>;
-
   using row_allocator = typename std::conditional_t<
       ::dingo::is_static_allocator_v<Allocator>, std::allocator<Entry *>,
       typename std::allocator_traits<Allocator>::template rebind_alloc<
           Entry *>>;
-  using row_storage = std::vector<Entry *, row_allocator>;
+
+  template <runtime_lookup_cardinality Cardinality>
+  using row_storage_type = row_storage<Entry, row_allocator, Cardinality>;
 
   struct bucket_key {
-    type_index interface_type;
     key_domain domain;
     cardinality lookup_cardinality;
     std::optional<type_index> key_type;
@@ -259,6 +450,43 @@ public:
 
   struct bucket_key_compare {
     bool operator()(const bucket_key &lhs, const bucket_key &rhs) const {
+      std::less<type_index> less;
+      if (lhs.domain != rhs.domain) {
+        return lhs.domain < rhs.domain;
+      }
+      if (lhs.lookup_cardinality != rhs.lookup_cardinality) {
+        return lhs.lookup_cardinality < rhs.lookup_cardinality;
+      }
+      if (lhs.key_type && rhs.key_type) {
+        return less(*lhs.key_type, *rhs.key_type);
+      }
+      return lhs.key_type.has_value() < rhs.key_type.has_value();
+    }
+  };
+
+  template <runtime_lookup_cardinality Cardinality>
+  using bucket_map =
+      dynamic_identity_map<bucket_key, row_storage_type<Cardinality>, Allocator,
+                           bucket_key_compare>;
+
+  template <runtime_lookup_cardinality Cardinality> struct ordinary_bucket {
+    ordinary_bucket(bucket_key resolved_key, const row_allocator &row_alloc)
+        : key(std::move(resolved_key)), rows(row_alloc) {}
+
+    bucket_key key;
+    row_storage_type<Cardinality> rows;
+  };
+
+  struct runtime_bucket_key {
+    type_index interface_type;
+    key_domain domain;
+    cardinality lookup_cardinality;
+    std::optional<type_index> key_type;
+  };
+
+  struct runtime_bucket_key_compare {
+    bool operator()(const runtime_bucket_key &lhs,
+                    const runtime_bucket_key &rhs) const {
       std::less<type_index> less;
       if (less(lhs.interface_type, rhs.interface_type)) {
         return true;
@@ -279,31 +507,70 @@ public:
     }
   };
 
-  using bucket_map = dynamic_identity_map<bucket_key, row_storage, Allocator,
-                                          bucket_key_compare>;
-
   template <typename KeyDomain> struct runtime_key_type;
 
   template <typename Key> struct runtime_key_type<::dingo::runtime_key<Key>> {
     using type = Key;
   };
 
+  template <runtime_lookup_cardinality Cardinality>
+  static void erase_row(row_storage_type<Cardinality> &rows, Entry *entry) {
+    rows.erase(entry);
+  }
+
+  template <runtime_lookup_cardinality Cardinality>
+  static bool row_conflicts(const row_storage_type<Cardinality> &rows,
+                            const Entry &entry) {
+    if constexpr (Cardinality == cardinality::one) {
+      (void)entry;
+      return !rows.empty();
+    }
+
+    bool result = false;
+    rows.for_each([&](auto *existing_entry) {
+      if (existing_entry->storage_type == entry.storage_type) {
+        result = true;
+      }
+    });
+    return result;
+  }
+
+  template <runtime_lookup_cardinality Cardinality>
+  static Entry *singular_row(const row_storage_type<Cardinality> *rows,
+                             bool &ambiguous) {
+    if (!rows || rows->empty()) {
+      ambiguous = false;
+      return nullptr;
+    }
+    ambiguous = rows->size() > 1;
+    return ambiguous ? nullptr : rows->front();
+  }
+
+  template <runtime_lookup_cardinality Cardinality, typename Fn>
+  static std::size_t for_each_row(const row_storage_type<Cardinality> *rows,
+                                  Fn &&fn) {
+    if (!rows) {
+      return 0;
+    }
+    rows->for_each([&](auto *entry) { fn(*entry); });
+    return rows->size();
+  }
+
   struct runtime_bucket_base {
     virtual ~runtime_bucket_base() = default;
     virtual void erase(Entry &entry, const lookup_identity &identity) = 0;
   };
 
-  template <typename LookupEntry,
-            bool IsRuntimeKey = is_runtime_lookup_entry_v<LookupEntry>>
-  class runtime_key_storage;
-
   template <typename LookupEntry>
-  class runtime_key_storage<LookupEntry, true> : public runtime_bucket_base {
+  class runtime_key_storage : public runtime_bucket_base {
     using key_type =
         typename runtime_key_type<typename LookupEntry::key_domain>::type;
     using backend_type = typename LookupEntry::backend_type;
+    static constexpr auto lookup_cardinality =
+        runtime_lookup_cardinality_value<typename LookupEntry::cardinality>();
+    using runtime_row_storage = row_storage_type<lookup_cardinality>;
     using storage_type =
-        typename backend_type::template storage<key_type, row_storage,
+        typename backend_type::template storage<key_type, runtime_row_storage,
                                                 Allocator>;
 
   public:
@@ -332,24 +599,7 @@ public:
       if (it == storage_.end()) {
         return false;
       }
-      for (auto *existing_entry : it->second) {
-        for (const auto &existing_identity :
-             existing_entry->lookup_identities) {
-          if (!matches(existing_identity) ||
-              !identity_lookup_value_matches(identity, existing_identity)) {
-            continue;
-          }
-          if (!identity.enforces_lookup_duplicates ||
-              !existing_identity.enforces_lookup_duplicates) {
-            continue;
-          }
-          if (identity.lookup_cardinality == cardinality::one ||
-              existing_entry->storage_type == entry.storage_type) {
-            return true;
-          }
-        }
-      }
-      return false;
+      return row_conflicts<lookup_cardinality>(it->second, entry);
     }
 
     bool insert(Entry &entry, const lookup_identity &identity) {
@@ -370,7 +620,7 @@ public:
         return;
       }
       auto &rows = it->second;
-      rows.erase(std::remove(rows.begin(), rows.end(), entry_ptr), rows.end());
+      erase_row<lookup_cardinality>(rows, entry_ptr);
       if (rows.empty()) {
         storage_.erase(it);
       }
@@ -378,32 +628,18 @@ public:
 
     template <typename KeyValue>
     Entry *find_singular(const KeyValue &key_value, bool &ambiguous) const {
-      Entry *selected = nullptr;
-      std::size_t match_count = 0;
       auto it = storage_.find(key_value);
-      if (it != storage_.end()) {
-        for (auto *entry : it->second) {
-          ++match_count;
-          if (match_count == 1) {
-            selected = entry;
-          }
-        }
-      }
-      ambiguous = match_count > 1;
-      return ambiguous ? nullptr : selected;
+      return singular_row<lookup_cardinality>(
+          it == storage_.end() ? nullptr : std::addressof(it->second),
+          ambiguous);
     }
 
     template <typename KeyValue, typename Fn>
     std::size_t for_each(const KeyValue &key_value, Fn &&fn) const {
-      std::size_t count = 0;
       auto it = storage_.find(key_value);
-      if (it != storage_.end()) {
-        for (auto *entry : it->second) {
-          ++count;
-          fn(*entry);
-        }
-      }
-      return count;
+      return for_each_row<lookup_cardinality>(
+          it == storage_.end() ? nullptr : std::addressof(it->second),
+          std::forward<Fn>(fn));
     }
 
     template <typename KeyValue>
@@ -434,7 +670,7 @@ public:
             std::declval<const key_type &>(), std::declval<row_allocator>()))>>
         : std::true_type {};
 
-    row_storage &rows_for_key(const key_type &key) {
+    runtime_row_storage &rows_for_key(const key_type &key) {
       if constexpr (has_try_emplace<storage_type>::value) {
         return storage_
             .try_emplace(
@@ -458,19 +694,6 @@ public:
 
     Allocator *allocator_;
     storage_type storage_;
-  };
-
-  template <typename LookupEntry>
-  class runtime_key_storage<LookupEntry, false> : public runtime_bucket_base {
-  public:
-    explicit runtime_key_storage(Allocator &) {}
-
-    bool matches(const lookup_identity &) const { return false; }
-    bool conflicts(const Entry &, const lookup_identity &) const {
-      return false;
-    }
-    bool insert(Entry &, const lookup_identity &) { return false; }
-    void erase(Entry &, const lookup_identity &) override {}
   };
 
   struct runtime_bucket_owner {
@@ -574,8 +797,8 @@ public:
   };
 
   using runtime_bucket_map =
-      dynamic_identity_map<bucket_key, runtime_bucket_owner, Allocator,
-                           bucket_key_compare>;
+      dynamic_identity_map<runtime_bucket_key, runtime_bucket_owner, Allocator,
+                           runtime_bucket_key_compare>;
 
   template <typename Entries> class runtime_key_storages;
 
@@ -586,14 +809,14 @@ public:
         : allocator_(std::addressof(allocator)), buckets_(allocator) {}
 
     void erase(Entry &entry) {
-      for (const auto &identity : entry.lookup_identities) {
-        if (identity.domain != key_domain::runtime_key) {
-          continue;
-        }
-        auto *owner = buckets_.get(runtime_lookup_table::make_bucket(identity));
-        if (owner) {
-          (*owner)->erase(entry, identity);
-        }
+      const auto &identity = entry.identity;
+      if (identity.domain != key_domain::runtime_key) {
+        return;
+      }
+      auto *owner =
+          buckets_.get(runtime_lookup_table::make_runtime_bucket(identity));
+      if (owner) {
+        (*owner)->erase(entry, identity);
       }
     }
 
@@ -622,21 +845,18 @@ public:
       return 0;
     }
 
-    template <typename LookupEntry>
     bool conflicts(const Entry &entry, const lookup_identity &identity) const {
-      if (auto *bucket = find_bucket<LookupEntry>()) {
-        return bucket->conflicts(entry, identity);
-      }
-      return false;
+      bool result = false;
+      (void)std::initializer_list<int>{
+          ((result = result || conflicts_one<Entries>(entry, identity)), 0)...};
+      return result;
     }
 
-    template <typename LookupEntry>
     bool insert(Entry &entry, const lookup_identity &identity) {
-      if (!runtime_key_storage<LookupEntry>::matches(identity)) {
-        return false;
-      }
-      ensure_bucket<LookupEntry>().insert(entry, identity);
-      return true;
+      bool inserted = false;
+      (void)std::initializer_list<int>{(
+          (inserted = inserted || insert_one<Entries>(entry, identity)), 0)...};
+      return inserted;
     }
 
   private:
@@ -644,7 +864,7 @@ public:
     using lookup_key_type =
         typename runtime_key_type<typename LookupEntry::key_domain>::type;
 
-    template <typename LookupEntry> static bucket_key make_bucket() {
+    template <typename LookupEntry> static runtime_bucket_key make_bucket() {
       return make_runtime_key_bucket<typename LookupEntry::interface_type,
                                      lookup_key_type<LookupEntry>,
                                      typename LookupEntry::cardinality>();
@@ -679,13 +899,31 @@ public:
       return owner->template as<LookupEntry>();
     }
 
+    template <typename LookupEntry>
+    bool conflicts_one(const Entry &entry,
+                       const lookup_identity &identity) const {
+      if (auto *bucket = find_bucket<LookupEntry>()) {
+        return bucket->conflicts(entry, identity);
+      }
+      return false;
+    }
+
+    template <typename LookupEntry>
+    bool insert_one(Entry &entry, const lookup_identity &identity) {
+      if (!runtime_key_storage<LookupEntry>::matches(identity)) {
+        return false;
+      }
+      ensure_bucket<LookupEntry>().insert(entry, identity);
+      return true;
+    }
+
     Allocator *allocator_;
     runtime_bucket_map buckets_;
   };
 
   explicit runtime_lookup_table(Allocator &allocator)
-      : allocator_(std::addressof(allocator)), buckets_(allocator),
-        runtime_key_buckets_(allocator) {}
+      : allocator_(std::addressof(allocator)), one_buckets_(allocator),
+        many_buckets_(allocator), runtime_key_buckets_(allocator) {}
 
   template <typename Interface, typename Cardinality>
   static lookup_identity make_no_key_identity() {
@@ -702,23 +940,8 @@ public:
                            Rtti::template get_type_index<Key>()};
   }
 
-  template <typename LookupEntry>
-  static bool runtime_identity_conflicts(const runtime_lookup_table &table,
-                                         const Entry &entry,
-                                         const lookup_identity &identity) {
-    return table.runtime_key_buckets_.template conflicts<LookupEntry>(entry,
-                                                                      identity);
-  }
-
-  template <typename LookupEntry>
-  static bool runtime_identity_insert(runtime_lookup_table &table, Entry &entry,
-                                      const lookup_identity &identity) {
-    return table.runtime_key_buckets_.template insert<LookupEntry>(entry,
-                                                                   identity);
-  }
-
   template <typename Interface, typename Key, typename Cardinality,
-            typename LookupEntry, typename KeyValue>
+            typename KeyValue>
   static lookup_identity make_runtime_key_identity(Allocator &allocator,
                                                    KeyValue &&key_value) {
     using stored_key_type = std::decay_t<Key>;
@@ -728,30 +951,24 @@ public:
                            key_domain::runtime_key,
                            runtime_lookup_cardinality_value<Cardinality>(),
                            Rtti::template get_type_index<stored_key_type>(),
-                           std::move(erased_key),
-                           true,
-                           &runtime_identity_conflicts<LookupEntry>,
-                           &runtime_identity_insert<LookupEntry>};
+                           std::move(erased_key)};
   }
 
   bool insert(Entry &entry) {
-    for (const auto &identity : entry.lookup_identities) {
-      if (conflicts(entry, identity)) {
-        return false;
-      }
+    const auto &identity = entry.identity;
+    if (conflicts(entry, identity)) {
+      return false;
     }
 
     try {
-      for (const auto &identity : entry.lookup_identities) {
-        if (identity.domain == key_domain::runtime_key) {
-          if (!identity.runtime_insert ||
-              !identity.runtime_insert(*this, entry, identity)) {
-            return false;
-          }
-        } else {
-          auto &rows = bucket(identity);
-          rows.emplace_back(std::addressof(entry));
+      if (identity.domain == key_domain::runtime_key) {
+        if (!runtime_key_buckets_.insert(entry, identity)) {
+          return false;
         }
+      } else if (identity.lookup_cardinality == cardinality::one) {
+        insert_ordinary<cardinality::one>(entry, identity);
+      } else {
+        insert_ordinary<cardinality::many>(entry, identity);
       }
     } catch (...) {
       erase(entry);
@@ -764,33 +981,29 @@ public:
   void erase(Entry &entry) {
     runtime_key_buckets_.erase(entry);
     auto *entry_ptr = std::addressof(entry);
-    for (auto it = buckets_.begin(); it != buckets_.end();) {
-      auto &rows = it->second;
-      rows.erase(std::remove(rows.begin(), rows.end(), entry_ptr), rows.end());
-      if (rows.empty()) {
-        it = buckets_.erase(it);
-      } else {
-        ++it;
-      }
+    const auto &identity = entry.identity;
+    if (identity.domain == key_domain::runtime_key) {
+      return;
+    }
+    if (identity.lookup_cardinality == cardinality::one) {
+      erase_ordinary<cardinality::one>(identity, entry_ptr);
+    } else {
+      erase_ordinary<cardinality::many>(identity, entry_ptr);
     }
   }
 
   template <typename Interface, typename Cardinality>
   Entry *find_singular_no_key(bool &ambiguous) const {
-    return find_singular_in_bucket(
-        make_no_key_bucket<Interface, Cardinality>(), ambiguous,
-        [](const auto &identity) {
-          return matches_no_key<Interface, Cardinality>(identity);
-        });
+    return find_singular_in_bucket<
+        runtime_lookup_cardinality_value<Cardinality>()>(
+        make_no_key_bucket<Interface, Cardinality>(), ambiguous);
   }
 
   template <typename Interface, typename Key, typename Cardinality>
   Entry *find_singular_typed_key(bool &ambiguous) const {
-    return find_singular_in_bucket(
-        make_typed_key_bucket<Interface, Key, Cardinality>(), ambiguous,
-        [](const auto &identity) {
-          return matches_typed_key<Interface, Key, Cardinality>(identity);
-        });
+    return find_singular_in_bucket<
+        runtime_lookup_cardinality_value<Cardinality>()>(
+        make_typed_key_bucket<Interface, Key, Cardinality>(), ambiguous);
   }
 
   template <typename Interface, typename Key, typename Cardinality,
@@ -803,21 +1016,14 @@ public:
 
   template <typename Interface, typename Cardinality, typename Fn>
   std::size_t for_each_no_key(Fn &&fn) const {
-    return for_each_in_bucket(
-        make_no_key_bucket<Interface, Cardinality>(),
-        [](const auto &identity) {
-          return matches_no_key<Interface, Cardinality>(identity);
-        },
-        std::forward<Fn>(fn));
+    return for_each_in_bucket<runtime_lookup_cardinality_value<Cardinality>()>(
+        make_no_key_bucket<Interface, Cardinality>(), std::forward<Fn>(fn));
   }
 
   template <typename Interface, typename Key, typename Cardinality, typename Fn>
   std::size_t for_each_typed_key(Fn &&fn) const {
-    return for_each_in_bucket(
+    return for_each_in_bucket<runtime_lookup_cardinality_value<Cardinality>()>(
         make_typed_key_bucket<Interface, Key, Cardinality>(),
-        [](const auto &identity) {
-          return matches_typed_key<Interface, Key, Cardinality>(identity);
-        },
         std::forward<Fn>(fn));
   }
 
@@ -830,13 +1036,14 @@ public:
 
   template <typename Interface, typename Cardinality>
   std::size_t count_no_key() const {
-    return for_each_no_key<Interface, Cardinality>([](const Entry &) {});
+    return count_in_bucket<runtime_lookup_cardinality_value<Cardinality>()>(
+        make_no_key_bucket<Interface, Cardinality>());
   }
 
   template <typename Interface, typename Key, typename Cardinality>
   std::size_t count_typed_key() const {
-    return for_each_typed_key<Interface, Key, Cardinality>(
-        [](const Entry &) {});
+    return count_in_bucket<runtime_lookup_cardinality_value<Cardinality>()>(
+        make_typed_key_bucket<Interface, Key, Cardinality>());
   }
 
   template <typename Interface, typename Key, typename Cardinality,
@@ -845,185 +1052,205 @@ public:
     return runtime_key_buckets_.template count<LookupEntry>(key_value);
   }
 
-  template <typename Interface, typename Cardinality>
-  static bool matches_no_key(const lookup_identity &identity) {
-    return identity.interface_type ==
-               Rtti::template get_type_index<Interface>() &&
-           identity.domain == key_domain::no_key &&
-           identity.lookup_cardinality ==
-               runtime_lookup_cardinality_value<Cardinality>() &&
-           !identity.key_type && !identity.runtime_key;
-  }
-
-  template <typename Interface, typename Key, typename Cardinality>
-  static bool matches_typed_key(const lookup_identity &identity) {
-    return identity.interface_type ==
-               Rtti::template get_type_index<Interface>() &&
-           identity.domain == key_domain::typed_key &&
-           identity.lookup_cardinality ==
-               runtime_lookup_cardinality_value<Cardinality>() &&
-           identity.key_type &&
-           *identity.key_type == Rtti::template get_type_index<Key>() &&
-           !identity.runtime_key;
-  }
-
-  template <typename Interface, typename Key, typename Cardinality,
-            typename KeyValue>
-  static bool matches_runtime_key(const lookup_identity &identity,
-                                  const KeyValue &key_value) {
-    using stored_key_type = std::decay_t<Key>;
-    if (!(identity.interface_type ==
-              Rtti::template get_type_index<Interface>() &&
-          identity.domain == key_domain::runtime_key &&
-          identity.lookup_cardinality ==
-              runtime_lookup_cardinality_value<Cardinality>() &&
-          identity.key_type &&
-          *identity.key_type ==
-              Rtti::template get_type_index<stored_key_type>() &&
-          identity.runtime_key)) {
-      return false;
-    }
-
-    auto *stored_key = static_cast<runtime_lookup_key_value<stored_key_type> *>(
-        identity.runtime_key.get());
-    return stored_key->value == key_value;
-  }
-
-  template <typename Matcher>
-  static bool entry_matches(Entry &entry, Matcher &matches) {
-    for (const auto &identity : entry.lookup_identities) {
-      if (matches(identity)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  static bool identity_base_matches(const lookup_identity &lhs,
-                                    const lookup_identity &rhs) {
-    return lhs.interface_type == rhs.interface_type &&
-           lhs.domain == rhs.domain &&
-           lhs.lookup_cardinality == rhs.lookup_cardinality &&
-           lhs.key_type == rhs.key_type;
-  }
-
-  static bool identity_lookup_value_matches(const lookup_identity &lhs,
-                                            const lookup_identity &rhs) {
-    if (!identity_base_matches(lhs, rhs)) {
-      return false;
-    }
-    if (lhs.domain != key_domain::runtime_key) {
-      return true;
-    }
-    return lhs.runtime_key && rhs.runtime_key &&
-           lhs.runtime_key->equals(*rhs.runtime_key);
-  }
-
 private:
   static bucket_key make_bucket(const lookup_identity &identity) {
+    return {identity.domain, identity.lookup_cardinality, identity.key_type};
+  }
+
+  static runtime_bucket_key
+  make_runtime_bucket(const lookup_identity &identity) {
     return {identity.interface_type, identity.domain,
             identity.lookup_cardinality, identity.key_type};
   }
 
   template <typename Interface, typename Cardinality>
   static bucket_key make_no_key_bucket() {
-    return {Rtti::template get_type_index<Interface>(), key_domain::no_key,
-            runtime_lookup_cardinality_value<Cardinality>(), std::nullopt};
+    return {key_domain::no_key, runtime_lookup_cardinality_value<Cardinality>(),
+            std::nullopt};
   }
 
   template <typename Interface, typename Key, typename Cardinality>
   static bucket_key make_typed_key_bucket() {
-    return {Rtti::template get_type_index<Interface>(), key_domain::typed_key,
+    return {key_domain::typed_key,
             runtime_lookup_cardinality_value<Cardinality>(),
             Rtti::template get_type_index<Key>()};
   }
 
   template <typename Interface, typename Key, typename Cardinality>
-  static bucket_key make_runtime_key_bucket() {
+  static runtime_bucket_key make_runtime_key_bucket() {
     using stored_key_type = std::decay_t<Key>;
     return {Rtti::template get_type_index<Interface>(), key_domain::runtime_key,
             runtime_lookup_cardinality_value<Cardinality>(),
             Rtti::template get_type_index<stored_key_type>()};
   }
 
-  row_storage &bucket(const lookup_identity &identity) {
+  template <cardinality Cardinality>
+  void insert_ordinary(Entry &entry, const lookup_identity &identity) {
+    auto &rows = bucket<Cardinality>(identity);
+    rows.emplace_back(std::addressof(entry));
+  }
+
+  template <cardinality Cardinality>
+  void erase_ordinary(const lookup_identity &identity, Entry *entry_ptr) {
     auto resolved_bucket = make_bucket(identity);
-    auto rows = buckets_.get(resolved_bucket);
+    if (auto *rows = inline_bucket_rows<Cardinality>(resolved_bucket)) {
+      erase_row<Cardinality>(*rows, entry_ptr);
+      if (rows->empty()) {
+        inline_bucket<Cardinality>().reset();
+      }
+      return;
+    }
+    auto *rows = buckets<Cardinality>().get(resolved_bucket);
     if (rows) {
+      erase_row<Cardinality>(*rows, entry_ptr);
+      if (rows->empty()) {
+        buckets<Cardinality>().erase(resolved_bucket);
+      }
+    }
+  }
+
+  template <cardinality Cardinality>
+  row_storage_type<Cardinality> &bucket(const lookup_identity &identity) {
+    auto resolved_bucket = make_bucket(identity);
+    if (auto *rows = inline_bucket_rows<Cardinality>(resolved_bucket)) {
       return *rows;
     }
-    return buckets_
+    if (auto *rows = buckets<Cardinality>().get(resolved_bucket)) {
+      return *rows;
+    }
+    if (!inline_bucket<Cardinality>()) {
+      inline_bucket<Cardinality>().emplace(
+          std::move(resolved_bucket),
+          make_lookup_storage_allocator<row_allocator>(*allocator_));
+      return inline_bucket<Cardinality>()->rows;
+    }
+    return buckets<Cardinality>()
         .insert(std::move(resolved_bucket),
                 make_lookup_storage_allocator<row_allocator>(*allocator_))
         .first;
   }
 
-  template <typename Matches>
+  template <cardinality Cardinality>
   Entry *find_singular_in_bucket(const bucket_key &resolved_bucket,
-                                 bool &ambiguous, Matches &&matches) const {
-    Entry *selected = nullptr;
-    std::size_t match_count = 0;
-    auto *rows = buckets_.get(resolved_bucket);
-    if (rows) {
-      for (auto *entry : *rows) {
-        if (!entry_matches(*entry, matches)) {
-          continue;
-        }
-        ++match_count;
-        if (match_count == 1) {
-          selected = entry;
-        }
-      }
+                                 bool &ambiguous) const {
+    if (const auto *rows = inline_bucket_rows<Cardinality>(resolved_bucket)) {
+      return singular_row<Cardinality>(rows, ambiguous);
     }
-    ambiguous = match_count > 1;
-    return ambiguous ? nullptr : selected;
+    return singular_row<Cardinality>(
+        buckets<Cardinality>().get(resolved_bucket), ambiguous);
   }
 
-  template <typename Matches, typename Fn>
+  template <cardinality Cardinality, typename Fn>
   std::size_t for_each_in_bucket(const bucket_key &resolved_bucket,
-                                 Matches &&matches, Fn &&fn) const {
-    std::size_t count = 0;
-    auto *rows = buckets_.get(resolved_bucket);
-    if (rows) {
-      for (auto *entry : *rows) {
-        if (entry_matches(*entry, matches)) {
-          ++count;
-          fn(*entry);
-        }
-      }
+                                 Fn &&fn) const {
+    if (const auto *rows = inline_bucket_rows<Cardinality>(resolved_bucket)) {
+      return for_each_row<Cardinality>(rows, std::forward<Fn>(fn));
     }
-    return count;
+    return for_each_row<Cardinality>(
+        buckets<Cardinality>().get(resolved_bucket), std::forward<Fn>(fn));
+  }
+
+  template <cardinality Cardinality>
+  std::size_t count_in_bucket(const bucket_key &resolved_bucket) const {
+    if (const auto *rows = inline_bucket_rows<Cardinality>(resolved_bucket)) {
+      return rows->size();
+    }
+    if (const auto *rows = buckets<Cardinality>().get(resolved_bucket)) {
+      return rows->size();
+    }
+    return 0;
   }
 
   bool conflicts(const Entry &entry, const lookup_identity &identity) const {
     if (identity.domain == key_domain::runtime_key) {
-      return identity.runtime_conflicts &&
-             identity.runtime_conflicts(*this, entry, identity);
+      return runtime_key_buckets_.conflicts(entry, identity);
     }
-    auto *rows = buckets_.get(make_bucket(identity));
+    if (identity.lookup_cardinality == cardinality::one) {
+      return conflicts_ordinary<cardinality::one>(entry, identity);
+    }
+    return conflicts_ordinary<cardinality::many>(entry, identity);
+  }
+
+  template <cardinality Cardinality>
+  bool conflicts_ordinary(const Entry &entry,
+                          const lookup_identity &identity) const {
+    auto resolved_bucket = make_bucket(identity);
+    auto *rows = inline_bucket_rows<Cardinality>(resolved_bucket);
+    if (!rows) {
+      rows = buckets<Cardinality>().get(resolved_bucket);
+    }
     if (!rows) {
       return false;
     }
-    for (auto *existing_entry : *rows) {
-      for (const auto &existing_identity : existing_entry->lookup_identities) {
-        if (!identity_lookup_value_matches(identity, existing_identity)) {
-          continue;
-        }
-        if (!identity.enforces_lookup_duplicates ||
-            !existing_identity.enforces_lookup_duplicates) {
-          continue;
-        }
-        if (identity.lookup_cardinality == cardinality::one ||
-            existing_entry->storage_type == entry.storage_type) {
-          return true;
-        }
-      }
+    return row_conflicts<Cardinality>(*rows, entry);
+  }
+
+  static bool bucket_matches(const bucket_key &lhs, const bucket_key &rhs) {
+    return lhs.domain == rhs.domain &&
+           lhs.lookup_cardinality == rhs.lookup_cardinality &&
+           lhs.key_type == rhs.key_type;
+  }
+
+  template <cardinality Cardinality>
+  std::optional<ordinary_bucket<Cardinality>> &inline_bucket() {
+    if constexpr (Cardinality == cardinality::one) {
+      return inline_one_bucket_;
+    } else {
+      return inline_many_bucket_;
     }
-    return false;
+  }
+
+  template <cardinality Cardinality>
+  const std::optional<ordinary_bucket<Cardinality>> &inline_bucket() const {
+    if constexpr (Cardinality == cardinality::one) {
+      return inline_one_bucket_;
+    } else {
+      return inline_many_bucket_;
+    }
+  }
+
+  template <cardinality Cardinality> bucket_map<Cardinality> &buckets() {
+    if constexpr (Cardinality == cardinality::one) {
+      return one_buckets_;
+    } else {
+      return many_buckets_;
+    }
+  }
+
+  template <cardinality Cardinality>
+  const bucket_map<Cardinality> &buckets() const {
+    if constexpr (Cardinality == cardinality::one) {
+      return one_buckets_;
+    } else {
+      return many_buckets_;
+    }
+  }
+
+  template <cardinality Cardinality>
+  row_storage_type<Cardinality> *
+  inline_bucket_rows(const bucket_key &resolved_bucket) {
+    return inline_bucket<Cardinality>() &&
+                   bucket_matches(inline_bucket<Cardinality>()->key,
+                                  resolved_bucket)
+               ? std::addressof(inline_bucket<Cardinality>()->rows)
+               : nullptr;
+  }
+
+  template <cardinality Cardinality>
+  const row_storage_type<Cardinality> *
+  inline_bucket_rows(const bucket_key &resolved_bucket) const {
+    return inline_bucket<Cardinality>() &&
+                   bucket_matches(inline_bucket<Cardinality>()->key,
+                                  resolved_bucket)
+               ? std::addressof(inline_bucket<Cardinality>()->rows)
+               : nullptr;
   }
 
   Allocator *allocator_;
-  bucket_map buckets_;
+  std::optional<ordinary_bucket<cardinality::one>> inline_one_bucket_;
+  std::optional<ordinary_bucket<cardinality::many>> inline_many_bucket_;
+  bucket_map<cardinality::one> one_buckets_;
+  bucket_map<cardinality::many> many_buckets_;
   runtime_key_storages<typename runtime_lookup_entries<LookupEntries>::type>
       runtime_key_buckets_;
 };

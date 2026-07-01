@@ -57,6 +57,8 @@ public:
 
   iterator erase(iterator it) { return values_.erase(it); }
 
+  bool empty() const { return values_.empty(); }
+
   size_t size() const { return values_.size(); }
 
   Value &front() { return values_.begin()->second; }
