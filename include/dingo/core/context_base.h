@@ -20,6 +20,8 @@
 
 #include <array>
 #include <cassert>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace dingo {
@@ -77,6 +79,23 @@ struct context_closure_base {
   virtual void reset() = 0;
   virtual arena<> &arena_storage() = 0;
   virtual void add_destructor(void *instance, void (*dtor)(void *)) = 0;
+
+  template <typename T, typename... Args> T &construct(Args &&...args) {
+    arena_allocator<void> alloc(arena_storage());
+    auto allocator = allocator_traits::rebind<T>(alloc);
+    auto instance = allocator_traits::allocate(allocator, 1);
+    allocator_traits::construct(allocator, instance,
+                                std::forward<Args>(args)...);
+    if constexpr (!std::is_trivially_destructible_v<T>) {
+      add_destructor(instance, &destructor<T>);
+    }
+    return *instance;
+  }
+
+private:
+  template <typename T> static void destructor(void *ptr) {
+    reinterpret_cast<T *>(ptr)->~T();
+  }
 };
 
 struct context_closure : context_closure_base {
@@ -259,15 +278,7 @@ public:
   }
 
   template <typename T, typename... Args> T &construct(Args &&...args) {
-    arena_allocator<void> alloc(closures_.back()->arena_storage());
-    auto allocator = allocator_traits::rebind<T>(alloc);
-    auto instance = allocator_traits::allocate(allocator, 1);
-    allocator_traits::construct(allocator, instance,
-                                std::forward<Args>(args)...);
-    if constexpr (!std::is_trivially_destructible_v<T>) {
-      register_destructor(instance);
-    }
-    return *instance;
+    return closures_.back()->template construct<T>(std::forward<Args>(args)...);
   }
 
   template <typename T> T *allocate() {
@@ -296,15 +307,6 @@ public:
   }
 
 protected:
-  template <typename T> void register_destructor(T *instance) {
-    static_assert(!std::is_trivially_destructible_v<T>);
-    closures_.back()->add_destructor(instance, &destructor<T>);
-  }
-
-  template <typename T> static void destructor(void *ptr) {
-    reinterpret_cast<T *>(ptr)->~T();
-  }
-
   aligned_storage_t<DINGO_CONTEXT_ARENA_BUFFER_SIZE, alignof(std::max_align_t)>
       arena_buffer_;
   arena<> arena_;

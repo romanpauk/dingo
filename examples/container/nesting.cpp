@@ -29,7 +29,7 @@ int main() {
   assert(base_container.resolve<A>().value == 1);
 
   base_container.register_type<scope<unique>, storage<B>>()
-      .register_type<scope<external>, storage<int>>(
+      ->register_type<scope<external>, storage<int>>(
           2); // Override value of int for struct B
   // Resolving B will use B{2} to construct B
   assert(base_container.resolve<B>().value == 2);

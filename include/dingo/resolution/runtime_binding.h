@@ -30,23 +30,42 @@ public:
   using container_type = InstanceContainer;
   using instance_container_type = InstanceContainer;
   using resolution_container_type = ResolutionContainer;
+  using allocator_type = typename InstanceContainer::allocator_type;
+  using parent_container_type =
+      typename InstanceContainer::parent_container_type;
 
   template <typename ParentContainer, typename... Args>
   runtime_binding_state(ParentContainer *parent, Args &&...args)
-      : storage_(std::forward<Args>(args)...),
-        instance_container_(parent, parent->get_allocator()),
-        resolution_container_(parent, parent->get_allocator()) {}
+      : storage_(std::forward<Args>(args)...), parent_(parent) {}
 
   Storage &storage_ref() { return storage_; }
-  InstanceContainer &instance_container_ref() { return instance_container_; }
-  ResolutionContainer &resolution_container_ref() {
-    return resolution_container_;
+  InstanceContainer &instance_container(detail::context_closure_base &closure) {
+    return container(closure);
+  }
+  ResolutionContainer &
+  resolution_container(detail::context_closure_base &closure) {
+    if (!resolution_container_) {
+      resolution_container_ =
+          std::addressof(closure.template construct<ResolutionContainer>(
+              parent_, parent_->get_allocator()));
+    }
+    return *resolution_container_;
+  }
+
+  InstanceContainer &container(detail::context_closure_base &closure) {
+    if (!instance_container_) {
+      instance_container_ =
+          std::addressof(closure.template construct<InstanceContainer>(
+              parent_, parent_->get_allocator()));
+    }
+    return *instance_container_;
   }
 
 private:
   Storage storage_;
-  InstanceContainer instance_container_;
-  ResolutionContainer resolution_container_;
+  parent_container_type *parent_;
+  InstanceContainer *instance_container_ = nullptr;
+  ResolutionContainer *resolution_container_ = nullptr;
 };
 
 template <typename InstanceContainer, typename Storage>
@@ -55,19 +74,36 @@ public:
   using container_type = InstanceContainer;
   using instance_container_type = InstanceContainer;
   using resolution_container_type = InstanceContainer;
+  using allocator_type = typename InstanceContainer::allocator_type;
+  using parent_container_type =
+      typename InstanceContainer::parent_container_type;
 
   template <typename ParentContainer, typename... Args>
   runtime_binding_state(ParentContainer *parent, Args &&...args)
-      : storage_(std::forward<Args>(args)...),
-        instance_container_(parent, parent->get_allocator()) {}
+      : storage_(std::forward<Args>(args)...), parent_(parent) {}
 
   Storage &storage_ref() { return storage_; }
-  InstanceContainer &instance_container_ref() { return instance_container_; }
-  InstanceContainer &resolution_container_ref() { return instance_container_; }
+  InstanceContainer &instance_container(detail::context_closure_base &closure) {
+    return container(closure);
+  }
+  InstanceContainer &
+  resolution_container(detail::context_closure_base &closure) {
+    return container(closure);
+  }
+
+  InstanceContainer &container(detail::context_closure_base &closure) {
+    if (!instance_container_) {
+      instance_container_ =
+          std::addressof(closure.template construct<InstanceContainer>(
+              parent_, parent_->get_allocator()));
+    }
+    return *instance_container_;
+  }
 
 private:
   Storage storage_;
-  InstanceContainer instance_container_;
+  parent_container_type *parent_;
+  InstanceContainer *instance_container_ = nullptr;
 };
 
 namespace detail {
@@ -193,7 +229,7 @@ private:
   state_type &state_ref() { return state_traits::ref(state_); }
   auto &get_storage() { return state_ref().storage_ref(); }
   auto &get_resolution_container() {
-    return state_ref().resolution_container_ref();
+    return state_ref().resolution_container(closure_);
   }
 
   static constexpr type_descriptor registered_type() {
@@ -235,7 +271,7 @@ public:
   template <typename... Args>
   runtime_binding(Args &&...args) : state_(std::forward<Args>(args)...) {}
 
-  auto &get_container() { return state_ref().instance_container_ref(); }
+  auto &get_container() { return state_ref().container(closure_); }
 
   void *get_value(runtime_context &context, const request_type &request,
                   instance_cache_sink cache) override {

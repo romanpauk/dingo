@@ -88,6 +88,7 @@ class runtime_registry : public allocator_base<Allocator> {
 public:
   using container_traits_type = ContainerTraits;
   using allocator_type = Allocator;
+  using parent_container_type = resolve_root_type;
   using rtti_type = typename ContainerTraits::rtti_type;
   using lookup_definition_type =
       detail::container_lookup_definition_type_t<ContainerTraits>;
@@ -150,14 +151,14 @@ protected:
   }
 
 public:
-  template <typename... TypeArgs> auto &register_type() {
+  template <typename... TypeArgs> auto register_type() {
     return register_type_impl<TypeArgs...>(resolve_root(), none_t{}, none_t{});
   }
 
   template <typename... TypeArgs, typename Arg,
             std::enable_if_t<!detail::is_runtime_registration_key_arg_v<Arg>,
                              int> = 0>
-  auto &register_type(Arg &&arg) {
+  auto register_type(Arg &&arg) {
     return register_type_impl<TypeArgs...>(resolve_root(),
                                            std::forward<Arg>(arg), none_t{});
   }
@@ -167,7 +168,7 @@ public:
                 (sizeof...(KeyArgs) > 0 &&
                  (detail::is_runtime_registration_key_arg_v<KeyArgs> && ...)),
                 int> = 0>
-  auto &register_type(KeyArgs &&...keys) {
+  auto register_type(KeyArgs &&...keys) {
     return register_type_impl<TypeArgs...>(resolve_root(), none_t{}, none_t{},
                                            std::forward<KeyArgs>(keys)...);
   }
@@ -178,26 +179,26 @@ public:
                  !detail::is_runtime_registration_key_arg_v<Arg> &&
                  (detail::is_runtime_registration_key_arg_v<KeyArgs> && ...)),
                 int> = 0>
-  auto &register_type(Arg &&arg, KeyArgs &&...keys) {
+  auto register_type(Arg &&arg, KeyArgs &&...keys) {
     return register_type_impl<TypeArgs...>(resolve_root(),
                                            std::forward<Arg>(arg), none_t{},
                                            std::forward<KeyArgs>(keys)...);
   }
 
   template <typename... TypeArgs, typename IdType>
-  auto &register_indexed_type(IdType &&id) {
+  auto register_indexed_type(IdType &&id) {
     return register_type_impl<TypeArgs...>(resolve_root(), none_t{},
                                            std::forward<IdType>(id));
   }
 
   template <typename... TypeArgs, typename Arg, typename IdType>
-  auto &register_indexed_type(Arg &&arg, IdType &&id) {
+  auto register_indexed_type(Arg &&arg, IdType &&id) {
     return register_type_impl<TypeArgs...>(
         resolve_root(), std::forward<Arg>(arg), std::forward<IdType>(id));
   }
 
   template <typename... TypeArgs, typename Fn>
-  auto &register_type_collection(Fn &&fn) {
+  auto register_type_collection(Fn &&fn) {
     using registration = type_registration<TypeArgs...>;
     return register_type<TypeArgs...>(
         callable([this, collection_fn = std::forward<Fn>(fn)]() mutable {
@@ -206,15 +207,15 @@ public:
         }));
   }
 
-  template <typename... TypeArgs> auto &register_type_collection() {
+  template <typename... TypeArgs> auto register_type_collection() {
     return register_type_collection<TypeArgs...>(
         detail::binding_collection_append{});
   }
 
   template <typename... TypeArgs, typename Parent, typename Arg,
             typename IdType, typename... RuntimeKeyArgs>
-  auto &emplace_type_binding(Parent &parent, Arg &&arg, IdType &&id,
-                             RuntimeKeyArgs &&...runtime_keys) {
+  auto emplace_type_binding(Parent &parent, Arg &&arg, IdType &&id,
+                            RuntimeKeyArgs &&...runtime_keys) {
     return register_type_impl<TypeArgs...>(
         &parent, std::forward<Arg>(arg), std::forward<IdType>(id),
         std::forward<RuntimeKeyArgs>(runtime_keys)...);
@@ -435,7 +436,21 @@ protected:
     return resolve<T, RemoveRvalueReferences>(context, collection_key<Key>());
   }
 
-  template <typename T> static T &invalid_registration_return();
+  template <typename Source> class container_proxy {
+  public:
+    using container_type = typename Source::container_type;
+
+    explicit container_proxy(Source *source) : source_(source) {}
+
+    container_type &get() const { return source_->container(); }
+    container_type *operator->() const { return std::addressof(get()); }
+    operator container_type &() const { return get(); }
+
+  private:
+    Source *source_;
+  };
+
+  template <typename T> static T invalid_registration_return();
 
   using normalized_lookup_entries =
       detail::normalize_lookup_definitions_t<lookup_definition_type>;
@@ -464,7 +479,7 @@ protected:
 
     virtual ~runtime_binding_value() = default;
 
-    virtual void destroy() = 0;
+    virtual void destroy(allocator_type &allocator) = 0;
 
   protected:
     runtime_binding_value() = default;
@@ -506,9 +521,8 @@ protected:
           .container();
     }
 
-    void destroy() override {
-      auto alloc =
-          allocator_traits::rebind<Derived>(container().get_allocator());
+    void destroy(allocator_type &allocator) override {
+      auto alloc = allocator_traits::rebind<Derived>(allocator);
       auto *derived = static_cast<Derived *>(this);
       allocator_traits::destroy(alloc, derived);
       allocator_traits::deallocate(alloc, derived, 1);
@@ -548,9 +562,11 @@ protected:
   };
 
   struct runtime_binding_value_deleter {
+    allocator_type *allocator = nullptr;
+
     void operator()(runtime_binding_value *value) const {
       if (value != nullptr) {
-        value->destroy();
+        value->destroy(*allocator);
       }
     }
   };
@@ -1187,8 +1203,8 @@ private:
   template <typename... TypeArgs, typename Parent, typename Arg,
             typename IdType, typename... RuntimeKeyArgs>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-  auto &register_type_impl(Parent *parent, Arg &&arg, IdType &&id,
-                           RuntimeKeyArgs &&...runtime_keys) {
+  auto register_type_impl(Parent *parent, Arg &&arg, IdType &&id,
+                          RuntimeKeyArgs &&...runtime_keys) {
     static_assert(!detail::has_explicit_void_interface_v<TypeArgs...>,
                   "interfaces<void> is not a valid registration target");
     using registration =
@@ -1280,8 +1296,8 @@ private:
               interface_types, storage_type,
               std::shared_ptr<runtime_binding_state_type>, key_id_type>;
           auto &state = runtime_bindings_;
-          auto [binding_owner, result] =
-              make_binding_owner<true, owner_type>(data);
+          auto binding_owner = make_binding_owner<true, owner_type>(data);
+          auto *binding_result = binding_owner.get();
           shared_lookup_value_factory<owner_type> value_factory{
               std::move(binding_owner)};
 
@@ -1290,7 +1306,7 @@ private:
             commit_registration_plan<interface_type, storage_type>(
                 state, value_factory, id, key_id_type{}, runtime_keys...);
           });
-          return data->instance_container_ref();
+          return container_proxy<owner_type>(binding_result);
         } else {
           return invalid_registration_return<instance_container_type>();
         }
@@ -1406,8 +1422,7 @@ private:
   };
 
   template <typename Owner, typename... Args>
-  std::pair<std::unique_ptr<Owner, runtime_binding_value_deleter>,
-            typename Owner::container_type *>
+  std::unique_ptr<Owner, runtime_binding_value_deleter>
   make_allocated_binding_value(Args &&...args) {
     using value_type = Owner;
     auto alloc = allocator_traits::rebind<value_type>(get_allocator());
@@ -1418,22 +1433,19 @@ private:
       allocator_traits::deallocate(alloc, instance, 1);
       throw;
     }
-    return {std::unique_ptr<Owner, runtime_binding_value_deleter>(instance),
-            &instance->container()};
+    return std::unique_ptr<Owner, runtime_binding_value_deleter>(
+        instance,
+        runtime_binding_value_deleter{std::addressof(get_allocator())});
   }
 
   template <bool SharedOwner, typename Owner, typename... Args>
   auto make_binding_owner(Args &&...args) {
-    auto &&[owner, binding_container] =
+    auto owner =
         make_allocated_binding_value<Owner>(std::forward<Args>(args)...);
     if constexpr (SharedOwner) {
-      return std::pair<std::shared_ptr<Owner>,
-                       typename Owner::container_type *>(
-          std::shared_ptr<Owner>(std::move(owner)), binding_container);
+      return std::shared_ptr<Owner>(std::move(owner));
     } else {
-      return std::pair<std::unique_ptr<Owner, runtime_binding_value_deleter>,
-                       typename Owner::container_type *>(std::move(owner),
-                                                         binding_container);
+      return owner;
     }
   }
 
@@ -1542,14 +1554,14 @@ private:
   template <bool SharedOwner, typename TypeInterface, typename TypeStorage,
             typename Owner, typename Parent, typename IdType,
             typename KeyIdType, typename RuntimeKeyTuple, typename... Args>
-  typename Owner::container_type &
+  container_proxy<Owner>
   register_constructed_type_binding(Parent *parent, IdType &&id, KeyIdType,
                                     RuntimeKeyTuple &&runtime_keys,
                                     Args &&...args) {
     auto &state = runtime_bindings_;
-    auto [binding_owner, result] = make_binding_owner<SharedOwner, Owner>(
+    auto binding_owner = make_binding_owner<SharedOwner, Owner>(
         parent, std::forward<Args>(args)...);
-    auto *binding_result = result;
+    auto *binding_result = binding_owner.get();
     if constexpr (SharedOwner) {
       shared_lookup_value_factory<Owner> value_factory{
           std::move(binding_owner)};
@@ -1573,7 +1585,7 @@ private:
           },
           std::forward<RuntimeKeyTuple>(runtime_keys));
     }
-    return *binding_result;
+    return container_proxy<Owner>(binding_result);
   }
 
 #ifdef _MSC_VER

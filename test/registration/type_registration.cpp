@@ -21,6 +21,8 @@
 
 #include <gtest/gtest.h>
 
+#include <memory>
+
 using namespace dingo;
 
 namespace {
@@ -56,6 +58,29 @@ struct runtime_binding_local_service {
 
   int value;
 };
+
+struct counting_runtime_binding_storage {};
+
+struct counting_runtime_binding_container {
+  using allocator_type = std::allocator<char>;
+  using parent_container_type = counting_runtime_binding_container;
+
+  explicit counting_runtime_binding_container(
+      counting_runtime_binding_container *,
+      allocator_type allocator = allocator_type())
+      : allocator_(allocator) {
+    ++constructions;
+  }
+
+  allocator_type &get_allocator() { return allocator_; }
+
+  static int constructions;
+
+private:
+  allocator_type allocator_;
+};
+
+int counting_runtime_binding_container::constructions = 0;
 } // namespace
 
 TEST(type_registration_test, get_type) {
@@ -263,6 +288,7 @@ TEST(type_registration_test, registration_specialization) {
   struct test_container {
     using rtti_type = rtti<typeid_provider>;
     using allocator_type = std::allocator<char>;
+    using parent_container_type = test_container;
 
     explicit test_container(test_container *,
                             allocator_type allocator = allocator_type())
@@ -388,6 +414,29 @@ TEST(type_registration_test, runtime_multi_interface_binding_shares_storage) {
 
   ASSERT_NE(first_impl, nullptr);
   EXPECT_EQ(first_impl, second_impl);
+}
+
+TEST(type_registration_test,
+     runtime_binding_state_constructs_child_container_on_demand) {
+  counting_runtime_binding_container parent(nullptr);
+  counting_runtime_binding_container::constructions = 0;
+
+  runtime_binding_state<counting_runtime_binding_container,
+                        counting_runtime_binding_storage>
+      state(&parent);
+  detail::context_closure closure;
+
+  EXPECT_EQ(counting_runtime_binding_container::constructions, 0);
+  (void)state.storage_ref();
+  EXPECT_EQ(counting_runtime_binding_container::constructions, 0);
+
+  auto &container = state.container(closure);
+  EXPECT_EQ(counting_runtime_binding_container::constructions, 1);
+  EXPECT_EQ(std::addressof(state.instance_container(closure)),
+            std::addressof(container));
+  EXPECT_EQ(std::addressof(state.resolution_container(closure)),
+            std::addressof(container));
+  EXPECT_EQ(counting_runtime_binding_container::constructions, 1);
 }
 
 TEST(type_registration_test,
