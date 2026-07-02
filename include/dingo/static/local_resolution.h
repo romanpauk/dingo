@@ -28,10 +28,10 @@ template <typename Host, typename StaticRegistry> class binding_resolution;
 
 template <typename Host, typename... Registrations>
 class binding_resolution<Host, static_registry<Registrations...>>
-    : private binding_scope<Registrations...> {
+    : private borrowed_binding_scope<Registrations...> {
   using static_registry_type = static_registry<Registrations...>;
   using self_type = binding_resolution<Host, static_registry_type>;
-  using state_type = binding_scope<Registrations...>;
+  using state_type = borrowed_binding_scope<Registrations...>;
 
   template <typename T, typename Key>
   using binding_t = static_binding_t<
@@ -126,7 +126,8 @@ public:
                 "local storage objects");
 
   template <typename Allocator>
-  binding_resolution(Host *host, Allocator &&) : host_(host) {}
+  binding_resolution(Host *host, Allocator &&, context_closure_base &closure)
+      : state_type(closure), host_(host) {}
 
   allocator_type &get_allocator() { return host_->get_allocator(); }
 

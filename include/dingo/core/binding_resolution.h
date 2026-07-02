@@ -66,18 +66,20 @@ struct binding_conversion_cache_base<false, ConversionTypes> {
   }
 };
 
-template <typename Context> struct preserve_closure_scope {
-  explicit preserve_closure_scope(Context &context)
-      : context_(context), exceptions_(std::uncaught_exceptions()) {}
+template <typename Context> struct closure_scope {
+  explicit closure_scope(Context &context, bool active = true)
+      : context_(context), active_(active),
+        exceptions_(std::uncaught_exceptions()) {}
 
-  ~preserve_closure_scope() {
-    if (std::uncaught_exceptions() == exceptions_) {
+  ~closure_scope() {
+    if (active_ && std::uncaught_exceptions() == exceptions_) {
       context_.pop();
     }
   }
 
 private:
   Context &context_;
+  bool active_;
   int exceptions_;
 };
 
@@ -221,8 +223,11 @@ materialize_binding_resolution_source(Context &context, Storage &storage,
   [[maybe_unused]] auto guard =
       materialization_traits::template make_guard<leaf_type>(context, storage);
   if (materialization_traits::preserves_closure(storage)) {
-    context.push(&closure);
-    preserve_closure_scope<Context> closure_scope(context);
+    const auto pushed = !context.contains(&closure);
+    if (pushed) {
+      context.push(&closure);
+    }
+    closure_scope<Context> scope(context, pushed);
     auto source =
         materialization_traits::materialize_source(context, storage, owner);
     return std::forward<Fn>(fn)(std::move(source));

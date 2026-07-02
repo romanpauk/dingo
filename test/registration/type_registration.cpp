@@ -21,6 +21,8 @@
 
 #include <gtest/gtest.h>
 
+#include <memory>
+
 using namespace dingo;
 
 namespace {
@@ -56,6 +58,29 @@ struct runtime_binding_local_service {
 
   int value;
 };
+
+struct counting_runtime_binding_storage {};
+
+struct counting_runtime_binding_container {
+  using allocator_type = std::allocator<char>;
+  using parent_container_type = counting_runtime_binding_container;
+
+  explicit counting_runtime_binding_container(
+      counting_runtime_binding_container *,
+      allocator_type allocator = allocator_type())
+      : allocator_(allocator) {
+    ++constructions;
+  }
+
+  allocator_type &get_allocator() { return allocator_; }
+
+  static int constructions;
+
+private:
+  allocator_type allocator_;
+};
+
+int counting_runtime_binding_container::constructions = 0;
 } // namespace
 
 TEST(type_registration_test, get_type) {
@@ -263,6 +288,7 @@ TEST(type_registration_test, registration_specialization) {
   struct test_container {
     using rtti_type = rtti<typeid_provider>;
     using allocator_type = std::allocator<char>;
+    using parent_container_type = test_container;
 
     explicit test_container(test_container *,
                             allocator_type allocator = allocator_type())
@@ -391,7 +417,78 @@ TEST(type_registration_test, runtime_multi_interface_binding_shares_storage) {
 }
 
 TEST(type_registration_test,
+     runtime_binding_state_constructs_child_container_on_demand) {
+  counting_runtime_binding_container parent(nullptr);
+  counting_runtime_binding_container::constructions = 0;
+
+  runtime_binding_state<counting_runtime_binding_container,
+                        counting_runtime_binding_storage>
+      state(&parent);
+
+  EXPECT_EQ(counting_runtime_binding_container::constructions, 0);
+  (void)state.storage_ref();
+  EXPECT_EQ(counting_runtime_binding_container::constructions, 0);
+
+  auto &container = state.container();
+  EXPECT_EQ(counting_runtime_binding_container::constructions, 1);
+  EXPECT_EQ(std::addressof(state.instance_container()),
+            std::addressof(container));
+  EXPECT_EQ(std::addressof(state.resolution_container()),
+            std::addressof(container));
+  EXPECT_EQ(counting_runtime_binding_container::constructions, 1);
+}
+
+TEST(type_registration_test,
      runtime_local_bindings_use_separate_resolution_container) {
+  using empty_local_registration =
+      type_registration<scope<shared>, storage<runtime_binding_local_service>,
+                        dingo::bindings<>>;
+  using empty_local_model = detail::binding_model<empty_local_registration>;
+  static_assert(std::is_void_v<typename empty_local_model::bindings_type>);
+  using empty_resolution_container =
+      detail::runtime_binding_resolution_container_t<
+          dingo::container<>, dingo::container<>,
+          typename empty_local_model::bindings_type>;
+  using empty_runtime_state = detail::runtime_binding_state_t<
+      dingo::container<>, dingo::container<>,
+      typename empty_local_model::storage_type,
+      typename empty_local_model::bindings_type>;
+  static_assert(std::is_same_v<empty_resolution_container, dingo::container<>>);
+  static_assert(std::is_same_v<typename empty_runtime_state::container_type,
+                               dingo::container<>>);
+  static_assert(
+      std::is_same_v<typename empty_runtime_state::resolution_container_type,
+                     dingo::container<>>);
+
+  using non_empty_local_registration = type_registration<
+      scope<shared>, storage<runtime_binding_local_service>,
+      dingo::bindings<dingo::bind<
+          scope<shared>, storage<runtime_binding_local_dependency>,
+          factory<function<make_runtime_binding_local_dependency>>>>>;
+  using non_empty_local_model =
+      detail::binding_model<non_empty_local_registration>;
+  static_assert(!std::is_void_v<typename non_empty_local_model::bindings_type>);
+  using non_empty_resolution_container =
+      detail::runtime_binding_resolution_container_t<
+          dingo::container<>, dingo::container<>,
+          typename non_empty_local_model::bindings_type>;
+  using non_empty_local_binding =
+      dingo::bind<scope<shared>, storage<runtime_binding_local_dependency>,
+                  factory<function<make_runtime_binding_local_dependency>>>;
+  using non_empty_runtime_state = detail::runtime_binding_state_t<
+      dingo::container<>, dingo::container<>,
+      typename non_empty_local_model::storage_type,
+      typename non_empty_local_model::bindings_type>;
+  static_assert(
+      !std::is_same_v<non_empty_resolution_container, dingo::container<>>);
+  static_assert(std::is_same_v<typename non_empty_runtime_state::container_type,
+                               dingo::container<>>);
+  static_assert(std::is_same_v<
+                typename non_empty_runtime_state::resolution_container_type,
+                non_empty_resolution_container>);
+  static_assert(sizeof(non_empty_resolution_container) <
+                sizeof(detail::binding_scope<non_empty_local_binding>));
+
   dingo::container<> container;
   container.register_type<
       scope<shared>, storage<runtime_binding_local_service>,

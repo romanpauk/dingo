@@ -20,14 +20,69 @@
 
 #include <array>
 #include <cassert>
+#include <cstdint>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace dingo {
+template <typename StaticRegistry, bool RuntimeDependencies>
+class basic_static_context;
+
 namespace detail {
+
+template <typename T> struct is_basic_static_context : std::false_type {};
+
+template <typename StaticRegistry, bool RuntimeDependencies>
+struct is_basic_static_context<
+    basic_static_context<StaticRegistry, RuntimeDependencies>>
+    : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_basic_static_context_v = is_basic_static_context<
+    std::remove_cv_t<std::remove_reference_t<T>>>::value;
 
 struct context_destructible {
   void *instance;
   void (*dtor)(void *);
+};
+
+struct context_destructible_list {
+  void push_back(arena<> &arena, context_destructible value) {
+    if (size_ == capacity_) {
+      grow(arena);
+    }
+    data_[size_++] = value;
+  }
+
+  void destroy() {
+    while (size_ != 0) {
+      auto &destructible = data_[--size_];
+      destructible.dtor(destructible.instance);
+    }
+  }
+
+  void clear() {
+    data_ = nullptr;
+    size_ = 0;
+    capacity_ = 0;
+  }
+
+private:
+  void grow(arena<> &arena) {
+    auto new_capacity = capacity_ == 0 ? std::uint32_t{1} : capacity_ * 2;
+    arena_allocator<context_destructible> allocator(arena);
+    auto *new_data = allocator_traits::allocate(allocator, new_capacity);
+    for (std::uint32_t i = 0; i != size_; ++i) {
+      new_data[i] = data_[i];
+    }
+    data_ = new_data;
+    capacity_ = new_capacity;
+  }
+
+  context_destructible *data_ = nullptr;
+  std::uint32_t size_ = 0;
+  std::uint32_t capacity_ = 0;
 };
 
 template <typename T, typename Context, typename Container>
@@ -40,30 +95,18 @@ T resolve_context_request(Context &context, Container &container) {
       return T(container.template resolve<request_type, false, true>(
           context, key<key_type>{}));
     } else if constexpr (is_value_selector_v<selector_type>) {
-      return T(container.template resolve<request_type, false, true>(
-          context, is_value_selector<selector_type>::make()));
+      if constexpr (is_basic_static_context_v<Context>) {
+        return T(container.template resolve<request_type, false, true>(
+            context, selector_type{}));
+      } else {
+        return T(container.template resolve<request_type, false, true>(
+            context, is_value_selector<selector_type>::make()));
+      }
     } else {
       static_assert(is_type_selector_v<selector_type> ||
                         is_value_selector_v<selector_type>,
-                    "detail::selected<T, Selector> requires a type_selector "
-                    "or value_selector");
-    }
-  } else if constexpr (is_keyed_v<T>) {
-    using request_type = keyed_type_t<T>;
-    using key_type = keyed_key_t<T>;
-    return T(container.template resolve<request_type, false, true>(
-        context, key<key_type>{}));
-  } else if constexpr (is_indexed_v<T>) {
-    using request_type = indexed_type_t<T>;
-    using selector_type = indexed_selector_t<T>;
-    if constexpr (is_key_value_v<selector_type>) {
-      using key_type = typename key_selector_value<selector_type>::type;
-      return T(container.template resolve<request_type, false, true>(
-          context, key_type{key_selector_value<selector_type>::make()}));
-    } else {
-      static_assert(is_key_value_v<selector_type>,
-                    "dingo::indexed<T, dingo::key<Key>> constructor injection "
-                    "requires dingo::key<Key, Value>");
+                    "dingo::request<T, Selector> requires dingo::key<Key> or "
+                    "dingo::key<Key, Value>");
     }
   } else {
     return container.template resolve<T, false>(context);
@@ -75,10 +118,27 @@ struct context_closure_base {
   virtual void reset() = 0;
   virtual arena<> &arena_storage() = 0;
   virtual void add_destructor(void *instance, void (*dtor)(void *)) = 0;
+
+  template <typename T, typename... Args> T &construct(Args &&...args) {
+    arena_allocator<void> alloc(arena_storage());
+    auto allocator = allocator_traits::rebind<T>(alloc);
+    auto instance = allocator_traits::allocate(allocator, 1);
+    allocator_traits::construct(allocator, instance,
+                                std::forward<Args>(args)...);
+    if constexpr (!std::is_trivially_destructible_v<T>) {
+      add_destructor(instance, &destructor<T>);
+    }
+    return *instance;
+  }
+
+private:
+  template <typename T> static void destructor(void *ptr) {
+    reinterpret_cast<T *>(ptr)->~T();
+  }
 };
 
 struct context_closure : context_closure_base {
-  context_closure() : arena_(arena_buffer_), destructibles_(arena_) {}
+  context_closure() : arena_(arena_buffer_) {}
 
   ~context_closure() { reset_impl(); }
 
@@ -88,32 +148,20 @@ struct context_closure : context_closure_base {
   void reset() override { reset_impl(); }
 
   void reset_impl() {
-    if (!destructibles_.empty()) {
-      for (auto it = destructibles_.rbegin(); it != destructibles_.rend();
-           ++it) {
-        it->dtor(it->instance);
-      }
-    }
+    destructibles_.destroy();
     destructibles_.clear();
-    // `destructibles_` stores its capacity inside `arena_`. Rebuild the
-    // vector before rewinding the arena so the vector destructor never
-    // observes capacity backed by invalidated storage.
-    using destructibles_type = decltype(destructibles_);
-    destructibles_.~destructibles_type();
     arena_.reset();
-    new (&destructibles_) destructibles_type(arena_);
   }
 
   aligned_storage_t<DINGO_CLOSURE_ARENA_BUFFER_SIZE, alignof(std::max_align_t)>
       arena_buffer_;
   arena<> arena_;
-  std::vector<context_destructible, arena_allocator<context_destructible>>
-      destructibles_;
+  context_destructible_list destructibles_;
 
   arena<> &arena_storage() override { return arena_; }
 
   void add_destructor(void *instance, void (*dtor)(void *)) override {
-    destructibles_.push_back({instance, dtor});
+    destructibles_.push_back(arena_, {instance, dtor});
   }
 };
 
@@ -257,15 +305,7 @@ public:
   }
 
   template <typename T, typename... Args> T &construct(Args &&...args) {
-    arena_allocator<void> alloc(closures_.back()->arena_storage());
-    auto allocator = allocator_traits::rebind<T>(alloc);
-    auto instance = allocator_traits::allocate(allocator, 1);
-    allocator_traits::construct(allocator, instance,
-                                std::forward<Args>(args)...);
-    if constexpr (!std::is_trivially_destructible_v<T>) {
-      register_destructor(instance);
-    }
-    return *instance;
+    return closures_.back()->template construct<T>(std::forward<Args>(args)...);
   }
 
   template <typename T> T *allocate() {
@@ -294,15 +334,6 @@ public:
   }
 
 protected:
-  template <typename T> void register_destructor(T *instance) {
-    static_assert(!std::is_trivially_destructible_v<T>);
-    closures_.back()->add_destructor(instance, &destructor<T>);
-  }
-
-  template <typename T> static void destructor(void *ptr) {
-    reinterpret_cast<T *>(ptr)->~T();
-  }
-
   aligned_storage_t<DINGO_CONTEXT_ARENA_BUFFER_SIZE, alignof(std::max_align_t)>
       arena_buffer_;
   arena<> arena_;

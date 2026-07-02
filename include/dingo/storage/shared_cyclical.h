@@ -83,7 +83,7 @@ struct storage_traits<shared_cyclical, std::shared_ptr<Type>, U> {
   using conversion_types = type_list<std::shared_ptr<U>>;
 };
 
-template <typename Base, typename Derived> struct is_virtual_base_of {
+template <typename Base, typename Derived> struct is_virtual_base {
 #if defined(__GNUG__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Winaccessible-base"
@@ -104,8 +104,7 @@ template <typename Base, typename Derived> struct is_virtual_base_of {
 };
 
 template <typename Base, typename Derived>
-static constexpr bool is_virtual_base_of_v =
-    is_virtual_base_of<Base, Derived>::value;
+static constexpr bool is_virtual_base_v = is_virtual_base<Base, Derived>::value;
 
 namespace detail {
 template <typename Type, typename U>
@@ -118,7 +117,7 @@ template <typename Type, typename StoredType, typename Factory,
           typename Conversions, typename Derived, typename Base>
 struct storage_interface_requirements<
     storage<shared_cyclical, Type, StoredType, Factory, Conversions>, Derived,
-    Base> : std::bool_constant<!is_virtual_base_of_v<Base, Derived>> {};
+    Base> : std::bool_constant<!is_virtual_base_v<Base, Derived>> {};
 
 template <typename Type, typename Factory,
           bool IsTriviallyDestructible = std::is_trivially_destructible_v<Type>>

@@ -406,7 +406,7 @@ Constructor deduction is intentionally useful, not magical. The main limits are:
   explicitly opted in through `is_auto_constructible<T>`
 - opting a type into auto-construction does not bypass ambiguity checks
 - auto-construction requires `T` to be complete
-- borrowed lookups such as `resolve<T&>()` and `resolve<T*>()` can use a
+- borrowed requests such as `resolve<T&>()` and `resolve<T*>()` can use a
   forward-declared `T` as long as the type is already registered
 - constructing another type can still depend on a forward-declared `T&` or `T*`;
   the dependency is looked up, not auto-constructed
@@ -609,10 +609,11 @@ struct IProcessor {
 
 template <size_t N> struct Processor : IProcessor {};
 
-container<> container;
-// Register multi-bindings collection
-container.template register_type_collection<
-    scope<shared>, storage<std::vector<IProcessor *>>>();
+struct container_traits : dynamic_container_traits {
+  using lookup_definition_type = lookups<collection<IProcessor>>;
+};
+
+container<container_traits> container;
 
 // Register types under the same interface
 container.template register_type<scope<shared>, storage<Processor<0>>,
@@ -673,7 +674,12 @@ private:
   std::map<std::type_index, std::unique_ptr<ProcessorBase>> processors_;
 };
 
-container<> container;
+struct traits : dingo::dynamic_container_traits {
+  using lookup_definition_type =
+      dingo::lookups<dingo::collection<ProcessorBase>>;
+};
+
+container<traits> container;
 container
     .register_type<scope<unique>, storage<std::unique_ptr<StringProcessor>>,
                    interfaces<ProcessorBase>>();

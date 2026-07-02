@@ -19,6 +19,9 @@
 
 namespace dingo {
 // TODO: this is bit convoluted, ideally merge resolver with runtime binding
+namespace detail {
+template <typename Host, typename StaticRegistry> class binding_resolution;
+} // namespace detail
 
 template <typename InstanceContainer, typename Storage,
           typename ResolutionContainer = InstanceContainer>
@@ -27,23 +30,51 @@ public:
   using container_type = InstanceContainer;
   using instance_container_type = InstanceContainer;
   using resolution_container_type = ResolutionContainer;
+  using allocator_type = typename InstanceContainer::allocator_type;
+  using parent_container_type =
+      typename InstanceContainer::parent_container_type;
 
   template <typename ParentContainer, typename... Args>
   runtime_binding_state(ParentContainer *parent, Args &&...args)
-      : storage_(std::forward<Args>(args)...),
-        instance_container_(parent, parent->get_allocator()),
-        resolution_container_(parent, parent->get_allocator()) {}
+      : storage_(std::forward<Args>(args)...), parent_(parent) {}
 
+  detail::context_closure &closure() { return closure_; }
   Storage &storage_ref() { return storage_; }
-  InstanceContainer &instance_container_ref() { return instance_container_; }
-  ResolutionContainer &resolution_container_ref() {
-    return resolution_container_;
+  InstanceContainer &instance_container() { return container(); }
+  ResolutionContainer &resolution_container() {
+    if (!resolution_container_) {
+      resolution_container_ = construct_container<ResolutionContainer>();
+    }
+    return *resolution_container_;
+  }
+
+  InstanceContainer &container() {
+    if (!instance_container_) {
+      instance_container_ = construct_container<InstanceContainer>();
+    }
+    return *instance_container_;
   }
 
 private:
+  template <typename T> T *construct_container() {
+    if constexpr (std::is_constructible_v<T, parent_container_type *,
+                                          decltype(parent_->get_allocator()),
+                                          detail::context_closure_base &>) {
+      return std::addressof(closure_.template construct<T>(
+          parent_, parent_->get_allocator(), closure_));
+    } else {
+      return std::addressof(
+          closure_.template construct<T>(parent_, parent_->get_allocator()));
+    }
+  }
+
+  // Storage is declared after the closure so cached instances are destroyed
+  // before preserved construction temporaries.
+  detail::context_closure closure_;
   Storage storage_;
-  InstanceContainer instance_container_;
-  ResolutionContainer resolution_container_;
+  parent_container_type *parent_;
+  InstanceContainer *instance_container_ = nullptr;
+  ResolutionContainer *resolution_container_ = nullptr;
 };
 
 template <typename InstanceContainer, typename Storage>
@@ -52,20 +83,62 @@ public:
   using container_type = InstanceContainer;
   using instance_container_type = InstanceContainer;
   using resolution_container_type = InstanceContainer;
+  using allocator_type = typename InstanceContainer::allocator_type;
+  using parent_container_type =
+      typename InstanceContainer::parent_container_type;
 
   template <typename ParentContainer, typename... Args>
   runtime_binding_state(ParentContainer *parent, Args &&...args)
-      : storage_(std::forward<Args>(args)...),
-        instance_container_(parent, parent->get_allocator()) {}
+      : storage_(std::forward<Args>(args)...), parent_(parent) {}
 
+  detail::context_closure &closure() { return closure_; }
   Storage &storage_ref() { return storage_; }
-  InstanceContainer &instance_container_ref() { return instance_container_; }
-  InstanceContainer &resolution_container_ref() { return instance_container_; }
+  InstanceContainer &instance_container() { return container(); }
+  InstanceContainer &resolution_container() { return container(); }
+
+  InstanceContainer &container() {
+    if (!instance_container_) {
+      instance_container_ = construct_container<InstanceContainer>();
+    }
+    return *instance_container_;
+  }
 
 private:
+  template <typename T> T *construct_container() {
+    if constexpr (std::is_constructible_v<T, parent_container_type *,
+                                          decltype(parent_->get_allocator()),
+                                          detail::context_closure_base &>) {
+      return std::addressof(closure_.template construct<T>(
+          parent_, parent_->get_allocator(), closure_));
+    } else {
+      return std::addressof(
+          closure_.template construct<T>(parent_, parent_->get_allocator()));
+    }
+  }
+
+  // Storage is declared after the closure so cached instances are destroyed
+  // before preserved construction temporaries.
+  detail::context_closure closure_;
   Storage storage_;
-  InstanceContainer instance_container_;
+  parent_container_type *parent_;
+  InstanceContainer *instance_container_ = nullptr;
 };
+
+namespace detail {
+
+template <typename ResolveRoot, typename InstanceContainer, typename Bindings>
+using runtime_binding_resolution_container_t =
+    std::conditional_t<std::is_void_v<Bindings>, InstanceContainer,
+                       binding_resolution<ResolveRoot, Bindings>>;
+
+template <typename ResolveRoot, typename InstanceContainer, typename Storage,
+          typename Bindings>
+using runtime_binding_state_t =
+    runtime_binding_state<InstanceContainer, Storage,
+                          runtime_binding_resolution_container_t<
+                              ResolveRoot, InstanceContainer, Bindings>>;
+
+} // namespace detail
 
 template <typename T> struct runtime_binding_state_traits {
   using state_type = T;
@@ -108,6 +181,7 @@ public:
   using state_traits = runtime_binding_state_traits<State>;
   using state_type = typename state_traits::state_type;
   using container_type = typename state_type::container_type;
+  using interface_type = Type;
   using rtti_type = typename Container::rtti_type;
   using type_index = typename rtti_type::type_index;
   using request_type = instance_request<rtti_type>;
@@ -165,15 +239,20 @@ private:
     }
   };
 
-  detail::context_closure closure_;
-  // `state_` must be destroyed before binding state so shared storage can
-  // tear down cached instances before preserved construction temporaries.
   State state_;
 
   state_type &state_ref() { return state_traits::ref(state_); }
+  auto &closure() { return state_ref().closure(); }
   auto &get_storage() { return state_ref().storage_ref(); }
   auto &get_resolution_container() {
-    return state_ref().resolution_container_ref();
+    return state_ref().resolution_container();
+  }
+
+  template <typename Context, typename Fn>
+  decltype(auto) materialize_resolution_source(Context &context, Fn &&fn) {
+    return detail::materialize_binding_resolution_source(
+        context, get_storage(), get_resolution_container(), closure(),
+        std::forward<Fn>(fn));
   }
 
   static constexpr type_descriptor registered_type() {
@@ -215,7 +294,7 @@ public:
   template <typename... Args>
   runtime_binding(Args &&...args) : state_(std::forward<Args>(args)...) {}
 
-  auto &get_container() { return state_ref().instance_container_ref(); }
+  auto &get_container() { return state_ref().container(); }
 
   void *get_value(runtime_context &context, const request_type &request,
                   instance_cache_sink cache) override {
@@ -256,22 +335,19 @@ public:
     }
 
     using Target = std::remove_reference_t<resolved_type_t<T, Type>>;
-    return detail::materialize_binding_resolution_source(
-        context, get_storage(), get_resolution_container(), closure_,
-        [&](auto &&source) -> void * {
-          return detail::resolve_binding_address_from_source<Target>(
-              *this, context, std::forward<decltype(source)>(source),
-              requested_type, registered_type);
-        });
+    return materialize_resolution_source(context, [&](auto &&source) -> void * {
+      return detail::resolve_binding_address_from_source<Target>(
+          *this, context, std::forward<decltype(source)>(source),
+          requested_type, registered_type);
+    });
   }
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
 
   template <typename Context> decltype(auto) resolve(Context &context) {
-    return detail::materialize_binding_resolution_source(
-        context, get_storage(), get_resolution_container(), closure_,
-        [](auto &&source) -> decltype(auto) {
+    return materialize_resolution_source(
+        context, [](auto &&source) -> decltype(auto) {
           return std::forward<decltype(source)>(source).get();
         });
   }
@@ -279,77 +355,12 @@ public:
   template <typename T, typename Context>
   decltype(auto) resolve(Context &context) {
     binding_activation activation{*this};
-    return detail::materialize_binding_resolution_source(
-        context, get_storage(), get_resolution_container(), closure_,
-        [&](auto &&source) -> decltype(auto) {
+    return materialize_resolution_source(
+        context, [&](auto &&source) -> decltype(auto) {
           return detail::resolve_binding_value<T>(
               activation, context, std::forward<decltype(source)>(source));
         });
   }
-
-  void destroy() override {
-    auto allocator = allocator_traits::rebind<runtime_binding>(
-        get_container().get_allocator());
-    allocator_traits::destroy(allocator, this);
-    allocator_traits::deallocate(allocator, this, 1);
-  }
-};
-
-// This is much faster than unique_ptr + deleter
-template <typename T> struct runtime_binding_ptr {
-  using destroy_fn = void (*)(T *);
-
-  runtime_binding_ptr(T *ptr = nullptr, destroy_fn destroy = &default_destroy)
-      : ptr_(ptr), destroy_(destroy) {}
-
-  runtime_binding_ptr(const runtime_binding_ptr &) = delete;
-  runtime_binding_ptr &operator=(const runtime_binding_ptr &) = delete;
-
-  runtime_binding_ptr(runtime_binding_ptr<T> &&other) noexcept
-      : ptr_(other.release()), destroy_(other.destroy_) {
-    other.destroy_ = &default_destroy;
-  }
-
-  runtime_binding_ptr &operator=(runtime_binding_ptr<T> &&other) noexcept {
-    if (this != &other) {
-      reset();
-      ptr_ = other.release();
-      destroy_ = other.destroy_;
-      other.destroy_ = &default_destroy;
-    }
-    return *this;
-  }
-
-  ~runtime_binding_ptr() { reset(); }
-
-  T &operator*() {
-    assert(ptr_);
-    return *ptr_;
-  }
-
-  T *release() {
-    T *ptr = ptr_;
-    ptr_ = nullptr;
-    return ptr;
-  }
-
-  void reset(T *ptr = nullptr, destroy_fn destroy = &default_destroy) {
-    if (ptr_) {
-      destroy_(ptr_);
-    }
-    ptr_ = ptr;
-    destroy_ = destroy;
-  }
-
-  T *get() { return ptr_; }
-  T *operator->() { return ptr_; }
-  operator bool() const { return ptr_ != nullptr; }
-
-private:
-  static void default_destroy(T *ptr) { ptr->destroy(); }
-
-  T *ptr_ = nullptr;
-  destroy_fn destroy_ = &default_destroy;
 };
 
 } // namespace dingo

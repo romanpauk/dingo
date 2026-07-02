@@ -13,7 +13,6 @@
 #include <type_traits>
 
 namespace dingo {
-
 template <typename Request> struct request_interface {
   using type = typename annotated_traits<Request>::type;
 };

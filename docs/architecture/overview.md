@@ -29,7 +29,10 @@ The public entry points are:
 Below that API, the runtime registration path owns:
 
 - runtime binding state (`runtime_binding_state`)
-- per-type binding maps (`runtime_type_bindings::bindings`)
+- stable runtime binding entries that own lookup identities
+- the runtime lookup table used for lookup, collection enumeration, counting,
+  and duplicate checks
+- dynamic type maps for outer per-interface dispatch
 - the resolved-instance cache (`runtime_binding_state::type_cache`)
 - parent lookup for nested containers
 - the public registration and resolution entry points

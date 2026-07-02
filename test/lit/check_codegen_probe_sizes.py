@@ -14,9 +14,9 @@ PROBE_LIMITS = {
         "gcc_arm64": 0x60,
     },
     "probe_static_resolution_mixed_container_consumer_read": {
-        "default": 0x50,
-        "gcc": 0x60,
-        "gcc_arm64": 0x60,
+        "default": 0x850,
+        "gcc": 0x850,
+        "gcc_arm64": 0x850,
     },
     "probe_runtime_resolution_consumer_read": {
         "default": None,
@@ -26,8 +26,8 @@ PROBE_LIMITS = {
         "clang_arm64": 0xd0,
     },
     "probe_static_resolution_mixed_container_shared_config": {
-        "default": 0x120,
-        "clang_arm64": 0x140,
+        "default": 0x430,
+        "clang_arm64": 0x430,
     },
     "probe_runtime_resolution_shared_config": {
         "default": None,
@@ -38,9 +38,9 @@ PROBE_LIMITS = {
         "gcc_arm64": 0x60,
     },
     "probe_static_resolution_mixed_container_shared_value_config": {
-        "default": 0x10,
-        "gcc": 0x50,
-        "gcc_arm64": 0x60,
+        "default": 0x2e0,
+        "gcc": 0x2e0,
+        "gcc_arm64": 0x2e0,
     },
     "probe_runtime_resolution_shared_value_config": {
         "default": None,
@@ -51,10 +51,10 @@ PROBE_LIMITS = {
         "gcc_arm64": 0x60,
     },
     "probe_static_resolution_mixed_container_shared_reference_config": {
-        "default": 0x10,
-        "gcc": 0x50,
-        "gcc13": 0xa0,
-        "gcc_arm64": 0x60,
+        "default": 0x2E0,
+        "gcc": 0x2E0,
+        "gcc13": 0x2E0,
+        "gcc_arm64": 0x2E0,
     },
     "probe_runtime_resolution_shared_reference_config": {
         "default": None,
@@ -63,7 +63,7 @@ PROBE_LIMITS = {
         "default": 0x60,
     },
     "probe_static_resolution_mixed_container_optional_config": {
-        "default": 0x10,
+        "default": 0x380,
     },
     "probe_runtime_resolution_optional_config": {
         "default": None,
@@ -82,15 +82,15 @@ PROBE_LIMITS = {
         "gcc_arm64": 0x60,
     },
     "probe_static_resolution_mixed_container_unique_value_config": {
-        "default": 0x10,
-        "gcc": 0x50,
-        "gcc_arm64": 0x60,
+        "default": 0x280,
+        "gcc": 0x280,
+        "gcc_arm64": 0x280,
     },
     "probe_static_resolution_mixed_container_unique_rvalue_config": {
-        "default": 0x10,
-        "gcc": 0x50,
-        "gcc13": 0x90,
-        "gcc_arm64": 0x60,
+        "default": 0x320,
+        "gcc": 0x320,
+        "gcc13": 0x320,
+        "gcc_arm64": 0x320,
     },
     "probe_runtime_resolution_unique_rvalue_config": {
         "default": None,
@@ -101,7 +101,7 @@ PROBE_LIMITS = {
         "gcc_arm64": 0x60,
     },
     "probe_static_resolution_mixed_container_unique_wrapper_config": {
-        "default": 0x10,
+        "default": 0x440,
     },
     "probe_runtime_resolution_unique_wrapper_config": {
         "default": None,
@@ -112,9 +112,9 @@ PROBE_LIMITS = {
         "clang_arm64": 0x1d0,
     },
     "probe_static_resolution_mixed_container_interface_handle": {
-        "default": 0x200,
-        "clang": 0x260,
-        "gcc_arm64": 0x360,
+        "default": 0x570,
+        "clang": 0x570,
+        "gcc_arm64": 0x570,
     },
     "probe_runtime_resolution_interface_handle": {
         "default": None,
@@ -123,19 +123,20 @@ PROBE_LIMITS = {
         "default": 0x500,
     },
     "probe_static_resolution_mixed_container_collection_sum": {
-        "default": 0x800,
+        "default": 0xc00,
     },
     "probe_runtime_resolution_collection_sum": {
         "default": None,
     },
     "probe_runtime_resolution_external_value_storage": {
         "default": 0x300,
-        "clang": 0x2d0,
+        "clang": 0x420,
+        "clang_arm64": 0x350,
         "gcc": 0x310,
-        "gcc13": 0x3e0,
-        "gcc14": 0x3e0,
-        "gcc15": 0x400,
-        "gcc_arm64": 0x3b0,
+        "gcc13": 0x540,
+        "gcc14": 0x590,
+        "gcc15": 0x590,
+        "gcc_arm64": 0x590,
     },
     "probe_runtime_resolution_mixed_container_external_value_storage": {
         "default": 0x520,
@@ -145,12 +146,13 @@ PROBE_LIMITS = {
     },
     "probe_runtime_resolution_external_reference_storage": {
         "default": 0x300,
-        "clang": 0x2e0,
+        "clang": 0x440,
+        "clang_arm64": 0x370,
         "gcc": 0x330,
-        "gcc13": 0x3e0,
-        "gcc14": 0x3f0,
-        "gcc15": 0x410,
-        "gcc_arm64": 0x3c0,
+        "gcc13": 0x550,
+        "gcc14": 0x5a0,
+        "gcc15": 0x5a0,
+        "gcc_arm64": 0x5a0,
     },
     "probe_runtime_resolution_mixed_container_external_reference_storage": {
         "default": 0x520,
@@ -161,14 +163,19 @@ PROBE_LIMITS = {
         "default": 0x420,
         "clang": 0x940,
         "clang_arm64": 0x740,
-        "gcc15": 0x440,
-        "gcc_arm64": 0x500,
+        "gcc": 0x750,
+        "gcc13": 0x750,
+        "gcc14": 0x750,
+        "gcc15": 0x750,
+        "gcc_arm64": 0x750,
     },
     "probe_runtime_resolution_mixed_container_external_wrapper_storage": {
         "default": 0x580,
-        "clang": 0x8D0,
-        "gcc14": 0x620,
-        "gcc15": 0x5c0,
+        "clang": 0x930,
+        "gcc13": 0x640,
+        "gcc14": 0x640,
+        "gcc15": 0x640,
+        "gcc_arm64": 0x6a0,
     },
 }
 

@@ -15,9 +15,9 @@ are an output of axis selection.
 - `nested_wrappers`: resolve nested smart-pointer, variant, and array wrapper
   combinations.
 - `resolve_collection`: resolve all unkeyed bindings for an interface.
-- `resolve_keyed`: resolve one keyed binding.
+- `resolve_keyed`: resolve one typed-key lookup binding.
 - `resolve_keyed_collection`: resolve all bindings for a key.
-- `resolve_indexed`: resolve one indexed runtime binding.
+- `resolve_indexed`: resolve one runtime-key lookup binding.
 - `construct`: construct an unregistered type from registered dependencies.
 - `invoke`: invoke a callable from registered dependencies.
 - `construct_collection`: construct a collection with default or custom insertion.
@@ -105,7 +105,7 @@ fixture type needed by that case.
 - annotated interface
 - collection of interfaces
 - keyed collection of interfaces
-- indexed interface
+- runtime-key lookup interface
 - local binding target
 - local binding override target
 - local and host collection target
@@ -132,12 +132,12 @@ fixture type needed by that case.
 - user-defined wrapper values, references, and interface conversions
 - `std::vector<std::shared_ptr<I>>`
 - custom inserted collection forms such as `std::map<int, std::shared_ptr<I>>`
-- keyed `T`, `T&`, and collection requests through `resolve(...,
+- typed-key `T`, `T&`, and collection requests through `resolve(...,
   key<Key>{})`
-- `keyed<T, Key>` constructor and invocation dependencies
-- `keyed<std::vector<std::shared_ptr<I>>, Key>` constructor and invocation
-  dependencies
-- indexed runtime requests
+- `request<T, key<Key>>` constructor and invocation dependencies
+- `request<std::vector<std::shared_ptr<I>>, key<Key>>` constructor and
+  invocation dependencies
+- runtime-key requests
 - `T (*)[N]`
 - `T (&)[M][N]`
 - `std::unique_ptr<T[]>`
@@ -156,12 +156,12 @@ fixture type needed by that case.
 - `static_container<bindings<...>>`
 - `container<bindings<...>>` using only static bindings
 - `container<bindings<...>>` using static and runtime registrations
-- `runtime_container<indexed_traits<map>>`
-- `container<indexed_traits<map>>`
-- `runtime_container<indexed_traits<unordered_map>>`
-- `container<indexed_traits<unordered_map>>`
-- `runtime_container<indexed_traits<array>>`
-- `container<indexed_traits<array>>`
+- `runtime_container<indexed_traits<std::size_t>>`
+- `container<indexed_traits<std::size_t>>`
+- `runtime_container<indexed_traits<int>>`
+- `container<indexed_traits<int>>`
+- `runtime_container<indexed_traits<std::string>>`
+- `container<indexed_traits<std::string>>`
 - `runtime_container<indexed_dsl_traits>`
 - `container<indexed_dsl_traits>`
 - allocator-parameterized `container`
@@ -180,8 +180,8 @@ Then it should keep only rows that satisfy all rules below.
 - Runtime-only containers cannot use static bindings.
 - Mixed containers require at least one static binding and may add runtime
   bindings.
-- Indexed features require indexed container traits.
-- Indexed registration is runtime-only unless static indexed bindings are added
+- Runtime-key lookup features require lookup container traits.
+- Runtime-key registration is runtime-only unless static fixed-key bindings are added
   to the library.
 - `external` scope requires caller-supplied storage.
 - `unique` scope can resolve owning values and wrappers, but not stable shared

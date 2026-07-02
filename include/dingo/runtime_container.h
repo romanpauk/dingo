@@ -37,7 +37,7 @@ public:
       std::conditional_t<std::is_same_v<void, ParentContainer>, container_type,
                          ParentContainer>;
   using rtti_type = typename registry_type::rtti_type;
-  using index_definition_type = typename registry_type::index_definition_type;
+  using lookup_definition_type = typename registry_type::lookup_definition_type;
 
   template <typename ContainerTraitsT, typename AllocatorT,
             typename ParentContainerT>
@@ -63,17 +63,29 @@ public:
 
   const registry_type &registry() const { return runtime_registry_; }
 
+  template <typename T, typename R, typename IdType>
+  R resolve_parent_request(IdType &&id) {
+    if constexpr (is_none_v<std::decay_t<IdType>>) {
+      return parent_->template resolve<T>();
+    } else if constexpr (detail::is_typed_key_v<IdType>) {
+      return parent_->template resolve<T>(std::decay_t<IdType>{});
+    } else {
+      return parent_->template resolve<T>(std::forward<IdType>(id));
+    }
+  }
+
   template <typename T, typename IdType = none_t,
             typename R = request_result_t<T>>
   R resolve(IdType &&id = IdType()) {
-    if (parent_ && runtime_registry_.template binding_status_for_id<T>(id) ==
-                       detail::binding_selection_status::not_found) {
-      if constexpr (is_none_v<std::decay_t<IdType>>) {
-        return parent_->template resolve<T>();
-      } else if constexpr (detail::is_typed_key_v<IdType>) {
-        return parent_->template resolve<T>(std::decay_t<IdType>{});
-      } else {
-        return parent_->template resolve<T>(std::forward<IdType>(id));
+    if constexpr (collection_traits<R>::is_collection) {
+      if (parent_ &&
+          runtime_registry_.template count_runtime_collection<R>(id) == 0) {
+        return resolve_parent_request<T, R>(std::forward<IdType>(id));
+      }
+    } else {
+      if (parent_ && runtime_registry_.template binding_status_for_id<T>(id) ==
+                         detail::binding_selection_status::not_found) {
+        return resolve_parent_request<T, R>(std::forward<IdType>(id));
       }
     }
     return runtime_registry_.template resolve<T>(std::forward<IdType>(id));

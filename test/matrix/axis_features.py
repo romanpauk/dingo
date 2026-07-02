@@ -55,7 +55,7 @@ FEATURES = (
         requires=frozenset(
             {"collection_binding", "shared_storage", "resolved_collection"}
         ),
-        modes=frozenset({"runtime", "static", "mixed"}),
+        modes=frozenset({"static", "mixed"}),
         system_headers=("algorithm",),
     ),
     Feature(
@@ -109,7 +109,7 @@ FEATURES = (
     Feature(
         name="resolve_keyed_collection",
         requires=frozenset({"keyed_collection_binding", "resolved_keyed_collection"}),
-        modes=frozenset({"runtime", "static", "mixed"}),
+        modes=frozenset({"static", "mixed"}),
         system_headers=("algorithm",),
     ),
     Feature(
@@ -129,7 +129,7 @@ FEATURES = (
     Feature(
         name="construct_collection",
         requires=frozenset({"collection_binding", "constructable_collection"}),
-        modes=frozenset({"runtime", "static", "mixed"}),
+        modes=frozenset({"static", "mixed"}),
         system_headers=("algorithm", "map"),
         checks=(
             "auto elements = container.template construct_collection<std::vector<std::shared_ptr<element_interface>>>();",

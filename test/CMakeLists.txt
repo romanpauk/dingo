@@ -62,9 +62,11 @@ add_executable(dingo_unit_test
     container/incomplete_resolve.cpp
     container/incomplete_resolve_fixture.cpp
     factory/constructor_detection.cpp
+    index/associative_backends.cpp
     index/index.cpp
     memory/arena_allocator.cpp
     registration/binding_graph.cpp
+    registration/object_sizes.cpp
     registration/static_bindings_source.cpp
     registration/static_parent_container.cpp
     registration/type_registration.cpp
@@ -79,6 +81,8 @@ add_executable(dingo_unit_test
     type/type_name.cpp
     type/type_traits.cpp
 )
+set_source_files_properties(index/index.cpp PROPERTIES COMPILE_OPTIONS
+    "$<$<OR:$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-O0>")
 add_test(NAME dingo_unit_test COMMAND dingo_unit_test)
 set_tests_properties(dingo_unit_test PROPERTIES LABELS "unit")
 target_link_libraries(dingo_unit_test dingo::dingo gtest_main)

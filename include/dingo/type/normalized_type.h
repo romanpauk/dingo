@@ -49,10 +49,6 @@ template <class T, class Tag>
 struct normalized_type<annotated<T, Tag>, void>
     : std::decay<annotated<typename normalized_type<T>::type, Tag>> {};
 
-template <class T, class Key>
-struct normalized_type<keyed<T, Key>, void>
-    : std::decay<keyed<typename normalized_type<T>::type, Key>> {};
-
 template <class T, class Selector>
 struct normalized_type<detail::selected<T, Selector>, void>
     : std::decay<

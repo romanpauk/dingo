@@ -6,7 +6,6 @@
 //
 
 #include <dingo/container.h>
-#include <dingo/index/array.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 
@@ -54,8 +53,8 @@ struct ProcessorB : IProcessor {
 };
 
 struct Pipeline {
-  Pipeline(dingo::indexed<IProcessor &, dingo::key<size_t, 1>> first_processor,
-           dingo::indexed<IProcessor &, dingo::key<size_t, 2>> second_processor)
+  Pipeline(dingo::request<IProcessor &, dingo::key<size_t, 1>> first_processor,
+           dingo::request<IProcessor &, dingo::key<size_t, 2>> second_processor)
       : first(first_processor), second(second_processor) {}
 
   IProcessor &first;
@@ -67,16 +66,16 @@ int main() {
   using namespace dingo;
 
   ////
-  // Define traits type with a single index using size_t as a key,
-  // backed by a std::array of size 10
-  struct container_traits : dynamic_container_traits {
-    using index_definition_type =
-        indexes<index<IProcessor, size_t, index_type::array<10>>>;
+  // Define traits type with a single lookup using size_t as a key
+  struct container_traits : static_container_traits<void> {
+    using lookup_definition_type = lookups<associative<size_t, IProcessor>>;
   };
+  // Runtime lookup storage is dynamic even when this
+  // example uses static_container_traits for the rest of the container.
 
   container<container_traits> container;
 
-  // Register processors into the container, indexed by the type they process
+  // Register processors into the container, keyed by the type they process
   container.register_indexed_type<scope<shared>,
                                   storage<std::shared_ptr<ProcessorA>>,
                                   interfaces<IProcessor>>(size_t(1));

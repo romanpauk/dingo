@@ -8,7 +8,7 @@ types stay free of framework macros or base classes.
 
 Resolution applies supported ownership and interface conversions automatically,
 so one registration can satisfy references, pointers, smart pointers, and
-interface views when the selected storage and scope allow it.
+interface lookups when the selected storage and scope allow it.
 
 Tested with:
 

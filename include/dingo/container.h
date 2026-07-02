@@ -20,14 +20,13 @@
 #include <dingo/detail/container_traits.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/invoke.h>
-#include <dingo/index/index.h>
+#include <dingo/lookup/lookup.h>
 #include <dingo/memory/allocator.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/registration/requirements.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/resolution/runtime_binding.h>
-#include <dingo/resolution/type_cache.h>
 #include <dingo/rtti/static_provider.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/runtime/container_traits.h>
@@ -82,6 +81,8 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   using binding_resolution_ref =
       detail::binding_scope_ref<static_state, Registrations...>;
   using static_context_type = static_context<static_registry_type_>;
+  using index_entries_ = detail::normalize_lookup_definitions_t<
+      detail::container_lookup_definition_type_t<dynamic_container_traits>>;
   static constexpr bool has_parent_v = !std::is_void_v<ParentContainer>;
   using parent_container_type = ParentContainer;
 
@@ -173,23 +174,13 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   };
 
   template <typename Request, typename Key = void> bool has_runtime_binding() {
-    if (!runtime_registry_.has_runtime_registrations()) {
-      return false;
-    }
     return runtime_registry_.template binding_status<Request, Key>() !=
            detail::binding_selection_status::not_found;
   }
 
   template <typename T, typename Key = void> bool has_runtime_collection() {
-    if (!runtime_registry_.has_runtime_registrations()) {
-      return false;
-    }
     return runtime_registry_.template count_runtime_collection<T>(
                collection_key<Key>()) != 0;
-  }
-
-  bool has_runtime_registrations() const {
-    return runtime_registry_.has_runtime_registrations();
   }
 
   template <typename Request, typename Key = void>
@@ -220,8 +211,6 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   bool select_static_resolve() {
     if constexpr (!static_binding_satisfies_request_v<Request, Key>) {
       return false;
-    } else if (!has_runtime_registrations()) {
-      return true;
     } else {
       return !has_runtime_binding<Request, Key>();
     }
@@ -241,8 +230,6 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   bool select_static_collection() {
     if constexpr (!has_static_collection_v<Collection, Key>) {
       return false;
-    } else if (!has_runtime_registrations()) {
-      return true;
     } else {
       return !has_runtime_collection<Collection, Key>();
     }
@@ -272,8 +259,6 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
 
     if constexpr (!has_static_construct_request_v<T>) {
       return false;
-    } else if (!has_runtime_registrations()) {
-      return true;
     } else {
       return !has_runtime_binding<request_type>() &&
              !has_runtime_binding<normalized_request_type>();
@@ -287,8 +272,6 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
                                                 Key>() != 0;
     if constexpr (!has_static_collection_bindings) {
       return false;
-    } else if (!has_runtime_registrations()) {
-      return true;
     } else {
       return !has_runtime_collection<T, Key>();
     }
@@ -679,6 +662,17 @@ public:
 
   static_assert(static_source_type::valid,
                 "container requires a valid compile-time bindings source");
+  static_assert(detail::key_value_bindings_are_declared<
+                    typename static_source_type::interface_bindings,
+                    index_entries_>::value,
+                "container fixed dingo::key<Key, Value> bindings require "
+                "static_container with associative<Key, Interface, one> or "
+                "associative<Key, Interface, many>");
+  static_assert(detail::key_value_bindings_are_unique<
+                    typename static_source_type::interface_bindings,
+                    index_entries_>::value,
+                "container fixed runtime-key lookup bindings must be unique "
+                "for one lookups and unique by storage for many lookups");
   static_assert(detail::graph_analysis<static_source_type, true>::resolvable,
                 "container requires a resolvable compile-time binding graph");
   static_assert(
@@ -830,11 +824,6 @@ public:
     using request_type = request_interface_t<T>;
     using normalized_request_type = request_value_t<T>;
     if constexpr (std::is_same_v<Factory, constructor<normalized_type_t<T>>>) {
-      if constexpr (has_static_construct_request_v<T>) {
-        if (!has_runtime_registrations()) {
-          return construct_static<T>();
-        }
-      }
       if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<T>) {
         constexpr bool has_static_normalized_binding =
             static_selection_t<normalized_request_type, void>::status !=

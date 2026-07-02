@@ -55,7 +55,7 @@ the relevant feature and start there.
 ## Interfaces, Collections, And Dispatch
 
 - [examples/container/service_locator.cpp](../examples/container/service_locator.cpp):
-  resolve a concrete type through an interface view
+  resolve a concrete type through an interface lookup
 - [examples/index/multibindings.cpp](../examples/index/multibindings.cpp):
   resolve multiple implementations through a single interface
 - [examples/registration/collection.cpp](../examples/registration/collection.cpp):
@@ -63,7 +63,7 @@ the relevant feature and start there.
 - [examples/registration/annotated.cpp](../examples/registration/annotated.cpp):
   disambiguate same-type dependencies with annotation tags
 - [examples/index/message_processing.cpp](../examples/index/message_processing.cpp):
-  dispatch messages to indexed handlers
+  dispatch messages to keyed handlers
 
 ## Construction Helpers
 

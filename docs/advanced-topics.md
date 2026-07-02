@@ -3,50 +3,176 @@
 This page covers the parts of Dingo that usually matter only after the basic
 registration and resolution flow is already in place.
 
-## Indexed Resolution
+## View Resolution
 
-Container traits can define one or more indexes so that a registration is
-resolved by both type and a user-supplied key.
+Container traits can define one or more lookups so that a registration is
+resolved by interface, key domain, and cardinality.
 
-Use indexes when:
+Use lookups when:
 
 - multiple implementations share the same interface
 - the caller chooses the implementation by name or numeric ID
-- the lookup structure should be a specific container type
+- the binding should remain separate from unkeyed resolution
 
-Built-in index backends:
+View definitions are scoped to the interface they serve. Every keyed
+registration or runtime request requires a matching lookup definition.
 
-- `index_type::associative<std::map>`
-- `index_type::associative<std::unordered_map>`
-- `index_type::sequence<std::vector>`
-- `index_type::array<N>`
-
-Index definitions are scoped to the interface they serve. Every indexed
-registration or lookup requires a matching `(Interface, Key)` definition.
-
-Custom backends can specialize
-`dingo::detail::index_storage<Backend, Key, Value, Allocator>`. The
-specialization must satisfy an associative container contract:
-`emplace(Key, Value)` returning a result with `.second`, `find(Key)`, `end()`,
-and iterators whose dereferenced value has `.second`.
-
-Constructor dependencies can also bind to a fixed indexed key:
+Unkeyed runtime registrations without an explicit lookup are treated as
+`no_key`/`one`: a second registration for the same interface is rejected,
+regardless of storage type. Declare `collection<I>` when an interface is meant
+to have multiple unkeyed implementations:
 
 ```c++
-struct Pipeline {
-    Pipeline(dingo::indexed<IProcessor&, dingo::key<std::size_t, 1>> first,
-             dingo::indexed<IProcessor&, dingo::key<std::size_t, 2>> second);
+struct container_traits : dynamic_container_traits {
+  using lookup_definition_type = lookups<collection<IProcessor>>;
 };
 ```
 
-This is backend-independent. `indexed<IProcessor&, key<std::size_t, 1>>`
-resolves the same object as `container.resolve<IProcessor&>(std::size_t{1})`;
-the configured `(IProcessor, std::size_t)` index can be a sequence, associative
-container, fixed array, or a custom backend.
+`collection<I>` makes unkeyed collection membership explicit:
+`resolve<std::vector<I *>>()` enumerates the registrations in registration
+order, while singular `resolve<I &>()` succeeds only when exactly one
+registration matches.
+
+Runtime-keyed lookups use `associative<K, I>` for unique bindings and
+`associative<K, I, many>` for keyed collections:
+
+```c++
+struct container_traits : dynamic_container_traits {
+  using lookup_definition_type =
+      lookups<associative<std::size_t, IProcessor>,
+                associative<std::string, IHandler, many>>;
+};
+```
+
+`associative<K, I>` uses the `ordered` backend by default:
+`associative<Key, Interface, Cardinality = one, Backend = ordered>`. The
+built-in backend tags are:
+
+- `ordered`: map-like lookup by runtime key, `O(log N)` plus rows for the key.
+- `unordered`: hash-map-like lookup by runtime key, average `O(1)` plus rows for
+  the key.
+- `array<N>`: direct indexed lookup for dense integral or enum keys in `[0, N)`.
+
+For example:
+
+```c++
+struct container_traits : dynamic_container_traits {
+  using lookup_definition_type =
+      lookups<associative<std::size_t, IProcessor, many, unordered>,
+              associative<MessageId, IHandler, one, array<32>>>;
+};
+```
+
+Custom backends can be used as `associative<MyKey, IService, many, my_backend>`.
+A backend tag provides
+`Backend::template storage<Key, Mapped, Cardinality, Allocator>`, where Dingo
+chooses `Mapped` for its internal lookup entry pointer. The storage is
+constructed with the container allocator and should expose an STL-like mapped
+container API. For `one`, Dingo uses `find(key)`, `end()`,
+`try_emplace(key, mapped)`, and `erase(iterator)`. For `many`, Dingo uses
+`equal_range(key)`, `emplace(key, mapped)`, and `erase(iterator)`. Collection
+iteration order is defined by the backend; `many` backends are not required to
+preserve registration order.
+
+Typed-key registrations can also use explicit lookups:
+
+```c++
+struct container_traits : dynamic_container_traits {
+  using lookup_definition_type =
+      lookups<typed<Primary, IProcessor, one>>;
+};
+```
+
+`typed<K, I, one>` gives `register_type<interfaces<I>, key<K>>()` singular
+identity for that interface and key type. `typed<K, I, many>` makes
+`resolve<std::vector<I *>>(key<K>{})` enumerate keyed collection members in
+registration order. A singular typed-key resolve succeeds only when the matching
+`many` lookup contains exactly one registration.
+
+When no explicit typed-key lookup is declared, `key<K>` registrations still use
+implicit `typed_key<K>`/`one`: a second registration for the same interface and
+key type is rejected, regardless of storage type. Use `typed<K, I, many>` when
+one typed key should hold multiple implementations.
+
+No-key and typed-key lookups use the library's internal row storage; only
+runtime-keyed `associative` lookups have configurable storage backends.
+
+Constructor dependencies can also bind to a fixed request key:
+
+```c++
+struct Pipeline {
+    Pipeline(dingo::request<IProcessor&, dingo::key<std::size_t, 1>> first,
+             dingo::request<IProcessor&, dingo::key<std::size_t, 2>> second);
+};
+```
+
+`request<IProcessor&, key<std::size_t, 1>>` resolves the same object as
+`container.resolve<IProcessor&>(std::size_t{1})`; the configured
+`associative<std::size_t, IProcessor>` lookup determines the key domain and
+cardinality, while the lookup storage remains an implementation detail.
 
 The value in `key<T, Value>` must be a valid non-type template parameter and
 must be usable as `T{Value}`. Class-type values such as `key<MyKey, MyKey{1}>`
 require C++20 structural non-type template parameter support.
+
+Static containers can use the same `associative<K, I>` lookups when the key
+value is fixed in the type:
+
+- `key<K>` remains a typed key and maps to `typed<K, I, ...>`.
+- `key<K, Value>` maps to `associative<K, I, ...>` when `associative<K, I>` or
+  `associative<K, I, many>` is declared.
+- Static request selection is type-encoded: use `request<I &, key<K, Value>>` or
+  `resolve<Collection>(key<K, Value>{})`; `resolve<I &>(K{...})` is runtime key
+  lookup and is not supported by `static_container`.
+- Static fixed runtime-key bindings require `static_container` with traits that
+  declare the lookup. `container<bindings<...>>` rejects them because that mixed
+  form cannot carry custom lookup traits.
+
+<!-- { include("../examples/index/static_fixed.cpp", scope="////") -->
+
+Example code included from
+[../examples/index/static_fixed.cpp](../examples/index/static_fixed.cpp):
+
+```c++
+struct IProcessor {
+  virtual ~IProcessor() = default;
+  virtual int id() const = 0;
+};
+
+template <int Id> struct Processor : IProcessor {
+  int id() const override { return Id; }
+};
+
+struct Pipeline {
+  explicit Pipeline(
+      dingo::request<IProcessor &, dingo::key<std::size_t, 0>> first_processor)
+      : first(first_processor) {}
+
+  IProcessor &first;
+};
+
+using source = dingo::bindings<
+    dingo::bind<dingo::scope<dingo::shared>, dingo::storage<Processor<0>>,
+                dingo::interfaces<IProcessor>, dingo::key<std::size_t, 0>>,
+    dingo::bind<dingo::scope<dingo::shared>, dingo::storage<Processor<1>>,
+                dingo::interfaces<IProcessor>, dingo::key<std::size_t, 1>>>;
+
+struct container_traits : dingo::static_container_traits<> {
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<std::size_t, IProcessor>>;
+};
+
+dingo::static_container<source, container_traits> container;
+
+auto &first =
+    container
+        .resolve<dingo::request<IProcessor &, dingo::key<std::size_t, 0>>>();
+auto pipeline = container.construct<Pipeline>();
+
+return first.id() == 0 && &pipeline.first == &first ? 0 : 1;
+```
+
+<!-- } -->
 
 <!-- { include("../examples/index/index.cpp", scope="////") -->
 
@@ -61,10 +187,9 @@ struct IAnimal {
 struct Dog : IAnimal {};
 struct Cat : IAnimal {};
 
-// Declare traits with std::string based index
+// Declare traits with a std::string based lookup
 struct container_traits : dynamic_container_traits {
-  using index_definition_type = indexes<
-      index<IAnimal, std::string, index_type::associative<std::unordered_map>>>;
+  using lookup_definition_type = lookups<associative<std::string, IAnimal>>;
 };
 
 container<container_traits> container;
@@ -127,24 +252,24 @@ struct ProcessorB : IProcessor {
 };
 
 struct Pipeline {
-  Pipeline(dingo::indexed<IProcessor &, dingo::key<size_t, 1>> first_processor,
-           dingo::indexed<IProcessor &, dingo::key<size_t, 2>> second_processor)
+  Pipeline(dingo::request<IProcessor &, dingo::key<size_t, 1>> first_processor,
+           dingo::request<IProcessor &, dingo::key<size_t, 2>> second_processor)
       : first(first_processor), second(second_processor) {}
 
   IProcessor &first;
   IProcessor &second;
 };
 
-// Define traits type with a single index using size_t as a key,
-// backed by a std::array of size 10
-struct container_traits : dynamic_container_traits {
-  using index_definition_type =
-      indexes<index<IProcessor, size_t, index_type::array<10>>>;
+// Define traits type with a single lookup using size_t as a key
+struct container_traits : static_container_traits<void> {
+  using lookup_definition_type = lookups<associative<size_t, IProcessor>>;
 };
+// Runtime lookup storage is dynamic even when this
+// example uses static_container_traits for the rest of the container.
 
 container<container_traits> container;
 
-// Register processors into the container, indexed by the type they process
+// Register processors into the container, keyed by the type they process
 container
     .register_indexed_type<scope<shared>, storage<std::shared_ptr<ProcessorA>>,
                            interfaces<IProcessor>>(size_t(1));
@@ -175,11 +300,7 @@ auto pipeline = container.construct<Pipeline>();
 
 See:
 
-- [include/dingo/index/index.h](../include/dingo/index/index.h)
-- [include/dingo/index/map.h](../include/dingo/index/map.h)
-- [include/dingo/index/unordered_map.h](../include/dingo/index/unordered_map.h)
-- [include/dingo/index/sequence.h](../include/dingo/index/sequence.h)
-- [include/dingo/index/array.h](../include/dingo/index/array.h)
+- [include/dingo/lookup/lookup.h](../include/dingo/lookup/lookup.h)
 
 ## Annotated Types
 
@@ -187,7 +308,7 @@ Annotations support multiple implementations for the same interface and
 disambiguate them with a tag type.
 
 Use annotations when type-based registration is not enough but runtime key
-lookup would be the wrong abstraction.
+lookups would be the wrong abstraction.
 
 <!-- { include("../examples/registration/annotated.cpp", scope="////") -->
 
@@ -258,7 +379,7 @@ Compile-time bindings make sense when:
 
 - the participating types are known and stable at compile time
 - missing dependencies and unsupported cycles should fail during compilation
-- lookup should avoid mutable runtime registration state
+- lookups should avoid mutable runtime registration state
 
 See:
 
@@ -306,7 +427,7 @@ base_container.register_type<scope<unique>, storage<A>>();
 assert(base_container.resolve<A>().value == 1);
 
 base_container.register_type<scope<unique>, storage<B>>()
-    .register_type<scope<external>, storage<int>>(
+    ->register_type<scope<external>, storage<int>>(
         2); // Override value of int for struct B
 // Resolving B will use B{2} to construct B
 assert(base_container.resolve<B>().value == 2);
