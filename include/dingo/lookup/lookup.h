@@ -109,28 +109,28 @@ using normalize_lookup_definitions_t =
     typename normalize_lookup_definitions<Definitions>::type;
 
 template <typename Candidate, typename Entry>
-struct same_lookup_slot
+struct is_same_lookup_key_type
     : std::bool_constant<std::is_same_v<typename Candidate::interface_type,
                                         typename Entry::interface_type> &&
                          std::is_same_v<typename Candidate::key_domain,
                                         typename Entry::key_domain>> {};
 
 template <typename Candidate, typename Entry>
-struct same_lookup_definition
-    : std::bool_constant<same_lookup_slot<Candidate, Entry>::value &&
+struct is_same_lookup_definition
+    : std::bool_constant<is_same_lookup_key_type<Candidate, Entry>::value &&
                          std::is_same_v<typename Candidate::cardinality,
                                         typename Entry::cardinality>> {};
 
-template <typename Candidate, typename List> struct contains_lookup_slot;
+template <typename Candidate, typename List> struct contains_lookup_key_type;
 
 template <typename Candidate>
-struct contains_lookup_slot<Candidate, type_list<>> : std::false_type {};
+struct contains_lookup_key_type<Candidate, type_list<>> : std::false_type {};
 
 template <typename Candidate, typename Head, typename... Tail>
-struct contains_lookup_slot<Candidate, type_list<Head, Tail...>>
+struct contains_lookup_key_type<Candidate, type_list<Head, Tail...>>
     : std::bool_constant<
-          same_lookup_slot<Candidate, Head>::value ||
-          contains_lookup_slot<Candidate, type_list<Tail...>>::value> {};
+          is_same_lookup_key_type<Candidate, Head>::value ||
+          contains_lookup_key_type<Candidate, type_list<Tail...>>::value> {};
 
 template <typename Candidate, typename List> struct contains_lookup_definition;
 
@@ -140,25 +140,27 @@ struct contains_lookup_definition<Candidate, type_list<>> : std::false_type {};
 template <typename Candidate, typename Head, typename... Tail>
 struct contains_lookup_definition<Candidate, type_list<Head, Tail...>>
     : std::bool_constant<
-          same_lookup_definition<Candidate, Head>::value ||
+          is_same_lookup_definition<Candidate, Head>::value ||
           contains_lookup_definition<Candidate, type_list<Tail...>>::value> {};
 
-template <typename Seen, typename Remaining> struct has_duplicate_lookup_slot;
+template <typename Seen, typename Remaining>
+struct has_duplicate_lookup_key_type;
 
 template <typename... Seen>
-struct has_duplicate_lookup_slot<type_list<Seen...>, type_list<>>
+struct has_duplicate_lookup_key_type<type_list<Seen...>, type_list<>>
     : std::false_type {};
 
 template <typename... Seen, typename Head, typename... Tail>
-struct has_duplicate_lookup_slot<type_list<Seen...>, type_list<Head, Tail...>>
+struct has_duplicate_lookup_key_type<type_list<Seen...>,
+                                     type_list<Head, Tail...>>
     : std::bool_constant<
-          contains_lookup_slot<Head, type_list<Seen...>>::value ||
-          has_duplicate_lookup_slot<type_list<Seen..., Head>,
-                                    type_list<Tail...>>::value> {};
+          contains_lookup_key_type<Head, type_list<Seen...>>::value ||
+          has_duplicate_lookup_key_type<type_list<Seen..., Head>,
+                                        type_list<Tail...>>::value> {};
 
 template <typename Entries>
-inline constexpr bool has_duplicate_lookup_slot_v =
-    has_duplicate_lookup_slot<type_list<>, Entries>::value;
+inline constexpr bool has_duplicate_lookup_key_type_v =
+    has_duplicate_lookup_key_type<type_list<>, Entries>::value;
 
 template <typename Seen, typename Remaining>
 struct has_duplicate_lookup_definition;
