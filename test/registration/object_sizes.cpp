@@ -138,11 +138,11 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
     expect_size_at_most<size_probe_registry::runtime_bindings_state>(
         "runtime bindings state", 48);
 
-    expect_size_at_most<detail::context_closure>("context closure", 128);
-    expect_size_at_most<size_binding_state>("runtime binding state", 176);
-    expect_size_at_most<size_binding>("runtime binding", 192);
+    expect_size_at_most<detail::context_closure>("context closure", 112);
+    expect_size_at_most<size_binding_state>("runtime binding state", 160);
+    expect_size_at_most<size_binding>("runtime binding", 176);
     expect_size_at_most<size_single_owner>("single-interface binding owner",
-                                           208);
+                                           192);
     expect_size_at_most<size_shared_state_owner>(
         "multi-interface shared-state binding owner", 56);
 

@@ -20,6 +20,7 @@
 
 #include <array>
 #include <cassert>
+#include <cstdint>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -44,6 +45,44 @@ inline constexpr bool is_basic_static_context_v = is_basic_static_context<
 struct context_destructible {
   void *instance;
   void (*dtor)(void *);
+};
+
+struct context_destructible_list {
+  void push_back(arena<> &arena, context_destructible value) {
+    if (size_ == capacity_) {
+      grow(arena);
+    }
+    data_[size_++] = value;
+  }
+
+  void destroy() {
+    while (size_ != 0) {
+      auto &destructible = data_[--size_];
+      destructible.dtor(destructible.instance);
+    }
+  }
+
+  void clear() {
+    data_ = nullptr;
+    size_ = 0;
+    capacity_ = 0;
+  }
+
+private:
+  void grow(arena<> &arena) {
+    auto new_capacity = capacity_ == 0 ? std::uint32_t{1} : capacity_ * 2;
+    arena_allocator<context_destructible> allocator(arena);
+    auto *new_data = allocator_traits::allocate(allocator, new_capacity);
+    for (std::uint32_t i = 0; i != size_; ++i) {
+      new_data[i] = data_[i];
+    }
+    data_ = new_data;
+    capacity_ = new_capacity;
+  }
+
+  context_destructible *data_ = nullptr;
+  std::uint32_t size_ = 0;
+  std::uint32_t capacity_ = 0;
 };
 
 template <typename T, typename Context, typename Container>
@@ -99,7 +138,7 @@ private:
 };
 
 struct context_closure : context_closure_base {
-  context_closure() : arena_(arena_buffer_), destructibles_(arena_) {}
+  context_closure() : arena_(arena_buffer_) {}
 
   ~context_closure() { reset_impl(); }
 
@@ -109,32 +148,20 @@ struct context_closure : context_closure_base {
   void reset() override { reset_impl(); }
 
   void reset_impl() {
-    if (!destructibles_.empty()) {
-      for (auto it = destructibles_.rbegin(); it != destructibles_.rend();
-           ++it) {
-        it->dtor(it->instance);
-      }
-    }
+    destructibles_.destroy();
     destructibles_.clear();
-    // `destructibles_` stores its capacity inside `arena_`. Rebuild the
-    // vector before rewinding the arena so the vector destructor never
-    // observes capacity backed by invalidated storage.
-    using destructibles_type = decltype(destructibles_);
-    destructibles_.~destructibles_type();
     arena_.reset();
-    new (&destructibles_) destructibles_type(arena_);
   }
 
   aligned_storage_t<DINGO_CLOSURE_ARENA_BUFFER_SIZE, alignof(std::max_align_t)>
       arena_buffer_;
   arena<> arena_;
-  std::vector<context_destructible, arena_allocator<context_destructible>>
-      destructibles_;
+  context_destructible_list destructibles_;
 
   arena<> &arena_storage() override { return arena_; }
 
   void add_destructor(void *instance, void (*dtor)(void *)) override {
-    destructibles_.push_back({instance, dtor});
+    destructibles_.push_back(arena_, {instance, dtor});
   }
 };
 
