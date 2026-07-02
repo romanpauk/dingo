@@ -573,6 +573,19 @@ using registration_key_t = std::conditional_t<
     !std::is_same_v<typename ParsedArgs::key_type, ::dingo::key<void>>,
     typename ParsedArgs::key_type, registration_selected_key_t<ParsedArgs>>;
 
+template <typename Bindings> struct is_empty_bindings : std::false_type {};
+
+template <> struct is_empty_bindings<::dingo::bindings<>> : std::true_type {};
+
+template <>
+struct is_empty_bindings<::dingo::bindings<static_registry<>>>
+    : std::true_type {};
+
+template <typename Bindings>
+using canonical_bindings_t =
+    std::conditional_t<is_empty_bindings<Bindings>::value,
+                       ::dingo::bindings<void>, Bindings>;
+
 } // namespace detail
 
 // TODO:
@@ -617,7 +630,8 @@ public:
                 "failed to deduce a conversions type");
 
   using dependencies_type = detail::registration_dependencies_t<parsed_args>;
-  using bindings_type = typename parsed_args::bindings_type;
+  using bindings_type =
+      detail::canonical_bindings_t<typename parsed_args::bindings_type>;
 };
 
 } // namespace dingo

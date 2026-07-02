@@ -19,6 +19,9 @@
 
 namespace dingo {
 // TODO: this is bit convoluted, ideally merge resolver with runtime binding
+namespace detail {
+template <typename Host, typename StaticRegistry> class binding_resolution;
+} // namespace detail
 
 template <typename InstanceContainer, typename Storage,
           typename ResolutionContainer = InstanceContainer>
@@ -66,6 +69,22 @@ private:
   Storage storage_;
   InstanceContainer instance_container_;
 };
+
+namespace detail {
+
+template <typename ResolveRoot, typename InstanceContainer, typename Bindings>
+using runtime_binding_resolution_container_t =
+    std::conditional_t<std::is_void_v<Bindings>, InstanceContainer,
+                       binding_resolution<ResolveRoot, Bindings>>;
+
+template <typename ResolveRoot, typename InstanceContainer, typename Storage,
+          typename Bindings>
+using runtime_binding_state_t =
+    runtime_binding_state<InstanceContainer, Storage,
+                          runtime_binding_resolution_container_t<
+                              ResolveRoot, InstanceContainer, Bindings>>;
+
+} // namespace detail
 
 template <typename T> struct runtime_binding_state_traits {
   using state_type = T;

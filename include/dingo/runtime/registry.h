@@ -1201,9 +1201,6 @@ private:
     using binding_model = detail::binding_model<registration>;
     using bindings_type = typename binding_model::bindings_type;
     using instance_container_type = registration_container_type<registration>;
-    using resolution_container_type = std::conditional_t<
-        std::is_void_v<bindings_type>, instance_container_type,
-        detail::binding_resolution<resolve_root_type, bindings_type>>;
     (void)arg;
     using interface_types = typename binding_model::interface_types;
     static constexpr bool storage_tag_is_complete =
@@ -1221,8 +1218,9 @@ private:
       registration_requirements::assert_valid();
 
       using runtime_binding_state_type =
-          runtime_binding_state<instance_container_type, storage_type,
-                                resolution_container_type>;
+          detail::runtime_binding_state_t<resolve_root_type,
+                                          instance_container_type, storage_type,
+                                          bindings_type>;
 
       if constexpr (registration_requirements::valid &&
                     type_list_size_v<interface_types> == 1) {
