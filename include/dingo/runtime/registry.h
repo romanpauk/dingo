@@ -634,13 +634,13 @@ protected:
 
   template <typename Interface>
   static detail::default_lookup_key<rtti_type> default_no_key_lookup_key() {
-    return {rtti_type::template get_type_index<normalized_type_t<Interface>>(),
+    return {rtti_type::template get_type_index<Interface>(),
             rtti_type::template get_type_index<none_t>()};
   }
 
   template <typename Interface, typename Key>
   static detail::default_lookup_key<rtti_type> default_typed_key_lookup_key() {
-    return {rtti_type::template get_type_index<normalized_type_t<Interface>>(),
+    return {rtti_type::template get_type_index<Interface>(),
             rtti_type::template get_type_index<
                 detail::normalized_lookup_key_t<Key>>()};
   }
@@ -864,6 +864,7 @@ protected:
 
   template <typename Interface>
   struct request_lookup_traits<Interface, ::dingo::none_t> {
+    using interface_type = Interface;
     using normalized_interface = normalized_type_t<Interface>;
     using key_domain = ::dingo::no_key;
     using runtime_key_type = void;
@@ -878,6 +879,7 @@ protected:
 
   template <typename Interface, typename Key>
   struct request_lookup_traits<Interface, ::dingo::key<Key>> {
+    using interface_type = Interface;
     using normalized_interface = normalized_type_t<Interface>;
     using key_type = Key;
     using key_domain = ::dingo::typed_key<key_type>;
@@ -920,8 +922,7 @@ protected:
 
     static auto key(none_t) {
       if constexpr (std::is_same_v<entry, default_lookup_entry>) {
-        return default_no_key_lookup_key<
-            typename traits::normalized_interface>();
+        return default_no_key_lookup_key<typename traits::interface_type>();
       } else {
         return none_t{};
       }
@@ -935,8 +936,8 @@ protected:
 
     static auto key(::dingo::key<Key>) {
       if constexpr (std::is_same_v<entry, default_lookup_entry>) {
-        return default_typed_key_lookup_key<
-            typename traits::normalized_interface, typename traits::key_type>();
+        return default_typed_key_lookup_key<typename traits::interface_type,
+                                            typename traits::key_type>();
       } else {
         return none_t{};
       }
@@ -1050,8 +1051,9 @@ protected:
                                         IdType &&id, Fn &&fn) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
-    using traits = request_lookup_traits<resolve_type, std::decay_t<IdType>>;
-    using route = lookup_index_route<resolve_type, std::decay_t<IdType>>;
+    using lookup_type = normalized_type_t<resolve_type>;
+    using traits = request_lookup_traits<lookup_type, std::decay_t<IdType>>;
+    using route = lookup_index_route<lookup_type, std::decay_t<IdType>>;
 
     if constexpr (traits::has_explicit_collection_lookup ||
                   std::is_same_v<typename route::entry, default_lookup_entry>) {
