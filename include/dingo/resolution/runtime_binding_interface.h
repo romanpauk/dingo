@@ -70,7 +70,5 @@ public:
   get_pointer(runtime_context &,
               const instance_request<typename Container::rtti_type> &request,
               instance_cache_sink) = 0;
-
-  virtual void destroy() = 0;
 };
 } // namespace dingo

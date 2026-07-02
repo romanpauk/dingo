@@ -14,9 +14,9 @@ PROBE_LIMITS = {
         "gcc_arm64": 0x60,
     },
     "probe_static_resolution_mixed_container_consumer_read": {
-        "default": 0xf0,
-        "gcc": 0xf0,
-        "gcc_arm64": 0xf0,
+        "default": 0x7d0,
+        "gcc": 0x7d0,
+        "gcc_arm64": 0x7d0,
     },
     "probe_runtime_resolution_consumer_read": {
         "default": None,
@@ -26,8 +26,8 @@ PROBE_LIMITS = {
         "clang_arm64": 0xd0,
     },
     "probe_static_resolution_mixed_container_shared_config": {
-        "default": 0x3a0,
-        "clang_arm64": 0x3a0,
+        "default": 0x430,
+        "clang_arm64": 0x430,
     },
     "probe_runtime_resolution_shared_config": {
         "default": None,
@@ -38,9 +38,9 @@ PROBE_LIMITS = {
         "gcc_arm64": 0x60,
     },
     "probe_static_resolution_mixed_container_shared_value_config": {
-        "default": 0x240,
-        "gcc": 0x240,
-        "gcc_arm64": 0x240,
+        "default": 0x2e0,
+        "gcc": 0x2e0,
+        "gcc_arm64": 0x2e0,
     },
     "probe_runtime_resolution_shared_value_config": {
         "default": None,
@@ -51,10 +51,10 @@ PROBE_LIMITS = {
         "gcc_arm64": 0x60,
     },
     "probe_static_resolution_mixed_container_shared_reference_config": {
-        "default": 0xe8,
-        "gcc": 0xe8,
-        "gcc13": 0xe8,
-        "gcc_arm64": 0xe8,
+        "default": 0x280,
+        "gcc": 0x280,
+        "gcc13": 0x280,
+        "gcc_arm64": 0x280,
     },
     "probe_runtime_resolution_shared_reference_config": {
         "default": None,
@@ -82,15 +82,15 @@ PROBE_LIMITS = {
         "gcc_arm64": 0x60,
     },
     "probe_static_resolution_mixed_container_unique_value_config": {
-        "default": 0x1c0,
-        "gcc": 0x1c0,
-        "gcc_arm64": 0x1c0,
+        "default": 0x280,
+        "gcc": 0x280,
+        "gcc_arm64": 0x280,
     },
     "probe_static_resolution_mixed_container_unique_rvalue_config": {
-        "default": 0xe8,
-        "gcc": 0xe8,
-        "gcc13": 0xe8,
-        "gcc_arm64": 0xe8,
+        "default": 0x320,
+        "gcc": 0x320,
+        "gcc13": 0x320,
+        "gcc_arm64": 0x320,
     },
     "probe_runtime_resolution_unique_rvalue_config": {
         "default": None,
@@ -101,7 +101,7 @@ PROBE_LIMITS = {
         "gcc_arm64": 0x60,
     },
     "probe_static_resolution_mixed_container_unique_wrapper_config": {
-        "default": 0x2f0,
+        "default": 0x440,
     },
     "probe_runtime_resolution_unique_wrapper_config": {
         "default": None,

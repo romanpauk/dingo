@@ -34,7 +34,6 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <deque>
 #include <functional>
 #include <map>
 #include <memory>
@@ -42,6 +41,7 @@
 #include <type_traits>
 #include <typeindex>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace dingo {
@@ -469,7 +469,6 @@ protected:
     void *cache = nullptr;
   };
 
-  struct registered_binding_entry;
   using normalized_lookup_entries =
       detail::normalize_lookup_definitions_t<lookup_definition_type>;
   using default_lookup_entry = detail::default_lookup_entry<rtti_type>;
@@ -485,68 +484,87 @@ protected:
       detail::contains_lookup_definition<LookupEntry,
                                          lookup_index_entries>::value;
 
-  struct registered_binding_entry : binding_cache_state {
-    runtime_binding_ptr<runtime_binding_interface<container_type>> binding;
+  struct runtime_binding_value : binding_cache_state {
+    runtime_binding_value(const runtime_binding_value &) = delete;
+    runtime_binding_value &operator=(const runtime_binding_value &) = delete;
+    runtime_binding_value(runtime_binding_value &&) = delete;
+    runtime_binding_value &operator=(runtime_binding_value &&) = delete;
 
-    registered_binding_entry(
-        runtime_binding_ptr<runtime_binding_interface<container_type>>
-            &&binding_ptr)
-        : binding(std::move(binding_ptr)) {}
+    virtual ~runtime_binding_value() = default;
 
-    registered_binding_entry(const registered_binding_entry &) = delete;
-    registered_binding_entry &
-    operator=(const registered_binding_entry &) = delete;
+    virtual runtime_binding_interface<container_type> *binding() = 0;
+    virtual void destroy() = 0;
 
-    registered_binding_entry(registered_binding_entry &&other) noexcept
-        : binding_cache_state{other.cache}, binding(std::move(other.binding)) {
-      other.cache = nullptr;
+  protected:
+    runtime_binding_value() = default;
+  };
+
+  template <typename Binding>
+  struct runtime_binding_value_impl final : runtime_binding_value {
+    template <typename... Args>
+    explicit runtime_binding_value_impl(Args &&...args)
+        : binding_(std::forward<Args>(args)...) {}
+
+    runtime_binding_interface<container_type> *binding() override {
+      return std::addressof(binding_);
     }
 
-    registered_binding_entry &
-    operator=(registered_binding_entry &&other) noexcept {
-      if (this != &other) {
-        this->cache = other.cache;
-        other.cache = nullptr;
-        binding = std::move(other.binding);
+    typename Binding::container_type &container() {
+      return binding_.get_container();
+    }
+
+    void destroy() override {
+      auto alloc = allocator_traits::rebind<runtime_binding_value_impl>(
+          binding_.get_container().get_allocator());
+      allocator_traits::destroy(alloc, this);
+      allocator_traits::deallocate(alloc, this, 1);
+    }
+
+  private:
+    Binding binding_;
+  };
+
+  struct runtime_binding_value_deleter {
+    void operator()(runtime_binding_value *value) const {
+      if (value != nullptr) {
+        value->destroy();
       }
-      return *this;
     }
   };
 
-  using entry_allocator = typename std::allocator_traits<
-      allocator_type>::template rebind_alloc<registered_binding_entry>;
-  using entry_deque = std::deque<registered_binding_entry, entry_allocator>;
+  struct runtime_lookup_value {
+    using unique_owner =
+        std::unique_ptr<runtime_binding_value, runtime_binding_value_deleter>;
+    using shared_owner = std::shared_ptr<runtime_binding_value>;
 
-  struct registered_binding_entry_handle {
-    registered_binding_entry *ptr = nullptr;
+    runtime_lookup_value(unique_owner &&value) : value_(std::move(value)) {}
+    runtime_lookup_value(const shared_owner &value) : value_(value) {}
 
-    registered_binding_entry &operator*() const { return *ptr; }
+    runtime_lookup_value(runtime_lookup_value &&) noexcept = default;
+    runtime_lookup_value &operator=(runtime_lookup_value &&) noexcept = default;
+    runtime_lookup_value(const runtime_lookup_value &) = delete;
+    runtime_lookup_value &operator=(const runtime_lookup_value &) = delete;
+
+    runtime_binding_value &get() {
+      if (auto *value = std::get_if<unique_owner>(&value_)) {
+        return **value;
+      }
+      return **std::get_if<shared_owner>(&value_);
+    }
+
+  private:
+    std::variant<unique_owner, shared_owner> value_;
   };
 
   struct runtime_bindings_state {
     explicit runtime_bindings_state(allocator_type &allocator)
-        : entries(detail::make_lookup_storage_allocator<entry_allocator>(
-              allocator)),
-          type_cache(allocator), lookup_indexes(allocator) {
+        : type_cache(allocator), lookup_indexes(allocator) {
       validate_lookup_definitions();
     }
 
-    template <typename Binding>
-    registered_binding_entry_handle emplace_entry(Binding &&binding) {
-      entries.emplace_back(std::forward<Binding>(binding));
-      return {std::addressof(entries.back())};
-    }
-
-    void pop_pending_entry(registered_binding_entry_handle) {
-      // Only current registration rollback may remove rows; lookup indexes must
-      // erase rows for this entry before the just-appended deque row is popped.
-      entries.pop_back();
-    }
-
-    entry_deque entries;
     typename ContainerTraits::template type_cache_type<void *, allocator_type>
         type_cache;
-    detail::lookup_index<lookup_index_entries, registered_binding_entry *,
+    detail::lookup_index<lookup_index_entries, runtime_lookup_value,
                          allocator_type>
         lookup_indexes;
 
@@ -1028,7 +1046,7 @@ protected:
     return for_each_collection_entry<T>(
         runtime_bindings_, id, [&](auto &entry) {
           fn(results,
-             resolve_collection_type<resolve_type>(*entry.binding, context));
+             resolve_collection_type<resolve_type>(*entry.binding(), context));
         });
   }
 
@@ -1100,14 +1118,14 @@ private:
     }
   }
 
-  runtime_selection make_slot_selection(registered_binding_entry *selected,
+  runtime_selection make_slot_selection(runtime_binding_value *selected,
                                         bool ambiguous) {
     if (ambiguous) {
       return runtime_selection::ambiguity();
     }
     return detail::make_runtime_selection<runtime_binding_interface_type,
                                           binding_cache_state *>(
-        selected ? selected->binding.get() : nullptr, selected);
+        selected ? selected->binding() : nullptr, selected);
   }
 
   template <typename Value>
@@ -1127,15 +1145,17 @@ private:
   }
 
   template <typename LookupEntry, typename Backend, typename Key>
-  static registered_binding_entry *lookup_index_find_singular(Backend &backend,
-                                                              const Key &key,
-                                                              bool &ambiguous) {
+  static runtime_binding_value *lookup_index_find_singular(Backend &backend,
+                                                           const Key &key,
+                                                           bool &ambiguous) {
     if constexpr (std::is_same_v<
                       typename lookup_entry_cardinality<LookupEntry>::type,
                       ::dingo::one>) {
       auto it = backend.find(key);
       ambiguous = false;
-      return it == backend.end() ? nullptr : lookup_index_iterator_mapped(it);
+      return it == backend.end()
+                 ? nullptr
+                 : std::addressof(lookup_index_iterator_mapped(it).get());
     } else {
       auto [first, last] = backend.equal_range(key);
       if (first == last) {
@@ -1145,7 +1165,9 @@ private:
       auto next = first;
       ++next;
       ambiguous = next != last;
-      return ambiguous ? nullptr : lookup_index_iterator_mapped(first);
+      return ambiguous
+                 ? nullptr
+                 : std::addressof(lookup_index_iterator_mapped(first).get());
     }
   }
 
@@ -1159,13 +1181,13 @@ private:
       if (it == backend.end()) {
         return 0;
       }
-      fn(*lookup_index_iterator_mapped(it));
+      fn(lookup_index_iterator_mapped(it).get());
       return 1;
     } else {
       std::size_t result = 0;
       auto [first, last] = backend.equal_range(key);
       for (auto it = first; it != last; ++it) {
-        fn(*lookup_index_iterator_mapped(it));
+        fn(lookup_index_iterator_mapped(it).get());
         ++result;
       }
       return result;
@@ -1175,7 +1197,7 @@ private:
   template <typename LookupEntry, typename Key>
   runtime_selection select_lookup_index_binding(runtime_bindings_state &state,
                                                 const Key &key) {
-    registered_binding_entry *selected = nullptr;
+    runtime_binding_value *selected = nullptr;
     bool ambiguous = false;
     auto &index = state.lookup_indexes.template get<LookupEntry>();
     selected = lookup_index_find_singular<LookupEntry>(index, key, ambiguous);
@@ -1290,7 +1312,7 @@ private:
                                        key_id_type, runtime_binding_type>>;
 
             register_type_binding<interface_type, storage_type>(
-                allocate_binding<registered_binding_type>(data).first, id,
+                make_allocated_binding<registered_binding_type>(data).first, id,
                 key_id_type{}, runtime_keys...);
           });
           return data->instance_container_ref();
@@ -1334,48 +1356,49 @@ private:
     }
   }
 
-  template <typename TypeInterface, typename TypeStorage, typename IdType,
-            typename KeyIdType, typename LookupEntry, typename KeyArg>
-  auto insert_lookup_row(runtime_bindings_state &state,
-                         registered_binding_entry_handle entry,
+  template <bool SharedOwner, typename TypeInterface, typename TypeStorage,
+            typename IdType, typename KeyIdType, typename LookupEntry,
+            typename Pending, typename KeyArg>
+  auto insert_lookup_row(runtime_bindings_state &state, Pending &pending,
                          const KeyArg &key_arg) {
     auto &index = state.lookup_indexes.template get<LookupEntry>();
 
     if constexpr (std::is_same_v<
                       typename lookup_entry_cardinality<LookupEntry>::type,
                       ::dingo::one>) {
-      auto [it, inserted] = index.try_emplace(key_arg, std::addressof(*entry));
+      auto [it, inserted] = index.try_emplace(
+          key_arg, pending.template make_lookup_value<SharedOwner>());
       if (!inserted) {
         throw make_registration_duplicate_exception<TypeInterface, TypeStorage,
                                                     IdType, KeyIdType>();
       }
       return it;
     } else {
-      return index.emplace(key_arg, std::addressof(*entry));
+      return index.emplace(key_arg,
+                           pending.template make_lookup_value<SharedOwner>());
     }
   }
 
-  template <typename TypeInterface, typename TypeStorage, typename IdType,
-            typename KeyIdType, typename KeyResolver>
-  void commit_lookup_entries(runtime_bindings_state &,
-                             registered_binding_entry_handle, KeyResolver &&,
-                             type_list<>) {}
+  template <bool, typename TypeInterface, typename TypeStorage, typename IdType,
+            typename KeyIdType, typename Pending, typename KeyResolver>
+  void commit_lookup_entries(runtime_bindings_state &, Pending &,
+                             KeyResolver &&, type_list<>) {}
 
-  template <typename TypeInterface, typename TypeStorage, typename IdType,
-            typename KeyIdType, typename Head, typename... Tail,
-            typename KeyResolver>
-  void commit_lookup_entries(runtime_bindings_state &state,
-                             registered_binding_entry_handle entry,
+  template <bool SharedOwner, typename TypeInterface, typename TypeStorage,
+            typename IdType, typename KeyIdType, typename Head,
+            typename... Tail, typename Pending, typename KeyResolver>
+  void commit_lookup_entries(runtime_bindings_state &state, Pending &pending,
                              KeyResolver &&key_resolver,
                              type_list<Head, Tail...>) {
     decltype(auto) key_arg = key_resolver(type_list_iterator<Head>{});
     auto row =
-        insert_lookup_row<TypeInterface, TypeStorage, IdType, KeyIdType, Head>(
-            state, entry, key_arg);
+        insert_lookup_row<SharedOwner, TypeInterface, TypeStorage, IdType,
+                          KeyIdType, Head>(state, pending, key_arg);
     try {
-      commit_lookup_entries<TypeInterface, TypeStorage, IdType, KeyIdType>(
-          state, entry, std::forward<KeyResolver>(key_resolver),
-          type_list<Tail...>{});
+      commit_lookup_entries<SharedOwner, TypeInterface, TypeStorage, IdType,
+                            KeyIdType>(state, pending,
+                                       std::forward<KeyResolver>(key_resolver),
+                                       type_list<Tail...>{});
     } catch (...) {
       state.lookup_indexes.template get<Head>().erase(row);
       throw;
@@ -1383,15 +1406,29 @@ private:
   }
 
   template <typename Result> struct pending_binding_registration {
-    registered_binding_entry_handle entry;
+    typename runtime_lookup_value::unique_owner binding;
+    typename runtime_lookup_value::shared_owner shared_value;
     Result result;
+
+    template <bool SharedOwner> runtime_lookup_value make_lookup_value() {
+      if constexpr (SharedOwner) {
+        if (!shared_value) {
+          shared_value =
+              typename runtime_lookup_value::shared_owner(std::move(binding));
+        }
+        return runtime_lookup_value(shared_value);
+      } else {
+        return runtime_lookup_value(std::move(binding));
+      }
+    }
   };
 
   template <typename Binding, typename... Args>
-  std::pair<runtime_binding_ptr<runtime_binding_interface<container_type>>,
+  std::pair<typename runtime_lookup_value::unique_owner,
             typename Binding::container_type *>
   make_allocated_binding(Args &&...args) {
-    auto alloc = allocator_traits::rebind<Binding>(get_allocator());
+    using value_type = runtime_binding_value_impl<Binding>;
+    auto alloc = allocator_traits::rebind<value_type>(get_allocator());
     auto *instance = allocator_traits::allocate(alloc, 1);
     try {
       allocator_traits::construct(alloc, instance, std::forward<Args>(args)...);
@@ -1399,35 +1436,29 @@ private:
       allocator_traits::deallocate(alloc, instance, 1);
       throw;
     }
-    return {runtime_binding_ptr<runtime_binding_interface<container_type>>(
-                instance, &registry_type::template destroy_binding<Binding>),
-            &instance->get_container()};
+    return {typename runtime_lookup_value::unique_owner(instance),
+            &instance->container()};
   }
 
   template <typename Binding>
   pending_binding_registration<none_t>
-  emplace_existing_binding(runtime_bindings_state &state, Binding &&binding) {
-    return {state.emplace_entry(std::forward<Binding>(binding)), none_t{}};
+  emplace_existing_binding(runtime_bindings_state &, Binding &&binding) {
+    return {std::forward<Binding>(binding), {}, none_t{}};
   }
 
   template <typename Binding, typename... Args>
   pending_binding_registration<typename Binding::container_type *>
-  emplace_constructed_binding(runtime_bindings_state &state, Args &&...args) {
+  emplace_constructed_binding(runtime_bindings_state &, Args &&...args) {
     auto &&[binding, binding_container] =
         make_allocated_binding<Binding>(std::forward<Args>(args)...);
-    try {
-      return {state.emplace_entry(std::move(binding)), binding_container};
-    } catch (...) {
-      binding.reset();
-      throw;
-    }
+    return {std::move(binding), {}, binding_container};
   }
 
   template <typename TypeInterface, typename TypeStorage, typename KeyDomain,
-            typename Cardinality, typename IdType, typename KeyIdType>
-  void
-  commit_static_key_registration_plan(runtime_bindings_state &state,
-                                      registered_binding_entry_handle entry) {
+            typename Cardinality, typename IdType, typename KeyIdType,
+            typename Pending>
+  void commit_static_key_registration_plan(runtime_bindings_state &state,
+                                           Pending &pending) {
     using explicit_lookup_entry =
         explicit_static_key_lookup_entry_t<TypeInterface, KeyDomain,
                                            Cardinality>;
@@ -1440,8 +1471,9 @@ private:
       static_assert(lookup_entry_indexed_v<routed_lookup_entry>);
       auto route_key = route_id{};
       auto key_resolver = [&](auto) { return route::key(route_key); };
-      commit_lookup_entries<TypeInterface, TypeStorage, IdType, KeyIdType>(
-          state, entry, key_resolver, type_list<routed_lookup_entry>{});
+      commit_lookup_entries<false, TypeInterface, TypeStorage, IdType,
+                            KeyIdType>(state, pending, key_resolver,
+                                       type_list<routed_lookup_entry>{});
     } else {
       static_assert(std::is_same_v<Cardinality, ::dingo::one>,
                     "static-key many lookup registrations require an explicit "
@@ -1450,10 +1482,9 @@ private:
   }
 
   template <typename TypeInterface, typename TypeStorage, typename IdType,
-            typename KeyIdType, typename... RuntimeKeyArgs>
+            typename KeyIdType, typename Pending, typename... RuntimeKeyArgs>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-  void commit_registration_plan(runtime_bindings_state &state,
-                                registered_binding_entry_handle entry,
+  void commit_registration_plan(runtime_bindings_state &state, Pending &pending,
                                 IdType &&id, KeyIdType,
                                 RuntimeKeyArgs &&...runtime_keys) {
     check_interface_requirements<TypeStorage,
@@ -1476,21 +1507,24 @@ private:
               typename runtime_lookup_entry_traits<entry_type>::key_type;
           return runtime_registration_key_value<key_type>(runtime_key_tuple);
         };
-        commit_lookup_entries<TypeInterface, TypeStorage, IdType, KeyIdType>(
-            state, entry, key_resolver, lookup_entries{});
+        static constexpr bool shared_owner =
+            type_list_size_v<lookup_entries> > 1;
+        commit_lookup_entries<shared_owner, TypeInterface, TypeStorage, IdType,
+                              KeyIdType>(state, pending, key_resolver,
+                                         lookup_entries{});
       } else if constexpr (is_none_v<std::decay_t<KeyIdType>>) {
         using lookup_cardinality_type =
             no_key_lookup_cardinality_t<TypeInterface>;
         commit_static_key_registration_plan<
             TypeInterface, TypeStorage, ::dingo::no_key,
-            lookup_cardinality_type, IdType, KeyIdType>(state, entry);
+            lookup_cardinality_type, IdType, KeyIdType>(state, pending);
       } else {
         using typed_key_type = typename std::decay_t<KeyIdType>::type;
         using lookup_cardinality_type =
             typed_key_lookup_cardinality_t<TypeInterface, typed_key_type>;
         commit_static_key_registration_plan<
             TypeInterface, TypeStorage, ::dingo::typed_key<typed_key_type>,
-            lookup_cardinality_type, IdType, KeyIdType>(state, entry);
+            lookup_cardinality_type, IdType, KeyIdType>(state, pending);
       }
     } else if constexpr (!is_none_v<std::decay_t<IdType>>) {
       using runtime_key_type = std::decay_t<IdType>;
@@ -1507,21 +1541,22 @@ private:
             typename runtime_lookup_entry_traits<entry_type>::key_type;
         return runtime_registration_key_value<key_type>(runtime_key_tuple);
       };
-      commit_lookup_entries<TypeInterface, TypeStorage, IdType, KeyIdType>(
-          state, entry, key_resolver, type_list<lookup_entry>{});
+      commit_lookup_entries<false, TypeInterface, TypeStorage, IdType,
+                            KeyIdType>(state, pending, key_resolver,
+                                       type_list<lookup_entry>{});
     } else if constexpr (is_none_v<std::decay_t<KeyIdType>>) {
       using lookup_cardinality_type =
           no_key_lookup_cardinality_t<TypeInterface>;
       commit_static_key_registration_plan<
           TypeInterface, TypeStorage, ::dingo::no_key, lookup_cardinality_type,
-          IdType, KeyIdType>(state, entry);
+          IdType, KeyIdType>(state, pending);
     } else {
       using typed_key_type = typename std::decay_t<KeyIdType>::type;
       using lookup_cardinality_type =
           typed_key_lookup_cardinality_t<TypeInterface, typed_key_type>;
       commit_static_key_registration_plan<
           TypeInterface, TypeStorage, ::dingo::typed_key<typed_key_type>,
-          lookup_cardinality_type, IdType, KeyIdType>(state, entry);
+          lookup_cardinality_type, IdType, KeyIdType>(state, pending);
     }
   }
 
@@ -1530,16 +1565,13 @@ private:
   void register_type_binding(Binding &&binding, IdType &&id, KeyIdType,
                              RuntimeKeyArgs &&...runtime_keys) {
     auto &state = runtime_bindings_;
-    auto [entry, result] =
+    auto [binding_owner, shared_value, result] =
         emplace_existing_binding(state, std::forward<Binding>(binding));
-    try {
-      commit_registration_plan<TypeInterface, TypeStorage, IdType, KeyIdType>(
-          state, entry, std::forward<IdType>(id), KeyIdType{},
-          std::forward<RuntimeKeyArgs>(runtime_keys)...);
-    } catch (...) {
-      state.pop_pending_entry(entry);
-      throw;
-    }
+    pending_binding_registration<none_t> pending{
+        std::move(binding_owner), std::move(shared_value), result};
+    commit_registration_plan<TypeInterface, TypeStorage, IdType, KeyIdType>(
+        state, pending, std::forward<IdType>(id), KeyIdType{},
+        std::forward<RuntimeKeyArgs>(runtime_keys)...);
     (void)result;
   }
 
@@ -1551,23 +1583,20 @@ private:
                                     RuntimeKeyTuple &&runtime_keys,
                                     Args &&...args) {
     auto &state = runtime_bindings_;
-    auto [entry, result] = emplace_constructed_binding<Binding>(
-        state, parent, std::forward<Args>(args)...);
-    auto pending_entry = entry;
+    auto [binding_owner, shared_value, result] =
+        emplace_constructed_binding<Binding>(state, parent,
+                                             std::forward<Args>(args)...);
+    pending_binding_registration<typename Binding::container_type *> pending{
+        std::move(binding_owner), std::move(shared_value), result};
     auto *binding_result = result;
-    try {
-      std::apply(
-          [&](auto &&...runtime_key_args) {
-            commit_registration_plan<TypeInterface, TypeStorage, IdType,
-                                     KeyIdType>(
-                state, pending_entry, std::forward<IdType>(id), KeyIdType{},
-                std::forward<decltype(runtime_key_args)>(runtime_key_args)...);
-          },
-          std::forward<RuntimeKeyTuple>(runtime_keys));
-    } catch (...) {
-      state.pop_pending_entry(pending_entry);
-      throw;
-    }
+    std::apply(
+        [&](auto &&...runtime_key_args) {
+          commit_registration_plan<TypeInterface, TypeStorage, IdType,
+                                   KeyIdType>(
+              state, pending, std::forward<IdType>(id), KeyIdType{},
+              std::forward<decltype(runtime_key_args)>(runtime_key_args)...);
+        },
+        std::forward<RuntimeKeyTuple>(runtime_keys));
     return *binding_result;
   }
 
@@ -1653,34 +1682,6 @@ private:
   void check_interface_requirements() {
     detail::interface_registration_requirements<Storage, TypeInterface,
                                                 Type>::assert_valid();
-  }
-
-  template <typename U, typename... Args>
-  std::pair<runtime_binding_ptr<runtime_binding_interface<container_type>>,
-            typename U::container_type *>
-  allocate_binding(Args &&...args) {
-    auto alloc = allocator_traits::rebind<U>(get_allocator());
-    U *instance = allocator_traits::allocate(alloc, 1);
-    try {
-      allocator_traits::construct(alloc, instance, std::forward<Args>(args)...);
-    } catch (...) {
-      allocator_traits::deallocate(alloc, instance, 1);
-      throw;
-    }
-
-    return std::make_pair(
-        runtime_binding_ptr<runtime_binding_interface<container_type>>(
-            instance, &registry_type::template destroy_binding<U>),
-        &instance->get_container());
-  }
-
-  template <typename U>
-  static void destroy_binding(runtime_binding_interface<container_type> *ptr) {
-    auto *instance = static_cast<U *>(ptr);
-    auto alloc =
-        allocator_traits::rebind<U>(instance->get_container().get_allocator());
-    allocator_traits::destroy(alloc, instance);
-    allocator_traits::deallocate(alloc, instance, 1);
   }
 
   resolve_root_type *resolve_root_ = nullptr;
