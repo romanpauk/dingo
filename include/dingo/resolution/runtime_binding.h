@@ -108,6 +108,7 @@ public:
   using state_traits = runtime_binding_state_traits<State>;
   using state_type = typename state_traits::state_type;
   using container_type = typename state_type::container_type;
+  using interface_type = Type;
   using rtti_type = typename Container::rtti_type;
   using type_index = typename rtti_type::type_index;
   using request_type = instance_request<rtti_type>;
