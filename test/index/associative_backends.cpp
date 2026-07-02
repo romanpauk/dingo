@@ -177,9 +177,6 @@ TEST(associative_backend_test, unordered_one_uses_runtime_key_lookup) {
   ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
                 container.registry(), std::size_t(7)),
             1U);
-  ASSERT_FALSE(
-      probe::template lookup_slot_empty<lookup_entry>(container.registry()));
-
   container.template register_indexed_type<
       scope<shared>, storage<second_processor>, interfaces<processor>>(
       std::size_t(8));
@@ -289,8 +286,6 @@ TEST(associative_backend_test,
                    scope<shared>, storage<out_of_range_processor>,
                    interfaces<processor>>(std::size_t(1))),
                std::out_of_range);
-  ASSERT_TRUE(
-      probe::template lookup_slot_empty<lookup_entry>(container.registry()));
   ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
                 container.registry(), std::size_t(1)),
             0U);
@@ -301,8 +296,6 @@ TEST(associative_backend_test,
       scope<shared>, storage<processor_impl>, interfaces<processor>>(
       std::size_t(0));
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(0)).id(), 1);
-  ASSERT_FALSE(
-      probe::template lookup_slot_empty<lookup_entry>(container.registry()));
   ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
                 container.registry(), std::size_t(0)),
             1U);
@@ -402,8 +395,6 @@ TEST(associative_backend_test,
                    scope<shared>, storage<out_of_range_processor>,
                    interfaces<processor>>(std::size_t(1))),
                std::out_of_range);
-  ASSERT_TRUE(
-      probe::template lookup_slot_empty<lookup_entry>(container.registry()));
   ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
                 container.registry(), std::size_t(1)),
             0U);
@@ -418,8 +409,6 @@ TEST(associative_backend_test,
       container.template resolve<std::vector<processor *>>(std::size_t(0));
   ASSERT_EQ(values.size(), 1U);
   ASSERT_EQ(values[0]->id(), 1);
-  ASSERT_FALSE(
-      probe::template lookup_slot_empty<lookup_entry>(container.registry()));
   ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
                 container.registry(), std::size_t(0)),
             1U);

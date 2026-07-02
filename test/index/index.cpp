@@ -126,30 +126,6 @@ template <typename T> struct collection_traits<tracked_collection<T>> {
 };
 } // namespace detail
 
-template <typename Container>
-using slot_key_probe =
-    detail::runtime_slot_key_probe<typename Container::registry_type>;
-
-struct slot_test_entry;
-using slot_test_rtti = rtti<typeid_provider>;
-using slot_test_allocator = test_allocator<char>;
-using slot_test_key = detail::slot_key<slot_test_rtti>;
-static_assert(sizeof(slot_test_key) == sizeof(slot_test_rtti::type_index) * 2 +
-                                           sizeof(detail::slot_domain) +
-                                           sizeof(detail::slot_cardinality));
-
-struct slot_test_entry {
-  explicit slot_test_entry(
-      slot_test_key &&resolved_key,
-      typename slot_test_rtti::type_index resolved_storage_type =
-          slot_test_rtti::template get_type_index<slot_test_entry>())
-      : storage_type(std::move(resolved_storage_type)),
-        key(std::move(resolved_key)) {}
-
-  typename slot_test_rtti::type_index storage_type;
-  slot_test_key key;
-};
-
 struct fixed_injection_processor {
   virtual ~fixed_injection_processor() = default;
   virtual int id() const = 0;
@@ -594,12 +570,28 @@ TEST(index_test, normal_unkeyed_collection_uses_no_key_one_rows) {
 TEST(index_test, failed_normal_unkeyed_registration_preserves_lookup_rows) {
   typed_key_cached_processor_impl::constructions = 0;
 
-  container<> container;
+  struct traits : dynamic_container_traits {
+    using lookup_definition_type = lookups<single<typed_key_cached_processor>>;
+  };
+
+  container<traits> container;
   container.template register_type<scope<shared>,
                                    storage<typed_key_cached_processor_impl>,
                                    interfaces<typed_key_cached_processor>>();
 
+  using probe =
+      detail::runtime_slot_probe<typename decltype(container)::registry_type>;
+  using lookup_entry =
+      typename probe::template no_key_lookup_entry<typed_key_cached_processor,
+                                                   one>;
+
   auto &before = container.template resolve<typed_key_cached_processor &>();
+  ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
+                container.registry(), none_t{}),
+            1U);
+  ASSERT_EQ(probe::template default_no_key_lookup_index_row_count<
+                typed_key_cached_processor>(container.registry()),
+            0U);
 
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<typed_key_cached_processor_impl>,
@@ -607,6 +599,12 @@ TEST(index_test, failed_normal_unkeyed_registration_preserves_lookup_rows) {
                type_already_registered_exception);
 
   auto &after = container.template resolve<typed_key_cached_processor &>();
+  ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
+                container.registry(), none_t{}),
+            1U);
+  ASSERT_EQ(probe::template default_no_key_lookup_index_row_count<
+                typed_key_cached_processor>(container.registry()),
+            0U);
   ASSERT_EQ(&after, &before);
   ASSERT_EQ(after.id(), 42);
   ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
@@ -620,10 +618,23 @@ TEST(index_test, failed_normal_unkeyed_registration_preserves_collection_rows) {
                                    storage<typed_key_cached_processor_impl>,
                                    interfaces<typed_key_cached_processor>>();
 
+  using probe =
+      detail::runtime_slot_probe<typename decltype(container)::registry_type>;
+  auto &before = container.template resolve<typed_key_cached_processor &>();
+  ASSERT_EQ(probe::template default_no_key_lookup_index_row_count<
+                typed_key_cached_processor>(container.registry()),
+            1U);
+
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<typed_key_cached_processor_impl>,
                    interfaces<typed_key_cached_processor>>()),
                type_already_registered_exception);
+
+  auto &after = container.template resolve<typed_key_cached_processor &>();
+  ASSERT_EQ(probe::template default_no_key_lookup_index_row_count<
+                typed_key_cached_processor>(container.registry()),
+            1U);
+  ASSERT_EQ(&after, &before);
 
   auto processors =
       container
@@ -770,6 +781,7 @@ TEST(index_test,
 TEST(index_test,
      failed_implicit_typed_key_registration_preserves_collection_rows) {
   struct processor_key {};
+
   typed_key_cached_processor_impl::constructions = 0;
 
   container<> container;
@@ -777,11 +789,28 @@ TEST(index_test,
       scope<shared>, storage<typed_key_cached_processor_impl>,
       interfaces<typed_key_cached_processor>, key<processor_key>>();
 
+  using probe =
+      detail::runtime_slot_probe<typename decltype(container)::registry_type>;
+  auto &before = container.template resolve<typed_key_cached_processor &>(
+      key<processor_key>{});
+  ASSERT_EQ(
+      (probe::template default_typed_key_lookup_index_row_count<
+          typed_key_cached_processor, processor_key>(container.registry())),
+      1U);
+
   EXPECT_THROW(
       (container.template register_type<
           scope<shared>, storage<typed_key_cached_processor_impl>,
           interfaces<typed_key_cached_processor>, key<processor_key>>()),
       type_index_already_registered_exception);
+
+  auto &after = container.template resolve<typed_key_cached_processor &>(
+      key<processor_key>{});
+  ASSERT_EQ(
+      (probe::template default_typed_key_lookup_index_row_count<
+          typed_key_cached_processor, processor_key>(container.registry())),
+      1U);
+  ASSERT_EQ(&after, &before);
 
   auto processors =
       container
@@ -822,86 +851,6 @@ TEST(index_test, child_implicit_typed_key_collection_does_not_merge_parent) {
   ASSERT_EQ(processors.values[0]->id(), 2);
 }
 
-TEST(index_test, implicit_unkeyed_registration_records_no_key_one) {
-  runtime_container<> container;
-  container.template register_type<scope<shared>,
-                                   storage<typed_key_cached_processor_impl>,
-                                   interfaces<typed_key_cached_processor>>();
-
-  using probe = slot_key_probe<decltype(container)>;
-  ASSERT_TRUE((probe::template selected_no_key_slot_key_matches<
-               typed_key_cached_processor, typed_key_cached_processor, one>(
-      container.registry())));
-}
-
-TEST(index_test, explicit_collection_registration_records_no_key_many) {
-  struct traits : dynamic_container_traits {
-    using lookup_definition_type =
-        lookups<collection<typed_key_cached_processor>>;
-  };
-
-  runtime_container<traits> container;
-  container.template register_type<scope<shared>,
-                                   storage<typed_key_cached_processor_impl>,
-                                   interfaces<typed_key_cached_processor>>();
-
-  using probe = slot_key_probe<decltype(container)>;
-  ASSERT_TRUE((probe::template selected_no_key_slot_key_matches<
-               typed_key_cached_processor, typed_key_cached_processor, many>(
-      container.registry())));
-}
-
-TEST(index_test, implicit_typed_key_registration_records_typed_key_one) {
-  struct processor_key {};
-
-  runtime_container<> container;
-  container.template register_type<
-      scope<shared>, storage<typed_key_cached_processor_impl>,
-      interfaces<typed_key_cached_processor>, key<processor_key>>();
-
-  using probe = slot_key_probe<decltype(container)>;
-  ASSERT_TRUE(
-      (probe::template selected_typed_key_slot_key_matches<
-          typed_key_cached_processor, typed_key_cached_processor, processor_key,
-          one>(container.registry(), key<processor_key>{})));
-}
-
-TEST(index_test, explicit_typed_key_many_registration_records_typed_key_many) {
-  struct processor_key {};
-  struct traits : dynamic_container_traits {
-    using lookup_definition_type =
-        lookups<typed<processor_key, typed_key_cached_processor, many>>;
-  };
-
-  runtime_container<traits> container;
-  container.template register_type<
-      scope<shared>, storage<typed_key_cached_processor_impl>,
-      interfaces<typed_key_cached_processor>, key<processor_key>>();
-
-  using probe = slot_key_probe<decltype(container)>;
-  ASSERT_TRUE(
-      (probe::template selected_typed_key_slot_key_matches<
-          typed_key_cached_processor, typed_key_cached_processor, processor_key,
-          many>(container.registry(), key<processor_key>{})));
-}
-
-TEST(index_test, associative_one_registration_records_runtime_key_one) {
-  struct traits : dynamic_container_traits {
-    using lookup_definition_type =
-        lookups<associative<std::size_t, typed_key_cached_processor>>;
-  };
-
-  runtime_container<traits> container;
-  container.template register_indexed_type<
-      scope<shared>, storage<typed_key_cached_processor_impl>,
-      interfaces<typed_key_cached_processor>>(std::size_t(7));
-
-  using probe = slot_key_probe<decltype(container)>;
-  ASSERT_TRUE((probe::template selected_runtime_key_slot_key_matches<
-               typed_key_cached_processor, typed_key_cached_processor,
-               std::size_t, one>(container.registry(), std::size_t(7))));
-}
-
 TEST(index_test, runtime_key_one_lookup_uses_equal_distinct_key_object) {
   struct comparable_key {
     int value;
@@ -937,110 +886,7 @@ TEST(index_test, runtime_key_one_lookup_uses_equal_distinct_key_object) {
   ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
 }
 
-TEST(index_test, associative_many_registration_records_runtime_key_many) {
-  struct traits : dynamic_container_traits {
-    using lookup_definition_type =
-        lookups<associative<std::size_t, typed_key_cached_processor, many>>;
-  };
-
-  runtime_container<traits> container;
-  container.template register_indexed_type<
-      scope<shared>, storage<typed_key_cached_processor_impl>,
-      interfaces<typed_key_cached_processor>>(std::size_t(7));
-
-  using probe = slot_key_probe<decltype(container)>;
-  ASSERT_TRUE((probe::template selected_runtime_key_slot_key_matches<
-               typed_key_cached_processor, typed_key_cached_processor,
-               std::size_t, many>(container.registry(), std::size_t(7))));
-}
-
-TEST(index_test, slot_storage_no_key_one_rejects_duplicate_inline) {
-  struct processor {};
-  struct first_storage {};
-  struct second_storage {};
-  using lookup_entry = detail::lookup_entry<processor, no_key, one, ordered>;
-  using storage_type =
-      detail::slot_storage<lookup_entry, slot_test_entry, slot_test_allocator>;
-
-  test_allocator_state state;
-  slot_test_allocator allocator(&state);
-  storage_type storage(allocator);
-  slot_test_entry first_entry(
-      detail::make_slot_key<slot_test_rtti, processor, no_key, one>(),
-      slot_test_rtti::template get_type_index<first_storage>());
-  slot_test_entry second_entry(
-      detail::make_slot_key<slot_test_rtti, processor, no_key, one>(),
-      slot_test_rtti::template get_type_index<second_storage>());
-
-  ASSERT_FALSE(storage.conflicts(first_entry));
-  storage.insert(first_entry);
-  ASSERT_EQ(state.allocations, 0);
-  ASSERT_TRUE(storage.conflicts(second_entry));
-  ASSERT_EQ(storage.for_each([](auto &) {}), 1U);
-
-  bool ambiguous = false;
-  auto *selected = storage.find_singular(ambiguous);
-  ASSERT_FALSE(ambiguous);
-  ASSERT_EQ(selected, &first_entry);
-}
-
-TEST(index_test, slot_storage_typed_key_many_tracks_ambiguity_and_storage) {
-  struct processor {};
-  struct processor_key {};
-  struct first_storage {};
-  struct second_storage {};
-  using lookup_entry =
-      detail::lookup_entry<processor, typed_key<processor_key>, many, ordered>;
-  using storage_type =
-      detail::slot_storage<lookup_entry, slot_test_entry, slot_test_allocator>;
-
-  test_allocator_state state;
-  slot_test_allocator allocator(&state);
-  storage_type storage(allocator);
-  slot_test_entry first_entry(
-      detail::make_slot_key<slot_test_rtti, processor, typed_key<processor_key>,
-                            many>(),
-      slot_test_rtti::template get_type_index<first_storage>());
-  slot_test_entry duplicate_storage_entry(
-      detail::make_slot_key<slot_test_rtti, processor, typed_key<processor_key>,
-                            many>(),
-      slot_test_rtti::template get_type_index<first_storage>());
-  slot_test_entry second_entry(
-      detail::make_slot_key<slot_test_rtti, processor, typed_key<processor_key>,
-                            many>(),
-      slot_test_rtti::template get_type_index<second_storage>());
-
-  storage.insert(first_entry);
-  ASSERT_GT(state.allocations, 0);
-  ASSERT_FALSE(storage.conflicts(duplicate_storage_entry));
-  ASSERT_FALSE(storage.conflicts(second_entry));
-
-  storage.insert(duplicate_storage_entry);
-  storage.insert(second_entry);
-  ASSERT_GT(state.allocations, 0);
-  ASSERT_EQ(storage.for_each([](auto &) {}), 3U);
-
-  bool ambiguous = false;
-  ASSERT_EQ(storage.find_singular(ambiguous), nullptr);
-  ASSERT_TRUE(ambiguous);
-
-  std::size_t visits = 0;
-  ASSERT_EQ(storage.for_each([&](auto &entry) {
-    ++visits;
-    ASSERT_TRUE(&entry == &first_entry || &entry == &duplicate_storage_entry ||
-                &entry == &second_entry);
-  }),
-            3U);
-  ASSERT_EQ(visits, 3U);
-
-  storage.erase(first_entry);
-  ASSERT_EQ(storage.for_each([](auto &) {}), 2U);
-  ambiguous = true;
-  ASSERT_EQ(storage.find_singular(ambiguous), nullptr);
-  ASSERT_TRUE(ambiguous);
-}
-
-TEST(index_test, production_slots_are_generic_lookup_slots) {
+TEST(index_test, production_runtime_bindings_use_entry_owner_and_lookup_index) {
   struct no_key_one_processor {};
   struct no_key_many_processor {};
   struct typed_key_one_processor {};
@@ -1057,75 +903,12 @@ TEST(index_test, production_slots_are_generic_lookup_slots) {
                 associative<std::size_t, runtime_key_one_processor, one>,
                 associative<std::size_t, runtime_key_many_processor, many>>;
   };
-  using container_type = container<traits, slot_test_allocator>;
+  using container_type = container<traits, test_allocator<char>>;
   using probe =
       detail::runtime_slot_probe<typename container_type::registry_type>;
 
   static_assert(probe::runtime_bindings_state_has_lookup_index());
   static_assert(probe::runtime_bindings_state_has_entry_owner());
-  static_assert(probe::runtime_type_bindings_uses_shared_entry_owner());
-  static_assert(
-      probe::template no_key_slot_is_lookup_slot<no_key_one_processor, one>());
-  static_assert(
-      probe::template typed_key_slot_is_lookup_slot<typed_key_one_processor,
-                                                    processor_key, one>());
-  static_assert(
-      probe::template no_key_slot_is_lookup_slot<no_key_many_processor,
-                                                 many>());
-  static_assert(
-      probe::template typed_key_slot_is_lookup_slot<typed_key_many_processor,
-                                                    processor_key, many>());
-  static_assert(
-      probe::template runtime_key_slot_is_lookup_slot<runtime_key_one_processor,
-                                                      std::size_t>());
-  static_assert(probe::template runtime_key_slot_is_lookup_slot<
-                runtime_key_many_processor, std::size_t>());
-}
-
-TEST(index_test,
-     slot_storage_runtime_key_one_rejects_duplicate_without_row_growth) {
-  struct processor {};
-  struct first_storage {};
-  struct second_storage {};
-  using runtime_lookup_entry =
-      detail::lookup_entry<processor, runtime_key<std::size_t>, one, ordered>;
-  struct entry {
-    entry(slot_test_key &&resolved_key,
-          typename slot_test_rtti::type_index resolved_storage_type)
-        : storage_type(std::move(resolved_storage_type)),
-          key(std::move(resolved_key)) {}
-
-    typename slot_test_rtti::type_index storage_type;
-    slot_test_key key;
-  };
-
-  test_allocator_state state;
-  {
-    slot_test_allocator allocator(&state);
-    detail::slot_storage<runtime_lookup_entry, entry, slot_test_allocator>
-        storage(allocator);
-    entry first_entry(detail::make_slot_key<slot_test_rtti, processor,
-                                            runtime_key<std::size_t>, one>(),
-                      slot_test_rtti::template get_type_index<first_storage>());
-    entry second_entry(
-        detail::make_slot_key<slot_test_rtti, processor,
-                              runtime_key<std::size_t>, one>(),
-        slot_test_rtti::template get_type_index<second_storage>());
-
-    ASSERT_TRUE(storage.insert(first_entry, std::size_t(7)));
-    const auto allocations_after_first_insert = state.allocations;
-
-    ASSERT_TRUE(storage.conflicts(second_entry, std::size_t(7)));
-    ASSERT_EQ(state.allocations, allocations_after_first_insert);
-    ASSERT_EQ(storage.for_each(std::size_t(7), [](auto &) {}), 1U);
-
-    bool ambiguous = false;
-    auto *selected = storage.find_singular(std::size_t(7), ambiguous);
-    ASSERT_FALSE(ambiguous);
-    ASSERT_EQ(selected, &first_entry);
-  }
-
-  ASSERT_EQ(state.deallocations, state.allocations);
 }
 
 TEST(index_test, no_key_many_lookup_covers_empty_exact_ambiguous) {
@@ -2291,6 +2074,56 @@ TEST(index_test, typed_key_one_lookup_reuses_entry_cache) {
   ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
 }
 
+TEST(index_test, failed_typed_key_one_registration_preserves_lookup_rows) {
+  struct processor_key {};
+
+  struct traits : dynamic_container_traits {
+    using lookup_definition_type =
+        lookups<typed<processor_key, typed_key_cached_processor, one>>;
+  };
+
+  typed_key_cached_processor_impl::constructions = 0;
+
+  container<traits> container;
+  container.template register_type<
+      scope<shared>, storage<typed_key_cached_processor_impl>,
+      interfaces<typed_key_cached_processor>, key<processor_key>>();
+
+  using probe =
+      detail::runtime_slot_probe<typename decltype(container)::registry_type>;
+  using lookup_entry = typename probe::template typed_key_lookup_entry<
+      typed_key_cached_processor, processor_key, one>;
+
+  auto &before = container.template resolve<typed_key_cached_processor &>(
+      key<processor_key>{});
+  ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
+                container.registry(), none_t{}),
+            1U);
+  ASSERT_EQ(
+      (probe::template default_typed_key_lookup_index_row_count<
+          typed_key_cached_processor, processor_key>(container.registry())),
+      0U);
+
+  EXPECT_THROW(
+      (container.template register_type<
+          scope<shared>, storage<typed_key_cached_processor_impl>,
+          interfaces<typed_key_cached_processor>, key<processor_key>>()),
+      type_index_already_registered_exception);
+
+  auto &after = container.template resolve<typed_key_cached_processor &>(
+      key<processor_key>{});
+  ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
+                container.registry(), none_t{}),
+            1U);
+  ASSERT_EQ(
+      (probe::template default_typed_key_lookup_index_row_count<
+          typed_key_cached_processor, processor_key>(container.registry())),
+      0U);
+  ASSERT_EQ(&after, &before);
+  ASSERT_EQ(after.id(), 42);
+  ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
+}
+
 TEST(index_test, exception_message_index_out_of_range_negative) {
   auto e = detail::make_type_index_out_of_range_exception(-1, std::size_t(2));
 
@@ -2513,7 +2346,7 @@ TEST(index_test, runtime_key_lookup_backend_uses_rebound_allocator) {
     container.template register_indexed_type<scope<shared>, storage<dog>,
                                              interfaces<animal>>(small_key{7});
 
-    ASSERT_EQ(small_state.allocations, 6);
+    ASSERT_EQ(small_state.allocations, 4);
     ASSERT_EQ(container.template resolve<animal &>(small_key{7}).id(), 11);
   }
 
@@ -2533,7 +2366,7 @@ TEST(index_test, runtime_key_lookup_backend_uses_rebound_allocator) {
                                              interfaces<animal>>(
         allocator_visible_key{7});
 
-    ASSERT_EQ(state.allocations, 6);
+    ASSERT_EQ(state.allocations, 4);
     ASSERT_GE(state.largest_allocation_bytes, sizeof(allocator_visible_key));
     ASSERT_EQ(
         container.template resolve<animal &>(allocator_visible_key{7}).id(),

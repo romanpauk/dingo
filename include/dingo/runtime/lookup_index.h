@@ -18,6 +18,32 @@
 
 namespace dingo::detail {
 
+template <typename Rtti> struct default_lookup_key {
+  using type_index = typename Rtti::type_index;
+
+  type_index interface_type;
+  type_index key_type;
+
+  bool operator<(const default_lookup_key &other) const {
+    if (interface_type < other.interface_type) {
+      return true;
+    }
+    if (other.interface_type < interface_type) {
+      return false;
+    }
+    return key_type < other.key_type;
+  }
+
+  bool operator==(const default_lookup_key &other) const {
+    return interface_type == other.interface_type && key_type == other.key_type;
+  }
+};
+
+template <typename Rtti> struct default_lookup_entry {
+  using cardinality = ::dingo::one;
+  using backend_type = ::dingo::ordered;
+};
+
 template <typename Value, typename Cardinality, typename Allocator>
 class static_key_lookup_storage;
 
@@ -168,6 +194,12 @@ struct lookup_backend_storage<
     lookup_entry<Interface, ::dingo::typed_key<Key>, Cardinality, Backend>,
     Value, Allocator> {
   using type = static_key_lookup_storage<Value, Cardinality, Allocator>;
+};
+
+template <typename Rtti, typename Value, typename Allocator>
+struct lookup_backend_storage<default_lookup_entry<Rtti>, Value, Allocator> {
+  using type = typename ::dingo::ordered::template storage<
+      default_lookup_key<Rtti>, Value, ::dingo::one, Allocator>;
 };
 
 template <typename Entry, typename Value, typename Allocator>
