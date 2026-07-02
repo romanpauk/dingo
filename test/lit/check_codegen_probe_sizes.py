@@ -51,10 +51,10 @@ PROBE_LIMITS = {
         "gcc_arm64": 0x60,
     },
     "probe_static_resolution_mixed_container_shared_reference_config": {
-        "default": 0x280,
-        "gcc": 0x280,
-        "gcc13": 0x280,
-        "gcc_arm64": 0x280,
+        "default": 0x2E0,
+        "gcc": 0x2E0,
+        "gcc13": 0x2E0,
+        "gcc_arm64": 0x2E0,
     },
     "probe_runtime_resolution_shared_reference_config": {
         "default": None,

@@ -484,7 +484,8 @@ protected:
       detail::contains_lookup_definition<LookupEntry,
                                          lookup_index_entries>::value;
 
-  struct runtime_binding_value : binding_cache_state {
+  struct runtime_binding_value : runtime_binding_interface<container_type>,
+                                 binding_cache_state {
     runtime_binding_value(const runtime_binding_value &) = delete;
     runtime_binding_value &operator=(const runtime_binding_value &) = delete;
     runtime_binding_value(runtime_binding_value &&) = delete;
@@ -492,7 +493,6 @@ protected:
 
     virtual ~runtime_binding_value() = default;
 
-    virtual runtime_binding_interface<container_type> *binding() = 0;
     virtual void destroy() = 0;
 
   protected:
@@ -505,8 +505,28 @@ protected:
     explicit runtime_binding_value_impl(Args &&...args)
         : binding_(std::forward<Args>(args)...) {}
 
-    runtime_binding_interface<container_type> *binding() override {
-      return std::addressof(binding_);
+    void *get_value(runtime_context &context,
+                    const instance_request<rtti_type> &request,
+                    instance_cache_sink cache_sink) override {
+      return binding_.get_value(context, request, cache_sink);
+    }
+
+    void *get_lvalue_reference(runtime_context &context,
+                               const instance_request<rtti_type> &request,
+                               instance_cache_sink cache_sink) override {
+      return binding_.get_lvalue_reference(context, request, cache_sink);
+    }
+
+    void *get_rvalue_reference(runtime_context &context,
+                               const instance_request<rtti_type> &request,
+                               instance_cache_sink cache_sink) override {
+      return binding_.get_rvalue_reference(context, request, cache_sink);
+    }
+
+    void *get_pointer(runtime_context &context,
+                      const instance_request<rtti_type> &request,
+                      instance_cache_sink cache_sink) override {
+      return binding_.get_pointer(context, request, cache_sink);
     }
 
     typename Binding::container_type &container() {
@@ -1045,8 +1065,7 @@ protected:
     using resolve_type = typename collection_type::resolve_type;
     return for_each_collection_entry<T>(
         runtime_bindings_, id, [&](auto &entry) {
-          fn(results,
-             resolve_collection_type<resolve_type>(*entry.binding(), context));
+          fn(results, resolve_collection_type<resolve_type>(entry, context));
         });
   }
 
@@ -1124,8 +1143,8 @@ private:
       return runtime_selection::ambiguity();
     }
     return detail::make_runtime_selection<runtime_binding_interface_type,
-                                          binding_cache_state *>(
-        selected ? selected->binding() : nullptr, selected);
+                                          binding_cache_state *>(selected,
+                                                                 selected);
   }
 
   template <typename Value>
