@@ -125,6 +125,7 @@ if(DINGO_DEVELOPMENT_MODE)
         runtime_container.h
         runtime/container_traits.h
         runtime/registration_api.h
+        runtime/lookup_index.h
         runtime/registry.h
         static_container.h
         lookup/array.h
