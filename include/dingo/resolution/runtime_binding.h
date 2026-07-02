@@ -38,30 +38,31 @@ public:
   runtime_binding_state(ParentContainer *parent, Args &&...args)
       : storage_(std::forward<Args>(args)...), parent_(parent) {}
 
+  detail::context_closure &closure() { return closure_; }
   Storage &storage_ref() { return storage_; }
-  InstanceContainer &instance_container(detail::context_closure_base &closure) {
-    return container(closure);
-  }
-  ResolutionContainer &
-  resolution_container(detail::context_closure_base &closure) {
+  InstanceContainer &instance_container() { return container(); }
+  ResolutionContainer &resolution_container() {
     if (!resolution_container_) {
       resolution_container_ =
-          std::addressof(closure.template construct<ResolutionContainer>(
+          std::addressof(closure_.template construct<ResolutionContainer>(
               parent_, parent_->get_allocator()));
     }
     return *resolution_container_;
   }
 
-  InstanceContainer &container(detail::context_closure_base &closure) {
+  InstanceContainer &container() {
     if (!instance_container_) {
       instance_container_ =
-          std::addressof(closure.template construct<InstanceContainer>(
+          std::addressof(closure_.template construct<InstanceContainer>(
               parent_, parent_->get_allocator()));
     }
     return *instance_container_;
   }
 
 private:
+  // Storage is declared after the closure so cached instances are destroyed
+  // before preserved construction temporaries.
+  detail::context_closure closure_;
   Storage storage_;
   parent_container_type *parent_;
   InstanceContainer *instance_container_ = nullptr;
@@ -82,25 +83,24 @@ public:
   runtime_binding_state(ParentContainer *parent, Args &&...args)
       : storage_(std::forward<Args>(args)...), parent_(parent) {}
 
+  detail::context_closure &closure() { return closure_; }
   Storage &storage_ref() { return storage_; }
-  InstanceContainer &instance_container(detail::context_closure_base &closure) {
-    return container(closure);
-  }
-  InstanceContainer &
-  resolution_container(detail::context_closure_base &closure) {
-    return container(closure);
-  }
+  InstanceContainer &instance_container() { return container(); }
+  InstanceContainer &resolution_container() { return container(); }
 
-  InstanceContainer &container(detail::context_closure_base &closure) {
+  InstanceContainer &container() {
     if (!instance_container_) {
       instance_container_ =
-          std::addressof(closure.template construct<InstanceContainer>(
+          std::addressof(closure_.template construct<InstanceContainer>(
               parent_, parent_->get_allocator()));
     }
     return *instance_container_;
   }
 
 private:
+  // Storage is declared after the closure so cached instances are destroyed
+  // before preserved construction temporaries.
+  detail::context_closure closure_;
   Storage storage_;
   parent_container_type *parent_;
   InstanceContainer *instance_container_ = nullptr;
@@ -221,15 +221,13 @@ private:
     }
   };
 
-  detail::context_closure closure_;
-  // `state_` must be destroyed before binding state so shared storage can
-  // tear down cached instances before preserved construction temporaries.
   State state_;
 
   state_type &state_ref() { return state_traits::ref(state_); }
+  auto &closure() { return state_ref().closure(); }
   auto &get_storage() { return state_ref().storage_ref(); }
   auto &get_resolution_container() {
-    return state_ref().resolution_container(closure_);
+    return state_ref().resolution_container();
   }
 
   static constexpr type_descriptor registered_type() {
@@ -271,7 +269,7 @@ public:
   template <typename... Args>
   runtime_binding(Args &&...args) : state_(std::forward<Args>(args)...) {}
 
-  auto &get_container() { return state_ref().container(closure_); }
+  auto &get_container() { return state_ref().container(); }
 
   void *get_value(runtime_context &context, const request_type &request,
                   instance_cache_sink cache) override {
@@ -313,7 +311,7 @@ public:
 
     using Target = std::remove_reference_t<resolved_type_t<T, Type>>;
     return detail::materialize_binding_resolution_source(
-        context, get_storage(), get_resolution_container(), closure_,
+        context, get_storage(), get_resolution_container(), closure(),
         [&](auto &&source) -> void * {
           return detail::resolve_binding_address_from_source<Target>(
               *this, context, std::forward<decltype(source)>(source),
@@ -326,7 +324,7 @@ public:
 
   template <typename Context> decltype(auto) resolve(Context &context) {
     return detail::materialize_binding_resolution_source(
-        context, get_storage(), get_resolution_container(), closure_,
+        context, get_storage(), get_resolution_container(), closure(),
         [](auto &&source) -> decltype(auto) {
           return std::forward<decltype(source)>(source).get();
         });
@@ -336,7 +334,7 @@ public:
   decltype(auto) resolve(Context &context) {
     binding_activation activation{*this};
     return detail::materialize_binding_resolution_source(
-        context, get_storage(), get_resolution_container(), closure_,
+        context, get_storage(), get_resolution_container(), closure(),
         [&](auto &&source) -> decltype(auto) {
           return detail::resolve_binding_value<T>(
               activation, context, std::forward<decltype(source)>(source));

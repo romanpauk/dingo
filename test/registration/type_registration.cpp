@@ -424,17 +424,16 @@ TEST(type_registration_test,
   runtime_binding_state<counting_runtime_binding_container,
                         counting_runtime_binding_storage>
       state(&parent);
-  detail::context_closure closure;
 
   EXPECT_EQ(counting_runtime_binding_container::constructions, 0);
   (void)state.storage_ref();
   EXPECT_EQ(counting_runtime_binding_container::constructions, 0);
 
-  auto &container = state.container(closure);
+  auto &container = state.container();
   EXPECT_EQ(counting_runtime_binding_container::constructions, 1);
-  EXPECT_EQ(std::addressof(state.instance_container(closure)),
+  EXPECT_EQ(std::addressof(state.instance_container()),
             std::addressof(container));
-  EXPECT_EQ(std::addressof(state.resolution_container(closure)),
+  EXPECT_EQ(std::addressof(state.resolution_container()),
             std::addressof(container));
   EXPECT_EQ(counting_runtime_binding_container::constructions, 1);
 }
