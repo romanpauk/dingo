@@ -153,17 +153,40 @@ TEST(associative_backend_test, unordered_one_uses_runtime_key_lookup) {
         lookups<associative<std::size_t, processor, one, unordered>>;
   };
 
-  container<traits> container;
+  using container_type = container<traits>;
+  using probe =
+      detail::runtime_slot_probe<typename container_type::registry_type>;
+  using lookup_entry =
+      typename probe::template runtime_key_lookup_entry<processor, std::size_t>;
+
+  container_type container;
   container.template register_indexed_type<
       scope<shared>, storage<first_processor>, interfaces<processor>>(
       std::size_t(7));
 
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(7)).id(), 1);
+  ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
+                container.registry(), std::size_t(7)),
+            1U);
   EXPECT_THROW(
       (container.template register_indexed_type<
           scope<shared>, storage<second_processor>, interfaces<processor>>(
           std::size_t(7))),
       type_index_already_registered_exception);
+  ASSERT_EQ(container.template resolve<processor &>(std::size_t(7)).id(), 1);
+  ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
+                container.registry(), std::size_t(7)),
+            1U);
+  ASSERT_FALSE(
+      probe::template lookup_slot_empty<lookup_entry>(container.registry()));
+
+  container.template register_indexed_type<
+      scope<shared>, storage<second_processor>, interfaces<processor>>(
+      std::size_t(8));
+  ASSERT_EQ(container.template resolve<processor &>(std::size_t(8)).id(), 2);
+  ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
+                container.registry(), std::size_t(8)),
+            1U);
 }
 
 TEST(associative_backend_test, unordered_many_resolves_duplicate_key_entries) {
@@ -237,6 +260,57 @@ TEST(associative_backend_test, array_one_uses_dense_key_lookup) {
                type_not_found_exception);
 }
 
+TEST(associative_backend_test,
+     array_one_out_of_range_registration_rolls_back_runtime_key_rows) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct processor_impl : processor {
+    int id() const override { return 1; }
+  };
+  struct out_of_range_processor : processor {
+    int id() const override { return 2; }
+  };
+
+  struct traits : dynamic_container_traits {
+    using lookup_definition_type =
+        lookups<associative<std::size_t, processor, one, array<1>>>;
+  };
+
+  using container_type = container<traits>;
+  using probe =
+      detail::runtime_slot_probe<typename container_type::registry_type>;
+  using lookup_entry =
+      typename probe::template runtime_key_lookup_entry<processor, std::size_t>;
+
+  container_type container;
+  EXPECT_THROW((container.template register_indexed_type<
+                   scope<shared>, storage<out_of_range_processor>,
+                   interfaces<processor>>(std::size_t(1))),
+               std::out_of_range);
+  ASSERT_TRUE(
+      probe::template lookup_slot_empty<lookup_entry>(container.registry()));
+  ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
+                container.registry(), std::size_t(1)),
+            0U);
+  EXPECT_THROW((container.template resolve<processor &>(std::size_t(1))),
+               type_not_found_exception);
+
+  container.template register_indexed_type<
+      scope<shared>, storage<processor_impl>, interfaces<processor>>(
+      std::size_t(0));
+  ASSERT_EQ(container.template resolve<processor &>(std::size_t(0)).id(), 1);
+  ASSERT_FALSE(
+      probe::template lookup_slot_empty<lookup_entry>(container.registry()));
+  ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
+                container.registry(), std::size_t(0)),
+            1U);
+  ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
+                container.registry(), std::size_t(1)),
+            0U);
+}
+
 TEST(associative_backend_test, array_many_uses_dense_key_rows) {
   struct processor {
     virtual ~processor() = default;
@@ -297,6 +371,61 @@ TEST(associative_backend_test, array_many_uses_dense_key_rows) {
                    scope<shared>, storage<out_of_range_processor>,
                    interfaces<processor>>(std::size_t(4))),
                std::out_of_range);
+}
+
+TEST(associative_backend_test,
+     array_many_out_of_range_registration_rolls_back_runtime_key_rows) {
+  struct processor {
+    virtual ~processor() = default;
+    virtual int id() const = 0;
+  };
+  struct processor_impl : processor {
+    int id() const override { return 1; }
+  };
+  struct out_of_range_processor : processor {
+    int id() const override { return 2; }
+  };
+
+  struct traits : dynamic_container_traits {
+    using lookup_definition_type =
+        lookups<associative<std::size_t, processor, many, array<1>>>;
+  };
+
+  using container_type = container<traits>;
+  using probe =
+      detail::runtime_slot_probe<typename container_type::registry_type>;
+  using lookup_entry =
+      typename probe::template runtime_key_lookup_entry<processor, std::size_t>;
+
+  container_type container;
+  EXPECT_THROW((container.template register_indexed_type<
+                   scope<shared>, storage<out_of_range_processor>,
+                   interfaces<processor>>(std::size_t(1))),
+               std::out_of_range);
+  ASSERT_TRUE(
+      probe::template lookup_slot_empty<lookup_entry>(container.registry()));
+  ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
+                container.registry(), std::size_t(1)),
+            0U);
+  ASSERT_TRUE(
+      container.template resolve<std::vector<processor *>>(std::size_t(1))
+          .empty());
+
+  container.template register_indexed_type<
+      scope<shared>, storage<processor_impl>, interfaces<processor>>(
+      std::size_t(0));
+  auto values =
+      container.template resolve<std::vector<processor *>>(std::size_t(0));
+  ASSERT_EQ(values.size(), 1U);
+  ASSERT_EQ(values[0]->id(), 1);
+  ASSERT_FALSE(
+      probe::template lookup_slot_empty<lookup_entry>(container.registry()));
+  ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
+                container.registry(), std::size_t(0)),
+            1U);
+  ASSERT_EQ(probe::template lookup_index_row_count<lookup_entry>(
+                container.registry(), std::size_t(1)),
+            0U);
 }
 
 TEST(associative_backend_test, custom_backend_uses_stl_like_try_emplace) {

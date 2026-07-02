@@ -1061,6 +1061,7 @@ TEST(index_test, production_slots_are_generic_lookup_slots) {
   using probe =
       detail::runtime_slot_probe<typename container_type::registry_type>;
 
+  static_assert(probe::runtime_bindings_state_has_lookup_index());
   static_assert(
       probe::template no_key_slot_is_lookup_slot<no_key_one_processor, one>());
   static_assert(
