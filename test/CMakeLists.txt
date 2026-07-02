@@ -66,6 +66,7 @@ add_executable(dingo_unit_test
     index/index.cpp
     memory/arena_allocator.cpp
     registration/binding_graph.cpp
+    registration/object_sizes.cpp
     registration/static_bindings_source.cpp
     registration/static_parent_container.cpp
     registration/type_registration.cpp
