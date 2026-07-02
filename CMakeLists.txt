@@ -142,7 +142,6 @@ if(DINGO_DEVELOPMENT_MODE)
         core/context_base.h
         runtime/context.h
         static/context.h
-        resolution/type_cache.h
         rtti/static_provider.h
         rtti/rtti.h
         rtti/typeid_provider.h

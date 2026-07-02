@@ -14,9 +14,9 @@ PROBE_LIMITS = {
         "gcc_arm64": 0x60,
     },
     "probe_static_resolution_mixed_container_consumer_read": {
-        "default": 0x7d0,
-        "gcc": 0x7d0,
-        "gcc_arm64": 0x7d0,
+        "default": 0x850,
+        "gcc": 0x850,
+        "gcc_arm64": 0x850,
     },
     "probe_runtime_resolution_consumer_read": {
         "default": None,

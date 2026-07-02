@@ -12,9 +12,9 @@ struct processor {
 struct processor_impl : processor {};
 
 struct traits : dingo::dynamic_container_traits {
-  using lookup_definition_type = dingo::lookups<
-      dingo::associative<int, processor>,
-      dingo::associative<std::string, processor>>;
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<int, processor>,
+                     dingo::associative<std::string, processor>>;
 };
 
 int main() {
@@ -26,4 +26,3 @@ int main() {
 
 // CHECK: runtime-key lookup registration requires exactly one
 // CHECK: dingo::key<K>{value} for each declared runtime-key lookup
-

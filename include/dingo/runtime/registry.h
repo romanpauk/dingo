@@ -85,8 +85,6 @@ class runtime_registry : public allocator_base<Allocator> {
       std::conditional_t<std::is_same_v<void, ParentRegistry>, registry_type,
                          ParentRegistry>;
 
-  static constexpr bool cache_enabled = ContainerTraits::cache_enabled;
-
 public:
   using container_traits_type = ContainerTraits;
   using allocator_type = Allocator;
@@ -273,22 +271,6 @@ protected:
       return construct_collection_runtime_request<R>(
           detail::binding_collection_append{}, none_t{});
     } else {
-      if constexpr (cache_enabled) {
-        if constexpr (is_none_v<std::decay_t<IdType>>) {
-          void *cache = runtime_bindings_.type_cache.template get<T>();
-          if (cache) {
-            return detail::convert_resolved_binding<request_interface_t<T>>(
-                cache);
-          }
-        } else {
-          auto selection = select_runtime_binding<T>(runtime_bindings_, id);
-          if (selection.found() && selection.state->cache) {
-            return detail::convert_resolved_binding<request_interface_t<T>>(
-                selection.state->cache);
-          }
-        }
-      }
-
       runtime_context context;
       return resolve_impl<T, true, false, false>(context,
                                                  std::forward<IdType>(id));
@@ -453,21 +435,7 @@ protected:
     return resolve<T, RemoveRvalueReferences>(context, collection_key<Key>());
   }
 
-  template <typename CachedT>
-  static void store_type_cache(void *context, void *ptr) {
-    static_cast<registry_type *>(context)
-        ->runtime_bindings_.type_cache.template insert<CachedT>(ptr);
-  }
-
-  static void store_index_cache(void *context, void *ptr) {
-    static_cast<binding_cache_state *>(context)->cache = ptr;
-  }
-
   template <typename T> static T &invalid_registration_return();
-
-  struct binding_cache_state {
-    void *cache = nullptr;
-  };
 
   using normalized_lookup_entries =
       detail::normalize_lookup_definitions_t<lookup_definition_type>;
@@ -486,7 +454,6 @@ protected:
 
   struct runtime_lookup_binding_view {
     runtime_binding_interface<container_type> *binding = nullptr;
-    binding_cache_state *cache = nullptr;
   };
 
   struct runtime_binding_value {
@@ -504,8 +471,7 @@ protected:
   };
 
   template <typename Binding>
-  struct runtime_binding_slot : runtime_binding_interface<container_type>,
-                                binding_cache_state {
+  struct runtime_binding_slot : runtime_binding_interface<container_type> {
     template <typename... Args>
     explicit runtime_binding_slot(Args &&...args)
         : binding_(std::forward<Args>(args)...) {}
@@ -590,7 +556,7 @@ protected:
                         typename annotated_traits<Interface>::type>) {
         auto &binding =
             static_cast<runtime_binding_slot_member<Index, Head> &>(*this);
-        return {std::addressof(binding), std::addressof(binding)};
+        return {std::addressof(binding)};
       } else if constexpr (sizeof...(Tail) > 0) {
         return view_impl<Interface, Index + 1, Tail...>();
       } else {
@@ -642,8 +608,6 @@ protected:
       return *view_.binding;
     }
 
-    binding_cache_state &cache() { return *view_.cache; }
-
   private:
     std::variant<unique_owner, shared_owner> value_;
     runtime_lookup_binding_view view_;
@@ -651,12 +615,10 @@ protected:
 
   struct runtime_bindings_state {
     explicit runtime_bindings_state(allocator_type &allocator)
-        : type_cache(allocator), lookup_indexes(allocator) {
+        : lookup_indexes(allocator) {
       validate_lookup_definitions();
     }
 
-    typename ContainerTraits::template type_cache_type<void *, allocator_type>
-        type_cache;
     detail::lookup_index<lookup_index_entries, runtime_lookup_value,
                          allocator_type>
         lookup_indexes;
@@ -676,8 +638,7 @@ protected:
   using runtime_binding_interface_type =
       runtime_binding_interface<container_type>;
   using runtime_selection =
-      detail::runtime_binding_selection<runtime_binding_interface_type,
-                                        binding_cache_state *>;
+      detail::runtime_binding_selection<runtime_binding_interface_type>;
 
   template <typename Key>
   using collection_key_t =
@@ -1049,19 +1010,8 @@ protected:
                               runtime_context &context, IdType &&id)
       -> request_interface_t<T> {
     (void)id;
-    if constexpr (is_none_v<std::decay_t<IdType>>) {
-      return resolve<T, request_interface_t<T>>(*selection.binding, context);
-    } else {
-      if constexpr (cache_enabled && CheckCache) {
-        if (selection.state->cache) {
-          return detail::convert_resolved_binding<request_interface_t<T>>(
-              selection.state->cache);
-        }
-      }
-
-      return resolve<T, request_interface_t<T>>(*selection.binding, context,
-                                                *selection.state);
-    }
+    (void)CheckCache;
+    return resolve<T, request_interface_t<T>>(*selection.binding, context);
   }
 
   template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
@@ -1198,9 +1148,7 @@ private:
     if constexpr (std::is_void_v<lookup_entry>) {
       if constexpr (!std::is_same_v<void, ParentRegistry> &&
                     !std::is_base_of_v<registry_type, resolve_root_type>) {
-        return detail::make_runtime_selection<runtime_binding_interface_type,
-                                              binding_cache_state *>(nullptr,
-                                                                     nullptr);
+        return runtime_selection::miss();
       } else {
         static_assert(!std::is_void_v<lookup_entry>,
                       "keyed registration or request has no matching "
@@ -1216,10 +1164,8 @@ private:
     if (ambiguous) {
       return runtime_selection::ambiguity();
     }
-    return detail::make_runtime_selection<runtime_binding_interface_type,
-                                          binding_cache_state *>(
-        selected ? &selected->binding() : nullptr,
-        selected ? &selected->cache() : nullptr);
+    return detail::make_runtime_selection<runtime_binding_interface_type>(
+        selected ? &selected->binding() : nullptr);
   }
 
   template <typename Value>
@@ -1740,12 +1686,7 @@ private:
     using Type = normalized_type_t<T>;
     static_assert(!std::is_const_v<Type>);
 
-    if constexpr (cache_enabled && CheckCache) {
-      void *cache = runtime_bindings_.type_cache.template get<T>();
-      if (cache) {
-        return detail::convert_resolved_binding<request_interface_t<T>>(cache);
-      }
-    }
+    (void)CheckCache;
 
     selected_runtime_binding<T, CheckCache, IdType> selected{*this, id};
     missing_runtime_binding<T, RemoveRvalueReferences, MayAutoConstruct, IdType>
@@ -1785,21 +1726,7 @@ private:
 
   template <typename CachedT, typename T, typename Binding, typename Context>
   T resolve(Binding &binding, Context &context) {
-    return ::dingo::resolve_binding_request<T, rtti_type>(
-        binding, context,
-        cache_enabled
-            ? instance_cache_sink{this,
-                                  &registry_type::store_type_cache<CachedT>}
-            : instance_cache_sink{});
-  }
-
-  template <typename CachedT, typename T, typename Binding, typename Context>
-  T resolve(Binding &binding, Context &context, binding_cache_state &data) {
-    return ::dingo::resolve_binding_request<T, rtti_type>(
-        binding, context,
-        cache_enabled
-            ? instance_cache_sink{&data, &registry_type::store_index_cache}
-            : instance_cache_sink{});
+    return ::dingo::resolve_binding_request<T, rtti_type>(binding, context);
   }
 
   template <typename T, typename Binding, typename Context>

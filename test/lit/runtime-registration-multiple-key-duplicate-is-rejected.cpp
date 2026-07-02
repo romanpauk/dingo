@@ -24,4 +24,3 @@ int main() {
 
 // CHECK: duplicate dingo::key<K>{value} arguments for runtime lookup
 // CHECK: registration
-

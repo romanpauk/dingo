@@ -27,7 +27,6 @@
 #include <dingo/registration/requirements.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/resolution/runtime_binding.h>
-#include <dingo/resolution/type_cache.h>
 #include <dingo/rtti/static_provider.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/runtime/container_traits.h>

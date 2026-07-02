@@ -26,4 +26,3 @@ int main() {
 
 // CHECK: supplied dingo::key<K>{value} has no matching runtime-key lookup
 // CHECK: definition for the registered interface
-

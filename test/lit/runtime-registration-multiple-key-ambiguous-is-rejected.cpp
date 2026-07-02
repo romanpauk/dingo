@@ -28,4 +28,3 @@ int main() {
 }
 
 // CHECK: supplied dingo::key<K>{value} is ambiguous for this registration
-

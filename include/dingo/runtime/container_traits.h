@@ -9,7 +9,6 @@
 
 #include <dingo/core/none.h>
 #include <dingo/detail/container_traits.h>
-#include <dingo/resolution/type_cache.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/type/type_list.h>
 #include <dingo/type/type_map.h>
@@ -27,11 +26,8 @@ struct dynamic_container_traits {
   using rtti_type = rtti<typeid_provider>;
   template <typename Value, typename Allocator>
   using type_map_type = dynamic_type_map<Value, rtti_type, Allocator>;
-  template <typename Value, typename Allocator>
-  using type_cache_type = dynamic_type_cache<Value, rtti_type, Allocator>;
   using allocator_type = std::allocator<char>;
   using lookup_definition_type = std::tuple<>;
-  static constexpr bool cache_enabled = true;
 };
 
 namespace detail {
