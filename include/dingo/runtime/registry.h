@@ -520,12 +520,7 @@ protected:
     }
   };
 
-  template <typename Interface, typename KeyDomain, typename Cardinality>
-  struct runtime_binding_slot {};
-
-  struct runtime_type_bindings {
-    template <typename RegistryT> friend struct detail::runtime_slot_probe;
-
+  struct runtime_binding_entry_owner {
     using entry_allocator = typename std::allocator_traits<
         allocator_type>::template rebind_alloc<registered_binding_entry>;
     using entry_list = std::list<registered_binding_entry, entry_allocator>;
@@ -537,6 +532,84 @@ protected:
       registered_binding_entry &operator*() const { return *ptr; }
     };
 
+    explicit runtime_binding_entry_owner(allocator_type &allocator)
+        : allocator_(std::addressof(allocator)),
+          entries_(detail::make_lookup_storage_allocator<entry_allocator>(
+              allocator)) {}
+
+    runtime_binding_entry_owner(const runtime_binding_entry_owner &) = delete;
+    runtime_binding_entry_owner &
+    operator=(const runtime_binding_entry_owner &) = delete;
+
+    bool empty() const { return entries_.empty(); }
+
+    template <typename Binding>
+    entry_handle emplace_entry(
+        Binding &&binding, typename rtti_type::type_index resolved_storage_type,
+        std::optional<typename rtti_type::type_index> resolved_key_type,
+        slot_key &&resolved_slot_key) {
+      entries_.emplace_back(
+          std::forward<Binding>(binding), std::move(resolved_storage_type),
+          std::move(resolved_key_type), std::move(resolved_slot_key));
+      auto entry = std::prev(entries_.end());
+      return {std::addressof(*entry), entry};
+    }
+
+    template <typename Binding, typename... Args>
+    std::pair<entry_handle, typename Binding::container_type *>
+    emplace_binding_entry(
+        typename rtti_type::type_index resolved_storage_type,
+        std::optional<typename rtti_type::type_index> resolved_key_type,
+        slot_key &&resolved_slot_key, Args &&...args) {
+      auto &&[binding, binding_container] = make_allocated_binding<Binding>(
+          *allocator_, std::forward<Args>(args)...);
+      try {
+        return {emplace_entry(
+                    std::move(binding), std::move(resolved_storage_type),
+                    std::move(resolved_key_type), std::move(resolved_slot_key)),
+                binding_container};
+      } catch (...) {
+        binding.reset();
+        throw;
+      }
+    }
+
+    void erase_entry(entry_handle entry) {
+      entries_.erase(entry.list_iterator);
+    }
+
+  private:
+    template <typename Binding, typename... Args>
+    static std::pair<
+        runtime_binding_ptr<runtime_binding_interface<container_type>>,
+        typename Binding::container_type *>
+    make_allocated_binding(allocator_type &allocator, Args &&...args) {
+      auto alloc = allocator_traits::rebind<Binding>(allocator);
+      auto *instance = allocator_traits::allocate(alloc, 1);
+      try {
+        allocator_traits::construct(alloc, instance,
+                                    std::forward<Args>(args)...);
+      } catch (...) {
+        allocator_traits::deallocate(alloc, instance, 1);
+        throw;
+      }
+      return {runtime_binding_ptr<runtime_binding_interface<container_type>>(
+                  instance, &registry_type::template destroy_binding<Binding>),
+              &instance->get_container()};
+    }
+
+    allocator_type *allocator_;
+    entry_list entries_;
+  };
+
+  template <typename Interface, typename KeyDomain, typename Cardinality>
+  struct runtime_binding_slot {};
+
+  struct runtime_type_bindings {
+    template <typename RegistryT> friend struct detail::runtime_slot_probe;
+
+    using entry_handle = typename runtime_binding_entry_owner::entry_handle;
+
   private:
     template <typename LookupEntry> struct lookup_slot;
 
@@ -545,8 +618,10 @@ protected:
 
     template <typename LookupEntry>
     runtime_type_bindings(allocator_type &allocator,
+                          runtime_binding_entry_owner &entry_owner,
                           lookup_slot_tag<LookupEntry> tag)
-        : allocator_(std::addressof(allocator)) {
+        : allocator_(std::addressof(allocator)),
+          entry_owner_(std::addressof(entry_owner)) {
       (void)tag;
       construct_slot<lookup_slot<LookupEntry>>(allocator);
       validate_lookup_definitions();
@@ -627,81 +702,6 @@ protected:
                     "domain");
     }
 
-    template <typename Binding, typename... Args>
-    static std::pair<
-        runtime_binding_ptr<runtime_binding_interface<container_type>>,
-        typename Binding::container_type *>
-    make_allocated_binding(allocator_type &allocator, Args &&...args) {
-      auto alloc = allocator_traits::rebind<Binding>(allocator);
-      auto *instance = allocator_traits::allocate(alloc, 1);
-      try {
-        allocator_traits::construct(alloc, instance,
-                                    std::forward<Args>(args)...);
-      } catch (...) {
-        allocator_traits::deallocate(alloc, instance, 1);
-        throw;
-      }
-      return {runtime_binding_ptr<runtime_binding_interface<container_type>>(
-                  instance, &registry_type::template destroy_binding<Binding>),
-              &instance->get_container()};
-    }
-
-    struct lookup_entry_owner {
-      explicit lookup_entry_owner(allocator_type &allocator)
-          : allocator_(std::addressof(allocator)),
-            entries(detail::make_lookup_storage_allocator<entry_allocator>(
-                allocator)) {}
-
-      lookup_entry_owner(const lookup_entry_owner &) = delete;
-      lookup_entry_owner &operator=(const lookup_entry_owner &) = delete;
-
-      bool empty() const { return entries.empty(); }
-
-      allocator_type *allocator() const { return allocator_; }
-
-      template <typename Binding>
-      entry_handle emplace_entry(
-          Binding &&binding,
-          typename rtti_type::type_index resolved_storage_type,
-          std::optional<typename rtti_type::type_index> resolved_key_type,
-          slot_key &&resolved_slot_key) {
-        entries.emplace_back(
-            std::forward<Binding>(binding), std::move(resolved_storage_type),
-            std::move(resolved_key_type), std::move(resolved_slot_key));
-        auto entry = std::prev(entries.end());
-        return {std::addressof(*entry), entry};
-      }
-
-      template <typename Binding, typename... Args>
-      std::pair<entry_handle, typename Binding::container_type *>
-      emplace_binding_entry(
-          typename rtti_type::type_index resolved_storage_type,
-          std::optional<typename rtti_type::type_index> resolved_key_type,
-          slot_key &&resolved_slot_key, Args &&...args) {
-        auto &&[binding, binding_container] =
-            runtime_type_bindings::make_allocated_binding<Binding>(
-                *allocator_, std::forward<Args>(args)...);
-        try {
-          return {emplace_entry(std::move(binding),
-                                std::move(resolved_storage_type),
-                                std::move(resolved_key_type),
-                                std::move(resolved_slot_key)),
-                  binding_container};
-        } catch (...) {
-          binding.reset();
-          throw;
-        }
-      }
-
-      void erase_entry(entry_handle entry) {
-        entries.erase(entry.list_iterator);
-      }
-
-    private:
-      allocator_type *allocator_;
-      entry_list entries;
-    };
-
     template <typename LookupEntry>
     using slot_storage_type =
         detail::slot_storage<LookupEntry, registered_binding_entry,
@@ -710,39 +710,12 @@ protected:
     template <typename LookupEntry> struct lookup_slot {
       using storage_type = slot_storage_type<LookupEntry>;
 
-      explicit lookup_slot(allocator_type &allocator)
-          : owner(allocator), storage(allocator) {}
+      explicit lookup_slot(allocator_type &allocator) : storage(allocator) {}
 
       lookup_slot(const lookup_slot &) = delete;
       lookup_slot &operator=(const lookup_slot &) = delete;
 
-      bool empty() const { return owner.empty() && empty_storage(); }
-
-      allocator_type *allocator() const { return owner.allocator(); }
-
-      template <typename Binding>
-      entry_handle emplace_entry(
-          Binding &&binding,
-          typename rtti_type::type_index resolved_storage_type,
-          std::optional<typename rtti_type::type_index> resolved_key_type,
-          slot_key &&resolved_slot_key) {
-        return owner.emplace_entry(
-            std::forward<Binding>(binding), std::move(resolved_storage_type),
-            std::move(resolved_key_type), std::move(resolved_slot_key));
-      }
-
-      template <typename Binding, typename... Args>
-      std::pair<entry_handle, typename Binding::container_type *>
-      emplace_binding_entry(
-          typename rtti_type::type_index resolved_storage_type,
-          std::optional<typename rtti_type::type_index> resolved_key_type,
-          slot_key &&resolved_slot_key, Args &&...args) {
-        return owner.template emplace_binding_entry<Binding>(
-            std::move(resolved_storage_type), std::move(resolved_key_type),
-            std::move(resolved_slot_key), std::forward<Args>(args)...);
-      }
-
-      void erase_entry(entry_handle entry) { owner.erase_entry(entry); }
+      bool empty() const { return empty_storage(); }
 
       template <typename KeyArg>
       auto insert(registered_binding_entry &entry, const KeyArg &key_arg) {
@@ -775,7 +748,6 @@ protected:
         return storage.for_each(key_value, std::forward<Fn>(fn));
       }
 
-      lookup_entry_owner owner;
       storage_type storage;
 
     private:
@@ -824,7 +796,6 @@ protected:
       destroy_ = &destroy_allocated_slot<Slot>;
       storage_ = slot;
       storage_type_ = std::addressof(storage_type_token<Slot>());
-      entry_owner_ = std::addressof(slot->owner);
     }
 
     void destroy_storage() noexcept {
@@ -867,16 +838,17 @@ protected:
 
     allocator_type *allocator_ = nullptr;
     void *storage_ = nullptr;
-    lookup_entry_owner *entry_owner_ = nullptr;
+    runtime_binding_entry_owner *entry_owner_ = nullptr;
     void (*destroy_)(allocator_type &, void *) noexcept = nullptr;
     const void *storage_type_ = nullptr;
   };
 
   struct runtime_bindings_state {
     explicit runtime_bindings_state(allocator_type &allocator)
-        : type_bindings(allocator), type_cache(allocator),
-          lookup_indexes(allocator) {}
+        : entry_owner(allocator), type_bindings(allocator),
+          type_cache(allocator), lookup_indexes(allocator) {}
 
+    runtime_binding_entry_owner entry_owner;
     typename ContainerTraits::template type_map_type<runtime_type_bindings,
                                                      allocator_type>
         type_bindings;
@@ -1663,10 +1635,10 @@ private:
         std::is_same_v<typename lookup_entry_cardinality<LookupEntry>::type,
                        Cardinality>,
         "lookup slot LookupEntry cardinality must match slot cardinality");
-    return ensure_runtime_bindings()
-        .type_bindings
+    auto &state = ensure_runtime_bindings();
+    return state.type_bindings
         .template insert<Slot>(
-            get_allocator(),
+            get_allocator(), state.entry_owner,
             typename runtime_type_bindings::template lookup_slot_tag<
                 LookupEntry>{})
         .first;
@@ -1859,7 +1831,7 @@ private:
       auto &data =
           state.type_bindings
               .template insert<slot>(
-                  get_allocator(),
+                  get_allocator(), state.entry_owner,
                   typename runtime_type_bindings::template lookup_slot_tag<
                       lookup_entry>{})
               .first;
@@ -2187,6 +2159,11 @@ private:
 };
 
 template <typename Registry> struct runtime_slot_probe {
+  using entry_owner_type =
+      decltype(std::declval<typename Registry::runtime_bindings_state &>()
+                   .entry_owner);
+  using expected_entry_owner_type =
+      typename Registry::runtime_binding_entry_owner;
   using lookup_index_type =
       decltype(std::declval<typename Registry::runtime_bindings_state &>()
                    .lookup_indexes);
@@ -2194,6 +2171,10 @@ template <typename Registry> struct runtime_slot_probe {
       lookup_index<typename Registry::normalized_lookup_entries,
                    typename Registry::registered_binding_entry *,
                    typename Registry::allocator_type>;
+
+  static constexpr bool runtime_bindings_state_has_entry_owner() {
+    return std::is_same_v<entry_owner_type, expected_entry_owner_type>;
+  }
 
   static constexpr bool runtime_bindings_state_has_lookup_index() {
     return std::is_same_v<lookup_index_type, expected_lookup_index_type>;
@@ -2212,11 +2193,19 @@ template <typename Registry> struct runtime_slot_probe {
   using expected_slot_storage_type =
       typename Registry::runtime_type_bindings::template slot_storage_type<
           LookupEntry>;
+  using entry_owner_pointer_type =
+      decltype(std::declval<typename Registry::runtime_type_bindings &>()
+                   .entry_owner_);
 
   template <typename LookupEntry>
   static constexpr bool lookup_slot_is_concrete() {
     return std::is_same_v<slot_storage_type<LookupEntry>,
                           expected_slot_storage_type<LookupEntry>>;
+  }
+
+  static constexpr bool runtime_type_bindings_uses_shared_entry_owner() {
+    return std::is_same_v<entry_owner_pointer_type,
+                          expected_entry_owner_type *>;
   }
 
   template <typename Interface, typename Cardinality>
@@ -2259,6 +2248,10 @@ template <typename Registry> struct runtime_slot_probe {
     auto *data = state->type_bindings.template get<slot>();
     if (!data) {
       return true;
+    }
+
+    if constexpr (detail::is_runtime_key_lookup_entry_v<LookupEntry>) {
+      return state->entry_owner.empty();
     }
 
     return data->template storage_as<lookup_slot_type<LookupEntry>>().empty();
