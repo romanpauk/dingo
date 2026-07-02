@@ -49,8 +49,6 @@ namespace detail {
 template <typename StaticRegistry, typename ParentContainer>
 class container_with_static_bindings;
 
-template <typename Registry> struct runtime_slot_probe;
-
 } // namespace detail
 
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
@@ -66,8 +64,6 @@ class runtime_registry : public allocator_base<Allocator> {
   template <typename ContainerTraitsT, typename AllocatorT,
             typename ParentRegistryT, typename ResolveRootT>
   friend class runtime_registry;
-  template <typename RegistryT> friend struct detail::runtime_slot_probe;
-
   template <typename ContainerTraitsT, typename AllocatorT,
             typename ParentRegistryT, typename ResolveRootT>
   using rebind_t = runtime_registry<ContainerTraitsT, AllocatorT,
@@ -1565,101 +1561,5 @@ void runtime_registry<ContainerTraits, Allocator, ParentRegistry,
                       ResolveRoot>::destroy_runtime_bindings() {
   runtime_bindings_.destroy(get_allocator());
 }
-
-namespace detail {
-
-template <typename Registry> struct runtime_slot_probe {
-  using entry_owner_type =
-      decltype(std::declval<typename Registry::runtime_bindings_state &>()
-                   .entry_owner);
-  using expected_entry_owner_type =
-      typename Registry::runtime_binding_entry_owner;
-  using lookup_index_type =
-      decltype(std::declval<typename Registry::runtime_bindings_state &>()
-                   .lookup_indexes);
-  using expected_lookup_index_type =
-      lookup_index<typename Registry::lookup_index_entries,
-                   typename Registry::registered_binding_entry *,
-                   typename Registry::allocator_type>;
-  using default_lookup_entry = typename Registry::default_lookup_entry;
-  using expected_default_lookup_backend_type =
-      lookup_backend<default_lookup_entry,
-                     typename Registry::registered_binding_entry *,
-                     typename Registry::allocator_type>;
-
-  static constexpr bool runtime_bindings_state_has_entry_owner() {
-    return std::is_same_v<entry_owner_type, expected_entry_owner_type>;
-  }
-
-  static constexpr bool runtime_bindings_state_has_lookup_index() {
-    return std::is_same_v<lookup_index_type, expected_lookup_index_type>;
-  }
-
-  static constexpr bool default_lookup_entry_is_runtime_key_lookup() {
-    return std::is_same_v<
-        typename default_lookup_entry::key_domain,
-        ::dingo::runtime_key<default_lookup_key<typename Registry::rtti_type>>>;
-  }
-
-  static constexpr bool default_lookup_index_get_is_reachable() {
-    return std::is_same_v<decltype(std::declval<lookup_index_type &>()
-                                       .template get<default_lookup_entry>()),
-                          expected_default_lookup_backend_type &>;
-  }
-
-  template <typename Interface, typename Key>
-  using runtime_key_lookup_entry =
-      typename Registry::template runtime_key_lookup_entry_t<Interface, Key>;
-
-  template <typename Interface, typename Cardinality>
-  using no_key_lookup_entry =
-      typename Registry::template no_key_request_lookup_entry_t<Interface,
-                                                                Cardinality>;
-
-  template <typename Interface, typename Key, typename Cardinality>
-  using typed_key_lookup_entry =
-      typename Registry::template typed_key_request_lookup_entry_t<
-          Interface, Key, Cardinality>;
-
-  template <typename LookupEntry, typename Key>
-  static std::size_t lookup_index_row_count(Registry &registry,
-                                            const Key &key) {
-    auto *state = registry.runtime_bindings_if_present();
-    if (!state) {
-      return 0;
-    }
-
-    auto &index = state->lookup_indexes.template get<LookupEntry>();
-    if constexpr (std::is_same_v<
-                      typename Registry::template lookup_entry_cardinality<
-                          LookupEntry>::type,
-                      ::dingo::one>) {
-      return index.find(key) == index.end() ? 0 : 1;
-    } else {
-      std::size_t result = 0;
-      auto [first, last] = index.equal_range(key);
-      for (auto it = first; it != last; ++it) {
-        ++result;
-      }
-      return result;
-    }
-  }
-
-  template <typename Interface>
-  static std::size_t default_no_key_lookup_index_row_count(Registry &registry) {
-    return lookup_index_row_count<default_lookup_entry>(
-        registry, Registry::template default_no_key_lookup_key<Interface>());
-  }
-
-  template <typename Interface, typename Key>
-  static std::size_t
-  default_typed_key_lookup_index_row_count(Registry &registry) {
-    return lookup_index_row_count<default_lookup_entry>(
-        registry,
-        Registry::template default_typed_key_lookup_key<Interface, Key>());
-  }
-};
-
-} // namespace detail
 
 } // namespace dingo
