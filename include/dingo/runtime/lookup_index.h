@@ -39,10 +39,13 @@ template <typename Rtti> struct default_lookup_key {
   }
 };
 
-template <typename Rtti> struct default_lookup_entry {
-  using cardinality = ::dingo::one;
-  using backend_type = ::dingo::ordered;
-};
+template <typename Rtti> struct default_lookup_interface {};
+
+template <typename Rtti>
+using default_lookup_entry =
+    lookup_entry<default_lookup_interface<Rtti>,
+                 ::dingo::runtime_key<default_lookup_key<Rtti>>, ::dingo::one,
+                 ::dingo::ordered>;
 
 template <typename Value, typename Cardinality, typename Allocator>
 class static_key_lookup_storage;
@@ -194,12 +197,6 @@ struct lookup_backend_storage<
     lookup_entry<Interface, ::dingo::typed_key<Key>, Cardinality, Backend>,
     Value, Allocator> {
   using type = static_key_lookup_storage<Value, Cardinality, Allocator>;
-};
-
-template <typename Rtti, typename Value, typename Allocator>
-struct lookup_backend_storage<default_lookup_entry<Rtti>, Value, Allocator> {
-  using type = typename ::dingo::ordered::template storage<
-      default_lookup_key<Rtti>, Value, ::dingo::one, Allocator>;
 };
 
 template <typename Entry, typename Value, typename Allocator>

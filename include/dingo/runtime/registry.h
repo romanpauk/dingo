@@ -469,7 +469,7 @@ protected:
   template <typename LookupEntry>
   static constexpr bool lookup_entry_indexed_v =
       detail::contains_lookup_definition<LookupEntry,
-                                         normalized_lookup_entries>::value;
+                                         lookup_index_entries>::value;
 
   struct registered_binding_entry : binding_cache_state {
     runtime_binding_ptr<runtime_binding_interface<container_type>> binding;
@@ -656,23 +656,6 @@ protected:
                 detail::normalized_lookup_key_t<Key>>()};
   }
 
-  template <typename Interface, typename KeyDomain>
-  struct default_lookup_key_for;
-
-  template <typename Interface>
-  struct default_lookup_key_for<Interface, ::dingo::no_key> {
-    static detail::default_lookup_key<rtti_type> value() {
-      return default_no_key_lookup_key<Interface>();
-    }
-  };
-
-  template <typename Interface, typename Key>
-  struct default_lookup_key_for<Interface, ::dingo::typed_key<Key>> {
-    static detail::default_lookup_key<rtti_type> value() {
-      return default_typed_key_lookup_key<Interface, Key>();
-    }
-  };
-
   template <typename Interface, typename Cardinality>
   using no_key_lookup_entry_t =
       detail::selected_no_key_lookup_entry_t<Interface, Cardinality,
@@ -741,6 +724,14 @@ protected:
       typename explicit_static_key_lookup_entry<Interface, KeyDomain,
                                                 Cardinality>::type;
 
+  template <typename KeyDomain> struct static_key_route_id {
+    using type = none_t;
+  };
+
+  template <typename Key> struct static_key_route_id<::dingo::typed_key<Key>> {
+    using type = ::dingo::key<Key>;
+  };
+
   template <typename Interface, typename Key>
   using runtime_key_lookup_entry_t =
       detail::selected_lookup_entry_t<Interface, Key,
@@ -795,6 +786,42 @@ protected:
     static constexpr bool has_explicit_collection_lookup =
         has_valid_explicit_runtime_key_view &&
         std::is_same_v<selected_cardinality, ::dingo::many>;
+  };
+
+  template <typename Interface, typename IdType> struct lookup_index_route {
+    using traits = request_slot_traits<Interface, std::decay_t<IdType>>;
+    using entry = typename traits::lookup_entry;
+
+    static decltype(auto) key(IdType &id) { return id; }
+  };
+
+  template <typename Interface> struct lookup_index_route<Interface, none_t> {
+    using traits = request_slot_traits<Interface, none_t>;
+    using entry = typename traits::lookup_entry;
+
+    static auto key(none_t) {
+      if constexpr (std::is_same_v<entry, default_lookup_entry>) {
+        return default_no_key_lookup_key<
+            typename traits::normalized_interface>();
+      } else {
+        return none_t{};
+      }
+    }
+  };
+
+  template <typename Interface, typename Key>
+  struct lookup_index_route<Interface, ::dingo::key<Key>> {
+    using traits = request_slot_traits<Interface, ::dingo::key<Key>>;
+    using entry = typename traits::lookup_entry;
+
+    static auto key(::dingo::key<Key>) {
+      if constexpr (std::is_same_v<entry, default_lookup_entry>) {
+        return default_typed_key_lookup_key<
+            typename traits::normalized_interface, typename traits::key_type>();
+      } else {
+        return none_t{};
+      }
+    }
   };
 
   template <typename T, typename IdType>
@@ -910,81 +937,21 @@ protected:
     }
   }
 
-  template <typename LookupEntry, typename Fn>
-  std::size_t for_each_static_lookup_entry(runtime_bindings_state *state,
-                                           Fn &&fn) {
-    if (!state) {
-      return 0;
-    }
-    return for_each_lookup_index_entry<LookupEntry>(*state, none_t{},
-                                                    std::forward<Fn>(fn));
-  }
-
-  template <typename Interface, typename Fn>
-  std::size_t
-  for_each_default_no_key_lookup_entry(runtime_bindings_state *state, Fn &&fn) {
-    if (!state) {
-      return 0;
-    }
-    return for_each_lookup_index_entry<default_lookup_entry>(
-        *state, default_no_key_lookup_key<Interface>(), std::forward<Fn>(fn));
-  }
-
-  template <typename Interface, typename Key, typename Fn>
-  std::size_t
-  for_each_default_typed_key_lookup_entry(runtime_bindings_state *state,
-                                          Fn &&fn) {
-    if (!state) {
-      return 0;
-    }
-    return for_each_lookup_index_entry<default_lookup_entry>(
-        *state, default_typed_key_lookup_key<Interface, Key>(),
-        std::forward<Fn>(fn));
-  }
-
   template <typename T, typename IdType, typename Fn>
   std::size_t for_each_collection_entry(runtime_bindings_state *state,
                                         IdType &&id, Fn &&fn) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
-    using index_interface_type = normalized_type_t<resolve_type>;
     using traits = request_slot_traits<resolve_type, std::decay_t<IdType>>;
+    using route = lookup_index_route<resolve_type, std::decay_t<IdType>>;
 
-    if constexpr (traits::has_explicit_collection_lookup) {
-      if constexpr (!is_none_v<std::decay_t<IdType>> &&
-                    !detail::is_typed_key_v<IdType>) {
-        if (!state) {
-          return 0;
-        }
-        return for_each_lookup_index_entry<typename traits::lookup_entry>(
-            *state, std::forward<IdType>(id), std::forward<Fn>(fn));
-      } else {
-        (void)id;
-        return for_each_static_lookup_entry<typename traits::lookup_entry>(
-            state, std::forward<Fn>(fn));
-      }
-    } else if constexpr (is_none_v<std::decay_t<IdType>>) {
-      if constexpr (!has_explicit_no_key_one_lookup_v<index_interface_type>) {
-        return for_each_default_no_key_lookup_entry<index_interface_type>(
-            state, std::forward<Fn>(fn));
-      } else {
-        (void)id;
-        (void)fn;
+    if constexpr (traits::has_explicit_collection_lookup ||
+                  std::is_same_v<typename route::entry, default_lookup_entry>) {
+      if (!state) {
         return 0;
       }
-    } else if constexpr (detail::is_typed_key_v<IdType>) {
-      using key_type = typename std::decay_t<IdType>::type;
-      if constexpr (!has_explicit_typed_key_one_lookup_v<index_interface_type,
-                                                         key_type>) {
-        (void)id;
-        return for_each_default_typed_key_lookup_entry<index_interface_type,
-                                                       key_type>(
-            state, std::forward<Fn>(fn));
-      } else {
-        (void)id;
-        (void)fn;
-        return 0;
-      }
+      return for_each_lookup_index_entry<typename route::entry>(
+          *state, route::key(id), std::forward<Fn>(fn));
     } else {
       (void)id;
       (void)fn;
@@ -1060,8 +1027,8 @@ private:
   runtime_selection
   select_runtime_binding_at_interface(runtime_bindings_state *state,
                                       IdType &id) {
-    using traits = request_slot_traits<Interface, std::decay_t<IdType>>;
-    using lookup_entry = typename traits::lookup_entry;
+    using route = lookup_index_route<Interface, std::decay_t<IdType>>;
+    using lookup_entry = typename route::entry;
     if constexpr (std::is_void_v<lookup_entry>) {
       if constexpr (!std::is_same_v<void, ParentRegistry> &&
                     !std::is_base_of_v<registry_type, resolve_root_type>) {
@@ -1074,32 +1041,7 @@ private:
                       "dingo lookup definition for interface/key");
       }
     } else {
-      if constexpr (!is_none_v<std::decay_t<IdType>> &&
-                    !detail::is_typed_key_v<IdType>) {
-        return select_lookup_index_binding<lookup_entry>(
-            state, std::forward<IdType>(id));
-      } else {
-        (void)id;
-        if constexpr (std::is_same_v<lookup_entry, default_lookup_entry> &&
-                      std::is_same_v<typename traits::key_domain,
-                                     ::dingo::no_key>) {
-          return select_lookup_index_binding<default_lookup_entry>(
-              state, default_no_key_lookup_key<
-                         typename traits::normalized_interface>());
-        } else if constexpr (std::is_same_v<lookup_entry,
-                                            default_lookup_entry> &&
-                             detail::is_typed_key_v<std::decay_t<IdType>>) {
-          return select_lookup_index_binding<default_lookup_entry>(
-              state, default_typed_key_lookup_key<
-                         typename traits::normalized_interface,
-                         typename traits::key_type>());
-        } else if constexpr (lookup_entry_indexed_v<lookup_entry>) {
-          return select_lookup_index_binding<lookup_entry>(state, none_t{});
-        } else {
-          (void)state;
-          return make_slot_selection(nullptr, false);
-        }
-      }
+      return select_lookup_index_binding<lookup_entry>(state, route::key(id));
     }
   }
 
@@ -1377,20 +1319,18 @@ private:
     using explicit_lookup_entry =
         explicit_static_key_lookup_entry_t<TypeInterface, KeyDomain,
                                            Cardinality>;
-    if constexpr (!std::is_void_v<explicit_lookup_entry>) {
-      static_assert(lookup_entry_indexed_v<explicit_lookup_entry>);
+    using route_id = typename static_key_route_id<KeyDomain>::type;
+    using route = lookup_index_route<TypeInterface, route_id>;
+    using routed_lookup_entry = typename route::entry;
+    if constexpr (!std::is_void_v<explicit_lookup_entry> ||
+                  std::is_same_v<Cardinality, ::dingo::one>) {
+      static_assert(!std::is_void_v<routed_lookup_entry>);
+      static_assert(lookup_entry_indexed_v<routed_lookup_entry>);
       auto &state = ensure_runtime_bindings();
+      auto route_key = route_id{};
       return register_lookup_index_binding_transaction<
-          TypeInterface, TypeStorage, explicit_lookup_entry>(
-          state, none_t{}, std::forward<EntryFactory>(entry_factory), [] {
-            return make_registration_duplicate_exception<
-                TypeInterface, TypeStorage, IdType, KeyIdType>();
-          });
-    } else if constexpr (std::is_same_v<Cardinality, ::dingo::one>) {
-      auto &state = ensure_runtime_bindings();
-      return register_lookup_index_binding_transaction<
-          TypeInterface, TypeStorage, default_lookup_entry>(
-          state, default_lookup_key_for<TypeInterface, KeyDomain>::value(),
+          TypeInterface, TypeStorage, routed_lookup_entry>(
+          state, route::key(route_key),
           std::forward<EntryFactory>(entry_factory), [] {
             return make_registration_duplicate_exception<
                 TypeInterface, TypeStorage, IdType, KeyIdType>();
@@ -1412,14 +1352,15 @@ private:
                                  typename TypeStorage::type>();
 
     if constexpr (!is_none_v<std::decay_t<IdType>>) {
-      using lookup_entry = runtime_key_lookup_entry_t<TypeInterface, IdType>;
+      using route = lookup_index_route<TypeInterface, std::decay_t<IdType>>;
+      using lookup_entry = typename route::entry;
       static_assert(!std::is_void_v<lookup_entry>,
                     "keyed registration or request has no matching "
                     "dingo lookup definition for interface/key");
       auto &state = ensure_runtime_bindings();
       return register_lookup_index_binding_transaction<
           TypeInterface, TypeStorage, lookup_entry>(
-          state, id, std::forward<EntryFactory>(entry_factory), [] {
+          state, route::key(id), std::forward<EntryFactory>(entry_factory), [] {
             return make_registration_duplicate_exception<
                 TypeInterface, TypeStorage, IdType, KeyIdType>();
           });
@@ -1640,6 +1581,11 @@ template <typename Registry> struct runtime_slot_probe {
       lookup_index<typename Registry::lookup_index_entries,
                    typename Registry::registered_binding_entry *,
                    typename Registry::allocator_type>;
+  using default_lookup_entry = typename Registry::default_lookup_entry;
+  using expected_default_lookup_backend_type =
+      lookup_backend<default_lookup_entry,
+                     typename Registry::registered_binding_entry *,
+                     typename Registry::allocator_type>;
 
   static constexpr bool runtime_bindings_state_has_entry_owner() {
     return std::is_same_v<entry_owner_type, expected_entry_owner_type>;
@@ -1647,6 +1593,18 @@ template <typename Registry> struct runtime_slot_probe {
 
   static constexpr bool runtime_bindings_state_has_lookup_index() {
     return std::is_same_v<lookup_index_type, expected_lookup_index_type>;
+  }
+
+  static constexpr bool default_lookup_entry_is_runtime_key_lookup() {
+    return std::is_same_v<
+        typename default_lookup_entry::key_domain,
+        ::dingo::runtime_key<default_lookup_key<typename Registry::rtti_type>>>;
+  }
+
+  static constexpr bool default_lookup_index_get_is_reachable() {
+    return std::is_same_v<decltype(std::declval<lookup_index_type &>()
+                                       .template get<default_lookup_entry>()),
+                          expected_default_lookup_backend_type &>;
   }
 
   template <typename Interface, typename Key>
@@ -1662,8 +1620,6 @@ template <typename Registry> struct runtime_slot_probe {
   using typed_key_lookup_entry =
       typename Registry::template typed_key_request_lookup_entry_t<
           Interface, Key, Cardinality>;
-
-  using default_lookup_entry = typename Registry::default_lookup_entry;
 
   template <typename LookupEntry, typename Key>
   static std::size_t lookup_index_row_count(Registry &registry,

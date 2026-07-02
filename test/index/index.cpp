@@ -909,6 +909,8 @@ TEST(index_test, production_runtime_bindings_use_entry_owner_and_lookup_index) {
 
   static_assert(probe::runtime_bindings_state_has_lookup_index());
   static_assert(probe::runtime_bindings_state_has_entry_owner());
+  static_assert(probe::default_lookup_entry_is_runtime_key_lookup());
+  static_assert(probe::default_lookup_index_get_is_reachable());
 }
 
 TEST(index_test, no_key_many_lookup_covers_empty_exact_ambiguous) {
