@@ -175,23 +175,13 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   };
 
   template <typename Request, typename Key = void> bool has_runtime_binding() {
-    if (!runtime_registry_.has_runtime_registrations()) {
-      return false;
-    }
     return runtime_registry_.template binding_status<Request, Key>() !=
            detail::binding_selection_status::not_found;
   }
 
   template <typename T, typename Key = void> bool has_runtime_collection() {
-    if (!runtime_registry_.has_runtime_registrations()) {
-      return false;
-    }
     return runtime_registry_.template count_runtime_collection<T>(
                collection_key<Key>()) != 0;
-  }
-
-  bool has_runtime_registrations() const {
-    return runtime_registry_.has_runtime_registrations();
   }
 
   template <typename Request, typename Key = void>
@@ -222,8 +212,6 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   bool select_static_resolve() {
     if constexpr (!static_binding_satisfies_request_v<Request, Key>) {
       return false;
-    } else if (!has_runtime_registrations()) {
-      return true;
     } else {
       return !has_runtime_binding<Request, Key>();
     }
@@ -243,8 +231,6 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   bool select_static_collection() {
     if constexpr (!has_static_collection_v<Collection, Key>) {
       return false;
-    } else if (!has_runtime_registrations()) {
-      return true;
     } else {
       return !has_runtime_collection<Collection, Key>();
     }
@@ -274,8 +260,6 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
 
     if constexpr (!has_static_construct_request_v<T>) {
       return false;
-    } else if (!has_runtime_registrations()) {
-      return true;
     } else {
       return !has_runtime_binding<request_type>() &&
              !has_runtime_binding<normalized_request_type>();
@@ -289,8 +273,6 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
                                                 Key>() != 0;
     if constexpr (!has_static_collection_bindings) {
       return false;
-    } else if (!has_runtime_registrations()) {
-      return true;
     } else {
       return !has_runtime_collection<T, Key>();
     }
@@ -843,11 +825,6 @@ public:
     using request_type = request_interface_t<T>;
     using normalized_request_type = request_value_t<T>;
     if constexpr (std::is_same_v<Factory, constructor<normalized_type_t<T>>>) {
-      if constexpr (has_static_construct_request_v<T>) {
-        if (!has_runtime_registrations()) {
-          return construct_static<T>();
-        }
-      }
       if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<T>) {
         constexpr bool has_static_normalized_binding =
             static_selection_t<normalized_request_type, void>::status !=
