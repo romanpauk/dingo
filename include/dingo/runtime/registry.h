@@ -17,6 +17,7 @@
 #include <dingo/factory/callable.h>
 #include <dingo/factory/invoke.h>
 #include <dingo/lookup/lookup.h>
+#include <dingo/lookup/operations.h>
 #include <dingo/memory/allocator.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
@@ -24,7 +25,6 @@
 #include <dingo/resolution/runtime_binding.h>
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
-#include <dingo/runtime/lookup.h>
 #include <dingo/runtime/lookup_index.h>
 #include <dingo/static/local_resolution.h>
 #include <dingo/storage/interface_storage_traits.h>
@@ -1135,86 +1135,22 @@ private:
         selected ? &selected->binding() : nullptr);
   }
 
-  template <typename Value>
-  static auto lookup_index_mapped(Value &value, int)
-      -> decltype((value.second)) {
-    return value.second;
-  }
-
-  template <typename Value>
-  static Value &lookup_index_mapped(Value &value, ...) {
-    return value;
-  }
-
-  template <typename Iterator>
-  static decltype(auto) lookup_index_iterator_mapped(Iterator iterator) {
-    return lookup_index_mapped(*iterator, 0);
-  }
-
-  template <typename LookupEntry, typename Backend, typename Key>
-  static runtime_lookup_value *lookup_index_find_singular(Backend &backend,
-                                                          const Key &key,
-                                                          bool &ambiguous) {
-    if constexpr (std::is_same_v<
-                      typename lookup_entry_cardinality<LookupEntry>::type,
-                      ::dingo::one>) {
-      auto it = backend.find(key);
-      ambiguous = false;
-      return it == backend.end()
-                 ? nullptr
-                 : std::addressof(lookup_index_iterator_mapped(it));
-    } else {
-      auto [first, last] = backend.equal_range(key);
-      if (first == last) {
-        ambiguous = false;
-        return nullptr;
-      }
-      auto next = first;
-      ++next;
-      ambiguous = next != last;
-      return ambiguous ? nullptr
-                       : std::addressof(lookup_index_iterator_mapped(first));
-    }
-  }
-
-  template <typename LookupEntry, typename Backend, typename Key, typename Fn>
-  static std::size_t lookup_index_for_each(Backend &backend, const Key &key,
-                                           Fn &&fn) {
-    if constexpr (std::is_same_v<
-                      typename lookup_entry_cardinality<LookupEntry>::type,
-                      ::dingo::one>) {
-      auto it = backend.find(key);
-      if (it == backend.end()) {
-        return 0;
-      }
-      fn(lookup_index_iterator_mapped(it));
-      return 1;
-    } else {
-      std::size_t result = 0;
-      auto [first, last] = backend.equal_range(key);
-      for (auto it = first; it != last; ++it) {
-        fn(lookup_index_iterator_mapped(it));
-        ++result;
-      }
-      return result;
-    }
-  }
-
   template <typename LookupEntry, typename Key>
   runtime_selection select_lookup_index_binding(runtime_bindings_state &state,
                                                 const Key &key) {
-    runtime_lookup_value *selected = nullptr;
-    bool ambiguous = false;
     auto &index = state.lookup_indexes.template get<LookupEntry>();
-    selected = lookup_index_find_singular<LookupEntry>(index, key, ambiguous);
-    return make_lookup_selection(selected, ambiguous);
+    auto match =
+        detail::lookup_find_singular<LookupEntry, runtime_lookup_value>(index,
+                                                                        key);
+    return make_lookup_selection(match.value, match.ambiguous);
   }
 
   template <typename LookupEntry, typename Key, typename Fn>
   std::size_t for_each_lookup_index_entry(runtime_bindings_state &state,
                                           const Key &key, Fn &&fn) {
     auto &index = state.lookup_indexes.template get<LookupEntry>();
-    return lookup_index_for_each<LookupEntry>(index, key, std::forward<Fn>(fn));
+    return detail::lookup_for_each<LookupEntry>(index, key,
+                                                std::forward<Fn>(fn));
   }
 
   template <typename TypeInterface, typename TypeStorage, typename BindingState,

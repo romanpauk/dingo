@@ -40,6 +40,16 @@ struct lookup_entry {
   using backend_type = Backend;
 };
 
+template <typename LookupEntry, bool = std::is_void_v<LookupEntry>>
+struct lookup_entry_cardinality {
+  using type = typename LookupEntry::cardinality;
+};
+
+template <typename LookupEntry>
+struct lookup_entry_cardinality<LookupEntry, true> {
+  using type = ::dingo::one;
+};
+
 template <typename T> struct lookup_interface_arg {
   using type = type_list<T>;
 };

@@ -131,6 +131,7 @@ if(DINGO_DEVELOPMENT_MODE)
         lookup/array.h
         lookup/collection.h
         lookup/lookup.h
+        lookup/operations.h
         lookup/ordered.h
         lookup/storage.h
         lookup/tags.h
