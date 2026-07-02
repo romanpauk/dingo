@@ -43,23 +43,31 @@ public:
   InstanceContainer &instance_container() { return container(); }
   ResolutionContainer &resolution_container() {
     if (!resolution_container_) {
-      resolution_container_ =
-          std::addressof(closure_.template construct<ResolutionContainer>(
-              parent_, parent_->get_allocator()));
+      resolution_container_ = construct_container<ResolutionContainer>();
     }
     return *resolution_container_;
   }
 
   InstanceContainer &container() {
     if (!instance_container_) {
-      instance_container_ =
-          std::addressof(closure_.template construct<InstanceContainer>(
-              parent_, parent_->get_allocator()));
+      instance_container_ = construct_container<InstanceContainer>();
     }
     return *instance_container_;
   }
 
 private:
+  template <typename T> T *construct_container() {
+    if constexpr (std::is_constructible_v<T, parent_container_type *,
+                                          decltype(parent_->get_allocator()),
+                                          detail::context_closure_base &>) {
+      return std::addressof(closure_.template construct<T>(
+          parent_, parent_->get_allocator(), closure_));
+    } else {
+      return std::addressof(
+          closure_.template construct<T>(parent_, parent_->get_allocator()));
+    }
+  }
+
   // Storage is declared after the closure so cached instances are destroyed
   // before preserved construction temporaries.
   detail::context_closure closure_;
@@ -90,14 +98,24 @@ public:
 
   InstanceContainer &container() {
     if (!instance_container_) {
-      instance_container_ =
-          std::addressof(closure_.template construct<InstanceContainer>(
-              parent_, parent_->get_allocator()));
+      instance_container_ = construct_container<InstanceContainer>();
     }
     return *instance_container_;
   }
 
 private:
+  template <typename T> T *construct_container() {
+    if constexpr (std::is_constructible_v<T, parent_container_type *,
+                                          decltype(parent_->get_allocator()),
+                                          detail::context_closure_base &>) {
+      return std::addressof(closure_.template construct<T>(
+          parent_, parent_->get_allocator(), closure_));
+    } else {
+      return std::addressof(
+          closure_.template construct<T>(parent_, parent_->get_allocator()));
+    }
+  }
+
   // Storage is declared after the closure so cached instances are destroyed
   // before preserved construction temporaries.
   detail::context_closure closure_;
@@ -230,6 +248,13 @@ private:
     return state_ref().resolution_container();
   }
 
+  template <typename Context, typename Fn>
+  decltype(auto) materialize_resolution_source(Context &context, Fn &&fn) {
+    return detail::materialize_binding_resolution_source(
+        context, get_storage(), get_resolution_container(), closure(),
+        std::forward<Fn>(fn));
+  }
+
   static constexpr type_descriptor registered_type() {
     return describe_type<detail::registered_type_t<Storage>>();
   }
@@ -310,22 +335,19 @@ public:
     }
 
     using Target = std::remove_reference_t<resolved_type_t<T, Type>>;
-    return detail::materialize_binding_resolution_source(
-        context, get_storage(), get_resolution_container(), closure(),
-        [&](auto &&source) -> void * {
-          return detail::resolve_binding_address_from_source<Target>(
-              *this, context, std::forward<decltype(source)>(source),
-              requested_type, registered_type);
-        });
+    return materialize_resolution_source(context, [&](auto &&source) -> void * {
+      return detail::resolve_binding_address_from_source<Target>(
+          *this, context, std::forward<decltype(source)>(source),
+          requested_type, registered_type);
+    });
   }
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
 
   template <typename Context> decltype(auto) resolve(Context &context) {
-    return detail::materialize_binding_resolution_source(
-        context, get_storage(), get_resolution_container(), closure(),
-        [](auto &&source) -> decltype(auto) {
+    return materialize_resolution_source(
+        context, [](auto &&source) -> decltype(auto) {
           return std::forward<decltype(source)>(source).get();
         });
   }
@@ -333,9 +355,8 @@ public:
   template <typename T, typename Context>
   decltype(auto) resolve(Context &context) {
     binding_activation activation{*this};
-    return detail::materialize_binding_resolution_source(
-        context, get_storage(), get_resolution_container(), closure(),
-        [&](auto &&source) -> decltype(auto) {
+    return materialize_resolution_source(
+        context, [&](auto &&source) -> decltype(auto) {
           return detail::resolve_binding_value<T>(
               activation, context, std::forward<decltype(source)>(source));
         });

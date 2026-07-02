@@ -472,6 +472,9 @@ TEST(type_registration_test,
       detail::runtime_binding_resolution_container_t<
           dingo::container<>, dingo::container<>,
           typename non_empty_local_model::bindings_type>;
+  using non_empty_local_binding =
+      dingo::bind<scope<shared>, storage<runtime_binding_local_dependency>,
+                  factory<function<make_runtime_binding_local_dependency>>>;
   using non_empty_runtime_state = detail::runtime_binding_state_t<
       dingo::container<>, dingo::container<>,
       typename non_empty_local_model::storage_type,
@@ -483,6 +486,8 @@ TEST(type_registration_test,
   static_assert(std::is_same_v<
                 typename non_empty_runtime_state::resolution_container_type,
                 non_empty_resolution_container>);
+  static_assert(sizeof(non_empty_resolution_container) <
+                sizeof(detail::binding_scope<non_empty_local_binding>));
 
   dingo::container<> container;
   container.register_type<
