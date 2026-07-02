@@ -34,10 +34,11 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <deque>
 #include <functional>
-#include <list>
 #include <map>
 #include <memory>
+#include <tuple>
 #include <type_traits>
 #include <typeindex>
 #include <utility>
@@ -160,9 +161,34 @@ public:
     return register_type_impl<TypeArgs...>(resolve_root(), none_t{}, none_t{});
   }
 
-  template <typename... TypeArgs, typename Arg> auto &register_type(Arg &&arg) {
+  template <typename... TypeArgs, typename Arg,
+            std::enable_if_t<!detail::is_runtime_registration_key_arg_v<Arg>,
+                             int> = 0>
+  auto &register_type(Arg &&arg) {
     return register_type_impl<TypeArgs...>(resolve_root(),
                                            std::forward<Arg>(arg), none_t{});
+  }
+
+  template <typename... TypeArgs, typename... KeyArgs,
+            std::enable_if_t<
+                (sizeof...(KeyArgs) > 0 &&
+                 (detail::is_runtime_registration_key_arg_v<KeyArgs> && ...)),
+                int> = 0>
+  auto &register_type(KeyArgs &&...keys) {
+    return register_type_impl<TypeArgs...>(resolve_root(), none_t{}, none_t{},
+                                           std::forward<KeyArgs>(keys)...);
+  }
+
+  template <typename... TypeArgs, typename Arg, typename... KeyArgs,
+            std::enable_if_t<
+                (sizeof...(KeyArgs) > 0 &&
+                 !detail::is_runtime_registration_key_arg_v<Arg> &&
+                 (detail::is_runtime_registration_key_arg_v<KeyArgs> && ...)),
+                int> = 0>
+  auto &register_type(Arg &&arg, KeyArgs &&...keys) {
+    return register_type_impl<TypeArgs...>(resolve_root(),
+                                           std::forward<Arg>(arg), none_t{},
+                                           std::forward<KeyArgs>(keys)...);
   }
 
   template <typename... TypeArgs, typename IdType>
@@ -193,10 +219,12 @@ public:
   }
 
   template <typename... TypeArgs, typename Parent, typename Arg,
-            typename IdType>
-  auto &emplace_type_binding(Parent &parent, Arg &&arg, IdType &&id) {
-    return register_type_impl<TypeArgs...>(&parent, std::forward<Arg>(arg),
-                                           std::forward<IdType>(id));
+            typename IdType, typename... RuntimeKeyArgs>
+  auto &emplace_type_binding(Parent &parent, Arg &&arg, IdType &&id,
+                             RuntimeKeyArgs &&...runtime_keys) {
+    return register_type_impl<TypeArgs...>(
+        &parent, std::forward<Arg>(arg), std::forward<IdType>(id),
+        std::forward<RuntimeKeyArgs>(runtime_keys)...);
   }
 
 protected:
@@ -456,8 +484,9 @@ protected:
   using normalized_lookup_entries =
       detail::normalize_lookup_definitions_t<lookup_definition_type>;
   using default_lookup_entry = detail::default_lookup_entry<rtti_type>;
-  using lookup_index_entries = type_list_cat_t<normalized_lookup_entries,
-                                               type_list<default_lookup_entry>>;
+  using lookup_index_entries =
+      type_list_unique_t<type_list_cat_t<normalized_lookup_entries,
+                                         type_list<default_lookup_entry>>>;
   template <typename LookupEntry>
   using lookup_entry_cardinality =
       detail::lookup_entry_cardinality<LookupEntry>;
@@ -495,84 +524,37 @@ protected:
     }
   };
 
-  struct runtime_binding_entry_owner {
-    using entry_allocator = typename std::allocator_traits<
-        allocator_type>::template rebind_alloc<registered_binding_entry>;
-    using entry_list = std::list<registered_binding_entry, entry_allocator>;
+  using entry_allocator = typename std::allocator_traits<
+      allocator_type>::template rebind_alloc<registered_binding_entry>;
+  using entry_deque = std::deque<registered_binding_entry, entry_allocator>;
 
-    struct entry_handle {
-      registered_binding_entry *ptr = nullptr;
-      typename entry_list::iterator list_iterator{};
+  struct registered_binding_entry_handle {
+    registered_binding_entry *ptr = nullptr;
 
-      registered_binding_entry &operator*() const { return *ptr; }
-    };
-
-    explicit runtime_binding_entry_owner(allocator_type &allocator)
-        : allocator_(std::addressof(allocator)),
-          entries_(detail::make_lookup_storage_allocator<entry_allocator>(
-              allocator)) {}
-
-    runtime_binding_entry_owner(const runtime_binding_entry_owner &) = delete;
-    runtime_binding_entry_owner &
-    operator=(const runtime_binding_entry_owner &) = delete;
-
-    bool empty() const { return entries_.empty(); }
-
-    template <typename Binding> entry_handle emplace_entry(Binding &&binding) {
-      entries_.emplace_back(std::forward<Binding>(binding));
-      auto entry = std::prev(entries_.end());
-      return {std::addressof(*entry), entry};
-    }
-
-    template <typename Binding, typename... Args>
-    std::pair<entry_handle, typename Binding::container_type *>
-    emplace_binding_entry(Args &&...args) {
-      auto &&[binding, binding_container] = make_allocated_binding<Binding>(
-          *allocator_, std::forward<Args>(args)...);
-      try {
-        return {emplace_entry(std::move(binding)), binding_container};
-      } catch (...) {
-        binding.reset();
-        throw;
-      }
-    }
-
-    void erase_entry(entry_handle entry) {
-      entries_.erase(entry.list_iterator);
-    }
-
-  private:
-    template <typename Binding, typename... Args>
-    static std::pair<
-        runtime_binding_ptr<runtime_binding_interface<container_type>>,
-        typename Binding::container_type *>
-    make_allocated_binding(allocator_type &allocator, Args &&...args) {
-      auto alloc = allocator_traits::rebind<Binding>(allocator);
-      auto *instance = allocator_traits::allocate(alloc, 1);
-      try {
-        allocator_traits::construct(alloc, instance,
-                                    std::forward<Args>(args)...);
-      } catch (...) {
-        allocator_traits::deallocate(alloc, instance, 1);
-        throw;
-      }
-      return {runtime_binding_ptr<runtime_binding_interface<container_type>>(
-                  instance, &registry_type::template destroy_binding<Binding>),
-              &instance->get_container()};
-    }
-
-    allocator_type *allocator_;
-    entry_list entries_;
+    registered_binding_entry &operator*() const { return *ptr; }
   };
 
   struct runtime_bindings_state {
     explicit runtime_bindings_state(allocator_type &allocator)
-        : entry_owner(allocator), type_cache(allocator),
-          lookup_indexes(allocator) {
+        : entries(detail::make_lookup_storage_allocator<entry_allocator>(
+              allocator)),
+          type_cache(allocator), lookup_indexes(allocator) {
       validate_lookup_definitions();
     }
 
-    runtime_binding_entry_owner entry_owner;
+    template <typename Binding>
+    registered_binding_entry_handle emplace_entry(Binding &&binding) {
+      entries.emplace_back(std::forward<Binding>(binding));
+      return {std::addressof(entries.back())};
+    }
+
+    void pop_pending_entry(registered_binding_entry_handle) {
+      // Only current registration rollback may remove rows; lookup indexes must
+      // erase rows for this entry before the just-appended deque row is popped.
+      entries.pop_back();
+    }
+
+    entry_deque entries;
     typename ContainerTraits::template type_cache_type<void *, allocator_type>
         type_cache;
     detail::lookup_index<lookup_index_entries, registered_binding_entry *,
@@ -736,6 +718,136 @@ protected:
   template <typename Interface, typename Key>
   using runtime_key_lookup_cardinality_t = typename lookup_entry_cardinality<
       runtime_key_lookup_entry_t<Interface, Key>>::type;
+
+  template <typename LookupEntry> struct runtime_lookup_entry_traits {
+    static constexpr bool is_runtime_key = false;
+    using interface_type = void;
+    using key_type = void;
+  };
+
+  template <typename Interface, typename Key, typename Cardinality,
+            typename Backend>
+  struct runtime_lookup_entry_traits<detail::lookup_entry<
+      Interface, ::dingo::runtime_key<Key>, Cardinality, Backend>> {
+    static constexpr bool is_runtime_key = true;
+    using interface_type = Interface;
+    using key_type = Key;
+  };
+
+  template <typename TypeInterface, typename Entries>
+  struct runtime_lookup_entries_for_interface;
+
+  template <typename TypeInterface>
+  struct runtime_lookup_entries_for_interface<TypeInterface, type_list<>> {
+    using type = type_list<>;
+  };
+
+  template <typename TypeInterface, typename Head, typename... Tail>
+  struct runtime_lookup_entries_for_interface<TypeInterface,
+                                              type_list<Head, Tail...>> {
+  private:
+    using head_traits = runtime_lookup_entry_traits<Head>;
+    using tail_type =
+        typename runtime_lookup_entries_for_interface<TypeInterface,
+                                                      type_list<Tail...>>::type;
+    static constexpr bool matches =
+        head_traits::is_runtime_key &&
+        std::is_same_v<normalized_type_t<TypeInterface>,
+                       typename head_traits::interface_type>;
+
+  public:
+    using type =
+        std::conditional_t<matches, type_list_cat_t<type_list<Head>, tail_type>,
+                           tail_type>;
+  };
+
+  template <typename TypeInterface>
+  using runtime_lookup_entries_for_interface_t =
+      typename runtime_lookup_entries_for_interface<
+          TypeInterface, normalized_lookup_entries>::type;
+
+  template <typename Key, typename... RuntimeKeyArgs>
+  static constexpr std::size_t runtime_registration_key_arg_count_v =
+      (std::size_t{0} + ... +
+       (std::is_same_v<std::decay_t<RuntimeKeyArgs>, ::dingo::key<Key>> ? 1U
+                                                                        : 0U));
+
+  template <typename Entries, typename Key>
+  struct runtime_lookup_entry_key_count;
+
+  template <typename Key>
+  struct runtime_lookup_entry_key_count<type_list<>, Key>
+      : std::integral_constant<std::size_t, 0> {};
+
+  template <typename Head, typename... Tail, typename Key>
+  struct runtime_lookup_entry_key_count<type_list<Head, Tail...>, Key>
+      : std::integral_constant<
+            std::size_t,
+            (std::is_same_v<
+                 typename runtime_lookup_entry_traits<Head>::key_type, Key>
+                 ? 1U
+                 : 0U) +
+                runtime_lookup_entry_key_count<type_list<Tail...>,
+                                               Key>::value> {};
+
+  template <typename InterfaceList, typename Key>
+  struct runtime_registration_key_match_count;
+
+  template <typename Key>
+  struct runtime_registration_key_match_count<type_list<>, Key>
+      : std::integral_constant<std::size_t, 0> {};
+
+  template <typename Interface, typename... Tail, typename Key>
+  struct runtime_registration_key_match_count<type_list<Interface, Tail...>,
+                                              Key>
+      : std::integral_constant<
+            std::size_t,
+            runtime_lookup_entry_key_count<
+                runtime_lookup_entries_for_interface_t<Interface>, Key>::value +
+                runtime_registration_key_match_count<type_list<Tail...>,
+                                                     Key>::value> {};
+
+  template <typename InterfaceList, typename... RuntimeKeyArgs>
+  static constexpr void validate_supplied_runtime_registration_keys() {
+    static_assert(
+        ((runtime_registration_key_arg_count_v<
+              typename std::decay_t<RuntimeKeyArgs>::type, RuntimeKeyArgs...> ==
+          1U) &&
+         ...),
+        "duplicate dingo::key<K>{value} arguments for runtime lookup "
+        "registration");
+    static_assert(
+        ((runtime_registration_key_match_count<
+              InterfaceList,
+              typename std::decay_t<RuntimeKeyArgs>::type>::value > 0U) &&
+         ...),
+        "supplied dingo::key<K>{value} has no matching runtime-key lookup "
+        "definition for the registered interface");
+    static_assert(
+        ((runtime_registration_key_match_count<
+              InterfaceList,
+              typename std::decay_t<RuntimeKeyArgs>::type>::value == 1U) &&
+         ...),
+        "supplied dingo::key<K>{value} is ambiguous for this registration; "
+        "multiple registered interfaces have that runtime-key lookup");
+  }
+
+  template <typename Entries, typename... RuntimeKeyArgs>
+  static constexpr void validate_required_runtime_registration_keys() {
+    static_assert(type_list_size_v<Entries> > 0,
+                  "runtime dingo::key<K>{value} registration requires a "
+                  "matching runtime-key lookup definition");
+    for_each(Entries{}, [](auto element) {
+      using entry_type = typename decltype(element)::type;
+      using key_type =
+          typename runtime_lookup_entry_traits<entry_type>::key_type;
+      static_assert(
+          runtime_registration_key_arg_count_v<key_type, RuntimeKeyArgs...> ==
+              1U,
+          "runtime-key lookup registration requires exactly one "
+          "dingo::key<K>{value} for each declared runtime-key lookup");
+    });
+  }
 
   template <typename Interface, typename IdType> struct request_slot_traits;
 
@@ -1133,9 +1245,10 @@ private:
   }
 
   template <typename... TypeArgs, typename Parent, typename Arg,
-            typename IdType>
+            typename IdType, typename... RuntimeKeyArgs>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-  auto &register_type_impl(Parent *parent, Arg &&arg, IdType &&id) {
+  auto &register_type_impl(Parent *parent, Arg &&arg, IdType &&id,
+                           RuntimeKeyArgs &&...runtime_keys) {
     static_assert(!detail::has_explicit_void_interface_v<TypeArgs...>,
                   "interfaces<void> is not a valid registration target");
     using registration =
@@ -1173,6 +1286,10 @@ private:
 
       if constexpr (registration_requirements::valid &&
                     type_list_size_v<interface_types> == 1) {
+        if constexpr (sizeof...(RuntimeKeyArgs) > 0) {
+          validate_supplied_runtime_registration_keys<interface_types,
+                                                      RuntimeKeyArgs...>();
+        }
         using interface_type = type_list_head_t<interface_types>;
 
         using runtime_binding_type =
@@ -1187,14 +1304,22 @@ private:
           return register_constructed_type_binding<interface_type, storage_type,
                                                    registered_binding_type>(
               parent, std::forward<IdType>(id), key_id_type{},
+              std::forward_as_tuple(
+                  std::forward<RuntimeKeyArgs>(runtime_keys)...),
               std::forward<Arg>(arg));
         } else {
           return register_constructed_type_binding<interface_type, storage_type,
                                                    registered_binding_type>(
-              parent, std::forward<IdType>(id), key_id_type{});
+              parent, std::forward<IdType>(id), key_id_type{},
+              std::forward_as_tuple(
+                  std::forward<RuntimeKeyArgs>(runtime_keys)...));
         }
       } else {
         if constexpr (registration_requirements::valid) {
+          if constexpr (sizeof...(RuntimeKeyArgs) > 0) {
+            validate_supplied_runtime_registration_keys<interface_types,
+                                                        RuntimeKeyArgs...>();
+          }
           std::shared_ptr<runtime_binding_state_type> data;
           if constexpr (!is_none_v<std::decay_t<Arg>>) {
             data = std::allocate_shared<runtime_binding_state_type>(
@@ -1221,7 +1346,7 @@ private:
 
             register_type_binding<interface_type, storage_type>(
                 allocate_binding<registered_binding_type>(data).first, id,
-                key_id_type{});
+                key_id_type{}, runtime_keys...);
           });
           return data->instance_container_ref();
         } else {
@@ -1233,17 +1358,32 @@ private:
     }
   }
 
+  template <typename Key, typename Tuple, std::size_t Index = 0>
+  static decltype(auto) runtime_registration_key_value(Tuple &keys) {
+    using tuple_type = std::remove_reference_t<Tuple>;
+    if constexpr (Index >= std::tuple_size_v<tuple_type>) {
+      static_assert(Index < std::tuple_size_v<tuple_type>,
+                    "missing dingo::key<K>{value} for runtime-key lookup "
+                    "registration");
+    } else if constexpr (std::is_same_v<std::decay_t<std::tuple_element_t<
+                                            Index, tuple_type>>,
+                                        ::dingo::key<Key>>) {
+      return std::get<Index>(keys).value();
+    } else {
+      return runtime_registration_key_value<Key, Tuple, Index + 1>(keys);
+    }
+  }
+
   template <typename TypeInterface, typename TypeStorage, typename LookupEntry,
             typename KeyArg, typename ExceptionFactory>
   void commit_lookup_index_registration_entry(
       runtime_bindings_state &state,
-      typename runtime_binding_entry_owner::entry_handle inserted_entry,
-      const KeyArg &key_arg, ExceptionFactory &&make_exception) {
+      registered_binding_entry_handle inserted_entry, const KeyArg &key_arg,
+      ExceptionFactory &&make_exception) {
     auto &index = state.lookup_indexes.template get<LookupEntry>();
     using index_type = std::remove_reference_t<decltype(index)>;
     using insertion_handle_type = typename index_type::iterator;
     std::optional<insertion_handle_type> lookup_row_handle;
-    bool binding_registered = true;
     bool lookup_row_registered = false;
 
     try {
@@ -1253,8 +1393,6 @@ private:
         auto [it, inserted] =
             index.try_emplace(key_arg, std::addressof(*inserted_entry));
         if (!inserted) {
-          state.entry_owner.erase_entry(inserted_entry);
-          binding_registered = false;
           throw make_exception();
         }
         lookup_row_handle = it;
@@ -1264,31 +1402,133 @@ private:
       }
       lookup_row_registered = true;
     } catch (...) {
-      if (binding_registered) {
-        if (lookup_row_registered) {
-          index.erase(*lookup_row_handle);
+      if (lookup_row_registered) {
+        index.erase(*lookup_row_handle);
+      }
+      throw;
+    }
+  }
+
+  template <typename TypeInterface, typename TypeStorage, typename Tuple,
+            typename ExceptionFactory>
+  void commit_runtime_lookup_index_registration_entries(
+      runtime_bindings_state &, registered_binding_entry_handle, Tuple &,
+      ExceptionFactory &&, type_list<>) {}
+
+  template <typename TypeInterface, typename TypeStorage, typename Head,
+            typename... Tail, typename Tuple, typename ExceptionFactory>
+  void commit_runtime_lookup_index_registration_entries(
+      runtime_bindings_state &state,
+      registered_binding_entry_handle inserted_entry, Tuple &runtime_keys,
+      ExceptionFactory &&make_exception, type_list<Head, Tail...>) {
+    using key_type = typename runtime_lookup_entry_traits<Head>::key_type;
+    auto &index = state.lookup_indexes.template get<Head>();
+    using index_type = std::remove_reference_t<decltype(index)>;
+    using insertion_handle_type = typename index_type::iterator;
+    std::optional<insertion_handle_type> lookup_row_handle;
+    bool lookup_row_registered = false;
+
+    try {
+      const auto &key_arg =
+          runtime_registration_key_value<key_type>(runtime_keys);
+      if constexpr (std::is_same_v<
+                        typename lookup_entry_cardinality<Head>::type,
+                        ::dingo::one>) {
+        auto [it, inserted] =
+            index.try_emplace(key_arg, std::addressof(*inserted_entry));
+        if (!inserted) {
+          throw make_exception();
         }
-        state.entry_owner.erase_entry(inserted_entry);
+        lookup_row_handle = it;
+      } else {
+        lookup_row_handle =
+            index.emplace(key_arg, std::addressof(*inserted_entry));
+      }
+      lookup_row_registered = true;
+      commit_runtime_lookup_index_registration_entries<TypeInterface,
+                                                       TypeStorage>(
+          state, inserted_entry, runtime_keys,
+          std::forward<ExceptionFactory>(make_exception), type_list<Tail...>{});
+    } catch (...) {
+      if (lookup_row_registered) {
+        index.erase(*lookup_row_handle);
       }
       throw;
     }
   }
 
   template <typename Result> struct registered_binding_insertion {
-    typename runtime_binding_entry_owner::entry_handle inserted_entry;
+    registered_binding_entry_handle inserted_entry;
     Result result;
   };
+
+  template <typename Binding, typename... Args>
+  std::pair<runtime_binding_ptr<runtime_binding_interface<container_type>>,
+            typename Binding::container_type *>
+  make_allocated_binding(Args &&...args) {
+    auto alloc = allocator_traits::rebind<Binding>(get_allocator());
+    auto *instance = allocator_traits::allocate(alloc, 1);
+    try {
+      allocator_traits::construct(alloc, instance, std::forward<Args>(args)...);
+    } catch (...) {
+      allocator_traits::deallocate(alloc, instance, 1);
+      throw;
+    }
+    return {runtime_binding_ptr<runtime_binding_interface<container_type>>(
+                instance, &registry_type::template destroy_binding<Binding>),
+            &instance->get_container()};
+  }
+
+  template <typename Binding, typename... Args>
+  std::pair<registered_binding_entry_handle, typename Binding::container_type *>
+  emplace_binding_entry(runtime_bindings_state &state, Args &&...args) {
+    auto &&[binding, binding_container] =
+        make_allocated_binding<Binding>(std::forward<Args>(args)...);
+    try {
+      return {state.emplace_entry(std::move(binding)), binding_container};
+    } catch (...) {
+      binding.reset();
+      throw;
+    }
+  }
 
   template <typename TypeInterface, typename TypeStorage, typename LookupEntry,
             typename KeyArg, typename EntryFactory, typename ExceptionFactory>
   auto register_lookup_index_binding_transaction(
       runtime_bindings_state &state, const KeyArg &key_arg,
       EntryFactory &&entry_factory, ExceptionFactory &&make_exception) {
-    auto insertion = entry_factory(state.entry_owner);
-    commit_lookup_index_registration_entry<TypeInterface, TypeStorage,
-                                           LookupEntry>(
-        state, insertion.inserted_entry, key_arg,
-        std::forward<ExceptionFactory>(make_exception));
+    auto insertion = entry_factory(state);
+    try {
+      commit_lookup_index_registration_entry<TypeInterface, TypeStorage,
+                                             LookupEntry>(
+          state, insertion.inserted_entry, key_arg,
+          std::forward<ExceptionFactory>(make_exception));
+    } catch (...) {
+      state.pop_pending_entry(insertion.inserted_entry);
+      throw;
+    }
+    runtime_bindings_present_ = true;
+    return insertion;
+  }
+
+  template <typename TypeInterface, typename TypeStorage, typename EntryList,
+            typename EntryFactory, typename ExceptionFactory,
+            typename... RuntimeKeyArgs>
+  auto register_binding(runtime_bindings_state &state,
+                        EntryFactory &&entry_factory,
+                        ExceptionFactory &&make_exception,
+                        RuntimeKeyArgs &&...runtime_keys) {
+    auto insertion = entry_factory(state);
+    auto runtime_key_tuple = std::forward_as_tuple(runtime_keys...);
+    try {
+      commit_runtime_lookup_index_registration_entries<TypeInterface,
+                                                       TypeStorage>(
+          state, insertion.inserted_entry, runtime_key_tuple,
+          std::forward<ExceptionFactory>(make_exception), EntryList{});
+    } catch (...) {
+      state.pop_pending_entry(insertion.inserted_entry);
+      throw;
+    }
     runtime_bindings_present_ = true;
     return insertion;
   }
@@ -1339,27 +1579,67 @@ private:
   }
 
   template <typename TypeInterface, typename TypeStorage, typename IdType,
-            typename KeyIdType, typename EntryFactory>
+            typename KeyIdType, typename EntryFactory,
+            typename... RuntimeKeyArgs>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-  decltype(auto) register_routed_type_binding(IdType &&id, KeyIdType,
-                                              EntryFactory &&entry_factory) {
+  decltype(auto)
+  register_routed_type_binding(IdType &&id, KeyIdType,
+                               EntryFactory &&entry_factory,
+                               RuntimeKeyArgs &&...runtime_keys) {
     check_interface_requirements<TypeStorage,
                                  typename annotated_traits<TypeInterface>::type,
                                  typename TypeStorage::type>();
 
-    if constexpr (!is_none_v<std::decay_t<IdType>>) {
-      using route = lookup_index_route<TypeInterface, std::decay_t<IdType>>;
-      using lookup_entry = typename route::entry;
+    if constexpr (sizeof...(RuntimeKeyArgs) > 0) {
+      static_assert(is_none_v<std::decay_t<IdType>>,
+                    "runtime dingo::key<K>{value} registration cannot be "
+                    "combined with register_indexed_type id values");
+      using lookup_entries =
+          runtime_lookup_entries_for_interface_t<TypeInterface>;
+      if constexpr (type_list_size_v<lookup_entries> > 0) {
+        validate_required_runtime_registration_keys<lookup_entries,
+                                                    RuntimeKeyArgs...>();
+        auto &state = ensure_runtime_bindings();
+        return register_binding<TypeInterface, TypeStorage, lookup_entries>(
+            state, std::forward<EntryFactory>(entry_factory),
+            [] {
+              return make_registration_duplicate_exception<
+                  TypeInterface, TypeStorage, IdType, KeyIdType>();
+            },
+            std::forward<RuntimeKeyArgs>(runtime_keys)...);
+      } else if constexpr (is_none_v<std::decay_t<KeyIdType>>) {
+        using lookup_cardinality_type =
+            no_key_lookup_cardinality_t<TypeInterface>;
+        return register_static_key_lookup_binding<
+            TypeInterface, TypeStorage, ::dingo::no_key,
+            lookup_cardinality_type, IdType, KeyIdType>(
+            std::forward<EntryFactory>(entry_factory));
+      } else {
+        using typed_key_type = typename std::decay_t<KeyIdType>::type;
+        using lookup_cardinality_type =
+            typed_key_lookup_cardinality_t<TypeInterface, typed_key_type>;
+        return register_static_key_lookup_binding<
+            TypeInterface, TypeStorage, ::dingo::typed_key<typed_key_type>,
+            lookup_cardinality_type, IdType, KeyIdType>(
+            std::forward<EntryFactory>(entry_factory));
+      }
+    } else if constexpr (!is_none_v<std::decay_t<IdType>>) {
+      using runtime_key_type = std::decay_t<IdType>;
+      using lookup_entry =
+          runtime_key_lookup_entry_t<TypeInterface, runtime_key_type>;
       static_assert(!std::is_void_v<lookup_entry>,
                     "keyed registration or request has no matching "
                     "dingo lookup definition for interface/key");
       auto &state = ensure_runtime_bindings();
-      return register_lookup_index_binding_transaction<
-          TypeInterface, TypeStorage, lookup_entry>(
-          state, route::key(id), std::forward<EntryFactory>(entry_factory), [] {
+      auto runtime_key = key<runtime_key_type>{std::forward<IdType>(id)};
+      return register_binding<TypeInterface, TypeStorage,
+                              type_list<lookup_entry>>(
+          state, std::forward<EntryFactory>(entry_factory),
+          [] {
             return make_registration_duplicate_exception<
                 TypeInterface, TypeStorage, IdType, KeyIdType>();
-          });
+          },
+          runtime_key);
     } else if constexpr (is_none_v<std::decay_t<KeyIdType>>) {
       using lookup_cardinality_type =
           no_key_lookup_cardinality_t<TypeInterface>;
@@ -1378,34 +1658,43 @@ private:
   }
 
   template <typename TypeInterface, typename TypeStorage, typename Binding,
-            typename IdType, typename KeyIdType>
-  void register_type_binding(Binding &&binding, IdType &&id, KeyIdType) {
+            typename IdType, typename KeyIdType, typename... RuntimeKeyArgs>
+  void register_type_binding(Binding &&binding, IdType &&id, KeyIdType,
+                             RuntimeKeyArgs &&...runtime_keys) {
     auto insertion = register_routed_type_binding<TypeInterface, TypeStorage,
                                                   IdType, KeyIdType>(
-        std::forward<IdType>(id), KeyIdType{}, [&](auto &entry_owner) {
+        std::forward<IdType>(id), KeyIdType{},
+        [&](auto &state) {
           return registered_binding_insertion<none_t>{
-              entry_owner.emplace_entry(std::forward<Binding>(binding)),
-              none_t{}};
-        });
+              state.emplace_entry(std::forward<Binding>(binding)), none_t{}};
+        },
+        std::forward<RuntimeKeyArgs>(runtime_keys)...);
     (void)insertion;
   }
 
   template <typename TypeInterface, typename TypeStorage, typename Binding,
             typename Parent, typename IdType, typename KeyIdType,
-            typename... Args>
+            typename RuntimeKeyTuple, typename... Args>
   typename Binding::container_type &
   register_constructed_type_binding(Parent *parent, IdType &&id, KeyIdType,
+                                    RuntimeKeyTuple &&runtime_keys,
                                     Args &&...args) {
-    auto insertion = register_routed_type_binding<TypeInterface, TypeStorage,
-                                                  IdType, KeyIdType>(
-        std::forward<IdType>(id), KeyIdType{}, [&](auto &entry_owner) {
-          auto &&[inserted_entry, binding_container] =
-              entry_owner.template emplace_binding_entry<Binding>(
-                  parent, std::forward<Args>(args)...);
-          return registered_binding_insertion<
-              typename Binding::container_type *>{inserted_entry,
-                                                  binding_container};
-        });
+    auto insertion = std::apply(
+        [&](auto &&...runtime_key_args) {
+          return register_routed_type_binding<TypeInterface, TypeStorage,
+                                              IdType, KeyIdType>(
+              std::forward<IdType>(id), KeyIdType{},
+              [&](auto &state) {
+                auto &&[inserted_entry, binding_container] =
+                    this->template emplace_binding_entry<Binding>(
+                        state, parent, std::forward<Args>(args)...);
+                return registered_binding_insertion<
+                    typename Binding::container_type *>{inserted_entry,
+                                                        binding_container};
+              },
+              std::forward<decltype(runtime_key_args)>(runtime_key_args)...);
+        },
+        std::forward<RuntimeKeyTuple>(runtime_keys));
     return *insertion.result;
   }
 

@@ -16,6 +16,10 @@
 #include <dingo/type/rebind_type.h>
 #include <dingo/type/type_list.h>
 
+#include <optional>
+#include <type_traits>
+#include <utility>
+
 namespace dingo {
 struct unique;
 template <typename... Registrations> struct static_registry;
@@ -46,7 +50,41 @@ template <typename T> struct factory {
   template <typename U> using rebind_t = factory<U>;
 };
 
-template <typename T, auto... Values> struct key {
+namespace detail {
+template <typename T, bool Enabled> struct runtime_key_value_storage {
+  bool has_runtime_value() const { return false; }
+
+  const T &value() const {
+    static_assert(Enabled, "compile-time dingo::key<T, V> has no runtime "
+                           "lookup key value");
+  }
+};
+
+template <typename T> struct runtime_key_value_storage<T, true> {
+  runtime_key_value_storage() = default;
+
+  template <typename U,
+            typename = std::enable_if_t<std::is_constructible_v<T, U &&>>>
+  explicit runtime_key_value_storage(U &&value)
+      : runtime_value_(std::forward<U>(value)) {}
+
+  bool has_runtime_value() const { return runtime_value_.has_value(); }
+
+  const T &value() const { return runtime_value_.value(); }
+
+private:
+  std::optional<T> runtime_value_;
+};
+} // namespace detail
+
+template <typename T, auto... Values>
+struct key
+    : private detail::runtime_key_value_storage<T, sizeof...(Values) == 0> {
+private:
+  using runtime_value_storage =
+      detail::runtime_key_value_storage<T, sizeof...(Values) == 0>;
+
+public:
   static_assert(sizeof...(Values) <= 1,
                 "dingo::key<T, V> accepts at most one value");
   static_assert(sizeof...(Values) > 1 ||
@@ -57,7 +95,38 @@ template <typename T, auto... Values> struct key {
   template <typename U> using rebind_t = key<U>;
 
   static constexpr bool has_value = sizeof...(Values) == 1;
+
+  using runtime_value_storage::has_runtime_value;
+  using runtime_value_storage::value;
+
+  key() = default;
+
+  template <typename U,
+            typename = std::enable_if_t<sizeof...(Values) == 0 &&
+                                        std::is_constructible_v<T, U &&>>>
+  explicit key(U &&runtime_value)
+      : runtime_value_storage(std::forward<U>(runtime_value)) {}
 };
+
+template <> struct key<void> {
+  using type = void;
+  template <typename U> using rebind_t = key<U>;
+
+  static constexpr bool has_value = false;
+};
+
+namespace detail {
+template <typename T>
+struct is_runtime_registration_key_arg : std::false_type {};
+
+template <typename T>
+struct is_runtime_registration_key_arg<::dingo::key<T>>
+    : std::bool_constant<!std::is_void_v<T>> {};
+
+template <typename T>
+inline constexpr bool is_runtime_registration_key_arg_v =
+    is_runtime_registration_key_arg<std::decay_t<T>>::value;
+} // namespace detail
 
 template <typename T> struct conversions {
   using type = T;
