@@ -470,47 +470,15 @@ protected:
     runtime_binding_value() = default;
   };
 
-  template <typename Binding>
-  struct runtime_binding_slot : runtime_binding_interface<container_type> {
+  template <std::size_t Index, typename Binding>
+  struct runtime_binding_slot_member : Binding {
     template <typename... Args>
-    explicit runtime_binding_slot(Args &&...args)
-        : binding_(std::forward<Args>(args)...) {}
-
-    void *get_value(runtime_context &context,
-                    const instance_request<rtti_type> &request,
-                    instance_cache_sink cache_sink) override {
-      return binding_.get_value(context, request, cache_sink);
-    }
-
-    void *get_lvalue_reference(runtime_context &context,
-                               const instance_request<rtti_type> &request,
-                               instance_cache_sink cache_sink) override {
-      return binding_.get_lvalue_reference(context, request, cache_sink);
-    }
-
-    void *get_rvalue_reference(runtime_context &context,
-                               const instance_request<rtti_type> &request,
-                               instance_cache_sink cache_sink) override {
-      return binding_.get_rvalue_reference(context, request, cache_sink);
-    }
-
-    void *get_pointer(runtime_context &context,
-                      const instance_request<rtti_type> &request,
-                      instance_cache_sink cache_sink) override {
-      return binding_.get_pointer(context, request, cache_sink);
-    }
+    explicit runtime_binding_slot_member(Args &&...args)
+        : Binding(std::forward<Args>(args)...) {}
 
     typename Binding::container_type &container() {
-      return binding_.get_container();
+      return this->get_container();
     }
-
-  private:
-    Binding binding_;
-  };
-
-  template <std::size_t Index, typename Binding>
-  struct runtime_binding_slot_member : runtime_binding_slot<Binding> {
-    using runtime_binding_slot<Binding>::runtime_binding_slot;
   };
 
   template <typename Derived, typename Indexes, typename... Bindings>
