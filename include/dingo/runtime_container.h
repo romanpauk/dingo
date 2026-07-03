@@ -14,6 +14,87 @@
 
 namespace dingo {
 
+namespace detail {
+
+template <typename ParentContainer, typename Request, typename IdType,
+          typename = void>
+struct has_parent_key_value_lookup_definition : std::false_type {};
+
+template <typename ParentContainer, typename Request, typename IdType>
+struct has_parent_key_value_lookup_definition<
+    ParentContainer, Request, IdType,
+    std::void_t<typename ParentContainer::lookup_definition_type>>
+    : std::bool_constant<!std::is_void_v<selected_lookup_entry_t<
+          normalized_type_t<Request>, std::decay_t<IdType>,
+          normalize_lookup_definitions_t<
+              typename ParentContainer::lookup_definition_type>>>> {};
+
+template <typename ParentContainer, typename Request, typename IdType>
+inline constexpr bool has_parent_key_value_lookup_definition_v =
+    has_parent_key_value_lookup_definition<ParentContainer, Request,
+                                           IdType>::value;
+
+template <typename T>
+inline constexpr bool is_runtime_auto_constructible_dependency_v =
+    std::is_same_v<dependency_value_t<T>, std::decay_t<T>> &&
+    (!std::is_reference_v<T> ||
+     (std::is_lvalue_reference_v<T> &&
+      std::is_const_v<std::remove_reference_t<T>> &&
+      is_auto_constructible<std::decay_t<T>>::value));
+
+template <typename T, typename = void>
+struct has_static_registry_type : std::false_type {};
+
+template <typename T>
+struct has_static_registry_type<T,
+                                std::void_t<typename T::static_registry_type>>
+    : std::true_type {};
+
+template <typename T>
+inline constexpr bool has_static_registry_type_v =
+    has_static_registry_type<T>::value;
+
+template <typename ParentContainer, typename Request, typename IdType,
+          typename = void>
+struct has_parent_runtime_binding_status : std::false_type {};
+
+template <typename ParentContainer, typename Request, typename IdType>
+struct has_parent_runtime_binding_status<
+    ParentContainer, Request, IdType,
+    std::void_t<decltype(std::declval<ParentContainer &>()
+                             .template runtime_binding_status_for_id<Request>(
+                                 std::declval<IdType &>()))>> : std::true_type {
+};
+
+template <typename ParentContainer, typename Request, typename IdType>
+inline constexpr bool has_parent_runtime_binding_status_v =
+    has_parent_runtime_binding_status<ParentContainer, Request, IdType>::value;
+
+template <typename ParentContainer, typename Request, typename IdType>
+constexpr bool has_parent_lookup_for_id() {
+  if constexpr (is_none_v<std::decay_t<IdType>> || is_typed_key_v<IdType>) {
+    return true;
+  } else {
+    return has_parent_key_value_lookup_definition_v<ParentContainer, Request,
+                                                    IdType>;
+  }
+}
+
+template <typename Request, typename ParentContainer, typename IdType>
+bool should_resolve_missing_from_parent(ParentContainer &parent, IdType &id) {
+  if constexpr (is_runtime_auto_constructible_dependency_v<Request> &&
+                !has_static_registry_type_v<ParentContainer> &&
+                has_parent_runtime_binding_status_v<ParentContainer, Request,
+                                                    IdType>) {
+    return parent.template runtime_binding_status_for_id<Request>(id) !=
+           binding_selection_status::not_found;
+  } else {
+    return true;
+  }
+}
+
+} // namespace detail
+
 template <typename ContainerTraits = dynamic_container_traits,
           typename Allocator = typename ContainerTraits::allocator_type,
           typename ParentContainer = void>
@@ -74,6 +155,12 @@ public:
     }
   }
 
+  template <typename T, typename IdType>
+  detail::binding_selection_status runtime_binding_status_for_id(IdType &&id) {
+    return runtime_registry_.template binding_status_for_id<T>(
+        std::forward<IdType>(id));
+  }
+
   template <typename T, typename IdType = none_t,
             typename R = dependency_result_t<T>>
   R resolve(IdType &&id = IdType()) {
@@ -85,7 +172,12 @@ public:
     } else {
       if (parent_ && runtime_registry_.template binding_status_for_id<T>(id) ==
                          detail::binding_selection_status::not_found) {
-        return resolve_parent_request<T, R>(std::forward<IdType>(id));
+        if constexpr (detail::has_parent_lookup_for_id<parent_container_type, T,
+                                                       IdType>()) {
+          if (detail::should_resolve_missing_from_parent<T>(*parent_, id)) {
+            return resolve_parent_request<T, R>(std::forward<IdType>(id));
+          }
+        }
       }
     }
     return runtime_registry_.template resolve<T>(std::forward<IdType>(id));
@@ -97,6 +189,11 @@ public:
     if (parent_ &&
         runtime_registry_.template binding_status_for_id<T>(none_t{}) ==
             detail::binding_selection_status::not_found) {
+      none_t id;
+      if (!detail::should_resolve_missing_from_parent<T>(*parent_, id)) {
+        return runtime_registry_
+            .template resolve_request<T, RemoveRvalueReferences>(context);
+      }
       return parent_->template resolve<T, RemoveRvalueReferences>(context);
     }
     return runtime_registry_
@@ -115,6 +212,11 @@ public:
     if (parent_ &&
         runtime_registry_.template binding_status_for_id<T>(key_type<Key>{}) ==
             detail::binding_selection_status::not_found) {
+      key_type<Key> id;
+      if (!detail::should_resolve_missing_from_parent<T>(*parent_, id)) {
+        return runtime_registry_
+            .template resolve_request<T, RemoveRvalueReferences, Key>(context);
+      }
       return parent_->template resolve<T, RemoveRvalueReferences>(
           context, key_type<Key>{});
     }
@@ -130,8 +232,13 @@ public:
   R resolve(runtime_context &context, IdType &&id) {
     if (parent_ && runtime_registry_.template binding_status_for_id<T>(id) ==
                        detail::binding_selection_status::not_found) {
-      return parent_->template resolve<T, RemoveRvalueReferences>(
-          context, std::forward<IdType>(id));
+      if constexpr (detail::has_parent_lookup_for_id<parent_container_type, T,
+                                                     IdType>()) {
+        if (detail::should_resolve_missing_from_parent<T>(*parent_, id)) {
+          return parent_->template resolve<T, RemoveRvalueReferences>(
+              context, std::forward<IdType>(id));
+        }
+      }
     }
     return runtime_registry_.template resolve<T, RemoveRvalueReferences>(
         context, std::forward<IdType>(id));

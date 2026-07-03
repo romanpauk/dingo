@@ -7,7 +7,6 @@
 
 #include <dingo/container.h>
 #include <dingo/factory/callable.h>
-#include <dingo/index/array.h>
 #include <dingo/storage/shared.h>
 
 #include <gtest/gtest.h>
@@ -73,12 +72,9 @@ struct system_root {
 };
 
 struct system_container_traits : dynamic_container_traits {
-  using index_definition_type = dingo::indexes<
-      dingo::index<channel, std::size_t, dingo::index_type::array<2>>>;
+  using lookup_definition_type = dingo::lookups<
+      dingo::associative<std::size_t, channel, dingo::one, dingo::array<2>>>;
 };
-
-struct system_channel_0_key {};
-struct system_channel_1_key {};
 
 struct tree_node_api {
   tree_node_api(std::string node_name, int node_weight,
@@ -105,6 +101,19 @@ struct tree_node_api {
   std::shared_ptr<tree_node_api> parent;
 };
 
+struct channel_dependency_pack {
+  std::shared_ptr<shared_api> shared;
+  std::shared_ptr<channel_api> local;
+  std::shared_ptr<process_api> process;
+};
+
+struct packed_channel {
+  explicit packed_channel(channel_dependency_pack channel_deps)
+      : deps(std::move(channel_deps)) {}
+
+  channel_dependency_pack deps;
+};
+
 struct channel_hierarchy {
   channel_hierarchy() : system(&base), ch1(&base), ch2(&base) {
     shared_api::instances = 0;
@@ -124,28 +133,24 @@ struct channel_hierarchy {
   }
 
   void register_system_composition() {
-    system
-        .register_indexed_type<scope<shared>, storage<std::shared_ptr<channel>>,
-                               interfaces<channel>, key<system_channel_0_key>>(
-            callable(
-                [this] { return ch1.resolve<std::shared_ptr<channel>>(); }),
-            std::size_t{0});
-    system
-        .register_indexed_type<scope<shared>, storage<std::shared_ptr<channel>>,
-                               interfaces<channel>, key<system_channel_1_key>>(
-            callable(
-                [this] { return ch2.resolve<std::shared_ptr<channel>>(); }),
-            std::size_t{1});
-    system.register_type<scope<shared>,
-                         storage<std::vector<std::shared_ptr<channel>>>>(
-        callable(
-            [](indexed<std::shared_ptr<channel>, key<std::size_t, 0>> first,
-               indexed<std::shared_ptr<channel>, key<std::size_t, 1>> second) {
-              std::shared_ptr<channel> first_channel = first;
-              std::shared_ptr<channel> second_channel = second;
-              return std::vector<std::shared_ptr<channel>>{
-                  std::move(first_channel), std::move(second_channel)};
-            }));
+    system.register_type<scope<shared>, storage<std::shared_ptr<channel>>,
+                         interfaces<channel>>(
+        callable([this] { return ch1.resolve<std::shared_ptr<channel>>(); }),
+        key_value{std::size_t{0}});
+    system.register_type<scope<shared>, storage<std::shared_ptr<channel>>,
+                         interfaces<channel>>(
+        callable([this] { return ch2.resolve<std::shared_ptr<channel>>(); }),
+        key_value{std::size_t{1}});
+    system.register_type<
+        scope<shared>, storage<std::vector<std::shared_ptr<channel>>>>(callable(
+        [](dependency<std::shared_ptr<channel>, key_type<std::size_t, 0>> first,
+           dependency<std::shared_ptr<channel>, key_type<std::size_t, 1>>
+               second) {
+          std::shared_ptr<channel> first_channel = first;
+          std::shared_ptr<channel> second_channel = second;
+          return std::vector<std::shared_ptr<channel>>{
+              std::move(first_channel), std::move(second_channel)};
+        }));
     system
         .register_type<scope<shared>, storage<std::shared_ptr<system_root>>>();
   }
@@ -273,6 +278,25 @@ TEST(parent_container_resolution_test,
   ASSERT_EQ(ch1_node->path(), "base/ch1");
   ASSERT_EQ(base_node->operation(7), 107);
   ASSERT_EQ(ch1_node->operation(7), 108);
+}
+
+TEST(parent_container_resolution_test,
+     auto_constructed_dependency_pack_uses_child_container) {
+  channel_hierarchy h;
+
+  h.ch1
+      .register_type<scope<shared>, storage<std::shared_ptr<packed_channel>>>();
+
+  auto resolved = h.ch1.resolve<std::shared_ptr<packed_channel>>();
+
+  ASSERT_EQ(resolved->deps.shared,
+            h.base.resolve<std::shared_ptr<shared_api>>());
+  ASSERT_EQ(resolved->deps.process,
+            h.base.resolve<std::shared_ptr<process_api>>());
+  ASSERT_EQ(resolved->deps.local,
+            h.ch1.resolve<std::shared_ptr<channel_api>>());
+  ASSERT_THROW(h.base.resolve<std::shared_ptr<channel_api>>(),
+               type_not_found_exception);
 }
 
 TEST(parent_container_resolution_test,
