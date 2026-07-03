@@ -26,7 +26,7 @@ struct shared {};
 template <typename Type> struct storage_materialization_traits<shared, Type> {
   template <typename Leaf, typename Context, typename Storage>
   static auto make_guard(Context &context, const Storage &storage) {
-    return detail::recursion_guard_wrapper<Leaf>(context,
+    return detail::recursion_guard_wrapper<Leaf>(context, &storage,
                                                  !storage.is_resolved());
   }
 
