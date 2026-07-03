@@ -61,6 +61,7 @@ add_executable(dingo_unit_test
     container/dingo.cpp
     container/incomplete_resolve.cpp
     container/incomplete_resolve_fixture.cpp
+    container/parent_container_resolution.cpp
     factory/constructor_detection.cpp
     lookup/associative_backends.cpp
     lookup/lookup.cpp

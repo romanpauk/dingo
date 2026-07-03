@@ -19,8 +19,8 @@ struct unique {};
 
 template <typename Type> struct storage_materialization_traits<unique, Type> {
   template <typename Leaf, typename Context, typename Storage>
-  static auto make_guard(Context &context, const Storage &) {
-    return detail::recursion_guard<Leaf>(context);
+  static auto make_guard(Context &context, const Storage &storage) {
+    return detail::recursion_guard<Leaf>(context, &storage);
   }
 
   template <typename Storage> static bool preserves_closure(const Storage &) {
