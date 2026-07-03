@@ -10,13 +10,13 @@
 #include <dingo/core/binding_collection.h>
 #include <dingo/core/binding_resolution_policy.h>
 #include <dingo/core/exceptions.h>
-#include <dingo/core/keyed.h>
+#include <dingo/core/key.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/runtime/context.h>
 #include <dingo/static/activation_set.h>
 #include <dingo/static/graph.h>
 #include <dingo/static/registry.h>
-#include <dingo/type/request_traits.h>
+#include <dingo/type/dependency_traits.h>
 
 #include <type_traits>
 #include <utility>
@@ -28,10 +28,10 @@ template <typename Host, typename StaticRegistry> class binding_resolution;
 
 template <typename Host, typename... Registrations>
 class binding_resolution<Host, static_registry<Registrations...>>
-    : private binding_scope<Registrations...> {
+    : private borrowed_binding_scope<Registrations...> {
   using static_registry_type = static_registry<Registrations...>;
   using self_type = binding_resolution<Host, static_registry_type>;
-  using state_type = binding_scope<Registrations...>;
+  using state_type = borrowed_binding_scope<Registrations...>;
 
   template <typename T, typename Key>
   using binding_t = static_binding_t<
@@ -126,12 +126,13 @@ public:
                 "local storage objects");
 
   template <typename Allocator>
-  binding_resolution(Host *host, Allocator &&) : host_(host) {}
+  binding_resolution(Host *host, Allocator &&, context_closure_base &closure)
+      : state_type(closure), host_(host) {}
 
   allocator_type &get_allocator() { return host_->get_allocator(); }
 
   template <typename T, bool RemoveRvalueReferences, typename Key = void,
-            typename R = resolve_result_t<T, RemoveRvalueReferences>>
+            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
   R resolve(runtime_context &context) {
     if constexpr (collection_traits<R>::is_collection) {
       return construct_collection<R, Key>(context,
@@ -150,16 +151,8 @@ public:
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Key,
-            typename R = resolve_request_t<T, RemoveRvalueReferences>>
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
   R resolve(runtime_context &context, key<Key>) {
-    return resolve<T, RemoveRvalueReferences, Key>(context);
-  }
-
-  template <typename T, bool RemoveRvalueReferences, bool CheckCache,
-            typename Key,
-            typename R = resolve_request_t<T, RemoveRvalueReferences>>
-  R resolve(runtime_context &context, key<Key>) {
-    (void)CheckCache;
     return resolve<T, RemoveRvalueReferences, Key>(context);
   }
 

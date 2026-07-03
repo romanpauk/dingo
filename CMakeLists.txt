@@ -101,8 +101,9 @@ if(DINGO_DEVELOPMENT_MODE)
         static/local_resolution.h
         core/binding_resolution_policy.h
         core/binding_selection.h
+        core/dependency.h
         core/factory_traits.h
-        core/keyed.h
+        core/key.h
         core/none.h
         static/activation_set.h
         static/container_traits.h
@@ -114,11 +115,6 @@ if(DINGO_DEVELOPMENT_MODE)
         factory/constructor.h
         factory/function.h
         factory/invoke.h
-        index/index.h
-        index/array.h
-        index/map.h
-        index/sequence.h
-        index/unordered_map.h
         memory/aligned_storage.h
         memory/allocator.h
         memory/arena_allocator.h
@@ -130,8 +126,18 @@ if(DINGO_DEVELOPMENT_MODE)
         runtime_container.h
         runtime/container_traits.h
         runtime/registration_api.h
+        runtime/lookup_index.h
         runtime/registry.h
         static_container.h
+        lookup/array.h
+        lookup/base.h
+        lookup/collection.h
+        lookup/lookup.h
+        lookup/operations.h
+        lookup/ordered.h
+        lookup/storage.h
+        lookup/tags.h
+        lookup/unordered.h
         resolution/conversion_cache.h
         resolution/runtime_binding_interface.h
         resolution/runtime_binding.h
@@ -139,7 +145,6 @@ if(DINGO_DEVELOPMENT_MODE)
         core/context_base.h
         runtime/context.h
         static/context.h
-        resolution/type_cache.h
         rtti/static_provider.h
         rtti/rtti.h
         rtti/typeid_provider.h

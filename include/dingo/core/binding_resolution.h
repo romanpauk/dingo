@@ -15,8 +15,8 @@
 #include <dingo/resolution/runtime_binding_interface.h>
 #include <dingo/resolution/type_conversion.h>
 #include <dingo/storage/type_storage_traits.h>
+#include <dingo/type/dependency_traits.h>
 #include <dingo/type/normalized_type.h>
-#include <dingo/type/request_traits.h>
 #include <dingo/type/type_descriptor.h>
 #include <dingo/type/type_traits.h>
 
@@ -66,19 +66,19 @@ struct binding_conversion_cache_base<false, ConversionTypes> {
   }
 };
 
-template <typename Context> struct preserve_closure_scope {
-  explicit preserve_closure_scope(Context &context)
-      : context_(context), exceptions_(std::uncaught_exceptions()) {}
+template <typename Context> struct closure_scope {
+  explicit closure_scope(Context &context, bool active = true)
+      : context_(context), active_(active) {}
 
-  ~preserve_closure_scope() {
-    if (std::uncaught_exceptions() == exceptions_) {
+  ~closure_scope() {
+    if (active_) {
       context_.pop();
     }
   }
 
 private:
   Context &context_;
-  int exceptions_;
+  bool active_;
 };
 
 enum class binding_request_kind {
@@ -221,8 +221,11 @@ materialize_binding_resolution_source(Context &context, Storage &storage,
   [[maybe_unused]] auto guard =
       materialization_traits::template make_guard<leaf_type>(context, storage);
   if (materialization_traits::preserves_closure(storage)) {
-    context.push(&closure);
-    preserve_closure_scope<Context> closure_scope(context);
+    const auto pushed = !context.contains(&closure);
+    if (pushed) {
+      context.push(&closure);
+    }
+    closure_scope<Context> scope(context, pushed);
     auto source =
         materialization_traits::materialize_source(context, storage, owner);
     return std::forward<Fn>(fn)(std::move(source));
@@ -470,7 +473,7 @@ inline constexpr bool construct_normalized_request_v =
     !std::is_abstract_v<normalized_type_t<Request>>;
 
 template <typename Request,
-          typename ResolvedRequest = request_result_t<Request>>
+          typename ResolvedRequest = dependency_result_t<Request>>
 inline constexpr bool construct_factory_request_v =
     !rvalue_request_requires_explicit_conversion_v<Request> &&
     std::is_object_v<normalized_type_t<Request>> &&
@@ -525,7 +528,7 @@ template <typename Request>
 }
 
 template <typename Request, typename ResolveExact, typename ResolveNormalized>
-request_result_t<Request>
+dependency_result_t<Request>
 construct_request_or_wrap_normalized(ResolveExact &&resolve_exact,
                                      ResolveNormalized &&resolve_normalized) {
   try {

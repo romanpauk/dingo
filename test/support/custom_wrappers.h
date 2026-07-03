@@ -25,10 +25,10 @@ template <typename T> class test_optional;
 
 namespace test_detail {
 template <typename T, template <typename...> class Template>
-struct is_instance_of : std::false_type {};
+struct is_instance : std::false_type {};
 
 template <template <typename...> class Template, typename... Args>
-struct is_instance_of<Template<Args...>, Template> : std::true_type {};
+struct is_instance<Template<Args...>, Template> : std::true_type {};
 } // namespace test_detail
 
 template <typename T> class test_shared {
@@ -122,7 +122,7 @@ template <typename T> struct type_traits<test_shared<T>> {
 
   template <typename Target>
   static constexpr bool is_rebindable =
-      test_detail::is_instance_of<std::remove_cv_t<Target>, test_shared>::value;
+      test_detail::is_instance<std::remove_cv_t<Target>, test_shared>::value;
 
   static T *get(test_shared<T> &wrapper) { return wrapper.get(); }
   static const T *get(const test_shared<T> &wrapper) { return wrapper.get(); }

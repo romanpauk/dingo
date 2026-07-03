@@ -196,7 +196,7 @@ def generate_rows() -> tuple[MatrixRow, ...]:
         tuple[ScopeSpec, StoredType, ExposedType, FeatureCaseSpec], RegistrationPlan
     ] = {}
 
-    def plan_for(
+    def build_plan(
         scope: ScopeSpec,
         stored_type: StoredType,
         exposed_type: ExposedType,
@@ -278,7 +278,7 @@ def generate_rows() -> tuple[MatrixRow, ...]:
                                         ] += 1
                                         continue
 
-                                    plan = plan_for(
+                                    plan = build_plan(
                                         scope,
                                         stored_type,
                                         exposed_type,

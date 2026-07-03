@@ -9,7 +9,7 @@
 
 #include "matrix/support/values.h"
 
-#include <dingo/core/keyed.h>
+#include <dingo/core/dependency.h>
 
 #include <gtest/gtest.h>
 

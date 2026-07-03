@@ -28,7 +28,7 @@ public:
     detail::default_constructor_detection<temporary_type, DetectionTag>()
         .template construct<temporary_type>(instance, *this, container);
     if constexpr (!std::is_trivially_destructible_v<temporary_type>) {
-      register_destructor(instance);
+      this->template register_destructor<temporary_type>(instance);
     }
 
     if constexpr (std::is_lvalue_reference_v<T>) {

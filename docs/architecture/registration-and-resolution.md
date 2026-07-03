@@ -9,7 +9,7 @@ backends, then meet at the shared binding selection and resolution model.
 The public API starts at `container::register_type<...>()` in
 [include/dingo/container.h](../../include/dingo/container.h).
 
-`register_type_impl(...)` does three important things:
+`register_binding(...)` does three important things:
 
 1. It builds a complete `type_registration<...>` from the supplied policies.
 2. It computes the stored type, including the interface-storage rewrite

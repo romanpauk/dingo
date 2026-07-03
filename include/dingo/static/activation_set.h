@@ -12,7 +12,7 @@
 #include <dingo/core/context_base.h>
 #include <dingo/core/exceptions.h>
 #include <dingo/core/factory_traits.h>
-#include <dingo/core/keyed.h>
+#include <dingo/core/key.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/rtti/static_provider.h>
@@ -167,6 +167,22 @@ using static_activation_closure_t =
                                              Registrations...>::type;
 
 template <bool RuntimeDependencies, typename... Registrations>
+class static_activation_closure_storage
+    : private binding_closure_slot<
+          static_activation_closure_t<RuntimeDependencies, Registrations...>,
+          Registrations>... {
+  template <typename Registration>
+  using closure_holder = binding_closure_slot<
+      static_activation_closure_t<RuntimeDependencies, Registrations...>,
+      Registration>;
+
+public:
+  template <typename Registration> auto &get_closure() {
+    return static_cast<closure_holder<Registration> &>(*this).closure;
+  }
+};
+
+template <bool RuntimeDependencies, typename... Registrations>
 class static_binding_storage
     : private binding_conversion_cache_slot<Registrations>...,
       private binding_storage_slot<Registrations>...,
@@ -235,11 +251,18 @@ struct binding_activation {
     }
   }
 
-  template <typename T, bool RemoveRvalueReferences, bool CheckCache,
-            typename Context, typename Key>
-  decltype(auto) resolve(Context &context, key<Key>) {
-    (void)CheckCache;
-    return resolve<T, RemoveRvalueReferences>(context, key<Key>{});
+  template <typename T, bool RemoveRvalueReferences, typename Context,
+            typename IdType, std::enable_if_t<is_key_value_v<IdType>, int> = 0>
+  decltype(auto) resolve(Context &context, IdType) {
+    using local_bindings = typename BindingModel::bindings_type;
+    if constexpr (std::is_void_v<local_bindings>) {
+      return host.template resolve<T, RemoveRvalueReferences>(context,
+                                                              IdType{});
+    } else {
+      return state.template resolve_local_binding<
+          T, RemoveRvalueReferences, local_bindings, BindingModel, IdType>(
+          host, context);
+    }
   }
 
   template <typename T, typename Context>
@@ -297,8 +320,13 @@ template <typename Request, typename CapabilityTypes>
 struct request_capability_match;
 
 template <typename Capability>
-using unwrapped_static_capability_t =
-    typename annotated_traits<keyed_type_t<Capability>>::type;
+using unwrapped_static_capability_t = typename annotated_traits<
+    std::conditional_t<is_selected_v<Capability>, selected_type_t<Capability>,
+                       Capability>>::type;
+
+template <typename Request>
+using unwrapped_static_request_t = typename annotated_traits<std::conditional_t<
+    is_selected_v<Request>, selected_type_t<Request>, Request>>::type;
 
 template <typename Request>
 struct request_capability_match<Request, type_list<>> {
@@ -311,7 +339,7 @@ struct request_capability_match<Request, type_list<Head, Tail...>> {
       std::is_same_v<lookup_type_t<Head>, request_lookup_type_t<Request>> ||
           std::is_same_v<
               request_lookup_type_t<unwrapped_static_capability_t<Head>>,
-              request_lookup_type_t<Request>>,
+              request_lookup_type_t<unwrapped_static_request_t<Request>>>,
       Head,
       typename request_capability_match<Request, type_list<Tail...>>::type>;
 };
@@ -319,7 +347,7 @@ struct request_capability_match<Request, type_list<Head, Tail...>> {
 template <typename Request, typename InterfaceBinding>
 struct binding_supports_request {
   using capability_types =
-      typename binding_request_types<InterfaceBinding>::type;
+      typename binding_dependency_types<InterfaceBinding>::type;
   using type =
       typename request_capability_match<Request, capability_types>::type;
 
@@ -351,7 +379,7 @@ struct static_binding_resolver {
                   "static resolution cannot satisfy a request the storage "
                   "does not publish");
     using capability_types =
-        typename binding_request_types<InterfaceBinding>::type;
+        typename binding_dependency_types<InterfaceBinding>::type;
     using capability =
         typename request_capability_match<Request, capability_types>::type;
     if constexpr (!std::is_void_v<capability> &&
@@ -389,7 +417,7 @@ struct static_binding_resolver {
                   "static resolution cannot satisfy a request the storage "
                   "does not publish");
     using capability_types =
-        typename binding_request_types<InterfaceBinding>::type;
+        typename binding_dependency_types<InterfaceBinding>::type;
     using capability =
         typename request_capability_match<Request, capability_types>::type;
 
@@ -601,23 +629,11 @@ T construct_static_collection_default_impl(State &state, Host &host,
 }
 
 template <typename Derived, bool RuntimeDependencies, typename... Registrations>
-class basic_static_activation_set_base
-    : private binding_closure_slot<
-          static_activation_closure_t<RuntimeDependencies, Registrations...>,
-          Registrations>... {
-  template <typename Registration>
-  using closure_holder = binding_closure_slot<
-      static_activation_closure_t<RuntimeDependencies, Registrations...>,
-      Registration>;
-
+class basic_static_activation_set_base {
 public:
   static constexpr bool runtime_dependencies = RuntimeDependencies;
 
   using rtti_type = rtti<static_provider>;
-
-  template <typename Registration> auto &get_closure() {
-    return static_cast<closure_holder<Registration> &>(*this).closure;
-  }
 
   template <typename T, typename BindingModel, typename Context,
             typename Source>
@@ -641,7 +657,7 @@ public:
   template <typename T, bool RemoveRvalueReferences, typename LocalRegistry,
             typename BindingModel, typename Key = void, typename Host,
             typename Context,
-            typename R = resolve_result_t<T, RemoveRvalueReferences>>
+            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
   decltype(auto) resolve_local_binding(Host &host, Context &context) {
     if constexpr (collection_traits<R>::is_collection) {
       using collection_type = collection_traits<R>;
@@ -715,8 +731,12 @@ class basic_static_activation_set
     : public basic_static_activation_set_base<
           basic_static_activation_set<RuntimeDependencies, Registrations...>,
           RuntimeDependencies, Registrations...>,
+      private static_activation_closure_storage<RuntimeDependencies,
+                                                Registrations...>,
       private static_binding_storage<RuntimeDependencies, Registrations...> {
 public:
+  using static_activation_closure_storage<RuntimeDependencies,
+                                          Registrations...>::get_closure;
   using static_binding_storage<
       RuntimeDependencies, Registrations...>::get_conversion_cache_for_model;
   using static_binding_storage<RuntimeDependencies,
@@ -739,14 +759,19 @@ using static_storage_state = static_binding_storage<false, Registrations...>;
 
 template <bool RuntimeDependencies, typename StorageState,
           typename... Registrations>
-class basic_static_activation_set_ref
+class basic_static_activation_set_view
     : public basic_static_activation_set_base<
-          basic_static_activation_set_ref<RuntimeDependencies, StorageState,
-                                          Registrations...>,
-          RuntimeDependencies, Registrations...> {
+          basic_static_activation_set_view<RuntimeDependencies, StorageState,
+                                           Registrations...>,
+          RuntimeDependencies, Registrations...>,
+      private static_activation_closure_storage<RuntimeDependencies,
+                                                Registrations...> {
 public:
-  explicit basic_static_activation_set_ref(StorageState &state)
+  explicit basic_static_activation_set_view(StorageState &state)
       : state_(&state) {}
+
+  using static_activation_closure_storage<RuntimeDependencies,
+                                          Registrations...>::get_closure;
 
   template <typename Registration> auto &get_storage() {
     return state_->template get_storage<Registration>();
@@ -768,13 +793,37 @@ private:
   StorageState *state_;
 };
 
-template <typename StorageState, typename... Registrations>
-using static_binding_scope_ref =
-    basic_static_activation_set_ref<false, StorageState, Registrations...>;
+template <typename... Registrations>
+class borrowed_binding_scope
+    : public basic_static_activation_set_base<
+          borrowed_binding_scope<Registrations...>, true, Registrations...>,
+      private static_binding_storage<true, Registrations...> {
+public:
+  explicit borrowed_binding_scope(context_closure_base &closure)
+      : closure_(&closure) {}
+
+  template <typename Registration> context_closure_base &get_closure() {
+    return *closure_;
+  }
+
+  using static_binding_storage<
+      true, Registrations...>::get_conversion_cache_for_model;
+  using static_binding_storage<true,
+                               Registrations...>::get_local_scope_for_model;
+  using static_binding_storage<true, Registrations...>::get_storage;
+  using static_binding_storage<true, Registrations...>::get_storage_for_model;
+
+private:
+  context_closure_base *closure_;
+};
 
 template <typename StorageState, typename... Registrations>
-using binding_scope_ref =
-    basic_static_activation_set_ref<true, StorageState, Registrations...>;
+using static_binding_scope_view =
+    basic_static_activation_set_view<false, StorageState, Registrations...>;
+
+template <typename StorageState, typename... Registrations>
+using binding_scope_view =
+    basic_static_activation_set_view<true, StorageState, Registrations...>;
 
 } // namespace detail
 } // namespace dingo

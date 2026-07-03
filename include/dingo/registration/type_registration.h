@@ -10,11 +10,14 @@
 // #include <dingo/core/config.h>
 
 #include <dingo/core/factory_traits.h>
-#include <dingo/core/keyed.h>
+#include <dingo/core/key.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/storage/storage.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/type/type_list.h>
+
+#include <type_traits>
+#include <utility>
 
 namespace dingo {
 struct unique;
@@ -44,19 +47,6 @@ template <typename... Args> struct interfaces<type_list<Args...>> {
 template <typename T> struct factory {
   using type = T;
   template <typename U> using rebind_t = factory<U>;
-};
-
-template <typename T, auto... Values> struct key {
-  static_assert(sizeof...(Values) <= 1,
-                "dingo::key<T, V> accepts at most one value");
-  static_assert(sizeof...(Values) > 1 ||
-                    detail::is_key_value_usable_v<T, Values...>,
-                "dingo::key<T, V> requires V to be usable as T{V}");
-
-  using type = T;
-  template <typename U> using rebind_t = key<U>;
-
-  static constexpr bool has_value = sizeof...(Values) == 1;
 };
 
 template <typename T> struct conversions {
@@ -504,6 +494,19 @@ using registration_key_t = std::conditional_t<
     !std::is_same_v<typename ParsedArgs::key_type, ::dingo::key<void>>,
     typename ParsedArgs::key_type, registration_selected_key_t<ParsedArgs>>;
 
+template <typename Bindings> struct is_empty_bindings : std::false_type {};
+
+template <> struct is_empty_bindings<::dingo::bindings<>> : std::true_type {};
+
+template <>
+struct is_empty_bindings<::dingo::bindings<static_registry<>>>
+    : std::true_type {};
+
+template <typename Bindings>
+using canonical_bindings_t =
+    std::conditional_t<is_empty_bindings<Bindings>::value,
+                       ::dingo::bindings<void>, Bindings>;
+
 } // namespace detail
 
 // TODO:
@@ -541,9 +544,6 @@ public:
                 "failed to deduce an interface type");
 
   using key_type = detail::registration_key_t<parsed_args>;
-  static_assert(
-      !detail::is_key_value_v<key_type>,
-      "dingo::key<T, V> cannot be used as a typed-key registration key");
 
   // Conversions are deduced from Storage and Scope
   using conversions_type = detail::registration_conversions_t<parsed_args>;
@@ -551,7 +551,8 @@ public:
                 "failed to deduce a conversions type");
 
   using dependencies_type = detail::registration_dependencies_t<parsed_args>;
-  using bindings_type = typename parsed_args::bindings_type;
+  using bindings_type =
+      detail::canonical_bindings_t<typename parsed_args::bindings_type>;
 };
 
 } // namespace dingo

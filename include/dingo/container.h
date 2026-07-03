@@ -13,21 +13,20 @@
 #include <dingo/core/binding_resolution_policy.h>
 #include <dingo/core/binding_selection.h>
 #include <dingo/core/config.h>
+#include <dingo/core/dependency.h>
 #include <dingo/core/exceptions.h>
-#include <dingo/core/keyed.h>
 #include <dingo/core/none.h>
 #include <dingo/detail/container_base.h>
 #include <dingo/detail/container_traits.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/invoke.h>
-#include <dingo/index/index.h>
+#include <dingo/lookup/lookup.h>
 #include <dingo/memory/allocator.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/registration/requirements.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/resolution/runtime_binding.h>
-#include <dingo/resolution/type_cache.h>
 #include <dingo/rtti/static_provider.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/runtime/container_traits.h>
@@ -39,9 +38,8 @@
 #include <dingo/static/resolution.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/complete_type.h>
+#include <dingo/type/dependency_traits.h>
 #include <dingo/type/normalized_type.h>
-#include <dingo/type/request_traits.h>
-#include <dingo/type/type_map.h>
 
 #include <algorithm>
 #include <functional>
@@ -77,11 +75,13 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
                        typename dynamic_container_traits::allocator_type,
                        self_type, self_type>;
   using static_state = detail::static_storage_state<Registrations...>;
-  using static_resolution_ref =
-      detail::static_binding_scope_ref<static_state, Registrations...>;
-  using binding_resolution_ref =
-      detail::binding_scope_ref<static_state, Registrations...>;
+  using static_resolution =
+      detail::static_binding_scope_view<static_state, Registrations...>;
+  using binding_resolution =
+      detail::binding_scope_view<static_state, Registrations...>;
   using static_context_type = static_context<static_registry_type_>;
+  using index_entries_ = detail::normalize_lookup_definitions_t<
+      detail::container_lookup_definition_type_t<dynamic_container_traits>>;
   static constexpr bool has_parent_v = !std::is_void_v<ParentContainer>;
   using parent_container_type = ParentContainer;
 
@@ -98,26 +98,24 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
 
   template <typename T>
   static constexpr bool runtime_auto_constructible_v =
-      std::is_same_v<request_value_t<T>, std::decay_t<T>> &&
+      std::is_same_v<dependency_value_t<T>, std::decay_t<T>> &&
       (!std::is_reference_v<T> ||
        (std::is_lvalue_reference_v<T> &&
         std::is_const_v<std::remove_reference_t<T>> &&
         is_auto_constructible<std::decay_t<T>>::value));
 
-  template <typename T, bool CheckCache, typename IdType>
-  struct selected_runtime_binding {
+  template <typename T, typename IdType> struct selected_runtime_binding {
     runtime_base &registry;
     IdType &id;
 
     decltype(auto) select() {
-      return registry.template runtime_source_select<T>(
-          std::forward<IdType>(id));
+      return registry.template source_select<T>(std::forward<IdType>(id));
     }
 
     template <typename Request, typename Selection>
     decltype(auto) resolve(runtime_context &context, Selection selection) {
-      return registry.template runtime_source_resolve<T, CheckCache>(
-          selection, context, std::forward<IdType>(id));
+      return registry.template source_resolve<T>(selection, context,
+                                                 std::forward<IdType>(id));
     }
   };
 
@@ -128,10 +126,10 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
     IdType &id;
 
     template <typename Request>
-    request_interface_t<Request> resolve(runtime_context &context) {
+    dependency_interface_t<Request> resolve(runtime_context &context) {
       return self.template resolve_missing_runtime<
           T, RemoveRvalueReferences, MayAutoConstruct, IdType,
-          request_interface_t<Request>>(context, std::forward<IdType>(id));
+          dependency_interface_t<Request>>(context, std::forward<IdType>(id));
     }
   };
 
@@ -173,23 +171,13 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   };
 
   template <typename Request, typename Key = void> bool has_runtime_binding() {
-    if (!runtime_registry_.has_runtime_registrations()) {
-      return false;
-    }
     return runtime_registry_.template binding_status<Request, Key>() !=
            detail::binding_selection_status::not_found;
   }
 
   template <typename T, typename Key = void> bool has_runtime_collection() {
-    if (!runtime_registry_.has_runtime_registrations()) {
-      return false;
-    }
     return runtime_registry_.template count_runtime_collection<T>(
                collection_key<Key>()) != 0;
-  }
-
-  bool has_runtime_registrations() const {
-    return runtime_registry_.has_runtime_registrations();
   }
 
   template <typename Request, typename Key = void>
@@ -209,7 +197,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
                  typename static_selection_t<Request, Key>::binding_type,
                  static_registry_type_>) &&
             detail::binding_supports_request_v<
-                request_interface_t<Request>,
+                dependency_interface_t<Request>,
                 typename static_selection_t<Request, Key>::binding_type>> {};
 
   template <typename Request, typename Key = void>
@@ -220,8 +208,6 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   bool select_static_resolve() {
     if constexpr (!static_binding_satisfies_request_v<Request, Key>) {
       return false;
-    } else if (!has_runtime_registrations()) {
-      return true;
     } else {
       return !has_runtime_binding<Request, Key>();
     }
@@ -230,19 +216,17 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   template <typename T, bool RemoveRvalueReferences, typename Key = void>
   static constexpr bool has_static_resolve_request_v =
       static_binding_satisfies_request_v<
-          resolve_request_t<T, RemoveRvalueReferences>, Key>;
+          resolve_dependency_t<T, RemoveRvalueReferences>, Key>;
 
   template <typename T, bool RemoveRvalueReferences, typename Key = void>
   static constexpr detail::binding_selection_status static_resolve_status_v =
-      static_selection_t<resolve_request_t<T, RemoveRvalueReferences>,
+      static_selection_t<resolve_dependency_t<T, RemoveRvalueReferences>,
                          Key>::status;
 
   template <typename Collection, typename Key = void>
   bool select_static_collection() {
     if constexpr (!has_static_collection_v<Collection, Key>) {
       return false;
-    } else if (!has_runtime_registrations()) {
-      return true;
     } else {
       return !has_runtime_collection<Collection, Key>();
     }
@@ -250,8 +234,8 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
 
   template <typename T>
   static constexpr bool has_static_construct_request_v = [] {
-    using request_type = request_interface_t<T>;
-    using normalized_request_type = request_value_t<T>;
+    using request_type = dependency_interface_t<T>;
+    using normalized_request_type = dependency_value_t<T>;
     constexpr bool has_exact_static_binding =
         static_binding_satisfies_request_v<request_type>;
     constexpr bool has_normalized_static_binding =
@@ -267,13 +251,11 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   }();
 
   template <typename T> bool select_static_construct() {
-    using request_type = request_interface_t<T>;
-    using normalized_request_type = request_value_t<T>;
+    using request_type = dependency_interface_t<T>;
+    using normalized_request_type = dependency_value_t<T>;
 
     if constexpr (!has_static_construct_request_v<T>) {
       return false;
-    } else if (!has_runtime_registrations()) {
-      return true;
     } else {
       return !has_runtime_binding<request_type>() &&
              !has_runtime_binding<normalized_request_type>();
@@ -287,8 +269,6 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
                                                 Key>() != 0;
     if constexpr (!has_static_collection_bindings) {
       return false;
-    } else if (!has_runtime_registrations()) {
-      return true;
     } else {
       return !has_runtime_collection<T, Key>();
     }
@@ -307,38 +287,38 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
 
   template <typename T, typename Key, typename Fn, typename Context>
   T construct_static_collection(Context &context, Fn &&fn, key<Key>) {
-    static_resolution_ref static_state_ref(static_state_);
-    return static_state_ref
+    static_resolution static_state_scope(static_state_);
+    return static_state_scope
         .template construct_static_collection<T, Key, static_registry_type_>(
             *this, context, std::forward<Fn>(fn));
   }
 
   template <typename T, typename Fn, typename Context>
   T construct_static_collection(Context &context, Fn &&fn, none_t) {
-    static_resolution_ref static_state_ref(static_state_);
-    return static_state_ref
+    static_resolution static_state_scope(static_state_);
+    return static_state_scope
         .template construct_static_collection<T, void, static_registry_type_>(
             *this, context, std::forward<Fn>(fn));
   }
 
   template <typename T, typename Key, typename Context>
   T construct_static_collection(Context &context, key<Key>) {
-    static_resolution_ref static_state_ref(static_state_);
-    return static_state_ref
+    static_resolution static_state_scope(static_state_);
+    return static_state_scope
         .template construct_static_collection<T, Key, static_registry_type_>(
             *this, context);
   }
 
   template <typename T, typename Context>
   T construct_static_collection(Context &context, none_t) {
-    static_resolution_ref static_state_ref(static_state_);
-    return static_state_ref
+    static_resolution static_state_scope(static_state_);
+    return static_state_scope
         .template construct_static_collection<T, void, static_registry_type_>(
             *this, context);
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Key = void,
-            typename R = request_result_t<T>,
+            typename R = dependency_result_t<T>,
             std::enable_if_t<std::is_rvalue_reference_v<T>, int> = 0>
   DINGO_ALWAYS_INLINE R resolve_static() {
     static_context_type static_context;
@@ -352,10 +332,10 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
     return resolve_static<T, RemoveRvalueReferences, Key>(static_context);
   }
 
-  template <typename T, typename R = request_result_t<T>>
+  template <typename T, typename R = dependency_result_t<T>>
   DINGO_ALWAYS_INLINE R construct_static() {
-    using request_type = request_interface_t<T>;
-    using normalized_request_type = request_value_t<T>;
+    using request_type = dependency_interface_t<T>;
+    using normalized_request_type = dependency_value_t<T>;
     constexpr bool has_exact_static_binding =
         static_binding_satisfies_request_v<request_type>;
     constexpr bool has_normalized_static_binding =
@@ -413,7 +393,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   T construct_collection_impl(runtime_context &context, Fn &&fn) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
-    binding_resolution_ref static_state_ref(static_state_);
+    binding_resolution static_state_scope(static_state_);
 
     constexpr std::size_t static_count =
         type_list_size_v<typename static_registry_type_::template bindings<
@@ -430,7 +410,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
               collection_key<Key>());
         },
         [&](auto &results, auto &&append) {
-          static_state_ref
+          static_state_scope
               .template append_static_collection<T, Key, static_registry_type_>(
                   results, *this, context,
                   std::forward<decltype(append)>(append));
@@ -450,7 +430,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
 
   template <typename LookupRequest, typename Request, typename Key,
             typename Context>
-  DINGO_ALWAYS_INLINE request_interface_t<Request>
+  DINGO_ALWAYS_INLINE dependency_interface_t<Request>
   resolve_static_selection(Context &context) {
     using selection = static_selection_t<LookupRequest, Key>;
     using binding = typename selection::binding_type;
@@ -463,15 +443,15 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
         throw detail::make_type_not_found_exception<LookupRequest>(context);
       }
     } else {
-      static_resolution_ref static_state_ref(static_state_);
+      static_resolution static_state_scope(static_state_);
       auto resolver =
-          static_state_ref.template make_binding_resolver<binding>(*this);
+          static_state_scope.template make_binding_resolver<binding>(*this);
       return resolver.template resolve<Request>(context);
     }
   }
 
   template <typename Request, typename Key, typename Context>
-  request_interface_t<Request> resolve_binding_selection(Context &context) {
+  dependency_interface_t<Request> resolve_binding_selection(Context &context) {
     using selection = static_selection_t<Request, Key>;
     using binding = typename selection::binding_type;
     if constexpr (selection::status !=
@@ -483,21 +463,22 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
         throw detail::make_type_not_found_exception<Request>(context);
       }
     } else {
-      binding_resolution_ref static_state_ref(static_state_);
+      binding_resolution static_state_scope(static_state_);
       auto resolver =
-          static_state_ref.template make_binding_resolver<binding>(*this);
+          static_state_scope.template make_binding_resolver<binding>(*this);
       return resolver.template resolve<Request>(context);
     }
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Key = void,
             typename Context,
-            typename R = resolve_result_t<T, RemoveRvalueReferences>>
+            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
   DINGO_ALWAYS_INLINE R resolve_static(Context &context) {
     if constexpr (collection_traits<R>::is_collection) {
       return construct_static_collection<R>(context, collection_key<Key>());
     } else {
-      using lookup_request_type = resolve_request_t<T, RemoveRvalueReferences>;
+      using lookup_request_type =
+          resolve_dependency_t<T, RemoveRvalueReferences>;
       using request_type = R;
       return resolve_static_selection<lookup_request_type, request_type, Key>(
           context);
@@ -515,7 +496,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
 
   template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
             typename IdType,
-            typename R = resolve_request_t<T, RemoveRvalueReferences>>
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
   R resolve_missing_runtime(runtime_context &context, IdType &&id) {
     using Type = normalized_type_t<T>;
     (void)id;
@@ -531,7 +512,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
         static_assert(is_complete<Type>::value,
                       "auto-construction requires a complete type");
         using type_detection = detail::automatic;
-        return context.template construct_temporary<request_interface_t<T>,
+        return context.template construct_temporary<dependency_interface_t<T>,
                                                     type_detection>(*this);
       } else if constexpr (is_none_v<std::decay_t<IdType>>) {
         throw detail::make_type_not_found_exception<T>(context);
@@ -548,14 +529,13 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   }
 
   template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
-            bool CheckCache = true, typename IdType = none_t,
-            typename R = resolve_request_t<T, RemoveRvalueReferences>>
+            typename IdType = none_t,
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
   R resolve_runtime_only(runtime_context &context, IdType &&id = IdType()) {
     using Type = normalized_type_t<T>;
     static_assert(!std::is_const_v<Type>);
 
-    selected_runtime_binding<T, CheckCache, IdType> selected{runtime_registry_,
-                                                             id};
+    selected_runtime_binding<T, IdType> selected{runtime_registry_, id};
     missing_runtime_binding<T, RemoveRvalueReferences, MayAutoConstruct, IdType>
         missing{*this, id};
     auto sources = detail::make_selected_binding_sources(selected, missing);
@@ -563,7 +543,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Key = void,
-            typename R = resolve_result_t<T, RemoveRvalueReferences>>
+            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
   R resolve_parent(none_t = {}) {
     if constexpr (std::is_void_v<Key>) {
       return parent_->template resolve<T>();
@@ -572,38 +552,35 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
     }
   }
 
-  template <typename T, bool RemoveRvalueReferences, bool CheckCache,
-            typename Key = void,
-            typename R = resolve_request_t<T, RemoveRvalueReferences>>
+  template <typename T, bool RemoveRvalueReferences, typename Key = void,
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
   R resolve_parent(runtime_context &context) {
     using selector_type =
         std::conditional_t<std::is_void_v<Key>, void, key<Key>>;
     if constexpr (detail::is_context_resolve_supported_v<
                       parent_container_type, runtime_context, T,
-                      RemoveRvalueReferences, CheckCache, selector_type>) {
+                      RemoveRvalueReferences, selector_type>) {
       if constexpr (std::is_void_v<Key>) {
-        return parent_->template resolve<T, RemoveRvalueReferences, CheckCache>(
-            context);
+        return parent_->template resolve<T, RemoveRvalueReferences>(context);
       } else {
-        return parent_->template resolve<T, RemoveRvalueReferences, CheckCache>(
-            context, key<Key>{});
+        return parent_->template resolve<T, RemoveRvalueReferences>(context,
+                                                                    key<Key>{});
       }
     } else {
       return resolve_parent<T, RemoveRvalueReferences, Key>();
     }
   }
 
-  template <typename T, bool RemoveRvalueReferences, bool CheckCache,
-            typename IdType,
-            typename R = resolve_request_t<T, RemoveRvalueReferences>,
+  template <typename T, bool RemoveRvalueReferences, typename IdType,
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>,
             std::enable_if_t<!is_none_v<std::decay_t<IdType>> &&
                                  !detail::is_typed_key_v<IdType>,
                              int> = 0>
   R resolve_parent(runtime_context &context, IdType &&id) {
     if constexpr (detail::is_context_resolve_supported_v<
                       parent_container_type, runtime_context, T,
-                      RemoveRvalueReferences, CheckCache, IdType &&>) {
-      return parent_->template resolve<T, RemoveRvalueReferences, CheckCache>(
+                      RemoveRvalueReferences, IdType &&>) {
+      return parent_->template resolve<T, RemoveRvalueReferences>(
           context, std::forward<IdType>(id));
     } else {
       return parent_->template resolve<T>(std::forward<IdType>(id));
@@ -611,7 +588,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   }
 
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-            typename R = request_result_t<T>>
+            typename R = dependency_result_t<T>>
   R construct_runtime_only(Factory factory = Factory()) {
     runtime_context context;
     if constexpr (std::is_same_v<Factory, constructor<normalized_type_t<T>>>) {
@@ -679,6 +656,17 @@ public:
 
   static_assert(static_source_type::valid,
                 "container requires a valid compile-time bindings source");
+  static_assert(detail::key_value_bindings_are_declared<
+                    typename static_source_type::interface_bindings,
+                    index_entries_>::value,
+                "container fixed dingo::key<Key, Value> bindings require "
+                "static_container with associative<Key, Interface, one> or "
+                "associative<Key, Interface, many>");
+  static_assert(detail::key_value_bindings_are_unique<
+                    typename static_source_type::interface_bindings,
+                    index_entries_>::value,
+                "container fixed runtime-key lookup bindings must be unique "
+                "for one lookups and unique by storage for many lookups");
   static_assert(detail::graph_analysis<static_source_type, true>::resolvable,
                 "container requires a resolvable compile-time binding graph");
   static_assert(
@@ -742,7 +730,7 @@ public:
   const self_type &container() const { return *this; }
 
   template <typename T, typename IdType = none_t,
-            typename R = request_result_t<T>>
+            typename R = dependency_result_t<T>>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
   DINGO_ALWAYS_INLINE R resolve(IdType &&id = IdType()) {
     if constexpr (detail::is_typed_key_v<IdType>) {
@@ -773,7 +761,7 @@ public:
         }
       }
       runtime_context context;
-      return resolve<T, false, true, key_type>(context);
+      return resolve<T, false, key_type>(context);
     } else if constexpr (!is_none_v<std::decay_t<IdType>>) {
       if constexpr (has_parent_v) {
         if constexpr (collection_traits<R>::is_collection) {
@@ -824,17 +812,12 @@ public:
   }
 
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-            typename R = request_result_t<T>>
+            typename R = dependency_result_t<T>>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity)
   DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
-    using request_type = request_interface_t<T>;
-    using normalized_request_type = request_value_t<T>;
+    using request_type = dependency_interface_t<T>;
+    using normalized_request_type = dependency_value_t<T>;
     if constexpr (std::is_same_v<Factory, constructor<normalized_type_t<T>>>) {
-      if constexpr (has_static_construct_request_v<T>) {
-        if (!has_runtime_registrations()) {
-          return construct_static<T>();
-        }
-      }
       if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<T>) {
         constexpr bool has_static_normalized_binding =
             static_selection_t<normalized_request_type, void>::status !=
@@ -952,7 +935,7 @@ public:
 
   template <typename Request, typename Key = void>
   detail::binding_selection_status binding_status() {
-    using request_type = request_interface_t<Request>;
+    using request_type = dependency_interface_t<Request>;
     using static_selection = static_selection_t<request_type, Key>;
     const auto runtime_status =
         runtime_registry_.template binding_status<request_type, Key>();
@@ -963,7 +946,7 @@ public:
 
   template <typename T, bool RemoveRvalueReferences, typename Key = void>
   detail::binding_selection_status resolve_binding_status() {
-    using request_type = resolve_request_t<T, RemoveRvalueReferences>;
+    using request_type = resolve_dependency_t<T, RemoveRvalueReferences>;
     const auto runtime_status =
         runtime_registry_.template binding_status<request_type, Key>();
     return detail::resolve_binding_status<
@@ -992,7 +975,7 @@ public:
   std::size_t append_collection_impl(T &results,
                                      runtime_context &runtime_context,
                                      Context &static_context, Fn &&fn) {
-    binding_resolution_ref static_state_ref(static_state_);
+    binding_resolution static_state_scope(static_state_);
     return detail::append_binding_collection(
         results,
         [&](auto &collection, auto &&append) {
@@ -1001,7 +984,7 @@ public:
               std::forward<decltype(append)>(append), collection_key<Key>());
         },
         [&](auto &collection, auto &&append) {
-          return static_state_ref
+          return static_state_scope
               .template append_static_collection<T, Key, static_registry_type_>(
                   collection, *this, static_context,
                   std::forward<decltype(append)>(append));
@@ -1020,14 +1003,13 @@ public:
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Key = void,
-            typename R = resolve_request_t<T, RemoveRvalueReferences>>
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
   R resolve_request(runtime_context &context) {
-    return resolve<T, RemoveRvalueReferences, true>(context,
-                                                    collection_key<Key>());
+    return resolve<T, RemoveRvalueReferences>(context, collection_key<Key>());
   }
 
-  template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
-            typename R = resolve_result_t<T, RemoveRvalueReferences>>
+  template <typename T, bool RemoveRvalueReferences,
+            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
   R resolve(static_context_type &context, none_t) {
     if constexpr (!has_static_resolve_request_v<T, RemoveRvalueReferences> &&
                   has_parent_v) {
@@ -1041,9 +1023,8 @@ public:
     return resolve_static<T, RemoveRvalueReferences>(context);
   }
 
-  template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
-            typename Key = void,
-            typename R = resolve_result_t<T, RemoveRvalueReferences>>
+  template <typename T, bool RemoveRvalueReferences, typename Key = void,
+            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
   R resolve(static_context_type &context) {
     if constexpr (!has_static_resolve_request_v<T, RemoveRvalueReferences,
                                                 Key> &&
@@ -1058,9 +1039,8 @@ public:
     return resolve_static<T, RemoveRvalueReferences, Key>(context);
   }
 
-  template <typename T, bool RemoveRvalueReferences, bool CheckCache,
-            typename Key,
-            typename R = resolve_request_t<T, RemoveRvalueReferences>>
+  template <typename T, bool RemoveRvalueReferences, typename Key,
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
   R resolve(static_context_type &context, key<Key>) {
     if constexpr (!has_static_resolve_request_v<T, RemoveRvalueReferences,
                                                 Key> &&
@@ -1075,21 +1055,19 @@ public:
     return resolve_static<T, RemoveRvalueReferences, Key>(context);
   }
 
-  template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
-            typename R = resolve_result_t<T, RemoveRvalueReferences>>
+  template <typename T, bool RemoveRvalueReferences,
+            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
   R resolve(runtime_context &context, none_t) {
-    return resolve<T, RemoveRvalueReferences, CheckCache>(context);
+    return resolve<T, RemoveRvalueReferences>(context);
   }
 
-  template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
-            typename Key = void,
-            typename R = resolve_result_t<T, RemoveRvalueReferences>>
+  template <typename T, bool RemoveRvalueReferences, typename Key = void,
+            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
   R resolve(runtime_context &context) {
     if constexpr (collection_traits<R>::is_collection) {
       if constexpr (has_parent_v) {
         if (parent_ && count_collection<R, Key>() == 0) {
-          return resolve_parent<T, RemoveRvalueReferences, CheckCache, Key>(
-              context);
+          return resolve_parent<T, RemoveRvalueReferences, Key>(context);
         }
       }
       return construct_collection<R>(
@@ -1101,8 +1079,7 @@ public:
           if (parent_ &&
               resolve_binding_status<T, RemoveRvalueReferences, Key>() ==
                   detail::binding_selection_status::not_found) {
-            return resolve_parent<T, RemoveRvalueReferences, CheckCache, Key>(
-                context);
+            return resolve_parent<T, RemoveRvalueReferences, Key>(context);
           }
         }
       }
@@ -1118,16 +1095,14 @@ public:
     }
   }
 
-  template <typename T, bool RemoveRvalueReferences, bool CheckCache,
-            typename Key,
-            typename R = resolve_request_t<T, RemoveRvalueReferences>>
+  template <typename T, bool RemoveRvalueReferences, typename Key,
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
   R resolve(runtime_context &context, key<Key>) {
-    return resolve<T, RemoveRvalueReferences, CheckCache, Key>(context);
+    return resolve<T, RemoveRvalueReferences, Key>(context);
   }
 
-  template <typename T, bool RemoveRvalueReferences, bool CheckCache,
-            typename IdType,
-            typename R = resolve_request_t<T, RemoveRvalueReferences>,
+  template <typename T, bool RemoveRvalueReferences, typename IdType,
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>,
             std::enable_if_t<!is_none_v<std::decay_t<IdType>> &&
                                  !detail::is_typed_key_v<IdType>,
                              int> = 0>
@@ -1136,26 +1111,26 @@ public:
       if constexpr (has_parent_v) {
         if (parent_ &&
             runtime_registry_.template count_runtime_collection<R>(id) == 0) {
-          return resolve_parent<T, RemoveRvalueReferences, CheckCache>(
+          return resolve_parent<T, RemoveRvalueReferences>(
               context, std::forward<IdType>(id));
         }
       }
     } else if constexpr (has_parent_v) {
       if (parent_ && runtime_registry_.template binding_status_for_id<T>(id) ==
                          detail::binding_selection_status::not_found) {
-        return resolve_parent<T, RemoveRvalueReferences, CheckCache>(
+        return resolve_parent<T, RemoveRvalueReferences>(
             context, std::forward<IdType>(id));
       }
     }
     return resolve_runtime_only<T, RemoveRvalueReferences,
-                                runtime_auto_constructible_v<T>, CheckCache>(
+                                runtime_auto_constructible_v<T>>(
         context, std::forward<IdType>(id));
   }
 
 private:
   friend class detail::runtime_registration_api<self_type>;
 
-  runtime_registry_type &runtime_registry_ref() { return runtime_registry_; }
+  runtime_registry_type &binding_store() { return runtime_registry_; }
 
   self_type &runtime_registration_parent() { return *this; }
 

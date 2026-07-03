@@ -36,6 +36,7 @@ TEST(static_bindings_source_test, exposes_models_and_dependency_bindings) {
   using registry_type = typename source::type;
 
   static_assert(registry_type::valid);
+  static_assert(std::is_same_v<dependency<config &>, config &>);
   static_assert(std::is_same_v<typename registry_type::registration_types,
                                type_list<config_binding, service_binding>>);
   static_assert(
@@ -205,30 +206,32 @@ TEST(static_bindings_source_test,
   struct second_key : std::integral_constant<int, 1> {};
   struct config {};
   struct service {
-    explicit service(keyed<config &, first_key>) {}
+    explicit service(dependency<config &, key<first_key>>) {}
   };
 
   using first_config_binding =
       dingo::bind<scope<shared>, storage<config>, key<first_key>>;
   using second_config_binding =
       dingo::bind<scope<shared>, storage<config>, key<second_key>>;
-  using service_binding = dingo::bind<scope<unique>, storage<service>,
-                                      dependencies<keyed<config &, first_key>>>;
+  using service_binding =
+      dingo::bind<scope<unique>, storage<service>,
+                  dependencies<dependency<config &, key<first_key>>>>;
   using source = dingo::bindings<first_config_binding, second_config_binding,
                                  service_binding>;
   using registry_type = typename source::type;
 
   static_assert(registry_type::valid);
-  static_assert(std::is_same_v<typename registry_type::dependencies<service>,
-                               type_list<keyed<config &, first_key>>>);
+  static_assert(
+      std::is_same_v<typename registry_type::dependencies<service>,
+                     type_list<dependency<config &, key<first_key>>>>);
   static_assert(
       std::is_same_v<typename registry_type::dependency_bindings<service>,
                      type_list<typename registry_type::template binding<
-                         keyed<config, first_key>>>>);
-  static_assert(
-      std::is_same_v<
-          typename registry_type::template binding<keyed<config, first_key>>,
-          typename registry_type::template binding<config, first_key>>);
+                         dependency<config, key<first_key>>>>>);
+  static_assert(std::is_same_v<
+                typename registry_type::template binding<
+                    dependency<config, key<first_key>>>,
+                typename registry_type::template binding<config, first_key>>);
 }
 
 TEST(static_bindings_source_test,

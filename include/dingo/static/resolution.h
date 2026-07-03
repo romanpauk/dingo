@@ -9,8 +9,8 @@
 
 #include <dingo/core/factory_traits.h>
 #include <dingo/static/graph.h>
+#include <dingo/type/dependency_traits.h>
 #include <dingo/type/normalized_type.h>
-#include <dingo/type/request_traits.h>
 #include <dingo/type/type_list.h>
 
 #include <type_traits>
@@ -71,7 +71,7 @@ struct binding_factory<Selection, Request, true> {
 };
 
 template <typename Request, typename Selection, typename ResolveNormalized>
-request_result_t<Request>
+dependency_result_t<Request>
 construct_static_binding_value(ResolveNormalized &&resolve_normalized) {
   if constexpr (binding_factory<Selection, Request>::enabled) {
     return type_traits<std::decay_t<Request>>::make(

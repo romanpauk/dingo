@@ -55,7 +55,7 @@ FEATURES = (
         requires=frozenset(
             {"collection_binding", "shared_storage", "resolved_collection"}
         ),
-        modes=frozenset({"runtime", "static", "mixed"}),
+        modes=frozenset({"static", "mixed"}),
         system_headers=("algorithm",),
     ),
     Feature(
@@ -109,7 +109,7 @@ FEATURES = (
     Feature(
         name="resolve_keyed_collection",
         requires=frozenset({"keyed_collection_binding", "resolved_keyed_collection"}),
-        modes=frozenset({"runtime", "static", "mixed"}),
+        modes=frozenset({"static", "mixed"}),
         system_headers=("algorithm",),
     ),
     Feature(
@@ -129,7 +129,7 @@ FEATURES = (
     Feature(
         name="construct_collection",
         requires=frozenset({"collection_binding", "constructable_collection"}),
-        modes=frozenset({"runtime", "static", "mixed"}),
+        modes=frozenset({"static", "mixed"}),
         system_headers=("algorithm", "map"),
         checks=(
             "auto elements = container.template construct_collection<std::vector<std::shared_ptr<element_interface>>>();",
@@ -237,7 +237,7 @@ FEATURES = (
             "ASSERT_EQ(rollback_b::constructor_count, 1u);",
             "ASSERT_EQ(rollback_b::destructor_count, 0u);",
             "",
-            "ASSERT_THROW((container.template register_type<dingo::scope<dingo::shared>, dingo::storage<rollback_a>>()), dingo::type_already_registered_exception);",
+            "ASSERT_THROW((container.template register_type<dingo::scope<dingo::shared>, dingo::storage<rollback_a>>()), dingo::lookup_already_registered_exception);",
         ),
     ),
     Feature(
