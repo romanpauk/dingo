@@ -48,14 +48,13 @@ struct binding_source_selection {
   }
 };
 
-constexpr binding_result resolve_binding(binding_selection_status primary,
-                                         binding_selection_status secondary,
+constexpr binding_result resolve_binding(binding_status primary,
+                                         binding_status secondary,
                                          binding_resolution_policy policy) {
-  const bool primary_ambiguous = primary == binding_selection_status::ambiguous;
-  const bool secondary_ambiguous =
-      secondary == binding_selection_status::ambiguous;
-  const bool primary_found = primary == binding_selection_status::found;
-  const bool secondary_found = secondary == binding_selection_status::found;
+  const bool primary_ambiguous = primary == binding_status::ambiguous;
+  const bool secondary_ambiguous = secondary == binding_status::ambiguous;
+  const bool primary_found = primary == binding_status::found;
+  const bool secondary_found = secondary == binding_status::found;
 
   if (policy == binding_resolution_policy::prefer_primary) {
     if (primary_ambiguous) {
@@ -93,24 +92,25 @@ constexpr binding_result resolve_binding(binding_selection_status primary,
   return binding_result::missing;
 }
 
-constexpr binding_selection_status binding_status(binding_result resolution) {
+constexpr binding_status binding_status_from_result(binding_result resolution) {
   switch (resolution) {
   case binding_result::primary:
   case binding_result::secondary:
-    return binding_selection_status::found;
+    return binding_status::found;
   case binding_result::ambiguous:
-    return binding_selection_status::ambiguous;
+    return binding_status::ambiguous;
   case binding_result::missing:
   default:
-    return binding_selection_status::not_found;
+    return binding_status::not_found;
   }
 }
 
-template <binding_selection_status SecondaryStatus>
-constexpr binding_selection_status
-resolve_binding_status(binding_selection_status primary,
+template <binding_status SecondaryStatus>
+constexpr binding_status
+resolve_binding_status(binding_status primary,
                        binding_resolution_policy policy) {
-  return binding_status(resolve_binding(primary, SecondaryStatus, policy));
+  return binding_status_from_result(
+      resolve_binding(primary, SecondaryStatus, policy));
 }
 
 template <typename ErrorRequest, typename ResolveRequest = ErrorRequest,
@@ -181,10 +181,10 @@ template <typename Source, typename MissingSource> struct one_binding_source {
 
   binding_source_selection select() {
     const auto status = source.status();
-    if (status == binding_selection_status::ambiguous) {
+    if (status == binding_status::ambiguous) {
       return {binding_result::ambiguous};
     }
-    if (status == binding_selection_status::found) {
+    if (status == binding_status::found) {
       return {binding_result::primary};
     }
     return {binding_result::missing};

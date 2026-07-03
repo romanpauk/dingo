@@ -1265,11 +1265,11 @@ struct static_graph<StaticSource,
     : static_graph<static_bindings_source_t<StaticSource>, void> {};
 
 template <typename... Registrations>
-struct static_graph<static_registry<Registrations...>, void>
+struct static_graph<static_bindings<Registrations...>, void>
     : private detail::static_registry_dependency_diagnostics<
-          typename static_registry<Registrations...>::interface_bindings,
+          typename static_bindings<Registrations...>::interface_bindings,
           detail::binding_model<Registrations>...> {
-  using static_registry_type = static_registry<Registrations...>;
+  using static_registry_type = static_bindings<Registrations...>;
   using interface_bindings = typename static_registry_type::interface_bindings;
   using nodes =
       detail::static_graph_nodes_t<interface_bindings, static_registry_type>;

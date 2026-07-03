@@ -31,7 +31,7 @@ template <typename First>
 using container_base_two_parameter_tag_t = std::conditional_t<
     is_runtime_container_traits_v<First>,
     container_base_runtime_two_parameter_tag,
-    std::conditional_t<is_static_registry_v<First> ||
+    std::conditional_t<is_static_bindings_v<First> ||
                            is_bindings_wrapper_v<First>,
                        container_base_static_parent_tag,
                        container_base_invalid_two_parameter_tag>>;
@@ -101,20 +101,20 @@ struct container_base_from_parameter<
 
 template <typename Param>
 struct container_base_from_parameter<
-    Param, std::enable_if_t<is_static_registry_v<Param>>> {
+    Param, std::enable_if_t<is_static_bindings_v<Param>>> {
   using type = container_with_static_bindings<Param>;
 };
 
 template <typename Param>
 struct container_base_from_parameter<
     Param, std::enable_if_t<is_bindings_wrapper_v<Param>>> {
-  using static_registry_type = bindings_wrapper_registry_t<Param>;
+  using static_bindings_type = bindings_wrapper_registry_t<Param>;
 
-  static_assert(is_static_registry_v<static_registry_type>,
+  static_assert(is_static_bindings_v<static_bindings_type>,
                 "container<bindings<...>> requires a valid compile-time "
                 "bindings source");
 
-  using type = container_with_static_bindings<static_registry_type>;
+  using type = container_with_static_bindings<static_bindings_type>;
 };
 
 template <typename Param, typename Parent, typename Enable>
@@ -126,20 +126,20 @@ struct container_base_from_static_parent {
 
 template <typename Param, typename Parent>
 struct container_base_from_static_parent<
-    Param, Parent, std::enable_if_t<is_static_registry_v<Param>>> {
+    Param, Parent, std::enable_if_t<is_static_bindings_v<Param>>> {
   using type = container_with_static_bindings<Param, Parent>;
 };
 
 template <typename Param, typename Parent>
 struct container_base_from_static_parent<
     Param, Parent, std::enable_if_t<is_bindings_wrapper_v<Param>>> {
-  using static_registry_type = bindings_wrapper_registry_t<Param>;
+  using static_bindings_type = bindings_wrapper_registry_t<Param>;
 
-  static_assert(is_static_registry_v<static_registry_type>,
+  static_assert(is_static_bindings_v<static_bindings_type>,
                 "container<bindings<...>, Parent> requires a valid "
                 "compile-time bindings source");
 
-  using type = container_with_static_bindings<static_registry_type, Parent>;
+  using type = container_with_static_bindings<static_bindings_type, Parent>;
 };
 
 } // namespace dingo::detail

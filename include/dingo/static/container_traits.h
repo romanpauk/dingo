@@ -31,17 +31,17 @@ class static_container;
 
 namespace detail {
 
-template <typename StaticRegistry, typename ParentContainer = void>
+template <typename StaticBindings, typename ParentContainer = void>
 class container_with_static_bindings;
 
-template <typename T> struct is_static_registry : std::false_type {};
+template <typename T> struct is_static_bindings : std::false_type {};
 
 template <typename... Registrations>
-struct is_static_registry<static_registry<Registrations...>> : std::true_type {
+struct is_static_bindings<static_bindings<Registrations...>> : std::true_type {
 };
 
 template <typename T>
-inline constexpr bool is_static_registry_v = is_static_registry<T>::value;
+inline constexpr bool is_static_bindings_v = is_static_bindings<T>::value;
 
 template <typename T, typename = void>
 struct is_static_container_traits : std::false_type {};

@@ -52,7 +52,7 @@ Type construct_factory_value_without_dependencies() {
 }
 
 template <typename Selection, typename Request,
-          bool Enabled = Selection::status == binding_selection_status::found>
+          bool Enabled = Selection::status == binding_status::found>
 struct binding_factory {
   static constexpr bool enabled = false;
 };

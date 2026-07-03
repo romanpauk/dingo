@@ -16,28 +16,25 @@
 namespace dingo {
 namespace detail {
 
-enum class binding_selection_status {
+enum class binding_status {
   found,
   not_found,
   ambiguous,
 };
 
-template <binding_selection_status Status, typename Binding = void>
+template <binding_status Status, typename Binding = void>
 struct binding_choice {
-  static constexpr binding_selection_status status = Status;
-  static constexpr bool found = Status == binding_selection_status::found;
+  static constexpr binding_status status = Status;
+  static constexpr bool found = Status == binding_status::found;
   using binding_type = Binding;
 };
 
 template <typename Binding>
-using found_binding_choice_t =
-    binding_choice<binding_selection_status::found, Binding>;
+using found_binding_choice_t = binding_choice<binding_status::found, Binding>;
 
-using missing_binding_choice_t =
-    binding_choice<binding_selection_status::not_found>;
+using missing_binding_choice_t = binding_choice<binding_status::not_found>;
 
-using ambiguous_binding_choice_t =
-    binding_choice<binding_selection_status::ambiguous>;
+using ambiguous_binding_choice_t = binding_choice<binding_status::ambiguous>;
 
 template <typename Bindings> struct static_binding;
 
@@ -59,27 +56,25 @@ using static_binding_t = typename static_binding<Bindings>::type;
 
 template <typename Binding, typename State = std::nullptr_t>
 struct runtime_binding_selection {
-  binding_selection_status status = binding_selection_status::not_found;
+  binding_status status = binding_status::not_found;
   Binding *binding = nullptr;
   State state = nullptr;
 
-  constexpr bool found() const {
-    return status == binding_selection_status::found;
-  }
+  constexpr bool found() const { return status == binding_status::found; }
 
   constexpr bool ambiguous() const {
-    return status == binding_selection_status::ambiguous;
+    return status == binding_status::ambiguous;
   }
 
   static constexpr runtime_binding_selection found(Binding &binding,
                                                    State state = nullptr) {
-    return {binding_selection_status::found, &binding, state};
+    return {binding_status::found, &binding, state};
   }
 
   static constexpr runtime_binding_selection miss() { return {}; }
 
   static constexpr runtime_binding_selection ambiguity() {
-    return {binding_selection_status::ambiguous, nullptr, nullptr};
+    return {binding_status::ambiguous, nullptr, nullptr};
   }
 };
 

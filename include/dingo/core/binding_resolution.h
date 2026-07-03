@@ -453,7 +453,7 @@ void *resolve_binding_capability_address(Factory &factory, Context &context,
 }
 
 template <typename Request>
-inline constexpr bool can_wrap_normalized_request_v =
+inline constexpr bool can_construct_from_normalized_request_v =
     type_traits<std::decay_t<Request>>::enabled &&
     !std::is_pointer_v<std::decay_t<Request>> &&
     !std::is_same_v<normalized_type_t<Request>, std::decay_t<Request>>;
@@ -467,7 +467,7 @@ inline constexpr bool rvalue_request_requires_explicit_conversion_v =
 
 template <typename Request>
 inline constexpr bool construct_normalized_request_v =
-    can_wrap_normalized_request_v<Request> &&
+    can_construct_from_normalized_request_v<Request> &&
     !rvalue_request_requires_explicit_conversion_v<Request> &&
     std::is_object_v<normalized_type_t<Request>> &&
     !std::is_abstract_v<normalized_type_t<Request>>;
@@ -529,12 +529,12 @@ template <typename Request>
 
 template <typename Request, typename ResolveExact, typename ResolveNormalized>
 dependency_result_t<Request>
-construct_request_or_wrap_normalized(ResolveExact &&resolve_exact,
-                                     ResolveNormalized &&resolve_normalized) {
+construct_resolved_request(ResolveExact &&resolve_exact,
+                           ResolveNormalized &&resolve_normalized) {
   try {
     return std::forward<ResolveExact>(resolve_exact)();
   } catch (const type_not_convertible_exception &) {
-    if constexpr (can_wrap_normalized_request_v<Request>) {
+    if constexpr (can_construct_from_normalized_request_v<Request>) {
       auto &&value = std::forward<ResolveNormalized>(resolve_normalized)();
       return type_traits<std::decay_t<Request>>::make(
           std::forward<decltype(value)>(value));

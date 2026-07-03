@@ -8,7 +8,6 @@
 #pragma once
 
 #include <dingo/container.h>
-#include <dingo/core/binding_resolution_policy.h>
 #include <dingo/factory/invoke.h>
 #include <dingo/static/activation_set.h>
 #include <dingo/static/container_traits.h>
@@ -35,14 +34,14 @@ struct static_container_dependency_diagnostics_base;
 
 template <typename... Registrations>
 struct static_container_dependency_diagnostics_base<
-    static_registry<Registrations...>, false>
+    static_bindings<Registrations...>, false>
     : static_registry_dependency_diagnostics<
-          typename static_registry<Registrations...>::interface_bindings,
+          typename static_bindings<Registrations...>::interface_bindings,
           binding_model<Registrations>...> {};
 
 template <typename... Registrations>
 struct static_container_dependency_diagnostics_base<
-    static_registry<Registrations...>, true>
+    static_bindings<Registrations...>, true>
     : static_container_no_dependency_diagnostics {};
 
 template <typename StaticRegistry, typename ParentContainer = void,
@@ -51,25 +50,28 @@ class static_container_impl;
 
 template <typename ParentContainer, typename ContainerTraits,
           typename... Registrations>
-class static_container_impl<static_registry<Registrations...>, ParentContainer,
+class static_container_impl<static_bindings<Registrations...>, ParentContainer,
                             ContainerTraits>
     : private static_container_dependency_diagnostics_base<
-          static_registry<Registrations...>, !std::is_void_v<ParentContainer>> {
+          static_bindings<Registrations...>, !std::is_void_v<ParentContainer>> {
   template <typename T, typename Context, typename Container>
   friend T detail::resolve_context_request(Context &, Container &);
 
-  using registry_type_ = static_registry<Registrations...>;
+public:
+  using static_bindings_type = static_bindings<Registrations...>;
+
+private:
   static constexpr bool has_parent_v = !std::is_void_v<ParentContainer>;
   using graph_type_ = std::conditional_t<
-      has_parent_v, graph_analysis<registry_type_, true>,
+      has_parent_v, graph_analysis<static_bindings_type, true>,
       typename static_container_graph_type<
-          registry_type_, registry_type_::dependencies_are_resolved>::type>;
-  using self_type =
-      static_container_impl<registry_type_, ParentContainer, ContainerTraits>;
+          static_bindings_type,
+          static_bindings_type::dependencies_are_resolved>::type>;
+  using self_type = static_container_impl<static_bindings_type, ParentContainer,
+                                          ContainerTraits>;
   using parent_container_type = ParentContainer;
   using state_type = static_storage_state<Registrations...>;
-  using scope_type = static_binding_scope_view<state_type, Registrations...>;
-  using context_type = static_context<registry_type_>;
+  using context_type = static_context<static_bindings_type>;
   using index_entries_ = detail::normalize_lookup_definitions_t<
       detail::container_lookup_definition_type_t<ContainerTraits>>;
 
@@ -78,61 +80,20 @@ class static_container_impl<static_registry<Registrations...>, ParentContainer,
       std::is_invocable<Fn &, Collection &,
                         typename collection_traits<Collection>::resolve_type>;
 
-  template <typename Request, typename LookupRequest, typename Key>
-  struct diagnostic_static_binding_source {
-    using selection = static_binding_t<
-        typename registry_type_::template bindings<LookupRequest, Key>>;
-    static constexpr bool can_resolve =
-        selection::status == binding_selection_status::found;
-
-    self_type &host;
-
-    constexpr binding_selection_status status() const {
-      if constexpr (has_parent_v &&
-                    selection::status == binding_selection_status::not_found) {
-        return selection::status;
-      } else {
-        static_assert(selection::status != binding_selection_status::not_found,
-                      "static_container cannot resolve an unbound "
-                      "type");
-      }
-      static_assert(selection::status != binding_selection_status::ambiguous,
-                    "static_container cannot resolve an ambiguously "
-                    "bound type");
-      return selection::status;
-    }
-
-    template <typename ResolveRequest>
-    decltype(auto) resolve(context_type &context) {
-      using binding = typename selection::binding_type;
-      auto state = host.scope();
-      auto resolver = state.template make_binding_resolver<binding>(host);
-      return resolver.template resolve<Request>(context);
-    }
-  };
-
-  scope_type scope() { return scope_type(static_state_); }
-
   template <typename Request, typename Key>
-  using static_selection_t = static_binding_t<
-      typename registry_type_::template bindings<Request, Key>>;
+  using selection_t = static_binding_t<
+      typename static_bindings_type::template bindings<Request, Key>>;
 
   template <typename T, bool RemoveRvalueReferences, typename Key = void>
-  static constexpr bool has_static_resolve_request_v =
-      static_selection_t<resolve_dependency_t<T, RemoveRvalueReferences>,
-                         Key>::status == binding_selection_status::found;
-
-  template <typename T, bool RemoveRvalueReferences, typename Key = void>
-  static constexpr binding_selection_status static_resolve_status_v =
-      static_selection_t<resolve_dependency_t<T, RemoveRvalueReferences>,
-                         Key>::status;
+  static constexpr binding_status resolve_status_v =
+      selection_t<resolve_dependency_t<T, RemoveRvalueReferences>, Key>::status;
 
   template <typename Collection, typename Key = void>
-  static constexpr std::size_t static_collection_count_v =
-      static_collection_binding_count<registry_type_, Collection, Key>();
+  static constexpr std::size_t collection_count_v =
+      static_collection_binding_count<static_bindings_type, Collection, Key>();
 
   template <typename Collection, typename Key = void, typename R = Collection>
-  R resolve_missing_parent_collection() {
+  R resolve_missing_collection() {
     if (parent_) {
       if constexpr (std::is_void_v<Key>) {
         return parent_->template resolve<Collection>();
@@ -155,22 +116,22 @@ class static_container_impl<static_registry<Registrations...>, ParentContainer,
   }
 
 public:
-  using source_type = registry_type_;
-  using static_source_type = registry_type_;
+  using static_registry_type =
+      static_registry<static_bindings_type, state_type>;
   using container_traits_type = ContainerTraits;
-  using rtti_type = typename scope_type::rtti_type;
+  using rtti_type = typename static_binding_scope<Registrations...>::rtti_type;
 
-  static_assert(static_source_type::valid,
+  static_assert(static_bindings_type::valid,
                 "static_container requires a valid compile-time bindings "
                 "source");
   static_assert(detail::key_value_bindings_are_declared<
-                    typename static_source_type::interface_bindings,
+                    typename static_bindings_type::interface_bindings,
                     index_entries_>::value,
                 "static_container fixed dingo::key_type<Key, Value> bindings "
                 "require associative<Key, Interface, one> or "
                 "associative<Key, Interface, many>");
   static_assert(detail::key_value_bindings_are_unique<
-                    typename static_source_type::interface_bindings,
+                    typename static_bindings_type::interface_bindings,
                     index_entries_>::value,
                 "static_container fixed runtime-key lookup bindings must be "
                 "unique for one lookups and unique by storage for many "
@@ -188,10 +149,6 @@ public:
                 "static_container requires default-constructible storage "
                 "objects");
 
-  static_source_type &registry() { return static_registry_; }
-
-  const static_source_type &registry() const { return static_registry_; }
-
   static_container_impl() = default;
 
   template <typename Parent = ParentContainer,
@@ -205,9 +162,9 @@ public:
       using lookup_request_type = resolve_dependency_t<T, true>;
       using request_type = R;
       using selection =
-          static_binding_t<typename static_source_type::template bindings<
+          static_binding_t<typename static_bindings_type::template bindings<
               lookup_request_type, Key>>;
-      if constexpr (selection::status == binding_selection_status::found) {
+      if constexpr (selection::status == binding_status::found) {
         using binding = typename selection::binding_type;
         using binding_model_type = typename binding::binding_model_type;
         if constexpr (binding_supports_request_v<request_type, binding> &&
@@ -219,22 +176,23 @@ public:
                       factory_without_dependencies_v<
                           typename binding_model_type::factory_type>) {
           no_dependency_context context;
-          auto state = scope();
-          auto resolver = state.template make_binding_resolver<binding>(*this);
-          return resolver.template resolve<request_type>(context);
+          using selected = typename static_registry_type::template selection<
+              lookup_request_type, Key>;
+          return static_registry_.template resolve_binding<
+              lookup_request_type, request_type, selected>(context, *this);
         }
       }
     }
     if constexpr (collection_traits<R>::is_collection) {
-      if constexpr (has_parent_v && static_collection_count_v<R, Key> == 0) {
-        return resolve_missing_parent_collection<R, Key>();
+      if constexpr (has_parent_v && collection_count_v<R, Key> == 0) {
+        return resolve_missing_collection<R, Key>();
       } else {
         context_type context;
         return resolve<T, false, Key>(context);
       }
     } else {
-      if constexpr (has_parent_v && static_resolve_status_v<T, false, Key> ==
-                                        binding_selection_status::not_found) {
+      if constexpr (has_parent_v && resolve_status_v<T, false, Key> ==
+                                        binding_status::not_found) {
         if (parent_) {
           return resolve_parent<T, false, Key>();
         }
@@ -261,20 +219,27 @@ public:
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
             typename R = dependency_result_t<T>>
   R construct(Factory factory = Factory()) {
+    return construct_request<T>(std::move(factory));
+  }
+
+private:
+  template <typename T, typename Factory = constructor<normalized_type_t<T>>,
+            typename R = dependency_result_t<T>>
+  R construct_request(Factory factory = Factory()) {
     using normalized_request_type = dependency_value_t<T>;
     using request_type = dependency_interface_t<T>;
     if constexpr (std::is_same_v<Factory, constructor<normalized_type_t<T>>>) {
       using selection =
-          static_binding_t<typename static_source_type::template bindings<
+          static_binding_t<typename static_bindings_type::template bindings<
               binding_dependency_interface_t<request_type>,
               binding_dependency_key_t<request_type>>>;
       using normalized_selection =
-          static_binding_t<typename static_source_type::template bindings<
+          static_binding_t<typename static_bindings_type::template bindings<
               normalized_request_type, void>>;
       constexpr bool has_exact_binding =
-          selection::status != binding_selection_status::not_found;
+          selection::status != binding_status::not_found;
       constexpr bool has_normalized_binding =
-          normalized_selection::status != binding_selection_status::not_found;
+          normalized_selection::status != binding_status::not_found;
       if constexpr (has_exact_binding) {
         using binding = typename selection::binding_type;
         if constexpr (binding_supports_request_v<T, binding>) {
@@ -307,6 +272,7 @@ public:
     }
   }
 
+public:
   template <typename Signature = void, typename Callable>
   auto invoke(Callable &&callable) {
     using callable_type = std::remove_cv_t<std::remove_reference_t<Callable>>;
@@ -321,10 +287,7 @@ public:
 
   template <typename T> T construct_collection() {
     context_type context;
-    auto state = scope();
-    return state
-        .template construct_static_collection<T, void, static_source_type>(
-            *this, context);
+    return static_registry_.template construct_collection<T>(*this, context);
   }
 
   template <typename T, typename Fn,
@@ -334,18 +297,14 @@ public:
                 int> = 0>
   T construct_collection(Fn &&fn) {
     context_type context;
-    auto state = scope();
-    return state
-        .template construct_static_collection<T, void, static_source_type>(
-            *this, context, std::forward<Fn>(fn));
+    return static_registry_.template construct_collection<T>(
+        *this, context, std::forward<Fn>(fn));
   }
 
   template <typename T, typename Key> T construct_collection(key_type<Key>) {
     context_type context;
-    auto state = scope();
-    return state
-        .template construct_static_collection<T, Key, static_source_type>(
-            *this, context);
+    return static_registry_.template construct_collection<T, Key>(*this,
+                                                                  context);
   }
 
   template <typename T, typename IdType,
@@ -370,61 +329,71 @@ public:
   template <typename T, typename Fn, typename Key>
   T construct_collection(Fn &&fn, key_type<Key>) {
     context_type context;
-    auto state = scope();
-    return state
-        .template construct_static_collection<T, Key, static_source_type>(
-            *this, context, std::forward<Fn>(fn));
+    return static_registry_.template construct_collection<T, Key>(
+        *this, context, std::forward<Fn>(fn));
   }
 
   template <typename T, typename Key = void, typename Fn, typename Context>
   std::size_t append_collection(T &results, Context &context, Fn &&fn) {
-    auto state = scope();
-    return state.template append_static_collection<T, Key, static_source_type>(
+    return static_registry_.template append_collection<T, Key>(
         results, *this, context, std::forward<Fn>(fn));
   }
 
   template <typename T, typename Key = void> std::size_t count_collection() {
-    using collection_type = collection_traits<T>;
-    return type_list_size_v<typename static_source_type::template bindings<
-        normalized_type_t<typename collection_type::resolve_type>, Key>>;
+    return static_registry_.template count_collection<T, Key>();
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Key = void,
             typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
   R resolve(context_type &context) {
+    return resolve_request<T, RemoveRvalueReferences, Key>(context);
+  }
+
+private:
+  template <typename T, bool RemoveRvalueReferences, typename Key = void,
+            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
+  R resolve_request(context_type &context) {
     if constexpr (collection_traits<R>::is_collection) {
-      if constexpr (has_parent_v && static_collection_count_v<R, Key> == 0) {
-        return resolve_missing_parent_collection<R, Key>();
+      if constexpr (has_parent_v && collection_count_v<R, Key> == 0) {
+        return resolve_missing_collection<R, Key>();
       } else {
-        auto state = scope();
-        return state
-            .template construct_static_collection<R, Key, static_source_type>(
-                *this, context);
+        return static_registry_.template construct_collection<R, Key>(*this,
+                                                                      context);
       }
     } else {
       using lookup_request_type =
           resolve_dependency_t<T, RemoveRvalueReferences>;
       using request_type = R;
+      constexpr auto status = resolve_status_v<T, RemoveRvalueReferences, Key>;
       if constexpr (has_parent_v) {
-        if constexpr (static_resolve_status_v<T, RemoveRvalueReferences, Key> ==
-                      binding_selection_status::not_found) {
+        if constexpr (status == binding_status::not_found) {
           if (parent_) {
             return resolve_parent<T, RemoveRvalueReferences, Key>();
           }
         }
       }
-      diagnostic_static_binding_source<request_type, lookup_request_type, Key>
-          source{*this};
-      missing_binding_source<lookup_request_type> missing;
-      auto sources = make_one_binding_source(source, missing);
-      return resolve_from_binding_sources<T, request_type>(context, sources);
+      if constexpr (status == binding_status::found) {
+        using selected = typename static_registry_type::template selection<
+            lookup_request_type, Key>;
+        return static_registry_.template resolve_binding<
+            lookup_request_type, request_type, selected>(context, *this);
+      } else if constexpr (status == binding_status::ambiguous) {
+        static_assert(status != binding_status::ambiguous,
+                      "static_container cannot resolve an ambiguously bound "
+                      "type");
+      } else {
+        static_assert(has_parent_v,
+                      "static_container cannot resolve an unbound type");
+        throw make_type_not_found_exception<lookup_request_type>();
+      }
     }
   }
 
+public:
   template <typename T, bool RemoveRvalueReferences, typename Key,
             typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
   R resolve(context_type &context, key_type<Key>) {
-    return resolve<T, RemoveRvalueReferences, Key>(context);
+    return resolve_request<T, RemoveRvalueReferences, Key>(context);
   }
 
   template <typename T, bool RemoveRvalueReferences, typename IdType,
@@ -434,7 +403,8 @@ public:
                              int> = 0>
   R resolve(context_type &context, IdType &&) {
     if constexpr (detail::is_key_value_v<IdType>) {
-      return resolve<T, RemoveRvalueReferences, std::decay_t<IdType>>(context);
+      return resolve_request<T, RemoveRvalueReferences, std::decay_t<IdType>>(
+          context);
     } else {
       static_assert(detail::container_dependent_false_v<T, IdType>,
                     "dingo::dependency<T, dingo::key_type<Key, Value>> "
@@ -443,8 +413,7 @@ public:
   }
 
 private:
-  static_source_type static_registry_;
-  state_type static_state_;
+  static_registry_type static_registry_;
   parent_container_type *parent_ = nullptr;
 };
 

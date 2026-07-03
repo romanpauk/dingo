@@ -26,7 +26,6 @@ static_assert(
     dingo::type_list_size_v<
         typename registry_type::template bindings<interface, duplicate_key>> ==
     2);
-static_assert(selection::status ==
-              dingo::detail::binding_selection_status::ambiguous);
+static_assert(selection::status == dingo::detail::binding_status::ambiguous);
 
 int main() {}
