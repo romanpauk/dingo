@@ -54,9 +54,10 @@ struct ProcessorB : IProcessor {
 };
 
 struct Pipeline {
-  Pipeline(
-      dingo::dependency<IProcessor &, dingo::key<size_t, 1>> first_processor,
-      dingo::dependency<IProcessor &, dingo::key<size_t, 2>> second_processor)
+  Pipeline(dingo::dependency<IProcessor &, dingo::key_type<size_t, 1>>
+               first_processor,
+           dingo::dependency<IProcessor &, dingo::key_type<size_t, 2>>
+               second_processor)
       : first(first_processor), second(second_processor) {}
 
   IProcessor &first;
@@ -79,9 +80,9 @@ int main() {
 
   // Register processors into the container, keyed by the type they process
   container.register_type<scope<shared>, storage<std::shared_ptr<ProcessorA>>,
-                          interfaces<IProcessor>>(dingo::key{size_t(1)});
+                          interfaces<IProcessor>>(dingo::key_value{size_t(1)});
   container.register_type<scope<shared>, storage<std::shared_ptr<ProcessorB>>,
-                          interfaces<IProcessor>>(dingo::key{size_t(2)});
+                          interfaces<IProcessor>>(dingo::key_value{size_t(2)});
 
   // Register repositories used by the processors
   container.register_type<scope<shared>, storage<RepositoryA>>();

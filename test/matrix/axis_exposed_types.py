@@ -130,7 +130,7 @@ EXPOSED_TYPES = (
         kind="keyed",
         supported_stored_kinds=frozenset({"value_type"}),
         provides=frozenset({"keyed_binding"}),
-        registrations=(RegistrationSpec(key="dingo::key<key_a>"),),
+        registrations=(RegistrationSpec(key="dingo::key_type<key_a>"),),
     ),
     ExposedType(
         name="keyed_interface",
@@ -141,7 +141,7 @@ EXPOSED_TYPES = (
             RegistrationSpec(storage="dingo::storage<value_type>"),
             RegistrationSpec(
                 interfaces="dingo::interfaces<interface_type>",
-                key="dingo::key<key_a>",
+                key="dingo::key_type<key_a>",
             ),
         ),
     ),
@@ -388,12 +388,12 @@ EXPOSED_TYPES = (
             RegistrationSpec(
                 storage="dingo::storage<std::shared_ptr<element_type<0>>>",
                 interfaces="dingo::interfaces<element_interface>",
-                key="dingo::key<key_a>",
+                key="dingo::key_type<key_a>",
             ),
             RegistrationSpec(
                 storage="dingo::storage<std::shared_ptr<element_type<1>>>",
                 interfaces="dingo::interfaces<element_interface>",
-                key="dingo::key<key_b>",
+                key="dingo::key_type<key_b>",
                 mixed="runtime",
             ),
         ),
@@ -407,12 +407,12 @@ EXPOSED_TYPES = (
             RegistrationSpec(
                 storage="dingo::storage<std::shared_ptr<element_type<0>>>",
                 interfaces="dingo::interfaces<element_interface>",
-                key="dingo::key<key_a>",
+                key="dingo::key_type<key_a>",
             ),
             RegistrationSpec(
                 storage="dingo::storage<std::shared_ptr<element_type<1>>>",
                 interfaces="dingo::interfaces<element_interface>",
-                key="dingo::key<key_a>",
+                key="dingo::key_type<key_a>",
                 mixed="runtime",
             ),
         ),
@@ -420,13 +420,13 @@ EXPOSED_TYPES = (
             "container.template register_type_collection<"
             "dingo::scope<dingo::unique>, "
             "dingo::storage<std::vector<std::shared_ptr<"
-            "element_interface>>>>(dingo::key<key_a>{});",
+            "element_interface>>>>(dingo::key_type<key_a>{});",
         ),
         mixed_runtime_prefix=(
             "container.template register_type_collection<"
             "dingo::scope<dingo::unique>, "
             "dingo::storage<std::vector<std::shared_ptr<"
-            "element_interface>>>>(dingo::key<key_a>{});",
+            "element_interface>>>>(dingo::key_type<key_a>{});",
         ),
     ),
     ExposedType(

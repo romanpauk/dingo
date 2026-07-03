@@ -194,7 +194,7 @@ private:
       registration_arg_t<StorageType, ::dingo::storage<void>, Head>,
       registration_arg_t<FactoryType, ::dingo::factory<void>, Head>,
       registration_arg_t<InterfaceType, ::dingo::interfaces<void>, Head>,
-      registration_arg_t<KeyType, ::dingo::key<void>, Head>,
+      registration_arg_t<KeyType, ::dingo::key_type<void>, Head>,
       registration_arg_t<ConversionsType, ::dingo::conversions<void>, Head>,
       registration_arg_t<DependenciesType, ::dingo::dependencies<void>, Head>,
       registration_arg_t<BindingsType, ::dingo::bindings<void>, Head>>;
@@ -207,7 +207,7 @@ template <typename... Args>
 using parse_registration_args_t = typename parse_registration_args<
     registration_args<::dingo::scope<void>, ::dingo::storage<void>,
                       ::dingo::factory<void>, ::dingo::interfaces<void>,
-                      ::dingo::key<void>, ::dingo::conversions<void>,
+                      ::dingo::key_type<void>, ::dingo::conversions<void>,
                       ::dingo::dependencies<void>, ::dingo::bindings<void>>,
     Args...>::type;
 
@@ -217,7 +217,7 @@ inline constexpr bool is_supported_registration_arg_v =
     registration_arg_matches<::dingo::storage<void>, T>::value ||
     registration_arg_matches<::dingo::factory<void>, T>::value ||
     registration_arg_matches<::dingo::interfaces<void>, T>::value ||
-    registration_arg_matches<::dingo::key<void>, T>::value ||
+    registration_arg_matches<::dingo::key_type<void>, T>::value ||
     registration_arg_matches<::dingo::conversions<void>, T>::value ||
     registration_arg_matches<::dingo::dependencies<void>, T>::value ||
     registration_arg_matches<::dingo::bindings<void>, T>::value;
@@ -359,29 +359,30 @@ struct selected_registration_interface<
 };
 
 template <typename T> struct selected_registration_key {
-  using type = ::dingo::key<void>;
+  using type = ::dingo::key_type<void>;
 };
 
 template <typename T, typename Tag>
 struct selected_registration_key<
     ::dingo::detail::selected<T, ::dingo::detail::type_selector<Tag>>> {
-  using type = ::dingo::key<Tag>;
+  using type = ::dingo::key_type<Tag>;
 };
 
 template <typename Left, typename Right> struct merge_selected_registration_key;
 
 template <>
-struct merge_selected_registration_key<::dingo::key<void>, ::dingo::key<void>> {
-  using type = ::dingo::key<void>;
+struct merge_selected_registration_key<::dingo::key_type<void>,
+                                       ::dingo::key_type<void>> {
+  using type = ::dingo::key_type<void>;
 };
 
 template <typename Right>
-struct merge_selected_registration_key<::dingo::key<void>, Right> {
+struct merge_selected_registration_key<::dingo::key_type<void>, Right> {
   using type = Right;
 };
 
 template <typename Left>
-struct merge_selected_registration_key<Left, ::dingo::key<void>> {
+struct merge_selected_registration_key<Left, ::dingo::key_type<void>> {
   using type = Left;
 };
 
@@ -407,7 +408,7 @@ template <typename... Interfaces>
 struct selected_registration_key_from_interfaces;
 
 template <> struct selected_registration_key_from_interfaces<> {
-  using type = ::dingo::key<void>;
+  using type = ::dingo::key_type<void>;
 };
 
 template <typename Head, typename... Tail>
@@ -422,7 +423,7 @@ struct selected_registration_key_from_interfaces<Head, Tail...> {
 template <typename Interfaces>
 struct normalize_selected_registration_interface_arg {
   using type = Interfaces;
-  using key_type = ::dingo::key<void>;
+  using key_type = ::dingo::key_type<void>;
 };
 
 template <typename... Interfaces>
@@ -491,7 +492,7 @@ using registration_dependencies_t = std::conditional_t<
 
 template <typename ParsedArgs>
 using registration_key_t = std::conditional_t<
-    !std::is_same_v<typename ParsedArgs::key_type, ::dingo::key<void>>,
+    !std::is_same_v<typename ParsedArgs::key_type, ::dingo::key_type<void>>,
     typename ParsedArgs::key_type, registration_selected_key_t<ParsedArgs>>;
 
 template <typename Bindings> struct is_empty_bindings : std::false_type {};

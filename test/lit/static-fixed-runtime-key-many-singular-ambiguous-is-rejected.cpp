@@ -14,9 +14,9 @@ struct second_processor : processor {};
 
 using source = dingo::bindings<
     dingo::bind<dingo::scope<dingo::shared>, dingo::storage<first_processor>,
-                dingo::interfaces<processor>, dingo::key<std::size_t, 0>>,
+                dingo::interfaces<processor>, dingo::key_type<std::size_t, 0>>,
     dingo::bind<dingo::scope<dingo::shared>, dingo::storage<second_processor>,
-                dingo::interfaces<processor>, dingo::key<std::size_t, 0>>>;
+                dingo::interfaces<processor>, dingo::key_type<std::size_t, 0>>>;
 
 struct traits : dingo::static_container_traits<> {
   using lookup_definition_type =
@@ -25,8 +25,8 @@ struct traits : dingo::static_container_traits<> {
 
 int main() {
   dingo::static_container<source, traits> container;
-  (void)container
-      .resolve<dingo::dependency<processor &, dingo::key<std::size_t, 0>>>();
+  (void)container.resolve<
+      dingo::dependency<processor &, dingo::key_type<std::size_t, 0>>>();
   return 0;
 }
 

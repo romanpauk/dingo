@@ -213,7 +213,7 @@ struct move_only_invoker {
 
 struct keyed_value_dependency_type {
   explicit keyed_value_dependency_type(
-      dingo::dependency<value_type &, dingo::key<key_a>> dependency)
+      dingo::dependency<value_type &, dingo::key_type<key_a>> dependency)
       : value(static_cast<value_type &>(dependency).marker()) {}
 
   int value;
@@ -222,7 +222,7 @@ struct keyed_value_dependency_type {
 struct keyed_collection_dependency_type {
   explicit keyed_collection_dependency_type(
       dingo::dependency<std::vector<std::shared_ptr<element_interface>>,
-                        dingo::key<key_a>>
+                        dingo::key_type<key_a>>
           elements)
       : count(0), sum(0) {
     auto values =

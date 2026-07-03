@@ -21,7 +21,7 @@ int main() {
   dingo::container<traits> container;
   container.register_type<dingo::scope<dingo::shared>,
                           dingo::storage<processor_impl>,
-                          dingo::interfaces<processor>>(dingo::key{7});
+                          dingo::interfaces<processor>>(dingo::key_value{7});
 }
 
 // CHECK: runtime-key lookup registration requires a runtime key value

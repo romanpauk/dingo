@@ -152,7 +152,7 @@ public:
 
   template <typename T, bool RemoveRvalueReferences, typename Key,
             typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
-  R resolve(runtime_context &context, key<Key>) {
+  R resolve(runtime_context &context, key_type<Key>) {
     return resolve<T, RemoveRvalueReferences, Key>(context);
   }
 

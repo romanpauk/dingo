@@ -7,7 +7,6 @@
 
 #include <dingo/container.h>
 #include <dingo/storage/shared.h>
-#include <dingo/type/type_map.h>
 
 #include <gtest/gtest.h>
 
@@ -79,14 +78,6 @@ using size_shared_state_owner =
 
 using size_type_index = typename size_registry_type::rtti_type::type_index;
 using size_type_map_value = size_probe_registry::runtime_lookup_value;
-using size_type_map_entry =
-    std::pair<const size_type_index, size_type_map_value>;
-using size_type_map =
-    dynamic_type_map<size_type_map_value,
-                     typename size_registry_type::rtti_type,
-                     typename size_registry_type::allocator_type>;
-using size_static_type_map_node =
-    static_type_map_node<size_type_map_value, struct size_type_map_tag>;
 
 using size_base_lookup_key =
     detail::base_lookup_key<typename size_registry_type::rtti_type>;
@@ -95,17 +86,18 @@ using size_base_lookup_backend =
                            size_type_map_value,
                            typename size_registry_type::allocator_type>;
 using size_runtime_lookup_entry =
-    detail::lookup_entry<size_interface, runtime_key<int>, one, ordered>;
+    detail::lookup_entry<size_interface, detail::key_value_domain<int>, one,
+                         ordered>;
 using size_runtime_lookup_backend =
     detail::lookup_backend<size_runtime_lookup_entry, size_type_map_value,
                            typename size_registry_type::allocator_type>;
 using size_no_key_lookup_entry =
-    detail::lookup_entry<size_interface, no_key, one, ordered>;
+    detail::lookup_entry<size_interface, none_t, one, ordered>;
 using size_no_key_lookup_backend =
     detail::lookup_backend<size_no_key_lookup_entry, size_type_map_value,
                            typename size_registry_type::allocator_type>;
 using size_typed_key_lookup_entry =
-    detail::lookup_entry<size_interface, typed_key<int>, many, ordered>;
+    detail::lookup_entry<size_interface, key_type<int>, many, ordered>;
 using size_typed_key_lookup_backend =
     detail::lookup_backend<size_typed_key_lookup_entry, size_type_map_value,
                            typename size_registry_type::allocator_type>;
@@ -156,9 +148,6 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
 
     expect_size_at_most<size_type_index>("type index", 8);
     expect_size_at_most<size_base_lookup_key>("base lookup key", 16);
-    expect_size_at_most<size_type_map_entry>("dynamic type map entry", 40);
-    expect_size_at_most<size_type_map>("dynamic type map", 48);
-    expect_size_at_most<size_static_type_map_node>("static type map node", 56);
 
     expect_size_at_most<size_base_lookup_backend>("base lookup backend", 48);
     expect_size_at_most<size_runtime_lookup_backend>(

@@ -20,4 +20,13 @@ StorageAllocator make_lookup_storage_allocator(Allocator &allocator) {
   return StorageAllocator(allocator);
 }
 
+template <typename Storage, typename Allocator> struct lookup_storage_factory {
+  static Storage make(Allocator &allocator) { return Storage(allocator); }
+};
+
+template <typename Storage, typename Allocator>
+Storage make_lookup_storage(Allocator &allocator) {
+  return lookup_storage_factory<Storage, Allocator>::make(allocator);
+}
+
 } // namespace dingo::detail

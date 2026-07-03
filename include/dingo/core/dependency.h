@@ -17,10 +17,6 @@ template <typename Selector> struct dependency_selector {
   using type = Selector;
 };
 
-template <typename T> struct dependency_selector<key<T>> {
-  using type = type_selector<T>;
-};
-
 template <typename T> struct dependency_selector<key_type<T>> {
   using type = type_selector<T>;
 };

@@ -81,7 +81,7 @@ int main() {
   container.template register_type<dingo::scope<dingo::shared>,
                                    dingo::storage<string_processor_impl<7>>,
                                    dingo::interfaces<string_processor>>(
-      dingo::key{std::string{"json"}});
+      dingo::key_value{std::string{"json"}});
 
   auto consumer = container.template construct<string_literal_consumer>();
 

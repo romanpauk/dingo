@@ -13,7 +13,7 @@ struct processor_impl : processor {};
 
 using source = dingo::bindings<
     dingo::bind<dingo::scope<dingo::shared>, dingo::storage<processor_impl>,
-                dingo::interfaces<processor>, dingo::key<std::size_t, 1>>>;
+                dingo::interfaces<processor>, dingo::key_type<std::size_t, 1>>>;
 
 struct traits : dingo::static_container_traits<> {
   using lookup_definition_type =
@@ -22,8 +22,8 @@ struct traits : dingo::static_container_traits<> {
 
 int main() {
   dingo::static_container<source, traits> container;
-  (void)container
-      .resolve<dingo::dependency<processor &, dingo::key<std::size_t, 0>>>();
+  (void)container.resolve<
+      dingo::dependency<processor &, dingo::key_type<std::size_t, 0>>>();
   return 0;
 }
 

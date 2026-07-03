@@ -3,7 +3,7 @@
 This page covers the parts of Dingo that usually matter only after the basic
 registration and resolution flow is already in place.
 
-## View Resolution
+## Lookup Resolution
 
 Container traits can define one or more lookups so that a registration is
 resolved by interface, key domain, and cardinality.
@@ -14,11 +14,11 @@ Use lookups when:
 - the caller chooses the implementation by name or numeric ID
 - the binding should remain separate from unkeyed resolution
 
-View definitions are scoped to the interface they serve. Every keyed
+Lookup definitions are scoped to the interface they serve. Every keyed
 registration or runtime request requires a matching lookup definition.
 
 Unkeyed runtime registrations without an explicit lookup are treated as
-`no_key`/`one`: a second registration for the same interface is rejected,
+`none_t`/`one`: a second registration for the same interface is rejected,
 regardless of storage type. Declare `collection<I>` when an interface is meant
 to have multiple unkeyed implementations:
 
@@ -65,8 +65,8 @@ struct container_traits : dynamic_container_traits {
 
 Custom backends can be used as `associative<MyKey, IService, many, my_backend>`.
 A backend tag provides
-`Backend::template storage<Key, Mapped, Cardinality, Allocator>`, where Dingo
-chooses `Mapped` for its internal lookup entry pointer. The storage is
+`Backend::template storage<Key, Value, Cardinality, Allocator>`, where Dingo
+chooses `Value` for its internal lookup entry pointer. The storage is
 constructed with the container allocator and should expose an STL-like mapped
 container API. For `one`, Dingo uses `find(key)`, `end()`,
 `try_emplace(key, mapped)`, and `erase(iterator)`. For `many`, Dingo uses
@@ -83,16 +83,16 @@ struct container_traits : dynamic_container_traits {
 };
 ```
 
-`typed<K, I, one>` gives `register_type<interfaces<I>, key<K>>()` singular
+`typed<K, I, one>` gives `register_type<interfaces<I>, key_type<K>>()` singular
 identity for that interface and key type. `typed<K, I, many>` makes
-`resolve<std::vector<I *>>(key<K>{})` enumerate keyed collection members in
+`resolve<std::vector<I *>>(key_type<K>{})` enumerate keyed collection members in
 registration order. A singular typed-key resolve succeeds only when the matching
 `many` lookup contains exactly one registration.
 
-When no explicit typed-key lookup is declared, `key<K>` registrations still use
-implicit `typed_key<K>`/`one`: a second registration for the same interface and
-key type is rejected, regardless of storage type. Use `typed<K, I, many>` when
-one typed key should hold multiple implementations.
+When no explicit typed-key lookup is declared, `key_type<K>` registrations still
+use implicit `key_type<K>`/`one`: a second registration for the same interface
+and key type is rejected, regardless of storage type. Use `typed<K, I, many>`
+when one typed key should hold multiple implementations.
 
 No-key and typed-key lookups use the library's internal row storage; only
 runtime-keyed `associative` lookups have configurable storage backends.
@@ -101,30 +101,31 @@ Constructor dependencies can also bind to a fixed request key:
 
 ```c++
 struct Pipeline {
-    Pipeline(dingo::dependency<IProcessor&, dingo::key<std::size_t, 1>> first,
-             dingo::dependency<IProcessor&, dingo::key<std::size_t, 2>> second);
+    Pipeline(dingo::dependency<IProcessor&, dingo::key_type<std::size_t, 1>> first,
+             dingo::dependency<IProcessor&, dingo::key_type<std::size_t, 2>> second);
 };
 ```
 
-`dependency<IProcessor&, key<std::size_t, 1>>` resolves the same object as
+`dependency<IProcessor&, key_type<std::size_t, 1>>` resolves the same object as
 `container.resolve<IProcessor&>(std::size_t{1})`; the configured
 `associative<std::size_t, IProcessor>` lookup determines the key domain and
 cardinality, while the lookup storage remains an implementation detail.
 
-The value in `key<T, Value>` must be a valid non-type template parameter and
-must be usable as `T{Value}`. Class-type values such as `key<MyKey, MyKey{1}>`
-require C++20 structural non-type template parameter support.
+The value in `key_type<T, Value>` must be a valid non-type template parameter
+and must be usable as `T{Value}`. Class-type values such as
+`key_type<MyKey, MyKey{1}>` require C++20 structural non-type template parameter
+support.
 
 Static containers can use the same `associative<K, I>` lookups when the key
 value is fixed in the type:
 
-- `key<K>` remains a typed key and maps to `typed<K, I, ...>`.
-- `key<K, Value>` maps to `associative<K, I, ...>` when `associative<K, I>` or
-  `associative<K, I, many>` is declared.
+- `key_type<K>` remains a typed key and maps to `typed<K, I, ...>`.
+- `key_type<K, Value>` maps to `associative<K, I, ...>` when `associative<K, I>`
+  or `associative<K, I, many>` is declared.
 - Static dependency selection is type-encoded: use
-  `dependency<I &, key<K, Value>>` or `resolve<Collection>(key<K, Value>{})`;
-  `resolve<I &>(K{...})` is runtime key lookup and is not supported by
-  `static_container`.
+  `dependency<I &, key_type<K, Value>>` or
+  `resolve<Collection>(key_type<K, Value>{})`; `resolve<I &>(K{...})` is runtime
+  key lookup and is not supported by `static_container`.
 - Static fixed runtime-key bindings require `static_container` with traits that
   declare the lookup. `container<bindings<...>>` rejects them because that mixed
   form cannot carry custom lookup traits.
@@ -145,8 +146,9 @@ template <int Id> struct Processor : IProcessor {
 };
 
 struct Pipeline {
-  explicit Pipeline(dingo::dependency<IProcessor &, dingo::key<std::size_t, 0>>
-                        first_processor)
+  explicit Pipeline(
+      dingo::dependency<IProcessor &, dingo::key_type<std::size_t, 0>>
+          first_processor)
       : first(first_processor) {}
 
   IProcessor &first;
@@ -154,9 +156,10 @@ struct Pipeline {
 
 using source = dingo::bindings<
     dingo::bind<dingo::scope<dingo::shared>, dingo::storage<Processor<0>>,
-                dingo::interfaces<IProcessor>, dingo::key<std::size_t, 0>>,
+                dingo::interfaces<IProcessor>, dingo::key_type<std::size_t, 0>>,
     dingo::bind<dingo::scope<dingo::shared>, dingo::storage<Processor<1>>,
-                dingo::interfaces<IProcessor>, dingo::key<std::size_t, 1>>>;
+                dingo::interfaces<IProcessor>,
+                dingo::key_type<std::size_t, 1>>>;
 
 struct container_traits : dingo::static_container_traits<> {
   using lookup_definition_type =
@@ -165,9 +168,8 @@ struct container_traits : dingo::static_container_traits<> {
 
 dingo::static_container<source, container_traits> container;
 
-auto &first =
-    container
-        .resolve<dingo::dependency<IProcessor &, dingo::key<std::size_t, 0>>>();
+auto &first = container.resolve<
+    dingo::dependency<IProcessor &, dingo::key_type<std::size_t, 0>>>();
 auto pipeline = container.construct<Pipeline>();
 
 return first.id() == 0 && &pipeline.first == &first ? 0 : 1;
@@ -194,13 +196,13 @@ struct container_traits : dynamic_container_traits {
 };
 
 container<container_traits> container;
-  container
-      .template register_type<scope<shared>, storage<Dog>, interfaces<IAnimal>>(
-        dingo::key{std::string("dog")});
+container
+    .template register_type<scope<shared>, storage<Dog>, interfaces<IAnimal>>(
+        dingo::key_value{std::string("dog")});
 
-  container
-      .template register_type<scope<shared>, storage<Cat>, interfaces<IAnimal>>(
-        dingo::key{std::string("cat")});
+container
+    .template register_type<scope<shared>, storage<Cat>, interfaces<IAnimal>>(
+        dingo::key_value{std::string("cat")});
 
 // Resolve an instance of a dog
 auto dog = container.template resolve<IAnimal>(std::string("dog"));
@@ -255,9 +257,10 @@ struct ProcessorB : IProcessor {
 };
 
 struct Pipeline {
-  Pipeline(
-      dingo::dependency<IProcessor &, dingo::key<size_t, 1>> first_processor,
-      dingo::dependency<IProcessor &, dingo::key<size_t, 2>> second_processor)
+  Pipeline(dingo::dependency<IProcessor &, dingo::key_type<size_t, 1>>
+               first_processor,
+           dingo::dependency<IProcessor &, dingo::key_type<size_t, 2>>
+               second_processor)
       : first(first_processor), second(second_processor) {}
 
   IProcessor &first;
@@ -274,10 +277,10 @@ struct container_traits : static_container_traits<void> {
 container<container_traits> container;
 
 // Register processors into the container, keyed by the type they process
-  container.register_type<scope<shared>, storage<std::shared_ptr<ProcessorA>>,
-                        interfaces<IProcessor>>(dingo::key{size_t(1)});
-  container.register_type<scope<shared>, storage<std::shared_ptr<ProcessorB>>,
-                        interfaces<IProcessor>>(dingo::key{size_t(2)});
+container.register_type<scope<shared>, storage<std::shared_ptr<ProcessorA>>,
+                        interfaces<IProcessor>>(dingo::key_value{size_t(1)});
+container.register_type<scope<shared>, storage<std::shared_ptr<ProcessorB>>,
+                        interfaces<IProcessor>>(dingo::key_value{size_t(2)});
 
 // Register repositories used by the processors
 container.register_type<scope<shared>, storage<RepositoryA>>();

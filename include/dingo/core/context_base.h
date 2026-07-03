@@ -91,9 +91,9 @@ T resolve_context_request(Context &context, Container &container) {
     using request_type = selected_type_t<T>;
     using selector_type = selected_selector_t<T>;
     if constexpr (is_type_selector_v<selector_type>) {
-      using key_type = type_selector_type_t<selector_type>;
+      using selector_key_type = type_selector_type_t<selector_type>;
       return T(container.template resolve<request_type, false>(
-          context, key<key_type>{}));
+          context, key_type<selector_key_type>{}));
     } else if constexpr (is_value_selector_v<selector_type>) {
       if constexpr (is_basic_static_context_v<Context>) {
         return T(container.template resolve<request_type, false>(
@@ -103,10 +103,11 @@ T resolve_context_request(Context &context, Container &container) {
             context, is_value_selector<selector_type>::make()));
       }
     } else {
-      static_assert(is_type_selector_v<selector_type> ||
-                        is_value_selector_v<selector_type>,
-                    "dingo::dependency<T, Selector> requires dingo::key<Key> "
-                    "or dingo::key<Key, Value>");
+      static_assert(
+          is_type_selector_v<selector_type> ||
+              is_value_selector_v<selector_type>,
+          "dingo::dependency<T, Selector> requires dingo::key_type<Key> "
+          "or dingo::key_type<Key, Value>");
     }
   } else {
     return container.template resolve<T, false>(context);

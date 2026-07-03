@@ -26,16 +26,16 @@ inline int custom_lookup_backend_insertions = 0;
 inline int operator_lookup_backend_insertions = 0;
 
 struct custom_lookup_backend {
-  template <typename Key, typename Mapped, typename Cardinality,
+  template <typename Key, typename Value, typename Cardinality,
             typename Allocator>
   class storage {
-    using value_type = std::pair<const Key, Mapped>;
+    using value_type = std::pair<const Key, Value>;
     using storage_allocator = typename std::allocator_traits<
         Allocator>::template rebind_alloc<value_type>;
     using storage_type = std::conditional_t<
         std::is_same_v<Cardinality, one>,
-        std::map<Key, Mapped, std::less<Key>, storage_allocator>,
-        std::multimap<Key, Mapped, std::less<Key>, storage_allocator>>;
+        std::map<Key, Value, std::less<Key>, storage_allocator>,
+        std::multimap<Key, Value, std::less<Key>, storage_allocator>>;
 
   public:
     using iterator = typename storage_type::iterator;
@@ -62,15 +62,16 @@ struct custom_lookup_backend {
       return values_.equal_range(key);
     }
 
-    template <typename Value>
-    std::pair<iterator, bool> try_emplace(const Key &key, Value &&value) {
+    template <typename Inserted>
+    std::pair<iterator, bool> try_emplace(const Key &key, Inserted &&value) {
       ++custom_lookup_backend_insertions;
-      return values_.try_emplace(key, std::forward<Value>(value));
+      return values_.try_emplace(key, std::forward<Inserted>(value));
     }
 
-    template <typename Value> iterator emplace(const Key &key, Value &&value) {
+    template <typename Inserted>
+    iterator emplace(const Key &key, Inserted &&value) {
       ++custom_lookup_backend_insertions;
-      return values_.emplace(key, std::forward<Value>(value));
+      return values_.emplace(key, std::forward<Inserted>(value));
     }
 
     void erase(iterator handle) { values_.erase(handle); }
@@ -81,16 +82,16 @@ struct custom_lookup_backend {
 };
 
 struct operator_lookup_backend {
-  template <typename Key, typename Mapped, typename Cardinality,
+  template <typename Key, typename Value, typename Cardinality,
             typename Allocator>
   class storage {
-    using value_type = std::pair<const Key, Mapped>;
+    using value_type = std::pair<const Key, Value>;
     using storage_allocator = typename std::allocator_traits<
         Allocator>::template rebind_alloc<value_type>;
     using storage_type = std::conditional_t<
         std::is_same_v<Cardinality, one>,
-        std::map<Key, Mapped, std::less<Key>, storage_allocator>,
-        std::multimap<Key, Mapped, std::less<Key>, storage_allocator>>;
+        std::map<Key, Value, std::less<Key>, storage_allocator>,
+        std::multimap<Key, Value, std::less<Key>, storage_allocator>>;
 
   public:
     using iterator = typename storage_type::iterator;
@@ -115,18 +116,19 @@ struct operator_lookup_backend {
       return values_.equal_range(key);
     }
 
-    template <typename Value>
-    std::pair<iterator, bool> try_emplace(const Key &key, Value &&value) {
-      return values_.try_emplace(key, std::forward<Value>(value));
+    template <typename Inserted>
+    std::pair<iterator, bool> try_emplace(const Key &key, Inserted &&value) {
+      return values_.try_emplace(key, std::forward<Inserted>(value));
     }
 
-    template <typename Value> iterator emplace(const Key &key, Value &&value) {
-      return values_.emplace(key, std::forward<Value>(value));
+    template <typename Inserted>
+    iterator emplace(const Key &key, Inserted &&value) {
+      return values_.emplace(key, std::forward<Inserted>(value));
     }
 
     void erase(iterator handle) { values_.erase(handle); }
 
-    Mapped &operator[](const Key &key) {
+    Value &operator[](const Key &key) {
       ++operator_lookup_backend_insertions;
       return values_[key];
     }
@@ -136,7 +138,7 @@ struct operator_lookup_backend {
   };
 };
 
-TEST(associative_backend_test, unordered_one_uses_runtime_key_lookup) {
+TEST(associative_backend_test, unordered_one_uses_key_value_lookup) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -156,14 +158,14 @@ TEST(associative_backend_test, unordered_one_uses_runtime_key_lookup) {
   container<traits> container;
   container.template register_type<scope<shared>, storage<first_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
 
   auto &first = container.template resolve<processor &>(std::size_t(7));
   ASSERT_EQ(first.id(), 1);
   EXPECT_THROW(
       (container.template register_type<
           scope<shared>, storage<second_processor>, interfaces<processor>>(
-          dingo::key{std::size_t(7)})),
+          dingo::key_value{std::size_t(7)})),
       lookup_already_registered_exception);
   auto &after_duplicate =
       container.template resolve<processor &>(std::size_t(7));
@@ -171,7 +173,7 @@ TEST(associative_backend_test, unordered_one_uses_runtime_key_lookup) {
   ASSERT_EQ(after_duplicate.id(), 1);
   container.template register_type<scope<shared>, storage<second_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(8)});
+      dingo::key_value{std::size_t(8)});
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(8)).id(), 2);
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(7)).id(), 1);
 }
@@ -196,10 +198,10 @@ TEST(associative_backend_test, unordered_many_resolves_duplicate_key_entries) {
   container<traits> container;
   container.template register_type<scope<shared>, storage<first_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
   container.template register_type<scope<shared>, storage<second_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
 
   auto values =
       container.template resolve<std::vector<processor *>>(std::size_t(7));
@@ -235,12 +237,12 @@ TEST(associative_backend_test, array_one_uses_dense_key_lookup) {
   container<traits> container;
   container.template register_type<scope<shared>, storage<processor_impl>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(3)});
+      dingo::key_value{std::size_t(3)});
 
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(3)).id(), 1);
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<out_of_range_processor>,
-                   interfaces<processor>>(dingo::key{std::size_t(4)})),
+                   interfaces<processor>>(dingo::key_value{std::size_t(4)})),
                std::out_of_range);
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(3)).id(), 1);
   EXPECT_THROW((container.template resolve<processor &>(std::size_t(4))),
@@ -248,7 +250,7 @@ TEST(associative_backend_test, array_one_uses_dense_key_lookup) {
 }
 
 TEST(associative_backend_test,
-     array_one_out_of_range_registration_rolls_back_runtime_key_rows) {
+     array_one_out_of_range_registration_rolls_back_key_value_rows) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -268,14 +270,14 @@ TEST(associative_backend_test,
   container<traits> container;
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<out_of_range_processor>,
-                   interfaces<processor>>(dingo::key{std::size_t(1)})),
+                   interfaces<processor>>(dingo::key_value{std::size_t(1)})),
                std::out_of_range);
   EXPECT_THROW((container.template resolve<processor &>(std::size_t(1))),
                type_not_found_exception);
 
   container.template register_type<scope<shared>, storage<processor_impl>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(0)});
+      dingo::key_value{std::size_t(0)});
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(0)).id(), 1);
   EXPECT_THROW((container.template resolve<processor &>(std::size_t(1))),
                type_not_found_exception);
@@ -304,10 +306,10 @@ TEST(associative_backend_test, array_many_uses_dense_key_rows) {
   container<traits> container;
   container.template register_type<scope<shared>, storage<first_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(2)});
+      dingo::key_value{std::size_t(2)});
   container.template register_type<scope<shared>, storage<second_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(2)});
+      dingo::key_value{std::size_t(2)});
 
   auto values =
       container.template resolve<std::vector<processor *>>(std::size_t(2));
@@ -323,7 +325,7 @@ TEST(associative_backend_test, array_many_uses_dense_key_rows) {
                type_ambiguous_exception);
   container.template register_type<scope<shared>, storage<first_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(2)});
+      dingo::key_value{std::size_t(2)});
   values = container.template resolve<std::vector<processor *>>(std::size_t(2));
   ASSERT_EQ(values.size(), 3);
   ids.clear();
@@ -335,16 +337,16 @@ TEST(associative_backend_test, array_many_uses_dense_key_rows) {
 
   container.template register_type<scope<shared>, storage<first_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(3)});
+      dingo::key_value{std::size_t(3)});
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(3)).id(), 1);
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<out_of_range_processor>,
-                   interfaces<processor>>(dingo::key{std::size_t(4)})),
+                   interfaces<processor>>(dingo::key_value{std::size_t(4)})),
                std::out_of_range);
 }
 
 TEST(associative_backend_test,
-     array_many_out_of_range_registration_rolls_back_runtime_key_rows) {
+     array_many_out_of_range_registration_rolls_back_key_value_rows) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -364,7 +366,7 @@ TEST(associative_backend_test,
   container<traits> container;
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<out_of_range_processor>,
-                   interfaces<processor>>(dingo::key{std::size_t(1)})),
+                   interfaces<processor>>(dingo::key_value{std::size_t(1)})),
                std::out_of_range);
   ASSERT_TRUE(
       container.template resolve<std::vector<processor *>>(std::size_t(1))
@@ -372,7 +374,7 @@ TEST(associative_backend_test,
 
   container.template register_type<scope<shared>, storage<processor_impl>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(0)});
+      dingo::key_value{std::size_t(0)});
   auto values =
       container.template resolve<std::vector<processor *>>(std::size_t(0));
   ASSERT_EQ(values.size(), 1U);
@@ -401,7 +403,7 @@ TEST(associative_backend_test, custom_backend_uses_stl_like_try_emplace) {
 
   container<traits> container;
   container.template register_type<scope<shared>, storage<processor_impl>,
-                                   interfaces<processor>>(dingo::key{7});
+                                   interfaces<processor>>(dingo::key_value{7});
 
   ASSERT_GT(custom_lookup_backend_constructions, 0);
   ASSERT_GT(custom_lookup_backend_insertions, 0);
@@ -464,7 +466,7 @@ TEST(associative_backend_test,
 
   container<traits> container;
   container.template register_type<scope<shared>, storage<processor_impl>,
-                                   interfaces<processor>>(dingo::key{7});
+                                   interfaces<processor>>(dingo::key_value{7});
 
   ASSERT_EQ(operator_lookup_backend_insertions, 0);
   ASSERT_EQ(container.template resolve<processor &>(7).id(), 1);

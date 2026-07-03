@@ -27,16 +27,16 @@ public:
   }
 
   template <typename... TypeArgs> auto register_type() {
-    return self().binding_store().template emplace_binding<TypeArgs...>(
-        self().runtime_registration_parent(), none_t{});
+    return self().binding_store().template prepare_binding<TypeArgs...>(
+        &self().runtime_registration_parent(), none_t{});
   }
 
   template <typename... TypeArgs, typename Arg,
             std::enable_if_t<!detail::is_runtime_registration_key_arg_v<Arg>,
                              int> = 0>
   auto register_type(Arg &&arg) {
-    return self().binding_store().template emplace_binding<TypeArgs...>(
-        self().runtime_registration_parent(), std::forward<Arg>(arg));
+    return self().binding_store().template prepare_binding<TypeArgs...>(
+        &self().runtime_registration_parent(), std::forward<Arg>(arg));
   }
 
   template <typename... TypeArgs, typename... KeyArgs,
@@ -45,8 +45,8 @@ public:
                  detail::are_runtime_registration_key_args_v<KeyArgs...>),
                 int> = 0>
   auto register_type(KeyArgs &&...keys) {
-    return self().binding_store().template emplace_binding<TypeArgs...>(
-        self().runtime_registration_parent(), none_t{},
+    return self().binding_store().template prepare_binding<TypeArgs...>(
+        &self().runtime_registration_parent(), none_t{},
         std::forward<KeyArgs>(keys)...);
   }
 
@@ -57,8 +57,8 @@ public:
                  detail::are_runtime_registration_key_args_v<KeyArgs...>),
                 int> = 0>
   auto register_type(Arg &&arg, KeyArgs &&...keys) {
-    return self().binding_store().template emplace_binding<TypeArgs...>(
-        self().runtime_registration_parent(), std::forward<Arg>(arg),
+    return self().binding_store().template prepare_binding<TypeArgs...>(
+        &self().runtime_registration_parent(), std::forward<Arg>(arg),
         std::forward<KeyArgs>(keys)...);
   }
 

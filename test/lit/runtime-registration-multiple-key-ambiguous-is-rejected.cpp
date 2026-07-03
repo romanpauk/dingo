@@ -23,5 +23,6 @@ int main() {
   dingo::container<traits> container;
   container.register_type<dingo::scope<dingo::shared>,
                           dingo::storage<processor_animal>,
-                          dingo::interfaces<processor, animal>>(dingo::key{7});
+                          dingo::interfaces<processor, animal>>(
+      dingo::key_value{7});
 }

@@ -9,13 +9,13 @@
 
 #include <dingo/container.h>
 #include <dingo/memory/aligned_storage.h>
-#include <dingo/rtti/typeid_provider.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
-#include <dingo/type/type_map.h>
 
+#include <map>
 #include <memory>
 #include <optional>
+#include <typeindex>
 
 struct basic_factory {
   virtual ~basic_factory() {}
@@ -87,10 +87,10 @@ struct basic_unique_resolver {
 #pragma warning(disable : 4702)
 #endif
   template <typename T> T resolve4() {
-    void *tmp = cache_.get<T *>();
-    if (tmp) {
+    const auto cached = cache_.find(std::type_index(typeid(T *)));
+    if (cached != cache_.end()) {
       std::abort();
-      return *static_cast<T *>(tmp);
+      return *static_cast<T *>(cached->second);
     }
 
     if constexpr (std::is_trivially_destructible_v<T>) {
@@ -113,10 +113,7 @@ struct basic_unique_resolver {
 private:
   std::unique_ptr<basic_factory> factory_;
   void *(*resolve_call_)(void *);
-  std::allocator<char> allocator_;
-  dingo::dynamic_type_map<void *, dingo::rtti<dingo::typeid_provider>,
-                          std::allocator<char>>
-      cache_{allocator_};
+  std::map<std::type_index, void *> cache_;
 };
 
 struct basic_shared_resolver {
@@ -141,14 +138,11 @@ struct basic_shared_resolver {
   }
 
   template <typename T> T resolve4() {
-    void *ptr = cache_.get<T *>();
-    if (!ptr) {
-      ptr =
-          cache_.insert<T *>(static_cast<T *>((*resolve_call_)(factory_.get())))
-              .first;
-    }
+    auto [cached, inserted] = cache_.try_emplace(std::type_index(typeid(T *)));
+    if (inserted)
+      cached->second = static_cast<T *>((*resolve_call_)(factory_.get()));
 
-    return *static_cast<T *>(ptr);
+    return *static_cast<T *>(cached->second);
   }
 
   // TODO: idea for container.h - non-unique results can avoid
@@ -162,10 +156,7 @@ private:
   std::unique_ptr<basic_factory> factory_;
   void *(*resolve_call_)(void *);
   void *cached_ = nullptr;
-  std::allocator<char> allocator_;
-  dingo::dynamic_type_map<void *, dingo::rtti<dingo::typeid_provider>,
-                          std::allocator<char>>
-      cache_{allocator_};
+  std::map<std::type_index, void *> cache_;
 };
 
 bool is_empty(const std::string &val) { return val.empty(); }

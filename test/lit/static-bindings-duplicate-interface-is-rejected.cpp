@@ -14,9 +14,9 @@ struct service_b : interface {};
 
 using source = dingo::bindings<
     dingo::bind<dingo::scope<dingo::unique>, dingo::storage<service_a>,
-                dingo::interfaces<interface>, dingo::key<duplicate_key>>,
+                dingo::interfaces<interface>, dingo::key_type<duplicate_key>>,
     dingo::bind<dingo::scope<dingo::unique>, dingo::storage<service_b>,
-                dingo::interfaces<interface>, dingo::key<duplicate_key>>>;
+                dingo::interfaces<interface>, dingo::key_type<duplicate_key>>>;
 using registry_type = typename source::type;
 using selection = dingo::detail::static_binding_t<
     typename registry_type::template bindings<interface, duplicate_key>>;

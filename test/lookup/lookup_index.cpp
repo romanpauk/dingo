@@ -18,13 +18,14 @@
 
 namespace dingo {
 
-TEST(index_test, lookup_backend_inserts_runtime_key_rows) {
+TEST(index_test, lookup_backend_inserts_key_value_rows) {
   struct row {
     int id;
   };
   struct processor {};
   using entry =
-      detail::lookup_entry<processor, runtime_key<std::size_t>, one, ordered>;
+      detail::lookup_entry<processor, detail::key_value_domain<std::size_t>,
+                           one, ordered>;
 
   std::allocator<char> allocator;
   detail::lookup_backend<entry, row *, std::allocator<char>> backend(allocator);
@@ -45,13 +46,14 @@ TEST(index_test, lookup_backend_inserts_runtime_key_rows) {
   ASSERT_EQ(backend.find(std::size_t{7}), backend.end());
 }
 
-TEST(index_test, lookup_backend_iterates_many_runtime_key_rows) {
+TEST(index_test, lookup_backend_iterates_many_key_value_rows) {
   struct row {
     int id;
   };
   struct processor {};
-  using entry = detail::lookup_entry<processor, runtime_key<std::size_t>, many,
-                                     unordered>;
+  using entry =
+      detail::lookup_entry<processor, detail::key_value_domain<std::size_t>,
+                           many, unordered>;
 
   std::allocator<char> allocator;
   detail::lookup_backend<entry, row *, std::allocator<char>> backend(allocator);
@@ -80,8 +82,7 @@ TEST(index_test, lookup_backend_inserts_no_key_rows) {
     int id;
   };
   struct processor {};
-  using entry =
-      detail::lookup_entry<processor, no_key, one, detail::no_lookup_backend>;
+  using entry = detail::lookup_entry<processor, none_t, one, none_t>;
 
   std::allocator<char> allocator;
   detail::lookup_backend<entry, row *, std::allocator<char>> backend(allocator);
@@ -102,14 +103,14 @@ TEST(index_test, lookup_backend_inserts_no_key_rows) {
   ASSERT_EQ(backend.find(none_t{}), backend.end());
 }
 
-TEST(index_test, lookup_backend_inserts_typed_key_rows) {
+TEST(index_test, lookup_backend_inserts_key_type_rows) {
   struct row {
     int id;
   };
   struct processor {};
   struct selected_key {};
-  using entry = detail::lookup_entry<processor, typed_key<selected_key>, one,
-                                     detail::no_lookup_backend>;
+  using entry =
+      detail::lookup_entry<processor, key_type<selected_key>, one, none_t>;
 
   std::allocator<char> allocator;
   detail::lookup_backend<entry, row *, std::allocator<char>> backend(allocator);
@@ -132,8 +133,7 @@ TEST(index_test, lookup_backend_iterates_many_static_key_rows) {
     int id;
   };
   struct processor {};
-  using entry =
-      detail::lookup_entry<processor, no_key, many, detail::no_lookup_backend>;
+  using entry = detail::lookup_entry<processor, none_t, many, none_t>;
 
   std::allocator<char> allocator;
   detail::lookup_backend<entry, row *, std::allocator<char>> backend(allocator);
@@ -167,9 +167,9 @@ TEST(index_test, lookup_index_get_returns_lookup_backend) {
   };
   struct processor {};
   using runtime_entry =
-      detail::lookup_entry<processor, runtime_key<std::size_t>, one, ordered>;
-  using no_key_entry =
-      detail::lookup_entry<processor, no_key, one, detail::no_lookup_backend>;
+      detail::lookup_entry<processor, detail::key_value_domain<std::size_t>,
+                           one, ordered>;
+  using no_key_entry = detail::lookup_entry<processor, none_t, one, none_t>;
   using index_type =
       detail::lookup_index<type_list<runtime_entry, no_key_entry>, row *,
                            std::allocator<char>>;

@@ -12,90 +12,49 @@
 
 #include <functional>
 #include <map>
+#include <type_traits>
 #include <utility>
 
 namespace dingo {
 namespace detail {
 
-template <typename Key, typename Mapped, typename Cardinality,
-          typename Allocator>
-class ordered_lookup_storage;
+template <typename Key, typename Value, typename Compare,
+          typename StorageAllocator, typename Allocator>
+struct lookup_storage_factory<std::map<Key, Value, Compare, StorageAllocator>,
+                              Allocator> {
+  using storage_type = std::map<Key, Value, Compare, StorageAllocator>;
 
-template <typename Key, typename Mapped, typename Allocator>
-class ordered_lookup_storage<Key, Mapped, ::dingo::one, Allocator> {
-  using value_type = std::pair<const Key, Mapped>;
-  using storage_allocator = lookup_storage_allocator_t<value_type, Allocator>;
-  using storage_type = std::map<Key, Mapped, std::less<Key>, storage_allocator>;
-
-public:
-  using iterator = typename storage_type::iterator;
-  using const_iterator = typename storage_type::const_iterator;
-
-  explicit ordered_lookup_storage(Allocator &allocator)
-      : values_(std::less<Key>{},
-                make_lookup_storage_allocator<storage_allocator>(allocator)) {}
-
-  iterator find(const Key &key) { return values_.find(key); }
-  const_iterator find(const Key &key) const { return values_.find(key); }
-  iterator end() { return values_.end(); }
-  const_iterator end() const { return values_.end(); }
-
-  template <typename Value>
-  std::pair<iterator, bool> try_emplace(const Key &key, Value &&value) {
-    return values_.try_emplace(key, std::forward<Value>(value));
+  static storage_type make(Allocator &allocator) {
+    return storage_type(
+        Compare{}, make_lookup_storage_allocator<StorageAllocator>(allocator));
   }
-
-  void erase(iterator handle) { values_.erase(handle); }
-
-private:
-  storage_type values_;
 };
 
-template <typename Key, typename Mapped, typename Allocator>
-class ordered_lookup_storage<Key, Mapped, ::dingo::many, Allocator> {
-  using value_type = std::pair<const Key, Mapped>;
-  using storage_allocator = lookup_storage_allocator_t<value_type, Allocator>;
-  using storage_type =
-      std::multimap<Key, Mapped, std::less<Key>, storage_allocator>;
+template <typename Key, typename Value, typename Compare,
+          typename StorageAllocator, typename Allocator>
+struct lookup_storage_factory<
+    std::multimap<Key, Value, Compare, StorageAllocator>, Allocator> {
+  using storage_type = std::multimap<Key, Value, Compare, StorageAllocator>;
 
-public:
-  using iterator = typename storage_type::iterator;
-  using const_iterator = typename storage_type::const_iterator;
-
-  explicit ordered_lookup_storage(Allocator &allocator)
-      : values_(std::less<Key>{},
-                make_lookup_storage_allocator<storage_allocator>(allocator)) {}
-
-  iterator find(const Key &key) { return values_.find(key); }
-  const_iterator find(const Key &key) const { return values_.find(key); }
-  iterator end() { return values_.end(); }
-  const_iterator end() const { return values_.end(); }
-
-  std::pair<iterator, iterator> equal_range(const Key &key) {
-    return values_.equal_range(key);
+  static storage_type make(Allocator &allocator) {
+    return storage_type(
+        Compare{}, make_lookup_storage_allocator<StorageAllocator>(allocator));
   }
-
-  std::pair<const_iterator, const_iterator> equal_range(const Key &key) const {
-    return values_.equal_range(key);
-  }
-
-  template <typename Value> iterator emplace(const Key &key, Value &&value) {
-    return values_.emplace(key, std::forward<Value>(value));
-  }
-
-  void erase(iterator handle) { values_.erase(handle); }
-
-private:
-  storage_type values_;
 };
 
 } // namespace detail
 
 struct ordered {
-  template <typename Key, typename Mapped, typename Cardinality,
+  template <typename Key, typename Value, typename Cardinality,
             typename Allocator>
-  using storage =
-      detail::ordered_lookup_storage<Key, Mapped, Cardinality, Allocator>;
+  using storage = std::conditional_t<
+      std::is_same_v<Cardinality, one>,
+      std::map<Key, Value, std::less<Key>,
+               detail::lookup_storage_allocator_t<std::pair<const Key, Value>,
+                                                  Allocator>>,
+      std::multimap<Key, Value, std::less<Key>,
+                    detail::lookup_storage_allocator_t<
+                        std::pair<const Key, Value>, Allocator>>>;
 };
 
 } // namespace dingo

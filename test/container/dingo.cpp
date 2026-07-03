@@ -14,7 +14,7 @@
 
 namespace dingo {
 
-TEST(dingo_exception_test, make_runtime_key_type_not_found_exception_context) {
+TEST(dingo_exception_test, make_key_value_type_not_found_exception_context) {
   struct Missing {};
   struct Consumer {};
   struct context {

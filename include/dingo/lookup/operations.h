@@ -22,17 +22,16 @@ template <typename Value> struct lookup_singular_result {
 };
 
 template <typename Value>
-auto lookup_mapped(Value &value, int) -> decltype((value.second)) {
+auto lookup_value(Value &value, int) -> decltype((value.second)) {
   return value.second;
 }
 
-template <typename Value> Value &lookup_mapped(Value &value, ...) {
+template <typename Value> Value &lookup_value(Value &value, ...) {
   return value;
 }
 
-template <typename Iterator>
-decltype(auto) lookup_iterator_mapped(Iterator it) {
-  return lookup_mapped(*it, 0);
+template <typename Iterator> decltype(auto) lookup_iterator_value(Iterator it) {
+  return lookup_value(*it, 0);
 }
 
 template <typename LookupEntry, typename Value, typename Backend, typename Key>
@@ -45,7 +44,7 @@ lookup_singular_result<Value> lookup_find_singular(Backend &backend,
     if (it == backend.end()) {
       return {};
     }
-    return {std::addressof(lookup_iterator_mapped(it)), false};
+    return {std::addressof(lookup_iterator_value(it)), false};
   } else {
     auto [first, last] = backend.equal_range(key);
     if (first == last) {
@@ -54,7 +53,7 @@ lookup_singular_result<Value> lookup_find_singular(Backend &backend,
     auto next = first;
     ++next;
     const bool ambiguous = next != last;
-    return {ambiguous ? nullptr : std::addressof(lookup_iterator_mapped(first)),
+    return {ambiguous ? nullptr : std::addressof(lookup_iterator_value(first)),
             ambiguous};
   }
 }
@@ -68,13 +67,13 @@ std::size_t lookup_for_each(Backend &backend, const Key &key, Fn &&fn) {
     if (it == backend.end()) {
       return 0;
     }
-    fn(lookup_iterator_mapped(it));
+    fn(lookup_iterator_value(it));
     return 1;
   } else {
     std::size_t result = 0;
     auto [first, last] = backend.equal_range(key);
     for (auto it = first; it != last; ++it) {
-      fn(lookup_iterator_mapped(it));
+      fn(lookup_iterator_value(it));
       ++result;
     }
     return result;

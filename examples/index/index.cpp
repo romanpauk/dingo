@@ -31,11 +31,11 @@ int main() {
   container<container_traits> container;
   container
       .template register_type<scope<shared>, storage<Dog>, interfaces<IAnimal>>(
-          dingo::key{std::string("dog")});
+          dingo::key_value{std::string("dog")});
 
   container
       .template register_type<scope<shared>, storage<Cat>, interfaces<IAnimal>>(
-          dingo::key{std::string("cat")});
+          dingo::key_value{std::string("cat")});
 
   // Resolve an instance of a dog
   auto dog = container.template resolve<IAnimal>(std::string("dog"));

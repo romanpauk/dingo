@@ -21,7 +21,7 @@ template <typename T> struct indexed_definition_key_arg {
 };
 
 template <typename T, auto... Values>
-struct indexed_definition_key_arg<dingo::key<T, Values...>> {
+struct indexed_definition_key_arg<dingo::key_type<T, Values...>> {
   using type = T;
 };
 
@@ -55,7 +55,7 @@ template <typename T> T indexed_value(int value) {
 
 template <typename Key, Key Value> struct fixed_indexed_dependency_consumer {
   explicit fixed_indexed_dependency_consumer(
-      dingo::dependency<element_interface &, dingo::key<Key, Value>> value)
+      dingo::dependency<element_interface &, dingo::key_type<Key, Value>> value)
       : dependency(value) {}
 
   element_interface &dependency;
@@ -90,17 +90,17 @@ void exercise_indexed_registration_container(Container &container) {
       .template register_type<dingo::scope<dingo::unique>,
                               dingo::storage<std::unique_ptr<element_type<0>>>,
                               dingo::interfaces<element_interface>>(
-          dingo::key{indexed_value<key_type>(0)});
+          dingo::key_value{indexed_value<key_type>(0)});
   container
       .template register_type<dingo::scope<dingo::unique>,
                               dingo::storage<std::unique_ptr<element_type<1>>>,
                               dingo::interfaces<element_interface>>(
-          dingo::key{indexed_value<key_type>(1)});
+          dingo::key_value{indexed_value<key_type>(1)});
   ASSERT_THROW((container.template register_type<
                    dingo::scope<dingo::unique>,
                    dingo::storage<std::unique_ptr<element_type<1>>>,
                    dingo::interfaces<element_interface>>(
-                   dingo::key{indexed_value<key_type>(1)})),
+                   dingo::key_value{indexed_value<key_type>(1)})),
                lookup_already_registered_exception);
 
   ASSERT_EQ(container
@@ -121,17 +121,17 @@ void exercise_indexed_registration_container(Container &container) {
       .template register_type<dingo::scope<dingo::shared>,
                               dingo::storage<std::shared_ptr<element_type<2>>>,
                               dingo::interfaces<element_interface>>(
-          dingo::key{indexed_value<key_type>(2)});
+          dingo::key_value{indexed_value<key_type>(2)});
   container
       .template register_type<dingo::scope<dingo::shared>,
                               dingo::storage<std::shared_ptr<element_type<3>>>,
                               dingo::interfaces<element_interface>>(
-          dingo::key{indexed_value<key_type>(3)});
+          dingo::key_value{indexed_value<key_type>(3)});
   ASSERT_THROW((container.template register_type<
                    dingo::scope<dingo::shared>,
                    dingo::storage<std::shared_ptr<element_type<3>>>,
                    dingo::interfaces<element_interface>>(
-                   dingo::key{indexed_value<key_type>(3)})),
+                   dingo::key_value{indexed_value<key_type>(3)})),
                lookup_already_registered_exception);
 
   ASSERT_EQ(

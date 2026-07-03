@@ -27,10 +27,9 @@
 namespace dingo {
 
 struct test_ordered_base_backend {
-  template <typename Key, typename Mapped, typename Cardinality,
+  template <typename Key, typename Value, typename Cardinality,
             typename Allocator>
-  using storage =
-      detail::ordered_lookup_storage<Key, Mapped, Cardinality, Allocator>;
+  using storage = ordered::storage<Key, Value, Cardinality, Allocator>;
 };
 
 template <typename Backend> struct base_one_test_traits {
@@ -85,18 +84,19 @@ void expect_base_one_backend_resolves_implicit_static_keys() {
                               interfaces<no_key_processor>>();
   container.template register_type<
       scope<shared>, storage<typed_key_processor_impl>,
-      interfaces<typed_key_processor>, key<processor_key>>();
+      interfaces<typed_key_processor>, key_type<processor_key>>();
 
   ASSERT_EQ(container.template resolve<no_key_processor &>().id(), 1);
   ASSERT_EQ(
-      container.template resolve<typed_key_processor &>(key<processor_key>{})
+      container
+          .template resolve<typed_key_processor &>(key_type<processor_key>{})
           .id(),
       2);
   auto no_key_processors =
       container.template resolve<std::vector<no_key_processor *>>();
   auto typed_key_processors =
       container.template resolve<std::vector<typed_key_processor *>>(
-          key<processor_key>{});
+          key_type<processor_key>{});
 
   ASSERT_EQ(no_key_processors.size(), 1U);
   ASSERT_EQ(no_key_processors[0]->id(), 1);
@@ -137,16 +137,16 @@ void expect_base_many_backend_enumerates_implicit_static_keys() {
                               interfaces<no_key_processor>>();
   container.template register_type<
       scope<shared>, storage<first_typed_key_processor>,
-      interfaces<typed_key_processor>, key<processor_key>>();
+      interfaces<typed_key_processor>, key_type<processor_key>>();
   container.template register_type<
       scope<shared>, storage<second_typed_key_processor>,
-      interfaces<typed_key_processor>, key<processor_key>>();
+      interfaces<typed_key_processor>, key_type<processor_key>>();
 
   auto no_key_processors =
       container.template resolve<std::vector<no_key_processor *>>();
   auto typed_key_processors =
       container.template resolve<std::vector<typed_key_processor *>>(
-          key<processor_key>{});
+          key_type<processor_key>{});
 
   ASSERT_EQ(no_key_processors.size(), 2U);
   ASSERT_EQ(sorted_processor_ids(no_key_processors), (std::vector<int>{1, 2}));
@@ -155,9 +155,9 @@ void expect_base_many_backend_enumerates_implicit_static_keys() {
             (std::vector<int>{3, 4}));
   EXPECT_THROW((container.template resolve<no_key_processor &>()),
                type_ambiguous_exception);
-  EXPECT_THROW(
-      (container.template resolve<typed_key_processor &>(key<processor_key>{})),
-      type_ambiguous_exception);
+  EXPECT_THROW((container.template resolve<typed_key_processor &>(
+                   key_type<processor_key>{})),
+               type_ambiguous_exception);
 }
 
 struct test_allocator_state {
@@ -263,7 +263,8 @@ struct fixed_injection_processor_impl : fixed_injection_processor {
 
 template <auto Id> struct fixed_injection_consumer {
   explicit fixed_injection_consumer(
-      dependency<fixed_injection_processor &, key<std::size_t, Id>> selected)
+      dependency<fixed_injection_processor &, key_type<std::size_t, Id>>
+          selected)
       : processor(selected) {}
 
   fixed_injection_processor &processor;
@@ -272,9 +273,10 @@ template <auto Id> struct fixed_injection_consumer {
 enum class fixed_injection_processor_id { first, second };
 
 template <fixed_injection_processor_id Id> struct fixed_enum_consumer {
-  explicit fixed_enum_consumer(dependency<fixed_injection_processor &,
-                                          key<fixed_injection_processor_id, Id>>
-                                   selected)
+  explicit fixed_enum_consumer(
+      dependency<fixed_injection_processor &,
+                 key_type<fixed_injection_processor_id, Id>>
+          selected)
       : processor(selected) {}
 
   fixed_injection_processor &processor;
@@ -282,7 +284,8 @@ template <fixed_injection_processor_id Id> struct fixed_enum_consumer {
 
 struct registered_fixed_indexed_consumer {
   explicit registered_fixed_indexed_consumer(
-      dependency<fixed_injection_processor &, key<std::size_t, 1>> selected)
+      dependency<fixed_injection_processor &, key_type<std::size_t, 1>>
+          selected)
       : processor(selected) {}
 
   fixed_injection_processor &processor;
@@ -381,7 +384,7 @@ struct string_literal_consumer {
 };
 #endif
 
-TEST(index_test, same_storage_at_different_runtime_keys_is_distinct) {
+TEST(index_test, same_storage_at_different_key_values_is_distinct) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -400,11 +403,11 @@ TEST(index_test, same_storage_at_different_runtime_keys_is_distinct) {
   container.template register_type<scope<shared>,
                                    storage<std::shared_ptr<processor_impl>>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(0)});
+      dingo::key_value{std::size_t(0)});
   container.template register_type<scope<shared>,
                                    storage<std::shared_ptr<processor_impl>>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(1)});
+      dingo::key_value{std::size_t(1)});
 
   auto &first = container.template resolve<processor &>(std::size_t(0));
   auto &second = container.template resolve<processor &>(std::size_t(1));
@@ -414,8 +417,7 @@ TEST(index_test, same_storage_at_different_runtime_keys_is_distinct) {
   ASSERT_EQ(&second, container.template resolve<processor *>(std::size_t(1)));
 }
 
-TEST(index_test,
-     same_runtime_key_rejects_different_storage_for_associative_one) {
+TEST(index_test, same_key_value_rejects_different_storage_for_associative_one) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -434,16 +436,16 @@ TEST(index_test,
   container<traits> container;
   container.template register_type<scope<shared>, storage<first_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(0)});
+      dingo::key_value{std::size_t(0)});
 
   EXPECT_THROW(
       (container.template register_type<
           scope<shared>, storage<second_processor>, interfaces<processor>>(
-          dingo::key{std::size_t(0)})),
+          dingo::key_value{std::size_t(0)})),
       lookup_already_registered_exception);
 }
 
-TEST(index_test, same_runtime_key_rejects_same_storage_for_associative_one) {
+TEST(index_test, same_key_value_rejects_same_storage_for_associative_one) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -459,17 +461,17 @@ TEST(index_test, same_runtime_key_rejects_same_storage_for_associative_one) {
   container<traits> container;
   container.template register_type<scope<shared>, storage<processor_impl>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(0)});
+      dingo::key_value{std::size_t(0)});
 
   EXPECT_THROW(
       (container.template register_type<scope<shared>, storage<processor_impl>,
                                         interfaces<processor>>(
-          dingo::key{std::size_t(0)})),
+          dingo::key_value{std::size_t(0)})),
       lookup_already_registered_exception);
 }
 
 TEST(index_test,
-     failed_runtime_key_one_registration_preserves_existing_entry_cache) {
+     failed_key_value_one_registration_preserves_existing_entry_cache) {
   struct second_processor : typed_key_cached_processor {
     int id() const override { return 2; }
   };
@@ -485,7 +487,7 @@ TEST(index_test,
   container.template register_type<scope<shared>,
                                    storage<typed_key_cached_processor_impl>,
                                    interfaces<typed_key_cached_processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
 
   auto &before =
       container.template resolve<typed_key_cached_processor &>(std::size_t(7));
@@ -493,7 +495,7 @@ TEST(index_test,
       (container
            .template register_type<scope<shared>, storage<second_processor>,
                                    interfaces<typed_key_cached_processor>>(
-               dingo::key{std::size_t(7)})),
+               dingo::key_value{std::size_t(7)})),
       lookup_already_registered_exception);
   auto &after =
       container.template resolve<typed_key_cached_processor &>(std::size_t(7));
@@ -519,7 +521,7 @@ TEST(index_test, unkeyed_resolve_does_not_select_indexed_binding) {
   container<traits> container;
   container.template register_type<scope<shared>, storage<processor_impl>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(0)});
+      dingo::key_value{std::size_t(0)});
 
   EXPECT_THROW((container.template resolve<processor &>()),
                type_not_found_exception);
@@ -610,13 +612,14 @@ TEST(index_test, typed_key_singular_registration_uses_allocator_owned_storage) {
     container<dynamic_container_traits, test_allocator<char>> container(
         allocator);
 
-    container
-        .template register_type<scope<shared>, storage<processor_impl>,
-                                interfaces<processor>, key<processor_key>>();
+    container.template register_type<scope<shared>, storage<processor_impl>,
+                                     interfaces<processor>,
+                                     key_type<processor_key>>();
 
     ASSERT_GT(state.allocations, 0);
     ASSERT_EQ(
-        container.template resolve<processor &>(key<processor_key>{}).id(), 42);
+        container.template resolve<processor &>(key_type<processor_key>{}).id(),
+        42);
   }
 
   ASSERT_EQ(state.deallocations, state.allocations);
@@ -627,9 +630,9 @@ TEST(index_test, typed_key_singular_registration_uses_allocator_owned_storage) {
     container<dynamic_container_traits, test_allocator<char>> container(
         allocator);
 
-    container
-        .template register_type<scope<shared>, storage<large_processor_impl>,
-                                interfaces<processor>, key<processor_key>>();
+    container.template register_type<
+        scope<shared>, storage<large_processor_impl>, interfaces<processor>,
+        key_type<processor_key>>();
 
     ASSERT_GT(large_state.allocations, 0);
     ASSERT_GE(large_state.largest_allocation_bytes,
@@ -807,7 +810,7 @@ TEST(index_test, child_normal_unkeyed_collection_does_not_merge_parent) {
   ASSERT_EQ(processors.values[0]->id(), 2);
 }
 
-TEST(index_test, runtime_keyed_collection_requires_associative_many_lookup) {
+TEST(index_test, key_valueed_collection_requires_associative_many_lookup) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -823,7 +826,7 @@ TEST(index_test, runtime_keyed_collection_requires_associative_many_lookup) {
   container<traits> container;
   container.template register_type<scope<shared>, storage<processor_impl>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(0)});
+      dingo::key_value{std::size_t(0)});
 
   EXPECT_THROW(
       (container.template resolve<std::vector<processor *>>(std::size_t(0))),
@@ -839,12 +842,12 @@ TEST(index_test, implicit_typed_key_registration_reuses_entry_cache) {
   container<> container;
   container.template register_type<
       scope<shared>, storage<typed_key_cached_processor_impl>,
-      interfaces<typed_key_cached_processor>, key<processor_key>>();
+      interfaces<typed_key_cached_processor>, key_type<processor_key>>();
 
   auto &first = container.template resolve<typed_key_cached_processor &>(
-      key<processor_key>{});
+      key_type<processor_key>{});
   auto &second = container.template resolve<typed_key_cached_processor &>(
-      key<processor_key>{});
+      key_type<processor_key>{});
 
   ASSERT_EQ(&second, &first);
   ASSERT_EQ(first.id(), 42);
@@ -866,25 +869,28 @@ TEST(index_test,
   };
 
   container<> container;
-  container.template register_type<scope<shared>, storage<first_processor>,
-                                   interfaces<processor>, key<processor_key>>();
+  container
+      .template register_type<scope<shared>, storage<first_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
 
-  ASSERT_EQ(container.template resolve<processor &>(key<processor_key>{}).id(),
-            1);
+  ASSERT_EQ(
+      container.template resolve<processor &>(key_type<processor_key>{}).id(),
+      1);
 
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<second_processor>,
-                   interfaces<processor>, key<processor_key>>()),
+                   interfaces<processor>, key_type<processor_key>>()),
                lookup_already_registered_exception);
 
   auto processors = container.template resolve<tracked_collection<processor *>>(
-      key<processor_key>{});
+      key_type<processor_key>{});
 
   ASSERT_EQ(processors.reserve_count, 1U);
   ASSERT_EQ(processors.values.size(), 1U);
   ASSERT_EQ(processors.values[0]->id(), 1);
-  ASSERT_EQ(container.template resolve<processor &>(key<processor_key>{}).id(),
-            1);
+  ASSERT_EQ(
+      container.template resolve<processor &>(key_type<processor_key>{}).id(),
+      1);
 }
 
 TEST(index_test,
@@ -896,25 +902,25 @@ TEST(index_test,
   container<> container;
   container.template register_type<
       scope<shared>, storage<typed_key_cached_processor_impl>,
-      interfaces<typed_key_cached_processor>, key<processor_key>>();
+      interfaces<typed_key_cached_processor>, key_type<processor_key>>();
 
   auto &before = container.template resolve<typed_key_cached_processor &>(
-      key<processor_key>{});
+      key_type<processor_key>{});
 
   EXPECT_THROW(
       (container.template register_type<
           scope<shared>, storage<typed_key_cached_processor_impl>,
-          interfaces<typed_key_cached_processor>, key<processor_key>>()),
+          interfaces<typed_key_cached_processor>, key_type<processor_key>>()),
       lookup_already_registered_exception);
 
   auto &after = container.template resolve<typed_key_cached_processor &>(
-      key<processor_key>{});
+      key_type<processor_key>{});
   ASSERT_EQ(&after, &before);
 
   auto processors =
       container
           .template resolve<tracked_collection<typed_key_cached_processor *>>(
-              key<processor_key>{});
+              key_type<processor_key>{});
   ASSERT_EQ(processors.reserve_count, 1U);
   ASSERT_EQ(processors.values.size(), 1U);
   ASSERT_EQ(processors.values[0]->id(), 42);
@@ -937,20 +943,22 @@ TEST(index_test, child_implicit_typed_key_collection_does_not_merge_parent) {
   container<> parent;
   container<dynamic_container_traits, std::allocator<char>, decltype(parent)>
       child(&parent);
-  parent.template register_type<scope<shared>, storage<parent_processor>,
-                                interfaces<processor>, key<processor_key>>();
-  child.template register_type<scope<shared>, storage<child_processor>,
-                               interfaces<processor>, key<processor_key>>();
+  parent
+      .template register_type<scope<shared>, storage<parent_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
+  child
+      .template register_type<scope<shared>, storage<child_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
 
   auto processors = child.template resolve<tracked_collection<processor *>>(
-      key<processor_key>{});
+      key_type<processor_key>{});
 
   ASSERT_EQ(processors.reserve_count, 1U);
   ASSERT_EQ(processors.values.size(), 1U);
   ASSERT_EQ(processors.values[0]->id(), 2);
 }
 
-TEST(index_test, runtime_key_one_lookup_uses_equal_distinct_key_object) {
+TEST(index_test, key_value_one_lookup_uses_equal_distinct_key_object) {
   struct comparable_key {
     int value;
     bool operator==(const comparable_key &other) const {
@@ -972,7 +980,7 @@ TEST(index_test, runtime_key_one_lookup_uses_equal_distinct_key_object) {
   container.template register_type<scope<shared>,
                                    storage<typed_key_cached_processor_impl>,
                                    interfaces<typed_key_cached_processor>>(
-      dingo::key{registration_key});
+      dingo::key_value{registration_key});
 
   comparable_key first_lookup_key{7};
   comparable_key second_lookup_key{7};
@@ -1052,26 +1060,30 @@ TEST(index_test, typed_key_many_lookup_covers_collection_order) {
   runtime_container<traits> container;
 
   auto empty_processors = container.template resolve<std::vector<processor *>>(
-      key<processor_key>{});
+      key_type<processor_key>{});
   ASSERT_TRUE(empty_processors.empty());
-  EXPECT_THROW((container.template resolve<processor &>(key<processor_key>{})),
-               type_not_found_exception);
+  EXPECT_THROW(
+      (container.template resolve<processor &>(key_type<processor_key>{})),
+      type_not_found_exception);
 
-  container.template register_type<scope<shared>, storage<first_processor>,
-                                   interfaces<processor>, key<processor_key>>();
-  container.template register_type<scope<shared>, storage<second_processor>,
-                                   interfaces<processor>, key<processor_key>>();
+  container
+      .template register_type<scope<shared>, storage<first_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
+  container
+      .template register_type<scope<shared>, storage<second_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
 
   auto processors = container.template resolve<std::vector<processor *>>(
-      key<processor_key>{});
+      key_type<processor_key>{});
   ASSERT_EQ(processors.size(), 2U);
   ASSERT_EQ(processors[0]->id(), 1);
   ASSERT_EQ(processors[1]->id(), 2);
-  EXPECT_THROW((container.template resolve<processor &>(key<processor_key>{})),
-               type_ambiguous_exception);
+  EXPECT_THROW(
+      (container.template resolve<processor &>(key_type<processor_key>{})),
+      type_ambiguous_exception);
 }
 
-TEST(index_test, runtime_key_many_lookup_uses_value_semantics) {
+TEST(index_test, key_value_many_lookup_uses_value_semantics) {
   struct comparable_key {
     int value;
     bool operator==(const comparable_key &other) const {
@@ -1103,13 +1115,13 @@ TEST(index_test, runtime_key_many_lookup_uses_value_semantics) {
 
   container.template register_type<scope<shared>, storage<first_processor>,
                                    interfaces<processor>>(
-      dingo::key{comparable_key{7}});
+      dingo::key_value{comparable_key{7}});
   container.template register_type<scope<shared>, storage<second_processor>,
                                    interfaces<processor>>(
-      dingo::key{comparable_key{7}});
+      dingo::key_value{comparable_key{7}});
   container.template register_type<scope<shared>, storage<third_processor>,
                                    interfaces<processor>>(
-      dingo::key{comparable_key{8}});
+      dingo::key_value{comparable_key{8}});
 
   auto values =
       container.template resolve<std::vector<processor *>>(comparable_key{7});
@@ -1121,7 +1133,7 @@ TEST(index_test, runtime_key_many_lookup_uses_value_semantics) {
   ASSERT_EQ(container.template resolve<processor &>(comparable_key{8}).id(), 3);
 }
 
-TEST(index_test, runtime_key_many_lookup_resolves_empty_collection) {
+TEST(index_test, key_value_many_lookup_resolves_empty_collection) {
   struct comparable_key {
     int value;
     bool operator==(const comparable_key &other) const {
@@ -1149,7 +1161,7 @@ TEST(index_test, runtime_key_many_lookup_resolves_empty_collection) {
                type_not_found_exception);
 }
 
-TEST(index_test, associative_alias_behaves_like_runtime_key_one) {
+TEST(index_test, associative_alias_behaves_like_key_value_one) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1162,9 +1174,10 @@ TEST(index_test, associative_alias_behaves_like_runtime_key_one) {
   };
 
   static_assert(
-      std::is_same_v<associative<std::size_t, processor>,
-                     detail::lookup_definition<
-                         processor, runtime_key<std::size_t>, one, ordered>>);
+      std::is_same_v<
+          associative<std::size_t, processor>,
+          detail::lookup_definition<
+              processor, detail::key_value_domain<std::size_t>, one, ordered>>);
 
   struct traits : dynamic_container_traits {
     using lookup_definition_type = lookups<associative<std::size_t, processor>>;
@@ -1173,20 +1186,20 @@ TEST(index_test, associative_alias_behaves_like_runtime_key_one) {
   container<traits> container;
   container.template register_type<scope<shared>, storage<first_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
 
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(7)).id(), 1);
   EXPECT_THROW(
       (container.template register_type<
           scope<shared>, storage<second_processor>, interfaces<processor>>(
-          dingo::key{std::size_t(7)})),
+          dingo::key_value{std::size_t(7)})),
       lookup_already_registered_exception);
   EXPECT_THROW(
       (container.template resolve<std::vector<processor *>>(std::size_t(7))),
       type_not_found_exception);
 }
 
-TEST(index_test, associative_many_alias_behaves_like_runtime_key_many) {
+TEST(index_test, associative_many_alias_behaves_like_key_value_many) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1204,7 +1217,8 @@ TEST(index_test, associative_many_alias_behaves_like_runtime_key_many) {
   static_assert(
       std::is_same_v<associative<std::size_t, processor, many>,
                      detail::lookup_definition<
-                         processor, runtime_key<std::size_t>, many, ordered>>);
+                         processor, detail::key_value_domain<std::size_t>, many,
+                         ordered>>);
 
   struct traits : dynamic_container_traits {
     using lookup_definition_type =
@@ -1214,13 +1228,13 @@ TEST(index_test, associative_many_alias_behaves_like_runtime_key_many) {
   container<traits> container;
   container.template register_type<scope<shared>, storage<first_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
   container.template register_type<scope<shared>, storage<second_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
   container.template register_type<scope<shared>, storage<third_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(8)});
+      dingo::key_value{std::size_t(8)});
 
   auto values =
       container.template resolve<std::vector<processor *>>(std::size_t(7));
@@ -1234,7 +1248,7 @@ TEST(index_test, associative_many_alias_behaves_like_runtime_key_many) {
 }
 
 TEST(index_test,
-     runtime_key_one_same_storage_at_different_keys_has_distinct_cache_state) {
+     key_value_one_same_storage_at_different_keys_has_distinct_cache_state) {
   struct traits : dynamic_container_traits {
     using lookup_definition_type =
         lookups<associative<std::size_t, typed_key_cached_processor>>;
@@ -1246,11 +1260,11 @@ TEST(index_test,
   container.template register_type<scope<shared>,
                                    storage<typed_key_cached_processor_impl>,
                                    interfaces<typed_key_cached_processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
   container.template register_type<scope<shared>,
                                    storage<typed_key_cached_processor_impl>,
                                    interfaces<typed_key_cached_processor>>(
-      dingo::key{std::size_t(8)});
+      dingo::key_value{std::size_t(8)});
 
   auto &first_key_first =
       container.template resolve<typed_key_cached_processor &>(std::size_t(7));
@@ -1264,7 +1278,7 @@ TEST(index_test,
   ASSERT_EQ(typed_key_cached_processor_impl::constructions, 2);
 }
 
-TEST(index_test, empty_child_runtime_key_one_lookup_falls_back_to_parent) {
+TEST(index_test, empty_child_key_value_one_lookup_falls_back_to_parent) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1281,12 +1295,12 @@ TEST(index_test, empty_child_runtime_key_one_lookup_falls_back_to_parent) {
   container<traits, std::allocator<char>, decltype(parent)> child(&parent);
   parent.template register_type<scope<shared>, storage<parent_processor>,
                                 interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
 
   ASSERT_EQ(child.template resolve<processor &>(std::size_t(7)).id(), 1);
 }
 
-TEST(index_test, child_runtime_key_one_lookup_shadows_parent) {
+TEST(index_test, child_key_value_one_lookup_shadows_parent) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1306,16 +1320,16 @@ TEST(index_test, child_runtime_key_one_lookup_shadows_parent) {
   container<traits, std::allocator<char>, decltype(parent)> child(&parent);
   parent.template register_type<scope<shared>, storage<parent_processor>,
                                 interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
   child.template register_type<scope<shared>, storage<child_processor>,
                                interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
 
   ASSERT_EQ(child.template resolve<processor &>(std::size_t(7)).id(), 2);
 }
 
 TEST(index_test,
-     empty_child_runtime_key_many_lookup_collection_falls_back_to_parent) {
+     empty_child_key_value_many_lookup_collection_falls_back_to_parent) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1336,10 +1350,10 @@ TEST(index_test,
   container<traits, std::allocator<char>, decltype(parent)> child(&parent);
   parent.template register_type<scope<shared>, storage<first_parent_processor>,
                                 interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
   parent.template register_type<scope<shared>, storage<second_parent_processor>,
                                 interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
 
   auto values =
       child.template resolve<std::vector<processor *>>(std::size_t(7));
@@ -1351,8 +1365,7 @@ TEST(index_test,
                type_ambiguous_exception);
 }
 
-TEST(index_test,
-     child_runtime_key_many_lookup_collection_does_not_merge_parent) {
+TEST(index_test, child_key_value_many_lookup_collection_does_not_merge_parent) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1373,10 +1386,10 @@ TEST(index_test,
   container<traits, std::allocator<char>, decltype(parent)> child(&parent);
   parent.template register_type<scope<shared>, storage<parent_processor>,
                                 interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
   child.template register_type<scope<shared>, storage<child_processor>,
                                interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
 
   auto values =
       child.template resolve<std::vector<processor *>>(std::size_t(7));
@@ -1386,7 +1399,7 @@ TEST(index_test,
   ASSERT_EQ(child.template resolve<processor &>(std::size_t(7)).id(), 2);
 }
 
-TEST(index_test, child_runtime_key_many_lookup_ambiguity_does_not_fallback) {
+TEST(index_test, child_key_value_many_lookup_ambiguity_does_not_fallback) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -1410,13 +1423,13 @@ TEST(index_test, child_runtime_key_many_lookup_ambiguity_does_not_fallback) {
   container<traits, std::allocator<char>, decltype(parent)> child(&parent);
   parent.template register_type<scope<shared>, storage<parent_processor>,
                                 interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
   child.template register_type<scope<shared>, storage<first_child_processor>,
                                interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
   child.template register_type<scope<shared>, storage<second_child_processor>,
                                interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
 
   auto values =
       child.template resolve<std::vector<processor *>>(std::size_t(7));
@@ -1878,15 +1891,17 @@ TEST(index_test, typed_key_one_replaces_keyed_singular_key) {
   };
 
   container<traits> container;
-  container.template register_type<scope<shared>, storage<first_processor>,
-                                   interfaces<processor>, key<processor_key>>();
+  container
+      .template register_type<scope<shared>, storage<first_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
 
   EXPECT_THROW((container.template register_type<
                    scope<shared>, storage<second_processor>,
-                   interfaces<processor>, key<processor_key>>()),
+                   interfaces<processor>, key_type<processor_key>>()),
                lookup_already_registered_exception);
-  ASSERT_EQ(container.template resolve<processor &>(key<processor_key>{}).id(),
-            1);
+  ASSERT_EQ(
+      container.template resolve<processor &>(key_type<processor_key>{}).id(),
+      1);
 }
 
 TEST(index_test, typed_key_one_does_not_satisfy_collection_lookup) {
@@ -1905,14 +1920,16 @@ TEST(index_test, typed_key_one_does_not_satisfy_collection_lookup) {
   };
 
   container<traits> container;
-  container.template register_type<scope<shared>, storage<processor_impl>,
-                                   interfaces<processor>, key<processor_key>>();
+  container
+      .template register_type<scope<shared>, storage<processor_impl>,
+                              interfaces<processor>, key_type<processor_key>>();
 
   EXPECT_THROW((container.template resolve<std::vector<processor *>>(
-                   key<processor_key>{})),
+                   key_type<processor_key>{})),
                type_not_found_exception);
-  ASSERT_EQ(container.template resolve<processor &>(key<processor_key>{}).id(),
-            1);
+  ASSERT_EQ(
+      container.template resolve<processor &>(key_type<processor_key>{}).id(),
+      1);
 }
 
 TEST(index_test, typed_key_many_enumerates_keyed_collection_entries) {
@@ -1934,23 +1951,26 @@ TEST(index_test, typed_key_many_enumerates_keyed_collection_entries) {
   };
 
   container<traits> container;
-  container.template register_type<scope<shared>, storage<first_processor>,
-                                   interfaces<processor>, key<processor_key>>();
-  container.template register_type<scope<shared>, storage<second_processor>,
-                                   interfaces<processor>, key<processor_key>>();
+  container
+      .template register_type<scope<shared>, storage<first_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
+  container
+      .template register_type<scope<shared>, storage<second_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
 
   auto processors = container.template resolve<std::vector<processor *>>(
-      key<processor_key>{});
+      key_type<processor_key>{});
   auto tracked = container.template resolve<tracked_collection<processor *>>(
-      key<processor_key>{});
+      key_type<processor_key>{});
 
   ASSERT_EQ(processors.size(), 2U);
   ASSERT_EQ(sorted_processor_ids(processors), (std::vector<int>{1, 2}));
   ASSERT_EQ(tracked.reserve_count, 2U);
   ASSERT_EQ(tracked.values.size(), 2U);
   ASSERT_EQ(sorted_processor_ids(tracked.values), (std::vector<int>{1, 2}));
-  EXPECT_THROW((container.template resolve<processor &>(key<processor_key>{})),
-               type_ambiguous_exception);
+  EXPECT_THROW(
+      (container.template resolve<processor &>(key_type<processor_key>{})),
+      type_ambiguous_exception);
 }
 
 TEST(index_test, base_many_enumerates_implicit_typed_key_collection_entries) {
@@ -1971,18 +1991,21 @@ TEST(index_test, base_many_enumerates_implicit_typed_key_collection_entries) {
   };
 
   container<traits> container;
-  container.template register_type<scope<shared>, storage<first_processor>,
-                                   interfaces<processor>, key<processor_key>>();
-  container.template register_type<scope<shared>, storage<second_processor>,
-                                   interfaces<processor>, key<processor_key>>();
+  container
+      .template register_type<scope<shared>, storage<first_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
+  container
+      .template register_type<scope<shared>, storage<second_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
 
   auto processors = container.template resolve<std::vector<processor *>>(
-      key<processor_key>{});
+      key_type<processor_key>{});
 
   ASSERT_EQ(processors.size(), 2U);
   ASSERT_EQ(sorted_processor_ids(processors), (std::vector<int>{1, 2}));
-  EXPECT_THROW((container.template resolve<processor &>(key<processor_key>{})),
-               type_ambiguous_exception);
+  EXPECT_THROW(
+      (container.template resolve<processor &>(key_type<processor_key>{})),
+      type_ambiguous_exception);
 }
 
 TEST(index_test, typed_key_many_singular_resolve_requires_exactly_one_binding) {
@@ -2001,18 +2024,20 @@ TEST(index_test, typed_key_many_singular_resolve_requires_exactly_one_binding) {
   };
 
   container<traits> container;
-  EXPECT_THROW((container.template resolve<processor &>(key<processor_key>{})),
-               type_not_found_exception);
+  EXPECT_THROW(
+      (container.template resolve<processor &>(key_type<processor_key>{})),
+      type_not_found_exception);
 
-  container.template register_type<scope<shared>, storage<processor_impl>,
-                                   interfaces<processor>, key<processor_key>>();
+  container
+      .template register_type<scope<shared>, storage<processor_impl>,
+                              interfaces<processor>, key_type<processor_key>>();
 
   auto processors = container.template resolve<std::vector<processor *>>(
-      key<processor_key>{});
+      key_type<processor_key>{});
 
   ASSERT_EQ(processors.size(), 1U);
-  ASSERT_EQ(processors[0],
-            &container.template resolve<processor &>(key<processor_key>{}));
+  ASSERT_EQ(processors[0], &container.template resolve<processor &>(
+                               key_type<processor_key>{}));
 }
 
 TEST(index_test, typed_key_many_returns_same_storage_duplicates_in_order) {
@@ -2031,18 +2056,21 @@ TEST(index_test, typed_key_many_returns_same_storage_duplicates_in_order) {
   };
 
   container<traits> container;
-  container.template register_type<scope<shared>, storage<processor_impl>,
-                                   interfaces<processor>, key<processor_key>>();
-  container.template register_type<scope<shared>, storage<processor_impl>,
-                                   interfaces<processor>, key<processor_key>>();
+  container
+      .template register_type<scope<shared>, storage<processor_impl>,
+                              interfaces<processor>, key_type<processor_key>>();
+  container
+      .template register_type<scope<shared>, storage<processor_impl>,
+                              interfaces<processor>, key_type<processor_key>>();
 
   auto processors = container.template resolve<std::vector<processor *>>(
-      key<processor_key>{});
+      key_type<processor_key>{});
   ASSERT_EQ(processors.size(), 2U);
   ASSERT_EQ(processors[0]->id(), 1);
   ASSERT_EQ(processors[1]->id(), 1);
-  EXPECT_THROW((container.template resolve<processor &>(key<processor_key>{})),
-               type_ambiguous_exception);
+  EXPECT_THROW(
+      (container.template resolve<processor &>(key_type<processor_key>{})),
+      type_ambiguous_exception);
 }
 
 TEST(index_test,
@@ -2062,13 +2090,15 @@ TEST(index_test,
   };
 
   container<traits> container;
-  container.template register_type<scope<shared>, storage<processor_impl>,
-                                   interfaces<processor>, key<processor_key>>();
-  container.template register_type<scope<shared>, storage<processor_impl>,
-                                   interfaces<processor>, key<processor_key>>();
+  container
+      .template register_type<scope<shared>, storage<processor_impl>,
+                              interfaces<processor>, key_type<processor_key>>();
+  container
+      .template register_type<scope<shared>, storage<processor_impl>,
+                              interfaces<processor>, key_type<processor_key>>();
 
   auto processors = container.template resolve<std::vector<processor *>>(
-      key<processor_key>{});
+      key_type<processor_key>{});
   ASSERT_EQ(processors.size(), 2U);
   ASSERT_EQ(processors[0]->id(), 1);
   ASSERT_EQ(processors[1]->id(), 1);
@@ -2091,10 +2121,12 @@ TEST(index_test, empty_child_typed_key_one_lookup_falls_back_to_parent) {
 
   container<traits> parent;
   container<traits, std::allocator<char>, decltype(parent)> child(&parent);
-  parent.template register_type<scope<shared>, storage<parent_processor>,
-                                interfaces<processor>, key<processor_key>>();
+  parent
+      .template register_type<scope<shared>, storage<parent_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
 
-  ASSERT_EQ(child.template resolve<processor &>(key<processor_key>{}).id(), 1);
+  ASSERT_EQ(child.template resolve<processor &>(key_type<processor_key>{}).id(),
+            1);
 }
 
 TEST(index_test, child_typed_key_one_lookup_shadows_parent) {
@@ -2117,12 +2149,15 @@ TEST(index_test, child_typed_key_one_lookup_shadows_parent) {
 
   container<traits> parent;
   container<traits, std::allocator<char>, decltype(parent)> child(&parent);
-  parent.template register_type<scope<shared>, storage<parent_processor>,
-                                interfaces<processor>, key<processor_key>>();
-  child.template register_type<scope<shared>, storage<child_processor>,
-                               interfaces<processor>, key<processor_key>>();
+  parent
+      .template register_type<scope<shared>, storage<parent_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
+  child
+      .template register_type<scope<shared>, storage<child_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
 
-  ASSERT_EQ(child.template resolve<processor &>(key<processor_key>{}).id(), 2);
+  ASSERT_EQ(child.template resolve<processor &>(key_type<processor_key>{}).id(),
+            2);
 }
 
 TEST(index_test,
@@ -2146,13 +2181,15 @@ TEST(index_test,
 
   container<traits> parent;
   container<traits, std::allocator<char>, decltype(parent)> child(&parent);
-  parent.template register_type<scope<shared>, storage<first_processor>,
-                                interfaces<processor>, key<processor_key>>();
-  parent.template register_type<scope<shared>, storage<second_processor>,
-                                interfaces<processor>, key<processor_key>>();
+  parent
+      .template register_type<scope<shared>, storage<first_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
+  parent
+      .template register_type<scope<shared>, storage<second_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
 
-  auto processors =
-      child.template resolve<std::vector<processor *>>(key<processor_key>{});
+  auto processors = child.template resolve<std::vector<processor *>>(
+      key_type<processor_key>{});
 
   ASSERT_EQ(processors.size(), 2U);
   ASSERT_EQ(processors[0]->id(), 1);
@@ -2182,15 +2219,18 @@ TEST(index_test, child_typed_key_many_lookup_collection_does_not_merge_parent) {
 
   container<traits> parent;
   container<traits, std::allocator<char>, decltype(parent)> child(&parent);
-  parent.template register_type<scope<shared>, storage<parent_processor>,
-                                interfaces<processor>, key<processor_key>>();
-  child.template register_type<scope<shared>, storage<first_child_processor>,
-                               interfaces<processor>, key<processor_key>>();
-  child.template register_type<scope<shared>, storage<second_child_processor>,
-                               interfaces<processor>, key<processor_key>>();
+  parent
+      .template register_type<scope<shared>, storage<parent_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
+  child
+      .template register_type<scope<shared>, storage<first_child_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
+  child
+      .template register_type<scope<shared>, storage<second_child_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
 
-  auto processors =
-      child.template resolve<std::vector<processor *>>(key<processor_key>{});
+  auto processors = child.template resolve<std::vector<processor *>>(
+      key_type<processor_key>{});
 
   ASSERT_EQ(processors.size(), 2U);
   ASSERT_EQ(processors[0]->id(), 2);
@@ -2221,14 +2261,17 @@ TEST(index_test,
 
   container<traits> parent;
   container<traits, std::allocator<char>, decltype(parent)> child(&parent);
-  parent.template register_type<scope<shared>, storage<parent_processor>,
-                                interfaces<processor>, key<processor_key>>();
-  child.template register_type<scope<shared>, storage<first_child_processor>,
-                               interfaces<processor>, key<processor_key>>();
-  child.template register_type<scope<shared>, storage<second_child_processor>,
-                               interfaces<processor>, key<processor_key>>();
+  parent
+      .template register_type<scope<shared>, storage<parent_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
+  child
+      .template register_type<scope<shared>, storage<first_child_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
+  child
+      .template register_type<scope<shared>, storage<second_child_processor>,
+                              interfaces<processor>, key_type<processor_key>>();
 
-  EXPECT_THROW((child.template resolve<processor &>(key<processor_key>{})),
+  EXPECT_THROW((child.template resolve<processor &>(key_type<processor_key>{})),
                type_ambiguous_exception);
 }
 
@@ -2245,12 +2288,12 @@ TEST(index_test, typed_key_one_lookup_reuses_entry_cache) {
   container<traits> container;
   container.template register_type<
       scope<shared>, storage<typed_key_cached_processor_impl>,
-      interfaces<typed_key_cached_processor>, key<processor_key>>();
+      interfaces<typed_key_cached_processor>, key_type<processor_key>>();
 
   auto &first = container.template resolve<typed_key_cached_processor &>(
-      key<processor_key>{});
+      key_type<processor_key>{});
   auto &second = container.template resolve<typed_key_cached_processor &>(
-      key<processor_key>{});
+      key_type<processor_key>{});
 
   ASSERT_EQ(&second, &first);
   ASSERT_EQ(first.id(), 42);
@@ -2270,26 +2313,26 @@ TEST(index_test, failed_typed_key_one_registration_preserves_lookup_rows) {
   container<traits> container;
   container.template register_type<
       scope<shared>, storage<typed_key_cached_processor_impl>,
-      interfaces<typed_key_cached_processor>, key<processor_key>>();
+      interfaces<typed_key_cached_processor>, key_type<processor_key>>();
 
   auto &before = container.template resolve<typed_key_cached_processor &>(
-      key<processor_key>{});
+      key_type<processor_key>{});
 
   EXPECT_THROW(
       (container.template register_type<
           scope<shared>, storage<typed_key_cached_processor_impl>,
-          interfaces<typed_key_cached_processor>, key<processor_key>>()),
+          interfaces<typed_key_cached_processor>, key_type<processor_key>>()),
       lookup_already_registered_exception);
 
   auto &after = container.template resolve<typed_key_cached_processor &>(
-      key<processor_key>{});
+      key_type<processor_key>{});
   ASSERT_EQ(&after, &before);
   ASSERT_EQ(after.id(), 42);
 
   EXPECT_THROW(
       (container
            .template resolve<tracked_collection<typed_key_cached_processor *>>(
-               key<processor_key>{})),
+               key_type<processor_key>{})),
       type_not_found_exception);
   ASSERT_EQ(typed_key_cached_processor_impl::constructions, 1);
 }
@@ -2326,10 +2369,10 @@ TEST(index_test, same_key_type_can_use_different_lookups_per_interface) {
   container<traits> container;
   container.template register_type<scope<shared>, storage<processor_impl>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(2)});
+      dingo::key_value{std::size_t(2)});
   container.template register_type<scope<shared>, storage<animal_impl>,
                                    interfaces<animal>>(
-      dingo::key{std::size_t(15)});
+      dingo::key_value{std::size_t(15)});
 
   ASSERT_EQ(container.template resolve<processor &>(std::size_t(2)).id(), 2);
   ASSERT_EQ(container.template resolve<animal &>(std::size_t(15)).id(), 15);
@@ -2358,8 +2401,9 @@ TEST(index_test,
     int processor_id() const override { return 20; }
   };
   struct pipeline {
-    pipeline(dependency<source &, key<std::size_t, 1>> selected_source,
-             dependency<processor &, key<std::size_t, 0>> selected_processor)
+    pipeline(
+        dependency<source &, key_type<std::size_t, 1>> selected_source,
+        dependency<processor &, key_type<std::size_t, 0>> selected_processor)
         : input(selected_source), parser(selected_processor) {}
 
     source &input;
@@ -2374,16 +2418,16 @@ TEST(index_test,
   container<traits> container;
   container.template register_type<scope<shared>, storage<file_source>,
                                    interfaces<source>>(
-      dingo::key{std::size_t{0}});
+      dingo::key_value{std::size_t{0}});
   container.template register_type<scope<shared>, storage<network_source>,
                                    interfaces<source>>(
-      dingo::key{std::size_t{1}});
+      dingo::key_value{std::size_t{1}});
   container.template register_type<scope<shared>, storage<json_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t{0}});
+      dingo::key_value{std::size_t{0}});
   container.template register_type<scope<shared>, storage<xml_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t{1}});
+      dingo::key_value{std::size_t{1}});
 
   auto configured_pipeline = container.template construct<pipeline>();
 
@@ -2413,7 +2457,7 @@ TEST(index_test, multi_interface_registration_inserts_each_interface_index) {
   container<traits> container;
   container.template register_type<scope<shared>, storage<processor_animal>,
                                    interfaces<processor, animal>>(
-      dingo::key{std::size_t(2)});
+      dingo::key_value{std::size_t(2)});
 
   ASSERT_EQ(
       container.template resolve<processor &>(std::size_t(2)).processor_id(),
@@ -2442,10 +2486,12 @@ TEST(index_test, same_interface_can_use_multiple_key_types) {
   container<traits> container;
   container
       .template register_type<scope<shared>, storage<dog>, interfaces<animal>>(
-          dingo::key{std::size_t(1)}, dingo::key{std::string("dog")});
+          dingo::key_value{std::size_t(1)},
+          dingo::key_value{std::string("dog")});
   container
       .template register_type<scope<shared>, storage<cat>, interfaces<animal>>(
-          dingo::key{std::size_t(2)}, dingo::key{std::string("cat")});
+          dingo::key_value{std::size_t(2)},
+          dingo::key_value{std::string("cat")});
 
   ASSERT_EQ(container.template resolve<animal &>(std::size_t(1)).id(), 1);
   ASSERT_EQ(container.template resolve<animal &>(std::string("dog")).id(), 1);
@@ -2470,7 +2516,7 @@ TEST(index_test, register_type_accepts_multiple_runtime_lookup_keys) {
   container<traits> container;
   container.template register_type<scope<shared>, storage<json_processor>,
                                    interfaces<processor>>(
-      key{42}, key<std::string>{std::string("main")});
+      key_value{42}, key_value<std::string>{std::string("main")});
 
   auto &by_id = container.template resolve<processor &>(42);
   auto &by_name = container.template resolve<processor &>(std::string("main"));
@@ -2499,13 +2545,13 @@ TEST(index_test, multi_runtime_lookup_key_registration_rolls_back_all_rows) {
   container<traits> container;
   container.template register_type<scope<shared>, storage<json_processor>,
                                    interfaces<processor>>(
-      key{1}, key<std::string>{std::string("main")});
+      key_value{1}, key_value<std::string>{std::string("main")});
 
   auto &original = container.template resolve<processor &>(1);
   EXPECT_THROW(
       (container.template register_type<scope<shared>, storage<xml_processor>,
                                         interfaces<processor>>(
-          key{2}, key<std::string>{std::string("main")})),
+          key_value{2}, key_value<std::string>{std::string("main")})),
       lookup_already_registered_exception);
 
   EXPECT_THROW((container.template resolve<processor &>(2)),
@@ -2515,7 +2561,7 @@ TEST(index_test, multi_runtime_lookup_key_registration_rolls_back_all_rows) {
             &original);
 }
 
-TEST(index_test, multi_interface_runtime_key_registration_keeps_normal_routes) {
+TEST(index_test, multi_interface_key_value_registration_keeps_normal_routes) {
   struct processor {
     virtual ~processor() = default;
     virtual int processor_id() const = 0;
@@ -2535,7 +2581,7 @@ TEST(index_test, multi_interface_runtime_key_registration_keeps_normal_routes) {
 
   container<traits> container;
   container.template register_type<scope<shared>, storage<processor_animal>,
-                                   interfaces<processor, animal>>(key{7});
+                                   interfaces<processor, animal>>(key_value{7});
 
   ASSERT_EQ(container.template resolve<processor &>(7).processor_id(), 9);
   ASSERT_EQ(container.template resolve<animal &>().animal_id(), 4);
@@ -2650,12 +2696,12 @@ TEST(index_test, explicit_lookup_resolves_with_custom_container_allocator) {
 
   container
       .template register_type<scope<shared>, storage<dog>, interfaces<animal>>(
-          dingo::key{std::string("dog")});
+          dingo::key_value{std::string("dog")});
 
   ASSERT_EQ(container.template resolve<animal &>(std::string("dog")).id(), 11);
 }
 
-TEST(index_test, runtime_key_lookup_backend_uses_rebound_allocator) {
+TEST(index_test, key_value_lookup_backend_uses_rebound_allocator) {
   struct small_key {
     explicit small_key(int resolved_value) : value(resolved_value) {}
 
@@ -2698,7 +2744,7 @@ TEST(index_test, runtime_key_lookup_backend_uses_rebound_allocator) {
 
     container.template register_type<scope<shared>, storage<dog>,
                                      interfaces<animal>>(
-        dingo::key{small_key{7}});
+        dingo::key_value{small_key{7}});
 
     ASSERT_GT(small_state.allocations, 0);
     ASSERT_EQ(container.template resolve<animal &>(small_key{7}).id(), 11);
@@ -2718,7 +2764,7 @@ TEST(index_test, runtime_key_lookup_backend_uses_rebound_allocator) {
 
     container.template register_type<scope<shared>, storage<dog>,
                                      interfaces<animal>>(
-        dingo::key{allocator_visible_key{7}});
+        dingo::key_value{allocator_visible_key{7}});
 
     ASSERT_GT(state.allocations, 0);
     ASSERT_GE(state.largest_allocation_bytes, sizeof(allocator_visible_key));
@@ -2753,10 +2799,10 @@ TEST(index_test, indexed_container_releases_rebound_allocator_storage) {
     container<traits, test_allocator<char>> container(allocator);
     container.template register_type<scope<shared>, storage<first_processor>,
                                      interfaces<processor>>(
-        dingo::key{std::size_t(0)});
+        dingo::key_value{std::size_t(0)});
     container.template register_type<scope<shared>, storage<second_processor>,
                                      interfaces<processor>>(
-        dingo::key{std::size_t(0)});
+        dingo::key_value{std::size_t(0)});
 
     auto values =
         container.template resolve<std::vector<processor *>>(std::size_t(0));
@@ -2767,7 +2813,7 @@ TEST(index_test, indexed_container_releases_rebound_allocator_storage) {
   ASSERT_EQ(state.deallocations, state.allocations);
 }
 
-TEST(index_test, associative_many_allows_multiple_values_per_runtime_key) {
+TEST(index_test, associative_many_allows_multiple_values_per_key_value) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -2790,13 +2836,13 @@ TEST(index_test, associative_many_allows_multiple_values_per_runtime_key) {
   container<traits> container;
   container.template register_type<scope<shared>, storage<first_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
   container.template register_type<scope<shared>, storage<second_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
   container.template register_type<scope<shared>, storage<third_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(8)});
+      dingo::key_value{std::size_t(8)});
 
   auto values =
       container.template resolve<std::vector<processor *>>(std::size_t(7));
@@ -2811,7 +2857,7 @@ TEST(index_test, associative_many_allows_multiple_values_per_runtime_key) {
 }
 
 TEST(index_test,
-     associative_many_returns_same_storage_duplicates_for_same_runtime_key) {
+     associative_many_returns_same_storage_duplicates_for_same_key_value) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -2828,14 +2874,14 @@ TEST(index_test,
   container<traits> container;
   container.template register_type<scope<shared>, storage<processor_impl>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
   container.template register_type<scope<shared>, storage<processor_impl>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
 
   container.template register_type<scope<shared>, storage<processor_impl>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(8)});
+      dingo::key_value{std::size_t(8)});
 
   auto values =
       container.template resolve<std::vector<processor *>>(std::size_t(7));
@@ -2848,7 +2894,7 @@ TEST(index_test,
 }
 
 TEST(index_test,
-     runtime_key_many_duplicate_registration_preserves_existing_lookup_rows) {
+     key_value_many_duplicate_registration_preserves_existing_lookup_rows) {
   struct processor {
     virtual ~processor() = default;
     virtual int id() const = 0;
@@ -2865,10 +2911,10 @@ TEST(index_test,
   container<traits> container;
   container.template register_type<scope<shared>, storage<processor_impl>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
   container.template register_type<scope<shared>, storage<processor_impl>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
 
   auto values =
       container.template resolve<std::vector<processor *>>(std::size_t(7));
@@ -2896,7 +2942,7 @@ TEST(index_test,
   container.template register_type<scope<shared>,
                                    storage<std::shared_ptr<processor_impl>>,
                                    interfaces<processor>>(
-      dingo::key{std::size_t(7)});
+      dingo::key_value{std::size_t(7)});
 
   auto &selected = container.template resolve<processor &>(std::size_t(7));
   auto values =
@@ -2932,7 +2978,7 @@ TEST(index_test, external_lookup_constructs_string_key_for_indexed_injection) {
   container<traits> container;
   container.template register_type<scope<shared>, storage<json_processor>,
                                    interfaces<processor>>(
-      dingo::key{std::string{"json"}});
+      dingo::key_value{std::string{"json"}});
 
   auto selected = container.template construct<consumer>();
 
@@ -2950,11 +2996,11 @@ TEST(index_test, constructor_injects_fixed_indexed_associative_bindings) {
   container.template register_type<scope<shared>,
                                    storage<fixed_injection_processor_impl<0>>,
                                    interfaces<fixed_injection_processor>>(
-      dingo::key{std::size_t(0)});
+      dingo::key_value{std::size_t(0)});
   container.template register_type<scope<shared>,
                                    storage<fixed_injection_processor_impl<1>>,
                                    interfaces<fixed_injection_processor>>(
-      dingo::key{std::size_t(1)});
+      dingo::key_value{std::size_t(1)});
 
   auto first_consumer =
       container.template construct<fixed_injection_consumer<0>>();
@@ -2968,9 +3014,9 @@ TEST(index_test, constructor_injects_fixed_indexed_associative_bindings) {
 TEST(index_test, static_container_resolves_fixed_indexed_associative_bindings) {
   using source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<0>>,
-           interfaces<fixed_injection_processor>, key<std::size_t, 0>>,
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 0>>,
       bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
-           interfaces<fixed_injection_processor>, key<std::size_t, 1>>>;
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 1>>>;
 
   struct traits : static_container_traits<> {
     using lookup_definition_type =
@@ -2980,9 +3026,9 @@ TEST(index_test, static_container_resolves_fixed_indexed_associative_bindings) {
   static_container<source, traits> container;
 
   auto &first = container.template resolve<
-      dependency<fixed_injection_processor &, key<std::size_t, 0>>>();
+      dependency<fixed_injection_processor &, key_type<std::size_t, 0>>>();
   auto &second = container.template resolve<
-      dependency<fixed_injection_processor &, key<std::size_t, 1>>>();
+      dependency<fixed_injection_processor &, key_type<std::size_t, 1>>>();
 
   ASSERT_EQ(first.id(), 0);
   ASSERT_EQ(second.id(), 1);
@@ -3010,9 +3056,9 @@ TEST(index_test,
      static_container_keeps_fixed_associative_cache_entries_distinct) {
   using source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<7>>,
-           interfaces<fixed_injection_processor>, key<std::size_t, 0>>,
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 0>>,
       bind<scope<shared>, storage<fixed_injection_processor_impl<7>>,
-           interfaces<fixed_injection_processor>, key<std::size_t, 1>>>;
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 1>>>;
 
   struct traits : static_container_traits<> {
     using lookup_definition_type =
@@ -3022,11 +3068,11 @@ TEST(index_test,
   static_container<source, traits> container;
 
   auto &first = container.template resolve<
-      dependency<fixed_injection_processor &, key<std::size_t, 0>>>();
+      dependency<fixed_injection_processor &, key_type<std::size_t, 0>>>();
   auto &first_again = container.template resolve<
-      dependency<fixed_injection_processor &, key<std::size_t, 0>>>();
+      dependency<fixed_injection_processor &, key_type<std::size_t, 0>>>();
   auto &second = container.template resolve<
-      dependency<fixed_injection_processor &, key<std::size_t, 1>>>();
+      dependency<fixed_injection_processor &, key_type<std::size_t, 1>>>();
 
   ASSERT_EQ(&first, &first_again);
   ASSERT_NE(&first, &second);
@@ -3035,12 +3081,12 @@ TEST(index_test,
 }
 
 TEST(index_test, static_container_injects_fixed_indexed_dependency) {
-  using source =
-      bindings<bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
-                    interfaces<fixed_injection_processor>, key<std::size_t, 1>>,
-               bind<scope<unique>, storage<fixed_injection_consumer<1>>,
-                    dependencies<dependency<fixed_injection_processor &,
-                                            key<std::size_t, 1>>>>>;
+  using source = bindings<
+      bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 1>>,
+      bind<scope<unique>, storage<fixed_injection_consumer<1>>,
+           dependencies<dependency<fixed_injection_processor &,
+                                   key_type<std::size_t, 1>>>>>;
 
   struct traits : static_container_traits<> {
     using lookup_definition_type =
@@ -3058,12 +3104,12 @@ TEST(index_test, static_container_preserves_typed_key_resolution) {
   struct static_typed_key {};
   using source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<4>>,
-           interfaces<fixed_injection_processor>, key<static_typed_key>>>;
+           interfaces<fixed_injection_processor>, key_type<static_typed_key>>>;
 
   static_container<source> container;
 
   auto &processor = container.template resolve<fixed_injection_processor &>(
-      key<static_typed_key>{});
+      key_type<static_typed_key>{});
 
   ASSERT_EQ(processor.id(), 4);
 }
@@ -3071,11 +3117,11 @@ TEST(index_test, static_container_preserves_typed_key_resolution) {
 TEST(index_test, static_container_resolves_key_value_many_collection) {
   using source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<0>>,
-           interfaces<fixed_injection_processor>, key<std::size_t, 7>>,
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 7>>,
       bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
-           interfaces<fixed_injection_processor>, key<std::size_t, 7>>,
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 7>>,
       bind<scope<shared>, storage<fixed_injection_processor_impl<2>>,
-           interfaces<fixed_injection_processor>, key<std::size_t, 8>>>;
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 8>>>;
 
   struct traits : static_container_traits<> {
     using lookup_definition_type =
@@ -3086,13 +3132,14 @@ TEST(index_test, static_container_resolves_key_value_many_collection) {
 
   auto processors =
       container.template resolve<std::vector<fixed_injection_processor *>>(
-          key<std::size_t, 7>{});
+          key_type<std::size_t, 7>{});
   auto constructed = container.template construct_collection<
-      std::vector<fixed_injection_processor *>>(key<std::size_t, 7>{});
+      std::vector<fixed_injection_processor *>>(key_type<std::size_t, 7>{});
 
   ASSERT_EQ(
-      (container.template count_collection<
-          std::vector<fixed_injection_processor *>, key<std::size_t, 7>>()),
+      (container
+           .template count_collection<std::vector<fixed_injection_processor *>,
+                                      key_type<std::size_t, 7>>()),
       2U);
   ASSERT_EQ(processors.size(), 2U);
   ASSERT_EQ(processors[0]->id(), 0);
@@ -3105,7 +3152,7 @@ TEST(index_test, static_container_resolves_key_value_many_collection) {
 TEST(index_test, static_container_resolves_key_value_many_exactly_one) {
   using source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
-           interfaces<fixed_injection_processor>, key<std::size_t, 7>>>;
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 7>>>;
 
   struct traits : static_container_traits<> {
     using lookup_definition_type =
@@ -3115,7 +3162,7 @@ TEST(index_test, static_container_resolves_key_value_many_exactly_one) {
   static_container<source, traits> container;
 
   auto &processor = container.template resolve<
-      dependency<fixed_injection_processor &, key<std::size_t, 7>>>();
+      dependency<fixed_injection_processor &, key_type<std::size_t, 7>>>();
 
   ASSERT_EQ(processor.id(), 1);
 }
@@ -3123,9 +3170,9 @@ TEST(index_test, static_container_resolves_key_value_many_exactly_one) {
 TEST(index_test, static_key_value_many_allows_same_storage_different_key) {
   using source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<9>>,
-           interfaces<fixed_injection_processor>, key<std::size_t, 7>>,
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 7>>,
       bind<scope<shared>, storage<fixed_injection_processor_impl<9>>,
-           interfaces<fixed_injection_processor>, key<std::size_t, 8>>>;
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 8>>>;
 
   struct traits : static_container_traits<> {
     using lookup_definition_type =
@@ -3135,9 +3182,9 @@ TEST(index_test, static_key_value_many_allows_same_storage_different_key) {
   static_container<source, traits> container;
 
   auto &first = container.template resolve<
-      dependency<fixed_injection_processor &, key<std::size_t, 7>>>();
+      dependency<fixed_injection_processor &, key_type<std::size_t, 7>>>();
   auto &second = container.template resolve<
-      dependency<fixed_injection_processor &, key<std::size_t, 8>>>();
+      dependency<fixed_injection_processor &, key_type<std::size_t, 8>>>();
 
   ASSERT_EQ(first.id(), 9);
   ASSERT_EQ(second.id(), 9);
@@ -3147,9 +3194,9 @@ TEST(index_test, static_key_value_many_allows_same_storage_different_key) {
 TEST(index_test, static_container_key_value_many_parent_fallback) {
   using parent_source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
-           interfaces<fixed_injection_processor>, key<std::size_t, 7>>,
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 7>>,
       bind<scope<shared>, storage<fixed_injection_processor_impl<2>>,
-           interfaces<fixed_injection_processor>, key<std::size_t, 7>>>;
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 7>>>;
   using child_source = bindings<>;
 
   struct traits : static_container_traits<> {
@@ -3162,7 +3209,7 @@ TEST(index_test, static_container_key_value_many_parent_fallback) {
 
   auto processors =
       child.template resolve<std::vector<fixed_injection_processor *>>(
-          key<std::size_t, 7>{});
+          key_type<std::size_t, 7>{});
 
   ASSERT_EQ(processors.size(), 2U);
   ASSERT_EQ(processors[0]->id(), 1);
@@ -3172,10 +3219,10 @@ TEST(index_test, static_container_key_value_many_parent_fallback) {
 TEST(index_test, static_container_key_value_many_child_does_not_merge) {
   using parent_source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
-           interfaces<fixed_injection_processor>, key<std::size_t, 7>>>;
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 7>>>;
   using child_source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<2>>,
-           interfaces<fixed_injection_processor>, key<std::size_t, 7>>>;
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 7>>>;
 
   struct traits : static_container_traits<> {
     using lookup_definition_type =
@@ -3187,7 +3234,7 @@ TEST(index_test, static_container_key_value_many_child_does_not_merge) {
 
   auto processors =
       child.template resolve<std::vector<fixed_injection_processor *>>(
-          key<std::size_t, 7>{});
+          key_type<std::size_t, 7>{});
 
   ASSERT_EQ(processors.size(), 1U);
   ASSERT_EQ(processors[0]->id(), 2);
@@ -3196,7 +3243,7 @@ TEST(index_test, static_container_key_value_many_child_does_not_merge) {
 TEST(index_test, static_key_value_resolves_indexed_reference) {
   using source = bindings<
       bind<scope<shared>, storage<fixed_injection_processor_impl<1>>,
-           interfaces<fixed_injection_processor>, key<std::size_t, 0>>>;
+           interfaces<fixed_injection_processor>, key_type<std::size_t, 0>>>;
 
   struct traits : static_container_traits<> {
     using lookup_definition_type =
@@ -3206,7 +3253,7 @@ TEST(index_test, static_key_value_resolves_indexed_reference) {
   static_container<source, traits> container;
 
   auto &processor = container.template resolve<
-      dependency<fixed_injection_processor &, key<std::size_t, 0>>>();
+      dependency<fixed_injection_processor &, key_type<std::size_t, 0>>>();
 
   ASSERT_EQ(processor.id(), 1);
 }
@@ -3221,7 +3268,7 @@ TEST(index_test, constructor_injects_fixed_indexed_associative_binding) {
   container.template register_type<scope<shared>,
                                    storage<fixed_injection_processor_impl<1>>,
                                    interfaces<fixed_injection_processor>>(
-      dingo::key{std::size_t(1)});
+      dingo::key_value{std::size_t(1)});
 
   auto consumer = container.template construct<fixed_injection_consumer<1>>();
 
@@ -3238,7 +3285,7 @@ TEST(index_test, constructor_injects_fixed_indexed_enum_key) {
   container.template register_type<scope<shared>,
                                    storage<fixed_injection_processor_impl<1>>,
                                    interfaces<fixed_injection_processor>>(
-      dingo::key{fixed_injection_processor_id::first});
+      dingo::key_value{fixed_injection_processor_id::first});
 
   auto consumer = container.template construct<
       fixed_enum_consumer<fixed_injection_processor_id::first>>();
@@ -3256,7 +3303,7 @@ TEST(index_test, constructor_fixed_indexed_missing_key_throws_type_not_found) {
   container.template register_type<scope<shared>,
                                    storage<fixed_injection_processor_impl<0>>,
                                    interfaces<fixed_injection_processor>>(
-      dingo::key{std::size_t(0)});
+      dingo::key_value{std::size_t(0)});
 
   EXPECT_THROW((container.template construct<fixed_injection_consumer<1>>()),
                type_not_found_exception);
@@ -3272,7 +3319,7 @@ TEST(index_test, registered_consumer_resolves_fixed_indexed_dependency) {
   container.template register_type<scope<shared>,
                                    storage<fixed_injection_processor_impl<1>>,
                                    interfaces<fixed_injection_processor>>(
-      dingo::key{std::size_t(1)});
+      dingo::key_value{std::size_t(1)});
   container.template register_type<
       scope<shared>, storage<registered_fixed_indexed_consumer>>();
 
@@ -3307,7 +3354,7 @@ TEST(index_test, selected_value_selector_injects_indexed_binding) {
   container.template register_type<scope<shared>,
                                    storage<fixed_injection_processor_impl<5>>,
                                    interfaces<fixed_injection_processor>>(
-      dingo::key{std::size_t(1)});
+      dingo::key_value{std::size_t(1)});
   container.template register_type<scope<shared>,
                                    storage<selected_value_consumer>>();
 
@@ -3335,12 +3382,12 @@ TEST(index_test, annotated_interfaces_keep_independent_indexes) {
       scope<shared>, storage<fixed_injection_processor_impl<11>>,
       interfaces<
           annotated<fixed_injection_processor, annotated_index_primary_tag>>>(
-      dingo::key{std::size_t(1)});
+      dingo::key_value{std::size_t(1)});
   container.template register_type<
       scope<shared>, storage<fixed_injection_processor_impl<22>>,
       interfaces<
           annotated<fixed_injection_processor, annotated_index_replica_tag>>>(
-      dingo::key{std::size_t(3)});
+      dingo::key_value{std::size_t(3)});
 
   primary_processor primary =
       container.template resolve<primary_processor>(std::size_t(1));
@@ -3366,7 +3413,7 @@ TEST(index_test,
   container.template register_type<dingo::scope<dingo::shared>,
                                    dingo::storage<string_processor_impl<7>>,
                                    dingo::interfaces<string_processor>>(
-      dingo::key{std::string{"json"}});
+      dingo::key_value{std::string{"json"}});
 
   auto consumer = container.template construct<string_literal_consumer>();
 

@@ -17,15 +17,15 @@ struct second : interface {};
 using source = dingo::bindings<
     dingo::bind<dingo::scope<dingo::shared>,
                 dingo::storage<std::shared_ptr<first>>,
-                dingo::interfaces<interface>, dingo::key<duplicate_key>>,
+                dingo::interfaces<interface>, dingo::key_type<duplicate_key>>,
     dingo::bind<dingo::scope<dingo::shared>,
                 dingo::storage<std::shared_ptr<second>>,
-                dingo::interfaces<interface>, dingo::key<duplicate_key>>>;
+                dingo::interfaces<interface>, dingo::key_type<duplicate_key>>>;
 
 void test() {
   dingo::static_container<source> container;
   (void)container.resolve<std::shared_ptr<interface>>(
-      dingo::key<duplicate_key>{});
+      dingo::key_type<duplicate_key>{});
 }
 
 // CHECK: static_container cannot resolve an ambiguously bound type

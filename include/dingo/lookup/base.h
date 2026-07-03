@@ -57,8 +57,7 @@ template <typename Rtti> struct base_lookup_interface {};
 template <typename Rtti, typename Cardinality, typename Backend>
 using base_lookup_entry =
     lookup_entry<base_lookup_interface<Rtti>,
-                 ::dingo::runtime_key<base_lookup_key<Rtti>>, Cardinality,
-                 Backend>;
+                 key_value_domain<base_lookup_key<Rtti>>, Cardinality, Backend>;
 
 template <typename Definition>
 struct is_base_lookup_definition : std::false_type {};

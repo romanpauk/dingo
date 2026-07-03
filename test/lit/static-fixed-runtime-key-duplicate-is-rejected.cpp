@@ -14,10 +14,10 @@ struct second_processor : processor {};
 
 using source = dingo::bindings<
     dingo::bind<dingo::scope<dingo::shared>, dingo::storage<first_processor>,
-                dingo::interfaces<processor>, dingo::key<std::size_t, 0>>,
+                dingo::interfaces<processor>, dingo::key_type<std::size_t, 0>>,
     dingo::bind<dingo::scope<dingo::shared>, dingo::storage<second_processor>,
                 dingo::interfaces<processor>,
-                dingo::key<std::size_t, std::size_t{0}>>>;
+                dingo::key_type<std::size_t, std::size_t{0}>>>;
 
 struct traits : dingo::static_container_traits<> {
   using lookup_definition_type =

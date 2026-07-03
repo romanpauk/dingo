@@ -412,7 +412,7 @@ class RegistrationPlugin:
             return (
                 "container.template register_type<"
                 + ", ".join(parts)
-                + f">(dingo::key{{{spec.indexed_key}}});"
+                + f">(dingo::key_value{{{spec.indexed_key}}});"
             )
 
         argument = spec_runtime_argument(spec, stored_type)

@@ -11,6 +11,6 @@
 
 namespace dingo {
 template <typename Interface>
-using collection = detail::lookup_definition<Interface, no_key, many>;
+using collection = detail::lookup_definition<Interface, none_t, many>;
 
 } // namespace dingo

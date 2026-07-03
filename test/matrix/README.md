@@ -1,8 +1,8 @@
 # Generated Matrix Test Model
 
-The matrix is described as independent axes, then filtered into valid cases.
-The generator should not keep hand-written recipes as the primary model. Recipes
-are an output of axis selection.
+The matrix is described as independent axes, then filtered into valid cases. The
+generator should not keep hand-written recipes as the primary model. Recipes are
+an output of axis selection.
 
 ## Axes
 
@@ -20,8 +20,10 @@ are an output of axis selection.
 - `resolve_indexed`: resolve one runtime-key lookup binding.
 - `construct`: construct an unregistered type from registered dependencies.
 - `invoke`: invoke a callable from registered dependencies.
-- `construct_collection`: construct a collection with default or custom insertion.
-- `local_bindings`: resolve dependencies from bindings attached to a registration.
+- `construct_collection`: construct a collection with default or custom
+  insertion.
+- `local_bindings`: resolve dependencies from bindings attached to a
+  registration.
 - `nested_container`: resolve through child and parent containers.
 - `annotated`: disambiguate registrations with `annotated<T, Tag>`.
 - `variant`: construct or resolve a variant and its held alternative.
@@ -32,8 +34,7 @@ are an output of axis selection.
   destroy the stored value with expected counts.
 - `mixed_external_dependency`: combine compile-time bindings with a runtime
   external dependency.
-- `custom_allocator`: use a caller-selected allocator for container
-  bookkeeping.
+- `custom_allocator`: use a caller-selected allocator for container bookkeeping.
 - `custom_rtti`: use a caller-selected RTTI provider for runtime lookup.
 
 Negative compile-time checks stay in `test/lit`. The generated matrix covers
@@ -50,8 +51,8 @@ to describe the behavior under test without hiding it in resolved-type checks.
   multi-argument callables, and `std::move_only_function` when available.
 - `factory_override`: no-argument function factories, function factories with
   dependencies, explicit constructor factories, detected constructors,
-  `DINGO_CONSTRUCTOR` typedef constructors, callable registration factories,
-  and explicit callable construction.
+  `DINGO_CONSTRUCTOR` typedef constructors, callable registration factories, and
+  explicit callable construction.
 
 Factory case entries own the registration factory expression for the behavior
 under test. The stored, exposed, and resolved type axes only select the C++
@@ -132,10 +133,10 @@ fixture type needed by that case.
 - user-defined wrapper values, references, and interface conversions
 - `std::vector<std::shared_ptr<I>>`
 - custom inserted collection forms such as `std::map<int, std::shared_ptr<I>>`
-- typed-key `T`, `T&`, and collection requests through `resolve(...,
-  key<Key>{})`
-- `dependency<T, key<Key>>` constructor and invocation dependencies
-- `dependency<std::vector<std::shared_ptr<I>>, key<Key>>` constructor and
+- typed-key `T`, `T&`, and collection requests through
+  `resolve(..., key_type<Key>{})`
+- `dependency<T, key_type<Key>>` constructor and invocation dependencies
+- `dependency<std::vector<std::shared_ptr<I>>, key_type<Key>>` constructor and
   invocation dependencies
 - runtime-key requests
 - `T (*)[N]`
@@ -181,8 +182,8 @@ Then it should keep only rows that satisfy all rules below.
 - Mixed containers require at least one static binding and may add runtime
   bindings.
 - Runtime-key lookup features require lookup container traits.
-- Runtime-key registration is runtime-only unless static fixed-key bindings are added
-  to the library.
+- Runtime-key registration is runtime-only unless static fixed-key bindings are
+  added to the library.
 - `external` scope requires caller-supplied storage.
 - `unique` scope can resolve owning values and wrappers, but not stable shared
   references across resolutions.
@@ -194,13 +195,15 @@ Then it should keep only rows that satisfy all rules below.
 - Collection rows require more than one matching binding.
 - Keyed collection rows require more than one matching binding for the same key.
 - Keyed singular rows require exactly one binding for the requested key.
-- Annotated rows require matching `annotated<..., Tag>` request and registration.
+- Annotated rows require matching `annotated<..., Tag>` request and
+  registration.
 - Array rows must preserve the exact array shape.
 - Variant held-alternative rows require the held alternative to be unique in the
   variant type.
-- Factory rows require a constructor shape that would otherwise need the explicit
-  factory.
-- Local-binding rows must verify local lookup, host fallback, and local override.
+- Factory rows require a constructor shape that would otherwise need the
+  explicit factory.
+- Local-binding rows must verify local lookup, host fallback, and local
+  override.
 - Local-binding collection rows must verify local and host collection merge.
 - Nested-container rows must verify child lookup, parent fallback, and child
   override.
@@ -220,8 +223,8 @@ The generator should fail if:
   rows
 - a filter rule is declared but never exercised
 
-Not every axis combination should exist. Completeness means every axis member and
-filter rule is represented by at least one valid generated row, and each
+Not every axis combination should exist. Completeness means every axis member
+and filter rule is represented by at least one valid generated row, and each
 applicable feature / registration mode / container combination has at least one
 valid generated row.
 
@@ -235,7 +238,7 @@ sources are split by:
 Features with only the default case keep a single source and runner named after
 the feature. Dispatch-heavy features get one source and runner per case, for
 example `invoke_member_function_pointer.cpp` and
-`matrix_runner_invoke_member_function_pointer.cpp`. The split keeps
-translation units tied to matrix meaning instead of arbitrary shard numbers,
-while limiting the amount of template-heavy container and generated test code
-compiled by one compiler process.
+`matrix_runner_invoke_member_function_pointer.cpp`. The split keeps translation
+units tied to matrix meaning instead of arbitrary shard numbers, while limiting
+the amount of template-heavy container and generated test code compiled by one
+compiler process.

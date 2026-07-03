@@ -7,18 +7,17 @@
 
 #pragma once
 
+#include <dingo/core/none.h>
+
 namespace dingo {
 template <typename... Definitions> struct lookups {};
-struct no_key {};
-template <typename Key> struct typed_key {};
-template <typename Key> struct runtime_key {};
 struct one {};
 struct many {};
 
 namespace detail {
-struct no_lookup_backend {};
+template <typename Key> struct key_value_domain {};
 template <typename Interface, typename KeyDomain, typename Cardinality,
-          typename Backend = no_lookup_backend>
+          typename Backend = none_t>
 struct lookup_definition {};
 } // namespace detail
 

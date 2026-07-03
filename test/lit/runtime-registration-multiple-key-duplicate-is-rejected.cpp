@@ -18,8 +18,8 @@ int main() {
   dingo::container<traits> container;
   container.register_type<dingo::scope<dingo::shared>,
                           dingo::storage<processor_impl>,
-                          dingo::interfaces<processor>>(dingo::key{7},
-                                                        dingo::key{8});
+                          dingo::interfaces<processor>>(dingo::key_value{7},
+                                                        dingo::key_value{8});
 }
 
 // CHECK: duplicate runtime key value arguments for runtime lookup

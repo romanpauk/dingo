@@ -50,17 +50,16 @@ namespace detail {
 template <typename StaticRegistry, typename ParentContainer>
 class container_with_static_bindings;
 
-template <typename Interface> struct runtime_key_value_interface {
+template <typename Interface> struct key_value_interface {
   using type = normalized_type_t<Interface>;
 };
 
-template <> struct runtime_key_value_interface<void> {
+template <> struct key_value_interface<void> {
   using type = void;
 };
 
 template <typename Interface>
-using runtime_key_value_interface_t =
-    typename runtime_key_value_interface<Interface>::type;
+using key_value_interface_t = typename key_value_interface<Interface>::type;
 
 } // namespace detail
 
@@ -68,6 +67,7 @@ template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
           typename ResolveRoot>
 class runtime_registry : public allocator_base<Allocator> {
   friend class runtime_context;
+  template <typename> friend class detail::runtime_registration_api;
   template <typename T, typename Context, typename Container>
   friend T detail::resolve_context_request(Context &, Container &);
   template <typename, typename> friend class detail::binding_resolution;
@@ -164,15 +164,14 @@ protected:
 
 public:
   template <typename... TypeArgs> auto register_type() {
-    return register_binding<TypeArgs...>(resolve_root(), none_t{});
+    return prepare_binding<TypeArgs...>(resolve_root(), none_t{});
   }
 
   template <typename... TypeArgs, typename Arg,
             std::enable_if_t<!detail::is_runtime_registration_key_arg_v<Arg>,
                              int> = 0>
   auto register_type(Arg &&arg) {
-    return register_binding<TypeArgs...>(resolve_root(),
-                                         std::forward<Arg>(arg));
+    return prepare_binding<TypeArgs...>(resolve_root(), std::forward<Arg>(arg));
   }
 
   template <typename... TypeArgs, typename... KeyArgs,
@@ -181,8 +180,8 @@ public:
                  detail::are_runtime_registration_key_args_v<KeyArgs...>),
                 int> = 0>
   auto register_type(KeyArgs &&...keys) {
-    return register_binding<TypeArgs...>(resolve_root(), none_t{},
-                                         std::forward<KeyArgs>(keys)...);
+    return prepare_binding<TypeArgs...>(resolve_root(), none_t{},
+                                        std::forward<KeyArgs>(keys)...);
   }
 
   template <typename... TypeArgs, typename Arg, typename... KeyArgs,
@@ -192,32 +191,8 @@ public:
                  detail::are_runtime_registration_key_args_v<KeyArgs...>),
                 int> = 0>
   auto register_type(Arg &&arg, KeyArgs &&...keys) {
-    return register_binding<TypeArgs...>(resolve_root(), std::forward<Arg>(arg),
-                                         std::forward<KeyArgs>(keys)...);
-  }
-
-  template <typename... TypeArgs, typename Fn>
-  auto register_type_collection(Fn &&fn) {
-    using registration = type_registration<TypeArgs...>;
-    return register_type<TypeArgs...>(
-        callable([this, collection_fn = std::forward<Fn>(fn)]() mutable {
-          return this->template construct_collection<
-              typename registration::storage_type::type>(collection_fn);
-        }));
-  }
-
-  template <typename... TypeArgs> auto register_type_collection() {
-    return register_type_collection<TypeArgs...>(
-        detail::binding_collection_append{});
-  }
-
-  template <typename... TypeArgs, typename Parent, typename Arg,
-            typename... RuntimeKeyArgs>
-  auto emplace_binding(Parent &parent, Arg &&arg,
-                       RuntimeKeyArgs &&...runtime_keys) {
-    return register_binding<TypeArgs...>(
-        &parent, std::forward<Arg>(arg),
-        std::forward<RuntimeKeyArgs>(runtime_keys)...);
+    return prepare_binding<TypeArgs...>(resolve_root(), std::forward<Arg>(arg),
+                                        std::forward<KeyArgs>(keys)...);
   }
 
 protected:
@@ -241,14 +216,14 @@ protected:
     return construct_collection_runtime_request<T>(std::forward<Fn>(fn));
   }
 
-  template <typename T, typename Key> T construct_collection(key<Key>) {
-    return construct_collection_runtime_request<T>(key<Key>{});
+  template <typename T, typename Key> T construct_collection(key_type<Key>) {
+    return construct_collection_runtime_request<T>(key_type<Key>{});
   }
 
   template <typename T, typename Fn, typename Key>
-  T construct_collection(Fn &&fn, key<Key>) {
+  T construct_collection(Fn &&fn, key_type<Key>) {
     return construct_collection_runtime_request<T>(std::forward<Fn>(fn),
-                                                   key<Key>{});
+                                                   key_type<Key>{});
   }
 
   template <typename Signature = void, typename Callable>
@@ -329,13 +304,13 @@ protected:
   }
 
   template <typename T, typename Key>
-  T construct_collection_runtime_request(key<Key>) {
+  T construct_collection_runtime_request(key_type<Key>) {
     return construct_collection_runtime_request<T>(
-        detail::binding_collection_append{}, key<Key>{});
+        detail::binding_collection_append{}, key_type<Key>{});
   }
 
   template <typename T, typename Fn, typename Key>
-  T construct_collection_runtime_request(Fn &&fn, key<Key>) {
+  T construct_collection_runtime_request(Fn &&fn, key_type<Key>) {
     return construct_collection_runtime_request_impl<T, Key>(
         std::forward<Fn>(fn));
   }
@@ -633,7 +608,7 @@ protected:
 
   template <typename Key>
   using collection_key_t =
-      std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>;
+      std::conditional_t<std::is_void_v<Key>, none_t, key_type<Key>>;
 
 protected:
   template <typename Key> static collection_key_t<Key> collection_key() {
@@ -707,13 +682,13 @@ protected:
   struct explicit_static_key_lookup_entry;
 
   template <typename Interface, typename Cardinality>
-  struct explicit_static_key_lookup_entry<Interface, ::dingo::no_key,
+  struct explicit_static_key_lookup_entry<Interface, ::dingo::none_t,
                                           Cardinality> {
     using type = no_key_lookup_entry_t<Interface, Cardinality>;
   };
 
   template <typename Interface, typename Key, typename Cardinality>
-  struct explicit_static_key_lookup_entry<Interface, ::dingo::typed_key<Key>,
+  struct explicit_static_key_lookup_entry<Interface, ::dingo::key_type<Key>,
                                           Cardinality> {
     using type = typed_key_lookup_entry_t<Interface, Key, Cardinality>;
   };
@@ -727,21 +702,21 @@ protected:
     using type = none_t;
   };
 
-  template <typename Key> struct static_key_route_id<::dingo::typed_key<Key>> {
-    using type = ::dingo::key<Key>;
+  template <typename Key> struct static_key_route_id<::dingo::key_type<Key>> {
+    using type = ::dingo::key_type<Key>;
   };
 
   template <typename Interface, typename Key>
-  using runtime_key_lookup_entry_t =
+  using key_value_lookup_entry_t =
       detail::selected_lookup_entry_t<Interface, Key,
                                       normalized_lookup_entries>;
 
   template <typename Interface, typename Key>
-  using runtime_key_lookup_cardinality_t = typename lookup_entry_cardinality<
-      runtime_key_lookup_entry_t<Interface, Key>>::type;
+  using key_value_lookup_cardinality_t = typename lookup_entry_cardinality<
+      key_value_lookup_entry_t<Interface, Key>>::type;
 
   template <typename LookupEntry> struct runtime_lookup_entry_traits {
-    static constexpr bool is_runtime_key = false;
+    static constexpr bool is_key_value = false;
     using interface_type = void;
     using key_type = void;
   };
@@ -749,8 +724,8 @@ protected:
   template <typename Interface, typename Key, typename Cardinality,
             typename Backend>
   struct runtime_lookup_entry_traits<detail::lookup_entry<
-      Interface, ::dingo::runtime_key<Key>, Cardinality, Backend>> {
-    static constexpr bool is_runtime_key = true;
+      Interface, detail::key_value_domain<Key>, Cardinality, Backend>> {
+    static constexpr bool is_key_value = true;
     using interface_type = Interface;
     using key_type = Key;
   };
@@ -772,7 +747,7 @@ protected:
         typename runtime_lookup_entries_for_interface<TypeInterface,
                                                       type_list<Tail...>>::type;
     static constexpr bool matches =
-        head_traits::is_runtime_key &&
+        head_traits::is_key_value &&
         std::is_same_v<normalized_type_t<TypeInterface>,
                        typename head_traits::interface_type>;
 
@@ -796,8 +771,8 @@ protected:
   private:
     using entry_traits = runtime_lookup_entry_traits<Entry>;
     using arg_traits = runtime_registration_arg_traits<Arg>;
-    using arg_interface = detail::runtime_key_value_interface_t<
-        typename arg_traits::interface_type>;
+    using arg_interface =
+        detail::key_value_interface_t<typename arg_traits::interface_type>;
 
   public:
     static constexpr bool value =
@@ -812,8 +787,8 @@ protected:
   private:
     using entry_traits = runtime_lookup_entry_traits<Entry>;
     using arg_traits = runtime_registration_arg_traits<Arg>;
-    using arg_interface = detail::runtime_key_value_interface_t<
-        typename arg_traits::interface_type>;
+    using arg_interface =
+        detail::key_value_interface_t<typename arg_traits::interface_type>;
 
   public:
     static constexpr bool value =
@@ -828,10 +803,10 @@ protected:
   private:
     using left_traits = runtime_registration_arg_traits<Left>;
     using right_traits = runtime_registration_arg_traits<Right>;
-    using left_interface = detail::runtime_key_value_interface_t<
-        typename left_traits::interface_type>;
-    using right_interface = detail::runtime_key_value_interface_t<
-        typename right_traits::interface_type>;
+    using left_interface =
+        detail::key_value_interface_t<typename left_traits::interface_type>;
+    using right_interface =
+        detail::key_value_interface_t<typename right_traits::interface_type>;
 
   public:
     static constexpr bool value =
@@ -840,30 +815,29 @@ protected:
         std::is_same_v<left_interface, right_interface>;
   };
 
-  template <typename Arg, typename... RuntimeKeyArgs>
+  template <typename Arg, typename... KeyValueArgs>
   static constexpr std::size_t runtime_registration_key_arg_count_v =
       (std::size_t{0} + ... +
-       (runtime_registration_args_are_same_key<Arg, RuntimeKeyArgs>::value
-            ? 1U
-            : 0U));
+       (runtime_registration_args_are_same_key<Arg, KeyValueArgs>::value ? 1U
+                                                                         : 0U));
 
-  template <typename Key, typename... RuntimeKeyArgs>
+  template <typename Key, typename... KeyValueArgs>
   static constexpr std::size_t
       unqualified_runtime_registration_key_arg_count_v =
           (std::size_t{0} + ... +
            ((std::is_same_v<typename runtime_registration_arg_traits<
-                                RuntimeKeyArgs>::key_type,
+                                KeyValueArgs>::key_type,
                             Key> &&
              std::is_void_v<typename runtime_registration_arg_traits<
-                 RuntimeKeyArgs>::interface_type>)
+                 KeyValueArgs>::interface_type>)
                 ? 1U
                 : 0U));
 
-  template <typename Entry, typename... RuntimeKeyArgs>
+  template <typename Entry, typename... KeyValueArgs>
   static constexpr std::size_t qualified_runtime_registration_key_arg_count_v =
       (std::size_t{0} + ... +
        (runtime_registration_arg_matches_qualified_entry<Entry,
-                                                         RuntimeKeyArgs>::value
+                                                         KeyValueArgs>::value
             ? 1U
             : 0U));
 
@@ -900,26 +874,26 @@ protected:
                 runtime_registration_key_match_count<type_list<Tail...>,
                                                      Arg>::value> {};
 
-  template <typename InterfaceList, typename... RuntimeKeyArgs>
+  template <typename InterfaceList, typename... KeyValueArgs>
   static constexpr void validate_supplied_runtime_registration_keys() {
     static_assert(
-        ((runtime_registration_key_arg_count_v<RuntimeKeyArgs,
-                                               RuntimeKeyArgs...> == 1U) &&
+        ((runtime_registration_key_arg_count_v<KeyValueArgs, KeyValueArgs...> ==
+          1U) &&
          ...),
         "duplicate runtime key value arguments for runtime lookup "
         "registration");
     static_assert(
         ((runtime_registration_key_match_count<InterfaceList,
-                                               RuntimeKeyArgs>::value > 0U) &&
+                                               KeyValueArgs>::value > 0U) &&
          ...),
         "supplied runtime key value has no matching runtime-key lookup "
         "definition for the registered interface");
   }
 
-  template <typename Entries, typename... RuntimeKeyArgs>
+  template <typename Entries, typename... KeyValueArgs>
   static constexpr void validate_required_runtime_registration_keys() {
     static_assert(type_list_size_v<Entries> > 0,
-                  "runtime dingo::key<K>{value} registration requires a "
+                  "runtime dingo::key_value<K>{value} registration requires a "
                   "matching runtime-key lookup definition");
     for_each(Entries{}, [](auto element) {
       using entry_type = typename decltype(element)::type;
@@ -927,9 +901,9 @@ protected:
           typename runtime_lookup_entry_traits<entry_type>::key_type;
       static_assert(
           qualified_runtime_registration_key_arg_count_v<entry_type,
-                                                         RuntimeKeyArgs...> +
+                                                         KeyValueArgs...> +
                   unqualified_runtime_registration_key_arg_count_v<
-                      key_type, RuntimeKeyArgs...> >=
+                      key_type, KeyValueArgs...> >=
               1U,
           "runtime-key lookup registration requires a runtime key value for "
           "each declared runtime-key lookup");
@@ -942,46 +916,46 @@ protected:
   struct request_lookup_traits<Interface, ::dingo::none_t> {
     using interface_type = Interface;
     using normalized_interface = normalized_type_t<Interface>;
-    using key_domain = ::dingo::no_key;
-    using runtime_key_type = void;
+    using key_domain = ::dingo::none_t;
+    using key_value_type = void;
     using selected_cardinality =
         no_key_lookup_cardinality_t<normalized_interface>;
     using lookup_entry = no_key_request_lookup_entry_t<normalized_interface,
                                                        selected_cardinality>;
-    static constexpr bool has_valid_explicit_runtime_key_view = false;
+    static constexpr bool has_explicit_key_value_lookup = false;
     static constexpr bool has_explicit_collection_lookup =
         std::is_same_v<selected_cardinality, ::dingo::many>;
   };
 
   template <typename Interface, typename Key>
-  struct request_lookup_traits<Interface, ::dingo::key<Key>> {
+  struct request_lookup_traits<Interface, ::dingo::key_type<Key>> {
     using interface_type = Interface;
     using normalized_interface = normalized_type_t<Interface>;
     using key_type = Key;
-    using key_domain = ::dingo::typed_key<key_type>;
-    using runtime_key_type = void;
+    using key_domain = ::dingo::key_type<key_type>;
+    using key_value_type = void;
     using selected_cardinality =
         typed_key_lookup_cardinality_t<normalized_interface, key_type>;
     using lookup_entry =
         typed_key_request_lookup_entry_t<normalized_interface, key_type,
                                          selected_cardinality>;
-    static constexpr bool has_valid_explicit_runtime_key_view = false;
+    static constexpr bool has_explicit_key_value_lookup = false;
     static constexpr bool has_explicit_collection_lookup =
         std::is_same_v<selected_cardinality, ::dingo::many>;
   };
 
   template <typename Interface, typename IdType> struct request_lookup_traits {
     using normalized_interface = normalized_type_t<Interface>;
-    using runtime_key_type = std::decay_t<IdType>;
-    using key_domain = ::dingo::runtime_key<runtime_key_type>;
+    using key_value_type = std::decay_t<IdType>;
+    using key_domain = detail::key_value_domain<key_value_type>;
     using lookup_entry =
-        runtime_key_lookup_entry_t<normalized_interface, runtime_key_type>;
+        key_value_lookup_entry_t<normalized_interface, key_value_type>;
     using selected_cardinality =
         typename lookup_entry_cardinality<lookup_entry>::type;
-    static constexpr bool has_valid_explicit_runtime_key_view =
+    static constexpr bool has_explicit_key_value_lookup =
         !std::is_void_v<lookup_entry>;
     static constexpr bool has_explicit_collection_lookup =
-        has_valid_explicit_runtime_key_view &&
+        has_explicit_key_value_lookup &&
         std::is_same_v<selected_cardinality, ::dingo::many>;
   };
 
@@ -1006,11 +980,11 @@ protected:
   };
 
   template <typename Interface, typename Key>
-  struct lookup_index_route<Interface, ::dingo::key<Key>> {
-    using traits = request_lookup_traits<Interface, ::dingo::key<Key>>;
+  struct lookup_index_route<Interface, ::dingo::key_type<Key>> {
+    using traits = request_lookup_traits<Interface, ::dingo::key_type<Key>>;
     using entry = typename traits::lookup_entry;
 
-    static auto key(::dingo::key<Key>) {
+    static auto key(::dingo::key_type<Key>) {
       if constexpr (std::is_same_v<entry, base_lookup_entry>) {
         return base_typed_key_lookup_key<typename traits::interface_type,
                                          typename traits::key_type>();
@@ -1166,11 +1140,11 @@ private:
                   !detail::is_typed_key_v<IdType>) {
       using lookup_traits =
           request_lookup_traits<lookup_type, std::decay_t<IdType>>;
-      if constexpr (!lookup_traits::has_valid_explicit_runtime_key_view &&
+      if constexpr (!lookup_traits::has_explicit_key_value_lookup &&
                     !std::is_same_v<lookup_type, exact_type>) {
         using exact_traits =
             request_lookup_traits<exact_type, std::decay_t<IdType>>;
-        if constexpr (exact_traits::has_valid_explicit_runtime_key_view) {
+        if constexpr (exact_traits::has_explicit_key_value_lookup) {
           return select_binding_at_interface<Request, IdType, exact_type>(state,
                                                                           id);
         }
@@ -1271,19 +1245,20 @@ public:
 
 private:
   template <typename... TypeArgs, typename Parent, typename Arg,
-            typename... RuntimeKeyArgs>
+            typename... KeyValueArgs>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-  auto register_binding(Parent *parent, Arg &&arg,
-                        RuntimeKeyArgs &&...runtime_keys) {
+  auto prepare_binding(Parent *parent, Arg &&arg,
+                       KeyValueArgs &&...key_values) {
     static_assert(!detail::has_explicit_void_interface_v<TypeArgs...>,
                   "interfaces<void> is not a valid registration target");
     using registration =
         std::conditional_t<!is_none_v<std::decay_t<Arg>>,
                            type_registration<TypeArgs..., factory<Arg>>,
                            type_registration<TypeArgs...>>;
-    static_assert(!detail::is_key_value_v<typename registration::key_type>,
-                  "dingo::key<T, V> registration keys require a static fixed "
-                  "runtime-key request");
+    static_assert(
+        !detail::is_key_value_v<typename registration::key_type>,
+        "dingo::key_type<T, V> registration keys require a static fixed "
+        "runtime-key request");
     using binding_model = detail::binding_model<registration>;
     using bindings_type = typename binding_model::bindings_type;
     using instance_container_type = registration_container_type<registration>;
@@ -1299,7 +1274,8 @@ private:
       using registration_requirements = typename binding_model::requirements;
       using key_id_type =
           std::conditional_t<std::is_void_v<typename binding_model::key_type>,
-                             none_t, key<typename binding_model::key_type>>;
+                             none_t,
+                             key_type<typename binding_model::key_type>>;
 
       registration_requirements::assert_valid();
 
@@ -1310,9 +1286,9 @@ private:
 
       if constexpr (registration_requirements::valid &&
                     type_list_size_v<interface_types> == 1) {
-        if constexpr (sizeof...(RuntimeKeyArgs) > 0) {
+        if constexpr (sizeof...(KeyValueArgs) > 0) {
           validate_supplied_runtime_registration_keys<interface_types,
-                                                      RuntimeKeyArgs...>();
+                                                      KeyValueArgs...>();
         }
         using interface_type = type_list_head_t<interface_types>;
 
@@ -1325,29 +1301,27 @@ private:
             detail::keyed_binding_identity<key_id_type, runtime_binding_type>>;
         using owner_type = runtime_binding_value_impl<registered_binding_type>;
         static constexpr bool shared_owner =
-            sizeof...(RuntimeKeyArgs) > 0 &&
+            sizeof...(KeyValueArgs) > 0 &&
             type_list_size_v<
                 runtime_lookup_entries_for_interface_t<interface_type>> > 1;
 
         if constexpr (!is_none_v<std::decay_t<Arg>>) {
-          return emplace_binding<shared_owner, interface_type, storage_type,
-                                 owner_type>(
+          return commit_binding<shared_owner, interface_type, storage_type,
+                                owner_type>(
               parent, key_id_type{},
-              std::forward_as_tuple(
-                  std::forward<RuntimeKeyArgs>(runtime_keys)...),
+              std::forward_as_tuple(std::forward<KeyValueArgs>(key_values)...),
               std::forward<Arg>(arg));
         } else {
-          return emplace_binding<shared_owner, interface_type, storage_type,
-                                 owner_type>(
+          return commit_binding<shared_owner, interface_type, storage_type,
+                                owner_type>(
               parent, key_id_type{},
-              std::forward_as_tuple(
-                  std::forward<RuntimeKeyArgs>(runtime_keys)...));
+              std::forward_as_tuple(std::forward<KeyValueArgs>(key_values)...));
         }
       } else {
         if constexpr (registration_requirements::valid) {
-          if constexpr (sizeof...(RuntimeKeyArgs) > 0) {
+          if constexpr (sizeof...(KeyValueArgs) > 0) {
             validate_supplied_runtime_registration_keys<interface_types,
-                                                        RuntimeKeyArgs...>();
+                                                        KeyValueArgs...>();
           }
           std::shared_ptr<runtime_binding_state_type> data;
           if constexpr (!is_none_v<std::decay_t<Arg>>) {
@@ -1374,7 +1348,7 @@ private:
           for_each(interface_types{}, [&](auto element) {
             using interface_type = typename decltype(element)::type;
             commit_registration<interface_type, storage_type>(
-                state, value_factory, key_id_type{}, runtime_keys...);
+                state, value_factory, key_id_type{}, key_values...);
           });
           return container_proxy<owner_type>(binding_result);
         } else {
@@ -1427,7 +1401,7 @@ private:
             typename LookupEntry>
   static auto make_registration_duplicate_exception() {
     using runtime_lookup_traits = runtime_lookup_entry_traits<LookupEntry>;
-    if constexpr (runtime_lookup_traits::is_runtime_key) {
+    if constexpr (runtime_lookup_traits::is_key_value) {
       return detail::make_lookup_already_registered_exception<
           TypeInterface, typename TypeStorage::type,
           typename runtime_lookup_traits::key_type>();
@@ -1564,34 +1538,33 @@ private:
   }
 
   template <typename TypeInterface, typename TypeStorage, typename KeyIdType,
-            typename ValueFactory, typename... RuntimeKeyArgs>
+            typename ValueFactory, typename... KeyValueArgs>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity)
   void commit_registration(runtime_bindings_state &state,
                            ValueFactory &value_factory, KeyIdType,
-                           RuntimeKeyArgs &&...runtime_keys) {
+                           KeyValueArgs &&...key_values) {
     check_interface_requirements<TypeStorage,
                                  typename annotated_traits<TypeInterface>::type,
                                  typename TypeStorage::type>();
-    ((void)runtime_keys, ...);
+    ((void)key_values, ...);
 
-    if constexpr (sizeof...(RuntimeKeyArgs) > 0) {
+    if constexpr (sizeof...(KeyValueArgs) > 0) {
       using lookup_entries =
           runtime_lookup_entries_for_interface_t<TypeInterface>;
       if constexpr (type_list_size_v<lookup_entries> > 0) {
         validate_required_runtime_registration_keys<lookup_entries,
-                                                    RuntimeKeyArgs...>();
-        auto runtime_key_tuple = std::forward_as_tuple(runtime_keys...);
+                                                    KeyValueArgs...>();
+        auto key_value_tuple = std::forward_as_tuple(key_values...);
         auto key_resolver = [&](auto element) -> decltype(auto) {
           using entry_type = typename decltype(element)::type;
-          return qualified_registration_key_value<entry_type>(
-              runtime_key_tuple);
+          return qualified_registration_key_value<entry_type>(key_value_tuple);
         };
         commit_lookup<TypeInterface, TypeStorage, KeyIdType>(
             state, value_factory, key_resolver, lookup_entries{});
       } else if constexpr (is_none_v<std::decay_t<KeyIdType>>) {
         using lookup_cardinality_type =
             no_key_lookup_cardinality_t<TypeInterface>;
-        commit_static_lookup<TypeInterface, TypeStorage, ::dingo::no_key,
+        commit_static_lookup<TypeInterface, TypeStorage, ::dingo::none_t,
                              lookup_cardinality_type, KeyIdType>(state,
                                                                  value_factory);
       } else {
@@ -1599,14 +1572,14 @@ private:
         using lookup_cardinality_type =
             typed_key_lookup_cardinality_t<TypeInterface, typed_key_type>;
         commit_static_lookup<TypeInterface, TypeStorage,
-                             ::dingo::typed_key<typed_key_type>,
+                             ::dingo::key_type<typed_key_type>,
                              lookup_cardinality_type, KeyIdType>(state,
                                                                  value_factory);
       }
     } else if constexpr (is_none_v<std::decay_t<KeyIdType>>) {
       using lookup_cardinality_type =
           no_key_lookup_cardinality_t<TypeInterface>;
-      commit_static_lookup<TypeInterface, TypeStorage, ::dingo::no_key,
+      commit_static_lookup<TypeInterface, TypeStorage, ::dingo::none_t,
                            lookup_cardinality_type, KeyIdType>(state,
                                                                value_factory);
     } else {
@@ -1614,7 +1587,7 @@ private:
       using lookup_cardinality_type =
           typed_key_lookup_cardinality_t<TypeInterface, typed_key_type>;
       commit_static_lookup<TypeInterface, TypeStorage,
-                           ::dingo::typed_key<typed_key_type>,
+                           ::dingo::key_type<typed_key_type>,
                            lookup_cardinality_type, KeyIdType>(state,
                                                                value_factory);
     }
@@ -1622,10 +1595,10 @@ private:
 
   template <bool SharedOwner, typename TypeInterface, typename TypeStorage,
             typename Owner, typename Parent, typename KeyIdType,
-            typename RuntimeKeyTuple, typename... Args>
-  container_proxy<Owner> emplace_binding(Parent *parent, KeyIdType,
-                                         RuntimeKeyTuple &&runtime_keys,
-                                         Args &&...args) {
+            typename KeyValueTuple, typename... Args>
+  container_proxy<Owner> commit_binding(Parent *parent, KeyIdType,
+                                        KeyValueTuple &&key_values,
+                                        Args &&...args) {
     auto &state = runtime_bindings_;
     auto binding_owner = make_binding_owner<SharedOwner, Owner>(
         parent, std::forward<Args>(args)...);
@@ -1634,22 +1607,22 @@ private:
       shared_lookup_value_factory<Owner> value_factory{
           std::move(binding_owner)};
       std::apply(
-          [&](auto &&...runtime_key_args) {
+          [&](auto &&...key_value_args) {
             commit_registration<TypeInterface, TypeStorage, KeyIdType>(
                 state, value_factory, KeyIdType{},
-                std::forward<decltype(runtime_key_args)>(runtime_key_args)...);
+                std::forward<decltype(key_value_args)>(key_value_args)...);
           },
-          std::forward<RuntimeKeyTuple>(runtime_keys));
+          std::forward<KeyValueTuple>(key_values));
     } else {
       unique_lookup_value_factory<Owner> value_factory{
           std::move(binding_owner)};
       std::apply(
-          [&](auto &&...runtime_key_args) {
+          [&](auto &&...key_value_args) {
             commit_registration<TypeInterface, TypeStorage, KeyIdType>(
                 state, value_factory, KeyIdType{},
-                std::forward<decltype(runtime_key_args)>(runtime_key_args)...);
+                std::forward<decltype(key_value_args)>(key_value_args)...);
           },
-          std::forward<RuntimeKeyTuple>(runtime_keys));
+          std::forward<KeyValueTuple>(key_values));
     }
     return container_proxy<Owner>(binding_result);
   }

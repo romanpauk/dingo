@@ -90,7 +90,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
       typename static_registry_type_::template bindings<T, Key>>;
   template <typename Key>
   using collection_key_t =
-      std::conditional_t<std::is_void_v<Key>, none_t, key<Key>>;
+      std::conditional_t<std::is_void_v<Key>, none_t, key_type<Key>>;
 
   template <typename Key> static collection_key_t<Key> collection_key() {
     return {};
@@ -286,7 +286,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
           static_registry_type_>;
 
   template <typename T, typename Key, typename Fn, typename Context>
-  T construct_static_collection(Context &context, Fn &&fn, key<Key>) {
+  T construct_static_collection(Context &context, Fn &&fn, key_type<Key>) {
     static_resolution static_state_scope(static_state_);
     return static_state_scope
         .template construct_static_collection<T, Key, static_registry_type_>(
@@ -302,7 +302,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   }
 
   template <typename T, typename Key, typename Context>
-  T construct_static_collection(Context &context, key<Key>) {
+  T construct_static_collection(Context &context, key_type<Key>) {
     static_resolution static_state_scope(static_state_);
     return static_state_scope
         .template construct_static_collection<T, Key, static_registry_type_>(
@@ -378,15 +378,16 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   template <
       typename T, typename Fn, typename Key,
       std::enable_if_t<!detail::is_static_context_argument_v<Fn>, int> = 0>
-  T construct_static_collection(Fn &&fn, key<Key>) {
+  T construct_static_collection(Fn &&fn, key_type<Key>) {
     static_context_type static_context;
     return construct_static_collection<T>(static_context, std::forward<Fn>(fn),
-                                          key<Key>{});
+                                          key_type<Key>{});
   }
 
-  template <typename T, typename Key> T construct_static_collection(key<Key>) {
+  template <typename T, typename Key>
+  T construct_static_collection(key_type<Key>) {
     static_context_type static_context;
-    return construct_static_collection<T>(static_context, key<Key>{});
+    return construct_static_collection<T>(static_context, key_type<Key>{});
   }
 
   template <typename T, typename Key, typename Fn>
@@ -419,7 +420,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
   }
 
   template <typename T, typename Key, typename Fn>
-  T construct_collection(runtime_context &context, Fn &&fn, key<Key>) {
+  T construct_collection(runtime_context &context, Fn &&fn, key_type<Key>) {
     return construct_collection_impl<T, Key>(context, std::forward<Fn>(fn));
   }
 
@@ -548,7 +549,7 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
     if constexpr (std::is_void_v<Key>) {
       return parent_->template resolve<T>();
     } else {
-      return parent_->template resolve<T>(key<Key>{});
+      return parent_->template resolve<T>(key_type<Key>{});
     }
   }
 
@@ -556,15 +557,15 @@ class detail::container_with_static_bindings<static_registry<Registrations...>,
             typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
   R resolve_parent(runtime_context &context) {
     using selector_type =
-        std::conditional_t<std::is_void_v<Key>, void, key<Key>>;
+        std::conditional_t<std::is_void_v<Key>, void, key_type<Key>>;
     if constexpr (detail::is_context_resolve_supported_v<
                       parent_container_type, runtime_context, T,
                       RemoveRvalueReferences, selector_type>) {
       if constexpr (std::is_void_v<Key>) {
         return parent_->template resolve<T, RemoveRvalueReferences>(context);
       } else {
-        return parent_->template resolve<T, RemoveRvalueReferences>(context,
-                                                                    key<Key>{});
+        return parent_->template resolve<T, RemoveRvalueReferences>(
+            context, key_type<Key>{});
       }
     } else {
       return resolve_parent<T, RemoveRvalueReferences, Key>();
@@ -659,7 +660,7 @@ public:
   static_assert(detail::key_value_bindings_are_declared<
                     typename static_source_type::interface_bindings,
                     index_entries_>::value,
-                "container fixed dingo::key<Key, Value> bindings require "
+                "container fixed dingo::key_type<Key, Value> bindings require "
                 "static_container with associative<Key, Interface, one> or "
                 "associative<Key, Interface, many>");
   static_assert(detail::key_value_bindings_are_unique<
@@ -902,23 +903,24 @@ public:
                                                    none_t{});
   }
 
-  template <typename T, typename Key> T construct_collection(key<Key>) {
+  template <typename T, typename Key> T construct_collection(key_type<Key>) {
     if (select_static_collection_construct<T, Key>()) {
-      return construct_static_collection<T>(key<Key>{});
+      return construct_static_collection<T>(key_type<Key>{});
     }
 
     return construct_collection_runtime_context<T>(
-        detail::binding_collection_append{}, key<Key>{});
+        detail::binding_collection_append{}, key_type<Key>{});
   }
 
   template <typename T, typename Fn, typename Key>
-  T construct_collection(Fn &&fn, key<Key>) {
+  T construct_collection(Fn &&fn, key_type<Key>) {
     if (select_static_collection_construct<T, Key>()) {
-      return construct_static_collection<T>(std::forward<Fn>(fn), key<Key>{});
+      return construct_static_collection<T>(std::forward<Fn>(fn),
+                                            key_type<Key>{});
     }
 
     return construct_collection_runtime_context<T>(std::forward<Fn>(fn),
-                                                   key<Key>{});
+                                                   key_type<Key>{});
   }
 
   template <typename Signature = void, typename Callable>
@@ -1041,7 +1043,7 @@ public:
 
   template <typename T, bool RemoveRvalueReferences, typename Key,
             typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
-  R resolve(static_context_type &context, key<Key>) {
+  R resolve(static_context_type &context, key_type<Key>) {
     if constexpr (!has_static_resolve_request_v<T, RemoveRvalueReferences,
                                                 Key> &&
                   has_parent_v) {
@@ -1097,7 +1099,7 @@ public:
 
   template <typename T, bool RemoveRvalueReferences, typename Key,
             typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
-  R resolve(runtime_context &context, key<Key>) {
+  R resolve(runtime_context &context, key_type<Key>) {
     return resolve<T, RemoveRvalueReferences, Key>(context);
   }
 

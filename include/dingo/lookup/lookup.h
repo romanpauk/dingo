@@ -20,17 +20,18 @@
 #include <type_traits>
 
 namespace dingo {
+template <typename... Args> struct interfaces;
+template <typename T, auto... Values> struct key_type;
+
 template <typename Interface>
-using single = detail::lookup_definition<Interface, no_key, one>;
+using single = detail::lookup_definition<Interface, none_t, one>;
 template <typename Key, typename Interface, typename Cardinality = one,
           typename Backend = ordered>
-using associative = detail::lookup_definition<Interface, runtime_key<Key>,
-                                              Cardinality, Backend>;
+using associative =
+    detail::lookup_definition<Interface, detail::key_value_domain<Key>,
+                              Cardinality, Backend>;
 template <typename Key, typename Interface, typename Cardinality = one>
-using typed = detail::lookup_definition<Interface, typed_key<Key>, Cardinality>;
-template <typename... Args> struct interfaces;
-template <typename T, auto... Values> struct key;
-template <typename T, auto... Values> struct key_type;
+using typed = detail::lookup_definition<Interface, key_type<Key>, Cardinality>;
 
 namespace detail {
 template <typename Interface, typename KeyDomain, typename Cardinality,
@@ -61,13 +62,6 @@ template <typename... Types> struct lookup_interface_arg<interfaces<Types...>> {
 };
 
 template <typename T> struct lookup_key_arg {
-  using type = T;
-};
-
-template <typename T, auto... Values> struct lookup_key_arg<key<T, Values...>> {
-  static_assert(sizeof...(Values) == 0,
-                "lookup definitions require dingo::key<Key>, not "
-                "dingo::key<Key, Value>");
   using type = T;
 };
 
@@ -219,7 +213,7 @@ struct matching_lookup_entry<Interface, Key, type_list<Head, Tail...>> {
 private:
   static constexpr bool exact =
       std::is_same_v<typename Head::interface_type, Interface> &&
-      std::is_same_v<typename Head::key_domain, ::dingo::runtime_key<Key>>;
+      std::is_same_v<typename Head::key_domain, key_value_domain<Key>>;
 
 public:
   using type = std::conditional_t<
@@ -257,7 +251,7 @@ struct matching_no_key_lookup_entry<Interface, Cardinality,
 private:
   static constexpr bool exact =
       std::is_same_v<typename Head::interface_type, Interface> &&
-      std::is_same_v<typename Head::key_domain, ::dingo::no_key> &&
+      std::is_same_v<typename Head::key_domain, ::dingo::none_t> &&
       std::is_same_v<typename Head::cardinality, Cardinality>;
 
 public:
@@ -300,7 +294,7 @@ struct matching_typed_key_lookup_entry<Interface, Key, Cardinality,
 private:
   static constexpr bool exact =
       std::is_same_v<typename Head::interface_type, Interface> &&
-      std::is_same_v<typename Head::key_domain, ::dingo::typed_key<Key>> &&
+      std::is_same_v<typename Head::key_domain, ::dingo::key_type<Key>> &&
       std::is_same_v<typename Head::cardinality, Cardinality>;
 
 public:

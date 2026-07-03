@@ -21,7 +21,7 @@ int main() {
   container.register_type<dingo::scope<dingo::shared>,
                           dingo::storage<processor_impl>,
                           dingo::interfaces<processor>>(
-      dingo::key{7}, dingo::key{std::string{"extra"}});
+      dingo::key_value{7}, dingo::key_value{std::string{"extra"}});
 }
 
 // CHECK: supplied runtime key value has no matching runtime-key lookup

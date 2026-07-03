@@ -161,7 +161,6 @@ if(DINGO_DEVELOPMENT_MODE)
         type/type_conversion_traits.h
         type/type_descriptor.h
         type/type_list.h
-        type/type_map.h
         type/type_name.h
         type/type_traits.h
         resolution/type_conversion.h

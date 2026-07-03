@@ -9,13 +9,13 @@ backends, then meet at the shared binding selection and resolution model.
 The public API starts at `container::register_type<...>()` in
 [include/dingo/container.h](../../include/dingo/container.h).
 
-`register_binding(...)` does three important things:
+`prepare_binding(...)` does three important things:
 
 1. It builds a complete `type_registration<...>` from the supplied policies.
 2. It computes the stored type, including the interface-storage rewrite
    optimization for the single-interface virtual-destructor case.
-3. It allocates one or more runtime bindings and inserts them into the per-type
-   binding map.
+3. It chooses the binding owner and lookup commit path for the normalized
+   registration.
 
 `type_registration<...>` in
 [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)

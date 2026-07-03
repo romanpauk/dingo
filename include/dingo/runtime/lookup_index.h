@@ -148,8 +148,8 @@ struct lookup_backend_storage;
 template <typename Interface, typename Key, typename Cardinality,
           typename Backend, typename Value, typename Allocator>
 struct lookup_backend_storage<
-    lookup_entry<Interface, ::dingo::runtime_key<Key>, Cardinality, Backend>,
-    Value, Allocator> {
+    lookup_entry<Interface, key_value_domain<Key>, Cardinality, Backend>, Value,
+    Allocator> {
   using type =
       typename Backend::template storage<Key, Value, Cardinality, Allocator>;
 };
@@ -157,7 +157,7 @@ struct lookup_backend_storage<
 template <typename Interface, typename Cardinality, typename Backend,
           typename Value, typename Allocator>
 struct lookup_backend_storage<
-    lookup_entry<Interface, ::dingo::no_key, Cardinality, Backend>, Value,
+    lookup_entry<Interface, ::dingo::none_t, Cardinality, Backend>, Value,
     Allocator> {
   using type = static_key_lookup_storage<Value, Cardinality, Allocator>;
 };
@@ -165,7 +165,7 @@ struct lookup_backend_storage<
 template <typename Interface, typename Key, typename Cardinality,
           typename Backend, typename Value, typename Allocator>
 struct lookup_backend_storage<
-    lookup_entry<Interface, ::dingo::typed_key<Key>, Cardinality, Backend>,
+    lookup_entry<Interface, ::dingo::key_type<Key>, Cardinality, Backend>,
     Value, Allocator> {
   using type = static_key_lookup_storage<Value, Cardinality, Allocator>;
 };
@@ -177,7 +177,8 @@ class lookup_backend
       typename lookup_backend_storage<Entry, Value, Allocator>::type;
 
 public:
-  using base_type::base_type;
+  explicit lookup_backend(Allocator &allocator)
+      : base_type(make_lookup_storage<base_type>(allocator)) {}
 };
 
 template <typename Entry, typename Value, typename Allocator>

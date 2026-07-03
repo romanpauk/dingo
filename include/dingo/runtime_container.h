@@ -111,12 +111,12 @@ public:
 
   template <typename T, bool RemoveRvalueReferences, typename Key,
             typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
-  R resolve(runtime_context &context, key<Key>) {
+  R resolve(runtime_context &context, key_type<Key>) {
     if (parent_ &&
-        runtime_registry_.template binding_status_for_id<T>(key<Key>{}) ==
+        runtime_registry_.template binding_status_for_id<T>(key_type<Key>{}) ==
             detail::binding_selection_status::not_found) {
-      return parent_->template resolve<T, RemoveRvalueReferences>(context,
-                                                                  key<Key>{});
+      return parent_->template resolve<T, RemoveRvalueReferences>(
+          context, key_type<Key>{});
     }
     return runtime_registry_
         .template resolve_request<T, RemoveRvalueReferences, Key>(context);
@@ -152,14 +152,14 @@ public:
         std::forward<Fn>(fn));
   }
 
-  template <typename T, typename Key> T construct_collection(key<Key>) {
-    return runtime_registry_.template construct_collection<T>(key<Key>{});
+  template <typename T, typename Key> T construct_collection(key_type<Key>) {
+    return runtime_registry_.template construct_collection<T>(key_type<Key>{});
   }
 
   template <typename T, typename Fn, typename Key>
-  T construct_collection(Fn &&fn, key<Key>) {
+  T construct_collection(Fn &&fn, key_type<Key>) {
     return runtime_registry_.template construct_collection<T>(
-        std::forward<Fn>(fn), key<Key>{});
+        std::forward<Fn>(fn), key_type<Key>{});
   }
 
   template <typename T, typename Fn> T construct_collection(Fn &&fn, none_t) {

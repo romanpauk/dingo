@@ -18,7 +18,8 @@ int main() {
   dingo::container<traits> container;
   container
       .register_type<dingo::scope<dingo::shared>, dingo::storage<processor>,
-                     dingo::interfaces<processor>>(dingo::key{std::size_t(1)});
+                     dingo::interfaces<processor>>(
+          dingo::key_value{std::size_t(1)});
 }
 
 // CHECK: duplicate dingo lookup definition for interface/key

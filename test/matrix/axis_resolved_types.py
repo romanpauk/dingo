@@ -486,8 +486,8 @@ RESOLVED_TYPES = (
             (
                 "resolve_keyed",
                 (
-                    "auto& first = container.template resolve<std::shared_ptr<element_interface>&>(dingo::key<key_a>{});",
-                    "auto& second = container.template resolve<std::shared_ptr<element_interface>&>(dingo::key<key_b>{});",
+                    "auto& first = container.template resolve<std::shared_ptr<element_interface>&>(dingo::key_type<key_a>{});",
+                    "auto& second = container.template resolve<std::shared_ptr<element_interface>&>(dingo::key_type<key_b>{});",
                     "ASSERT_EQ(first->id(), 0);",
                     "ASSERT_EQ(second->id(), 1);",
                 ),
@@ -510,7 +510,7 @@ RESOLVED_TYPES = (
             (
                 "invoke",
                 (
-                    "auto invoked = container.invoke([](dingo::dependency<value_type&, dingo::key<key_a>> dependency) {",
+                    "auto invoked = container.invoke([](dingo::dependency<value_type&, dingo::key_type<key_a>> dependency) {",
                     "    return static_cast<value_type&>(dependency).marker();",
                     "});",
                     "ASSERT_EQ(invoked, 3);",
@@ -527,7 +527,7 @@ RESOLVED_TYPES = (
             (
                 "resolve_keyed",
                 (
-                    "auto instance = container.template resolve<value_type>(dingo::key<key_a>{});",
+                    "auto instance = container.template resolve<value_type>(dingo::key_type<key_a>{});",
                     "ASSERT_TRUE(is_constructed_value(instance));",
                 ),
             ),
@@ -542,7 +542,7 @@ RESOLVED_TYPES = (
             (
                 "resolve_keyed",
                 (
-                    "auto& instance = container.template resolve<value_type&>(dingo::key<key_a>{});",
+                    "auto& instance = container.template resolve<value_type&>(dingo::key_type<key_a>{});",
                     "ASSERT_TRUE(is_constructed_value(instance));",
                 ),
             ),
@@ -557,7 +557,7 @@ RESOLVED_TYPES = (
             (
                 "resolve_keyed",
                 (
-                    "auto& instance = container.template resolve<interface_type&>(dingo::key<key_a>{});",
+                    "auto& instance = container.template resolve<interface_type&>(dingo::key_type<key_a>{});",
                     "ASSERT_TRUE(is_constructed_value(instance));",
                 ),
             ),
@@ -572,7 +572,7 @@ RESOLVED_TYPES = (
             (
                 "resolve_keyed_collection",
                 (
-                    "auto elements = container.template resolve<std::vector<std::shared_ptr<element_interface>>>(dingo::key<key_a>{});",
+                    "auto elements = container.template resolve<std::vector<std::shared_ptr<element_interface>>>(dingo::key_type<key_a>{});",
                     "std::vector<int> ids;",
                     "for (auto& element : elements) { ids.push_back(element->id()); }",
                     "std::sort(ids.begin(), ids.end());",
@@ -598,7 +598,7 @@ RESOLVED_TYPES = (
             (
                 "invoke",
                 (
-                    "auto invoked = container.invoke([](dingo::dependency<std::vector<std::shared_ptr<element_interface>>, dingo::key<key_a>> elements) {",
+                    "auto invoked = container.invoke([](dingo::dependency<std::vector<std::shared_ptr<element_interface>>, dingo::key_type<key_a>> elements) {",
                     "    auto values = static_cast<std::vector<std::shared_ptr<element_interface>>>(elements);",
                     "    return values.size();",
                     "});",
@@ -822,6 +822,9 @@ RESOLVED_TYPES = (
                     "auto value = std::get<std::shared_ptr<value_type>>(instance);",
                     "ASSERT_TRUE(value);",
                     "ASSERT_TRUE(is_constructed_value(*value));",
+                    "auto alternative = container.template resolve<std::shared_ptr<value_type>>();",
+                    "ASSERT_TRUE(alternative);",
+                    "ASSERT_TRUE(is_constructed_value(*alternative));",
                 ),
             ),
         ),
@@ -842,6 +845,15 @@ RESOLVED_TYPES = (
                     "ASSERT_TRUE(handle);",
                     "ASSERT_TRUE(*handle);",
                     "ASSERT_TRUE(is_constructed_value(**handle));",
+                    "auto resolved_handle = container.template resolve<handle_type>();",
+                    "ASSERT_TRUE(resolved_handle);",
+                    "ASSERT_TRUE(*resolved_handle);",
+                    "ASSERT_TRUE(is_constructed_value(**resolved_handle));",
+                    "auto& unique_handle = container.template resolve<std::unique_ptr<value_type>&>();",
+                    "ASSERT_TRUE(unique_handle);",
+                    "ASSERT_TRUE(is_constructed_value(*unique_handle));",
+                    "auto& leaf = container.template resolve<value_type&>();",
+                    "ASSERT_TRUE(is_constructed_value(leaf));",
                 ),
             ),
         ),

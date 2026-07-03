@@ -49,14 +49,14 @@ std::optional<std::size_t> array_lookup_index(Key key, std::size_t size) {
   return index;
 }
 
-template <typename Key, typename Mapped, typename Cardinality,
+template <typename Key, typename Value, typename Cardinality,
           typename Allocator, std::size_t Size>
 class array_lookup_storage;
 
-template <typename Key, typename Mapped, typename Allocator, std::size_t Size>
-class array_lookup_storage<Key, Mapped, ::dingo::one, Allocator, Size> {
+template <typename Key, typename Value, typename Allocator, std::size_t Size>
+class array_lookup_storage<Key, Value, ::dingo::one, Allocator, Size> {
   struct slot {
-    std::optional<Mapped> second;
+    std::optional<Value> second;
   };
 
 public:
@@ -64,7 +64,7 @@ public:
   public:
     iterator() = default;
 
-    Mapped &operator*() const { return *slot_->second; }
+    Value &operator*() const { return *slot_->second; }
 
     bool operator==(const iterator &other) const {
       return slot_ == other.slot_;
@@ -84,7 +84,7 @@ public:
   public:
     const_iterator() = default;
 
-    const Mapped &operator*() const { return *slot_->second; }
+    const Value &operator*() const { return *slot_->second; }
 
     bool operator==(const const_iterator &other) const {
       return slot_ == other.slot_;
@@ -119,14 +119,14 @@ public:
   iterator end() { return iterator(); }
   const_iterator end() const { return const_iterator(); }
 
-  template <typename Value>
-  std::pair<iterator, bool> try_emplace(const Key &key, Value &&value) {
+  template <typename Inserted>
+  std::pair<iterator, bool> try_emplace(const Key &key, Inserted &&value) {
     const auto index = checked_index(key);
     auto &entry = entries_[index].second;
     if (entry) {
       return {iterator(&entries_[index]), false};
     }
-    entry.emplace(std::forward<Value>(value));
+    entry.emplace(std::forward<Inserted>(value));
     return {iterator(&entries_[index]), true};
   }
 
@@ -152,10 +152,10 @@ private:
   std::array<slot, Size> entries_{};
 };
 
-template <typename Key, typename Mapped, typename Allocator, std::size_t Size>
-class array_lookup_storage<Key, Mapped, ::dingo::many, Allocator, Size> {
-  using mapped_allocator = lookup_storage_allocator_t<Mapped, Allocator>;
-  using bucket_type = std::vector<Mapped, mapped_allocator>;
+template <typename Key, typename Value, typename Allocator, std::size_t Size>
+class array_lookup_storage<Key, Value, ::dingo::many, Allocator, Size> {
+  using mapped_allocator = lookup_storage_allocator_t<Value, Allocator>;
+  using bucket_type = std::vector<Value, mapped_allocator>;
   using bucket_allocator = lookup_storage_allocator_t<bucket_type, Allocator>;
   using storage_type = std::vector<bucket_type, bucket_allocator>;
 
@@ -164,7 +164,7 @@ public:
   public:
     iterator() = default;
 
-    Mapped &operator*() const { return *it_; }
+    Value &operator*() const { return *it_; }
 
     iterator &operator++() {
       ++it_;
@@ -196,7 +196,7 @@ public:
   public:
     const_iterator() = default;
 
-    const Mapped &operator*() const { return *it_; }
+    const Value &operator*() const { return *it_; }
 
     const_iterator &operator++() {
       ++it_;
@@ -269,10 +269,11 @@ public:
             const_iterator(this, *index, bucket.end())};
   }
 
-  template <typename Value> iterator emplace(const Key &key, Value &&value) {
+  template <typename Inserted>
+  iterator emplace(const Key &key, Inserted &&value) {
     const auto index = checked_index(key);
     auto &bucket = values_[index];
-    bucket.emplace_back(std::forward<Value>(value));
+    bucket.emplace_back(std::forward<Inserted>(value));
     auto it = bucket.end();
     --it;
     return iterator(this, index, it);
@@ -300,10 +301,10 @@ private:
 } // namespace detail
 
 template <std::size_t Size> struct array {
-  template <typename Key, typename Mapped, typename Cardinality,
+  template <typename Key, typename Value, typename Cardinality,
             typename Allocator>
   using storage =
-      detail::array_lookup_storage<Key, Mapped, Cardinality, Allocator, Size>;
+      detail::array_lookup_storage<Key, Value, Cardinality, Allocator, Size>;
 };
 
 } // namespace dingo

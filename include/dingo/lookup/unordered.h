@@ -11,94 +11,55 @@
 #include <dingo/lookup/tags.h>
 
 #include <functional>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 
 namespace dingo {
 namespace detail {
 
-template <typename Key, typename Mapped, typename Cardinality,
-          typename Allocator>
-class unordered_lookup_storage;
-
-template <typename Key, typename Mapped, typename Allocator>
-class unordered_lookup_storage<Key, Mapped, ::dingo::one, Allocator> {
-  using value_type = std::pair<const Key, Mapped>;
-  using storage_allocator = lookup_storage_allocator_t<value_type, Allocator>;
+template <typename Key, typename Value, typename Hash, typename Equal,
+          typename StorageAllocator, typename Allocator>
+struct lookup_storage_factory<
+    std::unordered_map<Key, Value, Hash, Equal, StorageAllocator>, Allocator> {
   using storage_type =
-      std::unordered_map<Key, Mapped, std::hash<Key>, std::equal_to<Key>,
-                         storage_allocator>;
+      std::unordered_map<Key, Value, Hash, Equal, StorageAllocator>;
 
-public:
-  using iterator = typename storage_type::iterator;
-  using const_iterator = typename storage_type::const_iterator;
-
-  explicit unordered_lookup_storage(Allocator &allocator)
-      : values_(0, std::hash<Key>{}, std::equal_to<Key>{},
-                make_lookup_storage_allocator<storage_allocator>(allocator)) {}
-
-  iterator find(const Key &key) { return values_.find(key); }
-  const_iterator find(const Key &key) const { return values_.find(key); }
-  iterator end() { return values_.end(); }
-  const_iterator end() const { return values_.end(); }
-
-  template <typename Value>
-  std::pair<iterator, bool> try_emplace(const Key &key, Value &&value) {
-    return values_.try_emplace(key, std::forward<Value>(value));
+  static storage_type make(Allocator &allocator) {
+    return storage_type(
+        0, Hash{}, Equal{},
+        make_lookup_storage_allocator<StorageAllocator>(allocator));
   }
-
-  void erase(iterator handle) { values_.erase(handle); }
-
-private:
-  storage_type values_;
 };
 
-template <typename Key, typename Mapped, typename Allocator>
-class unordered_lookup_storage<Key, Mapped, ::dingo::many, Allocator> {
-  using value_type = std::pair<const Key, Mapped>;
-  using storage_allocator = lookup_storage_allocator_t<value_type, Allocator>;
+template <typename Key, typename Value, typename Hash, typename Equal,
+          typename StorageAllocator, typename Allocator>
+struct lookup_storage_factory<
+    std::unordered_multimap<Key, Value, Hash, Equal, StorageAllocator>,
+    Allocator> {
   using storage_type =
-      std::unordered_multimap<Key, Mapped, std::hash<Key>, std::equal_to<Key>,
-                              storage_allocator>;
+      std::unordered_multimap<Key, Value, Hash, Equal, StorageAllocator>;
 
-public:
-  using iterator = typename storage_type::iterator;
-  using const_iterator = typename storage_type::const_iterator;
-
-  explicit unordered_lookup_storage(Allocator &allocator)
-      : values_(0, std::hash<Key>{}, std::equal_to<Key>{},
-                make_lookup_storage_allocator<storage_allocator>(allocator)) {}
-
-  iterator find(const Key &key) { return values_.find(key); }
-  const_iterator find(const Key &key) const { return values_.find(key); }
-  iterator end() { return values_.end(); }
-  const_iterator end() const { return values_.end(); }
-
-  std::pair<iterator, iterator> equal_range(const Key &key) {
-    return values_.equal_range(key);
+  static storage_type make(Allocator &allocator) {
+    return storage_type(
+        0, Hash{}, Equal{},
+        make_lookup_storage_allocator<StorageAllocator>(allocator));
   }
-
-  std::pair<const_iterator, const_iterator> equal_range(const Key &key) const {
-    return values_.equal_range(key);
-  }
-
-  template <typename Value> iterator emplace(const Key &key, Value &&value) {
-    return values_.emplace(key, std::forward<Value>(value));
-  }
-
-  void erase(iterator handle) { values_.erase(handle); }
-
-private:
-  storage_type values_;
 };
 
 } // namespace detail
 
 struct unordered {
-  template <typename Key, typename Mapped, typename Cardinality,
+  template <typename Key, typename Value, typename Cardinality,
             typename Allocator>
-  using storage =
-      detail::unordered_lookup_storage<Key, Mapped, Cardinality, Allocator>;
+  using storage = std::conditional_t<
+      std::is_same_v<Cardinality, one>,
+      std::unordered_map<Key, Value, std::hash<Key>, std::equal_to<Key>,
+                         detail::lookup_storage_allocator_t<
+                             std::pair<const Key, Value>, Allocator>>,
+      std::unordered_multimap<Key, Value, std::hash<Key>, std::equal_to<Key>,
+                              detail::lookup_storage_allocator_t<
+                                  std::pair<const Key, Value>, Allocator>>>;
 };
 
 } // namespace dingo

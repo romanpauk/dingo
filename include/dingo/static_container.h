@@ -137,7 +137,7 @@ class static_container_impl<static_registry<Registrations...>, ParentContainer,
       if constexpr (std::is_void_v<Key>) {
         return parent_->template resolve<Collection>();
       } else {
-        return parent_->template resolve<Collection>(key<Key>{});
+        return parent_->template resolve<Collection>(key_type<Key>{});
       }
     }
     using resolve_type = typename collection_traits<Collection>::resolve_type;
@@ -150,7 +150,7 @@ class static_container_impl<static_registry<Registrations...>, ParentContainer,
     if constexpr (std::is_void_v<Key>) {
       return parent_->template resolve<T>();
     } else {
-      return parent_->template resolve<T>(key<Key>{});
+      return parent_->template resolve<T>(key_type<Key>{});
     }
   }
 
@@ -166,7 +166,7 @@ public:
   static_assert(detail::key_value_bindings_are_declared<
                     typename static_source_type::interface_bindings,
                     index_entries_>::value,
-                "static_container fixed dingo::key<Key, Value> bindings "
+                "static_container fixed dingo::key_type<Key, Value> bindings "
                 "require associative<Key, Interface, one> or "
                 "associative<Key, Interface, many>");
   static_assert(detail::key_value_bindings_are_unique<
@@ -200,7 +200,7 @@ public:
 
   template <typename T, typename Key = void,
             typename R = dependency_result_t<T>>
-  R resolve(key<Key> = {}) {
+  R resolve(key_type<Key> = {}) {
     if constexpr (!collection_traits<R>::is_collection) {
       using lookup_request_type = resolve_dependency_t<T, true>;
       using request_type = R;
@@ -250,11 +250,11 @@ public:
                              int> = 0>
   R resolve(IdType &&) {
     if constexpr (detail::is_key_value_v<IdType>) {
-      return resolve<T>(key<std::decay_t<IdType>>{});
+      return resolve<T>(key_type<std::decay_t<IdType>>{});
     } else {
       static_assert(detail::container_dependent_false_v<T, IdType>,
                     "static_container fixed runtime-key request requires "
-                    "dingo::key<Key, Value>");
+                    "dingo::key_type<Key, Value>");
     }
   }
 
@@ -340,7 +340,7 @@ public:
             *this, context, std::forward<Fn>(fn));
   }
 
-  template <typename T, typename Key> T construct_collection(key<Key>) {
+  template <typename T, typename Key> T construct_collection(key_type<Key>) {
     context_type context;
     auto state = scope();
     return state
@@ -351,7 +351,7 @@ public:
   template <typename T, typename IdType,
             std::enable_if_t<detail::is_key_value_v<IdType>, int> = 0>
   T construct_collection(IdType &&) {
-    return construct_collection<T>(key<std::decay_t<IdType>>{});
+    return construct_collection<T>(key_type<std::decay_t<IdType>>{});
   }
 
   template <
@@ -364,11 +364,11 @@ public:
   T construct_collection(IdType &&) {
     static_assert(detail::container_dependent_false_v<T, IdType>,
                   "static_container fixed runtime-key collection request "
-                  "requires dingo::key<Key, Value>");
+                  "requires dingo::key_type<Key, Value>");
   }
 
   template <typename T, typename Fn, typename Key>
-  T construct_collection(Fn &&fn, key<Key>) {
+  T construct_collection(Fn &&fn, key_type<Key>) {
     context_type context;
     auto state = scope();
     return state
@@ -423,7 +423,7 @@ public:
 
   template <typename T, bool RemoveRvalueReferences, typename Key,
             typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
-  R resolve(context_type &context, key<Key>) {
+  R resolve(context_type &context, key_type<Key>) {
     return resolve<T, RemoveRvalueReferences, Key>(context);
   }
 
@@ -437,7 +437,7 @@ public:
       return resolve<T, RemoveRvalueReferences, std::decay_t<IdType>>(context);
     } else {
       static_assert(detail::container_dependent_false_v<T, IdType>,
-                    "dingo::dependency<T, dingo::key<Key, Value>> "
+                    "dingo::dependency<T, dingo::key_type<Key, Value>> "
                     "constructor injection requires a fixed dependency key");
     }
   }

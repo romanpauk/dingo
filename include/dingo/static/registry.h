@@ -68,9 +68,9 @@ template <typename Key, typename... RequestTypes>
 struct keyed_dependency_types<Key, type_list<RequestTypes...>> {
   using type = std::conditional_t<
       std::is_void_v<Key>, type_list<RequestTypes...>,
-      std::conditional_t<is_key_value_v<Key>,
-                         type_list<dependency<RequestTypes, Key>...>,
-                         type_list<dependency<RequestTypes, key<Key>>...>>>;
+      std::conditional_t<
+          is_key_value_v<Key>, type_list<dependency<RequestTypes, Key>...>,
+          type_list<dependency<RequestTypes, key_type<Key>>...>>>;
 };
 
 template <typename Request>

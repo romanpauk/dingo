@@ -62,9 +62,9 @@ add_executable(dingo_unit_test
     container/incomplete_resolve.cpp
     container/incomplete_resolve_fixture.cpp
     factory/constructor_detection.cpp
-    index/associative_backends.cpp
-    index/lookup.cpp
-    index/lookup_index.cpp
+    lookup/associative_backends.cpp
+    lookup/lookup.cpp
+    lookup/lookup_index.cpp
     memory/arena_allocator.cpp
     registration/binding_graph.cpp
     registration/object_sizes.cpp
@@ -78,11 +78,10 @@ add_executable(dingo_unit_test
     support/containers.h
     support/test.h
     type/type_list.cpp
-    type/type_map.cpp
     type/type_name.cpp
     type/type_traits.cpp
 )
-set_source_files_properties(index/lookup.cpp PROPERTIES COMPILE_OPTIONS
+set_source_files_properties(lookup/lookup.cpp PROPERTIES COMPILE_OPTIONS
     "$<$<OR:$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-O0>")
 add_test(NAME dingo_unit_test COMMAND dingo_unit_test)
 set_tests_properties(dingo_unit_test PROPERTIES LABELS "unit")

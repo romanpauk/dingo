@@ -239,11 +239,11 @@ struct binding_activation {
 
   template <typename T, bool RemoveRvalueReferences, typename Context,
             typename Key>
-  decltype(auto) resolve(Context &context, key<Key>) {
+  decltype(auto) resolve(Context &context, key_type<Key>) {
     using local_bindings = typename BindingModel::bindings_type;
     if constexpr (std::is_void_v<local_bindings>) {
       return host.template resolve<T, RemoveRvalueReferences>(context,
-                                                              key<Key>{});
+                                                              key_type<Key>{});
     } else {
       return state.template resolve_local_binding<
           T, RemoveRvalueReferences, local_bindings, BindingModel, Key>(
@@ -692,8 +692,8 @@ public:
         if constexpr (std::is_void_v<Key>) {
           return host.template resolve<T, RemoveRvalueReferences>(context);
         } else {
-          return host.template resolve<T, RemoveRvalueReferences>(context,
-                                                                  key<Key>{});
+          return host.template resolve<T, RemoveRvalueReferences>(
+              context, key_type<Key>{});
         }
       }
     }
