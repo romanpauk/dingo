@@ -52,7 +52,7 @@ struct type_already_registered_exception : exception {
   using exception::exception;
 };
 
-struct type_index_already_registered_exception : exception {
+struct lookup_already_registered_exception : exception {
   using exception::exception;
 };
 
@@ -226,13 +226,11 @@ type_already_registered_exception make_type_already_registered_exception() {
 }
 
 template <typename Interface, typename Storage, typename IdType>
-type_index_already_registered_exception
-make_type_index_already_registered_exception() {
-  std::string message = "type index already registered: interface ";
+lookup_already_registered_exception make_lookup_already_registered_exception() {
+  std::string message = "lookup already registered: interface ";
   append_text(message, describe_type<Interface>(), ", storage ",
-              describe_type<Storage>(), ", index type ",
-              describe_type<IdType>());
-  return type_index_already_registered_exception(std::move(message));
+              describe_type<Storage>(), ", key type ", describe_type<IdType>());
+  return lookup_already_registered_exception(std::move(message));
 }
 
 template <typename Key>

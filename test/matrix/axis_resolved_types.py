@@ -446,6 +446,7 @@ RESOLVED_TYPES = (
         name="element_vector",
         supported_exposed_types=frozenset({"element_collection"}),
         provides=frozenset({"resolved_collection", "constructable_collection"}),
+        supported_modes=frozenset({"static", "mixed"}),
         checks=(
             (
                 "resolve_collection",
@@ -463,6 +464,7 @@ RESOLVED_TYPES = (
         name="element_map_custom_insert",
         supported_exposed_types=frozenset({"element_collection"}),
         provides=frozenset({"constructable_collection"}),
+        supported_modes=frozenset({"static", "mixed"}),
         checks=(
             (
                 "construct_collection",
@@ -484,8 +486,8 @@ RESOLVED_TYPES = (
             (
                 "resolve_keyed",
                 (
-                    "auto& first = container.template resolve<std::shared_ptr<element_interface>&>(dingo::key<key_a>{});",
-                    "auto& second = container.template resolve<std::shared_ptr<element_interface>&>(dingo::key<key_b>{});",
+                    "auto& first = container.template resolve<std::shared_ptr<element_interface>&>(dingo::key_type<key_a>{});",
+                    "auto& second = container.template resolve<std::shared_ptr<element_interface>&>(dingo::key_type<key_b>{});",
                     "ASSERT_EQ(first->id(), 0);",
                     "ASSERT_EQ(second->id(), 1);",
                 ),
@@ -495,7 +497,7 @@ RESOLVED_TYPES = (
     ResolvedType(
         name="keyed_value_dependency",
         supported_exposed_types=frozenset({"keyed_concrete"}),
-        provides=frozenset({"constructable_dependency", "invokable_dependency"}),
+        provides=frozenset({"constructable_dependency"}),
         requires=frozenset({"direct_value_resolution", "stable_concrete_storage"}),
         checks=(
             (
@@ -508,7 +510,7 @@ RESOLVED_TYPES = (
             (
                 "invoke",
                 (
-                    "auto invoked = container.invoke([](dingo::keyed<value_type&, key_a> dependency) {",
+                    "auto invoked = container.invoke([](dingo::dependency<value_type&, dingo::key_type<key_a>> dependency) {",
                     "    return static_cast<value_type&>(dependency).marker();",
                     "});",
                     "ASSERT_EQ(invoked, 3);",
@@ -525,7 +527,7 @@ RESOLVED_TYPES = (
             (
                 "resolve_keyed",
                 (
-                    "auto instance = container.template resolve<value_type>(dingo::key<key_a>{});",
+                    "auto instance = container.template resolve<value_type>(dingo::key_type<key_a>{});",
                     "ASSERT_TRUE(is_constructed_value(instance));",
                 ),
             ),
@@ -540,7 +542,7 @@ RESOLVED_TYPES = (
             (
                 "resolve_keyed",
                 (
-                    "auto& instance = container.template resolve<value_type&>(dingo::key<key_a>{});",
+                    "auto& instance = container.template resolve<value_type&>(dingo::key_type<key_a>{});",
                     "ASSERT_TRUE(is_constructed_value(instance));",
                 ),
             ),
@@ -555,7 +557,7 @@ RESOLVED_TYPES = (
             (
                 "resolve_keyed",
                 (
-                    "auto& instance = container.template resolve<interface_type&>(dingo::key<key_a>{});",
+                    "auto& instance = container.template resolve<interface_type&>(dingo::key_type<key_a>{});",
                     "ASSERT_TRUE(is_constructed_value(instance));",
                 ),
             ),
@@ -565,11 +567,12 @@ RESOLVED_TYPES = (
         name="element_keyed_vector",
         supported_exposed_types=frozenset({"element_keyed_collection"}),
         provides=frozenset({"resolved_keyed_collection"}),
+        supported_modes=frozenset({"static", "mixed"}),
         checks=(
             (
                 "resolve_keyed_collection",
                 (
-                    "auto elements = container.template resolve<std::vector<std::shared_ptr<element_interface>>>(dingo::key<key_a>{});",
+                    "auto elements = container.template resolve<std::vector<std::shared_ptr<element_interface>>>(dingo::key_type<key_a>{});",
                     "std::vector<int> ids;",
                     "for (auto& element : elements) { ids.push_back(element->id()); }",
                     "std::sort(ids.begin(), ids.end());",
@@ -582,6 +585,7 @@ RESOLVED_TYPES = (
         name="keyed_collection_dependency",
         supported_exposed_types=frozenset({"element_keyed_collection"}),
         provides=frozenset({"constructable_dependency", "invokable_dependency"}),
+        supported_modes=frozenset({"static", "mixed"}),
         checks=(
             (
                 "construct",
@@ -594,7 +598,7 @@ RESOLVED_TYPES = (
             (
                 "invoke",
                 (
-                    "auto invoked = container.invoke([](dingo::keyed<std::vector<std::shared_ptr<element_interface>>, key_a> elements) {",
+                    "auto invoked = container.invoke([](dingo::dependency<std::vector<std::shared_ptr<element_interface>>, dingo::key_type<key_a>> elements) {",
                     "    auto values = static_cast<std::vector<std::shared_ptr<element_interface>>>(elements);",
                     "    return values.size();",
                     "});",

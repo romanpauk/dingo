@@ -10,7 +10,7 @@
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/registration_api.h>
 #include <dingo/runtime/registry.h>
-#include <dingo/type/request_traits.h>
+#include <dingo/type/dependency_traits.h>
 
 namespace dingo {
 
@@ -37,7 +37,7 @@ public:
       std::conditional_t<std::is_same_v<void, ParentContainer>, container_type,
                          ParentContainer>;
   using rtti_type = typename registry_type::rtti_type;
-  using index_definition_type = typename registry_type::index_definition_type;
+  using lookup_definition_type = typename registry_type::lookup_definition_type;
 
   template <typename ContainerTraitsT, typename AllocatorT,
             typename ParentContainerT>
@@ -63,74 +63,82 @@ public:
 
   const registry_type &registry() const { return runtime_registry_; }
 
+  template <typename T, typename R, typename IdType>
+  R resolve_parent_request(IdType &&id) {
+    if constexpr (is_none_v<std::decay_t<IdType>>) {
+      return parent_->template resolve<T>();
+    } else if constexpr (detail::is_typed_key_v<IdType>) {
+      return parent_->template resolve<T>(std::decay_t<IdType>{});
+    } else {
+      return parent_->template resolve<T>(std::forward<IdType>(id));
+    }
+  }
+
   template <typename T, typename IdType = none_t,
-            typename R = request_result_t<T>>
+            typename R = dependency_result_t<T>>
   R resolve(IdType &&id = IdType()) {
-    if (parent_ && runtime_registry_.template binding_status_for_id<T>(id) ==
-                       detail::binding_selection_status::not_found) {
-      if constexpr (is_none_v<std::decay_t<IdType>>) {
-        return parent_->template resolve<T>();
-      } else if constexpr (detail::is_typed_key_v<IdType>) {
-        return parent_->template resolve<T>(std::decay_t<IdType>{});
-      } else {
-        return parent_->template resolve<T>(std::forward<IdType>(id));
+    if constexpr (collection_traits<R>::is_collection) {
+      if (parent_ &&
+          runtime_registry_.template count_runtime_collection<R>(id) == 0) {
+        return resolve_parent_request<T, R>(std::forward<IdType>(id));
+      }
+    } else {
+      if (parent_ && runtime_registry_.template binding_status_for_id<T>(id) ==
+                         detail::binding_selection_status::not_found) {
+        return resolve_parent_request<T, R>(std::forward<IdType>(id));
       }
     }
     return runtime_registry_.template resolve<T>(std::forward<IdType>(id));
   }
 
-  template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
-            typename R = resolve_request_t<T, RemoveRvalueReferences>>
+  template <typename T, bool RemoveRvalueReferences,
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
   R resolve(runtime_context &context) {
     if (parent_ &&
         runtime_registry_.template binding_status_for_id<T>(none_t{}) ==
             detail::binding_selection_status::not_found) {
-      return parent_->template resolve<T, RemoveRvalueReferences, CheckCache>(
-          context);
+      return parent_->template resolve<T, RemoveRvalueReferences>(context);
     }
     return runtime_registry_
         .template resolve_request<T, RemoveRvalueReferences>(context);
   }
 
-  template <typename T, bool RemoveRvalueReferences, bool CheckCache = true,
-            typename R = resolve_request_t<T, RemoveRvalueReferences>>
+  template <typename T, bool RemoveRvalueReferences,
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
   R resolve(runtime_context &context, none_t) {
-    return resolve<T, RemoveRvalueReferences, CheckCache>(context);
+    return resolve<T, RemoveRvalueReferences>(context);
   }
 
-  template <typename T, bool RemoveRvalueReferences, bool CheckCache,
-            typename Key,
-            typename R = resolve_request_t<T, RemoveRvalueReferences>>
-  R resolve(runtime_context &context, key<Key>) {
+  template <typename T, bool RemoveRvalueReferences, typename Key,
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
+  R resolve(runtime_context &context, key_type<Key>) {
     if (parent_ &&
-        runtime_registry_.template binding_status_for_id<T>(key<Key>{}) ==
+        runtime_registry_.template binding_status_for_id<T>(key_type<Key>{}) ==
             detail::binding_selection_status::not_found) {
-      return parent_->template resolve<T, RemoveRvalueReferences, CheckCache>(
-          context, key<Key>{});
+      return parent_->template resolve<T, RemoveRvalueReferences>(
+          context, key_type<Key>{});
     }
     return runtime_registry_
         .template resolve_request<T, RemoveRvalueReferences, Key>(context);
   }
 
-  template <typename T, bool RemoveRvalueReferences, bool CheckCache,
-            typename IdType,
-            typename R = resolve_request_t<T, RemoveRvalueReferences>,
+  template <typename T, bool RemoveRvalueReferences, typename IdType,
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>,
             std::enable_if_t<!is_none_v<std::decay_t<IdType>> &&
                                  !detail::is_typed_key_v<IdType>,
                              int> = 0>
   R resolve(runtime_context &context, IdType &&id) {
     if (parent_ && runtime_registry_.template binding_status_for_id<T>(id) ==
                        detail::binding_selection_status::not_found) {
-      return parent_->template resolve<T, RemoveRvalueReferences, CheckCache>(
+      return parent_->template resolve<T, RemoveRvalueReferences>(
           context, std::forward<IdType>(id));
     }
-    return runtime_registry_
-        .template resolve<T, RemoveRvalueReferences, CheckCache>(
-            context, std::forward<IdType>(id));
+    return runtime_registry_.template resolve<T, RemoveRvalueReferences>(
+        context, std::forward<IdType>(id));
   }
 
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-            typename R = request_result_t<T>>
+            typename R = dependency_result_t<T>>
   R construct(Factory factory = Factory()) {
     return runtime_registry_.template construct<T>(std::move(factory));
   }
@@ -144,14 +152,14 @@ public:
         std::forward<Fn>(fn));
   }
 
-  template <typename T, typename Key> T construct_collection(key<Key>) {
-    return runtime_registry_.template construct_collection<T>(key<Key>{});
+  template <typename T, typename Key> T construct_collection(key_type<Key>) {
+    return runtime_registry_.template construct_collection<T>(key_type<Key>{});
   }
 
   template <typename T, typename Fn, typename Key>
-  T construct_collection(Fn &&fn, key<Key>) {
+  T construct_collection(Fn &&fn, key_type<Key>) {
     return runtime_registry_.template construct_collection<T>(
-        std::forward<Fn>(fn), key<Key>{});
+        std::forward<Fn>(fn), key_type<Key>{});
   }
 
   template <typename T, typename Fn> T construct_collection(Fn &&fn, none_t) {
@@ -168,7 +176,7 @@ public:
 private:
   friend class detail::runtime_registration_api<self_type>;
 
-  registry_type &runtime_registry_ref() { return runtime_registry_; }
+  registry_type &binding_store() { return runtime_registry_; }
 
   self_type &runtime_registration_parent() { return *this; }
 
@@ -188,7 +196,7 @@ private:
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Key = void,
-            typename R = resolve_request_t<T, RemoveRvalueReferences>>
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
   R resolve_request(runtime_context &context) {
     return runtime_registry_
         .template resolve_request<T, RemoveRvalueReferences, Key>(context);

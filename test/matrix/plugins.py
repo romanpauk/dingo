@@ -251,7 +251,7 @@ class FeatureCasePlugin:
         return None
 
 
-def plugins_for(feature: Feature) -> tuple[CheckPlugin, ...]:
+def plugins(feature: Feature) -> tuple[CheckPlugin, ...]:
     if feature.name == "lifetime_counts":
         return (LifetimeCountCheckPlugin(),)
     return (
@@ -264,7 +264,7 @@ def plugins_for(feature: Feature) -> tuple[CheckPlugin, ...]:
 FEATURE_CASE_PLUGINS: tuple[FeatureCasePlugin, ...] = tuple(
     FeatureCasePlugin(
         feature=feature,
-        check_plugins=plugins_for(feature),
+        check_plugins=plugins(feature),
         row_filters=ROW_FILTERS,
     )
     for feature in FEATURES
@@ -272,7 +272,7 @@ FEATURE_CASE_PLUGINS: tuple[FeatureCasePlugin, ...] = tuple(
 )
 
 
-def case_lines_for(row: CheckRow) -> CaseLines | None:
+def case_lines(row: CheckRow) -> CaseLines | None:
     for plugin in FEATURE_CASE_PLUGINS:
         lines = plugin.emit(row)
         if lines is not None:
@@ -410,9 +410,9 @@ class RegistrationPlugin:
             if spec.interfaces:
                 parts.append(spec.interfaces)
             return (
-                "container.template register_indexed_type<"
+                "container.template register_type<"
                 + ", ".join(parts)
-                + f">({spec.indexed_key});"
+                + f">(dingo::key_value{{{spec.indexed_key}}});"
             )
 
         argument = spec_runtime_argument(spec, stored_type)

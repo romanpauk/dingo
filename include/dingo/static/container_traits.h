@@ -7,11 +7,24 @@
 
 #pragma once
 
+#include <dingo/detail/container_traits.h>
 #include <dingo/registration/type_registration.h>
+#include <dingo/rtti/static_provider.h>
 
+#include <memory>
+#include <tuple>
 #include <type_traits>
 
 namespace dingo {
+
+template <typename Tag = void> struct static_container_traits {
+  template <typename TagT> using rebind_t = static_container_traits<TagT>;
+
+  using tag_type = Tag;
+  using rtti_type = rtti<static_provider>;
+  using allocator_type = std::allocator<char>;
+  using lookup_definition_type = std::tuple<>;
+};
 
 template <typename StaticSource, typename ParentContainer = void>
 class static_container;
@@ -29,6 +42,32 @@ struct is_static_registry<static_registry<Registrations...>> : std::true_type {
 
 template <typename T>
 inline constexpr bool is_static_registry_v = is_static_registry<T>::value;
+
+template <typename T, typename = void>
+struct is_static_container_traits : std::false_type {};
+
+template <typename T>
+struct is_static_container_traits<
+    T, std::void_t<container_lookup_definition_type_t<T>,
+                   typename T::allocator_type, typename T::rtti_type>>
+    : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_static_container_traits_v =
+    is_static_container_traits<T>::value;
+
+template <typename T, typename = void> struct static_container_traits {
+  using type = ::dingo::static_container_traits<>;
+};
+
+template <typename T>
+struct static_container_traits<T,
+                               std::void_t<typename T::container_traits_type>> {
+  using type = typename T::container_traits_type;
+};
+
+template <typename T>
+using static_container_traits_t = typename static_container_traits<T>::type;
 
 template <typename T> struct is_bindings_wrapper : std::false_type {};
 

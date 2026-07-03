@@ -23,10 +23,10 @@ class basic_static_context;
 namespace detail {
 
 template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_context_closure_selector;
+struct static_context_closure_choice;
 
 template <typename StaticRegistry>
-struct static_context_closure_selector<StaticRegistry, false> {
+struct static_context_closure_choice<StaticRegistry, false> {
   using execution_traits =
       detail::basic_static_execution_traits<StaticRegistry, false>;
   using type = detail::static_context_closure<
@@ -41,7 +41,7 @@ struct static_context_closure_selector<StaticRegistry, false> {
 };
 
 template <typename StaticRegistry>
-struct static_context_closure_selector<StaticRegistry, true> {
+struct static_context_closure_choice<StaticRegistry, true> {
   using execution_traits =
       detail::basic_static_execution_traits<StaticRegistry, true>;
   using type = detail::fixed_context_closure<
@@ -79,8 +79,9 @@ class basic_static_context : public detail::context_path_state {
       execution_traits::max_temporary_align == 0
           ? alignof(std::max_align_t)
           : execution_traits::max_temporary_align;
-  using closure_type = typename detail::static_context_closure_selector<
-      StaticRegistry, RuntimeDependencies>::type;
+  using closure_type =
+      typename detail::static_context_closure_choice<StaticRegistry,
+                                                     RuntimeDependencies>::type;
 
 public:
   basic_static_context() { closures_[0] = &closure_; }

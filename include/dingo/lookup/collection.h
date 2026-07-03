@@ -7,4 +7,10 @@
 
 #pragma once
 
-#include <dingo/index/sequence.h>
+#include <dingo/lookup/tags.h>
+
+namespace dingo {
+template <typename Interface>
+using collection = detail::lookup_definition<Interface, none_t, many>;
+
+} // namespace dingo

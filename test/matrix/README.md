@@ -1,8 +1,8 @@
 # Generated Matrix Test Model
 
-The matrix is described as independent axes, then filtered into valid cases.
-The generator should not keep hand-written recipes as the primary model. Recipes
-are an output of axis selection.
+The matrix is described as independent axes, then filtered into valid cases. The
+generator should not keep hand-written recipes as the primary model. Recipes are
+an output of axis selection.
 
 ## Axes
 
@@ -15,13 +15,15 @@ are an output of axis selection.
 - `nested_wrappers`: resolve nested smart-pointer, variant, and array wrapper
   combinations.
 - `resolve_collection`: resolve all unkeyed bindings for an interface.
-- `resolve_keyed`: resolve one keyed binding.
+- `resolve_keyed`: resolve one typed-key lookup binding.
 - `resolve_keyed_collection`: resolve all bindings for a key.
-- `resolve_indexed`: resolve one indexed runtime binding.
+- `resolve_indexed`: resolve one runtime-key lookup binding.
 - `construct`: construct an unregistered type from registered dependencies.
 - `invoke`: invoke a callable from registered dependencies.
-- `construct_collection`: construct a collection with default or custom insertion.
-- `local_bindings`: resolve dependencies from bindings attached to a registration.
+- `construct_collection`: construct a collection with default or custom
+  insertion.
+- `local_bindings`: resolve dependencies from bindings attached to a
+  registration.
 - `nested_container`: resolve through child and parent containers.
 - `annotated`: disambiguate registrations with `annotated<T, Tag>`.
 - `variant`: construct or resolve a variant and its held alternative.
@@ -32,8 +34,7 @@ are an output of axis selection.
   destroy the stored value with expected counts.
 - `mixed_external_dependency`: combine compile-time bindings with a runtime
   external dependency.
-- `custom_allocator`: use a caller-selected allocator for container
-  bookkeeping.
+- `custom_allocator`: use a caller-selected allocator for container bookkeeping.
 - `custom_rtti`: use a caller-selected RTTI provider for runtime lookup.
 
 Negative compile-time checks stay in `test/lit`. The generated matrix covers
@@ -50,8 +51,8 @@ to describe the behavior under test without hiding it in resolved-type checks.
   multi-argument callables, and `std::move_only_function` when available.
 - `factory_override`: no-argument function factories, function factories with
   dependencies, explicit constructor factories, detected constructors,
-  `DINGO_CONSTRUCTOR` typedef constructors, callable registration factories,
-  and explicit callable construction.
+  `DINGO_CONSTRUCTOR` typedef constructors, callable registration factories, and
+  explicit callable construction.
 
 Factory case entries own the registration factory expression for the behavior
 under test. The stored, exposed, and resolved type axes only select the C++
@@ -105,7 +106,7 @@ fixture type needed by that case.
 - annotated interface
 - collection of interfaces
 - keyed collection of interfaces
-- indexed interface
+- runtime-key lookup interface
 - local binding target
 - local binding override target
 - local and host collection target
@@ -132,12 +133,12 @@ fixture type needed by that case.
 - user-defined wrapper values, references, and interface conversions
 - `std::vector<std::shared_ptr<I>>`
 - custom inserted collection forms such as `std::map<int, std::shared_ptr<I>>`
-- keyed `T`, `T&`, and collection requests through `resolve(...,
-  key<Key>{})`
-- `keyed<T, Key>` constructor and invocation dependencies
-- `keyed<std::vector<std::shared_ptr<I>>, Key>` constructor and invocation
-  dependencies
-- indexed runtime requests
+- typed-key `T`, `T&`, and collection requests through
+  `resolve(..., key_type<Key>{})`
+- `dependency<T, key_type<Key>>` constructor and invocation dependencies
+- `dependency<std::vector<std::shared_ptr<I>>, key_type<Key>>` constructor and
+  invocation dependencies
+- runtime-key requests
 - `T (*)[N]`
 - `T (&)[M][N]`
 - `std::unique_ptr<T[]>`
@@ -156,12 +157,12 @@ fixture type needed by that case.
 - `static_container<bindings<...>>`
 - `container<bindings<...>>` using only static bindings
 - `container<bindings<...>>` using static and runtime registrations
-- `runtime_container<indexed_traits<map>>`
-- `container<indexed_traits<map>>`
-- `runtime_container<indexed_traits<unordered_map>>`
-- `container<indexed_traits<unordered_map>>`
-- `runtime_container<indexed_traits<array>>`
-- `container<indexed_traits<array>>`
+- `runtime_container<indexed_traits<std::size_t>>`
+- `container<indexed_traits<std::size_t>>`
+- `runtime_container<indexed_traits<int>>`
+- `container<indexed_traits<int>>`
+- `runtime_container<indexed_traits<std::string>>`
+- `container<indexed_traits<std::string>>`
 - `runtime_container<indexed_dsl_traits>`
 - `container<indexed_dsl_traits>`
 - allocator-parameterized `container`
@@ -180,9 +181,9 @@ Then it should keep only rows that satisfy all rules below.
 - Runtime-only containers cannot use static bindings.
 - Mixed containers require at least one static binding and may add runtime
   bindings.
-- Indexed features require indexed container traits.
-- Indexed registration is runtime-only unless static indexed bindings are added
-  to the library.
+- Runtime-key lookup features require lookup container traits.
+- Runtime-key registration is runtime-only unless static fixed-key bindings are
+  added to the library.
 - `external` scope requires caller-supplied storage.
 - `unique` scope can resolve owning values and wrappers, but not stable shared
   references across resolutions.
@@ -194,13 +195,15 @@ Then it should keep only rows that satisfy all rules below.
 - Collection rows require more than one matching binding.
 - Keyed collection rows require more than one matching binding for the same key.
 - Keyed singular rows require exactly one binding for the requested key.
-- Annotated rows require matching `annotated<..., Tag>` request and registration.
+- Annotated rows require matching `annotated<..., Tag>` request and
+  registration.
 - Array rows must preserve the exact array shape.
 - Variant held-alternative rows require the held alternative to be unique in the
   variant type.
-- Factory rows require a constructor shape that would otherwise need the explicit
-  factory.
-- Local-binding rows must verify local lookup, host fallback, and local override.
+- Factory rows require a constructor shape that would otherwise need the
+  explicit factory.
+- Local-binding rows must verify local lookup, host fallback, and local
+  override.
 - Local-binding collection rows must verify local and host collection merge.
 - Nested-container rows must verify child lookup, parent fallback, and child
   override.
@@ -220,8 +223,8 @@ The generator should fail if:
   rows
 - a filter rule is declared but never exercised
 
-Not every axis combination should exist. Completeness means every axis member and
-filter rule is represented by at least one valid generated row, and each
+Not every axis combination should exist. Completeness means every axis member
+and filter rule is represented by at least one valid generated row, and each
 applicable feature / registration mode / container combination has at least one
 valid generated row.
 
@@ -235,7 +238,7 @@ sources are split by:
 Features with only the default case keep a single source and runner named after
 the feature. Dispatch-heavy features get one source and runner per case, for
 example `invoke_member_function_pointer.cpp` and
-`matrix_runner_invoke_member_function_pointer.cpp`. The split keeps
-translation units tied to matrix meaning instead of arbitrary shard numbers,
-while limiting the amount of template-heavy container and generated test code
-compiled by one compiler process.
+`matrix_runner_invoke_member_function_pointer.cpp`. The split keeps translation
+units tied to matrix meaning instead of arbitrary shard numbers, while limiting
+the amount of template-heavy container and generated test code compiled by one
+compiler process.

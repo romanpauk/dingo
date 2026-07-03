@@ -9,7 +9,7 @@
 
 #include <dingo/core/config.h>
 
-#include <dingo/core/keyed.h>
+#include <dingo/core/key.h>
 #include <dingo/factory/constructor_traits.h>
 #include <dingo/factory/constructor_typedef.h>
 #include <dingo/registration/annotated.h>
@@ -76,16 +76,6 @@ struct constructor_argument<DisabledType, automatic> {
                             is_complete<std::decay_t<T>>::value>>
   operator T();
 
-  template <typename T, typename Key,
-            typename = typename std::enable_if_t<
-                !std::is_same_v<DisabledType, std::decay_t<T>>>>
-  operator keyed<T, Key>() const;
-
-  template <typename T, typename Selector,
-            typename = typename std::enable_if_t<
-                !std::is_same_v<DisabledType, std::decay_t<T>>>>
-  operator indexed<T, Selector>() const;
-
   template <typename T, typename Selector,
             typename = typename std::enable_if_t<
                 !std::is_same_v<DisabledType, std::decay_t<T>>>>
@@ -139,20 +129,6 @@ public:
                 !std::is_same_v<DisabledType, std::decay_t<T>>>>
   operator annotated<T, Tag>() {
     return context_.template resolve<annotated<T, Tag>>(container_);
-  }
-
-  template <typename T, typename Key,
-            typename = std::enable_if_t<
-                !std::is_same_v<DisabledType, std::decay_t<T>>>>
-  operator keyed<T, Key>() {
-    return context_.template resolve<keyed<T, Key>>(container_);
-  }
-
-  template <typename T, typename Selector,
-            typename = std::enable_if_t<
-                !std::is_same_v<DisabledType, std::decay_t<T>>>>
-  operator indexed<T, Selector>() {
-    return context_.template resolve<indexed<T, Selector>>(container_);
   }
 
   template <typename T, typename Selector,

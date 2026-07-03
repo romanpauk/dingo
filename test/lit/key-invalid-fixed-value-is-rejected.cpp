@@ -12,8 +12,8 @@ struct incompatible_key {
   incompatible_key(structural_key) = delete;
 };
 
-using key_type = dingo::key<incompatible_key, structural_key{1}>;
+using key_type = dingo::key_type<incompatible_key, structural_key{1}>;
 
 int main() { return sizeof(key_type); }
 
-// CHECK: dingo::key<T, V> requires V to be usable as T{V}
+// CHECK: dingo::key_type<T, V> requires V to be usable as T{V}
