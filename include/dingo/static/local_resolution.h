@@ -27,9 +27,9 @@ namespace detail {
 template <typename Host, typename StaticRegistry> class binding_resolution;
 
 template <typename Host, typename... Registrations>
-class binding_resolution<Host, static_registry<Registrations...>>
+class binding_resolution<Host, static_bindings<Registrations...>>
     : private borrowed_binding_scope<Registrations...> {
-  using static_registry_type = static_registry<Registrations...>;
+  using static_registry_type = static_bindings<Registrations...>;
   using self_type = binding_resolution<Host, static_registry_type>;
   using state_type = borrowed_binding_scope<Registrations...>;
 
@@ -42,13 +42,11 @@ class binding_resolution<Host, static_registry<Registrations...>>
   struct local_binding_source {
     using binding = binding_t<Request, Key>;
     static constexpr bool can_resolve =
-        binding::status == binding_selection_status::found;
+        binding::status == binding_status::found;
 
     self_type &self;
 
-    constexpr binding_selection_status status() const {
-      return binding::status;
-    }
+    constexpr binding_status status() const { return binding::status; }
 
     template <typename ResolveRequest>
     decltype(auto) resolve(runtime_context &context) {
@@ -63,14 +61,18 @@ class binding_resolution<Host, static_registry<Registrations...>>
 
     Host &host;
 
-    binding_selection_status status() const {
+    binding_status status() const {
       return host.template binding_status<Request, Key>();
     }
 
     template <typename ResolveRequest>
     decltype(auto) resolve(runtime_context &context) {
-      return host.template resolve_request<T, RemoveRvalueReferences, Key>(
-          context);
+      if constexpr (std::is_void_v<Key>) {
+        return host.template resolve<T, RemoveRvalueReferences>(context);
+      } else {
+        return host.template resolve<T, RemoveRvalueReferences>(
+            context, key_type<Key>{});
+      }
     }
   };
 

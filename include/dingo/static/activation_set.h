@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <dingo/core/binding_collection.h>
 #include <dingo/core/binding_model.h>
 #include <dingo/core/binding_resolution.h>
 #include <dingo/core/context_base.h>
@@ -89,7 +90,7 @@ struct local_binding_scope_slot {};
 template <bool RuntimeDependencies, typename Registration,
           typename... LocalRegistrations>
 struct local_binding_scope_slot<RuntimeDependencies, Registration,
-                                static_registry<LocalRegistrations...>> {
+                                static_bindings<LocalRegistrations...>> {
   basic_static_activation_set<RuntimeDependencies, LocalRegistrations...> scope;
 };
 
@@ -126,39 +127,39 @@ struct basic_static_activation_closure;
 template <typename... Registrations>
 struct basic_static_activation_closure<false, Registrations...> {
   using type = detail::static_context_closure<
-      detail::basic_static_execution_traits<static_registry<Registrations...>,
+      detail::basic_static_execution_traits<static_bindings<Registrations...>,
                                             false>::max_destructible_slots,
-      detail::basic_static_execution_traits<static_registry<Registrations...>,
+      detail::basic_static_execution_traits<static_bindings<Registrations...>,
                                             false>::max_temporary_slots,
-      detail::basic_static_execution_traits<static_registry<Registrations...>,
+      detail::basic_static_execution_traits<static_bindings<Registrations...>,
                                             false>::max_temporary_size == 0
           ? 1
           : detail::basic_static_execution_traits<
-                static_registry<Registrations...>, false>::max_temporary_size,
-      detail::basic_static_execution_traits<static_registry<Registrations...>,
+                static_bindings<Registrations...>, false>::max_temporary_size,
+      detail::basic_static_execution_traits<static_bindings<Registrations...>,
                                             false>::max_temporary_align == 0
           ? alignof(std::max_align_t)
           : detail::basic_static_execution_traits<
-                static_registry<Registrations...>, false>::max_temporary_align>;
+                static_bindings<Registrations...>, false>::max_temporary_align>;
 };
 
 template <typename... Registrations>
 struct basic_static_activation_closure<true, Registrations...> {
   using type = detail::fixed_context_closure<
-      detail::basic_static_execution_traits<static_registry<Registrations...>,
+      detail::basic_static_execution_traits<static_bindings<Registrations...>,
                                             true>::max_destructible_slots,
-      detail::basic_static_execution_traits<static_registry<Registrations...>,
+      detail::basic_static_execution_traits<static_bindings<Registrations...>,
                                             true>::max_temporary_slots,
-      detail::basic_static_execution_traits<static_registry<Registrations...>,
+      detail::basic_static_execution_traits<static_bindings<Registrations...>,
                                             true>::max_temporary_size == 0
           ? 1
           : detail::basic_static_execution_traits<
-                static_registry<Registrations...>, true>::max_temporary_size,
-      detail::basic_static_execution_traits<static_registry<Registrations...>,
+                static_bindings<Registrations...>, true>::max_temporary_size,
+      detail::basic_static_execution_traits<static_bindings<Registrations...>,
                                             true>::max_temporary_align == 0
           ? alignof(std::max_align_t)
           : detail::basic_static_execution_traits<
-                static_registry<Registrations...>, true>::max_temporary_align>;
+                static_bindings<Registrations...>, true>::max_temporary_align>;
 };
 
 template <bool RuntimeDependencies, typename... Registrations>
@@ -680,8 +681,7 @@ public:
     } else {
       using selection = detail::static_binding_t<
           typename LocalRegistry::template bindings<R, Key>>;
-      if constexpr (selection::status ==
-                    detail::binding_selection_status::found) {
+      if constexpr (selection::status == detail::binding_status::found) {
         using binding = typename selection::binding_type;
         auto &local_scope =
             derived().template get_local_scope_for_model<BindingModel>();
@@ -824,6 +824,113 @@ using static_binding_scope_view =
 template <typename StorageState, typename... Registrations>
 using binding_scope_view =
     basic_static_activation_set_view<true, StorageState, Registrations...>;
+
+template <typename State, typename... Registrations>
+class static_registry<static_bindings<Registrations...>, State> {
+  using bindings_type = static_bindings<Registrations...>;
+  using self_type = static_registry<bindings_type, State>;
+
+  template <typename Context>
+  using scope_type = basic_static_activation_set_view<
+      std::is_same_v<std::remove_reference_t<Context>, runtime_context>, State,
+      Registrations...>;
+
+  template <typename Request, typename Key>
+  using selection_t =
+      static_binding_t<typename bindings_type::template bindings<Request, Key>>;
+
+  template <typename Request, typename Key,
+            bool Selected =
+                selection_t<Request, Key>::status == binding_status::found>
+  struct binding_is_resolvable : std::false_type {};
+
+  template <typename Request, typename Key>
+  struct binding_is_resolvable<Request, Key, true>
+      : std::bool_constant<
+            static_binding_resolvable_v<
+                typename selection_t<Request, Key>::binding_type,
+                bindings_type> &&
+            binding_supports_request_v<
+                dependency_interface_t<Request>,
+                typename selection_t<Request, Key>::binding_type>> {};
+
+public:
+  using static_bindings_type = bindings_type;
+  using registration_types = typename static_bindings_type::registration_types;
+  using binding_models = typename static_bindings_type::binding_models;
+  using interface_bindings = typename static_bindings_type::interface_bindings;
+  template <typename Request, typename Key = void>
+  using selection = selection_t<Request, Key>;
+
+  static_registry() = default;
+
+  template <typename Request, typename Key = void>
+  static constexpr detail::binding_status binding_status() {
+    return selection_t<Request, Key>::status;
+  }
+
+  template <typename Request, typename Key = void>
+  static constexpr bool is_binding_resolvable() {
+    return binding_is_resolvable<Request, Key>::value;
+  }
+
+  template <typename T, bool RemoveRvalueReferences, typename Key = void,
+            typename Host, typename Context,
+            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
+  R resolve_request(Context &context, Host &host) {
+    if constexpr (collection_traits<R>::is_collection) {
+      return construct_collection<R, Key>(host, context);
+    } else {
+      using lookup_request_type =
+          resolve_dependency_t<T, RemoveRvalueReferences>;
+      using request_type = R;
+      using selected = selection_t<lookup_request_type, Key>;
+      return resolve_binding<lookup_request_type, request_type, selected>(
+          context, host);
+    }
+  }
+
+  template <typename T, typename Key = void, typename Host, typename Context,
+            typename Fn>
+  std::size_t append_collection(T &results, Host &host, Context &context,
+                                Fn &&fn) {
+    scope_type<Context> scope(state_);
+    return scope.template append_static_collection<T, Key, bindings_type>(
+        results, host, context, std::forward<Fn>(fn));
+  }
+
+  template <typename T, typename Key = void>
+  static constexpr std::size_t count_collection() {
+    return static_collection_binding_count<bindings_type, T, Key>();
+  }
+
+  template <typename T, typename Key = void, typename Host, typename Context>
+  T construct_collection(Host &host, Context &context) {
+    scope_type<Context> scope(state_);
+    return scope.template construct_static_collection<T, Key, bindings_type>(
+        host, context);
+  }
+
+  template <typename T, typename Key = void, typename Host, typename Context,
+            typename Fn>
+  T construct_collection(Host &host, Context &context, Fn &&fn) {
+    scope_type<Context> scope(state_);
+    return scope.template construct_static_collection<T, Key, bindings_type>(
+        host, context, std::forward<Fn>(fn));
+  }
+
+  template <typename Request, typename ResolveRequest, typename Selection,
+            typename Context, typename Host>
+  decltype(auto) resolve_binding(Context &context, Host &host) {
+    using binding = typename Selection::binding_type;
+    scope_type<Context> scope(state_);
+    auto resolver = scope.template make_binding_resolver<binding>(host);
+    return resolver.template resolve<ResolveRequest>(context);
+  }
+
+private:
+  State state_;
+};
 
 } // namespace detail
 } // namespace dingo

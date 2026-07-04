@@ -24,6 +24,8 @@ template <typename... Args> using bind = type_registration<Args...>;
 
 namespace detail {
 
+template <typename StaticBindings, typename State> class static_registry;
+
 enum class dependency_resolution_status {
   resolved,
   missing,
@@ -732,7 +734,7 @@ public:
 template <typename BindingModel, typename InterfaceBindings,
           typename... LocalRegistrations>
 struct effective_interface_bindings<BindingModel, InterfaceBindings,
-                                    static_registry<LocalRegistrations...>> {
+                                    static_bindings<LocalRegistrations...>> {
 private:
   using local_interface_bindings = type_list_cat_t<typename binding_expansion<
       binding_model<LocalRegistrations>>::interface_bindings...>;
@@ -983,7 +985,7 @@ struct static_registry_dependency_diagnostics
 
 } // namespace detail
 
-template <typename... Registrations> struct static_registry {
+template <typename... Registrations> struct static_bindings {
   using registration_types = type_list<Registrations...>;
   using binding_models = type_list<detail::binding_model<Registrations>...>;
   using interface_bindings =

@@ -61,6 +61,81 @@ template <> struct key_value_interface<void> {
 template <typename Interface>
 using key_value_interface_t = typename key_value_interface<Interface>::type;
 
+template <typename Container, typename Request, typename IdType,
+          typename = void>
+struct has_key_value_lookup_definition : std::false_type {};
+
+template <typename Container, typename Request, typename IdType>
+struct has_key_value_lookup_definition<
+    Container, Request, IdType,
+    std::void_t<typename Container::lookup_definition_type>>
+    : std::bool_constant<!std::is_void_v<selected_lookup_entry_t<
+          normalized_type_t<Request>, std::decay_t<IdType>,
+          normalize_lookup_definitions_t<
+              typename Container::lookup_definition_type>>>> {};
+
+template <typename Container, typename Request, typename IdType>
+inline constexpr bool has_key_value_lookup_definition_v =
+    has_key_value_lookup_definition<Container, Request, IdType>::value;
+
+template <typename T>
+inline constexpr bool is_runtime_auto_constructible_dependency_v =
+    std::is_same_v<dependency_value_t<T>, std::decay_t<T>> &&
+    (!std::is_reference_v<T> ||
+     (std::is_lvalue_reference_v<T> &&
+      std::is_const_v<std::remove_reference_t<T>> &&
+      is_auto_constructible<std::decay_t<T>>::value));
+
+template <typename T, typename = void>
+struct has_static_registry_type : std::false_type {};
+
+template <typename T>
+struct has_static_registry_type<T,
+                                std::void_t<typename T::static_registry_type>>
+    : std::true_type {};
+
+template <typename T>
+inline constexpr bool has_static_registry_type_v =
+    has_static_registry_type<T>::value;
+
+template <typename Container, typename Request, typename IdType,
+          typename = void>
+struct has_binding_status : std::false_type {};
+
+template <typename Container, typename Request, typename IdType>
+struct has_binding_status<
+    Container, Request, IdType,
+    std::void_t<
+        decltype(std::declval<Container &>().template binding_status<Request>(
+            std::declval<IdType &>()))>> : std::true_type {};
+
+template <typename Container, typename Request, typename IdType>
+inline constexpr bool has_binding_status_v =
+    has_binding_status<Container, Request, IdType>::value;
+
+template <typename Container, typename Request, typename IdType>
+constexpr bool has_lookup() {
+  if constexpr (is_none_v<std::decay_t<IdType>> || is_typed_key_v<IdType>) {
+    return true;
+  } else {
+    return has_key_value_lookup_definition_v<Container, Request, IdType>;
+  }
+}
+
+template <typename Request, typename ParentContainer, typename IdType>
+bool should_resolve_missing_from_parent(ParentContainer &parent, IdType &id) {
+  if constexpr (!has_lookup<ParentContainer, Request, IdType>()) {
+    return false;
+  } else if constexpr (is_runtime_auto_constructible_dependency_v<Request> &&
+                       !has_static_registry_type_v<ParentContainer> &&
+                       has_binding_status_v<ParentContainer, Request, IdType>) {
+    return parent.template binding_status<Request>(id) !=
+           binding_status::not_found;
+  } else {
+    return true;
+  }
+}
+
 } // namespace detail
 
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
@@ -87,6 +162,10 @@ class runtime_registry : public allocator_base<Allocator> {
       std::conditional_t<std::is_same_v<void, ResolveRoot>, registry_type,
                          ResolveRoot>;
   using container_type = resolve_root_type;
+  using runtime_binding_interface_type =
+      runtime_binding_interface<container_type>;
+  using runtime_selection =
+      detail::runtime_binding_selection<runtime_binding_interface_type>;
   template <typename Registration>
   using registration_container_type =
       runtime_registry<typename ContainerTraits::template rebind_t<
@@ -202,12 +281,6 @@ protected:
     return resolve_runtime_request<T>(std::forward<IdType>(id));
   }
 
-  template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-            typename R = dependency_result_t<T>>
-  R construct(Factory factory = Factory()) {
-    return construct_runtime_request<T>(std::move(factory));
-  }
-
   template <typename T> T construct_collection() {
     return construct_collection_runtime_request<T>();
   }
@@ -248,47 +321,6 @@ protected:
     } else {
       runtime_context context;
       return resolve_impl<T, true, false>(context, std::forward<IdType>(id));
-    }
-  }
-
-  template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-            typename R = dependency_result_t<T>>
-  R construct_runtime_request(Factory factory = Factory()) {
-    runtime_context context;
-    if constexpr (std::is_same_v<Factory, constructor<normalized_type_t<T>>>) {
-      if (binding_status<T>() != detail::binding_selection_status::not_found) {
-        if constexpr (!construct_normalized_request_v<T> ||
-                      ::dingo::rvalue_request_requires_explicit_conversion_v<
-                          T>) {
-          return resolve<T, false>(context, none_t{});
-        } else {
-          return ::dingo::construct_request_or_wrap_normalized<T>(
-              [&]() { return resolve<T, false>(context, none_t{}); },
-              [&]() {
-                return resolve<normalized_type_t<T>, false>(context, none_t{});
-              });
-        }
-      } else if (binding_status<normalized_type_t<T>>() !=
-                 detail::binding_selection_status::not_found) {
-        if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
-                          T>) {
-          ::dingo::throw_missing_rvalue_conversion<T>(true, context);
-        } else if constexpr (construct_normalized_request_v<T>) {
-          return type_traits<std::decay_t<T>>::make(
-              resolve<normalized_type_t<T>, false>(context, none_t{}));
-        } else {
-          return resolve<T, false>(context, none_t{});
-        }
-      }
-    }
-
-    if constexpr (construct_factory_request_v<T>) {
-      return factory.template construct<R>(context, *resolve_root());
-    } else if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
-                             T>) {
-      ::dingo::throw_missing_rvalue_conversion<T>(false, context);
-    } else {
-      return resolve<T, false>(context, none_t{});
     }
   }
 
@@ -334,7 +366,7 @@ protected:
 
     T results;
     runtime_context context;
-    const std::size_t count = count_runtime_collection<T>(id);
+    const std::size_t count = count_collection<T>(id);
     if (count == 0 &&
         !has_explicit_collection_lookup<T>(std::forward<IdType>(id))) {
       throw detail::make_collection_type_not_found_exception<T, resolve_type>();
@@ -356,8 +388,7 @@ protected:
 
     T results;
     runtime_context context;
-    const std::size_t count =
-        count_runtime_collection<T>(collection_key<Key>());
+    const std::size_t count = count_collection<T>(collection_key<Key>());
     if (count == 0 &&
         !has_explicit_collection_lookup<T>(collection_key<Key>())) {
       throw detail::make_collection_type_not_found_exception<T, resolve_type>();
@@ -382,12 +413,22 @@ protected:
   }
 
   template <typename Request, typename Key = void>
-  detail::binding_selection_status binding_status() {
-    return binding_status_for_id<Request>(collection_key<Key>());
+  detail::binding_status binding_status() {
+    return binding_status<Request>(collection_key<Key>());
+  }
+
+  template <typename Request, typename Key = void>
+  runtime_selection select_binding() {
+    return source_select<Request>(collection_key<Key>());
   }
 
   template <typename Request, typename IdType>
-  detail::binding_selection_status binding_status_for_id(IdType &&id) {
+  runtime_selection select_binding(IdType &&id) {
+    return source_select<Request>(std::forward<IdType>(id));
+  }
+
+  template <typename Request, typename IdType>
+  detail::binding_status binding_status(IdType &&id) {
     auto selection =
         select_binding<Request>(runtime_bindings_, std::forward<IdType>(id));
     return selection.status;
@@ -400,13 +441,13 @@ protected:
   }
 
   template <typename T, typename Key = void> std::size_t count_collection() {
-    return count_runtime_collection<T>(collection_key<Key>());
+    return count_collection<T>(collection_key<Key>());
   }
 
-  template <typename T, bool RemoveRvalueReferences, typename Key = void,
-            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
-  R resolve_request(runtime_context &context) {
-    return resolve<T, RemoveRvalueReferences>(context, collection_key<Key>());
+  template <typename Request, typename Result = Request>
+  Result resolve_binding(runtime_selection selection,
+                         runtime_context &context) {
+    return resolve<Request, Result>(*selection.binding, context);
   }
 
   template <typename Source> class container_proxy {
@@ -600,11 +641,6 @@ protected:
                     "domain");
     }
   };
-
-  using runtime_binding_interface_type =
-      runtime_binding_interface<container_type>;
-  using runtime_selection =
-      detail::runtime_binding_selection<runtime_binding_interface_type>;
 
   template <typename Key>
   using collection_key_t =
@@ -1123,7 +1159,7 @@ protected:
   }
 
   template <typename T, typename IdType>
-  std::size_t count_runtime_collection(IdType id) {
+  std::size_t count_collection(IdType id) {
     std::size_t result = 0;
     for_each_collection_entry<T>(runtime_bindings_, id,
                                  [&](auto &) { ++result; });
@@ -1669,13 +1705,16 @@ private:
                  is_auto_constructible<std::decay_t<T>>::value)) >
                    (context, std::forward<IdType>(id));
   }
+
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
 
-  template <typename CachedT, typename T, typename Binding, typename Context>
-  T resolve(Binding &binding, Context &context) {
-    return ::dingo::resolve_binding_request<T, rtti_type>(binding, context);
+  template <typename Request, typename Result, typename Binding,
+            typename Context>
+  Result resolve(Binding &binding, Context &context) {
+    return ::dingo::resolve_binding_request<Request, rtti_type>(binding,
+                                                                context);
   }
 
   template <typename T, typename Binding, typename Context>
