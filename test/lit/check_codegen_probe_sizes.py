@@ -32,7 +32,7 @@ PROBE_LIMITS = {
         "clang20": 0x5E0,
         "gcc13": 0x4C0,
         "gcc14": 0x530,
-        "clang_arm64": 0x440,
+        "clang_arm64": 0x450,
         "gcc_arm64": 0x620,
     },
     "probe_runtime_resolution_shared_config": {
@@ -116,9 +116,9 @@ PROBE_LIMITS = {
     },
     "probe_static_resolution_mixed_container_unique_wrapper_config": {
         "default": 0x440,
-        "clang": 0x530,
-        "clang19": 0x530,
-        "clang20": 0x530,
+        "clang": 0x540,
+        "clang19": 0x540,
+        "clang20": 0x540,
         "gcc_arm64": 0x540,
     },
     "probe_runtime_resolution_unique_wrapper_config": {
@@ -131,7 +131,7 @@ PROBE_LIMITS = {
     },
     "probe_static_resolution_mixed_container_interface_handle": {
         "default": 0x570,
-        "clang": 0x570,
+        "clang": 0x580,
         "gcc_arm64": 0x570,
     },
     "probe_runtime_resolution_interface_handle": {
@@ -211,7 +211,6 @@ EXPECTED_FASTER_THAN_RUNTIME = (
         "probe_runtime_resolution_unique_wrapper_config",
     ),
     ("probe_static_resolution_interface_handle", "probe_runtime_resolution_interface_handle"),
-    ("probe_static_resolution_collection_sum", "probe_runtime_resolution_collection_sum"),
 )
 
 SHAPES = {

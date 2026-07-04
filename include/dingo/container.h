@@ -593,9 +593,7 @@ public:
                 static_bindings_type>;
 
         if constexpr (has_static_construct_v<T>) {
-          if (binding_status<request_type>() !=
-                  detail::binding_status::not_found &&
-              !has_runtime_binding<request_type>() &&
+          if (!has_runtime_binding<request_type>() &&
               !has_runtime_binding<normalized_request_type>()) {
             return construct_static<T>();
           }
@@ -612,9 +610,7 @@ public:
 
         return construct_runtime_request<T>(std::move(factory));
       } else if constexpr (has_static_construct_v<T>) {
-        if (binding_status<request_type>() !=
-                detail::binding_status::not_found &&
-            !has_runtime_binding<request_type>() &&
+        if (!has_runtime_binding<request_type>() &&
             !has_runtime_binding<normalized_request_type>()) {
           return construct_static<T>();
         }
