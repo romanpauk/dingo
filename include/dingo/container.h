@@ -711,10 +711,10 @@ public:
   template <typename Request, typename Key = void>
   detail::binding_status binding_status() {
     using request_type = dependency_interface_t<Request>;
+    using static_selection = static_selection_t<request_type, Key>;
     const auto runtime_status =
         runtime_registry_.template binding_status<request_type, Key>();
-    return detail::resolve_binding_status<
-        static_registry_type::template binding_status<request_type, Key>()>(
+    return detail::resolve_binding_status<static_selection::status>(
         runtime_status,
         detail::binding_resolution_policy::ambiguous_on_conflict);
   }

@@ -865,7 +865,7 @@ public:
   static_registry() = default;
 
   template <typename Request, typename Key = void>
-  static constexpr binding_status binding_status() {
+  static constexpr detail::binding_status binding_status() {
     return selection_t<Request, Key>::status;
   }
 

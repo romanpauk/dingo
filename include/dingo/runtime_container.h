@@ -12,6 +12,11 @@
 #include <dingo/runtime/registry.h>
 #include <dingo/type/dependency_traits.h>
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+
 namespace dingo {
 
 template <typename ContainerTraits = dynamic_container_traits,
@@ -438,3 +443,7 @@ private:
 };
 
 } // namespace dingo
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
