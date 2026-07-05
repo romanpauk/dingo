@@ -285,23 +285,6 @@ private:
         } else {
           return construct_resolved_request<Request, R>(context);
         }
-      } else if (binding_status<request_value_type>(key) !=
-                 detail::binding_status::not_found) {
-        if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
-                          user_type>) {
-          ::dingo::throw_missing_rvalue_conversion<user_type>(true, context);
-        } else if constexpr (construct_normalized_request_v<user_type>) {
-          return type_traits<std::decay_t<user_type>>::make(
-              resolve_request<
-                  request_type<request_value_type>, true,
-                  typename request_type<request_value_type>::lookup_type>(
-                  context, key));
-        } else {
-          return resolve_request<
-              Request,
-              detail::is_runtime_auto_constructible_dependency_v<user_type>, R>(
-              context, key);
-        }
       }
     }
 

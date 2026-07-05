@@ -110,8 +110,10 @@ private:
   template <typename Request, typename NormalizedRequest>
   bool has_runtime_no_key_binding() {
     auto key = detail::no_lookup_key();
-    return has_runtime_binding<Request>(key) ||
-           has_runtime_binding<NormalizedRequest>(key);
+    static_assert(
+        std::is_same_v<typename request_type<Request>::value_type,
+                       typename request_type<NormalizedRequest>::value_type>);
+    return has_runtime_binding<Request>(key);
   }
 
   template <typename T, typename LookupKey,
@@ -380,18 +382,6 @@ private:
           return resolve_runtime_request<Request>(context);
         } else {
           return construct_runtime_resolved_request<Request, R>(context);
-        }
-      } else if (runtime_registry_.template binding_status<request_value_type>(
-                     key) != detail::binding_status::not_found) {
-        if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
-                          user_type>) {
-          ::dingo::throw_missing_rvalue_conversion<user_type>(true, context);
-        } else if constexpr (construct_normalized_request_v<user_type>) {
-          return type_traits<std::decay_t<user_type>>::make(
-              resolve_runtime_request<request_type<request_value_type>>(
-                  context));
-        } else {
-          return resolve_runtime_request<Request>(context);
         }
       }
     }
