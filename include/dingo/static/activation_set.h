@@ -226,32 +226,45 @@ struct binding_activation {
   State &state;
   Host &host;
 
-  template <typename T, bool RemoveRvalueReferences, typename Context>
-  decltype(auto) resolve(Context &context) {
+  template <typename Request, typename Context>
+  decltype(auto) resolve_request(Context &context) {
     using local_bindings = typename BindingModel::bindings_type;
     if constexpr (std::is_void_v<local_bindings>) {
-      return host.template resolve<T, RemoveRvalueReferences>(
+      return host.template resolve<typename Request::user_type,
+                                   Request::removes_rvalue_references>(
           context, detail::no_lookup_key());
     } else {
-      return state.template resolve_local_binding<T, RemoveRvalueReferences,
-                                                  local_bindings, BindingModel>(
-          host, context);
+      return state.template resolve_local_binding<Request, local_bindings,
+                                                  BindingModel>(host, context);
     }
+  }
+
+  template <typename Request, typename Context, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  decltype(auto) resolve_request(Context &context, LookupKey key) {
+    using local_bindings = typename BindingModel::bindings_type;
+    if constexpr (std::is_void_v<local_bindings>) {
+      return host.template resolve<typename Request::user_type,
+                                   Request::removes_rvalue_references>(
+          context, std::move(key));
+    } else {
+      return state.template resolve_local_binding<Request, local_bindings,
+                                                  BindingModel, LookupKey>(
+          host, context, std::move(key));
+    }
+  }
+
+  template <typename T, bool RemoveRvalueReferences, typename Context>
+  decltype(auto) resolve(Context &context) {
+    return resolve_request<request_type<T, RemoveRvalueReferences>>(context);
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Context,
             typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   decltype(auto) resolve(Context &context, LookupKey key) {
-    using local_bindings = typename BindingModel::bindings_type;
-    if constexpr (std::is_void_v<local_bindings>) {
-      return host.template resolve<T, RemoveRvalueReferences>(context,
-                                                              std::move(key));
-    } else {
-      return state.template resolve_local_binding<
-          T, RemoveRvalueReferences, local_bindings, BindingModel, LookupKey>(
-          host, context, std::move(key));
-    }
+    return resolve_request<request_type<T, RemoveRvalueReferences>>(
+        context, std::move(key));
   }
 
   template <typename T, typename Context>
@@ -646,10 +659,9 @@ public:
                                                                   host);
   }
 
-  template <typename T, bool RemoveRvalueReferences, typename LocalRegistry,
-            typename BindingModel, typename LookupKey, typename Host,
-            typename Context,
-            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
+  template <typename Request, typename LocalRegistry, typename BindingModel,
+            typename LookupKey, typename Host, typename Context,
+            typename R = typename Request::result_type>
   decltype(auto) resolve_local_binding(Host &host, Context &context,
                                        LookupKey key) {
     if constexpr (collection_traits<R>::is_collection) {
@@ -682,8 +694,9 @@ public:
             local_scope.template make_binding_resolver<binding>(host);
         return resolver.template resolve<R>(context);
       } else {
-        return host.template resolve<T, RemoveRvalueReferences>(context,
-                                                                std::move(key));
+        return host.template resolve<typename Request::user_type,
+                                     Request::removes_rvalue_references>(
+            context, std::move(key));
       }
     }
   }
@@ -845,7 +858,7 @@ class static_registry<static_bindings<Registrations...>, State> {
                 typename selection_t<Request, LookupKey>::binding_type,
                 bindings_type> &&
             binding_supports_request_v<
-                dependency_interface_t<Request>,
+                typename request_type<Request>::interface_type,
                 typename selection_t<Request, LookupKey>::binding_type>> {};
 
 public:
@@ -870,20 +883,17 @@ public:
     return binding_is_resolvable<Request, LookupKey>::value;
   }
 
-  template <typename T, bool RemoveRvalueReferences, typename LookupKey,
-            typename Host, typename Context,
-            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
+  template <typename Request, typename LookupKey, typename Host,
+            typename Context, typename R = typename Request::result_type>
   R resolve_request(Context &context, Host &host) {
     static_assert(is_lookup_key_v<LookupKey>);
     if constexpr (collection_traits<R>::is_collection) {
       return construct_collection<R, LookupKey>(host, context);
     } else {
-      using lookup_request_type =
-          resolve_dependency_t<T, RemoveRvalueReferences>;
-      using request_type = R;
-      using selected = selection_t<lookup_request_type, LookupKey>;
-      return resolve_binding<lookup_request_type, request_type, selected>(
-          context, host);
+      using lookup_type = typename Request::lookup_type;
+      using result_type = R;
+      using selected = selection_t<lookup_type, LookupKey>;
+      return resolve_binding<lookup_type, result_type, selected>(context, host);
     }
   }
 

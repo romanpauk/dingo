@@ -84,9 +84,9 @@ private:
   using selection_t = static_binding_t<
       typename static_bindings_type::template bindings<Request, Key>>;
 
-  template <typename T, bool RemoveRvalueReferences, typename Key>
+  template <typename Request, typename Key>
   static constexpr binding_status resolve_status_v =
-      selection_t<resolve_dependency_t<T, RemoveRvalueReferences>, Key>::status;
+      selection_t<typename Request::lookup_type, Key>::status;
 
   template <typename Collection, typename Key>
   static constexpr std::size_t collection_count_v =
@@ -102,11 +102,13 @@ private:
     throw make_collection_type_not_found_exception<Collection, resolve_type>();
   }
 
-  template <typename T, typename LookupKey,
-            typename R = resolve_dependency_result_t<T, false>,
+  template <typename Request, typename LookupKey,
+            typename R = typename request_type<
+                typename Request::user_type,
+                Request::removes_rvalue_references>::result_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve_parent(LookupKey key) {
-    return parent_->template resolve<T>(key);
+    return parent_->template resolve<typename Request::user_type>(key);
   }
 
 public:
@@ -150,36 +152,36 @@ public:
   explicit static_container_impl(Parent *parent) : parent_(parent) {}
 
   template <typename T, typename Key = key_type<none_t>,
-            typename R = dependency_result_t<T>>
+            typename R = typename request_type<T, true>::result_type>
   R resolve() {
     return resolve<T>(detail::make_lookup_key(type_selector<Key>{}));
   }
 
-  template <typename T, typename LookupKey, typename R = dependency_result_t<T>,
+  template <typename T, typename LookupKey,
+            typename R = typename request_type<T, true>::result_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(LookupKey key) {
+    using lookup_request = request_type<T, true>;
+    using request = request_type<T, false>;
     if constexpr (!collection_traits<R>::is_collection) {
-      using lookup_request_type = resolve_dependency_t<T, true>;
-      using request_type = R;
       using selection =
           static_binding_t<typename static_bindings_type::template bindings<
-              lookup_request_type, LookupKey>>;
+              typename lookup_request::lookup_type, LookupKey>>;
       if constexpr (selection::status == binding_status::found) {
         using binding = typename selection::binding_type;
         using binding_model_type = typename binding::binding_model_type;
-        if constexpr (binding_supports_request_v<request_type, binding> &&
-                      (std::is_reference_v<request_type> ||
-                       std::is_pointer_v<request_type>) &&
+        if constexpr (binding_supports_request_v<R, binding> &&
+                      (std::is_reference_v<R> || std::is_pointer_v<R>) &&
                       stored_request_identity_v<
-                          request_type,
-                          typename binding_model_type::storage_type> &&
+                          R, typename binding_model_type::storage_type> &&
                       factory_without_dependencies_v<
                           typename binding_model_type::factory_type>) {
           no_dependency_context context;
           using selected = typename static_registry_type::template selection<
-              lookup_request_type, LookupKey>;
+              typename lookup_request::lookup_type, LookupKey>;
           return static_registry_.template resolve_binding<
-              lookup_request_type, request_type, selected>(context, *this);
+              typename lookup_request::lookup_type, R, selected>(context,
+                                                                 *this);
         }
       }
     }
@@ -188,21 +190,22 @@ public:
         return resolve_missing_collection<R>(key);
       } else {
         context_type context;
-        return resolve<T, false>(context, key);
+        return resolve_request<request, R>(context, key);
       }
     } else {
-      if constexpr (has_parent_v && resolve_status_v<T, false, LookupKey> ==
+      if constexpr (has_parent_v && resolve_status_v<request, LookupKey> ==
                                         binding_status::not_found) {
         if (parent_) {
-          return resolve_parent<T>(key);
+          return resolve_parent<request>(key);
         }
       }
       context_type context;
-      return resolve<T, false>(context, key);
+      return resolve_request<request, R>(context, key);
     }
   }
 
-  template <typename T, typename IdType, typename R = dependency_result_t<T>,
+  template <typename T, typename IdType,
+            typename R = typename request_type<T, true>::result_type,
             std::enable_if_t<!detail::is_lookup_key_v<IdType>, int> = 0>
   R resolve(IdType &&id) {
     auto key = detail::make_lookup_key(std::forward<IdType>(id));
@@ -217,57 +220,59 @@ public:
   }
 
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-            typename R = dependency_result_t<T>>
+            typename R = typename request_type<T, true>::result_type>
   R construct(Factory factory = Factory()) {
-    return construct_request<T>(std::move(factory));
+    return construct_request<request_type<T>, Factory, R>(std::move(factory));
   }
 
 private:
-  template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-            typename R = dependency_result_t<T>>
+  template <typename Request,
+            typename Factory = constructor<typename Request::value_type>,
+            typename R = typename Request::result_type>
   R construct_request(Factory factory = Factory()) {
-    using normalized_request_type = dependency_value_t<T>;
-    using request_type = dependency_interface_t<T>;
-    if constexpr (std::is_same_v<Factory, constructor<normalized_type_t<T>>>) {
+    using user_type = typename Request::user_type;
+    using request_value_type = typename Request::value_type;
+    using interface_type = typename Request::interface_type;
+    if constexpr (std::is_same_v<Factory, constructor<request_value_type>>) {
       using selection =
           static_binding_t<typename static_bindings_type::template bindings<
-              binding_dependency_interface_t<request_type>,
-              binding_dependency_key_t<request_type>>>;
+              binding_dependency_interface_t<interface_type>,
+              binding_dependency_key_t<interface_type>>>;
       using normalized_selection =
           static_binding_t<typename static_bindings_type::template bindings<
-              normalized_request_type, detail::no_lookup_key_t>>;
+              request_value_type, detail::no_lookup_key_t>>;
       constexpr bool has_exact_binding =
           selection::status != binding_status::not_found;
       constexpr bool has_normalized_binding =
           normalized_selection::status != binding_status::not_found;
       if constexpr (has_exact_binding) {
         using binding = typename selection::binding_type;
-        if constexpr (binding_supports_request_v<T, binding>) {
-          return resolve<T>();
+        if constexpr (binding_supports_request_v<user_type, binding>) {
+          return resolve<user_type>();
         }
       }
 
       if constexpr (has_exact_binding || has_normalized_binding) {
         if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
-                          T>) {
+                          user_type>) {
           context_type context;
-          ::dingo::throw_missing_rvalue_conversion<T>(has_normalized_binding,
-                                                      context);
-        } else if constexpr (construct_normalized_request_v<T>) {
-          return construct_static_binding_value<T, normalized_selection>(
-              [&]() { return resolve<normalized_request_type>(); });
+          ::dingo::throw_missing_rvalue_conversion<user_type>(
+              has_normalized_binding, context);
+        } else if constexpr (construct_normalized_request_v<user_type>) {
+          return construct_static_binding_value<user_type,
+                                                normalized_selection>(
+              [&]() { return resolve<request_value_type>(); });
         } else {
-          return resolve<T>();
+          return resolve<user_type>();
         }
       } else {
         context_type context;
-        auto type_guard =
-            context.template track_type<normalized_request_type>();
+        auto type_guard = context.template track_type<request_value_type>();
         return factory.template construct<R>(context, *this);
       }
     } else {
       context_type context;
-      auto type_guard = context.template track_type<normalized_request_type>();
+      auto type_guard = context.template track_type<request_value_type>();
       return factory.template construct<R>(context, *this);
     }
   }
@@ -380,15 +385,15 @@ public:
   }
 
   template <typename T, bool RemoveRvalueReferences,
-            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
+            typename R =
+                typename request_type<T, RemoveRvalueReferences>::result_type>
   R resolve(context_type &context) {
-    return resolve_request<T, RemoveRvalueReferences, R>(
+    return resolve_request<request_type<T, RemoveRvalueReferences>, R>(
         context, detail::no_lookup_key());
   }
 
 private:
-  template <typename T, bool RemoveRvalueReferences, typename R,
-            typename LookupKey,
+  template <typename Request, typename R, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve_request(context_type &context, LookupKey key) {
     if constexpr (collection_traits<R>::is_collection) {
@@ -399,23 +404,22 @@ private:
             *this, context);
       }
     } else {
-      using lookup_request_type =
-          resolve_dependency_t<T, RemoveRvalueReferences>;
-      using request_type = R;
-      constexpr auto status =
-          resolve_status_v<T, RemoveRvalueReferences, LookupKey>;
+      using lookup_type = typename Request::lookup_type;
+      constexpr auto status = resolve_status_v<Request, LookupKey>;
       if constexpr (has_parent_v) {
         if constexpr (status == binding_status::not_found) {
           if (parent_) {
-            return resolve_parent<T>(std::move(key));
+            return resolve_parent<Request>(std::move(key));
           }
         }
       }
       if constexpr (status == binding_status::found) {
-        using selected = typename static_registry_type::template selection<
-            lookup_request_type, LookupKey>;
+        using selected =
+            typename static_registry_type::template selection<lookup_type,
+                                                              LookupKey>;
         return static_registry_.template resolve_binding<
-            lookup_request_type, request_type, selected>(context, *this);
+            lookup_type, typename Request::interface_type, selected>(context,
+                                                                     *this);
       } else if constexpr (status == binding_status::ambiguous) {
         static_assert(status != binding_status::ambiguous,
                       "static_container cannot resolve an ambiguously bound "
@@ -423,18 +427,19 @@ private:
       } else {
         static_assert(has_parent_v,
                       "static_container cannot resolve an unbound type");
-        throw make_type_not_found_exception<lookup_request_type>();
+        throw make_type_not_found_exception<lookup_type>();
       }
     }
   }
 
 public:
   template <typename T, bool RemoveRvalueReferences, typename LookupKey,
-            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>,
+            typename R =
+                typename request_type<T, RemoveRvalueReferences>::result_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(context_type &context, LookupKey key) {
-    return resolve_request<T, RemoveRvalueReferences, R>(context,
-                                                         std::move(key));
+    return resolve_request<request_type<T, RemoveRvalueReferences>, R>(
+        context, std::move(key));
   }
 
 private:

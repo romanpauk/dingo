@@ -37,10 +37,9 @@ class binding_resolution<Host, static_bindings<Registrations...>>
   using binding_t = static_binding_t<
       typename static_registry_type::template bindings<T, LookupKey>>;
 
-  template <typename T, bool RemoveRvalueReferences, typename LookupKey,
-            typename Request>
+  template <typename Request, typename LookupKey, typename Result>
   struct local_binding_source {
-    using binding = binding_t<Request, LookupKey>;
+    using binding = binding_t<Result, LookupKey>;
     static constexpr bool can_resolve =
         binding::status == binding_status::found;
 
@@ -50,12 +49,11 @@ class binding_resolution<Host, static_bindings<Registrations...>>
 
     template <typename ResolveRequest>
     decltype(auto) resolve(runtime_context &context) {
-      return self.template resolve_binding<Request, LookupKey>(context);
+      return self.template resolve_binding<Result, LookupKey>(context);
     }
   };
 
-  template <typename T, bool RemoveRvalueReferences, typename LookupKey,
-            typename Request>
+  template <typename Request, typename LookupKey, typename Result>
   struct host_binding_source {
     static constexpr bool can_resolve = true;
 
@@ -63,13 +61,14 @@ class binding_resolution<Host, static_bindings<Registrations...>>
     LookupKey key;
 
     binding_status status() const {
-      return host.template binding_status<Request>(key);
+      return host.template binding_status<Result>(key);
     }
 
     template <typename ResolveRequest>
     decltype(auto) resolve(runtime_context &context) {
-      return host.template resolve<T, RemoveRvalueReferences>(context,
-                                                              std::move(key));
+      return host.template resolve<typename Request::user_type,
+                                   Request::removes_rvalue_references>(
+          context, std::move(key));
     }
   };
 
@@ -132,8 +131,8 @@ public:
 
   allocator_type &get_allocator() { return host_->get_allocator(); }
 
-  template <typename T, bool RemoveRvalueReferences, typename LookupKey,
-            typename R = resolve_dependency_t<T, RemoveRvalueReferences>,
+  template <typename Request, typename LookupKey,
+            typename R = typename Request::result_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(runtime_context &context, LookupKey key) {
     static_assert(detail::is_lookup_key_v<LookupKey>);
@@ -142,16 +141,25 @@ public:
       return construct_collection<R, LookupKey>(
           context, detail::binding_collection_append{});
     } else {
-      using request_type = R;
-      local_binding_source<T, RemoveRvalueReferences, LookupKey, request_type>
-          local{*this};
-      host_binding_source<T, RemoveRvalueReferences, LookupKey, request_type>
-          host{*host_, std::move(key)};
+      using result_type = R;
+      local_binding_source<Request, LookupKey, result_type> local{*this};
+      host_binding_source<Request, LookupKey, result_type> host{*host_,
+                                                                std::move(key)};
       auto sources = detail::make_two_binding_sources(
           local, host, host, detail::binding_resolution_policy::prefer_primary);
-      return detail::resolve_from_binding_sources<T, request_type>(context,
-                                                                   sources);
+      return detail::resolve_from_binding_sources<typename Request::lookup_type,
+                                                  result_type>(context,
+                                                               sources);
     }
+  }
+
+  template <typename T, bool RemoveRvalueReferences, typename LookupKey,
+            typename R =
+                typename request_type<T, RemoveRvalueReferences>::lookup_type,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  R resolve(runtime_context &context, LookupKey key) {
+    using request = request_type<T, RemoveRvalueReferences>;
+    return resolve<request, LookupKey, R>(context, std::move(key));
   }
 
 private:

@@ -79,6 +79,18 @@ enforced by the matching logic in
 Use it when the caller must request a specific wrapper spelling instead of "any
 request with this leaf type."
 
+## Request Type
+
+`request_type<T, RemoveRvalueReferences>` is the type-request counterpart to a
+normalized lookup key. It records the caller's original spelling as `user_type`,
+chooses the registry-facing `lookup_type`, unwraps annotated and selected
+requests into `interface_type`/`result_type`, keeps the normalized value form as
+`value_type`, and exposes the cv/ref-free interface as `exact_type`.
+
+This keeps request normalization at the public boundary. Runtime, static, local,
+and parent resolution paths then pass one descriptor through selection and
+activation instead of rebuilding the same derived type vocabulary.
+
 ## Why This Exists
 
 Without leaf extraction and rebinding, every conversion rule would have to
@@ -95,4 +107,5 @@ The rebinding utilities are what allow those three layers to compose.
 
 - [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
+- [include/dingo/type/dependency_traits.h](../../include/dingo/type/dependency_traits.h)
 - [include/dingo/resolution/runtime_binding.h](../../include/dingo/resolution/runtime_binding.h)
