@@ -132,7 +132,8 @@ void register_runtime_external_wrapper_binding(
 using shared_config_static_source =
     static_bindings_source_t<static_wrapper_source>;
 using shared_config_selection = detail::static_binding_t<
-    typename shared_config_static_source::template bindings<config, void>>;
+    typename shared_config_static_source::template bindings<
+        config, detail::no_lookup_key_t>>;
 using shared_config_binding = typename shared_config_selection::binding_type;
 
 static_assert(

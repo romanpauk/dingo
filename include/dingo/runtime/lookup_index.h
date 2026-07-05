@@ -13,6 +13,7 @@
 #include <dingo/type/type_list.h>
 
 #include <optional>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -142,32 +143,31 @@ private:
   storage_type values_;
 };
 
+template <typename BackendKey, typename Backend, typename Value,
+          typename Cardinality, typename Allocator>
+struct lookup_backend_storage_type {
+  using type = typename Backend::template storage<BackendKey, Value,
+                                                  Cardinality, Allocator>;
+};
+
+template <typename Backend, typename Value, typename Cardinality,
+          typename Allocator>
+struct lookup_backend_storage_type<::dingo::none_t, Backend, Value, Cardinality,
+                                   Allocator> {
+  using type = static_key_lookup_storage<Value, Cardinality, Allocator>;
+};
+
 template <typename Entry, typename Value, typename Allocator>
 struct lookup_backend_storage;
 
-template <typename Interface, typename Key, typename Cardinality,
+template <typename Interface, typename KeyDefinition, typename Cardinality,
           typename Backend, typename Value, typename Allocator>
 struct lookup_backend_storage<
-    lookup_entry<Interface, key_value_domain<Key>, Cardinality, Backend>, Value,
+    lookup_entry<Interface, KeyDefinition, Cardinality, Backend>, Value,
     Allocator> {
-  using type =
-      typename Backend::template storage<Key, Value, Cardinality, Allocator>;
-};
-
-template <typename Interface, typename Cardinality, typename Backend,
-          typename Value, typename Allocator>
-struct lookup_backend_storage<
-    lookup_entry<Interface, ::dingo::none_t, Cardinality, Backend>, Value,
-    Allocator> {
-  using type = static_key_lookup_storage<Value, Cardinality, Allocator>;
-};
-
-template <typename Interface, typename Key, typename Cardinality,
-          typename Backend, typename Value, typename Allocator>
-struct lookup_backend_storage<
-    lookup_entry<Interface, ::dingo::key_type<Key>, Cardinality, Backend>,
-    Value, Allocator> {
-  using type = static_key_lookup_storage<Value, Cardinality, Allocator>;
+  using type = typename lookup_backend_storage_type<
+      typename KeyDefinition::backend_key_type, Backend, Value, Cardinality,
+      Allocator>::type;
 };
 
 template <typename Entry, typename Value, typename Allocator>

@@ -1289,7 +1289,9 @@ struct static_graph<static_bindings<Registrations...>, void>
       detail::static_graph_nodes_t<topological_bindings, static_registry_type>;
 
   template <typename Interface>
-  using binding = typename static_registry_type::template binding<Interface>;
+  using binding =
+      typename static_registry_type::template binding<Interface,
+                                                      detail::no_lookup_key_t>;
 
   template <typename Interface>
   using node =

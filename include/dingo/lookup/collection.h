@@ -7,10 +7,12 @@
 
 #pragma once
 
+#include <dingo/core/key.h>
 #include <dingo/lookup/tags.h>
 
 namespace dingo {
 template <typename Interface>
-using collection = detail::lookup_definition<Interface, none_t, many>;
+using collection =
+    detail::lookup_definition<Interface, detail::no_lookup_key_t, many>;
 
 } // namespace dingo

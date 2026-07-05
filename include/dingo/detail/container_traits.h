@@ -55,15 +55,6 @@ template <typename Container, typename Context, typename T,
 struct is_context_resolve_supported : std::false_type {};
 
 template <typename Container, typename Context, typename T,
-          bool RemoveRvalueReferences>
-struct is_context_resolve_supported<
-    Container, Context, T, RemoveRvalueReferences, void,
-    std::void_t<decltype(std::declval<Container &>()
-                             .template resolve<T, RemoveRvalueReferences>(
-                                 std::declval<Context &>()))>>
-    : std::true_type {};
-
-template <typename Container, typename Context, typename T,
           bool RemoveRvalueReferences, typename Selector>
 struct is_context_resolve_supported<
     Container, Context, T, RemoveRvalueReferences, Selector,

@@ -61,22 +61,23 @@ template <> struct key_value_interface<void> {
 template <typename Interface>
 using key_value_interface_t = typename key_value_interface<Interface>::type;
 
-template <typename Container, typename Request, typename IdType,
+template <typename Container, typename Request, typename LookupKey,
           typename = void>
 struct has_key_value_lookup_definition : std::false_type {};
 
-template <typename Container, typename Request, typename IdType>
+template <typename Container, typename Request, typename LookupKey>
 struct has_key_value_lookup_definition<
-    Container, Request, IdType,
+    Container, Request, LookupKey,
     std::void_t<typename Container::lookup_definition_type>>
     : std::bool_constant<!std::is_void_v<selected_lookup_entry_t<
-          normalized_type_t<Request>, std::decay_t<IdType>,
+          normalized_type_t<Request>,
+          typename std::decay_t<LookupKey>::definition_type,
           normalize_lookup_definitions_t<
               typename Container::lookup_definition_type>>>> {};
 
-template <typename Container, typename Request, typename IdType>
+template <typename Container, typename Request, typename LookupKey>
 inline constexpr bool has_key_value_lookup_definition_v =
-    has_key_value_lookup_definition<Container, Request, IdType>::value;
+    has_key_value_lookup_definition<Container, Request, LookupKey>::value;
 
 template <typename T>
 inline constexpr bool is_runtime_auto_constructible_dependency_v =
@@ -98,38 +99,46 @@ template <typename T>
 inline constexpr bool has_static_registry_type_v =
     has_static_registry_type<T>::value;
 
-template <typename Container, typename Request, typename IdType,
+template <typename Container, typename Request, typename LookupKey,
           typename = void>
 struct has_binding_status : std::false_type {};
 
-template <typename Container, typename Request, typename IdType>
+template <typename Container, typename Request, typename LookupKey>
 struct has_binding_status<
-    Container, Request, IdType,
+    Container, Request, LookupKey,
     std::void_t<
         decltype(std::declval<Container &>().template binding_status<Request>(
-            std::declval<IdType &>()))>> : std::true_type {};
+            std::declval<LookupKey &>()))>> : std::true_type {};
 
-template <typename Container, typename Request, typename IdType>
+template <typename Container, typename Request, typename LookupKey>
 inline constexpr bool has_binding_status_v =
-    has_binding_status<Container, Request, IdType>::value;
+    has_binding_status<Container, Request, LookupKey>::value;
 
-template <typename Container, typename Request, typename IdType>
+template <typename Container, typename Request, typename LookupKey>
 constexpr bool has_lookup() {
-  if constexpr (is_none_v<std::decay_t<IdType>> || is_typed_key_v<IdType>) {
+  static_assert(is_lookup_key_v<LookupKey>,
+                "internal lookup queries require dingo::detail::lookup_key");
+  using key_definition = typename std::decay_t<LookupKey>::definition_type;
+  if constexpr (is_static_lookup_key_definition_v<key_definition>) {
     return true;
   } else {
-    return has_key_value_lookup_definition_v<Container, Request, IdType>;
+    return has_key_value_lookup_definition_v<Container, Request, LookupKey>;
   }
 }
 
-template <typename Request, typename ParentContainer, typename IdType>
-bool should_resolve_missing_from_parent(ParentContainer &parent, IdType &id) {
-  if constexpr (!has_lookup<ParentContainer, Request, IdType>()) {
+template <typename Request, typename ParentContainer, typename LookupKey>
+bool should_resolve_missing_from_parent(ParentContainer &parent,
+                                        LookupKey &key) {
+  static_assert(is_lookup_key_v<LookupKey>,
+                "internal parent lookup queries require "
+                "dingo::detail::lookup_key");
+  if constexpr (!has_lookup<ParentContainer, Request, LookupKey>()) {
     return false;
   } else if constexpr (is_runtime_auto_constructible_dependency_v<Request> &&
                        !has_static_registry_type_v<ParentContainer> &&
-                       has_binding_status_v<ParentContainer, Request, IdType>) {
-    return parent.template binding_status<Request>(id) !=
+                       has_binding_status_v<ParentContainer, Request,
+                                            LookupKey>) {
+    return parent.template binding_status<Request>(key) !=
            binding_status::not_found;
   } else {
     return true;
@@ -275,28 +284,24 @@ public:
   }
 
 protected:
-  template <typename T, typename IdType = none_t,
-            typename R = dependency_result_t<T>>
-  R resolve(IdType &&id = IdType()) {
-    return resolve_runtime_request<T>(std::forward<IdType>(id));
+  template <typename T, typename LookupKey, typename R = dependency_result_t<T>,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  R resolve(LookupKey key) {
+    return resolve_runtime_request<T, LookupKey, R>(std::move(key));
   }
 
-  template <typename T> T construct_collection() {
-    return construct_collection_runtime_request<T>();
+  template <typename T, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  T construct_collection(LookupKey key) {
+    return construct_collection_runtime_request<T>(
+        detail::binding_collection_append{}, std::move(key));
   }
 
-  template <typename T, typename Fn> T construct_collection(Fn &&fn) {
-    return construct_collection_runtime_request<T>(std::forward<Fn>(fn));
-  }
-
-  template <typename T, typename Key> T construct_collection(key_type<Key>) {
-    return construct_collection_runtime_request<T>(key_type<Key>{});
-  }
-
-  template <typename T, typename Fn, typename Key>
-  T construct_collection(Fn &&fn, key_type<Key>) {
+  template <typename T, typename Fn, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  T construct_collection(Fn &&fn, LookupKey key) {
     return construct_collection_runtime_request<T>(std::forward<Fn>(fn),
-                                                   key_type<Key>{});
+                                                   std::move(key));
   }
 
   template <typename Signature = void, typename Callable>
@@ -304,60 +309,22 @@ protected:
     return invoke_runtime_request<Signature>(std::forward<Callable>(callable));
   }
 
-  template <typename T, typename IdType = none_t,
-            typename R = dependency_result_t<T>>
+  template <typename T, typename LookupKey, typename R = dependency_result_t<T>,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
-  R resolve_runtime_request(IdType &&id = IdType()) {
-    if constexpr (detail::is_typed_key_v<IdType> &&
-                  collection_traits<R>::is_collection) {
-      return construct_collection_runtime_request<R>(std::decay_t<IdType>{});
-    } else if constexpr (!is_none_v<std::decay_t<IdType>> &&
-                         collection_traits<R>::is_collection) {
+  R resolve_runtime_request(LookupKey key) {
+    if constexpr (collection_traits<R>::is_collection) {
       return construct_collection_runtime_request<R>(
-          detail::binding_collection_append{}, std::forward<IdType>(id));
-    } else if constexpr (collection_traits<R>::is_collection) {
-      return construct_collection_runtime_request<R>(
-          detail::binding_collection_append{}, none_t{});
+          detail::binding_collection_append{}, std::move(key));
     } else {
       runtime_context context;
-      return resolve_impl<T, true, false>(context, std::forward<IdType>(id));
+      return resolve_impl<T, true, false>(context, std::move(key));
     }
   }
 
-  template <typename T> T construct_collection_runtime_request() {
-    return construct_collection_runtime_request<T>(
-        detail::binding_collection_append{});
-  }
-
-  template <typename T, typename Fn>
-  T construct_collection_runtime_request(Fn &&fn) {
-    return construct_collection_runtime_request<T>(std::forward<Fn>(fn),
-                                                   none_t{});
-  }
-
-  template <typename T, typename Key>
-  T construct_collection_runtime_request(key_type<Key>) {
-    return construct_collection_runtime_request<T>(
-        detail::binding_collection_append{}, key_type<Key>{});
-  }
-
-  template <typename T, typename Fn, typename Key>
-  T construct_collection_runtime_request(Fn &&fn, key_type<Key>) {
-    return construct_collection_runtime_request_impl<T, Key>(
-        std::forward<Fn>(fn));
-  }
-
-  template <typename T, typename Fn>
-  T construct_collection_runtime_request(Fn &&fn, none_t) {
-    return construct_collection_runtime_request_impl<T, void>(
-        std::forward<Fn>(fn));
-  }
-
-  template <typename T, typename Fn, typename IdType,
-            std::enable_if_t<!is_none_v<std::decay_t<IdType>> &&
-                                 !detail::is_typed_key_v<IdType>,
-                             int> = 0>
-  T construct_collection_runtime_request(Fn &&fn, IdType &&id) {
+  template <typename T, typename Fn, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  T construct_collection_runtime_request(Fn &&fn, LookupKey key) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
 
@@ -366,37 +333,14 @@ protected:
 
     T results;
     runtime_context context;
-    const std::size_t count = count_collection<T>(id);
-    if (count == 0 &&
-        !has_explicit_collection_lookup<T>(std::forward<IdType>(id))) {
+    const std::size_t count = count_collection<T>(key);
+    if (count == 0 && !has_explicit_collection_lookup<T>(key)) {
       throw detail::make_collection_type_not_found_exception<T, resolve_type>();
     }
 
     collection_type::reserve(results, count);
     append_runtime_collection(results, context, std::forward<Fn>(fn),
-                              std::forward<IdType>(id));
-    return results;
-  }
-
-  template <typename T, typename Key, typename Fn>
-  T construct_collection_runtime_request_impl(Fn &&fn) {
-    using collection_type = collection_traits<T>;
-    using resolve_type = typename collection_type::resolve_type;
-
-    static_assert(collection_type::is_collection,
-                  "missing collection_traits specialization for type T");
-
-    T results;
-    runtime_context context;
-    const std::size_t count = count_collection<T>(collection_key<Key>());
-    if (count == 0 &&
-        !has_explicit_collection_lookup<T>(collection_key<Key>())) {
-      throw detail::make_collection_type_not_found_exception<T, resolve_type>();
-    }
-
-    collection_type::reserve(results, count);
-    append_runtime_collection(results, context, std::forward<Fn>(fn),
-                              collection_key<Key>());
+                              std::move(key));
     return results;
   }
 
@@ -412,36 +356,31 @@ protected:
         std::forward<Callable>(callable), context, *resolve_root());
   }
 
-  template <typename Request, typename Key = void>
-  detail::binding_status binding_status() {
-    return binding_status<Request>(collection_key<Key>());
+  template <typename Request, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  runtime_selection select_binding(LookupKey key) {
+    return source_select<Request>(std::move(key));
   }
 
-  template <typename Request, typename Key = void>
-  runtime_selection select_binding() {
-    return source_select<Request>(collection_key<Key>());
-  }
-
-  template <typename Request, typename IdType>
-  runtime_selection select_binding(IdType &&id) {
-    return source_select<Request>(std::forward<IdType>(id));
-  }
-
-  template <typename Request, typename IdType>
-  detail::binding_status binding_status(IdType &&id) {
-    auto selection =
-        select_binding<Request>(runtime_bindings_, std::forward<IdType>(id));
+  template <typename Request, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  detail::binding_status binding_status(LookupKey key) {
+    auto selection = select_binding<Request>(runtime_bindings_, key);
     return selection.status;
   }
 
-  template <typename T, typename Key = void, typename Fn>
+  template <typename T, typename Fn>
   std::size_t append_collection(T &results, runtime_context &context, Fn &&fn) {
     return append_runtime_collection(results, context, std::forward<Fn>(fn),
-                                     collection_key<Key>());
+                                     detail::no_lookup_key());
   }
 
-  template <typename T, typename Key = void> std::size_t count_collection() {
-    return count_collection<T>(collection_key<Key>());
+  template <typename T, typename Fn, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  std::size_t append_collection(T &results, runtime_context &context, Fn &&fn,
+                                LookupKey key) {
+    return append_runtime_collection(results, context, std::forward<Fn>(fn),
+                                     std::move(key));
   }
 
   template <typename Request, typename Result = Request>
@@ -642,125 +581,53 @@ protected:
     }
   };
 
-  template <typename Key>
-  using collection_key_t =
-      std::conditional_t<std::is_void_v<Key>, none_t, key_type<Key>>;
-
 protected:
-  template <typename Key> static collection_key_t<Key> collection_key() {
-    return {};
-  }
+  template <typename LookupKeyDefinition> struct base_lookup_key_type;
 
-  template <typename Interface>
-  static detail::base_lookup_key<rtti_type> base_no_key_lookup_key() {
-    return {rtti_type::template get_type_index<Interface>(),
-            rtti_type::template get_type_index<none_t>()};
-  }
+  template <typename T>
+  struct base_lookup_key_type<detail::lookup_key<key_type<T>>> {
+    using type = T;
+  };
+
+  template <typename T, typename Interface>
+  struct base_lookup_key_type<detail::lookup_key<key_value<T, Interface>>> {
+    using type = T;
+  };
 
   template <typename Interface, typename Key>
   static detail::base_lookup_key<rtti_type> base_typed_key_lookup_key() {
+    using key_definition = typename std::decay_t<Key>::definition_type;
+    using key_type = typename base_lookup_key_type<key_definition>::type;
     return {rtti_type::template get_type_index<Interface>(),
-            rtti_type::template get_type_index<
-                detail::normalized_lookup_key_t<Key>>()};
+            rtti_type::template get_type_index<key_type>()};
   }
 
-  template <typename Interface, typename Cardinality>
-  using no_key_lookup_entry_t =
-      detail::selected_no_key_lookup_entry_t<Interface, Cardinality,
-                                             normalized_lookup_entries>;
+  template <typename Interface, typename KeyDomain, typename Cardinality>
+  using static_key_lookup_entry_t =
+      detail::selected_lookup_entry_with_cardinality_t<
+          Interface, KeyDomain, Cardinality, normalized_lookup_entries>;
 
-  template <typename Interface>
-  static constexpr bool has_explicit_no_key_one_lookup_v =
-      !std::is_void_v<no_key_lookup_entry_t<Interface, ::dingo::one>>;
-
-  template <typename Interface>
-  static constexpr bool has_explicit_no_key_many_lookup_v =
-      !std::is_void_v<no_key_lookup_entry_t<Interface, ::dingo::many>>;
-
-  template <typename Interface>
-  using no_key_lookup_cardinality_t = std::conditional_t<
-      has_explicit_no_key_many_lookup_v<Interface>, ::dingo::many,
-      std::conditional_t<has_explicit_no_key_one_lookup_v<Interface>,
-                         ::dingo::one, base_lookup_cardinality>>;
-
-  template <typename Interface, typename Cardinality>
-  using no_key_request_lookup_entry_t = std::conditional_t<
-      std::is_void_v<no_key_lookup_entry_t<Interface, Cardinality>>,
-      base_lookup_entry, no_key_lookup_entry_t<Interface, Cardinality>>;
-
-  template <typename Interface, typename Key, typename Cardinality>
-  using typed_key_lookup_entry_t =
-      detail::selected_typed_key_lookup_entry_t<Interface, Key, Cardinality,
-                                                normalized_lookup_entries>;
-
-  template <typename Interface, typename Key>
-  static constexpr bool has_explicit_typed_key_one_lookup_v =
-      !std::is_void_v<typed_key_lookup_entry_t<Interface, Key, ::dingo::one>>;
-
-  template <typename Interface, typename Key>
-  static constexpr bool has_explicit_typed_key_many_lookup_v =
-      !std::is_void_v<typed_key_lookup_entry_t<Interface, Key, ::dingo::many>>;
-
-  template <typename Interface, typename Key>
-  using typed_key_lookup_cardinality_t = std::conditional_t<
-      !has_explicit_typed_key_one_lookup_v<Interface, Key> &&
-          has_explicit_typed_key_many_lookup_v<Interface, Key>,
+  template <typename Interface, typename KeyDomain>
+  using static_key_lookup_cardinality_t = std::conditional_t<
+      std::is_void_v<
+          static_key_lookup_entry_t<Interface, KeyDomain, ::dingo::one>> &&
+          !std::is_void_v<
+              static_key_lookup_entry_t<Interface, KeyDomain, ::dingo::many>>,
       ::dingo::many,
-      std::conditional_t<has_explicit_typed_key_one_lookup_v<Interface, Key>,
+      std::conditional_t<!std::is_void_v<static_key_lookup_entry_t<
+                             Interface, KeyDomain, ::dingo::one>>,
                          ::dingo::one, base_lookup_cardinality>>;
-
-  template <typename Interface, typename Key, typename Cardinality>
-  using typed_key_request_lookup_entry_t = std::conditional_t<
-      std::is_void_v<typed_key_lookup_entry_t<Interface, Key, Cardinality>>,
-      base_lookup_entry, typed_key_lookup_entry_t<Interface, Key, Cardinality>>;
-
-  template <typename Interface, typename KeyDomain, typename Cardinality>
-  struct explicit_static_key_lookup_entry;
-
-  template <typename Interface, typename Cardinality>
-  struct explicit_static_key_lookup_entry<Interface, ::dingo::none_t,
-                                          Cardinality> {
-    using type = no_key_lookup_entry_t<Interface, Cardinality>;
-  };
-
-  template <typename Interface, typename Key, typename Cardinality>
-  struct explicit_static_key_lookup_entry<Interface, ::dingo::key_type<Key>,
-                                          Cardinality> {
-    using type = typed_key_lookup_entry_t<Interface, Key, Cardinality>;
-  };
-
-  template <typename Interface, typename KeyDomain, typename Cardinality>
-  using explicit_static_key_lookup_entry_t =
-      typename explicit_static_key_lookup_entry<Interface, KeyDomain,
-                                                Cardinality>::type;
-
-  template <typename KeyDomain> struct static_key_route_id {
-    using type = none_t;
-  };
-
-  template <typename Key> struct static_key_route_id<::dingo::key_type<Key>> {
-    using type = ::dingo::key_type<Key>;
-  };
-
-  template <typename Interface, typename Key>
-  using key_value_lookup_entry_t =
-      detail::selected_lookup_entry_t<Interface, Key,
-                                      normalized_lookup_entries>;
-
-  template <typename Interface, typename Key>
-  using key_value_lookup_cardinality_t = typename lookup_entry_cardinality<
-      key_value_lookup_entry_t<Interface, Key>>::type;
 
   template <typename LookupEntry> struct runtime_lookup_entry_traits {
     static constexpr bool is_key_value = false;
     using interface_type = void;
-    using key_type = void;
+    using key_type = ::dingo::key_type<::dingo::none_t>;
   };
 
   template <typename Interface, typename Key, typename Cardinality,
             typename Backend>
   struct runtime_lookup_entry_traits<detail::lookup_entry<
-      Interface, detail::key_value_domain<Key>, Cardinality, Backend>> {
+      Interface, detail::lookup_key<key_value<Key>>, Cardinality, Backend>> {
     static constexpr bool is_key_value = true;
     using interface_type = Interface;
     using key_type = Key;
@@ -946,265 +813,241 @@ protected:
     });
   }
 
-  template <typename Interface, typename IdType> struct request_lookup_traits;
+  template <typename Interface, typename KeyDefinition, typename = void>
+  struct lookup_index_route_impl;
 
-  template <typename Interface>
-  struct request_lookup_traits<Interface, ::dingo::none_t> {
+  template <typename Interface, typename KeyDefinition>
+  struct lookup_index_route_impl<
+      Interface, KeyDefinition,
+      std::enable_if_t<
+          detail::is_static_lookup_key_definition_v<KeyDefinition>>> {
     using interface_type = Interface;
     using normalized_interface = normalized_type_t<Interface>;
-    using key_domain = ::dingo::none_t;
-    using key_value_type = void;
+    using key_domain = KeyDefinition;
+    using one_lookup_entry =
+        static_key_lookup_entry_t<normalized_interface, key_domain,
+                                  ::dingo::one>;
+    using many_lookup_entry =
+        static_key_lookup_entry_t<normalized_interface, key_domain,
+                                  ::dingo::many>;
     using selected_cardinality =
-        no_key_lookup_cardinality_t<normalized_interface>;
-    using lookup_entry = no_key_request_lookup_entry_t<normalized_interface,
-                                                       selected_cardinality>;
-    static constexpr bool has_explicit_key_value_lookup = false;
+        static_key_lookup_cardinality_t<normalized_interface, key_domain>;
+    using lookup_entry = std::conditional_t<
+        std::is_same_v<selected_cardinality, ::dingo::one> &&
+            !std::is_void_v<one_lookup_entry>,
+        one_lookup_entry,
+        std::conditional_t<
+            std::is_same_v<selected_cardinality, ::dingo::many> &&
+                !std::is_void_v<many_lookup_entry>,
+            many_lookup_entry, base_lookup_entry>>;
+    static constexpr bool has_explicit_lookup = false;
     static constexpr bool has_explicit_collection_lookup =
-        std::is_same_v<selected_cardinality, ::dingo::many>;
+        std::is_same_v<selected_cardinality, ::dingo::many> &&
+        !std::is_void_v<many_lookup_entry>;
   };
 
-  template <typename Interface, typename Key>
-  struct request_lookup_traits<Interface, ::dingo::key_type<Key>> {
-    using interface_type = Interface;
+  template <typename Interface, typename KeyDefinition>
+  struct lookup_index_route_impl<
+      Interface, KeyDefinition,
+      std::enable_if_t<
+          !detail::is_static_lookup_key_definition_v<KeyDefinition>>> {
     using normalized_interface = normalized_type_t<Interface>;
-    using key_type = Key;
-    using key_domain = ::dingo::key_type<key_type>;
-    using key_value_type = void;
-    using selected_cardinality =
-        typed_key_lookup_cardinality_t<normalized_interface, key_type>;
+    using key_domain = KeyDefinition;
     using lookup_entry =
-        typed_key_request_lookup_entry_t<normalized_interface, key_type,
-                                         selected_cardinality>;
-    static constexpr bool has_explicit_key_value_lookup = false;
-    static constexpr bool has_explicit_collection_lookup =
-        std::is_same_v<selected_cardinality, ::dingo::many>;
-  };
-
-  template <typename Interface, typename IdType> struct request_lookup_traits {
-    using normalized_interface = normalized_type_t<Interface>;
-    using key_value_type = std::decay_t<IdType>;
-    using key_domain = detail::key_value_domain<key_value_type>;
-    using lookup_entry =
-        key_value_lookup_entry_t<normalized_interface, key_value_type>;
+        detail::selected_lookup_entry_t<normalized_interface, key_domain,
+                                        normalized_lookup_entries>;
     using selected_cardinality =
         typename lookup_entry_cardinality<lookup_entry>::type;
-    static constexpr bool has_explicit_key_value_lookup =
-        !std::is_void_v<lookup_entry>;
+    static constexpr bool has_explicit_lookup = !std::is_void_v<lookup_entry>;
     static constexpr bool has_explicit_collection_lookup =
-        has_explicit_key_value_lookup &&
+        has_explicit_lookup &&
         std::is_same_v<selected_cardinality, ::dingo::many>;
   };
 
-  template <typename Interface, typename IdType> struct lookup_index_route {
-    using traits = request_lookup_traits<Interface, std::decay_t<IdType>>;
-    using entry = typename traits::lookup_entry;
-
-    static decltype(auto) key(IdType &id) { return id; }
-  };
-
-  template <typename Interface> struct lookup_index_route<Interface, none_t> {
-    using traits = request_lookup_traits<Interface, none_t>;
-    using entry = typename traits::lookup_entry;
-
-    static auto key(none_t) {
-      if constexpr (std::is_same_v<entry, base_lookup_entry>) {
-        return base_no_key_lookup_key<typename traits::interface_type>();
-      } else {
-        return none_t{};
-      }
-    }
-  };
-
   template <typename Interface, typename Key>
-  struct lookup_index_route<Interface, ::dingo::key_type<Key>> {
-    using traits = request_lookup_traits<Interface, ::dingo::key_type<Key>>;
-    using entry = typename traits::lookup_entry;
+  struct lookup_index_route
+      : lookup_index_route_impl<Interface,
+                                typename std::decay_t<Key>::definition_type> {
+    using key_definition = typename std::decay_t<Key>::definition_type;
+    using base = lookup_index_route_impl<Interface, key_definition>;
+    using entry = typename base::lookup_entry;
 
-    static auto key(::dingo::key_type<Key>) {
+    static decltype(auto) key(const Key &key) {
       if constexpr (std::is_same_v<entry, base_lookup_entry>) {
-        return base_typed_key_lookup_key<typename traits::interface_type,
-                                         typename traits::key_type>();
+        return base_typed_key_lookup_key<typename base::interface_type, Key>();
       } else {
-        return none_t{};
+        return detail::lookup_backend_key(key);
       }
     }
   };
 
-  template <typename T, typename IdType>
-  static constexpr bool has_explicit_collection_lookup(IdType &&) {
+  template <typename T, typename LookupKey>
+  static constexpr bool has_explicit_collection_lookup(const LookupKey &) {
+    static_assert(detail::is_lookup_key_v<std::decay_t<LookupKey>>);
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
-    using traits = request_lookup_traits<resolve_type, std::decay_t<IdType>>;
-    return traits::has_explicit_collection_lookup;
+    using lookup_key_type = std::decay_t<LookupKey>;
+    using route = lookup_index_route<resolve_type, lookup_key_type>;
+    return route::has_explicit_collection_lookup;
   }
 
-  template <typename T, typename IdType> struct selected_runtime_binding {
+  template <typename T, typename LookupKey> struct selected_runtime_binding {
     registry_type &registry;
-    IdType &id;
+    LookupKey &key;
 
-    decltype(auto) select() {
-      return registry.template source_select<T>(std::forward<IdType>(id));
-    }
+    decltype(auto) select() { return registry.template source_select<T>(key); }
 
     template <typename Request, typename Selection>
     decltype(auto) resolve(runtime_context &context, Selection selection) {
-      return registry.template source_resolve<T>(selection, context,
-                                                 std::forward<IdType>(id));
+      return registry.template source_resolve<T>(selection, context, key);
     }
   };
 
   template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
-            typename IdType>
+            typename LookupKey>
   struct missing_runtime_binding {
     registry_type &registry;
-    IdType &id;
+    LookupKey &key;
 
     template <typename Request>
     dependency_interface_t<Request> resolve(runtime_context &context) {
       return registry
           .template source_missing<T, RemoveRvalueReferences, MayAutoConstruct,
-                                   IdType, dependency_interface_t<Request>>(
-              context, std::forward<IdType>(id));
+                                   LookupKey, dependency_interface_t<Request>>(
+              context, key);
     }
   };
 
-  template <typename Request, typename IdType = none_t>
-  runtime_selection source_select(IdType &&id = IdType()) {
-    return select_binding<Request>(runtime_bindings_, std::forward<IdType>(id));
+  template <typename Request, typename LookupKey>
+  runtime_selection source_select(LookupKey key) {
+    static_assert(detail::is_lookup_key_v<LookupKey>);
+    return select_binding<Request>(runtime_bindings_, key);
   }
 
-  template <typename T, typename IdType>
+  template <typename T, typename LookupKey>
   auto source_resolve(runtime_selection selection, runtime_context &context,
-                      IdType &&id) -> dependency_interface_t<T> {
-    (void)id;
+                      const LookupKey &) -> dependency_interface_t<T> {
     return resolve<T, dependency_interface_t<T>>(*selection.binding, context);
   }
 
   template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
-            typename IdType,
-            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
-  R source_missing(runtime_context &context, IdType &&id) {
+            typename LookupKey,
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  R source_missing(runtime_context &context, const LookupKey &key) {
     using Type = normalized_type_t<T>;
-    (void)id;
+    using lookup_key_type = std::decay_t<LookupKey>;
 
     if constexpr (!std::is_same_v<void, ParentRegistry> &&
                   !std::is_same_v<void *, decltype(resolve_root_)> &&
                   !std::is_base_of_v<registry_type, resolve_root_type>) {
       if (resolve_root_) {
-        if constexpr (is_none_v<std::decay_t<IdType>>) {
-          return resolve_root()->template resolve<T, RemoveRvalueReferences>(
-              context, none_t{});
-        } else if constexpr (detail::is_typed_key_v<IdType>) {
-          return resolve_root()->template resolve<T, RemoveRvalueReferences>(
-              context, std::decay_t<IdType>{});
-        } else {
-          return resolve_root()->template resolve<T>(std::forward<IdType>(id));
-        }
+        return resolve_root()->template resolve<T, RemoveRvalueReferences>(
+            context, key);
       }
     }
 
-    if constexpr (MayAutoConstruct && detail::is_typed_key_v<IdType> &&
+    if constexpr (MayAutoConstruct &&
+                  detail::is_static_lookup_key_definition_v<lookup_key_type> &&
+                  !detail::is_no_lookup_key_v<lookup_key_type> &&
                   collection_traits<R>::is_collection) {
       return this->template construct_collection_runtime_request<R>(
-          detail::binding_collection_append{}, std::decay_t<IdType>{});
+          detail::binding_collection_append{}, key);
     } else if constexpr (MayAutoConstruct &&
                          is_auto_constructible<std::decay_t<T>>::value) {
       if constexpr (constructor<Type>::kind ==
                     detail::constructor_kind::concrete) {
         return auto_construct<T>(context);
-      } else if constexpr (is_none_v<std::decay_t<IdType>>) {
-        throw detail::make_type_not_found_exception<T>(context);
       } else {
-        throw detail::make_type_not_found_exception<T, std::decay_t<IdType>>(
-            context);
+        throw detail::make_type_not_found_exception<T>(context, key);
       }
-    } else if constexpr (is_none_v<std::decay_t<IdType>>) {
-      throw detail::make_type_not_found_exception<T>(context);
     } else {
-      throw detail::make_type_not_found_exception<T, std::decay_t<IdType>>(
-          context);
+      throw detail::make_type_not_found_exception<T>(context, key);
     }
   }
 
-  template <typename T, typename IdType, typename Fn>
+  template <typename T, typename LookupKey, typename Fn,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   std::size_t for_each_collection_entry(runtime_bindings_state &state,
-                                        IdType &&id, Fn &&fn) {
+                                        LookupKey key, Fn &&fn) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
     using lookup_type = normalized_type_t<resolve_type>;
-    using traits = request_lookup_traits<lookup_type, std::decay_t<IdType>>;
-    using route = lookup_index_route<lookup_type, std::decay_t<IdType>>;
+    using lookup_key_type = std::decay_t<LookupKey>;
+    using route = lookup_index_route<lookup_type, lookup_key_type>;
 
-    if constexpr (traits::has_explicit_collection_lookup ||
+    if constexpr (route::has_explicit_collection_lookup ||
                   std::is_same_v<typename route::entry, base_lookup_entry>) {
-      return for_each_lookup<typename route::entry>(state, route::key(id),
+      return for_each_lookup<typename route::entry>(state, route::key(key),
                                                     std::forward<Fn>(fn));
     } else {
-      (void)id;
       (void)fn;
       return 0;
     }
   }
 
-  template <typename T, typename Fn, typename IdType>
+  template <typename T, typename Fn, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   std::size_t append_runtime_collection(T &results, runtime_context &context,
-                                        Fn &&fn, IdType id) {
+                                        Fn &&fn, LookupKey key) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
     return for_each_collection_entry<T>(
-        runtime_bindings_, id, [&](auto &entry) {
+        runtime_bindings_, key, [&](auto &entry) {
           fn(results,
              resolve_collection_type<resolve_type>(entry.binding(), context));
         });
   }
 
-  template <typename T, typename IdType>
-  std::size_t count_collection(IdType id) {
+  template <typename T, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  std::size_t count_collection(LookupKey key) {
     std::size_t result = 0;
-    for_each_collection_entry<T>(runtime_bindings_, id,
+    for_each_collection_entry<T>(runtime_bindings_, key,
                                  [&](auto &) { ++result; });
     return result;
   }
 
 private:
-  template <typename Request, typename IdType>
-  runtime_selection select_binding(runtime_bindings_state &state, IdType &&id) {
+  template <typename Request, typename LookupKey>
+  runtime_selection select_binding(runtime_bindings_state &state,
+                                   LookupKey &key) {
+    static_assert(detail::is_lookup_key_v<LookupKey>);
     using lookup_type = normalized_type_t<Request>;
     using exact_type = std::remove_cv_t<
         std::remove_reference_t<dependency_interface_t<Request>>>;
-    if constexpr (!is_none_v<std::decay_t<IdType>> &&
-                  !detail::is_typed_key_v<IdType>) {
-      using lookup_traits =
-          request_lookup_traits<lookup_type, std::decay_t<IdType>>;
-      if constexpr (!lookup_traits::has_explicit_key_value_lookup &&
+    if constexpr (!detail::is_static_lookup_key_definition_v<LookupKey>) {
+      using lookup_route = lookup_index_route<lookup_type, LookupKey>;
+      if constexpr (!lookup_route::has_explicit_lookup &&
                     !std::is_same_v<lookup_type, exact_type>) {
-        using exact_traits =
-            request_lookup_traits<exact_type, std::decay_t<IdType>>;
-        if constexpr (exact_traits::has_explicit_key_value_lookup) {
-          return select_binding_at_interface<Request, IdType, exact_type>(state,
-                                                                          id);
+        using exact_route = lookup_index_route<exact_type, LookupKey>;
+        if constexpr (exact_route::has_explicit_lookup) {
+          return select_binding_at_interface<Request, LookupKey, exact_type>(
+              state, key);
         }
       }
-      return select_binding_at_interface<Request, IdType, lookup_type>(state,
-                                                                       id);
+      return select_binding_at_interface<Request, LookupKey, lookup_type>(state,
+                                                                          key);
     } else {
       auto selection =
-          select_binding_at_interface<Request, IdType, exact_type>(state, id);
+          select_binding_at_interface<Request, LookupKey, exact_type>(state,
+                                                                      key);
       if constexpr (!std::is_same_v<lookup_type, exact_type>) {
         if (!selection.found()) {
-          selection = select_binding_at_interface<Request, IdType, lookup_type>(
-              state, id);
+          selection =
+              select_binding_at_interface<Request, LookupKey, lookup_type>(
+                  state, key);
         }
       }
       return selection;
     }
   }
 
-  template <typename Request, typename IdType, typename Interface>
+  template <typename Request, typename LookupKey, typename Interface>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
   runtime_selection select_binding_at_interface(runtime_bindings_state &state,
-                                                IdType &id) {
-    using route = lookup_index_route<Interface, std::decay_t<IdType>>;
+                                                LookupKey &key) {
+    using route = lookup_index_route<Interface, std::decay_t<LookupKey>>;
     using lookup_entry = typename route::entry;
     if constexpr (std::is_void_v<lookup_entry>) {
       if constexpr (!std::is_same_v<void, ParentRegistry> &&
@@ -1216,7 +1059,7 @@ private:
                       "dingo lookup definition for interface/key");
       }
     } else {
-      return select_lookup<lookup_entry>(state, route::key(id));
+      return select_lookup<lookup_entry>(state, route::key(key));
     }
   }
 
@@ -1249,35 +1092,29 @@ private:
 
 public:
   template <typename TypeInterface, typename TypeStorage, typename BindingState,
-            typename KeyIdType>
-  using runtime_registration_binding_t = std::conditional_t<
-      is_none_v<KeyIdType>,
-      runtime_binding<container_type,
-                      typename annotated_traits<TypeInterface>::type,
-                      TypeStorage, BindingState>,
-      detail::keyed_binding_identity<
-          KeyIdType,
-          runtime_binding<container_type,
-                          typename annotated_traits<TypeInterface>::type,
-                          TypeStorage, BindingState>>>;
+            typename LookupKey>
+  using runtime_registration_binding_t = detail::keyed_binding_identity<
+      LookupKey, runtime_binding<container_type,
+                                 typename annotated_traits<TypeInterface>::type,
+                                 TypeStorage, BindingState>>;
 
   template <typename InterfaceList, typename TypeStorage, typename BindingState,
-            typename KeyIdType>
+            typename LookupKey>
   struct runtime_binding_value_owner;
 
   template <typename... TypeInterfaces, typename TypeStorage,
-            typename BindingState, typename KeyIdType>
+            typename BindingState, typename LookupKey>
   struct runtime_binding_value_owner<type_list<TypeInterfaces...>, TypeStorage,
-                                     BindingState, KeyIdType> {
+                                     BindingState, LookupKey> {
     using type = runtime_binding_value_impl<runtime_registration_binding_t<
-        TypeInterfaces, TypeStorage, BindingState, KeyIdType>...>;
+        TypeInterfaces, TypeStorage, BindingState, LookupKey>...>;
   };
 
   template <typename InterfaceList, typename TypeStorage, typename BindingState,
-            typename KeyIdType>
+            typename LookupKey>
   using runtime_binding_value_owner_t =
       typename runtime_binding_value_owner<InterfaceList, TypeStorage,
-                                           BindingState, KeyIdType>::type;
+                                           BindingState, LookupKey>::type;
 
 private:
   template <typename... TypeArgs, typename Parent, typename Arg,
@@ -1308,10 +1145,7 @@ private:
     if constexpr (storage_tag_is_complete) {
       using storage_type = typename binding_model::storage_type;
       using registration_requirements = typename binding_model::requirements;
-      using key_id_type =
-          std::conditional_t<std::is_void_v<typename binding_model::key_type>,
-                             none_t,
-                             key_type<typename binding_model::key_type>>;
+      using registration_key = typename binding_model::key_type;
 
       registration_requirements::assert_valid();
 
@@ -1328,14 +1162,10 @@ private:
         }
         using interface_type = type_list_head_t<interface_types>;
 
-        using runtime_binding_type =
-            runtime_binding<container_type,
-                            typename annotated_traits<interface_type>::type,
-                            storage_type, runtime_binding_state_type>;
-        using registered_binding_type = std::conditional_t<
-            is_none_v<key_id_type>, runtime_binding_type,
-            detail::keyed_binding_identity<key_id_type, runtime_binding_type>>;
-        using owner_type = runtime_binding_value_impl<registered_binding_type>;
+        using owner_type =
+            runtime_binding_value_impl<runtime_registration_binding_t<
+                interface_type, storage_type, runtime_binding_state_type,
+                registration_key>>;
         static constexpr bool shared_owner =
             sizeof...(KeyValueArgs) > 0 &&
             type_list_size_v<
@@ -1344,13 +1174,13 @@ private:
         if constexpr (!is_none_v<std::decay_t<Arg>>) {
           return commit_binding<shared_owner, interface_type, storage_type,
                                 owner_type>(
-              parent, key_id_type{},
+              parent, registration_key{},
               std::forward_as_tuple(std::forward<KeyValueArgs>(key_values)...),
               std::forward<Arg>(arg));
         } else {
           return commit_binding<shared_owner, interface_type, storage_type,
                                 owner_type>(
-              parent, key_id_type{},
+              parent, registration_key{},
               std::forward_as_tuple(std::forward<KeyValueArgs>(key_values)...));
         }
       } else {
@@ -1374,7 +1204,7 @@ private:
 
           using owner_type = runtime_binding_value_owner_t<
               interface_types, storage_type,
-              std::shared_ptr<runtime_binding_state_type>, key_id_type>;
+              std::shared_ptr<runtime_binding_state_type>, registration_key>;
           auto &state = runtime_bindings_;
           auto binding_owner = make_binding_owner<true, owner_type>(data);
           auto *binding_result = binding_owner.get();
@@ -1384,7 +1214,7 @@ private:
           for_each(interface_types{}, [&](auto element) {
             using interface_type = typename decltype(element)::type;
             commit_registration<interface_type, storage_type>(
-                state, value_factory, key_id_type{}, key_values...);
+                state, value_factory, registration_key{}, key_values...);
           });
           return container_proxy<owner_type>(binding_result);
         } else {
@@ -1433,24 +1263,10 @@ private:
     }
   }
 
-  template <typename TypeInterface, typename TypeStorage, typename KeyIdType,
-            typename LookupEntry>
-  static auto make_registration_duplicate_exception() {
-    using runtime_lookup_traits = runtime_lookup_entry_traits<LookupEntry>;
-    if constexpr (runtime_lookup_traits::is_key_value) {
-      return detail::make_lookup_already_registered_exception<
-          TypeInterface, typename TypeStorage::type,
-          typename runtime_lookup_traits::key_type>();
-    } else {
-      return detail::make_lookup_already_registered_exception<
-          TypeInterface, typename TypeStorage::type, std::decay_t<KeyIdType>>();
-    }
-  }
-
-  template <typename TypeInterface, typename TypeStorage, typename KeyIdType,
+  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
             typename LookupEntry, typename ValueFactory, typename KeyArg>
   auto insert_lookup(runtime_bindings_state &state, ValueFactory &value_factory,
-                     const KeyArg &key_arg) {
+                     const LookupKey &lookup_key, const KeyArg &key_arg) {
     auto &index = state.lookup_indexes.template get<LookupEntry>();
 
     if constexpr (std::is_same_v<
@@ -1459,8 +1275,8 @@ private:
       auto [it, inserted] = index.try_emplace(
           key_arg, value_factory.template make<TypeInterface>());
       if (!inserted) {
-        throw make_registration_duplicate_exception<TypeInterface, TypeStorage,
-                                                    KeyIdType, LookupEntry>();
+        throw detail::make_lookup_already_registered_exception<
+            TypeInterface, typename TypeStorage::type>(lookup_key, key_arg);
       }
       return it;
     } else {
@@ -1469,26 +1285,27 @@ private:
     }
   }
 
-  template <typename TypeInterface, typename TypeStorage, typename KeyIdType,
+  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
             typename ValueFactory, typename KeyResolver>
   void commit_lookup(runtime_bindings_state &, ValueFactory &, KeyResolver &&,
-                     type_list<>) {}
+                     const LookupKey &, type_list<>) {}
 
-  template <typename TypeInterface, typename TypeStorage, typename KeyIdType,
+  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
             typename Head, typename... Tail, typename ValueFactory,
             typename KeyResolver>
   void commit_lookup(runtime_bindings_state &state, ValueFactory &value_factory,
-                     KeyResolver &&key_resolver, type_list<Head, Tail...>) {
+                     KeyResolver &&key_resolver, const LookupKey &lookup_key,
+                     type_list<Head, Tail...>) {
     static_assert(ValueFactory::shared_owner || sizeof...(Tail) == 0,
                   "unique runtime binding owner can only be inserted into one "
                   "lookup");
     decltype(auto) key_arg = key_resolver(type_list_iterator<Head>{});
-    auto handle = insert_lookup<TypeInterface, TypeStorage, KeyIdType, Head>(
-        state, value_factory, key_arg);
+    auto handle = insert_lookup<TypeInterface, TypeStorage, LookupKey, Head>(
+        state, value_factory, lookup_key, key_arg);
     try {
-      commit_lookup<TypeInterface, TypeStorage, KeyIdType>(
+      commit_lookup<TypeInterface, TypeStorage, LookupKey>(
           state, value_factory, std::forward<KeyResolver>(key_resolver),
-          type_list<Tail...>{});
+          lookup_key, type_list<Tail...>{});
     } catch (...) {
       state.lookup_indexes.template get<Head>().erase(handle);
       throw;
@@ -1545,15 +1362,14 @@ private:
     }
   }
 
-  template <typename TypeInterface, typename TypeStorage, typename KeyDomain,
-            typename Cardinality, typename KeyIdType, typename ValueFactory>
+  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
+            typename Cardinality, typename ValueFactory>
   void commit_static_lookup(runtime_bindings_state &state,
-                            ValueFactory &value_factory) {
+                            ValueFactory &value_factory, LookupKey lookup_key) {
+    using key_domain = typename LookupKey::definition_type;
     using explicit_lookup_entry =
-        explicit_static_key_lookup_entry_t<TypeInterface, KeyDomain,
-                                           Cardinality>;
-    using route_id = typename static_key_route_id<KeyDomain>::type;
-    using route = lookup_index_route<TypeInterface, route_id>;
+        static_key_lookup_entry_t<TypeInterface, key_domain, Cardinality>;
+    using route = lookup_index_route<TypeInterface, LookupKey>;
     using routed_lookup_entry = typename route::entry;
     using routed_cardinality =
         typename lookup_entry_cardinality<routed_lookup_entry>::type;
@@ -1562,10 +1378,10 @@ private:
                   std::is_same_v<routed_cardinality, Cardinality>) {
       static_assert(!std::is_void_v<routed_lookup_entry>);
       static_assert(lookup_entry_indexed_v<routed_lookup_entry>);
-      auto route_key = route_id{};
-      auto key_resolver = [&](auto) { return route::key(route_key); };
-      commit_lookup<TypeInterface, TypeStorage, KeyIdType>(
-          state, value_factory, key_resolver, type_list<routed_lookup_entry>{});
+      auto key_resolver = [&](auto) { return route::key(lookup_key); };
+      commit_lookup<TypeInterface, TypeStorage, LookupKey>(
+          state, value_factory, key_resolver, lookup_key,
+          type_list<routed_lookup_entry>{});
     } else {
       static_assert(std::is_same_v<Cardinality, ::dingo::one>,
                     "static-key many lookup registrations require an explicit "
@@ -1573,16 +1389,19 @@ private:
     }
   }
 
-  template <typename TypeInterface, typename TypeStorage, typename KeyIdType,
+  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
             typename ValueFactory, typename... KeyValueArgs>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity)
   void commit_registration(runtime_bindings_state &state,
-                           ValueFactory &value_factory, KeyIdType,
+                           ValueFactory &value_factory, LookupKey lookup_key,
                            KeyValueArgs &&...key_values) {
     check_interface_requirements<TypeStorage,
                                  typename annotated_traits<TypeInterface>::type,
                                  typename TypeStorage::type>();
     ((void)key_values, ...);
+    using key_domain = typename LookupKey::definition_type;
+    using lookup_cardinality_type =
+        static_key_lookup_cardinality_t<TypeInterface, key_domain>;
 
     if constexpr (sizeof...(KeyValueArgs) > 0) {
       using lookup_entries =
@@ -1595,44 +1414,24 @@ private:
           using entry_type = typename decltype(element)::type;
           return qualified_registration_key_value<entry_type>(key_value_tuple);
         };
-        commit_lookup<TypeInterface, TypeStorage, KeyIdType>(
-            state, value_factory, key_resolver, lookup_entries{});
-      } else if constexpr (is_none_v<std::decay_t<KeyIdType>>) {
-        using lookup_cardinality_type =
-            no_key_lookup_cardinality_t<TypeInterface>;
-        commit_static_lookup<TypeInterface, TypeStorage, ::dingo::none_t,
-                             lookup_cardinality_type, KeyIdType>(state,
-                                                                 value_factory);
+        commit_lookup<TypeInterface, TypeStorage, LookupKey>(
+            state, value_factory, key_resolver, lookup_key, lookup_entries{});
       } else {
-        using typed_key_type = typename std::decay_t<KeyIdType>::type;
-        using lookup_cardinality_type =
-            typed_key_lookup_cardinality_t<TypeInterface, typed_key_type>;
-        commit_static_lookup<TypeInterface, TypeStorage,
-                             ::dingo::key_type<typed_key_type>,
-                             lookup_cardinality_type, KeyIdType>(state,
-                                                                 value_factory);
+        commit_static_lookup<TypeInterface, TypeStorage, LookupKey,
+                             lookup_cardinality_type>(state, value_factory,
+                                                      lookup_key);
       }
-    } else if constexpr (is_none_v<std::decay_t<KeyIdType>>) {
-      using lookup_cardinality_type =
-          no_key_lookup_cardinality_t<TypeInterface>;
-      commit_static_lookup<TypeInterface, TypeStorage, ::dingo::none_t,
-                           lookup_cardinality_type, KeyIdType>(state,
-                                                               value_factory);
     } else {
-      using typed_key_type = typename std::decay_t<KeyIdType>::type;
-      using lookup_cardinality_type =
-          typed_key_lookup_cardinality_t<TypeInterface, typed_key_type>;
-      commit_static_lookup<TypeInterface, TypeStorage,
-                           ::dingo::key_type<typed_key_type>,
-                           lookup_cardinality_type, KeyIdType>(state,
-                                                               value_factory);
+      commit_static_lookup<TypeInterface, TypeStorage, LookupKey,
+                           lookup_cardinality_type>(state, value_factory,
+                                                    lookup_key);
     }
   }
 
   template <bool SharedOwner, typename TypeInterface, typename TypeStorage,
-            typename Owner, typename Parent, typename KeyIdType,
+            typename Owner, typename Parent, typename LookupKey,
             typename KeyValueTuple, typename... Args>
-  container_proxy<Owner> commit_binding(Parent *parent, KeyIdType,
+  container_proxy<Owner> commit_binding(Parent *parent, LookupKey lookup_key,
                                         KeyValueTuple &&key_values,
                                         Args &&...args) {
     auto &state = runtime_bindings_;
@@ -1644,8 +1443,8 @@ private:
           std::move(binding_owner)};
       std::apply(
           [&](auto &&...key_value_args) {
-            commit_registration<TypeInterface, TypeStorage, KeyIdType>(
-                state, value_factory, KeyIdType{},
+            commit_registration<TypeInterface, TypeStorage>(
+                state, value_factory, lookup_key,
                 std::forward<decltype(key_value_args)>(key_value_args)...);
           },
           std::forward<KeyValueTuple>(key_values));
@@ -1654,8 +1453,8 @@ private:
           std::move(binding_owner)};
       std::apply(
           [&](auto &&...key_value_args) {
-            commit_registration<TypeInterface, TypeStorage, KeyIdType>(
-                state, value_factory, KeyIdType{},
+            commit_registration<TypeInterface, TypeStorage>(
+                state, value_factory, lookup_key,
                 std::forward<decltype(key_value_args)>(key_value_args)...);
           },
           std::forward<KeyValueTuple>(key_values));
@@ -1668,15 +1467,18 @@ private:
 #pragma warning(disable : 4702)
 #endif
   template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
-            typename IdType = none_t,
+            typename LookupKey,
             typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
-  R resolve_impl(runtime_context &context, IdType &&id = IdType()) {
+  R resolve_impl(runtime_context &context, LookupKey key) {
+    static_assert(detail::is_lookup_key_v<LookupKey>);
     using Type = normalized_type_t<T>;
     static_assert(!std::is_const_v<Type>);
 
-    selected_runtime_binding<T, IdType> selected{*this, id};
-    missing_runtime_binding<T, RemoveRvalueReferences, MayAutoConstruct, IdType>
-        missing{*this, id};
+    using lookup_key_type = LookupKey;
+    selected_runtime_binding<T, lookup_key_type> selected{*this, key};
+    missing_runtime_binding<T, RemoveRvalueReferences, MayAutoConstruct,
+                            lookup_key_type>
+        missing{*this, key};
     auto sources = detail::make_selected_binding_sources(selected, missing);
     return detail::resolve_from_binding_sources<T, R>(context, sources);
   }
@@ -1694,16 +1496,17 @@ private:
         *resolve_root());
   }
 
-  template <typename T, bool RemoveRvalueReferences, typename IdType = none_t,
-            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
-  R resolve(runtime_context &context, IdType &&id = IdType()) {
+  template <typename T, bool RemoveRvalueReferences, typename LookupKey,
+            typename R = resolve_dependency_t<T, RemoveRvalueReferences>,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  R resolve(runtime_context &context, LookupKey key) {
     return resolve_impl < T, RemoveRvalueReferences,
            std::is_same_v<dependency_value_t<T>, std::decay_t<T>> &&
                (!std::is_reference_v<T> ||
                 (std::is_lvalue_reference_v<T> &&
                  std::is_const_v<std::remove_reference_t<T>> &&
                  is_auto_constructible<std::decay_t<T>>::value)) >
-                   (context, std::forward<IdType>(id));
+                   (context, std::move(key));
   }
 
 #ifdef _MSC_VER

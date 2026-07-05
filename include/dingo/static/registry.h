@@ -62,17 +62,18 @@ struct annotated_dependency_types<annotated<T, Tag>,
   using type = type_list<annotated<RequestTypes, Tag>...>;
 };
 
-template <typename Key, typename RequestTypes> struct keyed_dependency_types {
+template <typename LookupKey, typename RequestTypes>
+struct keyed_dependency_types {
   using type = RequestTypes;
 };
 
-template <typename Key, typename... RequestTypes>
-struct keyed_dependency_types<Key, type_list<RequestTypes...>> {
-  using type = std::conditional_t<
-      std::is_void_v<Key>, type_list<RequestTypes...>,
-      std::conditional_t<
-          is_key_value_v<Key>, type_list<dependency<RequestTypes, Key>...>,
-          type_list<dependency<RequestTypes, key_type<Key>>...>>>;
+template <typename LookupKey, typename... RequestTypes>
+struct keyed_dependency_types<LookupKey, type_list<RequestTypes...>> {
+private:
+  using selector = typename std::decay_t<LookupKey>::selector_type;
+
+public:
+  using type = type_list<dependency<RequestTypes, selector>...>;
 };
 
 template <typename Request>
@@ -88,25 +89,9 @@ template <typename Request>
 using binding_exact_dependency_interface_t = std::remove_cv_t<
     std::remove_reference_t<binding_dependency_unwrapped_t<Request>>>;
 
-template <typename Request, typename Selector = selected_selector_t<Request>,
-          typename = void>
-struct binding_dependency_key {
-  using type = void;
-};
-
-template <typename Request, typename Key>
-struct binding_dependency_key<Request, type_selector<Key>> {
-  using type = Key;
-};
-
-template <typename Request, typename Selector>
-struct binding_dependency_key<Request, Selector,
-                              std::enable_if_t<is_key_value_v<Selector>>> {
-  using type = Selector;
-};
-
 template <typename Request>
-using binding_dependency_key_t = typename binding_dependency_key<Request>::type;
+using binding_dependency_key_t =
+    make_lookup_key_t<selected_selector_t<Request>>;
 
 template <typename Binding> struct binding_dependency_types {
 private:
@@ -343,57 +328,59 @@ struct binding_dependency_resolution<BindingModel, InterfaceBindings, false> {
       inferred_binding_dependencies<BindingModel, InterfaceBindings>::status;
 };
 
-template <typename Interface, typename Key, typename InterfaceBinding>
+template <typename Interface, typename LookupKey, typename InterfaceBinding>
 struct binding_matches
     : std::bool_constant<
           std::is_same_v<Interface,
                          typename InterfaceBinding::interface_type> &&
-          (std::is_void_v<Key> ||
-           std::is_same_v<Key, typename InterfaceBinding::key_type> ||
-           (is_key_value_v<Key> &&
-            is_key_value_v<typename InterfaceBinding::key_type> &&
-            is_same_key_value<Key,
-                              typename InterfaceBinding::key_type>::value))> {};
+          lookup_keys_match<LookupKey,
+                            typename InterfaceBinding::key_type>::value> {};
 
-template <typename Interface, typename Key, typename InterfaceBindings>
+template <typename Interface, typename LookupKey, typename InterfaceBindings>
 struct bindings;
 
-template <typename Interface, typename Key>
-struct bindings<Interface, Key, type_list<>> {
+template <typename Interface, typename LookupKey>
+struct bindings<Interface, LookupKey, type_list<>> {
   using type = type_list<>;
 };
 
-template <typename Interface, typename Key, typename Head, typename... Tail>
-struct bindings<Interface, Key, type_list<Head, Tail...>> {
+template <typename Interface, typename LookupKey, typename Head,
+          typename... Tail>
+struct bindings<Interface, LookupKey, type_list<Head, Tail...>> {
 private:
-  using tail_type = typename bindings<Interface, Key, type_list<Tail...>>::type;
+  using tail_type =
+      typename bindings<Interface, LookupKey, type_list<Tail...>>::type;
 
 public:
-  using type = std::conditional_t<binding_matches<Interface, Key, Head>::value,
-                                  type_list_cat_t<type_list<Head>, tail_type>,
-                                  tail_type>;
+  using type =
+      std::conditional_t<binding_matches<Interface, LookupKey, Head>::value,
+                         type_list_cat_t<type_list<Head>, tail_type>,
+                         tail_type>;
 };
 
-template <typename Interface, typename Key, typename InterfaceBindings>
-using bindings_t = typename bindings<Interface, Key, InterfaceBindings>::type;
+template <typename Interface, typename LookupKey, typename InterfaceBindings>
+using bindings_t =
+    typename bindings<Interface, LookupKey, InterfaceBindings>::type;
 
-template <typename Interface, typename Key, typename InterfaceBindings>
+template <typename Interface, typename LookupKey, typename InterfaceBindings>
 struct binding_count;
 
-template <typename Interface, typename Key>
-struct binding_count<Interface, Key, type_list<>>
+template <typename Interface, typename LookupKey>
+struct binding_count<Interface, LookupKey, type_list<>>
     : std::integral_constant<size_t, 0> {};
 
-template <typename Interface, typename Key, typename Head, typename... Tail>
-struct binding_count<Interface, Key, type_list<Head, Tail...>>
+template <typename Interface, typename LookupKey, typename Head,
+          typename... Tail>
+struct binding_count<Interface, LookupKey, type_list<Head, Tail...>>
     : std::integral_constant<
           size_t,
-          (binding_matches<Interface, Key, Head>::value ? 1 : 0) +
-              binding_count<Interface, Key, type_list<Tail...>>::value> {};
+          (binding_matches<Interface, LookupKey, Head>::value ? 1 : 0) +
+              binding_count<Interface, LookupKey, type_list<Tail...>>::value> {
+};
 
-template <typename Interface, typename Key, typename InterfaceBindings>
+template <typename Interface, typename LookupKey, typename InterfaceBindings>
 inline constexpr size_t binding_count_v =
-    binding_count<Interface, Key, InterfaceBindings>::value;
+    binding_count<Interface, LookupKey, InterfaceBindings>::value;
 
 template <typename Bindings,
           bool HasSingleBinding = (type_list_size_v<Bindings> == 1)>
@@ -408,69 +395,29 @@ struct single_binding<type_list<Head, Tail...>, true> {
   using type = Head;
 };
 
-template <typename Interface, typename Key, typename InterfaceBindings>
+template <typename Interface, typename LookupKey, typename InterfaceBindings>
 struct binding_lookup {
   using type = typename single_binding<
-      bindings_t<Interface, Key, InterfaceBindings>>::type;
+      bindings_t<Interface, LookupKey, InterfaceBindings>>::type;
 };
 
-template <typename Interface, typename Key, typename InterfaceBindings>
+template <typename Interface, typename LookupKey, typename InterfaceBindings>
 using binding_t =
-    typename binding_lookup<Interface, Key, InterfaceBindings>::type;
+    typename binding_lookup<Interface, LookupKey, InterfaceBindings>::type;
+
+struct key_value_lookup_not_required {};
 
 template <typename InterfaceBinding, typename Entries,
-          bool HasKeyValue =
-              is_key_value_v<typename InterfaceBinding::key_type>>
-struct key_value_binding_is_declared : std::true_type {};
-
-template <typename InterfaceBinding, typename Entries>
-struct key_value_binding_is_declared<InterfaceBinding, Entries, true> {
-private:
-  using key_type = typename InterfaceBinding::key_type;
-  using key_domain = typename key_value_traits<key_type>::type;
-  using entry =
-      selected_lookup_entry_t<typename InterfaceBinding::interface_type,
-                              key_domain, Entries>;
-
-  template <typename Entry, bool Found = !std::is_void_v<Entry>>
-  struct entry_is_supported : std::false_type {};
-
-  template <typename Entry>
-  struct entry_is_supported<Entry, true>
-      : std::bool_constant<std::is_same_v<typename Entry::cardinality, one> ||
-                           std::is_same_v<typename Entry::cardinality, many>> {
-  };
-
-public:
-  static constexpr bool value = entry_is_supported<entry>::value;
-};
-
-template <typename InterfaceBindings, typename Entries>
-struct key_value_bindings_are_declared;
-
-template <typename Entries>
-struct key_value_bindings_are_declared<type_list<>, Entries> : std::true_type {
-};
-
-template <typename Head, typename... Tail, typename Entries>
-struct key_value_bindings_are_declared<type_list<Head, Tail...>, Entries>
-    : std::bool_constant<
-          key_value_binding_is_declared<Head, Entries>::value &&
-          key_value_bindings_are_declared<type_list<Tail...>, Entries>::value> {
-};
-
-template <typename InterfaceBinding, typename Entries,
-          bool HasKeyValue =
-              is_key_value_v<typename InterfaceBinding::key_type>>
+          typename LookupKey = typename InterfaceBinding::key_type>
 struct key_value_lookup_cardinality {
-  using type = void;
+  using type = key_value_lookup_not_required;
 };
 
-template <typename InterfaceBinding, typename Entries>
-struct key_value_lookup_cardinality<InterfaceBinding, Entries, true> {
+template <typename InterfaceBinding, typename Entries, typename Key, auto Value>
+struct key_value_lookup_cardinality<InterfaceBinding, Entries,
+                                    lookup_key<::dingo::key_type<Key, Value>>> {
 private:
-  using key_type = typename InterfaceBinding::key_type;
-  using key_domain = typename key_value_traits<key_type>::type;
+  using key_domain = typename InterfaceBinding::key_type::definition_type;
   using entry =
       selected_lookup_entry_t<typename InterfaceBinding::interface_type,
                               key_domain, Entries>;
@@ -492,6 +439,25 @@ template <typename InterfaceBinding, typename Entries>
 using key_value_lookup_cardinality_t =
     typename key_value_lookup_cardinality<InterfaceBinding, Entries>::type;
 
+template <typename InterfaceBinding, typename Entries>
+struct key_value_binding_is_declared
+    : std::bool_constant<!std::is_void_v<
+          key_value_lookup_cardinality_t<InterfaceBinding, Entries>>> {};
+
+template <typename InterfaceBindings, typename Entries>
+struct key_value_bindings_are_declared;
+
+template <typename Entries>
+struct key_value_bindings_are_declared<type_list<>, Entries> : std::true_type {
+};
+
+template <typename Head, typename... Tail, typename Entries>
+struct key_value_bindings_are_declared<type_list<Head, Tail...>, Entries>
+    : std::bool_constant<
+          key_value_binding_is_declared<Head, Entries>::value &&
+          key_value_bindings_are_declared<type_list<Tail...>, Entries>::value> {
+};
+
 template <typename InterfaceBinding, typename Other>
 struct key_value_duplicate_storage
     : std::bool_constant<
@@ -500,9 +466,7 @@ struct key_value_duplicate_storage
           std::is_same_v<
               typename InterfaceBinding::binding_model_type::storage_type::type,
               typename Other::binding_model_type::storage_type::type> &&
-          is_key_value_v<typename InterfaceBinding::key_type> &&
-          is_key_value_v<typename Other::key_type> &&
-          is_same_key_value<typename InterfaceBinding::key_type,
+          lookup_keys_match<typename InterfaceBinding::key_type,
                             typename Other::key_type>::value> {};
 
 template <typename InterfaceBinding, typename InterfaceBindings>
@@ -532,7 +496,7 @@ struct key_value_bindings_are_unique<type_list<Head, Tail...>, Entries> {
 private:
   using cardinality = key_value_lookup_cardinality_t<Head, Entries>;
   static constexpr bool head_unique =
-      !is_key_value_v<typename Head::key_type> ||
+      std::is_same_v<cardinality, key_value_lookup_not_required> ||
       (std::is_same_v<cardinality, one> &&
        binding_count_v<typename Head::interface_type, typename Head::key_type,
                        type_list<Head, Tail...>> == 1) ||
@@ -689,12 +653,6 @@ struct effective_interface_bindings {
   using type = InterfaceBindings;
 };
 
-template <typename Left, typename Right>
-struct binding_keys_match
-    : std::bool_constant<std::is_same_v<Left, Right> ||
-                         (is_key_value_v<Left> && is_key_value_v<Right> &&
-                          is_same_key_value<Left, Right>::value)> {};
-
 template <typename InterfaceBinding, typename InterfaceBindings>
 struct binding_shadowed_by {
   static constexpr bool value = false;
@@ -705,8 +663,8 @@ struct binding_shadowed_by<InterfaceBinding, type_list<Head, Tail...>>
     : std::bool_constant<
           (std::is_same_v<typename InterfaceBinding::interface_type,
                           typename Head::interface_type> &&
-           binding_keys_match<typename InterfaceBinding::key_type,
-                              typename Head::key_type>::value) ||
+           lookup_keys_match<typename InterfaceBinding::key_type,
+                             typename Head::key_type>::value) ||
           binding_shadowed_by<InterfaceBinding, type_list<Tail...>>::value> {};
 
 template <typename InterfaceBindings, typename LocalInterfaceBindings>
@@ -1024,47 +982,50 @@ template <typename... Registrations> struct static_bindings {
       "bindings<...> source requires compile-time-bindable factories");
 
 private:
-  template <typename Interface, typename Key = void>
+  template <typename Interface, typename LookupKey>
   using binding_lookup_key_t =
-      std::conditional_t<std::is_void_v<Key>,
-                         detail::binding_dependency_key_t<Interface>, Key>;
+      std::conditional_t<detail::is_no_lookup_key_v<LookupKey>,
+                         detail::binding_dependency_key_t<Interface>,
+                         LookupKey>;
 
-  template <typename Interface, typename Key = void>
+  template <typename Interface, typename LookupKey>
   using exact_bindings_t = detail::bindings_t<
       detail::binding_exact_dependency_interface_t<Interface>,
-      binding_lookup_key_t<Interface, Key>, interface_bindings>;
+      binding_lookup_key_t<Interface, LookupKey>, interface_bindings>;
 
-  template <typename Interface, typename Key = void>
+  template <typename Interface, typename LookupKey>
   using normalized_bindings_t =
       detail::bindings_t<detail::binding_dependency_interface_t<Interface>,
-                         binding_lookup_key_t<Interface, Key>,
+                         binding_lookup_key_t<Interface, LookupKey>,
                          interface_bindings>;
 
-  template <typename Interface, typename Key = void,
+  template <typename Interface, typename LookupKey,
             bool SameLookup = std::is_same_v<
                 detail::binding_exact_dependency_interface_t<Interface>,
                 detail::binding_dependency_interface_t<Interface>>>
   struct selected_bindings {
-    using exact = exact_bindings_t<Interface, Key>;
-    using type = std::conditional_t<type_list_size_v<exact> != 0, exact,
-                                    normalized_bindings_t<Interface, Key>>;
+    using exact = exact_bindings_t<Interface, LookupKey>;
+    using type =
+        std::conditional_t<type_list_size_v<exact> != 0, exact,
+                           normalized_bindings_t<Interface, LookupKey>>;
   };
 
-  template <typename Interface, typename Key>
-  struct selected_bindings<Interface, Key, true> {
-    using type = exact_bindings_t<Interface, Key>;
+  template <typename Interface, typename LookupKey>
+  struct selected_bindings<Interface, LookupKey, true> {
+    using type = exact_bindings_t<Interface, LookupKey>;
   };
 
 public:
-  template <typename Interface, typename Key = void>
-  using bindings = typename selected_bindings<Interface, Key>::type;
+  template <typename Interface, typename LookupKey>
+  using bindings = typename selected_bindings<Interface, LookupKey>::type;
 
-  template <typename Interface, typename Key = void>
+  template <typename Interface, typename LookupKey>
   using binding =
-      typename detail::single_binding<bindings<Interface, Key>>::type;
+      typename detail::single_binding<bindings<Interface, LookupKey>>::type;
 
   template <typename Interface>
-  using model = typename binding<Interface>::binding_model_type;
+  using model =
+      typename binding<Interface, detail::no_lookup_key_t>::binding_model_type;
 
   template <typename Interface>
   using dependencies = typename model<Interface>::dependencies_type::type;

@@ -37,10 +37,7 @@ struct binding_model_impl {
   using storage_tag = typename scope_type::type;
   using factory_type = typename Registration::factory_type::type;
   using registration_key_type = typename Registration::key_type;
-  using key_type =
-      std::conditional_t<detail::is_key_value_v<registration_key_type>,
-                         registration_key_type,
-                         typename registration_key_type::type>;
+  using key_type = detail::make_lookup_key_t<registration_key_type>;
   using conversions_type = typename Registration::conversions_type::type;
   using dependencies_type = typename Registration::dependencies_type;
   using bindings_type = typename Registration::bindings_type::type;
@@ -62,10 +59,7 @@ template <typename Registration> struct binding_model_impl<Registration, true> {
   using storage_tag = typename scope_type::type;
   using factory_type = typename Registration::factory_type::type;
   using registration_key_type = typename Registration::key_type;
-  using key_type =
-      std::conditional_t<detail::is_key_value_v<registration_key_type>,
-                         registration_key_type,
-                         typename registration_key_type::type>;
+  using key_type = detail::make_lookup_key_t<registration_key_type>;
   using conversions_type = typename Registration::conversions_type::type;
   using dependencies_type = typename Registration::dependencies_type;
   using bindings_type = typename Registration::bindings_type::type;

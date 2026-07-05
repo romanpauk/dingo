@@ -15,7 +15,6 @@ struct one {};
 struct many {};
 
 namespace detail {
-template <typename Key> struct key_value_domain {};
 template <typename Interface, typename KeyDomain, typename Cardinality,
           typename Backend = none_t>
 struct lookup_definition {};

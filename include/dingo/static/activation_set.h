@@ -230,7 +230,8 @@ struct binding_activation {
   decltype(auto) resolve(Context &context) {
     using local_bindings = typename BindingModel::bindings_type;
     if constexpr (std::is_void_v<local_bindings>) {
-      return host.template resolve<T, RemoveRvalueReferences>(context);
+      return host.template resolve<T, RemoveRvalueReferences>(
+          context, detail::no_lookup_key());
     } else {
       return state.template resolve_local_binding<T, RemoveRvalueReferences,
                                                   local_bindings, BindingModel>(
@@ -239,30 +240,17 @@ struct binding_activation {
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Context,
-            typename Key>
-  decltype(auto) resolve(Context &context, key_type<Key>) {
+            typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  decltype(auto) resolve(Context &context, LookupKey key) {
     using local_bindings = typename BindingModel::bindings_type;
     if constexpr (std::is_void_v<local_bindings>) {
       return host.template resolve<T, RemoveRvalueReferences>(context,
-                                                              key_type<Key>{});
+                                                              std::move(key));
     } else {
       return state.template resolve_local_binding<
-          T, RemoveRvalueReferences, local_bindings, BindingModel, Key>(
-          host, context);
-    }
-  }
-
-  template <typename T, bool RemoveRvalueReferences, typename Context,
-            typename IdType, std::enable_if_t<is_key_value_v<IdType>, int> = 0>
-  decltype(auto) resolve(Context &context, IdType) {
-    using local_bindings = typename BindingModel::bindings_type;
-    if constexpr (std::is_void_v<local_bindings>) {
-      return host.template resolve<T, RemoveRvalueReferences>(context,
-                                                              IdType{});
-    } else {
-      return state.template resolve_local_binding<
-          T, RemoveRvalueReferences, local_bindings, BindingModel, IdType>(
-          host, context);
+          T, RemoveRvalueReferences, local_bindings, BindingModel, LookupKey>(
+          host, context, std::move(key));
     }
   }
 
@@ -541,14 +529,15 @@ auto make_static_binding_resolver(State &state, Host &host) {
   return static_binding_resolver<State, Host, InterfaceBinding>{state, host};
 }
 
-template <typename T, typename Key, typename StaticRegistryType, typename State,
-          typename Host, typename Fn, typename Context>
+template <typename T, typename LookupKey, typename StaticRegistryType,
+          typename State, typename Host, typename Fn, typename Context>
 std::size_t append_static_collection_impl(State &state, T &results, Host &host,
                                           Context &context, Fn &&fn) {
+  static_assert(is_lookup_key_v<LookupKey>);
   using collection_type = collection_traits<T>;
   using resolve_type = typename collection_type::resolve_type;
   using interface_bindings = typename StaticRegistryType::template bindings<
-      normalized_type_t<resolve_type>, Key>;
+      normalized_type_t<resolve_type>, LookupKey>;
 
   static_assert(collection_type::is_collection,
                 "missing collection_traits specialization for type T");
@@ -572,14 +561,15 @@ std::size_t append_static_collection_impl(State &state, T &results, Host &host,
   return count;
 }
 
-template <typename T, typename Key, typename StaticRegistryType, typename State,
-          typename Host, typename Fn, typename Context>
+template <typename T, typename LookupKey, typename StaticRegistryType,
+          typename State, typename Host, typename Fn, typename Context>
 T construct_static_collection_impl(State &state, Host &host, Context &context,
                                    Fn &&fn) {
+  static_assert(is_lookup_key_v<LookupKey>);
   using collection_type = collection_traits<T>;
   using resolve_type = typename collection_type::resolve_type;
   using interface_bindings = typename StaticRegistryType::template bindings<
-      normalized_type_t<resolve_type>, Key>;
+      normalized_type_t<resolve_type>, LookupKey>;
 
   static_assert(collection_type::is_collection,
                 "missing collection_traits specialization for type T");
@@ -589,19 +579,20 @@ T construct_static_collection_impl(State &state, Host &host, Context &context,
 
   T results;
   collection_type::reserve(results, type_list_size_v<interface_bindings>);
-  append_static_collection_impl<T, Key, StaticRegistryType>(
+  append_static_collection_impl<T, LookupKey, StaticRegistryType>(
       state, results, host, context, std::forward<Fn>(fn));
   return results;
 }
 
-template <typename T, typename Key, typename StaticRegistryType, typename State,
-          typename Host, typename Context>
+template <typename T, typename LookupKey, typename StaticRegistryType,
+          typename State, typename Host, typename Context>
 T construct_static_collection_default_impl(State &state, Host &host,
                                            Context &context) {
+  static_assert(is_lookup_key_v<LookupKey>);
   using collection_type = collection_traits<T>;
   using resolve_type = typename collection_type::resolve_type;
   using interface_bindings = typename StaticRegistryType::template bindings<
-      normalized_type_t<resolve_type>, Key>;
+      normalized_type_t<resolve_type>, LookupKey>;
 
   static_assert(collection_type::is_collection,
                 "missing collection_traits specialization for type T");
@@ -613,7 +604,7 @@ T construct_static_collection_default_impl(State &state, Host &host,
     T results =
         collection_type::make_fixed_size(type_list_size_v<interface_bindings>);
     std::size_t index = 0;
-    append_static_collection_impl<T, Key, StaticRegistryType>(
+    append_static_collection_impl<T, LookupKey, StaticRegistryType>(
         state, results, host, context, [&](auto &, auto &&value) {
           collection_type::set(results, index,
                                std::forward<decltype(value)>(value));
@@ -621,7 +612,7 @@ T construct_static_collection_default_impl(State &state, Host &host,
         });
     return results;
   } else {
-    return construct_static_collection_impl<T, Key, StaticRegistryType>(
+    return construct_static_collection_impl<T, LookupKey, StaticRegistryType>(
         state, host, context, [](auto &collection, auto &&value) {
           collection_type::add(collection,
                                std::forward<decltype(value)>(value));
@@ -656,10 +647,11 @@ public:
   }
 
   template <typename T, bool RemoveRvalueReferences, typename LocalRegistry,
-            typename BindingModel, typename Key = void, typename Host,
+            typename BindingModel, typename LookupKey, typename Host,
             typename Context,
             typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
-  decltype(auto) resolve_local_binding(Host &host, Context &context) {
+  decltype(auto) resolve_local_binding(Host &host, Context &context,
+                                       LookupKey key) {
     if constexpr (collection_traits<R>::is_collection) {
       using collection_type = collection_traits<R>;
       R results;
@@ -669,10 +661,11 @@ public:
       auto &local_scope =
           derived().template get_local_scope_for_model<BindingModel>();
       const auto local_count =
-          local_scope.template append_static_collection<R, Key, LocalRegistry>(
-              results, host, context, append);
+          local_scope
+              .template append_static_collection<R, LookupKey, LocalRegistry>(
+                  results, host, context, append);
       const auto host_count =
-          host.template append_collection<R, Key>(results, context, append);
+          host.template append_collection<R>(results, context, append, key);
       if (local_count + host_count == 0) {
         throw detail::make_collection_type_not_found_exception<
             R, typename collection_type::resolve_type>();
@@ -680,7 +673,7 @@ public:
       return results;
     } else {
       using selection = detail::static_binding_t<
-          typename LocalRegistry::template bindings<R, Key>>;
+          typename LocalRegistry::template bindings<R, LookupKey>>;
       if constexpr (selection::status == detail::binding_status::found) {
         using binding = typename selection::binding_type;
         auto &local_scope =
@@ -689,35 +682,36 @@ public:
             local_scope.template make_binding_resolver<binding>(host);
         return resolver.template resolve<R>(context);
       } else {
-        if constexpr (std::is_void_v<Key>) {
-          return host.template resolve<T, RemoveRvalueReferences>(context);
-        } else {
-          return host.template resolve<T, RemoveRvalueReferences>(
-              context, key_type<Key>{});
-        }
+        return host.template resolve<T, RemoveRvalueReferences>(context,
+                                                                std::move(key));
       }
     }
   }
 
-  template <typename T, typename Key, typename StaticRegistryType,
+  template <typename T, typename LookupKey, typename StaticRegistryType,
             typename Host, typename Fn, typename Context>
   std::size_t append_static_collection(T &results, Host &host, Context &context,
                                        Fn &&fn) {
-    return detail::append_static_collection_impl<T, Key, StaticRegistryType>(
+    static_assert(is_lookup_key_v<LookupKey>);
+    return detail::append_static_collection_impl<T, LookupKey,
+                                                 StaticRegistryType>(
         derived(), results, host, context, std::forward<Fn>(fn));
   }
 
-  template <typename T, typename Key, typename StaticRegistryType,
+  template <typename T, typename LookupKey, typename StaticRegistryType,
             typename Host, typename Fn, typename Context>
   T construct_static_collection(Host &host, Context &context, Fn &&fn) {
-    return detail::construct_static_collection_impl<T, Key, StaticRegistryType>(
+    static_assert(is_lookup_key_v<LookupKey>);
+    return detail::construct_static_collection_impl<T, LookupKey,
+                                                    StaticRegistryType>(
         derived(), host, context, std::forward<Fn>(fn));
   }
 
-  template <typename T, typename Key, typename StaticRegistryType,
+  template <typename T, typename LookupKey, typename StaticRegistryType,
             typename Host, typename Context>
   T construct_static_collection(Host &host, Context &context) {
-    return detail::construct_static_collection_default_impl<T, Key,
+    static_assert(is_lookup_key_v<LookupKey>);
+    return detail::construct_static_collection_default_impl<T, LookupKey,
                                                             StaticRegistryType>(
         derived(), host, context);
   }
@@ -835,88 +829,97 @@ class static_registry<static_bindings<Registrations...>, State> {
       std::is_same_v<std::remove_reference_t<Context>, runtime_context>, State,
       Registrations...>;
 
-  template <typename Request, typename Key>
-  using selection_t =
-      static_binding_t<typename bindings_type::template bindings<Request, Key>>;
+  template <typename Request, typename LookupKey>
+  using selection_t = static_binding_t<
+      typename bindings_type::template bindings<Request, LookupKey>>;
 
-  template <typename Request, typename Key,
-            bool Selected =
-                selection_t<Request, Key>::status == binding_status::found>
+  template <typename Request, typename LookupKey,
+            bool Selected = selection_t<Request, LookupKey>::status ==
+                            binding_status::found>
   struct binding_is_resolvable : std::false_type {};
 
-  template <typename Request, typename Key>
-  struct binding_is_resolvable<Request, Key, true>
+  template <typename Request, typename LookupKey>
+  struct binding_is_resolvable<Request, LookupKey, true>
       : std::bool_constant<
             static_binding_resolvable_v<
-                typename selection_t<Request, Key>::binding_type,
+                typename selection_t<Request, LookupKey>::binding_type,
                 bindings_type> &&
             binding_supports_request_v<
                 dependency_interface_t<Request>,
-                typename selection_t<Request, Key>::binding_type>> {};
+                typename selection_t<Request, LookupKey>::binding_type>> {};
 
 public:
   using static_bindings_type = bindings_type;
   using registration_types = typename static_bindings_type::registration_types;
   using binding_models = typename static_bindings_type::binding_models;
   using interface_bindings = typename static_bindings_type::interface_bindings;
-  template <typename Request, typename Key = void>
-  using selection = selection_t<Request, Key>;
+  template <typename Request, typename LookupKey>
+  using selection = selection_t<Request, LookupKey>;
 
   static_registry() = default;
 
-  template <typename Request, typename Key = void>
+  template <typename Request, typename LookupKey>
   static constexpr detail::binding_status binding_status() {
-    return selection_t<Request, Key>::status;
+    static_assert(is_lookup_key_v<LookupKey>);
+    return selection_t<Request, LookupKey>::status;
   }
 
-  template <typename Request, typename Key = void>
+  template <typename Request, typename LookupKey>
   static constexpr bool is_binding_resolvable() {
-    return binding_is_resolvable<Request, Key>::value;
+    static_assert(is_lookup_key_v<LookupKey>);
+    return binding_is_resolvable<Request, LookupKey>::value;
   }
 
-  template <typename T, bool RemoveRvalueReferences, typename Key = void,
+  template <typename T, bool RemoveRvalueReferences, typename LookupKey,
             typename Host, typename Context,
             typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
   R resolve_request(Context &context, Host &host) {
+    static_assert(is_lookup_key_v<LookupKey>);
     if constexpr (collection_traits<R>::is_collection) {
-      return construct_collection<R, Key>(host, context);
+      return construct_collection<R, LookupKey>(host, context);
     } else {
       using lookup_request_type =
           resolve_dependency_t<T, RemoveRvalueReferences>;
       using request_type = R;
-      using selected = selection_t<lookup_request_type, Key>;
+      using selected = selection_t<lookup_request_type, LookupKey>;
       return resolve_binding<lookup_request_type, request_type, selected>(
           context, host);
     }
   }
 
-  template <typename T, typename Key = void, typename Host, typename Context,
+  template <typename T, typename LookupKey, typename Host, typename Context,
             typename Fn>
   std::size_t append_collection(T &results, Host &host, Context &context,
                                 Fn &&fn) {
+    static_assert(is_lookup_key_v<LookupKey>);
     scope_type<Context> scope(state_);
-    return scope.template append_static_collection<T, Key, bindings_type>(
+    return scope.template append_static_collection<T, LookupKey, bindings_type>(
         results, host, context, std::forward<Fn>(fn));
   }
 
-  template <typename T, typename Key = void>
+  template <typename T, typename LookupKey>
   static constexpr std::size_t count_collection() {
-    return static_collection_binding_count<bindings_type, T, Key>();
+    static_assert(is_lookup_key_v<LookupKey>);
+    return static_collection_binding_count<bindings_type, T, LookupKey>();
   }
 
-  template <typename T, typename Key = void, typename Host, typename Context>
+  template <typename T, typename LookupKey, typename Host, typename Context>
   T construct_collection(Host &host, Context &context) {
+    static_assert(is_lookup_key_v<LookupKey>);
     scope_type<Context> scope(state_);
-    return scope.template construct_static_collection<T, Key, bindings_type>(
-        host, context);
+    return scope
+        .template construct_static_collection<T, LookupKey, bindings_type>(
+            host, context);
   }
 
-  template <typename T, typename Key = void, typename Host, typename Context,
+  template <typename T, typename LookupKey, typename Host, typename Context,
             typename Fn>
   T construct_collection(Host &host, Context &context, Fn &&fn) {
+    static_assert(is_lookup_key_v<LookupKey>);
     scope_type<Context> scope(state_);
-    return scope.template construct_static_collection<T, Key, bindings_type>(
-        host, context, std::forward<Fn>(fn));
+    return scope
+        .template construct_static_collection<T, LookupKey, bindings_type>(
+            host, context, std::forward<Fn>(fn));
   }
 
   template <typename Request, typename ResolveRequest, typename Selection,
