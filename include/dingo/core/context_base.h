@@ -93,24 +93,18 @@ T resolve_context_request(Context &context, Container &container) {
     if constexpr (is_type_selector_v<selector_type>) {
       using selector_key_type = type_selector_type_t<selector_type>;
       return T(container.template resolve<request_type, false>(
-          context, key_type<selector_key_type>{}));
-    } else if constexpr (is_value_selector_v<selector_type>) {
-      if constexpr (is_basic_static_context_v<Context>) {
-        return T(container.template resolve<request_type, false>(
-            context, selector_type{}));
-      } else {
-        return T(container.template resolve<request_type, false>(
-            context, is_value_selector<selector_type>::make()));
-      }
+          context,
+          detail::make_lookup_key(type_selector<selector_key_type>{})));
     } else {
-      static_assert(
-          is_type_selector_v<selector_type> ||
-              is_value_selector_v<selector_type>,
-          "dingo::dependency<T, Selector> requires dingo::key_type<Key> "
-          "or dingo::key_type<Key, Value>");
+      static_assert(is_value_selector_v<selector_type>,
+                    "dingo::dependency<T, Selector> requires "
+                    "dingo::key_type<Key> or dingo::key_type<Key, Value>");
+      return T(container.template resolve<request_type, false>(
+          context, detail::make_lookup_key(selector_type{})));
     }
   } else {
-    return container.template resolve<T, false>(context);
+    return container.template resolve<T, false>(context,
+                                                detail::no_lookup_key());
   }
 }
 

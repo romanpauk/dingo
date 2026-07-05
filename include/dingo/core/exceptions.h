@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/core/config.h>
+#include <dingo/core/none.h>
 #include <dingo/type/type_descriptor.h>
 
 #include <cassert>
@@ -18,6 +19,8 @@
 #include <utility>
 
 namespace dingo {
+template <typename T, auto... Values> struct key_type;
+
 struct exception : std::exception {
   explicit exception(std::string message) : message_(std::move(message)) {
     assert(!message_.empty());
@@ -71,6 +74,7 @@ struct arena_allocation_exception : exception {
 #endif
 
 namespace detail {
+template <typename T> struct lookup_key;
 
 inline void append_text_part(std::string &message, type_descriptor descriptor) {
   append_type_name(message, descriptor);
@@ -89,6 +93,17 @@ void append_text(std::string &message, First &&first, Rest &&...rest) {
   append_text(message, std::forward<Rest>(rest)...);
 }
 
+template <typename Context>
+void append_type_path_text(std::string &message, const Context &context) {
+  if (context.has_type_path()) {
+    std::string resolution_path;
+    context.append_type_path(resolution_path);
+    message += " (required by ";
+    message += resolution_path;
+    message += ")";
+  }
+}
+
 template <typename Request>
 type_not_found_exception make_type_not_found_exception() {
   std::string message = "type not found: ";
@@ -100,15 +115,7 @@ template <typename Request, typename Context>
 type_not_found_exception make_type_not_found_exception(const Context &context) {
   std::string message = "type not found: ";
   append_type_name(message, describe_type<Request>());
-
-  if (context.has_type_path()) {
-    std::string resolution_path;
-    context.append_type_path(resolution_path);
-    message += " (required by ";
-    message += resolution_path;
-    message += ")";
-  }
-
+  append_type_path_text(message, context);
   return type_not_found_exception(std::move(message));
 }
 
@@ -125,15 +132,25 @@ type_not_found_exception make_type_not_found_exception(const Context &context) {
   std::string message = "type not found: ";
   append_text(message, describe_type<Request>(),
               " (index type: ", describe_type<IdType>(), ")");
+  append_type_path_text(message, context);
+  return type_not_found_exception(std::move(message));
+}
 
-  if (context.has_type_path()) {
-    std::string resolution_path;
-    context.append_type_path(resolution_path);
-    message += " (required by ";
-    message += resolution_path;
-    message += ")";
+template <typename Selector>
+void append_lookup_key_text(std::string &message,
+                            const lookup_key<Selector> &) {
+  if constexpr (!std::is_same_v<Selector, key_type<none_t>>) {
+    append_text(message, " (index type: ", describe_type<Selector>(), ")");
   }
+}
 
+template <typename Request, typename Context, typename LookupKey>
+type_not_found_exception make_type_not_found_exception(const Context &context,
+                                                       const LookupKey &key) {
+  std::string message = "type not found: ";
+  append_type_name(message, describe_type<Request>());
+  append_lookup_key_text(message, key);
+  append_type_path_text(message, context);
   return type_not_found_exception(std::move(message));
 }
 
@@ -225,11 +242,40 @@ type_already_registered_exception make_type_already_registered_exception() {
   return type_already_registered_exception(std::move(message));
 }
 
-template <typename Interface, typename Storage, typename IdType>
-lookup_already_registered_exception make_lookup_already_registered_exception() {
+template <typename Selector>
+void append_lookup_already_registered_key_text(std::string &message,
+                                               const lookup_key<Selector> &) {
+  if constexpr (std::is_same_v<Selector, key_type<none_t>>) {
+    append_text(message, ", key type ", describe_type<none_t>());
+  } else {
+    append_text(message, ", key type ", describe_type<Selector>());
+  }
+}
+
+template <typename Interface, typename Storage, typename LookupKey>
+lookup_already_registered_exception
+make_lookup_already_registered_exception(const LookupKey &key) {
   std::string message = "lookup already registered: interface ";
   append_text(message, describe_type<Interface>(), ", storage ",
-              describe_type<Storage>(), ", key type ", describe_type<IdType>());
+              describe_type<Storage>());
+  append_lookup_already_registered_key_text(message, key);
+  return lookup_already_registered_exception(std::move(message));
+}
+
+template <typename Interface, typename Storage, typename LookupKey,
+          typename BackendKey>
+lookup_already_registered_exception
+make_lookup_already_registered_exception(const LookupKey &key,
+                                         const BackendKey &) {
+  std::string message = "lookup already registered: interface ";
+  append_text(message, describe_type<Interface>(), ", storage ",
+              describe_type<Storage>());
+  if constexpr (std::is_same_v<std::decay_t<BackendKey>, none_t>) {
+    append_lookup_already_registered_key_text(message, key);
+  } else {
+    append_text(message, ", key type ",
+                describe_type<std::decay_t<BackendKey>>());
+  }
   return lookup_already_registered_exception(std::move(message));
 }
 

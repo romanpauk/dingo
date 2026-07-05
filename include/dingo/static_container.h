@@ -84,35 +84,29 @@ private:
   using selection_t = static_binding_t<
       typename static_bindings_type::template bindings<Request, Key>>;
 
-  template <typename T, bool RemoveRvalueReferences, typename Key = void>
+  template <typename T, bool RemoveRvalueReferences, typename Key>
   static constexpr binding_status resolve_status_v =
       selection_t<resolve_dependency_t<T, RemoveRvalueReferences>, Key>::status;
 
-  template <typename Collection, typename Key = void>
+  template <typename Collection, typename Key>
   static constexpr std::size_t collection_count_v =
       static_collection_binding_count<static_bindings_type, Collection, Key>();
 
-  template <typename Collection, typename Key = void, typename R = Collection>
-  R resolve_missing_collection() {
+  template <typename Collection, typename LookupKey, typename R = Collection,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  R resolve_missing_collection(LookupKey key) {
     if (parent_) {
-      if constexpr (std::is_void_v<Key>) {
-        return parent_->template resolve<Collection>();
-      } else {
-        return parent_->template resolve<Collection>(key_type<Key>{});
-      }
+      return parent_->template resolve<Collection>(key);
     }
     using resolve_type = typename collection_traits<Collection>::resolve_type;
     throw make_collection_type_not_found_exception<Collection, resolve_type>();
   }
 
-  template <typename T, bool RemoveRvalueReferences, typename Key = void,
-            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
-  R resolve_parent() {
-    if constexpr (std::is_void_v<Key>) {
-      return parent_->template resolve<T>();
-    } else {
-      return parent_->template resolve<T>(key_type<Key>{});
-    }
+  template <typename T, typename LookupKey,
+            typename R = resolve_dependency_result_t<T, false>,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  R resolve_parent(LookupKey key) {
+    return parent_->template resolve<T>(key);
   }
 
 public:
@@ -155,15 +149,21 @@ public:
             std::enable_if_t<!std::is_void_v<Parent>, int> = 0>
   explicit static_container_impl(Parent *parent) : parent_(parent) {}
 
-  template <typename T, typename Key = void,
+  template <typename T, typename Key = key_type<none_t>,
             typename R = dependency_result_t<T>>
-  R resolve(key_type<Key> = {}) {
+  R resolve() {
+    return resolve<T>(detail::make_lookup_key(type_selector<Key>{}));
+  }
+
+  template <typename T, typename LookupKey, typename R = dependency_result_t<T>,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  R resolve(LookupKey key) {
     if constexpr (!collection_traits<R>::is_collection) {
       using lookup_request_type = resolve_dependency_t<T, true>;
       using request_type = R;
       using selection =
           static_binding_t<typename static_bindings_type::template bindings<
-              lookup_request_type, Key>>;
+              lookup_request_type, LookupKey>>;
       if constexpr (selection::status == binding_status::found) {
         using binding = typename selection::binding_type;
         using binding_model_type = typename binding::binding_model_type;
@@ -177,40 +177,40 @@ public:
                           typename binding_model_type::factory_type>) {
           no_dependency_context context;
           using selected = typename static_registry_type::template selection<
-              lookup_request_type, Key>;
+              lookup_request_type, LookupKey>;
           return static_registry_.template resolve_binding<
               lookup_request_type, request_type, selected>(context, *this);
         }
       }
     }
     if constexpr (collection_traits<R>::is_collection) {
-      if constexpr (has_parent_v && collection_count_v<R, Key> == 0) {
-        return resolve_missing_collection<R, Key>();
+      if constexpr (has_parent_v && collection_count_v<R, LookupKey> == 0) {
+        return resolve_missing_collection<R>(key);
       } else {
         context_type context;
-        return resolve<T, false, Key>(context);
+        return resolve<T, false>(context, key);
       }
     } else {
-      if constexpr (has_parent_v && resolve_status_v<T, false, Key> ==
+      if constexpr (has_parent_v && resolve_status_v<T, false, LookupKey> ==
                                         binding_status::not_found) {
         if (parent_) {
-          return resolve_parent<T, false, Key>();
+          return resolve_parent<T>(key);
         }
       }
       context_type context;
-      return resolve<T, false, Key>(context);
+      return resolve<T, false>(context, key);
     }
   }
 
   template <typename T, typename IdType, typename R = dependency_result_t<T>,
-            std::enable_if_t<!is_none_v<std::decay_t<IdType>> &&
-                                 !detail::is_typed_key_v<IdType>,
-                             int> = 0>
-  R resolve(IdType &&) {
-    if constexpr (detail::is_key_value_v<IdType>) {
-      return resolve<T>(key_type<std::decay_t<IdType>>{});
+            std::enable_if_t<!detail::is_lookup_key_v<IdType>, int> = 0>
+  R resolve(IdType &&id) {
+    auto key = detail::make_lookup_key(std::forward<IdType>(id));
+    using lookup_key_type = decltype(key);
+    if constexpr (detail::is_static_lookup_key_v<lookup_key_type>) {
+      return resolve<T, lookup_key_type, R>(std::move(key));
     } else {
-      static_assert(detail::container_dependent_false_v<T, IdType>,
+      static_assert(detail::container_dependent_false_v<T, lookup_key_type>,
                     "static_container fixed runtime-key request requires "
                     "dingo::key_type<Key, Value>");
     }
@@ -235,7 +235,7 @@ private:
               binding_dependency_key_t<request_type>>>;
       using normalized_selection =
           static_binding_t<typename static_bindings_type::template bindings<
-              normalized_request_type, void>>;
+              normalized_request_type, detail::no_lookup_key_t>>;
       constexpr bool has_exact_binding =
           selection::status != binding_status::not_found;
       constexpr bool has_normalized_binding =
@@ -285,96 +285,135 @@ public:
         std::forward<Callable>(callable), context, *this);
   }
 
+private:
+  template <typename T, typename LookupKey, typename... Args>
+  T construct_collection_static(Args &&...args) {
+    if constexpr (detail::is_static_lookup_key_v<LookupKey>) {
+      context_type context;
+      return static_registry_.template construct_collection<T, LookupKey>(
+          *this, context, std::forward<Args>(args)...);
+    } else {
+      static_assert(detail::container_dependent_false_v<T, LookupKey>,
+                    "static_container fixed runtime-key collection request "
+                    "requires dingo::key_type<Key, Value>");
+    }
+  }
+
+public:
   template <typename T> T construct_collection() {
-    context_type context;
-    return static_registry_.template construct_collection<T>(*this, context);
+    return construct_collection<T>(detail::no_lookup_key());
   }
 
   template <typename T, typename Fn,
             std::enable_if_t<
-                !detail::is_key_value_v<Fn> &&
+                !detail::is_lookup_key_v<std::decay_t<Fn>> &&
+                    !detail::is_key_value_v<Fn> &&
                     collection_insert_invocable<T, std::decay_t<Fn>>::value,
                 int> = 0>
   T construct_collection(Fn &&fn) {
-    context_type context;
-    return static_registry_.template construct_collection<T>(
-        *this, context, std::forward<Fn>(fn));
+    return construct_collection<T>(std::forward<Fn>(fn),
+                                   detail::no_lookup_key());
   }
 
-  template <typename T, typename Key> T construct_collection(key_type<Key>) {
-    context_type context;
-    return static_registry_.template construct_collection<T, Key>(*this,
-                                                                  context);
+  template <typename T, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  T construct_collection(LookupKey) {
+    return construct_collection_static<T, LookupKey>();
   }
 
   template <typename T, typename IdType,
-            std::enable_if_t<detail::is_key_value_v<IdType>, int> = 0>
-  T construct_collection(IdType &&) {
-    return construct_collection<T>(key_type<std::decay_t<IdType>>{});
+            std::enable_if_t<!detail::is_lookup_key_v<IdType> &&
+                                 !collection_insert_invocable<
+                                     T, std::decay_t<IdType>>::value,
+                             int> = 0>
+  T construct_collection(IdType &&id) {
+    return construct_collection<T>(
+        detail::make_lookup_key(std::forward<IdType>(id)));
   }
 
-  template <
-      typename T, typename IdType,
-      std::enable_if_t<
-          !is_none_v<std::decay_t<IdType>> && !detail::is_typed_key_v<IdType> &&
-              !detail::is_key_value_v<IdType> &&
-              !collection_insert_invocable<T, std::decay_t<IdType>>::value,
-          int> = 0>
-  T construct_collection(IdType &&) {
-    static_assert(detail::container_dependent_false_v<T, IdType>,
-                  "static_container fixed runtime-key collection request "
-                  "requires dingo::key_type<Key, Value>");
+  template <typename T, typename Fn, typename IdType,
+            std::enable_if_t<!detail::is_lookup_key_v<IdType>, int> = 0>
+  T construct_collection(Fn &&fn, IdType &&id) {
+    return construct_collection<T>(
+        std::forward<Fn>(fn),
+        detail::make_lookup_key(std::forward<IdType>(id)));
   }
 
-  template <typename T, typename Fn, typename Key>
-  T construct_collection(Fn &&fn, key_type<Key>) {
-    context_type context;
-    return static_registry_.template construct_collection<T, Key>(
-        *this, context, std::forward<Fn>(fn));
+  template <typename T, typename Fn, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  T construct_collection(Fn &&fn, LookupKey) {
+    return construct_collection_static<T, LookupKey>(std::forward<Fn>(fn));
   }
 
-  template <typename T, typename Key = void, typename Fn, typename Context>
+  template <typename T, typename Fn, typename Context>
   std::size_t append_collection(T &results, Context &context, Fn &&fn) {
-    return static_registry_.template append_collection<T, Key>(
+    return append_collection<T>(results, context, std::forward<Fn>(fn),
+                                detail::no_lookup_key());
+  }
+
+  template <typename T, typename Key, typename Fn, typename Context>
+  std::size_t append_collection(T &results, Context &context, Fn &&fn) {
+    return append_collection<T>(results, context, std::forward<Fn>(fn),
+                                detail::make_lookup_key(type_selector<Key>{}));
+  }
+
+  template <typename T, typename Fn, typename Context, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  std::size_t append_collection(T &results, Context &context, Fn &&fn,
+                                LookupKey) {
+    return static_registry_.template append_collection<T, LookupKey>(
         results, *this, context, std::forward<Fn>(fn));
   }
 
-  template <typename T, typename Key = void> std::size_t count_collection() {
-    return static_registry_.template count_collection<T, Key>();
+  template <typename T> std::size_t count_collection() {
+    return count_collection<T>(detail::no_lookup_key());
   }
 
-  template <typename T, bool RemoveRvalueReferences, typename Key = void,
+  template <typename T, typename Key> std::size_t count_collection() {
+    return count_collection<T>(detail::make_lookup_key(type_selector<Key>{}));
+  }
+
+  template <typename T, typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  std::size_t count_collection(LookupKey) {
+    return static_registry_.template count_collection<T, LookupKey>();
+  }
+
+  template <typename T, bool RemoveRvalueReferences,
             typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
   R resolve(context_type &context) {
-    return resolve_request<T, RemoveRvalueReferences, Key>(context);
+    return resolve_request<T, RemoveRvalueReferences, R>(
+        context, detail::no_lookup_key());
   }
 
 private:
-  template <typename T, bool RemoveRvalueReferences, typename Key = void,
-            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>>
-  R resolve_request(context_type &context) {
+  template <typename T, bool RemoveRvalueReferences, typename R,
+            typename LookupKey,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  R resolve_request(context_type &context, LookupKey key) {
     if constexpr (collection_traits<R>::is_collection) {
-      if constexpr (has_parent_v && collection_count_v<R, Key> == 0) {
-        return resolve_missing_collection<R, Key>();
+      if constexpr (has_parent_v && collection_count_v<R, LookupKey> == 0) {
+        return resolve_missing_collection<R>(std::move(key));
       } else {
-        return static_registry_.template construct_collection<R, Key>(*this,
-                                                                      context);
+        return static_registry_.template construct_collection<R, LookupKey>(
+            *this, context);
       }
     } else {
       using lookup_request_type =
           resolve_dependency_t<T, RemoveRvalueReferences>;
       using request_type = R;
-      constexpr auto status = resolve_status_v<T, RemoveRvalueReferences, Key>;
+      constexpr auto status =
+          resolve_status_v<T, RemoveRvalueReferences, LookupKey>;
       if constexpr (has_parent_v) {
         if constexpr (status == binding_status::not_found) {
           if (parent_) {
-            return resolve_parent<T, RemoveRvalueReferences, Key>();
+            return resolve_parent<T>(std::move(key));
           }
         }
       }
       if constexpr (status == binding_status::found) {
         using selected = typename static_registry_type::template selection<
-            lookup_request_type, Key>;
+            lookup_request_type, LookupKey>;
         return static_registry_.template resolve_binding<
             lookup_request_type, request_type, selected>(context, *this);
       } else if constexpr (status == binding_status::ambiguous) {
@@ -390,26 +429,12 @@ private:
   }
 
 public:
-  template <typename T, bool RemoveRvalueReferences, typename Key,
-            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
-  R resolve(context_type &context, key_type<Key>) {
-    return resolve_request<T, RemoveRvalueReferences, Key>(context);
-  }
-
-  template <typename T, bool RemoveRvalueReferences, typename IdType,
-            typename R = resolve_dependency_t<T, RemoveRvalueReferences>,
-            std::enable_if_t<!is_none_v<std::decay_t<IdType>> &&
-                                 !detail::is_typed_key_v<IdType>,
-                             int> = 0>
-  R resolve(context_type &context, IdType &&) {
-    if constexpr (detail::is_key_value_v<IdType>) {
-      return resolve_request<T, RemoveRvalueReferences, std::decay_t<IdType>>(
-          context);
-    } else {
-      static_assert(detail::container_dependent_false_v<T, IdType>,
-                    "dingo::dependency<T, dingo::key_type<Key, Value>> "
-                    "constructor injection requires a fixed dependency key");
-    }
+  template <typename T, bool RemoveRvalueReferences, typename LookupKey,
+            typename R = resolve_dependency_result_t<T, RemoveRvalueReferences>,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  R resolve(context_type &context, LookupKey key) {
+    return resolve_request<T, RemoveRvalueReferences, R>(context,
+                                                         std::move(key));
   }
 
 private:

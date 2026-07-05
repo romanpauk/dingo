@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/core/exceptions.h>
+#include <dingo/core/key.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/type_list.h>
@@ -26,10 +27,12 @@ struct binding_collection_append {
   }
 };
 
-template <typename StaticRegistry, typename T, typename Key = void>
+template <typename StaticRegistry, typename T, typename LookupKey>
 constexpr std::size_t static_collection_binding_count() {
+  static_assert(is_lookup_key_v<LookupKey>);
   return type_list_size_v<typename StaticRegistry::template bindings<
-      normalized_type_t<typename collection_traits<T>::resolve_type>, Key>>;
+      normalized_type_t<typename collection_traits<T>::resolve_type>,
+      LookupKey>>;
 }
 
 template <typename T, typename RuntimeCountFn>

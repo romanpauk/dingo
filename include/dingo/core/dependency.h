@@ -26,8 +26,14 @@ using dependency_selector_t = typename dependency_selector<Selector>::type;
 } // namespace dingo::detail
 
 namespace dingo {
-template <typename T, typename Selector = void>
-using dependency = std::conditional_t<
-    std::is_void_v<Selector>, T,
-    detail::selected<T, detail::dependency_selector_t<Selector>>>;
+template <typename T, typename Selector> struct dependency_type {
+  using type = detail::selected<T, detail::dependency_selector_t<Selector>>;
+};
+
+template <typename T> struct dependency_type<T, key_type<none_t>> {
+  using type = T;
+};
+
+template <typename T, typename Selector = key_type<none_t>>
+using dependency = typename dependency_type<T, std::decay_t<Selector>>::type;
 } // namespace dingo

@@ -131,9 +131,11 @@ TEST(static_graph_test,
   static_assert(!graph::acyclic);
   static_assert(graph::contains_cycle);
   static_assert(std::is_void_v<typename graph::topological_bindings>);
-  static_assert(detail::static_binding_resolvable_v<
-                typename source::type::template binding<owner>,
-                typename source::type>);
+  static_assert(
+      detail::static_binding_resolvable_v<
+          typename source::type::template binding<owner,
+                                                  detail::no_lookup_key_t>,
+          typename source::type>);
 }
 
 TEST(static_graph_test,
@@ -152,7 +154,8 @@ TEST(static_graph_test,
   static_assert(!graph::acyclic);
   static_assert(
       !detail::static_binding_resolvable_v<
-          typename source::type::template binding<a>, typename source::type>);
+          typename source::type::template binding<a, detail::no_lookup_key_t>,
+          typename source::type>);
 }
 
 TEST(static_graph_test,

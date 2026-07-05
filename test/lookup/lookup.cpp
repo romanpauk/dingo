@@ -1174,10 +1174,10 @@ TEST(index_test, associative_alias_behaves_like_key_value_one) {
   };
 
   static_assert(
-      std::is_same_v<
-          associative<std::size_t, processor>,
-          detail::lookup_definition<
-              processor, detail::key_value_domain<std::size_t>, one, ordered>>);
+      std::is_same_v<associative<std::size_t, processor>,
+                     detail::lookup_definition<
+                         processor, detail::lookup_key<key_value<std::size_t>>,
+                         one, ordered>>);
 
   struct traits : dynamic_container_traits {
     using lookup_definition_type = lookups<associative<std::size_t, processor>>;
@@ -1217,8 +1217,8 @@ TEST(index_test, associative_many_alias_behaves_like_key_value_many) {
   static_assert(
       std::is_same_v<associative<std::size_t, processor, many>,
                      detail::lookup_definition<
-                         processor, detail::key_value_domain<std::size_t>, many,
-                         ordered>>);
+                         processor, detail::lookup_key<key_value<std::size_t>>,
+                         many, ordered>>);
 
   struct traits : dynamic_container_traits {
     using lookup_definition_type =

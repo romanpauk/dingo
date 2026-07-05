@@ -43,14 +43,14 @@ struct size_probe_registry : size_registry_type {
   using typename base_type::runtime_lookup_value;
 
   template <typename Interface, typename Storage, typename BindingState,
-            typename Key>
+            typename LookupKey>
   using binding = typename base_type::template runtime_registration_binding_t<
-      Interface, Storage, BindingState, Key>;
+      Interface, Storage, BindingState, LookupKey>;
 
   template <typename Interfaces, typename Storage, typename BindingState,
-            typename Key>
+            typename LookupKey>
   using owner = typename base_type::template runtime_binding_value_owner_t<
-      Interfaces, Storage, BindingState, Key>;
+      Interfaces, Storage, BindingState, LookupKey>;
 };
 
 using size_registration =
@@ -86,18 +86,19 @@ using size_base_lookup_backend =
                            size_type_map_value,
                            typename size_registry_type::allocator_type>;
 using size_runtime_lookup_entry =
-    detail::lookup_entry<size_interface, detail::key_value_domain<int>, one,
-                         ordered>;
+    detail::lookup_entry<size_interface, detail::lookup_key<key_value<int>>,
+                         one, ordered>;
 using size_runtime_lookup_backend =
     detail::lookup_backend<size_runtime_lookup_entry, size_type_map_value,
                            typename size_registry_type::allocator_type>;
 using size_no_key_lookup_entry =
-    detail::lookup_entry<size_interface, none_t, one, ordered>;
+    detail::lookup_entry<size_interface, detail::no_lookup_key_t, one, ordered>;
 using size_no_key_lookup_backend =
     detail::lookup_backend<size_no_key_lookup_entry, size_type_map_value,
                            typename size_registry_type::allocator_type>;
 using size_typed_key_lookup_entry =
-    detail::lookup_entry<size_interface, key_type<int>, many, ordered>;
+    detail::lookup_entry<size_interface, detail::lookup_key<key_type<int>>,
+                         many, ordered>;
 using size_typed_key_lookup_backend =
     detail::lookup_backend<size_typed_key_lookup_entry, size_type_map_value,
                            typename size_registry_type::allocator_type>;

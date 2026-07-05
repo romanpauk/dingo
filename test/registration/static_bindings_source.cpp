@@ -49,9 +49,11 @@ TEST(static_bindings_source_test, exposes_models_and_dependency_bindings) {
   static_assert(
       std::is_same_v<typename registry_type::dependencies<service_interface>,
                      type_list<config &>>);
-  static_assert(std::is_same_v<
-                typename registry_type::dependency_bindings<service_interface>,
-                type_list<typename registry_type::binding<config>>>);
+  static_assert(
+      std::is_same_v<
+          typename registry_type::dependency_bindings<service_interface>,
+          type_list<typename registry_type::binding<config,
+                                                    detail::no_lookup_key_t>>>);
 }
 
 TEST(static_bindings_source_test, zero_argument_detected_constructor_is_known) {
@@ -85,7 +87,8 @@ TEST(static_bindings_source_test,
                                type_list<config &>>);
   static_assert(
       std::is_same_v<typename registry_type::dependency_bindings<service>,
-                     type_list<typename registry_type::binding<config>>>);
+                     type_list<typename registry_type::binding<
+                         config, detail::no_lookup_key_t>>>);
 }
 
 TEST(static_bindings_source_test,
@@ -106,8 +109,10 @@ TEST(static_bindings_source_test,
       std::is_same_v<typename registry_type::dependencies<service>, void>);
   static_assert(
       std::is_same_v<typename registry_type::dependency_bindings<service>,
-                     type_list<typename registry_type::binding<config>,
-                               typename registry_type::binding<logger>>>);
+                     type_list<typename registry_type::binding<
+                                   config, detail::no_lookup_key_t>,
+                               typename registry_type::binding<
+                                   logger, detail::no_lookup_key_t>>>);
 }
 
 TEST(static_bindings_source_test,
@@ -127,8 +132,10 @@ TEST(static_bindings_source_test,
       std::is_same_v<typename registry_type::dependencies<service>, void>);
   static_assert(
       std::is_same_v<typename registry_type::dependency_bindings<service>,
-                     type_list<typename registry_type::binding<config>,
-                               typename registry_type::binding<config>>>);
+                     type_list<typename registry_type::binding<
+                                   config, detail::no_lookup_key_t>,
+                               typename registry_type::binding<
+                                   config, detail::no_lookup_key_t>>>);
 }
 
 TEST(static_bindings_source_test,
@@ -154,10 +161,11 @@ TEST(static_bindings_source_test,
       std::is_same_v<
           typename registry_type::dependencies<annotated<service, service_tag>>,
           type_list<annotated<config &, config_tag>>>);
-  static_assert(std::is_same_v<typename registry_type::dependency_bindings<
-                                   annotated<service &, service_tag>>,
-                               type_list<typename registry_type::binding<
-                                   annotated<config, config_tag>>>>);
+  static_assert(std::is_same_v<
+                typename registry_type::dependency_bindings<
+                    annotated<service &, service_tag>>,
+                type_list<typename registry_type::binding<
+                    annotated<config, config_tag>, detail::no_lookup_key_t>>>);
 }
 
 TEST(static_bindings_source_test,
@@ -184,20 +192,22 @@ TEST(static_bindings_source_test,
   using registry_type = typename source::type;
 
   static_assert(registry_type::valid);
-  static_assert(
-      type_list_size_v<
-          typename registry_type::template bindings<service_interface>> == 3);
-  static_assert(std::is_void_v<
-                typename registry_type::template binding<service_interface>>);
   static_assert(type_list_size_v<typename registry_type::template bindings<
-                    service_interface, first_key>> == 2);
-  static_assert(type_list_size_v<typename registry_type::template bindings<
-                    service_interface, second_key>> == 1);
+                    service_interface, detail::no_lookup_key_t>> == 0);
+  static_assert(std::is_void_v<typename registry_type::template binding<
+                    service_interface, detail::no_lookup_key_t>>);
   static_assert(
-      std::is_void_v<typename registry_type::template binding<service_interface,
-                                                              first_key>>);
-  static_assert(!std::is_void_v<typename registry_type::template binding<
-                    service_interface, second_key>>);
+      type_list_size_v<typename registry_type::template bindings<
+          service_interface, detail::lookup_key<key_type<first_key>>>> == 2);
+  static_assert(
+      type_list_size_v<typename registry_type::template bindings<
+          service_interface, detail::lookup_key<key_type<second_key>>>> == 1);
+  static_assert(
+      std::is_void_v<typename registry_type::template binding<
+          service_interface, detail::lookup_key<key_type<first_key>>>>);
+  static_assert(
+      !std::is_void_v<typename registry_type::template binding<
+          service_interface, detail::lookup_key<key_type<second_key>>>>);
 }
 
 TEST(static_bindings_source_test,
@@ -227,11 +237,14 @@ TEST(static_bindings_source_test,
   static_assert(
       std::is_same_v<typename registry_type::dependency_bindings<service>,
                      type_list<typename registry_type::template binding<
-                         dependency<config, key_type<first_key>>>>>);
-  static_assert(std::is_same_v<
-                typename registry_type::template binding<
-                    dependency<config, key_type<first_key>>>,
-                typename registry_type::template binding<config, first_key>>);
+                         dependency<config, key_type<first_key>>,
+                         detail::no_lookup_key_t>>>);
+  static_assert(
+      std::is_same_v<
+          typename registry_type::template binding<
+              dependency<config, key_type<first_key>>, detail::no_lookup_key_t>,
+          typename registry_type::template binding<
+              config, detail::lookup_key<key_type<first_key>>>>);
 }
 
 TEST(static_bindings_source_test,

@@ -13,6 +13,9 @@
 #include <utility>
 
 namespace dingo {
+struct none_t;
+template <typename T, auto... Values> struct key_type;
+
 namespace detail {
 
 template <typename T, typename Selector> struct selected;
@@ -71,31 +74,36 @@ struct selected<T &, Selector> : selected_base<T &, Selector> {
 
 template <typename T> struct selected_traits {
   using type = T;
-  using selector_type = void;
+  using selector_type = key_type<none_t>;
+  static constexpr bool is_selected = false;
 };
 
 template <typename T, typename Selector>
 struct selected_traits<selected<T, Selector>> {
   using type = T;
   using selector_type = Selector;
+  static constexpr bool is_selected = true;
 };
 
 template <typename T, typename Selector>
 struct selected_traits<selected<T, Selector> &> {
   using type = T &;
   using selector_type = Selector;
+  static constexpr bool is_selected = true;
 };
 
 template <typename T, typename Selector>
 struct selected_traits<selected<T, Selector> &&> {
   using type = T &&;
   using selector_type = Selector;
+  static constexpr bool is_selected = true;
 };
 
 template <typename T, typename Selector>
 struct selected_traits<selected<T, Selector> *> {
   using type = T *;
   using selector_type = Selector;
+  static constexpr bool is_selected = true;
 };
 
 template <typename T> using selected_type_t = typename selected_traits<T>::type;
@@ -104,8 +112,7 @@ template <typename T>
 using selected_selector_t = typename selected_traits<T>::selector_type;
 
 template <typename T>
-struct is_selected
-    : std::bool_constant<!std::is_void_v<selected_selector_t<T>>> {};
+struct is_selected : std::bool_constant<selected_traits<T>::is_selected> {};
 
 template <typename T>
 inline constexpr bool is_selected_v = is_selected<T>::value;

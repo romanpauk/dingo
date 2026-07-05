@@ -18,14 +18,14 @@ using source = dingo::bindings<
     dingo::bind<dingo::scope<dingo::unique>, dingo::storage<service_b>,
                 dingo::interfaces<interface>, dingo::key_type<duplicate_key>>>;
 using registry_type = typename source::type;
+using lookup_key_type =
+    dingo::detail::make_lookup_key_t<dingo::key_type<duplicate_key>>;
 using selection = dingo::detail::static_binding_t<
-    typename registry_type::template bindings<interface, duplicate_key>>;
+    typename registry_type::template bindings<interface, lookup_key_type>>;
 
 static_assert(registry_type::valid);
-static_assert(
-    dingo::type_list_size_v<
-        typename registry_type::template bindings<interface, duplicate_key>> ==
-    2);
+static_assert(dingo::type_list_size_v<typename registry_type::template bindings<
+                  interface, lookup_key_type>> == 2);
 static_assert(selection::status == dingo::detail::binding_status::ambiguous);
 
 int main() {}
