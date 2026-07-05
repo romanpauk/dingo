@@ -74,13 +74,22 @@ temporary conversions.
 ## Resolution
 
 The public `resolve<T>()` path is also in
-[include/dingo/container.h](../../include/dingo/container.h).
+[include/dingo/container.h](../../include/dingo/container.h). At that boundary
+Dingo normalizes two independent request descriptions:
+
+- The type request becomes `request_type<T, RemoveRvalueReferences>`.
+- The key request becomes the result of `make_lookup_key(...)`.
+
+`request_type` is a zero-size compile-time descriptor. Internal resolution code
+uses its `lookup_type`, `interface_type`, `result_type`, `value_type`, and
+`exact_type` members instead of recomputing request-derived type aliases along
+each path.
 
 The sequence is:
 
 1. Check the cache if container caching is enabled.
-2. Normalize the request type and look up the matching runtime and/or static
-   binding set.
+2. Use the normalized type request and lookup key to find the matching runtime
+   and/or static binding set.
 3. Apply the container's selection rules:
    - runtime-only singular match: selected
    - static-only singular match: selected

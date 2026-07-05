@@ -13,50 +13,48 @@
 #include <type_traits>
 
 namespace dingo {
-template <typename Request> struct dependency_interface {
+
+namespace detail {
+template <typename Request> struct request_interface {
   using type = typename annotated_traits<Request>::type;
 };
 
 template <typename T, typename Selector>
-struct dependency_interface<detail::selected<T, Selector>> {
+struct request_interface<selected<T, Selector>> {
   using type = T;
 };
 
 template <typename T, typename Selector>
-struct dependency_interface<detail::selected<T, Selector> &> {
+struct request_interface<selected<T, Selector> &> {
   using type = T &;
 };
 
 template <typename T, typename Selector>
-struct dependency_interface<detail::selected<T, Selector> &&> {
+struct request_interface<selected<T, Selector> &&> {
   using type = T &&;
 };
 
 template <typename T, typename Selector>
-struct dependency_interface<detail::selected<T, Selector> *> {
+struct request_interface<selected<T, Selector> *> {
   using type = T *;
 };
+} // namespace detail
 
-template <typename Request>
-using dependency_interface_t = typename dependency_interface<Request>::type;
+template <typename Request, bool RemoveRvalueReferences = false>
+struct request_type {
+  using user_type = Request;
+  using lookup_type = std::conditional_t<
+      RemoveRvalueReferences,
+      std::conditional_t<std::is_rvalue_reference_v<Request>,
+                         std::remove_reference_t<Request>, Request>,
+      Request>;
+  using interface_type = typename detail::request_interface<lookup_type>::type;
+  using result_type = interface_type;
+  using value_type = normalized_type_t<lookup_type>;
+  using exact_type = std::remove_cv_t<std::remove_reference_t<interface_type>>;
 
-template <typename Request>
-using dependency_value_t = normalized_type_t<Request>;
-
-template <typename Request>
-using dependency_result_t = dependency_interface_t<
-    std::conditional_t<std::is_rvalue_reference_v<Request>,
-                       std::remove_reference_t<Request>, Request>>;
-
-template <typename Request, bool RemoveRvalueReferences>
-using resolve_dependency_t = std::conditional_t<
-    RemoveRvalueReferences,
-    std::conditional_t<std::is_rvalue_reference_v<Request>,
-                       std::remove_reference_t<Request>, Request>,
-    Request>;
-
-template <typename Request, bool RemoveRvalueReferences>
-using resolve_dependency_result_t = dependency_interface_t<
-    resolve_dependency_t<Request, RemoveRvalueReferences>>;
+  static constexpr bool removes_rvalue_references = RemoveRvalueReferences;
+  static constexpr bool is_rvalue_request = std::is_rvalue_reference_v<Request>;
+};
 
 } // namespace dingo

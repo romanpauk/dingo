@@ -473,7 +473,8 @@ inline constexpr bool construct_normalized_request_v =
     !std::is_abstract_v<normalized_type_t<Request>>;
 
 template <typename Request,
-          typename ResolvedRequest = dependency_result_t<Request>>
+          typename ResolvedRequest =
+              typename request_type<Request, true>::result_type>
 inline constexpr bool construct_factory_request_v =
     !rvalue_request_requires_explicit_conversion_v<Request> &&
     std::is_object_v<normalized_type_t<Request>> &&
@@ -528,7 +529,7 @@ template <typename Request>
 }
 
 template <typename Request, typename ResolveExact, typename ResolveNormalized>
-dependency_result_t<Request>
+typename request_type<Request, true>::result_type
 construct_resolved_request(ResolveExact &&resolve_exact,
                            ResolveNormalized &&resolve_normalized) {
   try {

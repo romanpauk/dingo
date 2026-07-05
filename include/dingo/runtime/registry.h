@@ -81,7 +81,7 @@ inline constexpr bool has_key_value_lookup_definition_v =
 
 template <typename T>
 inline constexpr bool is_runtime_auto_constructible_dependency_v =
-    std::is_same_v<dependency_value_t<T>, std::decay_t<T>> &&
+    std::is_same_v<typename request_type<T>::value_type, std::decay_t<T>> &&
     (!std::is_reference_v<T> ||
      (std::is_lvalue_reference_v<T> &&
       std::is_const_v<std::remove_reference_t<T>> &&
@@ -284,7 +284,8 @@ public:
   }
 
 protected:
-  template <typename T, typename LookupKey, typename R = dependency_result_t<T>,
+  template <typename T, typename LookupKey,
+            typename R = typename request_type<T, true>::result_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(LookupKey key) {
     return resolve_runtime_request<T, LookupKey, R>(std::move(key));
@@ -309,16 +310,19 @@ protected:
     return invoke_runtime_request<Signature>(std::forward<Callable>(callable));
   }
 
-  template <typename T, typename LookupKey, typename R = dependency_result_t<T>,
+  template <typename T, typename LookupKey,
+            typename R = typename request_type<T, true>::result_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
   R resolve_runtime_request(LookupKey key) {
+    using request = request_type<T, true>;
     if constexpr (collection_traits<R>::is_collection) {
       return construct_collection_runtime_request<R>(
           detail::binding_collection_append{}, std::move(key));
     } else {
       runtime_context context;
-      return resolve_impl<T, true, false>(context, std::move(key));
+      return resolve_impl<request, false, LookupKey, R>(context,
+                                                        std::move(key));
     }
   }
 
@@ -891,30 +895,34 @@ protected:
     return route::has_explicit_collection_lookup;
   }
 
-  template <typename T, typename LookupKey> struct selected_runtime_binding {
+  template <typename Request, typename LookupKey>
+  struct selected_runtime_binding {
     registry_type &registry;
     LookupKey &key;
 
-    decltype(auto) select() { return registry.template source_select<T>(key); }
+    decltype(auto) select() {
+      return registry.template source_select<typename Request::lookup_type>(
+          key);
+    }
 
-    template <typename Request, typename Selection>
+    template <typename ResolveRequest, typename Selection>
     decltype(auto) resolve(runtime_context &context, Selection selection) {
-      return registry.template source_resolve<T>(selection, context, key);
+      return registry.template source_resolve<Request>(selection, context, key);
     }
   };
 
-  template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
-            typename LookupKey>
+  template <typename Request, bool MayAutoConstruct, typename LookupKey>
   struct missing_runtime_binding {
     registry_type &registry;
     LookupKey &key;
 
-    template <typename Request>
-    dependency_interface_t<Request> resolve(runtime_context &context) {
-      return registry
-          .template source_missing<T, RemoveRvalueReferences, MayAutoConstruct,
-                                   LookupKey, dependency_interface_t<Request>>(
-              context, key);
+    template <typename ResolveRequest>
+    typename request_type<ResolveRequest>::interface_type
+    resolve(runtime_context &context) {
+      using result_type = typename request_type<ResolveRequest>::interface_type;
+      return registry.template source_missing<Request, MayAutoConstruct,
+                                              LookupKey, result_type>(context,
+                                                                      key);
     }
   };
 
@@ -924,26 +932,29 @@ protected:
     return select_binding<Request>(runtime_bindings_, key);
   }
 
-  template <typename T, typename LookupKey>
+  template <typename Request, typename LookupKey>
   auto source_resolve(runtime_selection selection, runtime_context &context,
-                      const LookupKey &) -> dependency_interface_t<T> {
-    return resolve<T, dependency_interface_t<T>>(*selection.binding, context);
+                      const LookupKey &) -> typename Request::interface_type {
+    return resolve<typename Request::lookup_type,
+                   typename Request::interface_type>(*selection.binding,
+                                                     context);
   }
 
-  template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
-            typename LookupKey,
-            typename R = resolve_dependency_t<T, RemoveRvalueReferences>,
+  template <typename Request, bool MayAutoConstruct, typename LookupKey,
+            typename R = typename Request::lookup_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R source_missing(runtime_context &context, const LookupKey &key) {
-    using Type = normalized_type_t<T>;
+    using Type = typename Request::value_type;
+    using user_type = typename Request::user_type;
     using lookup_key_type = std::decay_t<LookupKey>;
 
     if constexpr (!std::is_same_v<void, ParentRegistry> &&
                   !std::is_same_v<void *, decltype(resolve_root_)> &&
                   !std::is_base_of_v<registry_type, resolve_root_type>) {
       if (resolve_root_) {
-        return resolve_root()->template resolve<T, RemoveRvalueReferences>(
-            context, key);
+        return resolve_root()
+            ->template resolve<user_type, Request::removes_rvalue_references>(
+                context, key);
       }
     }
 
@@ -954,15 +965,18 @@ protected:
       return this->template construct_collection_runtime_request<R>(
           detail::binding_collection_append{}, key);
     } else if constexpr (MayAutoConstruct &&
-                         is_auto_constructible<std::decay_t<T>>::value) {
+                         is_auto_constructible<
+                             std::decay_t<user_type>>::value) {
       if constexpr (constructor<Type>::kind ==
                     detail::constructor_kind::concrete) {
-        return auto_construct<T>(context);
+        return auto_construct<Request>(context);
       } else {
-        throw detail::make_type_not_found_exception<T>(context, key);
+        throw detail::make_type_not_found_exception<
+            typename Request::lookup_type>(context, key);
       }
     } else {
-      throw detail::make_type_not_found_exception<T>(context, key);
+      throw detail::make_type_not_found_exception<
+          typename Request::lookup_type>(context, key);
     }
   }
 
@@ -1013,9 +1027,9 @@ private:
   runtime_selection select_binding(runtime_bindings_state &state,
                                    LookupKey &key) {
     static_assert(detail::is_lookup_key_v<LookupKey>);
-    using lookup_type = normalized_type_t<Request>;
-    using exact_type = std::remove_cv_t<
-        std::remove_reference_t<dependency_interface_t<Request>>>;
+    using request = request_type<Request>;
+    using lookup_type = typename request::value_type;
+    using exact_type = typename request::exact_type;
     if constexpr (!detail::is_static_lookup_key_definition_v<LookupKey>) {
       using lookup_route = lookup_index_route<lookup_type, LookupKey>;
       if constexpr (!lookup_route::has_explicit_lookup &&
@@ -1466,47 +1480,44 @@ private:
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-  template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
-            typename LookupKey,
-            typename R = resolve_dependency_t<T, RemoveRvalueReferences>>
+  template <typename Request, bool MayAutoConstruct, typename LookupKey,
+            typename R = typename Request::lookup_type>
   R resolve_impl(runtime_context &context, LookupKey key) {
     static_assert(detail::is_lookup_key_v<LookupKey>);
-    using Type = normalized_type_t<T>;
+    using Type = typename Request::value_type;
     static_assert(!std::is_const_v<Type>);
 
     using lookup_key_type = LookupKey;
-    selected_runtime_binding<T, lookup_key_type> selected{*this, key};
-    missing_runtime_binding<T, RemoveRvalueReferences, MayAutoConstruct,
-                            lookup_key_type>
-        missing{*this, key};
+    selected_runtime_binding<Request, lookup_key_type> selected{*this, key};
+    missing_runtime_binding<Request, MayAutoConstruct, lookup_key_type> missing{
+        *this, key};
     auto sources = detail::make_selected_binding_sources(selected, missing);
-    return detail::resolve_from_binding_sources<T, R>(context, sources);
+    return detail::resolve_from_binding_sources<typename Request::lookup_type,
+                                                R>(context, sources);
   }
 
-  template <typename T>
+  template <typename Request>
   decltype(auto) auto_construct(runtime_context &context) {
-    using Type = normalized_type_t<T>;
+    using Type = typename Request::value_type;
 
     static_assert(is_complete<Type>::value,
                   "auto-construction requires a complete type");
 
     using type_detection = detail::automatic;
-    return context.template construct_temporary<dependency_interface_t<T>,
-                                                type_detection>(
-        *resolve_root());
+    return context.template construct_temporary<
+        typename Request::interface_type, type_detection>(*resolve_root());
   }
 
   template <typename T, bool RemoveRvalueReferences, typename LookupKey,
-            typename R = resolve_dependency_t<T, RemoveRvalueReferences>,
+            typename R =
+                typename request_type<T, RemoveRvalueReferences>::lookup_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(runtime_context &context, LookupKey key) {
-    return resolve_impl < T, RemoveRvalueReferences,
-           std::is_same_v<dependency_value_t<T>, std::decay_t<T>> &&
-               (!std::is_reference_v<T> ||
-                (std::is_lvalue_reference_v<T> &&
-                 std::is_const_v<std::remove_reference_t<T>> &&
-                 is_auto_constructible<std::decay_t<T>>::value)) >
-                   (context, std::move(key));
+    using request = request_type<T, RemoveRvalueReferences>;
+    return resolve_impl<request,
+                        detail::is_runtime_auto_constructible_dependency_v<
+                            typename request::user_type>>(context,
+                                                          std::move(key));
   }
 
 #ifdef _MSC_VER
