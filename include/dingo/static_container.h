@@ -417,8 +417,9 @@ private:
         using selected =
             typename static_registry_type::template selection<lookup_type,
                                                               LookupKey>;
-        return static_registry_
-            .template resolve_binding<lookup_type, R, selected>(context, *this);
+        return static_registry_.template resolve_binding<
+            lookup_type, typename Request::interface_type, selected>(context,
+                                                                     *this);
       } else if constexpr (status == binding_status::ambiguous) {
         static_assert(status != binding_status::ambiguous,
                       "static_container cannot resolve an ambiguously bound "
