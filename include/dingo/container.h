@@ -193,13 +193,13 @@ private:
   DINGO_ALWAYS_INLINE R construct_static() {
     using user_type = typename Request::user_type;
     using interface_type = typename Request::interface_type;
-    using value_type = typename Request::value_type;
+    using request_value_type = typename Request::value_type;
     using no_key = detail::no_lookup_key_t;
     constexpr bool has_exact_static_binding =
         static_registry_type::template is_binding_resolvable<interface_type,
                                                              no_key>();
     constexpr bool has_normalized_static_binding =
-        static_registry_type::template is_binding_resolvable<value_type,
+        static_registry_type::template is_binding_resolvable<request_value_type,
                                                              no_key>();
     if constexpr (has_exact_static_binding) {
       using binding =
@@ -212,12 +212,15 @@ private:
 
     if constexpr (has_normalized_static_binding &&
                   construct_normalized_request_v<user_type>) {
-      using normalized_selection = static_selection_t<value_type, no_key>;
-      return detail::construct_static_binding_value<
-          user_type, normalized_selection>([&]() {
-        static_context_type static_context;
-        return resolve_static<request_type<value_type>, no_key>(static_context);
-      });
+      using normalized_selection =
+          static_selection_t<request_value_type, no_key>;
+      return detail::construct_static_binding_value<user_type,
+                                                    normalized_selection>(
+          [&]() {
+            static_context_type static_context;
+            return resolve_static<request_type<request_value_type>, no_key>(
+                static_context);
+          });
     } else {
       static_context_type static_context;
       return resolve_static<Request, no_key>(static_context);
@@ -350,8 +353,9 @@ private:
     try {
       return resolve_runtime_request<Request>(context);
     } catch (const type_not_convertible_exception &) {
-      using value_type = typename Request::value_type;
-      auto &&value = resolve_runtime_request<request_type<value_type>>(context);
+      using request_value_type = typename Request::value_type;
+      auto &&value =
+          resolve_runtime_request<request_type<request_value_type>>(context);
       return type_traits<std::decay_t<typename Request::user_type>>::make(
           std::forward<decltype(value)>(value));
     }
@@ -362,10 +366,10 @@ private:
             typename R = typename Request::result_type>
   R construct_runtime_request(Factory factory = Factory()) {
     using user_type = typename Request::user_type;
-    using value_type = typename Request::value_type;
+    using request_value_type = typename Request::value_type;
     runtime_context context;
 
-    if constexpr (std::is_same_v<Factory, constructor<value_type>>) {
+    if constexpr (std::is_same_v<Factory, constructor<request_value_type>>) {
       auto key = detail::no_lookup_key();
       if (runtime_registry_
               .template binding_status<typename Request::lookup_type>(key) !=
@@ -377,14 +381,15 @@ private:
         } else {
           return construct_runtime_resolved_request<Request, R>(context);
         }
-      } else if (runtime_registry_.template binding_status<value_type>(key) !=
-                 detail::binding_status::not_found) {
+      } else if (runtime_registry_.template binding_status<request_value_type>(
+                     key) != detail::binding_status::not_found) {
         if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
                           user_type>) {
           ::dingo::throw_missing_rvalue_conversion<user_type>(true, context);
         } else if constexpr (construct_normalized_request_v<user_type>) {
           return type_traits<std::decay_t<user_type>>::make(
-              resolve_runtime_request<request_type<value_type>>(context));
+              resolve_runtime_request<request_type<request_value_type>>(
+                  context));
         } else {
           return resolve_runtime_request<Request>(context);
         }
@@ -392,7 +397,7 @@ private:
     }
 
     if constexpr (construct_factory_request_v<user_type>) {
-      auto type_guard = context.template track_type<value_type>();
+      auto type_guard = context.template track_type<request_value_type>();
       return factory.template construct<R>(context, *this);
     } else if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
                              user_type>) {

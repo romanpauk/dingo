@@ -231,16 +231,16 @@ private:
             typename R = typename Request::result_type>
   R construct_request(Factory factory = Factory()) {
     using user_type = typename Request::user_type;
-    using value_type = typename Request::value_type;
+    using request_value_type = typename Request::value_type;
     using interface_type = typename Request::interface_type;
-    if constexpr (std::is_same_v<Factory, constructor<value_type>>) {
+    if constexpr (std::is_same_v<Factory, constructor<request_value_type>>) {
       using selection =
           static_binding_t<typename static_bindings_type::template bindings<
               binding_dependency_interface_t<interface_type>,
               binding_dependency_key_t<interface_type>>>;
       using normalized_selection =
           static_binding_t<typename static_bindings_type::template bindings<
-              value_type, detail::no_lookup_key_t>>;
+              request_value_type, detail::no_lookup_key_t>>;
       constexpr bool has_exact_binding =
           selection::status != binding_status::not_found;
       constexpr bool has_normalized_binding =
@@ -261,18 +261,18 @@ private:
         } else if constexpr (construct_normalized_request_v<user_type>) {
           return construct_static_binding_value<user_type,
                                                 normalized_selection>(
-              [&]() { return resolve<value_type>(); });
+              [&]() { return resolve<request_value_type>(); });
         } else {
           return resolve<user_type>();
         }
       } else {
         context_type context;
-        auto type_guard = context.template track_type<value_type>();
+        auto type_guard = context.template track_type<request_value_type>();
         return factory.template construct<R>(context, *this);
       }
     } else {
       context_type context;
-      auto type_guard = context.template track_type<value_type>();
+      auto type_guard = context.template track_type<request_value_type>();
       return factory.template construct<R>(context, *this);
     }
   }

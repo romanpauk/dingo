@@ -253,11 +253,11 @@ private:
                                  typename Request::user_type>,
                              R>(context, detail::no_lookup_key());
     } catch (const type_not_convertible_exception &) {
-      using value_type = typename Request::value_type;
-      auto &&value =
-          resolve_request<request_type<value_type>, true,
-                          typename request_type<value_type>::lookup_type>(
-              context, detail::no_lookup_key());
+      using request_value_type = typename Request::value_type;
+      auto &&value = resolve_request<
+          request_type<request_value_type>, true,
+          typename request_type<request_value_type>::lookup_type>(
+          context, detail::no_lookup_key());
       return type_traits<std::decay_t<typename Request::user_type>>::make(
           std::forward<decltype(value)>(value));
     }
@@ -268,10 +268,10 @@ private:
             typename R = typename Request::result_type>
   R construct_request(Factory factory = Factory()) {
     using user_type = typename Request::user_type;
-    using value_type = typename Request::value_type;
+    using request_value_type = typename Request::value_type;
     runtime_context context;
 
-    if constexpr (std::is_same_v<Factory, constructor<value_type>>) {
+    if constexpr (std::is_same_v<Factory, constructor<request_value_type>>) {
       auto key = detail::no_lookup_key();
       if (binding_status<typename Request::lookup_type>(key) !=
           detail::binding_status::not_found) {
@@ -285,15 +285,16 @@ private:
         } else {
           return construct_resolved_request<Request, R>(context);
         }
-      } else if (binding_status<value_type>(key) !=
+      } else if (binding_status<request_value_type>(key) !=
                  detail::binding_status::not_found) {
         if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
                           user_type>) {
           ::dingo::throw_missing_rvalue_conversion<user_type>(true, context);
         } else if constexpr (construct_normalized_request_v<user_type>) {
           return type_traits<std::decay_t<user_type>>::make(
-              resolve_request<request_type<value_type>, true,
-                              typename request_type<value_type>::lookup_type>(
+              resolve_request<
+                  request_type<request_value_type>, true,
+                  typename request_type<request_value_type>::lookup_type>(
                   context, key));
         } else {
           return resolve_request<
