@@ -111,6 +111,17 @@ private:
     return parent_->template resolve<typename Request::user_type>(key);
   }
 
+  template <typename Request, bool MayAutoConstruct, typename R,
+            typename LookupKey, typename OriginContainer,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  R resolve_parent(runtime_context &context, LookupKey key,
+                   OriginContainer &origin) {
+    using user_type = typename Request::user_type;
+    return parent_->template resolve<
+        user_type, Request::removes_rvalue_references, MayAutoConstruct, R>(
+        context, std::move(key), origin);
+  }
+
 public:
   using static_registry_type =
       static_registry<static_bindings_type, state_type>;
@@ -439,6 +450,50 @@ public:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(context_type &context, LookupKey key) {
     return resolve_request<request_type<T, RemoveRvalueReferences>, R>(
+        context, std::move(key));
+  }
+
+  template <typename T, bool RemoveRvalueReferences, bool MayAutoConstruct,
+            typename R, typename LookupKey, typename OriginContainer,
+            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
+  R resolve(runtime_context &context, LookupKey key, OriginContainer &origin) {
+    using request = request_type<T, RemoveRvalueReferences>;
+    if constexpr (collection_traits<R>::is_collection) {
+      if constexpr (detail::is_static_lookup_key_v<LookupKey>) {
+        if constexpr (has_parent_v && collection_count_v<R, LookupKey> == 0) {
+          if (parent_) {
+            return resolve_parent<request, MayAutoConstruct, R>(
+                context, std::move(key), origin);
+          }
+        }
+        if constexpr (collection_count_v<R, LookupKey> != 0) {
+          return static_registry_.template construct_collection<R, LookupKey>(
+              *this, context);
+        }
+      }
+    } else if constexpr (detail::is_static_lookup_key_v<LookupKey>) {
+      using lookup_type = typename request::lookup_type;
+      constexpr auto status = resolve_status_v<request, LookupKey>;
+      if constexpr (status == binding_status::found) {
+        using selected =
+            typename static_registry_type::template selection<lookup_type,
+                                                              LookupKey>;
+        return static_registry_.template resolve_binding<
+            lookup_type, typename request::interface_type, selected>(context,
+                                                                     *this);
+      } else if constexpr (status == binding_status::ambiguous) {
+        static_assert(status != binding_status::ambiguous,
+                      "static_container cannot resolve an ambiguously bound "
+                      "type");
+      } else if constexpr (has_parent_v) {
+        if (parent_) {
+          return resolve_parent<request, MayAutoConstruct, R>(
+              context, std::move(key), origin);
+        }
+      }
+    }
+
+    return origin.template unresolved<request, MayAutoConstruct, LookupKey, R>(
         context, std::move(key));
   }
 
