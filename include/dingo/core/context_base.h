@@ -25,6 +25,11 @@
 #include <utility>
 #include <vector>
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+
 namespace dingo {
 template <typename StaticRegistry, bool RuntimeDependencies>
 class basic_static_context;
@@ -160,6 +165,14 @@ struct context_closure : context_closure_base {
   }
 };
 
+struct static_context_closure_base {
+  virtual ~static_context_closure_base() = default;
+  virtual void reset() = 0;
+  virtual void add_destructor(void *instance, void (*dtor)(void *)) = 0;
+  virtual void *try_allocate_temporary(std::size_t size,
+                                       std::size_t alignment) = 0;
+};
+
 template <std::size_t DestructibleCapacity,
           std::size_t TemporarySlotCapacity = 0,
           std::size_t TemporarySlotSize = 1,
@@ -189,17 +202,22 @@ struct static_context_closure {
     destructibles_[destructible_count_++] = {instance, dtor};
   }
 
-  template <typename T> T *try_allocate_temporary() {
-    if constexpr (temporary_slot_capacity_ == 0 ||
-                  sizeof(T) > TemporarySlotSize ||
-                  alignof(T) > TemporarySlotAlign) {
+  void *try_allocate_temporary(std::size_t size, std::size_t alignment) {
+    if constexpr (temporary_slot_capacity_ == 0) {
       return nullptr;
     } else {
+      if (size > TemporarySlotSize || alignment > TemporarySlotAlign) {
+        return nullptr;
+      }
       if (temporary_count_ >= temporary_slot_capacity_) {
         return nullptr;
       }
-      return reinterpret_cast<T *>(&temporary_slots_[temporary_count_++]);
+      return &temporary_slots_[temporary_count_++];
     }
+  }
+
+  template <typename T> T *try_allocate_temporary() {
+    return reinterpret_cast<T *>(try_allocate_temporary(sizeof(T), alignof(T)));
   }
 
   std::array<context_destructible, destructible_capacity_> destructibles_{};
@@ -214,7 +232,8 @@ template <std::size_t DestructibleCapacity,
           std::size_t TemporarySlotCapacity = 0,
           std::size_t TemporarySlotSize = 1,
           std::size_t TemporarySlotAlign = alignof(std::max_align_t)>
-struct fixed_context_closure : context_closure_base {
+struct fixed_context_closure : context_closure_base,
+                               static_context_closure_base {
   static constexpr std::size_t destructible_capacity_ = DestructibleCapacity;
   static constexpr std::size_t temporary_slot_capacity_ = TemporarySlotCapacity;
   static constexpr std::size_t temporary_storage_capacity_ =
@@ -245,17 +264,23 @@ struct fixed_context_closure : context_closure_base {
     destructibles_[destructible_count_++] = {instance, dtor};
   }
 
-  template <typename T> T *try_allocate_temporary() {
-    if constexpr (temporary_slot_capacity_ == 0 ||
-                  sizeof(T) > TemporarySlotSize ||
-                  alignof(T) > TemporarySlotAlign) {
+  void *try_allocate_temporary(std::size_t size,
+                               std::size_t alignment) override {
+    if constexpr (temporary_slot_capacity_ == 0) {
       return nullptr;
     } else {
+      if (size > TemporarySlotSize || alignment > TemporarySlotAlign) {
+        return nullptr;
+      }
       if (temporary_count_ >= temporary_slot_capacity_) {
         return nullptr;
       }
-      return reinterpret_cast<T *>(&temporary_slots_[temporary_count_++]);
+      return &temporary_slots_[temporary_count_++];
     }
+  }
+
+  template <typename T> T *try_allocate_temporary() {
+    return reinterpret_cast<T *>(try_allocate_temporary(sizeof(T), alignof(T)));
   }
 
   aligned_storage_t<DINGO_CLOSURE_ARENA_BUFFER_SIZE, alignof(std::max_align_t)>
@@ -348,6 +373,10 @@ protected:
 
 } // namespace detail
 } // namespace dingo
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 #include <dingo/resolution/resolving_frame.h>
 

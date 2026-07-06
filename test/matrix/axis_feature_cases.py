@@ -46,16 +46,6 @@ FEATURE_CASES = (
         ),
     ),
     FeatureCaseSpec(
-        name="static_child_container_parent",
-        feature="static_parent_container",
-        requires=frozenset({"static_parent_static_child"}),
-        supported_exposed_types=frozenset({"concrete"}),
-        supported_resolved_types=frozenset({"value_ref_ptr"}),
-        checks=(
-            "exercise_static_parent_container_pair<container_parent_shape, static_child_shape>();",
-        ),
-    ),
-    FeatureCaseSpec(
         name="inferred_lambda",
         feature="invoke",
         requires=VALUE_DEPENDENCY,

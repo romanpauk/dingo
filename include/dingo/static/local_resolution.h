@@ -47,8 +47,8 @@ class binding_resolution<Host, static_bindings<Registrations...>>
 
     constexpr binding_status status() const { return binding::status; }
 
-    template <typename ResolveRequest>
-    decltype(auto) resolve(runtime_context &context) {
+    template <typename ResolveRequest, typename Context>
+    decltype(auto) resolve(Context &context) {
       return self.template resolve_binding<Result, LookupKey>(context);
     }
   };
@@ -72,9 +72,8 @@ class binding_resolution<Host, static_bindings<Registrations...>>
     }
   };
 
-  template <typename Request, typename LookupKey>
-  typename annotated_traits<Request>::type
-  resolve_binding(runtime_context &context) {
+  template <typename Request, typename LookupKey, typename Context>
+  typename annotated_traits<Request>::type resolve_binding(Context &context) {
     using selection = binding_t<Request, LookupKey>;
     using binding = typename selection::binding_type;
     auto resolver = this->template make_binding_resolver<binding>(*this);

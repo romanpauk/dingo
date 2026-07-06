@@ -82,6 +82,13 @@ class basic_static_context : public detail::context_path_state {
   using closure_type =
       typename detail::static_context_closure_choice<StaticRegistry,
                                                      RuntimeDependencies>::type;
+  // Pure static contexts keep concrete closure pointers so optimized static
+  // resolution does not emit virtual reset/allocation code. Runtime-dependent
+  // static resolution needs the base pointer to share closures with the runtime
+  // context stack.
+  using closure_pointer_type =
+      std::conditional_t<RuntimeDependencies,
+                         detail::static_context_closure_base *, closure_type *>;
 
 public:
   basic_static_context() { closures_[0] = &closure_; }
@@ -133,12 +140,21 @@ public:
     closures_[closure_count_++] = closure;
   }
 
+  // Only runtime-dependent static contexts accept runtime-compatible closures.
+  template <bool Enabled = RuntimeDependencies,
+            std::enable_if_t<Enabled, int> = 0>
+  void push(detail::static_context_closure_base *closure) {
+    assert(!contains(closure));
+    assert(closure_count_ < closures_.size());
+    closures_[closure_count_++] = closure;
+  }
+
   void pop() {
     assert(closure_count_ != 0);
     --closure_count_;
   }
 
-  bool contains(const closure_type *candidate) const {
+  bool contains(closure_pointer_type candidate) const {
     for (std::size_t index = 0; index < closure_count_; ++index) {
       if (closures_[index] == candidate) {
         return true;
@@ -159,12 +175,19 @@ private:
                   "static_context requires at least one compile-time "
                   "temporary slot for this resolution path");
 
-    auto *fixed = active_closure().template try_allocate_temporary<T>();
-    assert(fixed != nullptr);
-    return fixed;
+    if constexpr (RuntimeDependencies) {
+      auto *fixed =
+          active_closure().try_allocate_temporary(sizeof(T), alignof(T));
+      assert(fixed != nullptr);
+      return reinterpret_cast<T *>(fixed);
+    } else {
+      auto *fixed = active_closure().template try_allocate_temporary<T>();
+      assert(fixed != nullptr);
+      return fixed;
+    }
   }
 
-  closure_type &active_closure() {
+  auto &active_closure() {
     assert(closure_count_ != 0);
     return *closures_[closure_count_ - 1];
   }
@@ -178,7 +201,7 @@ private:
     reinterpret_cast<T *>(ptr)->~T();
   }
 
-  std::array<closure_type *, closure_capacity_> closures_{};
+  std::array<closure_pointer_type, closure_capacity_> closures_{};
   std::size_t closure_count_ = 1;
   closure_type closure_;
 };

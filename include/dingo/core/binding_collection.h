@@ -27,6 +27,20 @@ struct binding_collection_append {
   }
 };
 
+template <typename Collection, typename Value, typename = void>
+struct default_collection_append : std::false_type {};
+
+template <typename Collection, typename Value>
+struct default_collection_append<
+    Collection, Value,
+    std::void_t<typename std::decay_t<Collection>::value_type>>
+    : std::bool_constant<std::is_constructible_v<
+          typename std::decay_t<Collection>::value_type, Value>> {};
+
+template <typename Collection>
+inline constexpr bool default_collection_append_v = default_collection_append<
+    Collection, typename collection_traits<Collection>::resolve_type>::value;
+
 template <typename StaticRegistry, typename T, typename LookupKey>
 constexpr std::size_t static_collection_binding_count() {
   static_assert(is_lookup_key_v<LookupKey>);
