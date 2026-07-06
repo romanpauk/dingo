@@ -80,7 +80,7 @@ inline constexpr bool has_key_value_lookup_definition_v =
     has_key_value_lookup_definition<Container, Request, LookupKey>::value;
 
 template <typename T>
-inline constexpr bool is_runtime_auto_constructible_dependency_v =
+inline constexpr bool is_request_auto_constructible_v =
     std::is_same_v<typename request_type<T>::value_type, std::decay_t<T>> &&
     (!std::is_reference_v<T> ||
      (std::is_lvalue_reference_v<T> &&
@@ -134,7 +134,7 @@ bool should_resolve_missing_from_parent(ParentContainer &parent,
                 "dingo::detail::lookup_key");
   if constexpr (!has_lookup<ParentContainer, Request, LookupKey>()) {
     return false;
-  } else if constexpr (is_runtime_auto_constructible_dependency_v<Request> &&
+  } else if constexpr (is_request_auto_constructible_v<Request> &&
                        !has_static_registry_type_v<ParentContainer> &&
                        has_binding_status_v<ParentContainer, Request,
                                             LookupKey>) {
@@ -291,20 +291,6 @@ protected:
     return resolve_runtime_request<T, LookupKey, R>(std::move(key));
   }
 
-  template <typename T, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(LookupKey key) {
-    return construct_collection_runtime_request<T>(
-        detail::binding_collection_append{}, std::move(key));
-  }
-
-  template <typename T, typename Fn, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(Fn &&fn, LookupKey key) {
-    return construct_collection_runtime_request<T>(std::forward<Fn>(fn),
-                                                   std::move(key));
-  }
-
   template <typename Signature = void, typename Callable>
   auto invoke(Callable &&callable) {
     return invoke_runtime_request<Signature>(std::forward<Callable>(callable));
@@ -317,8 +303,9 @@ protected:
   R resolve_runtime_request(LookupKey key) {
     using request = request_type<T, true>;
     if constexpr (collection_traits<R>::is_collection) {
-      return construct_collection_runtime_request<R>(
-          detail::binding_collection_append{}, std::move(key));
+      runtime_context context;
+      return construct_collection<R>(
+          context, detail::binding_collection_append{}, std::move(key));
     } else {
       runtime_context context;
       return resolve_impl<request, false, LookupKey, R>(context,
@@ -328,7 +315,7 @@ protected:
 
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection_runtime_request(Fn &&fn, LookupKey key) {
+  T construct_collection(runtime_context &context, Fn &&fn, LookupKey key) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
 
@@ -336,7 +323,6 @@ protected:
                   "missing collection_traits specialization for type T");
 
     T results;
-    runtime_context context;
     const std::size_t count = count_collection<T>(key);
     if (count == 0 && !has_explicit_collection_lookup<T>(key)) {
       throw detail::make_collection_type_not_found_exception<T, resolve_type>();
@@ -962,8 +948,8 @@ protected:
                   detail::is_static_lookup_key_definition_v<lookup_key_type> &&
                   !detail::is_no_lookup_key_v<lookup_key_type> &&
                   collection_traits<R>::is_collection) {
-      return this->template construct_collection_runtime_request<R>(
-          detail::binding_collection_append{}, key);
+      return this->template construct_collection<R>(
+          context, detail::binding_collection_append{}, key);
     } else if constexpr (MayAutoConstruct &&
                          is_auto_constructible<
                              std::decay_t<user_type>>::value) {
@@ -1514,10 +1500,9 @@ private:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(runtime_context &context, LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
-    return resolve_impl<request,
-                        detail::is_runtime_auto_constructible_dependency_v<
-                            typename request::user_type>>(context,
-                                                          std::move(key));
+    return resolve_impl<request, detail::is_request_auto_constructible_v<
+                                     typename request::user_type>>(
+        context, std::move(key));
   }
 
 #ifdef _MSC_VER

@@ -122,6 +122,10 @@ struct channel_dependency_pack {
   std::shared_ptr<process_api> process;
 };
 
+struct auto_constructed_channel_dependency {
+  std::shared_ptr<channel_api> local;
+};
+
 struct packed_channel {
   explicit packed_channel(channel_dependency_pack channel_deps)
       : deps(std::move(channel_deps)) {}
@@ -310,6 +314,17 @@ TEST(parent_container_resolution_test,
             h.base.resolve<std::shared_ptr<process_api>>());
   ASSERT_EQ(resolved->deps.local,
             h.ch1.resolve<std::shared_ptr<channel_api>>());
+  ASSERT_THROW(h.base.resolve<std::shared_ptr<channel_api>>(),
+               type_not_found_exception);
+}
+
+TEST(parent_container_resolution_test,
+     missing_binding_auto_construction_uses_original_child_container) {
+  channel_hierarchy h;
+
+  auto resolved = h.ch1.resolve<auto_constructed_channel_dependency>();
+
+  ASSERT_EQ(resolved.local, h.ch1.resolve<std::shared_ptr<channel_api>>());
   ASSERT_THROW(h.base.resolve<std::shared_ptr<channel_api>>(),
                type_not_found_exception);
 }
