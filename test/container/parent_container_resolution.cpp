@@ -71,6 +71,21 @@ struct system_root {
   std::shared_ptr<process_api> process;
 };
 
+struct configured_channel_consumer {
+  explicit configured_channel_consumer(
+      std::shared_ptr<channel> selected_channel)
+      : selected(std::move(selected_channel)) {}
+
+  std::shared_ptr<channel> selected;
+};
+
+struct system_configuration {
+  explicit system_configuration(std::size_t configured_channel_id)
+      : channel_id(configured_channel_id) {}
+
+  std::size_t channel_id;
+};
+
 struct system_container_traits : dynamic_container_traits {
   using lookup_definition_type = dingo::lookups<
       dingo::associative<std::size_t, channel, dingo::one, dingo::array<2>>>;
@@ -325,6 +340,38 @@ TEST(parent_container_resolution_test,
   ASSERT_EQ(resolved_system->channels[0]->process, resolved_system->process);
   ASSERT_NE(resolved_system->channels[0]->local,
             resolved_system->channels[1]->local);
+}
+
+TEST(parent_container_resolution_test,
+     system_registered_lambda_dynamically_resolves_configured_channel) {
+  auto assert_configured_channel = [](std::size_t configured_channel_id,
+                                      int expected_local_id) {
+    channel_hierarchy h;
+    h.register_system_composition();
+    h.system.register_type<scope<shared>,
+                           storage<std::shared_ptr<system_configuration>>>(
+        callable([configured_channel_id] {
+          return std::make_shared<system_configuration>(configured_channel_id);
+        }));
+    h.system.register_type<
+        scope<shared>, storage<std::shared_ptr<configured_channel_consumer>>>(
+        callable([system = &h.system](
+                     std::shared_ptr<system_configuration> configuration) {
+          return std::make_shared<configured_channel_consumer>(
+              system->resolve<std::shared_ptr<channel>>(
+                  configuration->channel_id));
+        }));
+
+    auto consumer =
+        h.system.resolve<std::shared_ptr<configured_channel_consumer>>();
+
+    ASSERT_EQ(consumer->selected, h.system.resolve<std::shared_ptr<channel>>(
+                                      configured_channel_id));
+    ASSERT_EQ(consumer->selected->local->id, expected_local_id);
+  };
+
+  assert_configured_channel(std::size_t{0}, 1);
+  assert_configured_channel(std::size_t{1}, 2);
 }
 
 struct value_api {
