@@ -123,6 +123,22 @@ private:
   static constexpr detail::binding_status static_resolve_status_v =
       static_selection_t<typename Request::lookup_type, Key>::status;
 
+  template <typename Request, typename Key,
+            bool Found = static_selection_t<Request, Key>::status ==
+                         detail::binding_status::found>
+  struct is_static_binding_available : std::false_type {};
+
+  template <typename Request, typename Key>
+  struct is_static_binding_available<Request, Key, true> {
+    using binding = typename static_selection_t<Request, Key>::binding_type;
+    static constexpr bool value = detail::binding_supports_request_v<
+        typename request_type<Request>::interface_type, binding>;
+  };
+
+  template <typename Request, typename Key>
+  static constexpr bool is_static_binding_available_v =
+      is_static_binding_available<Request, Key>::value;
+
   template <typename Collection, typename Key> bool select_static_collection() {
     if constexpr (!has_static_collection_v<Collection, Key>) {
       return false;
@@ -138,11 +154,9 @@ private:
     using value_type = typename request::value_type;
     using no_key = detail::no_lookup_key_t;
     constexpr bool has_exact_static_binding =
-        static_registry_type::template is_binding_resolvable<interface_type,
-                                                             no_key>();
+        is_static_binding_available_v<interface_type, no_key>;
     constexpr bool has_normalized_static_binding =
-        static_registry_type::template is_binding_resolvable<value_type,
-                                                             no_key>();
+        is_static_binding_available_v<value_type, no_key>;
 
     return has_exact_static_binding ||
            (has_normalized_static_binding && construct_normalized_request_v<T>);
@@ -178,11 +192,9 @@ private:
     using request_value_type = typename Request::value_type;
     using no_key = detail::no_lookup_key_t;
     constexpr bool has_exact_static_binding =
-        static_registry_type::template is_binding_resolvable<interface_type,
-                                                             no_key>();
+        is_static_binding_available_v<interface_type, no_key>;
     constexpr bool has_normalized_static_binding =
-        static_registry_type::template is_binding_resolvable<request_value_type,
-                                                             no_key>();
+        is_static_binding_available_v<request_value_type, no_key>;
     if constexpr (has_exact_static_binding) {
       using binding =
           typename static_selection_t<interface_type, no_key>::binding_type;
@@ -471,11 +483,7 @@ public:
       if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<T>) {
         using no_key = detail::no_lookup_key_t;
         constexpr bool has_static_normalized_binding =
-            static_selection_t<value_type, no_key>::status !=
-                detail::binding_status::not_found &&
-            detail::static_binding_resolvable_v<
-                typename static_selection_t<value_type, no_key>::binding_type,
-                static_bindings_type>;
+            is_static_binding_available_v<value_type, no_key>;
 
         if constexpr (has_static_construct_v<T>) {
           if (!has_runtime_no_key) {

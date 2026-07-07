@@ -772,6 +772,12 @@ template <typename Bindings> struct static_graph_total_destructible_slots;
 
 template <typename Bindings> struct static_graph_total_temporary_slots;
 
+template <typename DependencyList> struct static_dependency_bounds_known;
+
+template <typename Binding> struct static_binding_dependency_bounds_known;
+
+template <typename Bindings> struct static_bindings_dependency_bounds_known;
+
 template <typename StaticRegistry, bool RuntimeDependencies, bool Acyclic,
           bool ContainsCycle>
 struct static_graph_preserved_closure_depth_bound;
@@ -813,6 +819,31 @@ struct static_graph_total_temporary_slots<type_list<Bindings...>>
     : std::integral_constant<std::size_t,
                              (static_binding_temporary_slot_cost_v<Bindings> +
                               ... + std::size_t{0})> {};
+
+template <> struct static_dependency_bounds_known<void> : std::false_type {};
+
+template <>
+struct static_dependency_bounds_known<type_list<>> : std::true_type {};
+
+template <typename Head, typename... Tail>
+struct static_dependency_bounds_known<type_list<Head, Tail...>>
+    : std::bool_constant<
+          !collection_traits<
+              binding_dependency_interface_t<Head>>::is_collection &&
+          static_dependency_bounds_known<type_list<Tail...>>::value> {};
+
+template <typename Binding>
+struct static_binding_dependency_bounds_known
+    : static_dependency_bounds_known<
+          typename Binding::binding_model_type::dependencies_type::type> {};
+
+template <>
+struct static_bindings_dependency_bounds_known<type_list<>> : std::true_type {};
+
+template <typename... Bindings>
+struct static_bindings_dependency_bounds_known<type_list<Bindings...>>
+    : std::bool_constant<(
+          static_binding_dependency_bounds_known<Bindings>::value && ...)> {};
 
 template <typename StaticRegistry, bool RuntimeDependencies>
 struct static_graph_max_preserved_closure_depth_all<type_list<>, StaticRegistry,
@@ -1227,16 +1258,30 @@ public:
   static constexpr bool resolvable = topology::resolvable;
   static constexpr bool contains_cycle = topology::contains_cycle;
   static constexpr bool acyclic = topology::acyclic;
+  static constexpr bool static_context_eligible =
+      static_bindings_dependency_bounds_known<
+          typename StaticRegistry::interface_bindings>::value;
   static constexpr std::size_t max_preserved_closure_depth =
-      static_graph_preserved_closure_depth_bound<
-          StaticRegistry, RuntimeDependencies, resolvable,
-          contains_cycle>::value;
+      static_context_eligible
+          ? static_graph_preserved_closure_depth_bound<
+                StaticRegistry, RuntimeDependencies, resolvable,
+                contains_cycle>::value
+          : static_graph_total_preserved_closure_depth<
+                typename StaticRegistry::interface_bindings>::value;
   static constexpr std::size_t max_destructible_slots =
-      static_graph_destructible_slots_bound<StaticRegistry, RuntimeDependencies,
-                                            resolvable, contains_cycle>::value;
+      static_context_eligible
+          ? static_graph_destructible_slots_bound<
+                StaticRegistry, RuntimeDependencies, resolvable,
+                contains_cycle>::value
+          : static_graph_total_destructible_slots<
+                typename StaticRegistry::interface_bindings>::value;
   static constexpr std::size_t max_temporary_slots =
-      static_graph_temporary_slots_bound<StaticRegistry, RuntimeDependencies,
-                                         resolvable, contains_cycle>::value;
+      static_context_eligible
+          ? static_graph_temporary_slots_bound<StaticRegistry,
+                                               RuntimeDependencies, resolvable,
+                                               contains_cycle>::value
+          : static_graph_total_temporary_slots<
+                typename StaticRegistry::interface_bindings>::value;
   static constexpr std::size_t max_temporary_size =
       static_graph_max_temporary_size<StaticRegistry, resolvable>::value;
   static constexpr std::size_t max_temporary_align =

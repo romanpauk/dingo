@@ -37,19 +37,22 @@ using binding_dependencies_t = typename BindingModel::dependencies_type::type;
 
 template <typename...> inline constexpr bool dependent_false_v = false;
 
-template <typename Head, typename List> struct type_list_prepend;
+template <typename Request>
+using binding_dependency_unwrapped_t =
+    std::conditional_t<is_selected_v<Request>, selected_type_t<Request>,
+                       Request>;
 
-template <typename Head, typename... Tail>
-struct type_list_prepend<Head, type_list<Tail...>> {
-  using type = type_list<Head, Tail...>;
-};
+template <typename Request>
+using binding_dependency_interface_t =
+    normalized_type_t<binding_dependency_unwrapped_t<Request>>;
 
-template <typename Head, typename Tuples> struct prepend_binding_to_tuples;
+template <typename Request>
+using binding_exact_dependency_interface_t = std::remove_cv_t<
+    std::remove_reference_t<binding_dependency_unwrapped_t<Request>>>;
 
-template <typename Head, typename... Tuples>
-struct prepend_binding_to_tuples<Head, type_list<Tuples...>> {
-  using type = type_list<typename type_list_prepend<Head, Tuples>::type...>;
-};
+template <typename Request>
+using binding_dependency_key_t =
+    make_lookup_key_t<selected_selector_t<Request>>;
 
 template <typename Interface, typename RequestTypes>
 struct annotated_dependency_types {
@@ -75,23 +78,6 @@ private:
 public:
   using type = type_list<dependency<RequestTypes, selector>...>;
 };
-
-template <typename Request>
-using binding_dependency_unwrapped_t =
-    std::conditional_t<is_selected_v<Request>, selected_type_t<Request>,
-                       Request>;
-
-template <typename Request>
-using binding_dependency_interface_t =
-    normalized_type_t<binding_dependency_unwrapped_t<Request>>;
-
-template <typename Request>
-using binding_exact_dependency_interface_t = std::remove_cv_t<
-    std::remove_reference_t<binding_dependency_unwrapped_t<Request>>>;
-
-template <typename Request>
-using binding_dependency_key_t =
-    make_lookup_key_t<selected_selector_t<Request>>;
 
 template <typename Binding> struct binding_dependency_types {
 private:
@@ -132,173 +118,6 @@ public:
                                       interface_type, base_types>::type>::type>;
 };
 
-template <typename Request> struct binding_dependency_converter {
-  operator Request() const;
-};
-
-template <typename Implementation, typename BindingTuple>
-struct binding_tuple_constructible;
-
-template <typename Implementation, typename SelectedRequests,
-          typename BindingTuple>
-struct binding_tuple_dependency_constructible;
-
-template <typename Implementation, typename SelectedRequests,
-          typename RequestTypes, typename RemainingBindings>
-struct binding_dependency_options_constructible;
-
-template <typename Implementation, typename... SelectedRequests>
-struct binding_tuple_dependency_constructible<
-    Implementation, type_list<SelectedRequests...>, type_list<>>
-    : std::bool_constant<
-          is_list_initializable_v<Implementation, binding_dependency_converter<
-                                                      SelectedRequests>...> ||
-          is_direct_initializable_v<
-              Implementation,
-              binding_dependency_converter<SelectedRequests>...>> {};
-
-template <typename Implementation, typename... SelectedRequests, typename Head,
-          typename... Tail>
-struct binding_tuple_dependency_constructible<
-    Implementation, type_list<SelectedRequests...>, type_list<Head, Tail...>>
-    : binding_dependency_options_constructible<
-          Implementation, type_list<SelectedRequests...>,
-          typename binding_dependency_types<Head>::type, type_list<Tail...>> {};
-
-template <typename Implementation, typename SelectedRequests,
-          typename RemainingBindings>
-struct binding_dependency_options_constructible<
-    Implementation, SelectedRequests, type_list<>, RemainingBindings>
-    : std::false_type {};
-
-template <typename Implementation, typename... SelectedRequests,
-          typename Request, typename... Requests, typename RemainingBindings>
-struct binding_dependency_options_constructible<
-    Implementation, type_list<SelectedRequests...>,
-    type_list<Request, Requests...>, RemainingBindings>
-    : std::bool_constant<
-          binding_tuple_dependency_constructible<
-              Implementation, type_list<SelectedRequests..., Request>,
-              RemainingBindings>::value ||
-          binding_dependency_options_constructible<
-              Implementation, type_list<SelectedRequests...>,
-              type_list<Requests...>, RemainingBindings>::value> {};
-
-template <typename Implementation, typename... InterfaceBindings>
-struct binding_tuple_constructible<Implementation,
-                                   type_list<InterfaceBindings...>>
-    : binding_tuple_dependency_constructible<Implementation, type_list<>,
-                                             type_list<InterfaceBindings...>> {
-};
-
-template <typename InterfaceBindings, size_t Arity, typename = void>
-struct binding_tuples;
-
-template <typename InterfaceBindings>
-struct binding_tuples<InterfaceBindings, 0, void> {
-  using type = type_list<type_list<>>;
-};
-
-template <typename... InterfaceBindings, size_t Arity>
-struct binding_tuples<type_list<InterfaceBindings...>, Arity,
-                      std::enable_if_t<(Arity > 0)>> {
-private:
-  using tail_tuples =
-      typename binding_tuples<type_list<InterfaceBindings...>, Arity - 1>::type;
-
-public:
-  using type =
-      type_list_cat_t<typename prepend_binding_to_tuples<InterfaceBindings,
-                                                         tail_tuples>::type...>;
-};
-
-template <typename Implementation, typename CandidateTuples>
-struct unique_constructible_binding_tuple;
-
-template <typename Implementation>
-struct unique_constructible_binding_tuple<Implementation, type_list<>> {
-  static constexpr size_t count = 0;
-  using type = void;
-};
-
-template <typename Implementation, typename Head, typename... Tail>
-struct unique_constructible_binding_tuple<Implementation,
-                                          type_list<Head, Tail...>> {
-private:
-  using tail_result =
-      unique_constructible_binding_tuple<Implementation, type_list<Tail...>>;
-  static constexpr bool head_matches =
-      binding_tuple_constructible<Implementation, Head>::value;
-
-public:
-  static constexpr size_t count = tail_result::count + (head_matches ? 1 : 0);
-  using type = std::conditional_t<
-      count == 1,
-      std::conditional_t<head_matches, Head, typename tail_result::type>, void>;
-};
-
-template <typename Factory> struct constructor_factory_target;
-
-template <typename T> struct constructor_factory_target<constructor<T>> {
-  using type = normalized_type_t<T>;
-};
-
-template <typename BindingModel, typename InterfaceBindings>
-struct remove_current_binding_model;
-
-template <typename BindingModel>
-struct remove_current_binding_model<BindingModel, type_list<>> {
-  using type = type_list<>;
-};
-
-template <typename BindingModel, typename Head, typename... Tail>
-struct remove_current_binding_model<BindingModel, type_list<Head, Tail...>> {
-private:
-  using tail_type =
-      typename remove_current_binding_model<BindingModel,
-                                            type_list<Tail...>>::type;
-
-public:
-  using type = std::conditional_t<
-      std::is_same_v<BindingModel, typename Head::binding_model_type>,
-      tail_type, type_list_cat_t<type_list<Head>, tail_type>>;
-};
-
-template <typename BindingModel, typename InterfaceBindings, typename = void>
-struct inferred_binding_dependencies {
-  using type = void;
-  static constexpr dependency_resolution_status status =
-      dependency_resolution_status::missing;
-};
-
-template <typename BindingModel, typename InterfaceBindings>
-struct inferred_binding_dependencies<
-    BindingModel, InterfaceBindings,
-    std::enable_if_t<is_plain_constructor_factory<
-        typename BindingModel::factory_type>::value>> {
-private:
-  using factory_type = typename BindingModel::factory_type;
-  using implementation_type =
-      typename constructor_factory_target<factory_type>::type;
-  using candidate_bindings =
-      typename remove_current_binding_model<BindingModel,
-                                            InterfaceBindings>::type;
-  using candidate_tuples =
-      typename binding_tuples<candidate_bindings, factory_type::arity>::type;
-  using selection =
-      unique_constructible_binding_tuple<implementation_type, candidate_tuples>;
-
-public:
-  using type = std::conditional_t<factory_type::arity == 0, type_list<>,
-                                  typename selection::type>;
-  static constexpr dependency_resolution_status status =
-      factory_type::arity == 0
-          ? dependency_resolution_status::resolved
-          : (selection::count == 0   ? dependency_resolution_status::missing
-             : selection::count == 1 ? dependency_resolution_status::resolved
-                                     : dependency_resolution_status::ambiguous);
-};
-
 template <typename DependencyList, typename InterfaceBindings>
 struct dependency_bindings;
 
@@ -322,10 +141,16 @@ struct binding_dependency_resolution<BindingModel, InterfaceBindings, true> {
 
 template <typename BindingModel, typename InterfaceBindings>
 struct binding_dependency_resolution<BindingModel, InterfaceBindings, false> {
-  using type = typename inferred_binding_dependencies<BindingModel,
-                                                      InterfaceBindings>::type;
+  using type = typename dependency_bindings<
+      typename factory_traits<
+          typename BindingModel::factory_type>::dependencies,
+      InterfaceBindings>::type;
   static constexpr dependency_resolution_status status =
-      inferred_binding_dependencies<BindingModel, InterfaceBindings>::status;
+      std::is_same_v<type, void>
+          ? dependency_resolution_status::resolved
+          : (dependency_bindings_are_resolved<type>::value
+                 ? dependency_resolution_status::resolved
+                 : dependency_resolution_status::missing);
 };
 
 template <typename Interface, typename LookupKey, typename InterfaceBinding>
@@ -721,47 +546,6 @@ inline constexpr dependency_resolution_status
         BindingModel, effective_interface_bindings_t<
                           BindingModel, InterfaceBindings>>::status;
 
-template <typename BindingModel, typename StatusTag, typename = void>
-struct inferred_dependency_problem_type {
-  using type = void;
-};
-
-template <typename BindingModel>
-struct inferred_dependency_problem_type<
-    BindingModel,
-    std::integral_constant<dependency_resolution_status,
-                           dependency_resolution_status::missing>,
-    std::enable_if_t<is_plain_constructor_factory<
-        typename BindingModel::factory_type>::value>> {
-  using type = typename constructor_factory_target<
-      typename BindingModel::factory_type>::type;
-};
-
-template <typename BindingModel>
-struct inferred_dependency_problem_type<
-    BindingModel,
-    std::integral_constant<dependency_resolution_status,
-                           dependency_resolution_status::ambiguous>,
-    std::enable_if_t<is_plain_constructor_factory<
-        typename BindingModel::factory_type>::value>> {
-  using type = typename constructor_factory_target<
-      typename BindingModel::factory_type>::type;
-};
-
-template <typename BindingModel>
-using inferred_missing_problem_type_t =
-    typename inferred_dependency_problem_type<
-        BindingModel,
-        std::integral_constant<dependency_resolution_status,
-                               dependency_resolution_status::missing>>::type;
-
-template <typename BindingModel>
-using inferred_ambiguous_problem_type_t =
-    typename inferred_dependency_problem_type<
-        BindingModel,
-        std::integral_constant<dependency_resolution_status,
-                               dependency_resolution_status::ambiguous>>::type;
-
 template <typename BindingModel, typename MissingDependency,
           bool Valid = std::is_void_v<MissingDependency>>
 struct declared_dependency_diagnostic;
@@ -818,33 +602,13 @@ template <typename BindingModel, typename InterfaceBindings,
               !std::is_same_v<binding_dependencies_t<BindingModel>, void>>
 struct binding_inferred_dependencies_resolved;
 
-template <typename BindingModel, typename ProblemType,
-          bool Valid = std::is_void_v<ProblemType>>
-struct inferred_missing_dependency_diagnostic;
-
-template <typename BindingModel, typename ProblemType>
-struct inferred_missing_dependency_diagnostic<BindingModel, ProblemType, true>
-    : std::true_type {};
-
-template <typename BindingModel, typename ProblemType>
-struct inferred_missing_dependency_diagnostic<BindingModel, ProblemType,
-                                              false> {
-  static_assert(dependent_false_v<BindingModel, ProblemType>,
-                "bindings<...> source requires every inferred constructor "
-                "dependency to map to an interface binding");
-  static constexpr bool value = false;
-};
-
 template <typename BindingModel, typename InterfaceBindings>
 struct binding_inferred_dependencies_resolved<BindingModel, InterfaceBindings,
                                               true> : std::true_type {};
 
 template <typename BindingModel, typename InterfaceBindings>
 struct binding_inferred_dependencies_resolved<BindingModel, InterfaceBindings,
-                                              false>
-    : std::bool_constant<binding_dependency_resolution_status_v<
-                             BindingModel, InterfaceBindings> !=
-                         dependency_resolution_status::missing> {};
+                                              false> : std::true_type {};
 
 template <typename BindingModel, typename InterfaceBindings,
           bool DependenciesResolved = binding_inferred_dependencies_resolved<
@@ -857,35 +621,12 @@ struct binding_inferred_dependency_diagnostic<BindingModel, InterfaceBindings,
 
 template <typename BindingModel, typename InterfaceBindings>
 struct binding_inferred_dependency_diagnostic<BindingModel, InterfaceBindings,
-                                              false>
-    : inferred_missing_dependency_diagnostic<
-          BindingModel,
-          std::conditional_t<binding_dependency_resolution_status_v<
-                                 BindingModel, InterfaceBindings> ==
-                                 dependency_resolution_status::missing,
-                             inferred_missing_problem_type_t<BindingModel>,
-                             void>> {};
+                                              false> : std::true_type {};
 
 template <typename BindingModel, typename InterfaceBindings,
           bool HasKnownDependencies =
               !std::is_same_v<binding_dependencies_t<BindingModel>, void>>
 struct binding_inferred_dependencies_unambiguous;
-
-template <typename BindingModel, typename ProblemType,
-          bool Valid = std::is_void_v<ProblemType>>
-struct inferred_ambiguity_diagnostic;
-
-template <typename BindingModel, typename ProblemType>
-struct inferred_ambiguity_diagnostic<BindingModel, ProblemType, true>
-    : std::true_type {};
-
-template <typename BindingModel, typename ProblemType>
-struct inferred_ambiguity_diagnostic<BindingModel, ProblemType, false> {
-  static_assert(dependent_false_v<BindingModel, ProblemType>,
-                "bindings<...> source requires every inferred constructor "
-                "dependency to map to exactly one interface binding");
-  static constexpr bool value = false;
-};
 
 template <typename BindingModel, typename InterfaceBindings>
 struct binding_inferred_dependencies_unambiguous<BindingModel,
@@ -895,9 +636,7 @@ struct binding_inferred_dependencies_unambiguous<BindingModel,
 template <typename BindingModel, typename InterfaceBindings>
 struct binding_inferred_dependencies_unambiguous<BindingModel,
                                                  InterfaceBindings, false>
-    : std::bool_constant<binding_dependency_resolution_status_v<
-                             BindingModel, InterfaceBindings> !=
-                         dependency_resolution_status::ambiguous> {};
+    : std::true_type {};
 
 template <typename BindingModel, typename InterfaceBindings,
           bool DependenciesUnambiguous =
@@ -911,14 +650,7 @@ struct binding_inferred_ambiguity_diagnostic<BindingModel, InterfaceBindings,
 
 template <typename BindingModel, typename InterfaceBindings>
 struct binding_inferred_ambiguity_diagnostic<BindingModel, InterfaceBindings,
-                                             false>
-    : inferred_ambiguity_diagnostic<
-          BindingModel,
-          std::conditional_t<binding_dependency_resolution_status_v<
-                                 BindingModel, InterfaceBindings> ==
-                                 dependency_resolution_status::ambiguous,
-                             inferred_ambiguous_problem_type_t<BindingModel>,
-                             void>> {};
+                                             false> : std::true_type {};
 
 template <typename BindingModel>
 struct binding_factory_is_compile_time_bindable
