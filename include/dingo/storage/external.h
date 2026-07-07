@@ -10,7 +10,6 @@
 #include <dingo/core/config.h>
 
 #include <dingo/factory/constructor.h>
-#include <dingo/storage/resettable.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
@@ -259,8 +258,7 @@ private:
 
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
-class storage<external, Type, StoredType, Factory, Conversions>
-    : public resettable {
+class storage<external, Type, StoredType, Factory, Conversions> {
   storage_instance<external, Type, StoredType, void> instance_;
 
 public:
@@ -278,7 +276,7 @@ public:
   }
   constexpr bool is_resolved() const { return true; }
 
-  void reset() override {}
+  void reset() {}
 };
 } // namespace detail
 } // namespace dingo

@@ -11,7 +11,6 @@
 
 #include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
-#include <dingo/storage/resettable.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
@@ -257,8 +256,7 @@ private:
 
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
-class storage<shared_cyclical, Type, StoredType, Factory, Conversions>
-    : public resettable {
+class storage<shared_cyclical, Type, StoredType, Factory, Conversions> {
   struct conversion_entry {
     explicit conversion_entry(type_descriptor key) : descriptor(key) {}
     virtual ~conversion_entry() = default;
@@ -331,7 +329,7 @@ public:
 
   bool is_resolved() const { return !instance_.empty(); }
 
-  void reset() override {
+  void reset() {
     // Graph objects can keep references to rebound shared_ptr interface
     // handles stored in `conversions_`. Destroy the object graph first so
     // those references stay valid for any destructor work.
