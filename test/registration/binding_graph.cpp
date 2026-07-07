@@ -221,6 +221,24 @@ TEST(static_execution_traits_test,
 }
 
 TEST(static_execution_traits_test,
+     unknown_auto_constructor_dependencies_use_full_context_bounds) {
+  struct left {};
+  struct right {};
+  struct root {
+    explicit root(left &) {}
+  };
+
+  using source = dingo::bindings<dingo::bind<scope<shared>, storage<left>>,
+                                 dingo::bind<scope<shared>, storage<right>>,
+                                 dingo::bind<scope<unique>, storage<root>>>;
+  using static_traits = detail::static_execution_traits<typename source::type>;
+
+  static_assert(static_traits::acyclic);
+  static_assert(!static_traits::static_context_eligible);
+  static_assert(static_traits::max_preserved_closure_depth == 2);
+}
+
+TEST(static_execution_traits_test,
      static_conversion_cost_traits_live_with_storage_types) {
   struct payload {
     ~payload() {}

@@ -92,7 +92,7 @@ TEST(static_bindings_source_test,
 }
 
 TEST(static_bindings_source_test,
-     plain_constructor_dependencies_are_inferred_from_interface_bindings) {
+     plain_constructor_dependencies_are_unknown_for_static_metadata) {
   struct config {};
   struct logger {};
   struct service {
@@ -109,22 +109,19 @@ TEST(static_bindings_source_test,
       std::is_same_v<typename registry_type::dependencies<service>, void>);
   static_assert(
       std::is_same_v<typename registry_type::dependency_bindings<service>,
-                     type_list<typename registry_type::binding<
-                                   config, detail::no_lookup_key_t>,
-                               typename registry_type::binding<
-                                   logger, detail::no_lookup_key_t>>>);
+                     void>);
 }
 
 TEST(static_bindings_source_test,
-     inferred_dependencies_can_reuse_one_binding_for_multiple_request_shapes) {
+     plain_constructor_still_resolves_selected_conversion_dependencies) {
   struct config {};
   struct service {
-    service(config &, std::shared_ptr<config>) {}
+    explicit service(config &init_dependency) : dependency(&init_dependency) {}
+    config *dependency;
   };
 
-  using source = dingo::bindings<
-      dingo::bind<scope<shared>, storage<std::shared_ptr<config>>>,
-      dingo::bind<scope<unique>, storage<service>>>;
+  using source = dingo::bindings<dingo::bind<scope<shared>, storage<config>>,
+                                 dingo::bind<scope<unique>, storage<service>>>;
   using registry_type = typename source::type;
 
   static_assert(registry_type::valid);
@@ -132,10 +129,12 @@ TEST(static_bindings_source_test,
       std::is_same_v<typename registry_type::dependencies<service>, void>);
   static_assert(
       std::is_same_v<typename registry_type::dependency_bindings<service>,
-                     type_list<typename registry_type::binding<
-                                   config, detail::no_lookup_key_t>,
-                               typename registry_type::binding<
-                                   config, detail::no_lookup_key_t>>>);
+                     void>);
+
+  dingo::static_container<source> container;
+  auto instance = container.resolve<service>();
+
+  EXPECT_EQ(instance.dependency, &container.resolve<config &>());
 }
 
 TEST(static_bindings_source_test,
