@@ -128,6 +128,62 @@ private:
   static constexpr binding_status resolve_status_v =
       selection_t<typename Request::lookup_type, Key>::status;
 
+  template <typename Request, typename Result, typename Selection,
+            binding_status Status = Selection::status>
+  struct minimal_context_selection {
+    static constexpr bool value = false;
+  };
+
+  template <typename Request, typename Result, typename Selection>
+  struct minimal_context_selection<Request, Result, Selection,
+                                   binding_status::found> {
+    using binding = typename Selection::binding_type;
+    using binding_model_type = typename binding::binding_model_type;
+
+    static constexpr bool value =
+        (std::is_reference_v<Result> || std::is_pointer_v<Result>) &&
+        binding_supports_request_v<typename Request::interface_type, binding> &&
+        stored_request_identity_v<typename Request::interface_type,
+                                  typename binding_model_type::storage_type> &&
+        factory_without_dependencies_v<
+            typename binding_model_type::factory_type>;
+  };
+
+  template <typename Request, typename LookupKey,
+            binding_status Status =
+                resolve_status_v<Request, detail::make_lookup_key_t<LookupKey>>>
+  struct resolve_request_status_check {
+    using type = void;
+  };
+
+  template <typename Request, typename LookupKey>
+  struct resolve_request_status_check<Request, LookupKey,
+                                      binding_status::ambiguous> {
+    static_assert(
+        resolve_status_v<Request, detail::make_lookup_key_t<LookupKey>> !=
+            binding_status::ambiguous,
+        "static_container cannot resolve an ambiguously bound type");
+    using type = void;
+  };
+
+  template <typename Request, typename LookupKey>
+  struct resolve_request_status_check<Request, LookupKey,
+                                      binding_status::not_found> {
+    static_assert(has_parent_v,
+                  "static_container cannot resolve an unbound type");
+    using type = void;
+  };
+
+  template <typename Request, typename R, typename LookupKey,
+            bool IsCollection = collection_traits<R>::is_collection>
+  struct resolve_request_check {
+    using type = void;
+  };
+
+  template <typename Request, typename R, typename LookupKey>
+  struct resolve_request_check<Request, R, LookupKey, false>
+      : resolve_request_status_check<Request, LookupKey> {};
+
   template <typename Collection, typename Key>
   static constexpr std::size_t collection_count_v =
       static_collection_binding_count<static_bindings_type, Collection, Key>();
@@ -146,20 +202,7 @@ private:
       using selection =
           static_binding_t<typename static_bindings_type::template bindings<
               typename Request::lookup_type, LookupKey>>;
-      if constexpr (selection::status == binding_status::found) {
-        using binding = typename selection::binding_type;
-        using binding_model_type = typename binding::binding_model_type;
-        return (std::is_reference_v<Result> || std::is_pointer_v<Result>) &&
-               binding_supports_request_v<typename Request::interface_type,
-                                          binding> &&
-               stored_request_identity_v<
-                   typename Request::interface_type,
-                   typename binding_model_type::storage_type> &&
-               factory_without_dependencies_v<
-                   typename binding_model_type::factory_type>;
-      } else {
-        return false;
-      }
+      return minimal_context_selection<Request, Result, selection>::value;
     }
   }();
 
@@ -242,6 +285,8 @@ public:
 
   template <typename T, typename LookupKey,
             typename R = typename request_type<T, true>::result_type,
+            typename = typename resolve_request_check<request_type<T, false>, R,
+                                                      LookupKey>::type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(LookupKey key) {
     using lookup_request = request_type<T, true>;
@@ -280,6 +325,8 @@ public:
             typename LookupKey,
             typename R =
                 typename request_type<T, RemoveRvalueReferences>::result_type,
+            typename = typename resolve_request_check<
+                request_type<T, RemoveRvalueReferences>, R, LookupKey>::type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(Context &context, LookupKey key) {
     using lookup_request = request_type<T, true>;
@@ -508,7 +555,10 @@ public:
 
   template <typename T, bool RemoveRvalueReferences, typename Context,
             typename R =
-                typename request_type<T, RemoveRvalueReferences>::result_type>
+                typename request_type<T, RemoveRvalueReferences>::result_type,
+            typename = typename resolve_request_check<
+                request_type<T, RemoveRvalueReferences>, R,
+                decltype(detail::no_lookup_key())>::type>
   R resolve(Context &context) {
     return resolve_request<request_type<T, RemoveRvalueReferences>, R>(
         context, detail::no_lookup_key());
