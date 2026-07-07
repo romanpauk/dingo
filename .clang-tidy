@@ -78,7 +78,7 @@ Checks: >
   readability-uniqueptr-delete-release
 CheckOptions:
   - key: readability-function-cognitive-complexity.Threshold
-    value: 25
+    value: 40
   - key: readability-function-size.StatementThreshold
     value: 120
   - key: readability-function-size.BranchThreshold

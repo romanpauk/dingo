@@ -284,51 +284,9 @@ public:
   }
 
 protected:
-  template <typename T, typename LookupKey,
-            typename R = typename request_type<T, true>::result_type,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(LookupKey key) {
-    return resolve_runtime_request<T, LookupKey, R>(std::move(key));
-  }
-
-  template <typename T, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(LookupKey key) {
-    return construct_collection_runtime_request<T>(
-        detail::binding_collection_append{}, std::move(key));
-  }
-
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(Fn &&fn, LookupKey key) {
-    return construct_collection_runtime_request<T>(std::forward<Fn>(fn),
-                                                   std::move(key));
-  }
-
-  template <typename Signature = void, typename Callable>
-  auto invoke(Callable &&callable) {
-    return invoke_runtime_request<Signature>(std::forward<Callable>(callable));
-  }
-
-  template <typename T, typename LookupKey,
-            typename R = typename request_type<T, true>::result_type,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
-  R resolve_runtime_request(LookupKey key) {
-    using request = request_type<T, true>;
-    if constexpr (collection_traits<R>::is_collection) {
-      return construct_collection_runtime_request<R>(
-          detail::binding_collection_append{}, std::move(key));
-    } else {
-      runtime_context context;
-      return resolve_impl<request, false, LookupKey, R>(context,
-                                                        std::move(key));
-    }
-  }
-
-  template <typename T, typename Fn, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection_runtime_request(Fn &&fn, LookupKey key) {
+  T construct_collection(runtime_context &context, Fn &&fn, LookupKey key) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
 
@@ -336,7 +294,6 @@ protected:
                   "missing collection_traits specialization for type T");
 
     T results;
-    runtime_context context;
     const std::size_t count = count_collection<T>(key);
     if (count == 0 && !has_explicit_collection_lookup<T>(key)) {
       throw detail::make_collection_type_not_found_exception<T, resolve_type>();
@@ -349,12 +306,11 @@ protected:
   }
 
   template <typename Signature = void, typename Callable>
-  auto invoke_runtime_request(Callable &&callable) {
+  auto invoke(runtime_context &context, Callable &&callable) {
     using callable_type = std::remove_cv_t<std::remove_reference_t<Callable>>;
     using dispatch_signature =
         detail::callable_dispatch_signature_t<Signature, callable_type>;
 
-    runtime_context context;
     auto type_guard = context.template track_type<callable_type>();
     return detail::callable_invoke<dispatch_signature>::construct(
         std::forward<Callable>(callable), context, *resolve_root());
@@ -962,8 +918,8 @@ protected:
                   detail::is_static_lookup_key_definition_v<lookup_key_type> &&
                   !detail::is_no_lookup_key_v<lookup_key_type> &&
                   collection_traits<R>::is_collection) {
-      return this->template construct_collection_runtime_request<R>(
-          detail::binding_collection_append{}, key);
+      return this->template construct_collection<R>(
+          context, detail::binding_collection_append{}, key);
     } else if constexpr (MayAutoConstruct &&
                          is_auto_constructible<
                              std::decay_t<user_type>>::value) {

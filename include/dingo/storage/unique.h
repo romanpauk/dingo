@@ -37,6 +37,17 @@ template <typename Type> struct storage_materialization_traits<unique, Type> {
           new (ptr) source_type(storage.resolve(context, container));
         });
   }
+
+  template <typename Context, typename Storage, typename Container>
+  static auto &materialize_source_in_context(Context &context, Storage &storage,
+                                             Container &container) {
+    using source_type = std::remove_cv_t<
+        std::remove_reference_t<decltype(storage.resolve(context, container))>>;
+    return context.template construct<detail::rvalue_source<source_type>>(
+        std::in_place, [&](void *ptr) {
+          new (ptr) source_type(storage.resolve(context, container));
+        });
+  }
 };
 
 template <typename Type, typename U>

@@ -192,6 +192,18 @@ decltype(auto) materialize_binding_source(Context &context, Storage &storage,
   return std::forward<Fn>(fn)(std::move(source));
 }
 
+template <typename MaterializationTraits, typename Context, typename Storage,
+          typename Owner, typename = void>
+struct has_context_materialize_source : std::false_type {};
+
+template <typename MaterializationTraits, typename Context, typename Storage,
+          typename Owner>
+struct has_context_materialize_source<
+    MaterializationTraits, Context, Storage, Owner,
+    std::void_t<decltype(MaterializationTraits::materialize_source_in_context(
+        std::declval<Context &>(), std::declval<Storage &>(),
+        std::declval<Owner &>()))>> : std::true_type {};
+
 template <typename Storage, typename Context, typename Owner, typename Fn>
 decltype(auto) materialize_tracked_binding_source(Context &context,
                                                   Storage &storage,
@@ -203,6 +215,15 @@ decltype(auto) materialize_tracked_binding_source(Context &context,
 
   [[maybe_unused]] auto guard =
       materialization_traits::template make_guard<leaf_type>(context, storage);
+  if constexpr (std::is_base_of_v<context_state,
+                                  std::remove_reference_t<Context>> &&
+                has_context_materialize_source<materialization_traits, Context,
+                                               Storage, Owner>::value) {
+    auto &source = materialization_traits::materialize_source_in_context(
+        context, storage, owner);
+    return std::forward<Fn>(fn)(std::move(source));
+  }
+
   auto source =
       materialization_traits::materialize_source(context, storage, owner);
   return std::forward<Fn>(fn)(std::move(source));

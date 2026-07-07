@@ -36,6 +36,13 @@ struct child_config : config {
 struct second_child_config : config {
   second_child_config() { value = 3; }
 };
+
+struct parent_temporary {
+  parent_temporary() : value(4) {}
+  ~parent_temporary() {}
+
+  int value;
+};
 } // namespace
 
 TEST(static_parent_container_test,
@@ -132,6 +139,32 @@ TEST(static_parent_container_test,
 
   EXPECT_EQ(child.resolve<config &>().value, 1);
   EXPECT_EQ(child.resolve<service>().value, 1);
+}
+
+TEST(static_parent_container_test,
+     static_child_context_is_sized_for_parent_temporaries) {
+  using parent_bindings =
+      bindings<dingo::bind<scope<unique>, storage<parent_temporary>>>;
+  using child_bindings = bindings<>;
+
+  static_container<parent_bindings> parent;
+  static_container<child_bindings, decltype(parent)> child(&parent);
+
+  EXPECT_EQ(child.resolve<parent_temporary>().value, 4);
+}
+
+TEST(static_parent_container_test,
+     static_child_context_is_sized_for_grandparent_temporaries) {
+  using grandparent_bindings =
+      bindings<dingo::bind<scope<unique>, storage<parent_temporary>>>;
+  using parent_bindings = bindings<>;
+  using child_bindings = bindings<>;
+
+  static_container<grandparent_bindings> grandparent;
+  static_container<parent_bindings, decltype(grandparent)> parent(&grandparent);
+  static_container<child_bindings, decltype(parent)> child(&parent);
+
+  EXPECT_EQ(child.resolve<parent_temporary>().value, 4);
 }
 
 TEST(static_parent_container_test, static_child_binding_overrides_parent) {

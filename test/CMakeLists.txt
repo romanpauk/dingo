@@ -9,6 +9,7 @@ set(DINGO_MATRIX_GENERATOR
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/axis_config.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/axis_containers.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/axis_feature_cases.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/axis_exposed_types.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/axis_features.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/axis_resolved_types.py"

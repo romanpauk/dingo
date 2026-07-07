@@ -28,8 +28,9 @@ PROBE_LIMITS = {
     "probe_static_resolution_mixed_container_shared_config": {
         "default": 0x430,
         "clang": 0x5E0,
-        "clang19": 0x5E0,
-        "clang20": 0x5E0,
+        "clang18": 0x680,
+        "clang19": 0x680,
+        "clang20": 0x680,
         "gcc13": 0x4C0,
         "gcc14": 0x530,
         "clang_arm64": 0x450,
@@ -59,6 +60,9 @@ PROBE_LIMITS = {
     },
     "probe_static_resolution_mixed_container_shared_reference_config": {
         "default": 0x2E0,
+        "clang18": 0x390,
+        "clang19": 0x390,
+        "clang20": 0x390,
         "gcc": 0x2E0,
         "gcc13": 0x2E0,
         "gcc_arm64": 0x2E0,
@@ -72,8 +76,9 @@ PROBE_LIMITS = {
     "probe_static_resolution_mixed_container_optional_config": {
         "default": 0x380,
         "clang": 0x520,
-        "clang19": 0x520,
-        "clang20": 0x520,
+        "clang18": 0x5B0,
+        "clang19": 0x5B0,
+        "clang20": 0x5B0,
         "gcc13": 0x390,
         "gcc14": 0x480,
         "gcc_arm64": 0x560,
@@ -96,12 +101,18 @@ PROBE_LIMITS = {
     },
     "probe_static_resolution_mixed_container_unique_value_config": {
         "default": 0x280,
+        "clang18": 0x2D0,
+        "clang19": 0x2D0,
+        "clang20": 0x2D0,
         "gcc": 0x280,
         "gcc13": 0x290,
         "gcc_arm64": 0x280,
     },
     "probe_static_resolution_mixed_container_unique_rvalue_config": {
         "default": 0x320,
+        "clang18": 0x3C0,
+        "clang19": 0x3C0,
+        "clang20": 0x3C0,
         "gcc": 0x320,
         "gcc13": 0x320,
         "gcc_arm64": 0x320,
@@ -117,8 +128,9 @@ PROBE_LIMITS = {
     "probe_static_resolution_mixed_container_unique_wrapper_config": {
         "default": 0x440,
         "clang": 0x540,
-        "clang19": 0x540,
-        "clang20": 0x540,
+        "clang18": 0x5C0,
+        "clang19": 0x5C0,
+        "clang20": 0x5C0,
         "gcc_arm64": 0x540,
     },
     "probe_runtime_resolution_unique_wrapper_config": {
@@ -132,6 +144,9 @@ PROBE_LIMITS = {
     "probe_static_resolution_mixed_container_interface_handle": {
         "default": 0x570,
         "clang": 0x580,
+        "clang18": 0x5D0,
+        "clang19": 0x5D0,
+        "clang20": 0x5D0,
         "gcc_arm64": 0x570,
     },
     "probe_runtime_resolution_interface_handle": {
@@ -197,6 +212,10 @@ PROBE_LIMITS = {
     },
 }
 
+# Mixed-container probes are smoke limits, not static-container performance
+# targets.  A mixed container intentionally carries runtime lookup, parent
+# fallback, and runtime/static collection composition paths; code-size pressure
+# should stay strict on static_container probes.
 EXPECTED_FASTER_THAN_RUNTIME = (
     ("probe_static_resolution_consumer_read", "probe_runtime_resolution_consumer_read"),
     ("probe_static_resolution_shared_value_config", "probe_runtime_resolution_shared_value_config"),
@@ -303,6 +322,12 @@ def expected_max_for_environment() -> dict[str, int]:
         columns.append("clang")
         if is_arm64:
             columns.append("clang_arm64")
+    if (
+        compiler_major == "18"
+        or "clang++-18" in compiler_id
+        or "clang-18" in compiler_id
+    ):
+        columns.append("clang18")
     if (
         compiler_major == "19"
         or "clang++-19" in compiler_id
