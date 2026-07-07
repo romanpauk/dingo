@@ -12,7 +12,6 @@
 #include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
 #include <dingo/memory/object_lifetime.h>
-#include <dingo/storage/resettable.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
@@ -378,8 +377,7 @@ private:
 
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions>
-class storage<shared, Type, StoredType, Factory, Conversions>
-    : public resettable {
+class storage<shared, Type, StoredType, Factory, Conversions> {
   // TODO
   // static_assert(std::is_trivially_destructible_v< Type > ==
   // std::is_trivially_destructible_v< storage_instance< Type, shared > >);
@@ -402,7 +400,7 @@ public:
   }
 
   bool is_resolved() const { return !instance_.empty(); }
-  void reset() override { instance_.reset(); }
+  void reset() { instance_.reset(); }
 };
 } // namespace detail
 } // namespace dingo

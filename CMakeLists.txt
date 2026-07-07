@@ -150,7 +150,6 @@ if(DINGO_DEVELOPMENT_MODE)
         rtti/typeid_provider.h
         storage/external.h
         storage/materialized_source.h
-        storage/resettable.h
         storage/shared_cyclical.h
         storage/shared.h
         storage/storage.h

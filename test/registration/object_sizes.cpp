@@ -133,10 +133,11 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
         "runtime bindings state", 48);
 
     expect_size_at_most<detail::context_closure>("context closure", 112);
-    expect_size_at_most<size_binding_state>("runtime binding state", 160);
-    expect_size_at_most<size_binding>("runtime binding", 176);
+    expect_size_at_most<size_storage>("shared registration storage", 16);
+    expect_size_at_most<size_binding_state>("runtime binding state", 144);
+    expect_size_at_most<size_binding>("runtime binding", 160);
     expect_size_at_most<size_single_owner>("single-interface binding owner",
-                                           192);
+                                           176);
     expect_size_at_most<size_shared_state_owner>(
         "multi-interface shared-state binding owner", 56);
 
@@ -162,6 +163,7 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
 
   static_assert(sizeof(size_resolution_container) <
                 sizeof(detail::binding_scope<size_local_binding>));
+  static_assert(!std::is_polymorphic_v<size_storage>);
   static_assert(sizeof(size_base_lookup_key) == sizeof(size_type_index) * 2);
   static_assert(sizeof(size_probe_registry::runtime_lookup_binding_view) ==
                 sizeof(void *));
