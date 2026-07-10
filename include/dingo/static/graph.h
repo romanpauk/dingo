@@ -228,14 +228,13 @@ template <typename DependencyBindings, typename StaticRegistry>
 using dependency_graph_nodes_t =
     typename dependency_graph_nodes<DependencyBindings, StaticRegistry>::type;
 
-template <typename StorageTag>
-struct static_preserves_closure : std::false_type {};
+template <typename StorageTag> struct static_retains_frame : std::false_type {};
 
-template <> struct static_preserves_closure<shared> : std::true_type {};
+template <> struct static_retains_frame<shared> : std::true_type {};
 
 template <typename StorageTag>
-inline constexpr bool static_preserves_closure_v =
-    static_preserves_closure<StorageTag>::value;
+inline constexpr bool static_retains_frame_v =
+    static_retains_frame<StorageTag>::value;
 
 template <typename StorageTag>
 struct static_storage_rollback_cost : std::integral_constant<std::size_t, 0> {};
@@ -482,8 +481,8 @@ struct static_dependency_temporary_align<type_list<Dependencies...>>
                     std::size_t{0}})> {};
 
 template <typename InterfaceBinding>
-inline constexpr std::size_t static_binding_preserved_closure_cost_v =
-    static_preserves_closure_v<
+inline constexpr std::size_t static_binding_retained_frame_cost_v =
+    static_retains_frame_v<
         typename InterfaceBinding::binding_model_type::storage_tag>
         ? 1
         : 0;
@@ -725,14 +724,14 @@ struct static_binding_peak_temporary_slots
 
 template <typename Bindings, typename StaticRegistry,
           bool RuntimeDependencies = false>
-struct static_graph_max_preserved_closure_depth_all;
+struct static_graph_max_retained_frame_depth_all;
 
 template <typename StaticRegistry, bool RuntimeDependencies, bool Acyclic>
-struct static_graph_max_preserved_closure_depth;
+struct static_graph_max_retained_frame_depth;
 
 template <typename Binding, typename StaticRegistry,
           bool RuntimeDependencies = false>
-struct static_binding_graph_preserved_closure_depth;
+struct static_binding_graph_retained_frame_depth;
 
 template <typename Bindings, typename StaticRegistry,
           bool RuntimeDependencies = false>
@@ -766,7 +765,7 @@ template <typename Binding, typename StaticRegistry,
           bool RuntimeDependencies = false>
 struct static_binding_graph_temporary_slots;
 
-template <typename Bindings> struct static_graph_total_preserved_closure_depth;
+template <typename Bindings> struct static_graph_total_retained_frame_depth;
 
 template <typename Bindings> struct static_graph_total_destructible_slots;
 
@@ -780,7 +779,7 @@ template <typename Bindings> struct static_bindings_dependency_bounds_known;
 
 template <typename StaticRegistry, bool RuntimeDependencies, bool Acyclic,
           bool ContainsCycle>
-struct static_graph_preserved_closure_depth_bound;
+struct static_graph_retained_frame_depth_bound;
 
 template <typename StaticRegistry, bool RuntimeDependencies, bool Acyclic,
           bool ContainsCycle>
@@ -791,14 +790,14 @@ template <typename StaticRegistry, bool RuntimeDependencies, bool Acyclic,
 struct static_graph_temporary_slots_bound;
 
 template <>
-struct static_graph_total_preserved_closure_depth<type_list<>>
+struct static_graph_total_retained_frame_depth<type_list<>>
     : std::integral_constant<std::size_t, 0> {};
 
 template <typename... Bindings>
-struct static_graph_total_preserved_closure_depth<type_list<Bindings...>>
-    : std::integral_constant<
-          std::size_t, (static_binding_preserved_closure_cost_v<Bindings> +
-                        ... + std::size_t{0})> {};
+struct static_graph_total_retained_frame_depth<type_list<Bindings...>>
+    : std::integral_constant<std::size_t,
+                             (static_binding_retained_frame_cost_v<Bindings> +
+                              ... + std::size_t{0})> {};
 
 template <>
 struct static_graph_total_destructible_slots<type_list<>>
@@ -846,38 +845,38 @@ struct static_bindings_dependency_bounds_known<type_list<Bindings...>>
           static_binding_dependency_bounds_known<Bindings>::value && ...)> {};
 
 template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_preserved_closure_depth_all<type_list<>, StaticRegistry,
-                                                    RuntimeDependencies>
+struct static_graph_max_retained_frame_depth_all<type_list<>, StaticRegistry,
+                                                 RuntimeDependencies>
     : std::integral_constant<std::size_t, 0> {};
 
 template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_preserved_closure_depth_all<void, StaticRegistry,
-                                                    RuntimeDependencies>
+struct static_graph_max_retained_frame_depth_all<void, StaticRegistry,
+                                                 RuntimeDependencies>
     : std::integral_constant<std::size_t, 0> {};
 
 template <typename... Bindings, typename StaticRegistry,
           bool RuntimeDependencies>
-struct static_graph_max_preserved_closure_depth_all<
+struct static_graph_max_retained_frame_depth_all<
     type_list<Bindings...>, StaticRegistry, RuntimeDependencies>
     : std::integral_constant<
-          std::size_t, std::max({static_binding_graph_preserved_closure_depth<
+          std::size_t, std::max({static_binding_graph_retained_frame_depth<
                                      Bindings, StaticRegistry,
                                      RuntimeDependencies>::value...,
                                  std::size_t{0}})> {};
 
 template <typename Binding, typename StaticRegistry, bool RuntimeDependencies>
-struct static_binding_graph_preserved_closure_depth
+struct static_binding_graph_retained_frame_depth
     : std::integral_constant<
-          std::size_t, static_binding_preserved_closure_cost_v<Binding> +
-                           static_graph_max_preserved_closure_depth_all<
+          std::size_t, static_binding_retained_frame_cost_v<Binding> +
+                           static_graph_max_retained_frame_depth_all<
                                typename static_graph_node_t<
                                    Binding, StaticRegistry,
                                    RuntimeDependencies>::dependency_bindings,
                                StaticRegistry, RuntimeDependencies>::value> {};
 
 template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_binding_graph_preserved_closure_depth<void, StaticRegistry,
-                                                    RuntimeDependencies>
+struct static_binding_graph_retained_frame_depth<void, StaticRegistry,
+                                                 RuntimeDependencies>
     : std::integral_constant<std::size_t, 0> {};
 
 template <typename StaticRegistry, bool RuntimeDependencies>
@@ -920,14 +919,14 @@ struct static_binding_graph_destructible_slots<Binding, StaticRegistry, false>
     : static_binding_peak_destructible_slots<Binding, StaticRegistry> {};
 
 template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_preserved_closure_depth<StaticRegistry,
-                                                RuntimeDependencies, false>
+struct static_graph_max_retained_frame_depth<StaticRegistry,
+                                             RuntimeDependencies, false>
     : std::integral_constant<std::size_t, 0> {};
 
 template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_preserved_closure_depth<StaticRegistry,
-                                                RuntimeDependencies, true>
-    : static_graph_max_preserved_closure_depth_all<
+struct static_graph_max_retained_frame_depth<StaticRegistry,
+                                             RuntimeDependencies, true>
+    : static_graph_max_retained_frame_depth_all<
           typename StaticRegistry::interface_bindings, StaticRegistry,
           RuntimeDependencies> {};
 
@@ -1035,20 +1034,20 @@ struct static_graph_max_temporary_slots<StaticRegistry, RuntimeDependencies,
           RuntimeDependencies> {};
 
 template <typename StaticRegistry, bool RuntimeDependencies, bool ContainsCycle>
-struct static_graph_preserved_closure_depth_bound<
+struct static_graph_retained_frame_depth_bound<
     StaticRegistry, RuntimeDependencies, false, ContainsCycle>
     : std::integral_constant<std::size_t, 0> {};
 
 template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_preserved_closure_depth_bound<
-    StaticRegistry, RuntimeDependencies, true, false>
-    : static_graph_max_preserved_closure_depth<StaticRegistry,
-                                               RuntimeDependencies, true> {};
+struct static_graph_retained_frame_depth_bound<StaticRegistry,
+                                               RuntimeDependencies, true, false>
+    : static_graph_max_retained_frame_depth<StaticRegistry, RuntimeDependencies,
+                                            true> {};
 
 template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_preserved_closure_depth_bound<
-    StaticRegistry, RuntimeDependencies, true, true>
-    : static_graph_total_preserved_closure_depth<
+struct static_graph_retained_frame_depth_bound<StaticRegistry,
+                                               RuntimeDependencies, true, true>
+    : static_graph_total_retained_frame_depth<
           typename StaticRegistry::interface_bindings> {};
 
 template <typename StaticRegistry, bool RuntimeDependencies, bool ContainsCycle>
@@ -1261,12 +1260,12 @@ public:
   static constexpr bool static_context_eligible =
       static_bindings_dependency_bounds_known<
           typename StaticRegistry::interface_bindings>::value;
-  static constexpr std::size_t max_preserved_closure_depth =
+  static constexpr std::size_t max_retained_frame_depth =
       static_context_eligible
-          ? static_graph_preserved_closure_depth_bound<
+          ? static_graph_retained_frame_depth_bound<
                 StaticRegistry, RuntimeDependencies, resolvable,
                 contains_cycle>::value
-          : static_graph_total_preserved_closure_depth<
+          : static_graph_total_retained_frame_depth<
                 typename StaticRegistry::interface_bindings>::value;
   static constexpr std::size_t max_destructible_slots =
       static_context_eligible

@@ -61,7 +61,7 @@ class detail::container_with_static_bindings<static_bindings<Registrations...>,
     : public detail::runtime_registration_api<
           detail::container_with_static_bindings<
               static_bindings<Registrations...>, ParentContainer>> {
-  friend class runtime_context;
+  template <typename> friend class runtime_context;
   template <typename T, typename Context, typename Container>
   friend T detail::resolve_context_request(Context &, Container &);
 
@@ -78,6 +78,8 @@ private:
       runtime_registry<dynamic_container_traits,
                        typename dynamic_container_traits::allocator_type,
                        self_type, self_type>;
+  using runtime_context_type =
+      runtime_context<typename dynamic_container_traits::allocator_type>;
   friend runtime_base;
 
   using index_entries_ = detail::normalize_lookup_definitions_t<
@@ -138,15 +140,6 @@ private:
   template <typename Request, typename Key>
   static constexpr bool is_static_binding_available_v =
       is_static_binding_available<Request, Key>::value;
-
-  template <typename Collection, typename Key> bool select_static_collection() {
-    if constexpr (!has_static_collection_v<Collection, Key>) {
-      return false;
-    } else {
-      return !has_runtime_collection<Collection>(Key{});
-    }
-  }
-
   template <typename T>
   static constexpr bool has_static_construct_v = [] {
     using request = request_type<T>;
@@ -186,7 +179,7 @@ private:
           static_bindings_type>;
 
   template <typename Request, typename R = typename Request::result_type>
-  DINGO_ALWAYS_INLINE R construct_static(runtime_context &context) {
+  DINGO_ALWAYS_INLINE R construct_static(runtime_context_type &context) {
     using user_type = typename Request::user_type;
     using interface_type = typename Request::interface_type;
     using request_value_type = typename Request::value_type;
@@ -220,7 +213,7 @@ private:
 
   template <typename T, typename LookupKey, typename Fn,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection_impl(runtime_context &context, LookupKey key,
+  T construct_collection_impl(runtime_context_type &context, LookupKey key,
                               Fn &&fn) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
@@ -252,7 +245,8 @@ private:
 
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(runtime_context &context, Fn &&fn, LookupKey key) {
+  T construct_collection(runtime_context_type &context, Fn &&fn,
+                         LookupKey key) {
     return construct_collection_impl<T>(context, std::move(key),
                                         std::forward<Fn>(fn));
   }
@@ -267,7 +261,7 @@ private:
   template <typename Request, bool MayAutoConstruct, typename LookupKey,
             typename R = typename Request::lookup_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve_missing(runtime_context &context, LookupKey key) {
+  R resolve_missing(runtime_context_type &context, LookupKey key) {
     using Type = typename Request::value_type;
     using user_type = typename Request::user_type;
 
@@ -288,8 +282,8 @@ private:
         static_assert(is_complete<Type>::value,
                       "auto-construction requires a complete type");
         using type_detection = detail::automatic;
-        return context.template construct_temporary<
-            typename Request::interface_type, type_detection>(*this);
+        return context.template construct<typename Request::interface_type,
+                                          type_detection>(*this);
       } else {
         throw detail::make_type_not_found_exception<
             typename Request::lookup_type>(context, key);
@@ -303,15 +297,15 @@ private:
   template <typename Request, typename LookupKey,
             typename R = typename Request::lookup_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve_parent(runtime_context &context, LookupKey key) {
+  R resolve_parent(runtime_context_type &context, LookupKey key) {
     using user_type = typename Request::user_type;
     return parent_
         ->template resolve<user_type, Request::removes_rvalue_references>(
-            context, key);
+            context, std::move(key));
   }
 
   template <typename Request, typename R = typename Request::lookup_type>
-  R resolve_request(runtime_context &context) {
+  R resolve_request(runtime_context_type &context) {
     auto key = detail::no_lookup_key();
     auto selection =
         runtime_registry_
@@ -331,7 +325,7 @@ private:
   }
 
   template <typename Request, typename R = typename Request::result_type>
-  R construct_runtime_resolved_request(runtime_context &context) {
+  R construct_runtime_resolved_request(runtime_context_type &context) {
     try {
       return resolve_request<Request>(context);
     } catch (const type_not_convertible_exception &) {
@@ -345,7 +339,7 @@ private:
   template <typename Request,
             typename Factory = constructor<typename Request::value_type>,
             typename R = typename Request::result_type>
-  R construct_runtime_request(runtime_context &context,
+  R construct_runtime_request(runtime_context_type &context,
                               Factory factory = Factory()) {
     using user_type = typename Request::user_type;
     using request_value_type = typename Request::value_type;
@@ -408,16 +402,16 @@ public:
                 "container requires default-constructible compile-time "
                 "storage objects");
 
-  container_with_static_bindings() : runtime_registry_(nullptr) {}
+  container_with_static_bindings() : runtime_registry_(this) {}
 
   explicit container_with_static_bindings(allocator_type alloc)
-      : runtime_registry_(nullptr, alloc) {}
+      : runtime_registry_(this, alloc) {}
 
   template <typename Parent = ParentContainer,
             std::enable_if_t<!std::is_void_v<Parent>, int> = 0>
   explicit container_with_static_bindings(
       Parent *parent, allocator_type alloc = allocator_type())
-      : runtime_registry_(nullptr, alloc), parent_(parent) {}
+      : runtime_registry_(this, alloc), parent_(parent) {}
 
   container_with_static_bindings(const self_type &other)
       : runtime_registry_(other.runtime_registry_),
@@ -450,6 +444,58 @@ public:
 
   const self_type &container() const { return *this; }
 
+private:
+  template <typename Request, typename R, typename LookupKey>
+  static constexpr bool is_cacheable() {
+    if constexpr (!detail::cache::supports_v<
+                      typename Request::interface_type> ||
+                  collection_traits<R>::is_collection) {
+      return false;
+    } else if constexpr (detail::is_static_lookup_key_definition_v<LookupKey>) {
+      using static_selection =
+          typename static_registry_type::template selection<
+              typename Request::lookup_type, LookupKey>;
+      return static_selection::status == detail::binding_status::not_found;
+    } else {
+      return true;
+    }
+  }
+
+  template <typename Request, typename R>
+  DINGO_NOINLINE R resolve_selected(
+      typename runtime_registry_type::runtime_selection selection) {
+    using interface_type = typename Request::interface_type;
+    return execute_transaction(
+        runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
+          return runtime_registry_.template resolve_binding<interface_type, R>(
+              selection, context);
+        });
+  }
+
+  template <typename Request, typename R, typename LookupKey>
+  R resolve_entry(LookupKey key) {
+    using interface_type = typename Request::interface_type;
+    if constexpr (is_cacheable<Request, R, LookupKey>()) {
+      auto selection =
+          runtime_registry_
+              .template select_binding<typename Request::lookup_type>(key);
+      auto result =
+          runtime_registry_.template lookup_cache<interface_type>(selection);
+      if (result.hit) {
+        return runtime_registry_.template resolve_cached<interface_type, R>(
+            result);
+      }
+      if (selection.status == detail::binding_status::found) {
+        return resolve_selected<Request, R>(selection);
+      }
+    }
+
+    return execute_transaction(
+        runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
+          return resolve<Request, R>(context, std::move(key));
+        });
+  }
+
 public:
   template <typename T, typename IdType = none_t,
             typename R = typename request_type<T, true>::result_type,
@@ -457,8 +503,7 @@ public:
   DINGO_ALWAYS_INLINE R resolve(IdType &&id = IdType()) {
     using request = request_type<T>;
     auto key = detail::make_lookup_key(std::forward<IdType>(id));
-    runtime_context context;
-    return resolve<request, R>(context, std::move(key));
+    return resolve_entry<request, R>(std::move(key));
   }
 
   template <typename T, typename LookupKey,
@@ -466,13 +511,12 @@ public:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   DINGO_ALWAYS_INLINE R resolve(LookupKey key) {
     using request = request_type<T>;
-    runtime_context context;
-    return resolve<request, R>(context, std::move(key));
+    return resolve_entry<request, R>(std::move(key));
   }
 
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
             typename R = typename request_type<T, true>::result_type>
-  // NOLINTNEXTLINE(readability-function-cognitive-complexity)
+  // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
   DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
     using request = request_type<T>;
     using interface_type = typename request::interface_type;
@@ -487,75 +531,96 @@ public:
 
         if constexpr (has_static_construct_v<T>) {
           if (!has_runtime_no_key) {
-            runtime_context context;
-            return construct_static<request, R>(context);
+            return execute_transaction(runtime_registry_.runtime(),
+                                       [&](runtime_context_type &context) -> R {
+                                         return construct_static<request, R>(
+                                             context);
+                                       });
           }
         }
 
         if (has_runtime_no_key) {
-          runtime_context context;
-          return construct_runtime_request<request, Factory, R>(
-              context, std::move(factory));
+          return execute_transaction(
+              runtime_registry_.runtime(),
+              [&](runtime_context_type &context) -> R {
+                return construct_runtime_request<request, Factory, R>(
+                    context, std::move(factory));
+              });
         }
 
         if constexpr (has_static_normalized_binding) {
           ::dingo::throw_missing_rvalue_conversion<T>(true);
         }
 
-        runtime_context context;
-        return construct_runtime_request<request, Factory, R>(
-            context, std::move(factory));
+        return execute_transaction(
+            runtime_registry_.runtime(),
+            [&](runtime_context_type &context) -> R {
+              return construct_runtime_request<request, Factory, R>(
+                  context, std::move(factory));
+            });
       } else if constexpr (has_static_construct_v<T>) {
         if (!has_runtime_no_key) {
-          runtime_context context;
-          return construct_static<request, R>(context);
+          return execute_transaction(runtime_registry_.runtime(),
+                                     [&](runtime_context_type &context) -> R {
+                                       return construct_static<request, R>(
+                                           context);
+                                     });
         }
       } else {
-        runtime_context context;
-        return construct_runtime_request<request, Factory, R>(
-            context, std::move(factory));
+        return execute_transaction(
+            runtime_registry_.runtime(),
+            [&](runtime_context_type &context) -> R {
+              return construct_runtime_request<request, Factory, R>(
+                  context, std::move(factory));
+            });
       }
     }
-    runtime_context context;
-    if constexpr (std::is_same_v<Factory, constructor<normalized_type_t<T>>>) {
-      auto key = detail::no_lookup_key();
-      const auto status = binding_status<T>(key);
-      if (status != detail::binding_status::not_found) {
-        if constexpr (construct_normalized_request_v<T>) {
-          return ::dingo::construct_resolved_request<T>(
-              [&]() {
+    return execute_transaction(
+        runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
+          if constexpr (std::is_same_v<Factory,
+                                       constructor<normalized_type_t<T>>>) {
+            auto key = detail::no_lookup_key();
+            const auto status = binding_status<T>(key);
+            if (status != detail::binding_status::not_found) {
+              if constexpr (construct_normalized_request_v<T>) {
+                return ::dingo::construct_resolved_request<T>(
+                    [&]() {
+                      return resolve<request, typename request::lookup_type>(
+                          context, key);
+                    },
+                    [&]() {
+                      using normalized_request = request_type<value_type>;
+                      return resolve<normalized_request,
+                                     typename normalized_request::lookup_type>(
+                          context, key);
+                    });
+              } else {
                 return resolve<request, typename request::lookup_type>(context,
                                                                        key);
-              },
-              [&]() {
+              }
+            } else if (binding_status<value_type>(key) !=
+                       detail::binding_status::not_found) {
+              if constexpr (construct_normalized_request_v<T>) {
                 using normalized_request = request_type<value_type>;
-                return resolve<normalized_request,
-                               typename normalized_request::lookup_type>(
-                    context, key);
-              });
-        } else {
-          return resolve<request, typename request::lookup_type>(context, key);
-        }
-      } else if (binding_status<value_type>(key) !=
-                 detail::binding_status::not_found) {
-        if constexpr (construct_normalized_request_v<T>) {
-          using normalized_request = request_type<value_type>;
-          return type_traits<std::decay_t<T>>::make(
-              resolve<normalized_request,
-                      typename normalized_request::lookup_type>(context, key));
-        } else {
-          return resolve<request, typename request::lookup_type>(context, key);
-        }
-      }
-    }
+                return type_traits<std::decay_t<T>>::make(
+                    resolve<normalized_request,
+                            typename normalized_request::lookup_type>(context,
+                                                                      key));
+              } else {
+                return resolve<request, typename request::lookup_type>(context,
+                                                                       key);
+              }
+            }
+          }
 
-    if constexpr (construct_factory_request_v<T>) {
-      auto type_guard = context.template track_type<value_type>();
-      return factory.template construct<R>(context, *this);
-    } else {
-      return resolve<request, typename request::lookup_type>(
-          context, detail::no_lookup_key());
-    }
+          if constexpr (construct_factory_request_v<T>) {
+            auto type_guard = context.template track_type<value_type>();
+            return factory.template construct<R>(context, *this);
+          } else {
+            return resolve<request, typename request::lookup_type>(
+                context, detail::no_lookup_key());
+          }
+        });
   }
 
   template <typename T> T construct_collection() {
@@ -575,15 +640,20 @@ public:
   T construct_collection(LookupKey key) {
     if constexpr (detail::is_static_lookup_key_v<LookupKey>) {
       if (select_static_collection_construct<T, LookupKey>()) {
-        runtime_context context;
-        return static_registry_.template construct_collection<T, LookupKey>(
-            *this, context);
+        return execute_transaction(
+            runtime_registry_.runtime(),
+            [&](runtime_context_type &context) -> T {
+              return static_registry_
+                  .template construct_collection<T, LookupKey>(*this, context);
+            });
       }
     }
 
-    runtime_context context;
-    return construct_collection<T>(context, detail::binding_collection_append{},
-                                   std::move(key));
+    return execute_transaction(
+        runtime_registry_.runtime(), [&](runtime_context_type &context) -> T {
+          return construct_collection<T>(
+              context, detail::binding_collection_append{}, std::move(key));
+        });
   }
 
   template <typename T, typename Fn, typename LookupKey,
@@ -591,15 +661,21 @@ public:
   T construct_collection(Fn &&fn, LookupKey key) {
     if constexpr (detail::is_static_lookup_key_v<LookupKey>) {
       if (select_static_collection_construct<T, LookupKey>()) {
-        runtime_context context;
-        return static_registry_.template construct_collection<T, LookupKey>(
-            *this, context, std::forward<Fn>(fn));
+        return execute_transaction(
+            runtime_registry_.runtime(),
+            [&](runtime_context_type &context) -> T {
+              return static_registry_
+                  .template construct_collection<T, LookupKey>(
+                      *this, context, std::forward<Fn>(fn));
+            });
       }
     }
 
-    runtime_context context;
-    return construct_collection<T>(context, std::forward<Fn>(fn),
-                                   std::move(key));
+    return execute_transaction(
+        runtime_registry_.runtime(), [&](runtime_context_type &context) -> T {
+          return construct_collection<T>(context, std::forward<Fn>(fn),
+                                         std::move(key));
+        });
   }
 
   template <typename T, typename Key> T construct_collection(key_type<Key>) {
@@ -618,10 +694,12 @@ public:
     using dispatch_signature =
         detail::callable_dispatch_signature_t<Signature, callable_type>;
 
-    runtime_context context;
-    auto type_guard = context.template track_type<callable_type>();
-    return detail::callable_invoke<dispatch_signature>::construct(
-        std::forward<Callable>(callable), context, *this);
+    return execute_transaction(
+        runtime_registry_.runtime(), [&](runtime_context_type &context) {
+          auto type_guard = context.template track_type<callable_type>();
+          return detail::callable_invoke<dispatch_signature>::construct(
+              std::forward<Callable>(callable), context, *this);
+        });
   }
 
   template <typename Request, typename LookupKey,
@@ -638,28 +716,30 @@ public:
   }
 
   template <typename T, typename Fn>
-  std::size_t append_collection(T &results, runtime_context &context, Fn &&fn) {
+  std::size_t append_collection(T &results, runtime_context_type &context,
+                                Fn &&fn) {
     return append_collection<T>(results, context, std::forward<Fn>(fn),
                                 detail::no_lookup_key());
   }
 
   template <typename T, typename Key, typename Fn>
-  std::size_t append_collection(T &results, runtime_context &context, Fn &&fn) {
+  std::size_t append_collection(T &results, runtime_context_type &context,
+                                Fn &&fn) {
     return append_collection<T>(results, context, std::forward<Fn>(fn),
                                 detail::make_lookup_key(type_selector<Key>{}));
   }
 
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t append_collection(T &results, runtime_context &context, Fn &&fn,
-                                LookupKey key) {
+  std::size_t append_collection(T &results, runtime_context_type &context,
+                                Fn &&fn, LookupKey key) {
     return append_collection_impl<T>(results, context, std::move(key),
                                      std::forward<Fn>(fn));
   }
 
   template <typename T, typename LookupKey, typename Fn,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t append_collection_impl(T &results, runtime_context &context,
+  std::size_t append_collection_impl(T &results, runtime_context_type &context,
                                      LookupKey key, Fn &&fn) {
     return detail::append_binding_collection(
         results,
@@ -694,7 +774,7 @@ public:
 private:
   template <typename Request, typename R, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve_singular(runtime_context &context, LookupKey key) {
+  R resolve_singular(runtime_context_type &context, LookupKey key) {
     using lookup_type = typename Request::lookup_type;
     using result_type = R;
     auto runtime_selection =
@@ -732,7 +812,7 @@ private:
 
   template <typename Request, typename R, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(runtime_context &context, LookupKey key) {
+  R resolve(runtime_context_type &context, LookupKey key) {
     if constexpr (detail::is_static_lookup_key_definition_v<LookupKey>) {
       if constexpr (collection_traits<R>::is_collection) {
         if constexpr (has_parent_v) {
@@ -786,9 +866,16 @@ public:
             typename R =
                 typename request_type<T, RemoveRvalueReferences>::lookup_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(runtime_context &context, LookupKey key) {
+  R resolve(runtime_context_type &context, LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
-    return resolve<request, R>(context, std::move(key));
+    if (context.owns(runtime_registry_.runtime())) {
+      return resolve<request, R>(context, std::move(key));
+    }
+    return execute_transaction(runtime_registry_.runtime(), context,
+                               [&](runtime_context_type &local_context) -> R {
+                                 return resolve<request, R>(local_context,
+                                                            std::move(key));
+                               });
   }
 
 private:

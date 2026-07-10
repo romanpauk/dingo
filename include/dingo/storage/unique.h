@@ -18,12 +18,14 @@ namespace dingo {
 struct unique {};
 
 template <typename Type> struct storage_materialization_traits<unique, Type> {
+  static constexpr bool can_retain_source = false;
+
   template <typename Leaf, typename Context, typename Storage>
   static auto make_guard(Context &context, const Storage &storage) {
     return detail::recursion_guard<Leaf>(context, &storage);
   }
 
-  template <typename Storage> static bool preserves_closure(const Storage &) {
+  template <typename Storage> static bool retains_source(const Storage &) {
     return false;
   }
 

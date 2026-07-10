@@ -51,10 +51,6 @@ struct type_recursion_exception : exception {
   using exception::exception;
 };
 
-struct type_already_registered_exception : exception {
-  using exception::exception;
-};
-
 struct lookup_already_registered_exception : exception {
   using exception::exception;
 };
@@ -232,14 +228,6 @@ type_recursion_exception make_type_recursion_exception(const Context &context) {
   }
 
   return type_recursion_exception(std::move(message));
-}
-
-template <typename Interface, typename Storage>
-type_already_registered_exception make_type_already_registered_exception() {
-  std::string message = "type already registered: interface ";
-  append_text(message, describe_type<Interface>(), ", storage ",
-              describe_type<Storage>());
-  return type_already_registered_exception(std::move(message));
 }
 
 template <typename Selector>

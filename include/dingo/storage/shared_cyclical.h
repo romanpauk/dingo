@@ -17,9 +17,9 @@
 #include <dingo/type/type_descriptor.h>
 
 #include <atomic>
-#include <exception>
 #include <memory>
 #include <new>
+#include <type_traits>
 #include <vector>
 
 namespace dingo {
@@ -27,12 +27,14 @@ struct shared_cyclical {};
 
 template <typename Type>
 struct storage_materialization_traits<shared_cyclical, Type> {
+  static constexpr bool can_retain_source = false;
+
   template <typename Leaf, typename Context, typename Storage>
   static auto make_guard(Context &, const Storage &) {
     return detail::no_materialization_scope();
   }
 
-  template <typename Storage> static bool preserves_closure(const Storage &) {
+  template <typename Storage> static bool retains_source(const Storage &) {
     return false;
   }
 
@@ -109,6 +111,15 @@ namespace detail {
 template <typename Type, typename U>
 struct conversions<shared_cyclical, Type, U>
     : type_storage_traits<shared_cyclical, Type, U> {};
+
+template <typename Context, typename Fn, typename = void>
+struct has_on_rollback : std::false_type {};
+
+template <typename Context, typename Fn>
+struct has_on_rollback<
+    Context, Fn,
+    std::void_t<decltype(std::declval<Context &>().on_rollback(
+        std::declval<Fn>()))>> : std::true_type {};
 
 // Disallow virtual bases as interfaces as in cyclical storage, we can't
 // properly calculate the cast when the object is not constructed
@@ -276,16 +287,26 @@ class storage<shared_cyclical, Type, StoredType, Factory, Conversions> {
   storage_instance<shared_cyclical, Type, StoredType, Factory> instance_;
   std::vector<std::unique_ptr<conversion_entry>> conversions_;
 
-  struct rollback {
-    explicit rollback(storage *storage) : storage_(storage) {}
-    ~rollback() {
-      if (std::uncaught_exceptions() != 0) {
+  struct rollback_action {
+    void operator()() noexcept { storage_->reset(); }
+
+    storage *storage_;
+  };
+
+  class local_rollback_guard {
+  public:
+    explicit local_rollback_guard(storage *storage) : storage_(storage) {}
+    ~local_rollback_guard() {
+      if (active_) {
         storage_->reset();
       }
     }
 
+    void release() { active_ = false; }
+
   private:
     storage *storage_;
+    bool active_ = true;
   };
 
 public:
@@ -305,10 +326,16 @@ public:
       // address. Rebound shared_ptr interface handles therefore belong
       // to the storage too and must roll back with the instance if the
       // first resolve throws.
-      context.template construct<rollback>(this);
-
-      instance_.resolve(context);
-      instance_.construct(context, container);
+      if constexpr (has_on_rollback<Context, rollback_action>::value) {
+        context.on_rollback(rollback_action{this});
+        instance_.resolve(context);
+        instance_.construct(context, container);
+      } else {
+        local_rollback_guard rollback(this);
+        instance_.resolve(context);
+        instance_.construct(context, container);
+        rollback.release();
+      }
       return instance_.get();
     }
     return instance_.get();
@@ -329,7 +356,7 @@ public:
 
   bool is_resolved() const { return !instance_.empty(); }
 
-  void reset() {
+  void reset() noexcept {
     // Graph objects can keep references to rebound shared_ptr interface
     // handles stored in `conversions_`. Destroy the object graph first so
     // those references stay valid for any destructor work.

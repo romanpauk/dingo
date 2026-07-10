@@ -9,32 +9,13 @@
 
 #include <dingo/core/config.h>
 
-#include <dingo/memory/aligned_storage.h>
-#include <dingo/memory/arena_allocator.h>
-#include <dingo/type/normalized_type.h>
-#include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_list.h>
-#include <dingo/type/type_traits.h>
 
-#include <variant>
+#include <cassert>
+#include <memory>
+#include <utility>
 
 namespace dingo {
-namespace detail {
-template <typename T, typename... Args>
-void construct_class_instance(void *ptr, Args &&...args) {
-  new (ptr) T(std::forward<Args>(args)...);
-}
-
-template <typename T, typename Source>
-std::enable_if_t<type_traits<T>::enabled &&
-                 type_traits<std::remove_reference_t<Source>>::enabled>
-construct_class_instance(void *ptr, Source &&source) {
-  new (ptr)
-      T(type_conversion_traits<T, std::remove_reference_t<Source>>::convert(
-          std::forward<Source>(source)));
-}
-} // namespace detail
-
 template <typename... Types> struct conversion_cache;
 
 template <> struct conversion_cache<> {
@@ -42,36 +23,44 @@ template <> struct conversion_cache<> {
 };
 
 template <typename T> struct conversion_cache_entry {
-  template <typename... Args> T &construct(Args &&...args) {
-    auto *instance = reinterpret_cast<T *>(&storage_);
-    if (initialized_) {
-      return *instance;
+  template <typename Owner, typename... Args>
+  T &construct(Owner &owner, Args &&...args) {
+    if (value_ == nullptr) {
+      value_ = std::addressof(
+          owner.template construct<T>(std::forward<Args>(args)...));
     }
-
-    detail::construct_class_instance<T>(instance, std::forward<Args>(args)...);
-    initialized_ = true;
-    return *instance;
+    return *value_;
   }
 
-  void reset() {
-    if (initialized_) {
-      if constexpr (!std::is_trivially_destructible_v<T>)
-        reinterpret_cast<T *>(&storage_)->~T();
-      initialized_ = false;
+  template <typename Context, typename... Args>
+  T &construct_tracked(Context &context, Args &&...args) {
+    if (value_ == nullptr) {
+      assert(value_ == nullptr);
+      auto *created = std::addressof(context.template construct_persistent<T>(
+          std::forward<Args>(args)...));
+      context.on_rollback([this]() noexcept { value_ = nullptr; });
+      value_ = created;
     }
+    return *value_;
   }
 
-  aligned_storage_t<sizeof(T), alignof(T)> storage_;
-  bool initialized_ = false;
+  void reset() { value_ = nullptr; }
+
+  T *value_ = nullptr;
 };
 
 template <typename... Types>
 struct conversion_cache : conversion_cache_entry<Types>... {
-  ~conversion_cache() { reset(); }
-
-  template <typename T, typename... Args> T &construct(Args &&...args) {
+  template <typename T, typename Owner, typename... Args>
+  T &construct(Owner &owner, Args &&...args) {
     return static_cast<conversion_cache_entry<T> &>(*this).construct(
-        std::forward<Args>(args)...);
+        owner, std::forward<Args>(args)...);
+  }
+
+  template <typename T, typename Context, typename... Args>
+  T &construct_tracked(Context &context, Args &&...args) {
+    return static_cast<conversion_cache_entry<T> &>(*this).construct_tracked(
+        context, std::forward<Args>(args)...);
   }
 
   void reset() {
@@ -79,10 +68,8 @@ struct conversion_cache : conversion_cache_entry<Types>... {
   }
 };
 
-// TODO: the idea was that conversions will act as a cache of pointers
-// context-owned instances. That would require pushing and popping of
-// the context on each resolution. Right now, conversions are like
-// "expanded variant".
+// Conversion caches retain typed slots but leave object lifetime to the
+// allocation owner passed to construct().
 template <typename... Args>
 struct conversion_cache<type_list<Args...>> : conversion_cache<Args...> {};
 

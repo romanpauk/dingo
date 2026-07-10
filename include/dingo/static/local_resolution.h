@@ -32,6 +32,7 @@ class binding_resolution<Host, static_bindings<Registrations...>>
   using static_registry_type = static_bindings<Registrations...>;
   using self_type = binding_resolution<Host, static_registry_type>;
   using state_type = borrowed_binding_scope<Registrations...>;
+  using runtime_context_type = runtime_context<typename Host::allocator_type>;
 
   template <typename T, typename LookupKey>
   using binding_t = static_binding_t<
@@ -65,7 +66,7 @@ class binding_resolution<Host, static_bindings<Registrations...>>
     }
 
     template <typename ResolveRequest>
-    decltype(auto) resolve(runtime_context &context) {
+    decltype(auto) resolve(runtime_context_type &context) {
       return host.template resolve<typename Request::user_type,
                                    Request::removes_rvalue_references>(
           context, std::move(key));
@@ -81,7 +82,7 @@ class binding_resolution<Host, static_bindings<Registrations...>>
   }
 
   template <typename T, typename LookupKey, typename Fn>
-  T construct_collection(runtime_context &context, Fn &&fn) {
+  T construct_collection(runtime_context_type &context, Fn &&fn) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
 
@@ -125,15 +126,19 @@ public:
                 "local storage objects");
 
   template <typename Allocator>
-  binding_resolution(Host *host, Allocator &&, context_closure_base &closure)
-      : state_type(closure), host_(host) {}
+  binding_resolution(Host *host, Allocator &&) : state_type(), host_(host) {}
+
+  template <typename Allocator>
+  binding_resolution(Host *host, Allocator &&allocator,
+                     static_context_frame_base &)
+      : binding_resolution(host, std::forward<Allocator>(allocator)) {}
 
   allocator_type &get_allocator() { return host_->get_allocator(); }
 
   template <typename Request, typename LookupKey,
             typename R = typename Request::result_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(runtime_context &context, LookupKey key) {
+  R resolve(runtime_context_type &context, LookupKey key) {
     static_assert(detail::is_lookup_key_v<LookupKey>);
     (void)key;
     if constexpr (collection_traits<R>::is_collection) {
@@ -156,7 +161,7 @@ public:
             typename R =
                 typename request_type<T, RemoveRvalueReferences>::lookup_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(runtime_context &context, LookupKey key) {
+  R resolve(runtime_context_type &context, LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
     return resolve<request, LookupKey, R>(context, std::move(key));
   }

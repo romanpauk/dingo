@@ -19,12 +19,14 @@ namespace dingo {
 struct external {};
 
 template <typename Type> struct storage_materialization_traits<external, Type> {
+  static constexpr bool can_retain_source = false;
+
   template <typename Leaf, typename Context, typename Storage>
   static auto make_guard(Context &, const Storage &) {
     return detail::no_materialization_scope();
   }
 
-  template <typename Storage> static bool preserves_closure(const Storage &) {
+  template <typename Storage> static bool retains_source(const Storage &) {
     return false;
   }
 

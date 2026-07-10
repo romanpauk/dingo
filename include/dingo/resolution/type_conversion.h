@@ -401,7 +401,23 @@ struct type_conversion {
 
 template <typename Target, typename Source>
 struct type_conversion<Target, detail::rvalue_source<Source>,
-                       std::enable_if_t<!std::is_pointer_v<Source> &&
+                       std::enable_if_t<std::is_lvalue_reference_v<Target> &&
+                                        !std::is_pointer_v<Source> &&
+                                        !is_alternative_type_v<Source>>> {
+  template <typename Factory, typename Context, typename SourceCapability>
+  static Target apply(Factory &, Context &, SourceCapability &&source,
+                      type_descriptor requested_type,
+                      type_descriptor registered_type) {
+    return detail::borrow_reference<std::remove_reference_t<Target>>(
+        detail::materialized_reference(source), requested_type,
+        registered_type);
+  }
+};
+
+template <typename Target, typename Source>
+struct type_conversion<Target, detail::rvalue_source<Source>,
+                       std::enable_if_t<!std::is_lvalue_reference_v<Target> &&
+                                        !std::is_pointer_v<Source> &&
                                         !is_alternative_type_v<Source>>> {
   template <typename Factory, typename Context, typename SourceCapability>
   static decltype(auto) apply(Factory &, Context &, SourceCapability &&source,

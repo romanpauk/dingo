@@ -90,7 +90,7 @@ TEST(static_graph_test, exposes_dependency_nodes_and_topological_order) {
                      type_list<typename graph::node<config>,
                                typename graph::node<service_interface>,
                                typename graph::node<controller>>>);
-  static_assert(static_traits::max_preserved_closure_depth == 2);
+  static_assert(static_traits::max_retained_frame_depth == 2);
   static_assert(static_traits::max_destructible_slots == 0);
 }
 
@@ -195,7 +195,7 @@ TEST(static_execution_traits_test,
   using static_traits = detail::static_execution_traits<typename source::type>;
 
   static_assert(static_traits::acyclic);
-  static_assert(static_traits::max_preserved_closure_depth == 0);
+  static_assert(static_traits::max_retained_frame_depth == 0);
   static_assert(static_traits::max_temporary_slots == 3);
   static_assert(static_traits::max_destructible_slots == 0);
   static_assert(static_traits::max_temporary_size >= sizeof(root));
@@ -235,7 +235,7 @@ TEST(static_execution_traits_test,
 
   static_assert(static_traits::acyclic);
   static_assert(!static_traits::static_context_eligible);
-  static_assert(static_traits::max_preserved_closure_depth == 2);
+  static_assert(static_traits::max_retained_frame_depth == 2);
 }
 
 TEST(static_execution_traits_test,
@@ -295,24 +295,24 @@ TEST(static_execution_traits_test,
 }
 
 TEST(static_execution_traits_test,
-     pure_static_closures_do_not_use_runtime_closure_base) {
+     pure_static_frames_do_not_use_runtime_frame_base) {
   struct payload {
     ~payload() {}
   };
 
   using registration = dingo::bind<scope<unique>, storage<payload>>;
-  using pure_closure = detail::static_activation_closure_t<false, registration>;
-  using partial_closure =
-      detail::static_activation_closure_t<true, registration>;
+  using pure_frame = detail::static_activation_frame_t<false, registration>;
+  using partial_frame = detail::static_activation_frame_t<true, registration>;
 
-  static_assert(!std::is_base_of_v<detail::context_closure_base, pure_closure>);
   static_assert(
-      std::is_base_of_v<detail::context_closure_base, partial_closure>);
+      !std::is_base_of_v<detail::static_context_frame_base, pure_frame>);
+  static_assert(
+      std::is_base_of_v<detail::static_context_frame_base, partial_frame>);
 }
 
 TEST(
     static_execution_traits_test,
-    preserved_closure_depth_counts_preserving_bindings_across_non_preserving_edges) {
+    retained_frame_depth_counts_retaining_bindings_across_non_retaining_edges) {
   struct config {};
   struct transient_service {
     explicit transient_service(config &) {}
@@ -334,7 +334,7 @@ TEST(
   using static_traits = detail::static_execution_traits<typename source::type>;
 
   static_assert(static_traits::acyclic);
-  static_assert(static_traits::max_preserved_closure_depth == 2);
+  static_assert(static_traits::max_retained_frame_depth == 2);
   static_assert(static_traits::max_temporary_slots == 2);
   static_assert(static_traits::max_destructible_slots == 0);
 }
@@ -348,7 +348,7 @@ TEST(static_execution_traits_test,
   using static_traits = detail::static_execution_traits<typename source::type>;
 
   static_assert(static_traits::acyclic);
-  static_assert(static_traits::max_preserved_closure_depth == 0);
+  static_assert(static_traits::max_retained_frame_depth == 0);
   static_assert(static_traits::max_destructible_slots == 1);
   static_assert(static_traits::max_temporary_slots == 1);
   static_assert(static_traits::max_temporary_size >=
@@ -367,7 +367,7 @@ TEST(static_execution_traits_test,
   using static_traits = detail::static_execution_traits<typename source::type>;
 
   static_assert(static_traits::acyclic);
-  static_assert(static_traits::max_preserved_closure_depth == 0);
+  static_assert(static_traits::max_retained_frame_depth == 0);
   static_assert(static_traits::max_temporary_slots == 1);
   static_assert(static_traits::max_destructible_slots == 1);
   static_assert(static_traits::max_temporary_size >=
@@ -385,7 +385,7 @@ TEST(static_execution_traits_test,
   using static_traits = detail::static_execution_traits<typename source::type>;
 
   static_assert(static_traits::acyclic);
-  static_assert(static_traits::max_preserved_closure_depth == 0);
+  static_assert(static_traits::max_retained_frame_depth == 0);
   static_assert(static_traits::max_destructible_slots == 1);
   static_assert(static_traits::max_temporary_slots == 1);
   static_assert(static_traits::max_temporary_size >= sizeof(void *));

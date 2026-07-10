@@ -68,11 +68,16 @@ add_executable(dingo_unit_test
     lookup/lookup.cpp
     lookup/lookup_index.cpp
     memory/arena_allocator.cpp
+    memory/object_store.cpp
+    memory/tagged_ptr.cpp
     registration/binding_graph.cpp
     registration/object_sizes.cpp
     registration/static_bindings_source.cpp
     registration/static_parent_container.cpp
     registration/type_registration.cpp
+    resolution/cache.cpp
+    runtime/container_runtime.cpp
+    runtime/transaction.cpp
     storage/shared_type_conversion.cpp
     container/construct_common.h
     support/assert.h
