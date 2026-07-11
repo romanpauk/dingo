@@ -175,45 +175,6 @@ make_two_binding_sources(PrimarySource &primary, SecondarySource &secondary,
   return {primary, secondary, missing, policy};
 }
 
-template <typename Source, typename MissingSource> struct one_binding_source {
-  Source &source;
-  MissingSource &missing;
-
-  binding_source_selection select() {
-    const auto status = source.status();
-    if (status == binding_status::ambiguous) {
-      return {binding_result::ambiguous};
-    }
-    if (status == binding_status::found) {
-      return {binding_result::primary};
-    }
-    return {binding_result::missing};
-  }
-
-  template <typename Request, typename Context>
-  decltype(auto) resolve_selected(Context &context,
-                                  binding_source_selection selection) {
-    if constexpr (Source::can_resolve) {
-      if (selection.found()) {
-        return source.template resolve<Request>(context);
-      }
-    }
-
-    return missing.template resolve<Request>(context);
-  }
-
-  template <typename Request, typename Context>
-  decltype(auto) resolve_missing(Context &context) {
-    return missing.template resolve<Request>(context);
-  }
-};
-
-template <typename Source, typename MissingSource>
-one_binding_source<Source, MissingSource>
-make_one_binding_source(Source &source, MissingSource &missing) {
-  return {source, missing};
-}
-
 template <typename SelectedSource, typename MissingSource>
 struct selected_binding_sources {
   SelectedSource &selected;

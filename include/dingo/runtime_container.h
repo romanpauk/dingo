@@ -278,16 +278,27 @@ public:
     return status;
   }
 
+private:
+  template <typename Request, bool MayAutoConstruct, typename R,
+            typename LookupKey>
+  R resolve_entry(LookupKey key) {
+    return execute_transaction(
+        runtime_registry_.runtime(), [&](runtime_context &context) -> R {
+          return resolve_request<Request, MayAutoConstruct, R>(context,
+                                                               std::move(key));
+        });
+  }
+
+public:
   template <typename T, typename IdType = none_t,
             typename R = typename request_type<T, true>::result_type,
             std::enable_if_t<!detail::is_lookup_key_v<IdType>, int> = 0>
   R resolve(IdType &&id = IdType()) {
     using request = request_type<T>;
     auto key = detail::make_lookup_key(std::forward<IdType>(id));
-    runtime_context context;
-    return resolve_request<
+    return resolve_entry<
         request, detail::is_runtime_auto_constructible_dependency_v<T>, R>(
-        context, std::move(key));
+        std::move(key));
   }
 
   template <typename T, typename LookupKey,
@@ -295,10 +306,9 @@ public:
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(LookupKey key) {
     using request = request_type<T>;
-    runtime_context context;
-    return resolve_request<
+    return resolve_entry<
         request, detail::is_runtime_auto_constructible_dependency_v<T>, R>(
-        context, std::move(key));
+        std::move(key));
   }
 
   template <typename T, bool RemoveRvalueReferences, typename LookupKey,
@@ -315,9 +325,11 @@ public:
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
             typename R = typename request_type<T, true>::result_type>
   R construct(Factory factory = Factory()) {
-    runtime_context context;
-    return construct_request<request_type<T>, Factory, R>(context,
-                                                          std::move(factory));
+    return execute_transaction(
+        runtime_registry_.runtime(), [&](runtime_context &context) -> R {
+          return construct_request<request_type<T>, Factory, R>(
+              context, std::move(factory));
+        });
   }
 
   template <typename T> T construct_collection() {
@@ -335,17 +347,21 @@ public:
   template <typename T, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   T construct_collection(LookupKey key) {
-    runtime_context context;
-    return runtime_registry_.template construct_collection<T>(
-        context, detail::binding_collection_append{}, std::move(key));
+    return execute_transaction(
+        runtime_registry_.runtime(), [&](runtime_context &context) -> T {
+          return runtime_registry_.template construct_collection<T>(
+              context, detail::binding_collection_append{}, std::move(key));
+        });
   }
 
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   T construct_collection(Fn &&fn, LookupKey key) {
-    runtime_context context;
-    return runtime_registry_.template construct_collection<T>(
-        context, std::forward<Fn>(fn), std::move(key));
+    return execute_transaction(
+        runtime_registry_.runtime(), [&](runtime_context &context) -> T {
+          return runtime_registry_.template construct_collection<T>(
+              context, std::forward<Fn>(fn), std::move(key));
+        });
   }
 
   template <typename T, typename Key> T construct_collection(key_type<Key>) {
@@ -365,9 +381,11 @@ public:
 
   template <typename Signature = void, typename Callable>
   auto invoke(Callable &&callable) {
-    runtime_context context;
-    return runtime_registry_.template invoke<Signature>(
-        context, std::forward<Callable>(callable));
+    return execute_transaction(
+        runtime_registry_.runtime(), [&](runtime_context &context) {
+          return runtime_registry_.template invoke<Signature>(
+              context, std::forward<Callable>(callable));
+        });
   }
 
 private:

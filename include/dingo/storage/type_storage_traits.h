@@ -30,6 +30,8 @@ struct no_materialization_scope {
 
 template <typename StorageTag, typename Type>
 struct storage_materialization_traits {
+  static constexpr bool can_retain_source = false;
+
   template <typename Leaf, typename Context, typename Storage>
   static auto make_guard(Context &, const Storage &) {
     static_assert(always_false_v<StorageTag, Type>,
@@ -37,7 +39,7 @@ struct storage_materialization_traits {
                   "this storage tag");
   }
 
-  template <typename Storage> static bool preserves_closure(const Storage &) {
+  template <typename Storage> static bool retains_source(const Storage &) {
     static_assert(always_false_v<StorageTag, Type>,
                   "storage_materialization_traits must be specialized for "
                   "this storage tag");

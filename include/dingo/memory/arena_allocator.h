@@ -29,14 +29,11 @@ class arena
       Allocator>::template rebind_alloc<uint8_t>;
   using allocator_traits_type = arena_allocator_traits<allocator_type>;
 
-  static constexpr std::size_t MaxBlockSize = 1 << 21;
-
   struct block {
     block *next;
     uintptr_t size : 63;
     uintptr_t owned : 1;
     intptr_t ptr;
-    intptr_t block_size;
   };
 
   block *block_head_ = nullptr;
@@ -57,26 +54,30 @@ class arena
   }
 
   bool request_block(intptr_t bytes) {
-    auto block_size =
-        block_head_ != nullptr ? block_head_->block_size : initial_block_size_;
-    assert(block_size > 0);
-
-    // For large blocks, glibc's malloc is aligning large allocations
-    // to the multiples of page size, also keeping space for chunk size.
-    auto header_size = allocator_traits_type::header_size();
-    auto page_size = allocator_traits_type::page_size();
-    intptr_t size =
-        ((header_size + std::max<intptr_t>(block_size, sizeof(block) + bytes) +
-          page_size - 1) &
-         ~(page_size - 1)) -
-        header_size;
-    if (size < 0)
+    assert(initial_block_size_ > 0);
+    if (bytes > std::numeric_limits<intptr_t>::max() -
+                    static_cast<intptr_t>(sizeof(block))) {
       return false;
+    }
+
+    intptr_t size =
+        std::max<intptr_t>(initial_block_size_, sizeof(block) + bytes);
+    const auto header_size = allocator_traits_type::header_size();
+    const auto page_size = allocator_traits_type::page_size();
+    assert((page_size & (page_size - 1)) == 0);
+    if (size > page_size / 2) {
+      if (size > std::numeric_limits<intptr_t>::max() - header_size -
+                     (page_size - 1)) {
+        return false;
+      }
+      // Account for allocator metadata when rounding large blocks to pages.
+      size = ((header_size + size + page_size - 1) & ~(page_size - 1)) -
+             header_size;
+    }
     assert(size - (intptr_t)sizeof(block) >= bytes);
     auto head = allocate_block(size);
     head->size = size;
     head->owned = true;
-    head->block_size = std::min<intptr_t>(block_size * 2, MaxBlockSize);
     push_block(head);
     return true;
   }
@@ -122,8 +123,18 @@ class arena
   }
 
 public:
+  struct checkpoint {
+    block *head;
+    intptr_t ptr;
+  };
+
   arena(std::size_t block_size)
       : initial_block_size_(checked_block_size(block_size)) {}
+
+  template <typename AllocatorT>
+  arena(std::size_t block_size, const AllocatorT &allocator)
+      : allocator_type(allocator),
+        initial_block_size_(checked_block_size(block_size)) {}
 
   template <typename T, std::size_t N>
   arena(T (&buffer)[N], std::size_t block_size = N * sizeof(T))
@@ -146,7 +157,6 @@ public:
     auto head = reinterpret_cast<block *>(buffer);
     head->owned = false;
     head->size = size;
-    head->block_size = initial_block_size_;
     push_block(head);
   }
 
@@ -175,7 +185,37 @@ public:
 
   void deallocate(void *, std::size_t) {}
 
+  checkpoint mark() const noexcept {
+    return checkpoint{block_head_,
+                      block_head_ != nullptr ? block_head_->ptr : intptr_t{0}};
+  }
+
+  void rewind(checkpoint point) noexcept {
+    deallocate_blocks(point.head);
+    if (point.head != nullptr) {
+      point.head->ptr = point.ptr;
+    }
+  }
+
   void reset() { deallocate_blocks(nullptr); }
+};
+
+namespace detail {
+template <std::size_t Size> struct inline_arena_storage {
+  alignas(std::max_align_t) uint8_t buffer[Size];
+};
+} // namespace detail
+
+template <std::size_t Size>
+class inline_arena : private detail::inline_arena_storage<Size>,
+                     public arena<> {
+  using storage_type = detail::inline_arena_storage<Size>;
+
+public:
+  inline_arena() : arena<>(static_cast<storage_type &>(*this).buffer, Size) {}
+
+  inline_arena(const inline_arena &) = delete;
+  inline_arena &operator=(const inline_arena &) = delete;
 };
 
 template <typename T> struct arena_allocator_alignment {

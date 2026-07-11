@@ -125,8 +125,12 @@ public:
                 "local storage objects");
 
   template <typename Allocator>
-  binding_resolution(Host *host, Allocator &&, context_closure_base &closure)
-      : state_type(closure), host_(host) {}
+  binding_resolution(Host *host, Allocator &&) : state_type(), host_(host) {}
+
+  template <typename Allocator>
+  binding_resolution(Host *host, Allocator &&allocator,
+                     static_context_frame_base &)
+      : binding_resolution(host, std::forward<Allocator>(allocator)) {}
 
   allocator_type &get_allocator() { return host_->get_allocator(); }
 

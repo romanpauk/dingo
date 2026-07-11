@@ -7,20 +7,15 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
-
 #include <dingo/core/exceptions.h>
 #include <dingo/core/key.h>
 #include <dingo/factory/constructor_detection.h>
 #include <dingo/memory/aligned_storage.h>
-#include <dingo/memory/allocator.h>
-#include <dingo/memory/arena_allocator.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/resolution/resolving_frame_fwd.h>
 
 #include <array>
 #include <cassert>
-#include <cstdint>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -52,44 +47,6 @@ struct context_destructible {
   void (*dtor)(void *);
 };
 
-struct context_destructible_list {
-  void push_back(arena<> &arena, context_destructible value) {
-    if (size_ == capacity_) {
-      grow(arena);
-    }
-    data_[size_++] = value;
-  }
-
-  void destroy() {
-    while (size_ != 0) {
-      auto &destructible = data_[--size_];
-      destructible.dtor(destructible.instance);
-    }
-  }
-
-  void clear() {
-    data_ = nullptr;
-    size_ = 0;
-    capacity_ = 0;
-  }
-
-private:
-  void grow(arena<> &arena) {
-    auto new_capacity = capacity_ == 0 ? std::uint32_t{1} : capacity_ * 2;
-    arena_allocator<context_destructible> allocator(arena);
-    auto *new_data = allocator_traits::allocate(allocator, new_capacity);
-    for (std::uint32_t i = 0; i != size_; ++i) {
-      new_data[i] = data_[i];
-    }
-    data_ = new_data;
-    capacity_ = new_capacity;
-  }
-
-  context_destructible *data_ = nullptr;
-  std::uint32_t size_ = 0;
-  std::uint32_t capacity_ = 0;
-};
-
 template <typename T, typename Context, typename Container>
 T resolve_context_request(Context &context, Container &container) {
   if constexpr (is_selected_v<T>) {
@@ -113,60 +70,8 @@ T resolve_context_request(Context &context, Container &container) {
   }
 }
 
-struct context_closure_base {
-  virtual ~context_closure_base() = default;
-  virtual void reset() = 0;
-  virtual arena<> &arena_storage() = 0;
-  virtual void add_destructor(void *instance, void (*dtor)(void *)) = 0;
-
-  template <typename T, typename... Args> T &construct(Args &&...args) {
-    arena_allocator<void> alloc(arena_storage());
-    auto allocator = allocator_traits::rebind<T>(alloc);
-    auto instance = allocator_traits::allocate(allocator, 1);
-    allocator_traits::construct(allocator, instance,
-                                std::forward<Args>(args)...);
-    if constexpr (!std::is_trivially_destructible_v<T>) {
-      add_destructor(instance, &destructor<T>);
-    }
-    return *instance;
-  }
-
-private:
-  template <typename T> static void destructor(void *ptr) {
-    reinterpret_cast<T *>(ptr)->~T();
-  }
-};
-
-struct context_closure : context_closure_base {
-  context_closure() : arena_(arena_buffer_) {}
-
-  ~context_closure() { reset_impl(); }
-
-  context_closure(const context_closure &) = delete;
-  context_closure &operator=(const context_closure &) = delete;
-
-  void reset() override { reset_impl(); }
-
-  void reset_impl() {
-    destructibles_.destroy();
-    destructibles_.clear();
-    arena_.reset();
-  }
-
-  aligned_storage_t<DINGO_CLOSURE_ARENA_BUFFER_SIZE, alignof(std::max_align_t)>
-      arena_buffer_;
-  arena<> arena_;
-  context_destructible_list destructibles_;
-
-  arena<> &arena_storage() override { return arena_; }
-
-  void add_destructor(void *instance, void (*dtor)(void *)) override {
-    destructibles_.push_back(arena_, {instance, dtor});
-  }
-};
-
-struct static_context_closure_base {
-  virtual ~static_context_closure_base() = default;
+struct static_context_frame_base {
+  virtual ~static_context_frame_base() = default;
   virtual void reset() = 0;
   virtual void add_destructor(void *instance, void (*dtor)(void *)) = 0;
   virtual void *try_allocate_temporary(std::size_t size,
@@ -177,17 +82,17 @@ template <std::size_t DestructibleCapacity,
           std::size_t TemporarySlotCapacity = 0,
           std::size_t TemporarySlotSize = 1,
           std::size_t TemporarySlotAlign = alignof(std::max_align_t)>
-struct static_context_closure {
+struct static_context_frame {
   static constexpr std::size_t destructible_capacity_ = DestructibleCapacity;
   static constexpr std::size_t temporary_slot_capacity_ = TemporarySlotCapacity;
   static constexpr std::size_t temporary_storage_capacity_ =
       temporary_slot_capacity_ == 0 ? 1 : temporary_slot_capacity_;
 
-  static_context_closure() = default;
-  ~static_context_closure() { reset(); }
+  static_context_frame() = default;
+  ~static_context_frame() { reset(); }
 
-  static_context_closure(const static_context_closure &) = delete;
-  static_context_closure &operator=(const static_context_closure &) = delete;
+  static_context_frame(const static_context_frame &) = delete;
+  static_context_frame &operator=(const static_context_frame &) = delete;
 
   void reset() {
     while (destructible_count_ != 0) {
@@ -232,19 +137,18 @@ template <std::size_t DestructibleCapacity,
           std::size_t TemporarySlotCapacity = 0,
           std::size_t TemporarySlotSize = 1,
           std::size_t TemporarySlotAlign = alignof(std::max_align_t)>
-struct fixed_context_closure : context_closure_base,
-                               static_context_closure_base {
+struct fixed_static_context_frame : static_context_frame_base {
   static constexpr std::size_t destructible_capacity_ = DestructibleCapacity;
   static constexpr std::size_t temporary_slot_capacity_ = TemporarySlotCapacity;
   static constexpr std::size_t temporary_storage_capacity_ =
       temporary_slot_capacity_ == 0 ? 1 : temporary_slot_capacity_;
 
-  fixed_context_closure() : arena_(arena_buffer_) {}
+  fixed_static_context_frame() = default;
+  ~fixed_static_context_frame() { reset_impl(); }
 
-  ~fixed_context_closure() { reset_impl(); }
-
-  fixed_context_closure(const fixed_context_closure &) = delete;
-  fixed_context_closure &operator=(const fixed_context_closure &) = delete;
+  fixed_static_context_frame(const fixed_static_context_frame &) = delete;
+  fixed_static_context_frame &
+  operator=(const fixed_static_context_frame &) = delete;
 
   void reset() override { reset_impl(); }
 
@@ -254,10 +158,7 @@ struct fixed_context_closure : context_closure_base,
       destructible.dtor(destructible.instance);
     }
     temporary_count_ = 0;
-    arena_.reset();
   }
-
-  arena<> &arena_storage() override { return arena_; }
 
   void add_destructor(void *instance, void (*dtor)(void *)) override {
     assert(destructible_count_ < destructible_capacity_);
@@ -283,9 +184,6 @@ struct fixed_context_closure : context_closure_base,
     return reinterpret_cast<T *>(try_allocate_temporary(sizeof(T), alignof(T)));
   }
 
-  aligned_storage_t<DINGO_CLOSURE_ARENA_BUFFER_SIZE, alignof(std::max_align_t)>
-      arena_buffer_;
-  arena<> arena_;
   std::array<context_destructible, destructible_capacity_> destructibles_{};
   std::size_t destructible_count_ = 0;
   std::array<aligned_storage_t<TemporarySlotSize, TemporarySlotAlign>,
@@ -310,65 +208,6 @@ protected:
   friend class resolving_frame;
 
   detail::resolving_frame *active_resolving_frame_ = nullptr;
-};
-
-class context_state : public context_path_state {
-public:
-  context_state() : arena_(arena_buffer_), closures_(arena_) {
-    closures_.emplace_back(&closure_);
-  }
-
-  ~context_state() {
-    for (auto it = closures_.rbegin(); it != closures_.rend(); ++it) {
-      (*it)->reset();
-    }
-  }
-
-  template <typename T, typename... Args> T &construct(Args &&...args) {
-    return closures_.back()->template construct<T>(std::forward<Args>(args)...);
-  }
-
-  template <typename T> T *allocate() {
-    arena_allocator<void> alloc(closures_.back()->arena_storage());
-    auto allocator = allocator_traits::rebind<T>(alloc);
-    return allocator_traits::allocate(allocator, 1);
-  }
-
-  void push(context_closure_base *c) {
-    // A closure represents one owner of preserved temporaries. Recursive
-    // shared resolution must be stopped by the type guard before the same
-    // factory tries to reactivate its closure while it is already active.
-    assert(!contains(c));
-    closures_.emplace_back(c);
-  }
-
-  void pop() { closures_.pop_back(); }
-
-  bool contains(const context_closure_base *candidate) const {
-    for (auto *active : closures_) {
-      if (active == candidate) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-protected:
-  template <typename T> void register_destructor(T *instance) {
-    static_assert(!std::is_trivially_destructible_v<T>);
-    closures_.back()->add_destructor(instance, &destructor<T>);
-  }
-
-  template <typename T> static void destructor(void *ptr) {
-    reinterpret_cast<T *>(ptr)->~T();
-  }
-
-  aligned_storage_t<DINGO_CONTEXT_ARENA_BUFFER_SIZE, alignof(std::max_align_t)>
-      arena_buffer_;
-  arena<> arena_;
-  std::vector<context_closure_base *, arena_allocator<context_closure_base *>>
-      closures_;
-  context_closure closure_;
 };
 
 } // namespace detail
