@@ -37,6 +37,9 @@ template <typename Container> class runtime_binding_interface {
 public:
   virtual ~runtime_binding_interface() = default;
 
+  virtual detail::cache::entry *cache_entry() noexcept = 0;
+  virtual void set_cache_entry(detail::cache::entry *entry) noexcept = 0;
+
   virtual void *
   get_value(runtime_context &,
             const instance_request<typename Container::rtti_type> &request,

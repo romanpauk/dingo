@@ -356,7 +356,38 @@ protected:
   template <typename Request, typename Result = Request>
   Result resolve_binding(runtime_selection selection,
                          runtime_context &context) {
-    return resolve<Request, Result>(*selection.binding, context);
+    if constexpr (detail::cache::supports_v<Request>) {
+      cache_update update{selection.binding, std::addressof(context),
+                          detail::cache::key<Request>()};
+      return resolve<Request, Result>(*selection.binding, context,
+                                      update.sink());
+    } else {
+      return resolve<Request, Result>(*selection.binding, context);
+    }
+  }
+
+  struct cache_result {
+    bool hit = false;
+    void *address = nullptr;
+  };
+
+  template <typename Request>
+  cache_result lookup_cache(runtime_selection selection) const {
+    if constexpr (detail::cache::supports_v<Request>) {
+      if (selection.status == detail::binding_status::found) {
+        auto *entry = selection.binding->cache_entry();
+        if (entry != nullptr && entry->key == detail::cache::key<Request>()) {
+          return {true, entry->address};
+        }
+      }
+    }
+    return {};
+  }
+
+  template <typename Request, typename Result>
+  static Result resolve_cached(cache_result result) {
+    assert(result.hit);
+    return detail::convert_resolved_binding<Request>(result.address);
   }
 
   template <typename Source> class container_proxy {
@@ -851,6 +882,33 @@ protected:
     template <typename ResolveRequest, typename Selection>
     decltype(auto) resolve(runtime_context &context, Selection selection) {
       return registry.template source_resolve<Request>(selection, context, key);
+    }
+  };
+
+  struct cache_update {
+    runtime_binding_interface_type *binding;
+    runtime_context *context;
+    const void *key;
+
+    detail::cache::sink sink() noexcept { return {this, &publish}; }
+
+    static void publish(void *state, void *address) {
+      auto &update = *reinterpret_cast<cache_update *>(state);
+      auto *entry = update.binding->cache_entry();
+      if (entry == nullptr) {
+        auto &created =
+            update.context->template construct_persistent<detail::cache::entry>(
+                detail::cache::entry{update.key, address});
+        update.context->on_rollback([binding = update.binding]() noexcept {
+          binding->set_cache_entry(nullptr);
+        });
+        update.binding->set_cache_entry(std::addressof(created));
+      } else {
+        const auto previous = *entry;
+        update.context->on_rollback(
+            [entry, previous]() noexcept { *entry = previous; });
+        *entry = {update.key, address};
+      }
     }
   };
 

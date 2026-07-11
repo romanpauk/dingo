@@ -42,7 +42,8 @@ inline constexpr bool runtime_storage_can_retain_source_v =
 
 template <typename Owner, typename InstanceContainer, typename Storage,
           typename ResolutionContainer = InstanceContainer>
-class runtime_binding_state {
+class runtime_binding_state : private detail::cache::state<
+                                  detail::cache::is_stable_storage_v<Storage>> {
 public:
   using owner_type = Owner;
   using container_type = InstanceContainer;
@@ -60,6 +61,10 @@ public:
   parent_container_type *parent() { return owner().parent(); }
   allocator_type &get_allocator() { return owner().get_allocator(); }
   Storage &storage() { return storage_; }
+  detail::cache::entry *cache_entry() noexcept { return cache_state::get(); }
+  void set_cache_entry(detail::cache::entry *entry) noexcept {
+    cache_state::set(entry);
+  }
   void reset_containers() {
     instance_container_ = nullptr;
     resolution_container_ = nullptr;
@@ -93,6 +98,9 @@ public:
   }
 
 private:
+  using cache_state =
+      detail::cache::state<detail::cache::is_stable_storage_v<Storage>>;
+
   owner_type &owner() {
     assert(owner_ != nullptr);
     return *owner_;
@@ -116,7 +124,9 @@ private:
 
 template <typename Owner, typename InstanceContainer, typename Storage>
 class runtime_binding_state<Owner, InstanceContainer, Storage,
-                            InstanceContainer> {
+                            InstanceContainer>
+    : private detail::cache::state<
+          detail::cache::is_stable_storage_v<Storage>> {
 public:
   using owner_type = Owner;
   using container_type = InstanceContainer;
@@ -134,6 +144,10 @@ public:
   parent_container_type *parent() { return owner().parent(); }
   allocator_type &get_allocator() { return owner().get_allocator(); }
   Storage &storage() { return storage_; }
+  detail::cache::entry *cache_entry() noexcept { return cache_state::get(); }
+  void set_cache_entry(detail::cache::entry *entry) noexcept {
+    cache_state::set(entry);
+  }
   void reset_containers() { instance_container_ = nullptr; }
   InstanceContainer &container() {
     if (!instance_container_) {
@@ -157,6 +171,9 @@ public:
   }
 
 private:
+  using cache_state =
+      detail::cache::state<detail::cache::is_stable_storage_v<Storage>>;
+
   owner_type &owner() {
     assert(owner_ != nullptr);
     return *owner_;
@@ -435,6 +452,14 @@ public:
 public:
   template <typename... Args>
   runtime_binding(Args &&...args) : state_(std::forward<Args>(args)...) {}
+
+  detail::cache::entry *cache_entry() noexcept override {
+    return state().cache_entry();
+  }
+
+  void set_cache_entry(detail::cache::entry *entry) noexcept override {
+    state().set_cache_entry(entry);
+  }
 
   auto &get_container() { return state().container(); }
 

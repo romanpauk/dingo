@@ -74,6 +74,7 @@ add_executable(dingo_unit_test
     registration/static_bindings_source.cpp
     registration/static_parent_container.cpp
     registration/type_registration.cpp
+    resolution/cache.cpp
     runtime/container_runtime.cpp
     runtime/transaction.cpp
     storage/shared_type_conversion.cpp

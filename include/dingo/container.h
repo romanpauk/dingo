@@ -443,7 +443,50 @@ public:
 
 private:
   template <typename Request, typename R, typename LookupKey>
+  static constexpr bool is_cacheable() {
+    if constexpr (!detail::cache::supports_v<
+                      typename Request::interface_type> ||
+                  collection_traits<R>::is_collection) {
+      return false;
+    } else if constexpr (detail::is_static_lookup_key_definition_v<LookupKey>) {
+      using static_selection =
+          typename static_registry_type::template selection<
+              typename Request::lookup_type, LookupKey>;
+      return static_selection::status == detail::binding_status::not_found;
+    } else {
+      return true;
+    }
+  }
+
+  template <typename Request, typename R>
+  DINGO_NOINLINE R resolve_selected(
+      typename runtime_registry_type::runtime_selection selection) {
+    using interface_type = typename Request::interface_type;
+    return execute_transaction(
+        runtime_registry_.runtime(), [&](runtime_context &context) -> R {
+          return runtime_registry_.template resolve_binding<interface_type, R>(
+              selection, context);
+        });
+  }
+
+  template <typename Request, typename R, typename LookupKey>
   R resolve_entry(LookupKey key) {
+    using interface_type = typename Request::interface_type;
+    if constexpr (is_cacheable<Request, R, LookupKey>()) {
+      auto selection =
+          runtime_registry_
+              .template select_binding<typename Request::lookup_type>(key);
+      auto result =
+          runtime_registry_.template lookup_cache<interface_type>(selection);
+      if (result.hit) {
+        return runtime_registry_.template resolve_cached<interface_type, R>(
+            result);
+      }
+      if (selection.status == detail::binding_status::found) {
+        return resolve_selected<Request, R>(selection);
+      }
+    }
+
     return execute_transaction(
         runtime_registry_.runtime(), [&](runtime_context &context) -> R {
           return resolve<Request, R>(context, std::move(key));
