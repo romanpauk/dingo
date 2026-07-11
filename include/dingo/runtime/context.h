@@ -164,21 +164,50 @@ private:
   construction_policy *policy_ = nullptr;
 };
 
+namespace detail {
+
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+
+template <typename Transaction> class transaction_commit_guard {
+public:
+  explicit transaction_commit_guard(Transaction &transaction) noexcept
+      : transaction_(std::addressof(transaction)) {}
+
+  ~transaction_commit_guard() noexcept {
+    if (transaction_ != nullptr) {
+      transaction_->commit();
+    }
+  }
+
+  void cancel() noexcept { transaction_ = nullptr; }
+
+private:
+  Transaction *transaction_;
+};
+
+} // namespace detail
+
 template <typename Runtime, typename Fn>
-decltype(auto) execute_transaction(Runtime &runtime, Fn &&fn) {
+DINGO_NOINLINE decltype(auto) execute_transaction(Runtime &runtime, Fn &&fn) {
   using allocator_type = typename Runtime::allocator_type;
   using context_type = runtime_context<allocator_type>;
   inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
   runtime_transaction<allocator_type> transaction(runtime, scratch);
   context_type context(scratch, transaction);
+  detail::transaction_commit_guard commit(transaction);
 
-  if constexpr (std::is_void_v<std::invoke_result_t<Fn, context_type &>>) {
-    std::forward<Fn>(fn)(context);
-    transaction.commit();
-  } else {
-    decltype(auto) result = std::forward<Fn>(fn)(context);
-    transaction.commit();
-    return result;
+  try {
+    if constexpr (std::is_void_v<std::invoke_result_t<Fn, context_type &>>) {
+      std::forward<Fn>(fn)(context);
+    } else {
+      return std::forward<Fn>(fn)(context);
+    }
+  } catch (...) {
+    commit.cancel();
+    throw;
   }
 }
 
@@ -192,15 +221,22 @@ auto execute_transaction(Runtime &runtime, runtime_context<Allocator> &context,
   inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
   runtime_transaction<Allocator> transaction(runtime, scratch);
   auto scope = context.use_transaction(transaction);
+  detail::transaction_commit_guard commit(transaction);
 
-  if constexpr (std::is_void_v<result_type>) {
-    std::forward<Fn>(fn)(context);
-    transaction.commit();
-  } else {
-    result_type result = std::forward<Fn>(fn)(context);
-    transaction.commit();
-    return std::forward<result_type>(result);
+  try {
+    if constexpr (std::is_void_v<result_type>) {
+      std::forward<Fn>(fn)(context);
+    } else {
+      return std::forward<Fn>(fn)(context);
+    }
+  } catch (...) {
+    commit.cancel();
+    throw;
   }
 }
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 } // namespace dingo

@@ -518,9 +518,9 @@ TEST(runtime_transaction_test,
   {
     arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
     container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+    bool persistent_alive = false;
     {
       runtime_transaction transaction(runtime, scratch);
-      bool persistent_alive = false;
       auto *persistent =
           transaction.construct_persistent<runtime_ordered_persistent>(
               &events, 7, &persistent_alive);

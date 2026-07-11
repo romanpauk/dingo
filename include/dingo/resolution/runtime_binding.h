@@ -372,6 +372,10 @@ private:
         context, std::forward<Fn>(fn));
   }
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
   template <typename Context, typename Fn>
   decltype(auto) materialize_resolution_source(Context &context, Fn &&fn) {
     if constexpr (materialization_traits::can_retain_source) {
@@ -409,6 +413,9 @@ private:
               context, get_storage(), container, std::forward<Fn>(fn));
         });
   }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
   void reset_runtime_artifacts() {
     conversion_cache_base::reset_conversions();

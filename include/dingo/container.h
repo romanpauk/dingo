@@ -861,21 +861,27 @@ private:
     }
   }
 
+  template <typename Request, typename R, typename LookupKey>
+  DINGO_NOINLINE R resolve_nested(runtime_context_type &context,
+                                  LookupKey key) {
+    return execute_transaction(runtime_registry_.runtime(), context,
+                               [&](runtime_context_type &local_context) -> R {
+                                 return resolve<Request, R>(local_context,
+                                                            std::move(key));
+                               });
+  }
+
 public:
   template <typename T, bool RemoveRvalueReferences, typename LookupKey,
             typename R =
                 typename request_type<T, RemoveRvalueReferences>::lookup_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(runtime_context_type &context, LookupKey key) {
+  DINGO_ALWAYS_INLINE R resolve(runtime_context_type &context, LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
     if (context.owns(runtime_registry_.runtime())) {
       return resolve<request, R>(context, std::move(key));
     }
-    return execute_transaction(runtime_registry_.runtime(), context,
-                               [&](runtime_context_type &local_context) -> R {
-                                 return resolve<request, R>(local_context,
-                                                            std::move(key));
-                               });
+    return resolve_nested<request, R>(context, std::move(key));
   }
 
 private:

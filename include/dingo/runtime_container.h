@@ -319,6 +319,18 @@ private:
         });
   }
 
+  template <typename Request, bool MayAutoConstruct, typename R,
+            typename LookupKey>
+  DINGO_NOINLINE R resolve_nested(runtime_context_type &context,
+                                  LookupKey key) {
+    return execute_transaction(
+        runtime_registry_.runtime(), context,
+        [&](runtime_context_type &local_context) -> R {
+          return resolve_request<Request, MayAutoConstruct, R>(local_context,
+                                                               std::move(key));
+        });
+  }
+
 public:
   template <typename T, typename IdType = none_t,
             typename R = typename request_type<T, true>::result_type,
@@ -345,20 +357,16 @@ public:
             typename R =
                 typename request_type<T, RemoveRvalueReferences>::lookup_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(runtime_context_type &context, LookupKey key) {
+  DINGO_ALWAYS_INLINE R resolve(runtime_context_type &context, LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
     if (context.owns(runtime_registry_.runtime())) {
       return resolve_request<
           request, detail::is_runtime_auto_constructible_dependency_v<T>, R>(
           context, std::move(key));
     }
-    return execute_transaction(
-        runtime_registry_.runtime(), context,
-        [&](runtime_context_type &local_context) -> R {
-          return resolve_request<
-              request, detail::is_runtime_auto_constructible_dependency_v<T>,
-              R>(local_context, std::move(key));
-        });
+    return resolve_nested<
+        request, detail::is_runtime_auto_constructible_dependency_v<T>, R>(
+        context, std::move(key));
   }
 
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,

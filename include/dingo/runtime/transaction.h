@@ -20,6 +20,11 @@
 
 namespace dingo {
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+
 template <typename Allocator> class runtime_transaction {
   using runtime_type = container_runtime<Allocator>;
 
@@ -172,7 +177,7 @@ public:
     runtime_->add_destructor(instance, dtor);
   }
 
-  void commit() {
+  DINGO_NOINLINE void commit() noexcept {
     if (runtime_ == nullptr) {
       return;
     }
@@ -254,5 +259,9 @@ private:
   runtime_type *runtime_;
   typename runtime_type::checkpoint checkpoint_;
 };
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 } // namespace dingo

@@ -14,6 +14,7 @@ namespace {
 
 struct alignas(8) tagged_value {
   int value;
+  int padding{};
 };
 
 static_assert(sizeof(tagged_ptr<tagged_value>) == sizeof(tagged_value *));
