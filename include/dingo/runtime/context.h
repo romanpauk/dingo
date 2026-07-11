@@ -18,7 +18,9 @@
 
 namespace dingo {
 
+template <typename Allocator>
 class runtime_context : public detail::context_path_state {
+  using transaction_type = runtime_transaction<Allocator>;
   enum class construction_kind {
     ephemeral,
     persistent,
@@ -53,8 +55,11 @@ public:
     construction_policy policy_;
   };
 
-  runtime_context(arena<> &scratch, runtime_transaction &transaction)
-      : ephemeral_store_(scratch), transaction_(std::addressof(transaction)) {}
+  runtime_context(arena<> &scratch, transaction_type &transaction)
+      : scratch_(std::addressof(scratch)),
+        transaction_(std::addressof(transaction)) {}
+
+  ~runtime_context() noexcept { ephemeral_store_.destroy(*scratch_); }
 
   runtime_context(const runtime_context &) = delete;
   runtime_context &operator=(const runtime_context &) = delete;
@@ -123,21 +128,24 @@ private:
     }
 
     return ephemeral_store_.template construct_at<T>(
-        std::forward<ConstructFn>(construct_fn));
+        *scratch_, std::forward<ConstructFn>(construct_fn));
   }
 
+  arena<> *scratch_;
   detail::object_store<arena<>> ephemeral_store_;
-  runtime_transaction *transaction_;
+  transaction_type *transaction_;
   construction_policy *policy_ = nullptr;
 };
 
 template <typename Runtime, typename Fn>
 decltype(auto) execute_transaction(Runtime &runtime, Fn &&fn) {
+  using allocator_type = typename Runtime::allocator_type;
+  using context_type = runtime_context<allocator_type>;
   inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
-  runtime_transaction transaction(runtime, scratch);
-  runtime_context context(scratch, transaction);
+  runtime_transaction<allocator_type> transaction(runtime, scratch);
+  context_type context(scratch, transaction);
 
-  if constexpr (std::is_void_v<std::invoke_result_t<Fn, runtime_context &>>) {
+  if constexpr (std::is_void_v<std::invoke_result_t<Fn, context_type &>>) {
     std::forward<Fn>(fn)(context);
     transaction.commit();
   } else {

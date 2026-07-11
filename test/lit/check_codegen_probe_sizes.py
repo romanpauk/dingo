@@ -209,7 +209,7 @@ PROBE_LIMITS = {
         "clang": 0x930,
         "gcc13": 0x780,
         "gcc14": 0x780,
-        "gcc15": 0x780,
+        "gcc15": 0x7B0,
         "gcc_arm64": 0x780,
     },
 }

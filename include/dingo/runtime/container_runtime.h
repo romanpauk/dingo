@@ -18,13 +18,13 @@
 
 namespace dingo {
 
-class runtime_transaction;
+template <typename Allocator> class runtime_transaction;
 
 template <typename Allocator> class container_runtime {
   using arena_type = arena<Allocator>;
   using store_type = detail::object_store<arena_type>;
 
-  friend class runtime_transaction;
+  friend class runtime_transaction<Allocator>;
 
 public:
   using allocator_type = Allocator;
@@ -35,29 +35,32 @@ public:
   };
 
   explicit container_runtime(const Allocator &allocator)
-      : arena_(DINGO_RUNTIME_ARENA_BLOCK_SIZE, allocator), store_(arena_) {}
+      : arena_(DINGO_RUNTIME_ARENA_BLOCK_SIZE, allocator) {}
 
-  ~container_runtime() { assert(active_transaction_ == nullptr); }
+  ~container_runtime() {
+    assert(active_transaction_ == nullptr);
+    store_.destroy(arena_);
+  }
 
   container_runtime(const container_runtime &) = delete;
   container_runtime &operator=(const container_runtime &) = delete;
 
   template <typename T, typename... Args> T &construct(Args &&...args) {
-    return store_.template construct<T>(std::forward<Args>(args)...);
+    return store_.template construct<T>(arena_, std::forward<Args>(args)...);
   }
 
   checkpoint mark() const { return checkpoint{arena_.mark(), store_.mark()}; }
 
   void *allocate(std::size_t size, std::size_t alignment) {
-    return store_.allocate(size, alignment);
+    return store_.allocate(arena_, size, alignment);
   }
 
   void add_destructor(void *instance, void (*dtor)(void *) noexcept) {
-    store_.add_destructor(instance, dtor);
+    store_.add_destructor(arena_, instance, dtor);
   }
 
   void rollback(checkpoint point) {
-    store_.destroy(point.objects);
+    store_.destroy(arena_, point.objects);
     arena_.rewind(point.arena);
   }
 
@@ -66,7 +69,7 @@ public:
 private:
   arena_type arena_;
   store_type store_;
-  runtime_transaction *active_transaction_ = nullptr;
+  runtime_transaction<Allocator> *active_transaction_ = nullptr;
 };
 
 } // namespace dingo

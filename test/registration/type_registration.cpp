@@ -1515,6 +1515,30 @@ TEST(type_registration_test,
 }
 
 TEST(type_registration_test,
+     materialized_runtime_binding_container_resolves_local_overrides) {
+  struct dependency {
+    int value;
+  };
+  struct service {
+    explicit service(dependency &value) : dependency_value(value.value) {}
+
+    int dependency_value;
+  };
+
+  dependency parent_dependency{1};
+  dependency local_dependency{2};
+  dingo::container<> container;
+  container.register_type<scope<external>, storage<dependency &>>(
+      parent_dependency);
+  auto local = container.register_type<scope<shared>, storage<service>,
+                                       dependencies<dependency &>>();
+  local->register_type<scope<external>, storage<dependency &>>(
+      local_dependency);
+
+  EXPECT_EQ(container.resolve<service &>().dependency_value, 2);
+}
+
+TEST(type_registration_test,
      runtime_unique_registration_constructs_nested_container_on_demand) {
   runtime_unique_local_dependency::live_count = 0;
 

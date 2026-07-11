@@ -117,6 +117,26 @@ The runtime and static paths share the same core selection and per-binding
 resolution vocabulary under [include/dingo/core/](../../include/dingo/core),
 even though their registration/storage backends differ.
 
+### Atomic Container Changes
+
+Public registration and resolution operations run in a transaction. If an
+operation succeeds, its container changes are committed together. If an
+exception escapes, Dingo restores the container to its state at the start of the
+operation. Rollback removes registrations, cache and lookup entries, and other
+pointers installed by the operation. It also destroys newly constructed
+container-owned objects in reverse construction order before reclaiming their
+arena storage.
+
+Recursive registration and resolution share the enclosing transaction. A nested
+operation may finish successfully, but its changes remain provisional until the
+outermost operation commits. Consequently, a later failure in the same operation
+also rolls back those nested changes. Operations on separate containers use
+separate transactions.
+
+The atomicity boundary covers container-managed state only. Side effects that
+user constructors, factories, callbacks, or destructors make outside the
+container cannot be rolled back.
+
 ## Factory Path
 
 The factory implementation in

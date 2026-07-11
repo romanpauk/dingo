@@ -949,9 +949,9 @@ class static_registry<static_bindings<Registrations...>, State> {
   using self_type = static_registry<bindings_type, State>;
 
   template <typename Context>
-  using scope_type = basic_static_activation_set_view<
-      std::is_same_v<std::remove_reference_t<Context>, runtime_context>, State,
-      Registrations...>;
+  using scope_type =
+      basic_static_activation_set_view<is_runtime_context_v<Context>, State,
+                                       Registrations...>;
 
   template <typename Request, typename LookupKey>
   using selection_t = static_binding_t<

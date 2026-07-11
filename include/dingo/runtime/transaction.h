@@ -8,6 +8,8 @@
 #pragma once
 
 #include <dingo/memory/arena_allocator.h>
+#include <dingo/memory/object_store.h>
+#include <dingo/runtime/container_runtime.h>
 
 #include <cassert>
 #include <cstddef>
@@ -18,60 +20,98 @@
 
 namespace dingo {
 
-class runtime_transaction {
-  struct action_node {
-    action_node *previous;
-    void (*process)(action_node *, bool, bool) noexcept;
-    bool processed;
+template <typename Allocator> class runtime_transaction {
+  using runtime_type = container_runtime<Allocator>;
+
+  struct action_link {
+    action_link(action_link *previous_node,
+                void (*invoke_fn)(action_link *) noexcept) noexcept
+        : previous(previous_node), invoke(invoke_fn) {}
+
+    action_link *previous;
+    void (*invoke)(action_link *) noexcept;
   };
 
-  template <typename Fn, bool OnCommit, bool OnRollback>
-  struct action_node_model final : action_node {
+  template <typename Fn> struct action_node final : action_link {
     template <typename FnT>
-    explicit action_node_model(action_node *previous_node, FnT &&fn)
-        : action_node{previous_node, &process_node, false},
+    explicit action_node(action_link *previous_node, FnT &&fn)
+        : action_link(previous_node, &invoke_node),
           callback(std::forward<FnT>(fn)) {}
 
-    static void process_node(action_node *base, bool committing,
-                             bool destroy) noexcept {
-      auto *node = static_cast<action_node_model *>(base);
-      if (destroy) {
-        node->~action_node_model();
-        return;
-      }
-      if ((committing && OnCommit) || (!committing && OnRollback)) {
-        node->callback();
-      }
+    static void invoke_node(action_link *base) noexcept {
+      auto *node = static_cast<action_node *>(base);
+      node->callback();
     }
 
     Fn callback;
   };
 
-  struct runtime_operations {
-    void *(*allocate)(void *, std::size_t, std::size_t);
-    void (*add_destructor)(void *, void *, void (*)(void *) noexcept);
-    void (*finish)(void *, void *, bool, runtime_transaction *,
-                   runtime_transaction *);
+  using action_store = detail::object_store<arena<>>;
+
+  struct action_checkpoint {
+    action_link *commit_tail;
+    action_link *rollback_tail;
+    typename action_store::checkpoint objects;
+  };
+
+  struct action_state {
+    explicit action_state(arena<> &scratch)
+        : scratch_arena(std::addressof(scratch)) {}
+
+    ~action_state() { objects.destroy(*scratch_arena); }
+
+    action_checkpoint mark() const noexcept {
+      return {commit_tail, rollback_tail, objects.mark()};
+    }
+
+    template <typename T, typename... Args> T &construct(Args &&...args) {
+      return objects.template construct<T>(*scratch_arena,
+                                           std::forward<Args>(args)...);
+    }
+
+    void destroy(typename action_store::checkpoint point) noexcept {
+      objects.destroy(*scratch_arena, point);
+    }
+
+    arena<> *scratch_arena;
+    action_store objects;
+    action_link *commit_tail = nullptr;
+    action_link *rollback_tail = nullptr;
+  };
+
+  union action_data {
+    action_data() {}
+    ~action_data() {}
+
+    action_state state;
+    action_checkpoint checkpoint;
   };
 
 public:
-  template <typename Runtime>
-  runtime_transaction(Runtime &runtime, arena<> &scratch)
-      : parent_(runtime.active_transaction_),
-        scratch_(parent_ != nullptr ? parent_->scratch_
-                                    : std::addressof(scratch)),
-        runtime_(std::addressof(runtime)),
-        operations_(std::addressof(runtime_operations_for<Runtime>())) {
-    using checkpoint_type = typename Runtime::checkpoint;
-    static_assert(sizeof(checkpoint_type) <= sizeof(checkpoint_storage_));
-    static_assert(alignof(checkpoint_type) <= alignof(void *));
-
-    action_checkpoint_ = shared_action_tail();
-    new (&checkpoint_storage_) checkpoint_type(runtime.mark());
+  runtime_transaction(runtime_type &runtime, arena<> &scratch)
+      : parent_(runtime.active_transaction_), runtime_(std::addressof(runtime)),
+        checkpoint_(runtime.mark()) {
+    if (parent_ == nullptr) {
+      new (std::addressof(actions_.state)) action_state(scratch);
+    } else {
+      actions_.checkpoint = shared_actions().mark();
+    }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
     runtime.active_transaction_ = this;
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
   }
 
-  ~runtime_transaction() noexcept { rollback(); }
+  ~runtime_transaction() noexcept {
+    rollback();
+    if (parent_ == nullptr) {
+      actions_.state.~action_state();
+    }
+  }
 
   runtime_transaction(const runtime_transaction &) = delete;
   runtime_transaction &operator=(const runtime_transaction &) = delete;
@@ -84,12 +124,12 @@ public:
 
   template <typename T, typename ConstructFn>
   T *construct_persistent_with(ConstructFn &&construct_fn) {
-    auto *instance = reinterpret_cast<T *>(
-        operations_->allocate(runtime_, sizeof(T), alignof(T)));
+    auto *instance =
+        reinterpret_cast<T *>(runtime_->allocate(sizeof(T), alignof(T)));
     std::forward<ConstructFn>(construct_fn)(instance);
     if constexpr (!std::is_trivially_destructible_v<T>) {
       try {
-        operations_->add_destructor(runtime_, instance, &destructor<T>);
+        runtime_->add_destructor(instance, &destructor<T>);
       } catch (...) {
         instance->~T();
         throw;
@@ -101,33 +141,31 @@ public:
   template <typename Fn> void on_rollback(Fn &&fn) {
     static_assert(std::is_nothrow_invocable_v<std::decay_t<Fn> &>);
     static_assert(std::is_nothrow_destructible_v<std::decay_t<Fn>>);
-    add_action<false, true>(std::forward<Fn>(fn));
+    auto &actions = shared_actions();
+    add_action(actions, actions.rollback_tail, std::forward<Fn>(fn));
   }
 
   template <typename Fn> void on_commit(Fn &&fn) {
     static_assert(std::is_nothrow_invocable_v<std::decay_t<Fn> &>);
     static_assert(std::is_nothrow_destructible_v<std::decay_t<Fn>>);
-    add_action<true, false>(std::forward<Fn>(fn));
+    auto &actions = shared_actions();
+    add_action(actions, actions.commit_tail, std::forward<Fn>(fn));
   }
 
   template <typename Fn> void on_finish(Fn &&fn) {
     static_assert(std::is_nothrow_invocable_v<std::decay_t<Fn> &>);
     static_assert(std::is_nothrow_destructible_v<std::decay_t<Fn>>);
-    add_action<true, true>(std::forward<Fn>(fn));
+    using action_type = std::decay_t<Fn>;
+    auto &actions = shared_actions();
+    auto &callback =
+        actions.template construct<action_type>(std::forward<Fn>(fn));
+    auto invoke = [&callback]() noexcept { callback(); };
+    add_action(actions, actions.commit_tail, invoke);
+    add_action(actions, actions.rollback_tail, invoke);
   }
 
   void add_runtime_destructor(void *instance, void (*dtor)(void *) noexcept) {
-    operations_->add_destructor(runtime_, instance, dtor);
-  }
-
-  template <bool OnCommit, bool OnRollback, typename Fn>
-  void add_action(Fn &&fn) {
-    using action_type = std::decay_t<Fn>;
-    using node_type = action_node_model<action_type, OnCommit, OnRollback>;
-    auto *storage = scratch_->allocate(sizeof(node_type), alignof(node_type));
-    auto *created =
-        new (storage) node_type(shared_action_tail(), std::forward<Fn>(fn));
-    shared_action_tail() = created;
+    runtime_->add_destructor(instance, dtor);
   }
 
   void commit() {
@@ -137,8 +175,7 @@ public:
     if (parent_ == nullptr) {
       finish_actions(true);
     }
-    operations_->finish(runtime_, std::addressof(checkpoint_storage_), true,
-                        this, parent_);
+    finish_runtime(true);
     runtime_ = nullptr;
   }
 
@@ -147,72 +184,53 @@ public:
       return;
     }
     finish_actions(false);
-    operations_->finish(runtime_, std::addressof(checkpoint_storage_), false,
-                        this, parent_);
+    finish_runtime(false);
     runtime_ = nullptr;
   }
 
 private:
+  template <typename Fn>
+  static void add_action(action_state &actions, action_link *&tail, Fn &&fn) {
+    using action_type = std::decay_t<Fn>;
+    using node_type = action_node<action_type>;
+    auto &created =
+        actions.template construct<node_type>(tail, std::forward<Fn>(fn));
+    tail = std::addressof(created);
+  }
+
   template <typename T> static void destructor(void *ptr) noexcept {
     reinterpret_cast<T *>(ptr)->~T();
   }
 
-  template <typename Runtime>
-  static void *allocate_runtime(void *runtime, std::size_t size,
-                                std::size_t alignment) {
-    return reinterpret_cast<Runtime *>(runtime)->allocate(size, alignment);
-  }
-
-  template <typename Runtime>
-  static void add_runtime_destructor(void *runtime, void *instance,
-                                     void (*dtor)(void *) noexcept) {
-    reinterpret_cast<Runtime *>(runtime)->add_destructor(instance, dtor);
-  }
-
-  template <typename Runtime>
-  static void finish_runtime(void *runtime_ptr, void *checkpoint, bool commit,
-                             runtime_transaction *transaction,
-                             runtime_transaction *parent) {
-    auto &runtime = *reinterpret_cast<Runtime *>(runtime_ptr);
-    assert(runtime.active_transaction_ == transaction);
+  void finish_runtime(bool commit) {
+    assert(runtime_->active_transaction_ == this);
     if (commit) {
-      runtime.commit(
-          *reinterpret_cast<typename Runtime::checkpoint *>(checkpoint));
+      runtime_->commit(checkpoint_);
     } else {
-      runtime.rollback(
-          *reinterpret_cast<typename Runtime::checkpoint *>(checkpoint));
+      runtime_->rollback(checkpoint_);
     }
-    assert(runtime.active_transaction_ == transaction);
-    runtime.active_transaction_ = parent;
-  }
-
-  template <typename Runtime>
-  static const runtime_operations &runtime_operations_for() noexcept {
-    static const runtime_operations operations{&allocate_runtime<Runtime>,
-                                               &add_runtime_destructor<Runtime>,
-                                               &finish_runtime<Runtime>};
-    return operations;
+    assert(runtime_->active_transaction_ == this);
+    runtime_->active_transaction_ = parent_;
   }
 
   void finish_actions(bool committing) noexcept {
-    auto *&tail = shared_action_tail();
-    auto *cursor = tail;
-    while (cursor != action_checkpoint_) {
-      if (cursor->processed) {
-        cursor = cursor->previous;
-        continue;
-      }
-      cursor->processed = true;
-      auto *head_before_callback = tail;
-      cursor->process(cursor, committing, false);
-      cursor = tail != head_before_callback ? tail : cursor->previous;
+    auto &actions = shared_actions();
+    const action_checkpoint checkpoint =
+        parent_ != nullptr
+            ? actions_.checkpoint
+            : action_checkpoint{nullptr, nullptr,
+                                typename action_store::checkpoint{nullptr}};
+    auto *&tail = committing ? actions.commit_tail : actions.rollback_tail;
+    auto *end = committing ? checkpoint.commit_tail : checkpoint.rollback_tail;
+    while (tail != end) {
+      auto *action = tail;
+      tail = action->previous;
+      action->invoke(action);
     }
 
-    while (tail != action_checkpoint_) {
-      auto *destroyed = tail;
-      tail = destroyed->previous;
-      destroyed->process(destroyed, committing, true);
-    }
+    actions.commit_tail = checkpoint.commit_tail;
+    actions.rollback_tail = checkpoint.rollback_tail;
+    actions.destroy(checkpoint.objects);
   }
 
   runtime_transaction *root_transaction() noexcept {
@@ -223,17 +241,14 @@ private:
     return root;
   }
 
-  action_node *&shared_action_tail() noexcept {
-    return root_transaction()->action_tail_;
+  action_state &shared_actions() noexcept {
+    return root_transaction()->actions_.state;
   }
 
   runtime_transaction *parent_;
-  arena<> *scratch_;
-  action_node *action_tail_ = nullptr;
-  action_node *action_checkpoint_ = nullptr;
-  void *runtime_;
-  const runtime_operations *operations_;
-  alignas(void *) std::byte checkpoint_storage_[sizeof(void *) * 3];
+  action_data actions_;
+  runtime_type *runtime_;
+  typename runtime_type::checkpoint checkpoint_;
 };
 
 } // namespace dingo

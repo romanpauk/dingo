@@ -18,6 +18,7 @@
 
 namespace dingo {
 namespace {
+using test_runtime_transaction = runtime_transaction<std::allocator<char>>;
 
 struct runtime_arena_tracker {
   explicit runtime_arena_tracker(std::vector<int> *events, int value)
@@ -102,7 +103,7 @@ struct runtime_transaction_tracked_action {
 
 struct runtime_transaction_reentrant_tracked_action {
   runtime_transaction_reentrant_tracked_action(
-      runtime_transaction *init_transaction, std::vector<int> *init_events,
+      test_runtime_transaction *init_transaction, std::vector<int> *init_events,
       int init_action_value, int init_destroy_value, bool init_install_action)
       : transaction(init_transaction), events(init_events),
         action_value(init_action_value), destroy_value(init_destroy_value),
@@ -135,7 +136,7 @@ struct runtime_transaction_reentrant_tracked_action {
     }
   }
 
-  runtime_transaction *transaction;
+  test_runtime_transaction *transaction;
   std::vector<int> *events;
   int action_value;
   int destroy_value;
@@ -211,7 +212,7 @@ TEST(runtime_transaction_test,
     runtime_transaction transaction(runtime, scratch);
     transaction.on_rollback([&events]() noexcept { events.push_back(1); });
 
-    auto *remaining = scratch.allocate(64, alignof(std::max_align_t));
+    auto *remaining = scratch.allocate(208, alignof(void *));
     EXPECT_TRUE(address_is_within(scratch, remaining));
   }
 

@@ -51,6 +51,7 @@ public:
   using resolution_container_type = ResolutionContainer;
   using allocator_type = typename Owner::allocator_type;
   using runtime_type = container_runtime<allocator_type>;
+  using runtime_context_type = runtime_context<allocator_type>;
   using parent_container_type = typename Owner::parent_container_type;
 
   template <typename... Args>
@@ -61,10 +62,7 @@ public:
   parent_container_type *parent() { return owner().parent(); }
   allocator_type &get_allocator() { return owner().get_allocator(); }
   Storage &storage() { return storage_; }
-  detail::cache::entry *cache_entry() noexcept { return cache_state::get(); }
-  void set_cache_entry(detail::cache::entry *entry) noexcept {
-    cache_state::set(entry);
-  }
+  detail::cache::entry *cache_slot() noexcept { return cache_state::slot(); }
   void reset_containers() {
     instance_container_ = nullptr;
     resolution_container_ = nullptr;
@@ -76,25 +74,38 @@ public:
     return *instance_container_;
   }
 
-  ResolutionContainer &resolution_container(runtime_context &context) {
+  template <bool TrackRollback = true>
+  ResolutionContainer &resolution_container(runtime_context_type &context) {
     if (!resolution_container_) {
       assert(resolution_container_ == nullptr);
       auto *created = construct_container<ResolutionContainer>(context);
-      context.on_rollback(
-          [this]() noexcept { resolution_container_ = nullptr; });
+      if constexpr (TrackRollback) {
+        context.on_rollback(
+            [this]() noexcept { resolution_container_ = nullptr; });
+      }
       resolution_container_ = created;
     }
     return *resolution_container_;
   }
 
-  InstanceContainer &container(runtime_context &context) {
+  template <bool TrackRollback = true>
+  InstanceContainer &container(runtime_context_type &context) {
     if (!instance_container_) {
       assert(instance_container_ == nullptr);
       auto *created = construct_container<InstanceContainer>(context);
-      context.on_rollback([this]() noexcept { instance_container_ = nullptr; });
+      if constexpr (TrackRollback) {
+        context.on_rollback(
+            [this]() noexcept { instance_container_ = nullptr; });
+      }
       instance_container_ = created;
     }
     return *instance_container_;
+  }
+
+  template <bool TrackRollback = true, typename Fn>
+  decltype(auto) with_resolution_container(runtime_context_type &context,
+                                           Fn &&fn) {
+    return std::forward<Fn>(fn)(resolution_container<TrackRollback>(context));
   }
 
 private:
@@ -106,7 +117,7 @@ private:
     return *owner_;
   }
 
-  template <typename T> T *construct_container(runtime_context &context) {
+  template <typename T> T *construct_container(runtime_context_type &context) {
     return std::addressof(
         context.template construct_persistent<T>(parent(), get_allocator()));
   }
@@ -134,6 +145,7 @@ public:
   using resolution_container_type = InstanceContainer;
   using allocator_type = typename Owner::allocator_type;
   using runtime_type = container_runtime<allocator_type>;
+  using runtime_context_type = runtime_context<allocator_type>;
   using parent_container_type = typename Owner::parent_container_type;
 
   template <typename... Args>
@@ -144,10 +156,7 @@ public:
   parent_container_type *parent() { return owner().parent(); }
   allocator_type &get_allocator() { return owner().get_allocator(); }
   Storage &storage() { return storage_; }
-  detail::cache::entry *cache_entry() noexcept { return cache_state::get(); }
-  void set_cache_entry(detail::cache::entry *entry) noexcept {
-    cache_state::set(entry);
-  }
+  detail::cache::entry *cache_slot() noexcept { return cache_state::slot(); }
   void reset_containers() { instance_container_ = nullptr; }
   InstanceContainer &container() {
     if (!instance_container_) {
@@ -156,18 +165,33 @@ public:
     return *instance_container_;
   }
 
-  InstanceContainer &container(runtime_context &context) {
+  template <bool TrackRollback = true>
+  InstanceContainer &container(runtime_context_type &context) {
     if (!instance_container_) {
       assert(instance_container_ == nullptr);
       auto *created = construct_container<InstanceContainer>(context);
-      context.on_rollback([this]() noexcept { instance_container_ = nullptr; });
+      if constexpr (TrackRollback) {
+        context.on_rollback(
+            [this]() noexcept { instance_container_ = nullptr; });
+      }
       instance_container_ = created;
     }
     return *instance_container_;
   }
 
-  InstanceContainer &resolution_container(runtime_context &context) {
-    return container(context);
+  template <bool TrackRollback = true>
+  InstanceContainer &resolution_container(runtime_context_type &context) {
+    return container<TrackRollback>(context);
+  }
+
+  template <bool TrackRollback = true, typename Fn>
+  decltype(auto) with_resolution_container(runtime_context_type &context,
+                                           Fn &&fn) {
+    (void)context;
+    if (instance_container_ != nullptr) {
+      return fn(*instance_container_);
+    }
+    return fn(*parent());
   }
 
 private:
@@ -179,7 +203,7 @@ private:
     return *owner_;
   }
 
-  template <typename T> T *construct_container(runtime_context &context) {
+  template <typename T> T *construct_container(runtime_context_type &context) {
     return std::addressof(
         context.template construct_persistent<T>(parent(), get_allocator()));
   }
@@ -256,7 +280,8 @@ struct runtime_storage_can_reset<
 // container directly?
 template <typename Container, typename Type, typename Storage, typename State>
 class runtime_binding
-    : public runtime_binding_interface<Container>,
+    : public runtime_binding_interface<
+          Container, runtime_context<typename Container::allocator_type>>,
       private detail::binding_conversion_cache_base<
           Storage::conversions::is_stable &&
               detail::runtime_binding_has_conversion_cache_v<
@@ -264,6 +289,8 @@ class runtime_binding
           detail::runtime_binding_conversion_types_t<Type, Storage>> {
 public:
   using storage_type = Storage;
+  using runtime_context_type =
+      runtime_context<typename Container::allocator_type>;
   using state_traits = runtime_binding_state_traits<State>;
   using state_type = typename state_traits::state_type;
   using container_type = typename state_type::container_type;
@@ -338,23 +365,28 @@ private:
 
   state_type &state() { return state_traits::ref(state_); }
   auto &get_storage() { return state().storage(); }
-  auto &get_resolution_container(runtime_context &context) {
-    return state().resolution_container(context);
+  template <bool TrackRollback = true, typename Fn>
+  decltype(auto) with_resolution_container(runtime_context_type &context,
+                                           Fn &&fn) {
+    return state().template with_resolution_container<TrackRollback>(
+        context, std::forward<Fn>(fn));
   }
 
   template <typename Context, typename Fn>
   decltype(auto) materialize_resolution_source(Context &context, Fn &&fn) {
     if constexpr (materialization_traits::can_retain_source) {
       if (materialization_traits::retains_source(get_storage())) {
-        context.on_rollback([this]() noexcept { reset_runtime_artifacts(); });
-        if (should_reset_storage_on_failure()) {
-          context.on_rollback(
-              [this]() noexcept { reset_storage_after_failure(true); });
-        }
+        const bool reset_storage = should_reset_storage_on_failure();
+        context.on_rollback([this, reset_storage]() noexcept {
+          reset_runtime_artifacts();
+          reset_storage_after_failure(reset_storage);
+        });
         auto materialize = [&]() -> decltype(auto) {
-          return detail::materialize_runtime_binding_resolution_source(
-              context, get_storage(), get_resolution_container(context),
-              std::forward<Fn>(fn));
+          return with_resolution_container<false>(
+              context, [&](auto &container) -> decltype(auto) {
+                return detail::materialize_runtime_binding_resolution_source(
+                    context, get_storage(), container, std::forward<Fn>(fn));
+              });
         };
         using result_type = std::invoke_result_t<decltype(materialize) &>;
         if constexpr (std::is_void_v<result_type>) {
@@ -371,9 +403,11 @@ private:
         }
       }
     }
-    return detail::materialize_runtime_binding_resolution_source(
-        context, get_storage(), get_resolution_container(context),
-        std::forward<Fn>(fn));
+    return with_resolution_container(
+        context, [&](auto &container) -> decltype(auto) {
+          return detail::materialize_runtime_binding_resolution_source(
+              context, get_storage(), container, std::forward<Fn>(fn));
+        });
   }
 
   void reset_runtime_artifacts() {
@@ -386,7 +420,8 @@ private:
     reset_storage_after_failure(true);
   }
 
-  void add_retained_source_runtime_reset_destructor(runtime_context &context) {
+  void
+  add_retained_source_runtime_reset_destructor(runtime_context_type &context) {
     context.add_runtime_destructor(
         this,
         &runtime_binding::reset_retained_source_runtime_artifacts_destructor);
@@ -433,7 +468,7 @@ public:
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-  void *convert(runtime_context &context, const request_type &request,
+  void *convert(runtime_context_type &context, const request_type &request,
                 detail::cache::sink cache) {
     void *ptr = ::dingo::resolve_binding_capability_address<rtti_type>(
         *this, context, ConversionTypes{}, request.lookup_type,
@@ -451,37 +486,31 @@ public:
 
 public:
   template <typename... Args>
-  runtime_binding(Args &&...args) : state_(std::forward<Args>(args)...) {}
-
-  detail::cache::entry *cache_entry() noexcept override {
-    return state().cache_entry();
-  }
-
-  void set_cache_entry(detail::cache::entry *entry) noexcept override {
-    state().set_cache_entry(entry);
+  runtime_binding(Args &&...args) : state_(std::forward<Args>(args)...) {
+    this->cache_slot(state().cache_slot());
   }
 
   auto &get_container() { return state().container(); }
 
-  void *get_value(runtime_context &context, const request_type &request,
+  void *get_value(runtime_context_type &context, const request_type &request,
                   detail::cache::sink cache) override {
     return convert<value_capability_types>(context, request, cache);
   }
 
-  void *get_lvalue_reference(runtime_context &context,
+  void *get_lvalue_reference(runtime_context_type &context,
                              const request_type &request,
                              detail::cache::sink cache) override {
     return convert<lvalue_reference_capability_types>(context, request, cache);
   }
 
-  void *get_rvalue_reference(runtime_context &context,
+  void *get_rvalue_reference(runtime_context_type &context,
                              const request_type &request,
                              detail::cache::sink cache) override {
     return convert<typename Storage::conversions::rvalue_reference_types>(
         context, request, cache);
   }
 
-  void *get_pointer(runtime_context &context, const request_type &request,
+  void *get_pointer(runtime_context_type &context, const request_type &request,
                     detail::cache::sink cache) override {
     return convert<pointer_capability_types>(context, request, cache);
   }

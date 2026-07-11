@@ -711,9 +711,15 @@ surface as exceptions during resolution. Compile-time bindings move the declared
 graph into the type system, so missing static dependencies and unsupported
 static cycles can be diagnosed at compile time.
 
-When user code throws during resolution, the container remains in a valid state.
-Already completed shared resolutions may stay cached, because resolution is a
-recursive process and some work may already have finished successfully.
+Container changes are atomic. If a registration or resolution operation throws,
+the container is restored to the state it had when the operation began. An
+operation therefore either succeeds completely or leaves the container
+unmodified; partially installed registrations, cached resolutions, lookup
+entries, and container-owned objects are rolled back.
+
+This guarantee covers state managed by the container. Dingo cannot undo external
+side effects performed by user constructors, factories, callbacks, or
+destructors before they throw.
 
 See:
 

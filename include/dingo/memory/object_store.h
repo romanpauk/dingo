@@ -103,34 +103,30 @@ template <typename Arena> class object_store {
 public:
   using checkpoint = typename destructor_journal::checkpoint;
 
-  explicit object_store(Arena &arena) : arena_(std::addressof(arena)) {}
-
-  ~object_store() noexcept { destroy(); }
-
-  object_store(const object_store &) = delete;
-  object_store &operator=(const object_store &) = delete;
-
-  void *allocate(std::size_t size, std::size_t alignment) {
+  void *allocate(Arena &arena, std::size_t size, std::size_t alignment) {
     assert(size <=
            static_cast<std::size_t>(std::numeric_limits<intptr_t>::max()));
     assert(alignment <=
            static_cast<std::size_t>(std::numeric_limits<intptr_t>::max()));
-    return arena_->allocate(static_cast<intptr_t>(size),
-                            static_cast<intptr_t>(alignment));
+    return arena.allocate(static_cast<intptr_t>(size),
+                          static_cast<intptr_t>(alignment));
   }
 
-  template <typename T, typename... Args> T &construct(Args &&...args) {
-    return construct_at<T>(
-        [&](T *instance) { new (instance) T(std::forward<Args>(args)...); });
+  template <typename T, typename... Args>
+  T &construct(Arena &arena, Args &&...args) {
+    return construct_at<T>(arena, [&](T *instance) {
+      new (instance) T(std::forward<Args>(args)...);
+    });
   }
 
   template <typename T, typename ConstructFn>
-  T &construct_at(ConstructFn &&construct) {
-    auto *instance = reinterpret_cast<T *>(allocate(sizeof(T), alignof(T)));
+  T &construct_at(Arena &arena, ConstructFn &&construct) {
+    auto *instance =
+        reinterpret_cast<T *>(allocate(arena, sizeof(T), alignof(T)));
     std::forward<ConstructFn>(construct)(instance);
     if constexpr (!std::is_trivially_destructible_v<T>) {
       try {
-        add_destructor(instance, &destructor<T>);
+        add_destructor(arena, instance, &destructor<T>);
       } catch (...) {
         instance->~T();
         throw;
@@ -139,31 +135,29 @@ public:
     return *instance;
   }
 
-  void add_destructor(void *instance, void (*dtor)(void *) noexcept) {
-    destructors_.push(destructor_allocator(*arena_),
+  void add_destructor(Arena &arena, void *instance,
+                      void (*dtor)(void *) noexcept) {
+    destructors_.push(destructor_allocator(arena),
                       destructible{instance, dtor});
   }
 
   checkpoint mark() const noexcept { return destructors_.mark(); }
 
-  void destroy() noexcept {
-    destroy(typename destructor_journal::checkpoint{nullptr});
+  void destroy(Arena &arena) noexcept {
+    destroy(arena, typename destructor_journal::checkpoint{nullptr});
   }
 
-  void destroy(checkpoint point) noexcept { destroy_from(point); }
+  void destroy(Arena &arena, checkpoint point) noexcept {
+    destructors_.pop_until(
+        point, destructor_allocator(arena),
+        [](destructible &entry) noexcept { entry.dtor(entry.instance); });
+  }
 
 private:
   template <typename T> static void destructor(void *ptr) noexcept {
     reinterpret_cast<T *>(ptr)->~T();
   }
 
-  void destroy_from(typename destructor_journal::checkpoint point) noexcept {
-    destructors_.pop_until(
-        point, destructor_allocator(*arena_),
-        [](destructible &entry) noexcept { entry.dtor(entry.instance); });
-  }
-
-  Arena *arena_;
   destructor_journal destructors_;
 };
 

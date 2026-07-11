@@ -184,44 +184,49 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
         "runtime bindings state", 48);
     expect_size_at_most<
         container_runtime<typename size_registry_type::allocator_type>>(
-        "container runtime", 40);
-    expect_size_at_most<runtime_transaction>("runtime transaction", 72);
+        "container runtime", 32);
+    expect_size_at_most<detail::object_store<arena<>>>("object store", 8);
+    expect_size_at_most<runtime_transaction<std::allocator<char>>>(
+        "runtime transaction", 72);
     // Runtime context carries one hidden construction-policy stack head.
-    expect_size_at_most<runtime_context>("runtime context", 40);
+    expect_size_at_most<runtime_context<std::allocator<char>>>(
+        "runtime context", 40);
     expect_size_at_most<size_storage>("shared registration storage", 16);
-    // Shared runtime state keeps storage/container pointers; retained source
-    // data now lives in the runtime transaction journal instead of a binding
-    // owned lifetime frame.
-    expect_size_at_most<size_binding_state>("runtime binding state", 40);
+    // Stable runtime state keeps its request cache inline; retained source
+    // data lives in the runtime transaction journal instead of a binding-owned
+    // lifetime frame.
+    expect_size_at_most<size_binding_state>("runtime binding state", 48);
     expect_size_at_most<size_unique_state>("unique runtime binding state", 24);
     expect_size_at_most<size_external_state>("external runtime binding state",
-                                             32);
+                                             40);
     expect_size_at_most<size_shared_ptr_state>(
-        "shared_ptr runtime binding state", 48);
+        "shared_ptr runtime binding state", 56);
     expect_size_at_most<size_shared_cyclical_state>(
         "shared_cyclical runtime binding state", 56);
     expect_size_at_most<size_local_state>(
-        "local-bindings runtime binding state", 40);
+        "local-bindings runtime binding state", 48);
     expect_size_at_most<size_multi_interface_state>(
-        "multi-interface runtime binding state", 48);
+        "multi-interface runtime binding state", 56);
     expect_size_at_most<size_multi_interface_conversion_cache>(
         "pointer-backed conversion cache", 16);
-    expect_size_at_most<size_binding>("runtime binding", 48);
+    // Runtime bindings keep a direct cache-slot pointer beside the vptr so
+    // cache access does not require another virtual dispatch.
+    expect_size_at_most<size_binding>("runtime binding", 64);
     expect_size_at_most<size_single_owner>("single-interface binding owner",
-                                           56);
+                                           64);
     expect_size_at_most<size_multi_interface_pointer_state_owner>(
-        "multi-interface pointer-state binding owner", 72);
+        "multi-interface pointer-state binding owner", 80);
     expect_size_at_most<size_multi_interface_shared_state_owner>(
-        "multi-interface shared-state binding owner", 88);
+        "multi-interface shared-state binding owner", 96);
     expect_size_at_most<size_shared_state_owner>(
-        "single-interface shared-state binding owner", 56);
+        "single-interface shared-state binding owner", 64);
 
     expect_size_at_most<size_probe_registry::runtime_lookup_binding_view>(
         "runtime lookup binding view", 8);
     expect_size_at_most<size_probe_registry::runtime_binding_value>(
-        "runtime binding value base", 8);
+        "runtime binding value base", 1);
     expect_size_at_most<size_probe_registry::runtime_lookup_value>(
-        "runtime lookup value", 16);
+        "runtime lookup value", 8);
 
     expect_size_at_most<size_type_index>("type index", 8);
     expect_size_at_most<size_base_lookup_key>("base lookup key", 16);
@@ -245,8 +250,7 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
   static_assert(sizeof(size_base_lookup_key) == sizeof(size_type_index) * 2);
   static_assert(sizeof(size_probe_registry::runtime_lookup_binding_view) ==
                 sizeof(void *));
-  static_assert(sizeof(size_probe_registry::runtime_binding_value) ==
-                sizeof(void *));
+  static_assert(std::is_empty_v<size_probe_registry::runtime_binding_value>);
   static_assert(sizeof(size_probe_registry::runtime_lookup_value) >=
                 sizeof(size_probe_registry::runtime_lookup_binding_view));
 }

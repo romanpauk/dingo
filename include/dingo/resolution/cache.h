@@ -60,17 +60,23 @@ template <bool Enabled> class state;
 
 template <> class state<true> {
 protected:
-  entry *get() noexcept { return entry_; }
-  void set(entry *value) noexcept { entry_ = value; }
+  entry *get() noexcept { return entry_.key != nullptr ? &entry_ : nullptr; }
+
+  entry *slot() noexcept { return &entry_; }
+
+  void set(const entry *value) noexcept {
+    entry_ = value != nullptr ? *value : entry{};
+  }
 
 private:
-  entry *entry_ = nullptr;
+  entry entry_{};
 };
 
 template <> class state<false> {
 protected:
   entry *get() noexcept { return nullptr; }
-  void set(entry *value) noexcept {
+  entry *slot() noexcept { return nullptr; }
+  void set(const entry *value) noexcept {
     assert(value == nullptr);
     (void)value;
   }

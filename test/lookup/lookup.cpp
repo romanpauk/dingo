@@ -591,6 +591,25 @@ TEST(index_test,
   ASSERT_EQ(large_state.deallocations, large_state.allocations);
 }
 
+TEST(index_test, shared_resolution_without_local_bindings_avoids_allocation) {
+  struct service {};
+
+  test_allocator_state state;
+  {
+    test_allocator<char> allocator(&state);
+    container<dynamic_container_traits, test_allocator<char>> container(
+        allocator);
+    container.template register_type<scope<shared>, storage<service>>();
+    const auto allocations_after_registration = state.allocations;
+
+    (void)container.template resolve<service &>();
+
+    EXPECT_EQ(state.allocations, allocations_after_registration);
+  }
+
+  EXPECT_EQ(state.deallocations, state.allocations);
+}
+
 TEST(index_test, typed_key_singular_registration_uses_allocator_owned_storage) {
   struct processor_key {};
   struct processor {

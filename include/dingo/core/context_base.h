@@ -28,6 +28,7 @@
 namespace dingo {
 template <typename StaticRegistry, bool RuntimeDependencies>
 class basic_static_context;
+template <typename Allocator> class runtime_context;
 
 namespace detail {
 
@@ -41,6 +42,15 @@ struct is_basic_static_context<
 template <typename T>
 inline constexpr bool is_basic_static_context_v = is_basic_static_context<
     std::remove_cv_t<std::remove_reference_t<T>>>::value;
+
+template <typename T> struct is_runtime_context : std::false_type {};
+
+template <typename Allocator>
+struct is_runtime_context<runtime_context<Allocator>> : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_runtime_context_v =
+    is_runtime_context<std::remove_cv_t<std::remove_reference_t<T>>>::value;
 
 struct context_destructible {
   void *instance;

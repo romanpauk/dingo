@@ -29,6 +29,12 @@ struct runtime_conversion_rollback_interface {
 struct runtime_conversion_rollback_implementation
     : runtime_conversion_rollback_interface {};
 
+struct runtime_request_cache_rollback_consumer {
+  explicit runtime_request_cache_rollback_consumer(int *) {
+    throw std::runtime_error("resolution failed");
+  }
+};
+
 struct runtime_conversion_rollback_consumer {
   explicit runtime_conversion_rollback_consumer(
       std::shared_ptr<runtime_conversion_rollback_interface> &handle) {
@@ -143,11 +149,18 @@ TEST(cache_test, state_stores_entries_only_when_enabled) {
 
   EXPECT_EQ(enabled.get(), nullptr);
   enabled.set(std::addressof(entry));
-  EXPECT_EQ(enabled.get(), std::addressof(entry));
+  ASSERT_NE(enabled.get(), nullptr);
+  EXPECT_NE(enabled.get(), std::addressof(entry));
+  EXPECT_EQ(enabled.get()->key, entry.key);
+  EXPECT_EQ(enabled.get()->address, entry.address);
   enabled.set(nullptr);
+  EXPECT_EQ(enabled.get(), nullptr);
 
   disabled.set(nullptr);
   EXPECT_EQ(disabled.get(), nullptr);
+
+  static_assert(sizeof(exposed_cache_state<true>) == sizeof(entry));
+  static_assert(std::is_empty_v<exposed_cache_state<false>>);
 }
 
 TEST(cache_test, stable_storage_trait_requires_explicit_stability) {
@@ -267,6 +280,21 @@ TEST(cache_test,
           .resolve<std::shared_ptr<runtime_conversion_rollback_interface> &>();
   EXPECT_EQ(std::addressof(after_failure), std::addressof(committed));
   EXPECT_EQ(after_failure.get(), committed.get());
+}
+
+TEST(cache_test, rollback_clears_cache_replaced_by_another_request_shape) {
+  dingo::container<> container;
+  container.register_type<scope<shared>, storage<int>>();
+  container.register_type<scope<shared>,
+                          storage<runtime_request_cache_rollback_consumer>,
+                          dependencies<int *>>();
+
+  auto &committed = container.resolve<int &>();
+  EXPECT_THROW((container.resolve<runtime_request_cache_rollback_consumer &>()),
+               std::runtime_error);
+
+  EXPECT_EQ(std::addressof(container.resolve<int &>()),
+            std::addressof(committed));
 }
 
 } // namespace
