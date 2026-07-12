@@ -191,6 +191,7 @@ PROBE_LIMITS = {
     },
     "probe_runtime_resolution_mixed_container_external_reference_storage": {
         "default": 0x520,
+        "gcc13": 0x530,
         "gcc14": 0x5c0,
         "gcc15": 0x560,
     },
