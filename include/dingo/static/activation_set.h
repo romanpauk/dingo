@@ -20,6 +20,7 @@
 #include <dingo/static/graph.h>
 #include <dingo/type/type_descriptor.h>
 
+#include <cassert>
 #include <cstddef>
 #include <type_traits>
 #include <utility>
@@ -78,8 +79,8 @@ inline constexpr bool binding_has_conversion_cache_v = [] {
          type_list_size_v<typename conversions_type::conversion_types> != 0;
 }();
 
-template <typename Closure, typename Registration> struct binding_closure_slot {
-  Closure closure;
+template <typename Frame, typename Registration> struct binding_frame_slot {
+  Frame frame;
 };
 
 template <bool RuntimeDependencies, typename Registration,
@@ -122,11 +123,11 @@ struct binding_conversion_cache_slot
 };
 
 template <bool RuntimeDependencies, typename... Registrations>
-struct basic_static_activation_closure;
+struct basic_static_activation_frame;
 
 template <typename... Registrations>
-struct basic_static_activation_closure<false, Registrations...> {
-  using type = detail::static_context_closure<
+struct basic_static_activation_frame<false, Registrations...> {
+  using type = detail::static_context_frame<
       detail::basic_static_execution_traits<static_bindings<Registrations...>,
                                             false>::max_destructible_slots,
       detail::basic_static_execution_traits<static_bindings<Registrations...>,
@@ -144,8 +145,8 @@ struct basic_static_activation_closure<false, Registrations...> {
 };
 
 template <typename... Registrations>
-struct basic_static_activation_closure<true, Registrations...> {
-  using type = detail::fixed_context_closure<
+struct basic_static_activation_frame<true, Registrations...> {
+  using type = detail::fixed_static_context_frame<
       detail::basic_static_execution_traits<static_bindings<Registrations...>,
                                             true>::max_destructible_slots,
       detail::basic_static_execution_traits<static_bindings<Registrations...>,
@@ -163,23 +164,23 @@ struct basic_static_activation_closure<true, Registrations...> {
 };
 
 template <bool RuntimeDependencies, typename... Registrations>
-using static_activation_closure_t =
-    typename basic_static_activation_closure<RuntimeDependencies,
-                                             Registrations...>::type;
+using static_activation_frame_t =
+    typename basic_static_activation_frame<RuntimeDependencies,
+                                           Registrations...>::type;
 
 template <bool RuntimeDependencies, typename... Registrations>
-class static_activation_closure_storage
-    : private binding_closure_slot<
-          static_activation_closure_t<RuntimeDependencies, Registrations...>,
+class static_activation_frame_storage
+    : private binding_frame_slot<
+          static_activation_frame_t<RuntimeDependencies, Registrations...>,
           Registrations>... {
   template <typename Registration>
-  using closure_holder = binding_closure_slot<
-      static_activation_closure_t<RuntimeDependencies, Registrations...>,
+  using frame_holder = binding_frame_slot<
+      static_activation_frame_t<RuntimeDependencies, Registrations...>,
       Registration>;
 
 public:
-  template <typename Registration> auto &get_closure() {
-    return static_cast<closure_holder<Registration> &>(*this).closure;
+  template <typename Registration> auto &get_frame() {
+    return static_cast<frame_holder<Registration> &>(*this).frame;
   }
 };
 
@@ -375,7 +376,7 @@ struct static_binding_resolver {
   }
 
   template <typename Request, typename Context>
-  Request resolve(Context &context, instance_cache_sink cache = {}) {
+  Request resolve(Context &context, cache::sink cache = {}) {
     static_assert(State::runtime_dependencies ||
                       binding_supports_request_v<Request, InterfaceBinding>,
                   "static resolution cannot satisfy a request the storage "
@@ -444,35 +445,105 @@ struct static_binding_resolver {
     binding_activation<State, Host, binding_model_type> activation{state, host};
     if constexpr (uses_stored_request_identity) {
       if constexpr (!State::runtime_dependencies) {
-        return detail::materialize_binding_source(
-            context, state.template get_storage_for_model<binding_model_type>(),
-            activation, [&](auto &&source) -> void * {
-              auto &&instance =
-                  detail::resolve_binding_request<Request, storage_type>(
-                      activation, context,
-                      std::forward<decltype(source)>(source));
-              return detail::get_address_as<target_type>(
-                  context, std::forward<decltype(instance)>(instance));
-            });
+        auto &&storage =
+            state.template get_storage_for_model<binding_model_type>();
+        auto materialize = [&](auto &&source) -> void * {
+          auto &&instance =
+              detail::resolve_binding_request<Request, storage_type>(
+                  activation, context, std::forward<decltype(source)>(source));
+          return detail::get_address_as<target_type>(
+              context, std::forward<decltype(instance)>(instance));
+        };
+        if constexpr ((std::is_lvalue_reference_v<Request> ||
+                       std::is_pointer_v<Request>) &&
+                      detail::materializes_value_source_v<
+                          std::remove_reference_t<decltype(storage)>, Context,
+                          decltype(activation)>) {
+          return detail::materialize_lvalue_binding_source_in_context(
+              context, storage, activation, std::move(materialize));
+        } else {
+          return detail::materialize_binding_source(
+              context, storage, activation, std::move(materialize));
+        }
       } else {
+        auto &&storage =
+            state.template get_storage_for_model<binding_model_type>();
+        auto materialize = [&](auto &&source) -> void * {
+          auto &&instance =
+              detail::resolve_binding_request<Request, storage_type>(
+                  activation, context, std::forward<decltype(source)>(source));
+          return detail::get_address_as<target_type>(
+              context, std::forward<decltype(instance)>(instance));
+        };
+        if constexpr ((std::is_lvalue_reference_v<Request> ||
+                       std::is_pointer_v<Request>) &&
+                      detail::materializes_value_source_v<
+                          std::remove_reference_t<decltype(storage)>, Context,
+                          decltype(activation)>) {
+          return detail::materialize_lvalue_binding_source_in_context(
+              context, storage, activation, std::move(materialize));
+        }
         return detail::forward_binding_request<Request>(
-            context, state.template get_storage_for_model<binding_model_type>(),
-            activation, activation, [&](auto &&instance) -> void * {
+            context, storage, activation, activation,
+            [&](auto &&instance) -> void * {
               return detail::get_address_as<target_type>(
                   context, std::forward<decltype(instance)>(instance));
             });
       }
     } else {
-      return detail::forward_binding_resolution_request<
-          conversion_request_type>(
-          context, state.template get_storage_for_model<binding_model_type>(),
-          activation,
-          state.template get_closure<
-              typename binding_model_type::registration_type>(),
-          activation, [&](auto &&instance) -> void * {
-            return detail::get_address_as<target_type>(
-                context, std::forward<decltype(instance)>(instance));
-          });
+      if constexpr (State::runtime_dependencies) {
+        auto &&storage =
+            state.template get_storage_for_model<binding_model_type>();
+        if constexpr ((std::is_lvalue_reference_v<Request> ||
+                       std::is_pointer_v<Request>) &&
+                      detail::materializes_value_source_v<
+                          std::remove_reference_t<decltype(storage)>, Context,
+                          decltype(activation)>) {
+          return detail::materialize_lvalue_binding_source_in_context(
+              context, storage, activation, [&](auto &&source) -> void * {
+                auto &&instance =
+                    detail::resolve_binding_request<conversion_request_type,
+                                                    storage_type>(
+                        activation, context,
+                        std::forward<decltype(source)>(source));
+                return detail::get_address_as<target_type>(
+                    context, std::forward<decltype(instance)>(instance));
+              });
+        }
+        return detail::forward_runtime_binding_resolution_request<
+            conversion_request_type>(
+            context, storage, activation, activation,
+            [&](auto &&instance) -> void * {
+              return detail::get_address_as<target_type>(
+                  context, std::forward<decltype(instance)>(instance));
+            });
+      } else {
+        auto &&storage =
+            state.template get_storage_for_model<binding_model_type>();
+        auto materialize = [&](auto &&source) -> void * {
+          auto &&instance =
+              detail::resolve_binding_request<conversion_request_type,
+                                              storage_type>(
+                  activation, context, std::forward<decltype(source)>(source));
+          return detail::get_address_as<target_type>(
+              context, std::forward<decltype(instance)>(instance));
+        };
+        if constexpr ((std::is_lvalue_reference_v<Request> ||
+                       std::is_pointer_v<Request>) &&
+                      detail::materializes_value_source_v<
+                          std::remove_reference_t<decltype(storage)>, Context,
+                          decltype(activation)>) {
+          return detail::materialize_lvalue_binding_source_in_context(
+              context, storage, activation, std::move(materialize));
+        }
+        return detail::forward_binding_resolution_request<
+            conversion_request_type>(
+            context, storage, activation, get_resolution_frame(context),
+            activation, [&](auto &&instance) -> void * {
+              return detail::get_address_as<target_type>(
+                  context, std::forward<decltype(instance)>(instance));
+            });
+      }
     }
   }
 
@@ -485,32 +556,69 @@ struct static_binding_resolver {
       binding_activation<State, Host, binding_model_type> activation{state,
                                                                      host};
       if constexpr (!State::runtime_dependencies) {
-        return detail::materialize_binding_source(
-            context, state.template get_storage_for_model<binding_model_type>(),
-            activation, [&](auto &&source) -> decltype(auto) {
-              auto &&instance =
-                  detail::resolve_binding_request<Request, storage_type>(
-                      activation, context,
-                      std::forward<decltype(source)>(source));
-              return detail::consume_resolved_binding<Request>(
-                  std::forward<decltype(instance)>(instance),
-                  std::forward<Fn>(fn));
-            });
+        auto &&storage =
+            state.template get_storage_for_model<binding_model_type>();
+        auto materialize = [&](auto &&source) -> decltype(auto) {
+          auto &&instance =
+              detail::resolve_binding_request<Request, storage_type>(
+                  activation, context, std::forward<decltype(source)>(source));
+          return detail::consume_resolved_binding<Request>(
+              std::forward<decltype(instance)>(instance), std::forward<Fn>(fn));
+        };
+        if constexpr ((std::is_lvalue_reference_v<Request> ||
+                       std::is_pointer_v<Request>) &&
+                      detail::materializes_value_source_v<
+                          std::remove_reference_t<decltype(storage)>, Context,
+                          decltype(activation)>) {
+          return detail::materialize_lvalue_binding_source_in_context(
+              context, storage, activation, std::move(materialize));
+        } else {
+          return detail::materialize_binding_source(
+              context, storage, activation, std::move(materialize));
+        }
       } else {
+        auto &&storage =
+            state.template get_storage_for_model<binding_model_type>();
+        auto materialize = [&](auto &&source) -> decltype(auto) {
+          auto &&instance =
+              detail::resolve_binding_request<Request, storage_type>(
+                  activation, context, std::forward<decltype(source)>(source));
+          return detail::consume_resolved_binding<Request>(
+              std::forward<decltype(instance)>(instance), std::forward<Fn>(fn));
+        };
+        if constexpr ((std::is_lvalue_reference_v<Request> ||
+                       std::is_pointer_v<Request>) &&
+                      detail::materializes_value_source_v<
+                          std::remove_reference_t<decltype(storage)>, Context,
+                          decltype(activation)>) {
+          return detail::materialize_lvalue_binding_source_in_context(
+              context, storage, activation, std::move(materialize));
+        }
         return detail::consume_binding_request<Request>(
-            context, state.template get_storage_for_model<binding_model_type>(),
-            activation, activation, std::forward<Fn>(fn));
+            context, storage, activation, activation, std::forward<Fn>(fn));
       }
     } else {
       binding_activation<State, Host, binding_model_type> activation{state,
                                                                      host};
-      return detail::consume_binding_resolution_request<Request>(
-          context, state.template get_storage_for_model<binding_model_type>(),
-          activation,
-          state.template get_closure<
-              typename binding_model_type::registration_type>(),
-          activation, std::forward<Fn>(fn));
+      if constexpr (State::runtime_dependencies) {
+        return detail::consume_runtime_binding_resolution_request<Request>(
+            context, state.template get_storage_for_model<binding_model_type>(),
+            activation, activation, std::forward<Fn>(fn));
+      } else {
+        return detail::consume_binding_resolution_request<Request>(
+            context, state.template get_storage_for_model<binding_model_type>(),
+            activation, get_resolution_frame(context), activation,
+            std::forward<Fn>(fn));
+      }
     }
+  }
+
+  template <typename Context>
+  decltype(auto) get_resolution_frame(Context &context) {
+    static_cast<void>(context);
+    static_assert(!State::runtime_dependencies);
+    return state
+        .template get_frame<typename binding_model_type::registration_type>();
   }
 };
 
@@ -738,12 +846,12 @@ class basic_static_activation_set
     : public basic_static_activation_set_base<
           basic_static_activation_set<RuntimeDependencies, Registrations...>,
           RuntimeDependencies, Registrations...>,
-      private static_activation_closure_storage<RuntimeDependencies,
-                                                Registrations...>,
+      private static_activation_frame_storage<RuntimeDependencies,
+                                              Registrations...>,
       private static_binding_storage<RuntimeDependencies, Registrations...> {
 public:
-  using static_activation_closure_storage<RuntimeDependencies,
-                                          Registrations...>::get_closure;
+  using static_activation_frame_storage<RuntimeDependencies,
+                                        Registrations...>::get_frame;
   using static_binding_storage<
       RuntimeDependencies, Registrations...>::get_conversion_cache_for_model;
   using static_binding_storage<RuntimeDependencies,
@@ -771,14 +879,14 @@ class basic_static_activation_set_view
           basic_static_activation_set_view<RuntimeDependencies, StorageState,
                                            Registrations...>,
           RuntimeDependencies, Registrations...>,
-      private static_activation_closure_storage<RuntimeDependencies,
-                                                Registrations...> {
+      private static_activation_frame_storage<RuntimeDependencies,
+                                              Registrations...> {
 public:
   explicit basic_static_activation_set_view(StorageState &state)
       : state_(&state) {}
 
-  using static_activation_closure_storage<RuntimeDependencies,
-                                          Registrations...>::get_closure;
+  using static_activation_frame_storage<RuntimeDependencies,
+                                        Registrations...>::get_frame;
 
   template <typename Registration> auto &get_storage() {
     return state_->template get_storage<Registration>();
@@ -806,11 +914,14 @@ class borrowed_binding_scope
           borrowed_binding_scope<Registrations...>, true, Registrations...>,
       private static_binding_storage<true, Registrations...> {
 public:
-  explicit borrowed_binding_scope(context_closure_base &closure)
-      : closure_(&closure) {}
+  borrowed_binding_scope() = default;
 
-  template <typename Registration> context_closure_base &get_closure() {
-    return *closure_;
+  explicit borrowed_binding_scope(static_context_frame_base &frame)
+      : frame_(&frame) {}
+
+  template <typename Registration> static_context_frame_base &get_frame() {
+    assert(frame_ != nullptr);
+    return *frame_;
   }
 
   using static_binding_storage<
@@ -821,7 +932,7 @@ public:
   using static_binding_storage<true, Registrations...>::get_storage_for_model;
 
 private:
-  context_closure_base *closure_;
+  static_context_frame_base *frame_;
 };
 
 template <typename StorageState, typename... Registrations>
@@ -838,9 +949,9 @@ class static_registry<static_bindings<Registrations...>, State> {
   using self_type = static_registry<bindings_type, State>;
 
   template <typename Context>
-  using scope_type = basic_static_activation_set_view<
-      std::is_same_v<std::remove_reference_t<Context>, runtime_context>, State,
-      Registrations...>;
+  using scope_type =
+      basic_static_activation_set_view<is_runtime_context_v<Context>, State,
+                                       Registrations...>;
 
   template <typename Request, typename LookupKey>
   using selection_t = static_binding_t<

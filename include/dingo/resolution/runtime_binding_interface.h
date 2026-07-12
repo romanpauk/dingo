@@ -8,11 +8,12 @@
 #pragma once
 
 #include <dingo/core/config.h>
+#include <dingo/resolution/cache.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/type/type_descriptor.h>
 
 namespace dingo {
-class runtime_context;
+template <typename Allocator> class runtime_context;
 
 template <typename RTTI> struct instance_request {
   using type_index = typename RTTI::type_index;
@@ -32,43 +33,32 @@ template <typename T> struct request_lookup_type<const T &> {
 template <typename T>
 using request_lookup_type_t = typename request_lookup_type<T>::type;
 
-struct instance_cache_sink {
-  void *context = nullptr;
-  void (*store)(void *, void *) = nullptr;
-
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4702)
-#endif
-  void operator()(void *ptr) const {
-    if (store != nullptr) {
-      store(context, ptr);
-    }
-  }
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
-};
-
-template <typename Container> class runtime_binding_interface {
+template <typename Container, typename Context>
+class runtime_binding_interface {
 public:
   virtual ~runtime_binding_interface() = default;
 
+  detail::cache::entry *cache_slot() noexcept { return cache_slot_; }
+
   virtual void *
-  get_value(runtime_context &,
+  get_value(Context &,
             const instance_request<typename Container::rtti_type> &request,
-            instance_cache_sink) = 0;
+            detail::cache::sink) = 0;
   virtual void *get_lvalue_reference(
-      runtime_context &,
-      const instance_request<typename Container::rtti_type> &request,
-      instance_cache_sink) = 0;
+      Context &, const instance_request<typename Container::rtti_type> &request,
+      detail::cache::sink) = 0;
   virtual void *get_rvalue_reference(
-      runtime_context &,
-      const instance_request<typename Container::rtti_type> &request,
-      instance_cache_sink) = 0;
+      Context &, const instance_request<typename Container::rtti_type> &request,
+      detail::cache::sink) = 0;
   virtual void *
-  get_pointer(runtime_context &,
+  get_pointer(Context &,
               const instance_request<typename Container::rtti_type> &request,
-              instance_cache_sink) = 0;
+              detail::cache::sink) = 0;
+
+protected:
+  void cache_slot(detail::cache::entry *slot) noexcept { cache_slot_ = slot; }
+
+private:
+  detail::cache::entry *cache_slot_ = nullptr;
 };
 } // namespace dingo

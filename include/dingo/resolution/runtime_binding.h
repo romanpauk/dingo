@@ -11,9 +11,11 @@
 
 #include <dingo/core/binding_resolution.h>
 #include <dingo/resolution/runtime_binding_interface.h>
+#include <dingo/runtime/container_runtime.h>
 #include <dingo/runtime/context.h>
 #include <dingo/type/rebind_type.h>
 
+#include <cassert>
 #include <memory>
 #include <type_traits>
 
@@ -21,90 +23,141 @@ namespace dingo {
 // TODO: this is bit convoluted, ideally merge resolver with runtime binding
 namespace detail {
 template <typename Host, typename StaticRegistry> class binding_resolution;
+
+template <typename Storage, typename = void>
+struct runtime_storage_can_retain_source : std::false_type {};
+
+template <typename Storage>
+struct runtime_storage_can_retain_source<
+    Storage, std::void_t<typename Storage::tag_type, typename Storage::type>>
+    : std::bool_constant<storage_materialization_traits<
+          typename Storage::tag_type,
+          typename Storage::type>::can_retain_source> {};
+
+template <typename Storage>
+inline constexpr bool runtime_storage_can_retain_source_v =
+    runtime_storage_can_retain_source<Storage>::value;
+
 } // namespace detail
 
-template <typename InstanceContainer, typename Storage,
+template <typename Owner, typename InstanceContainer, typename Storage,
           typename ResolutionContainer = InstanceContainer>
-class runtime_binding_state {
+class runtime_binding_state : private detail::cache::state<
+                                  detail::cache::is_stable_storage_v<Storage>> {
 public:
+  using owner_type = Owner;
   using container_type = InstanceContainer;
   using instance_container_type = InstanceContainer;
   using resolution_container_type = ResolutionContainer;
-  using allocator_type = typename InstanceContainer::allocator_type;
-  using parent_container_type =
-      typename InstanceContainer::parent_container_type;
+  using allocator_type = typename Owner::allocator_type;
+  using runtime_type = container_runtime<allocator_type>;
+  using runtime_context_type = runtime_context<allocator_type>;
+  using parent_container_type = typename Owner::parent_container_type;
 
-  template <typename ParentContainer, typename... Args>
-  runtime_binding_state(ParentContainer *parent, Args &&...args)
-      : storage_(std::forward<Args>(args)...), parent_(parent) {}
+  template <typename... Args>
+  explicit runtime_binding_state(owner_type *owner, Args &&...args)
+      : owner_(owner), storage_(std::forward<Args>(args)...) {}
 
-  detail::context_closure &closure() { return closure_; }
+  runtime_type &runtime() { return owner().runtime(); }
+  parent_container_type *parent() { return owner().parent(); }
+  allocator_type &get_allocator() { return owner().get_allocator(); }
   Storage &storage() { return storage_; }
-  void reset_closure() {
-    closure_.reset();
+  detail::cache::entry *cache_slot() noexcept { return cache_state::slot(); }
+  void reset_containers() {
     instance_container_ = nullptr;
     resolution_container_ = nullptr;
   }
-  InstanceContainer &instance_container() { return container(); }
-  ResolutionContainer &resolution_container() {
+  InstanceContainer &container() {
+    if (!instance_container_) {
+      instance_container_ = construct_container<InstanceContainer>();
+    }
+    return *instance_container_;
+  }
+
+  template <bool TrackRollback = true>
+  ResolutionContainer &resolution_container(runtime_context_type &context) {
     if (!resolution_container_) {
-      resolution_container_ = construct_container<ResolutionContainer>();
+      assert(resolution_container_ == nullptr);
+      auto *created = construct_container<ResolutionContainer>(context);
+      if constexpr (TrackRollback) {
+        context.on_rollback(
+            [this]() noexcept { resolution_container_ = nullptr; });
+      }
+      resolution_container_ = created;
     }
     return *resolution_container_;
   }
 
-  InstanceContainer &container() {
+  template <bool TrackRollback = true>
+  InstanceContainer &container(runtime_context_type &context) {
     if (!instance_container_) {
-      instance_container_ = construct_container<InstanceContainer>();
+      assert(instance_container_ == nullptr);
+      auto *created = construct_container<InstanceContainer>(context);
+      if constexpr (TrackRollback) {
+        context.on_rollback(
+            [this]() noexcept { instance_container_ = nullptr; });
+      }
+      instance_container_ = created;
     }
     return *instance_container_;
   }
 
-private:
-  template <typename T> T *construct_container() {
-    if constexpr (std::is_constructible_v<T, parent_container_type *,
-                                          decltype(parent_->get_allocator()),
-                                          detail::context_closure_base &>) {
-      return std::addressof(closure_.template construct<T>(
-          parent_, parent_->get_allocator(), closure_));
-    } else {
-      return std::addressof(
-          closure_.template construct<T>(parent_, parent_->get_allocator()));
-    }
+  template <bool TrackRollback = true, typename Fn>
+  decltype(auto) with_resolution_container(runtime_context_type &context,
+                                           Fn &&fn) {
+    return std::forward<Fn>(fn)(resolution_container<TrackRollback>(context));
   }
 
-  // Storage is declared after the closure so cached instances are destroyed
-  // before preserved construction temporaries.
-  detail::context_closure closure_;
+private:
+  using cache_state =
+      detail::cache::state<detail::cache::is_stable_storage_v<Storage>>;
+
+  owner_type &owner() {
+    assert(owner_ != nullptr);
+    return *owner_;
+  }
+
+  template <typename T> T *construct_container(runtime_context_type &context) {
+    return std::addressof(
+        context.template construct_persistent<T>(parent(), get_allocator()));
+  }
+
+  template <typename T> T *construct_container() {
+    return std::addressof(
+        runtime().template construct<T>(parent(), get_allocator()));
+  }
+
+  owner_type *owner_ = nullptr;
   Storage storage_;
-  parent_container_type *parent_;
   InstanceContainer *instance_container_ = nullptr;
   ResolutionContainer *resolution_container_ = nullptr;
 };
 
-template <typename InstanceContainer, typename Storage>
-class runtime_binding_state<InstanceContainer, Storage, InstanceContainer> {
+template <typename Owner, typename InstanceContainer, typename Storage>
+class runtime_binding_state<Owner, InstanceContainer, Storage,
+                            InstanceContainer>
+    : private detail::cache::state<
+          detail::cache::is_stable_storage_v<Storage>> {
 public:
+  using owner_type = Owner;
   using container_type = InstanceContainer;
   using instance_container_type = InstanceContainer;
   using resolution_container_type = InstanceContainer;
-  using allocator_type = typename InstanceContainer::allocator_type;
-  using parent_container_type =
-      typename InstanceContainer::parent_container_type;
+  using allocator_type = typename Owner::allocator_type;
+  using runtime_type = container_runtime<allocator_type>;
+  using runtime_context_type = runtime_context<allocator_type>;
+  using parent_container_type = typename Owner::parent_container_type;
 
-  template <typename ParentContainer, typename... Args>
-  runtime_binding_state(ParentContainer *parent, Args &&...args)
-      : storage_(std::forward<Args>(args)...), parent_(parent) {}
+  template <typename... Args>
+  explicit runtime_binding_state(owner_type *owner, Args &&...args)
+      : owner_(owner), storage_(std::forward<Args>(args)...) {}
 
-  detail::context_closure &closure() { return closure_; }
+  runtime_type &runtime() { return owner().runtime(); }
+  parent_container_type *parent() { return owner().parent(); }
+  allocator_type &get_allocator() { return owner().get_allocator(); }
   Storage &storage() { return storage_; }
-  void reset_closure() {
-    closure_.reset();
-    instance_container_ = nullptr;
-  }
-  InstanceContainer &instance_container() { return container(); }
-  InstanceContainer &resolution_container() { return container(); }
-
+  detail::cache::entry *cache_slot() noexcept { return cache_state::slot(); }
+  void reset_containers() { instance_container_ = nullptr; }
   InstanceContainer &container() {
     if (!instance_container_) {
       instance_container_ = construct_container<InstanceContainer>();
@@ -112,24 +165,56 @@ public:
     return *instance_container_;
   }
 
-private:
-  template <typename T> T *construct_container() {
-    if constexpr (std::is_constructible_v<T, parent_container_type *,
-                                          decltype(parent_->get_allocator()),
-                                          detail::context_closure_base &>) {
-      return std::addressof(closure_.template construct<T>(
-          parent_, parent_->get_allocator(), closure_));
-    } else {
-      return std::addressof(
-          closure_.template construct<T>(parent_, parent_->get_allocator()));
+  template <bool TrackRollback = true>
+  InstanceContainer &container(runtime_context_type &context) {
+    if (!instance_container_) {
+      assert(instance_container_ == nullptr);
+      auto *created = construct_container<InstanceContainer>(context);
+      if constexpr (TrackRollback) {
+        context.on_rollback(
+            [this]() noexcept { instance_container_ = nullptr; });
+      }
+      instance_container_ = created;
     }
+    return *instance_container_;
   }
 
-  // Storage is declared after the closure so cached instances are destroyed
-  // before preserved construction temporaries.
-  detail::context_closure closure_;
+  template <bool TrackRollback = true>
+  InstanceContainer &resolution_container(runtime_context_type &context) {
+    return container<TrackRollback>(context);
+  }
+
+  template <bool TrackRollback = true, typename Fn>
+  decltype(auto) with_resolution_container(runtime_context_type &context,
+                                           Fn &&fn) {
+    (void)context;
+    if (instance_container_ != nullptr) {
+      return fn(*instance_container_);
+    }
+    return fn(*parent());
+  }
+
+private:
+  using cache_state =
+      detail::cache::state<detail::cache::is_stable_storage_v<Storage>>;
+
+  owner_type &owner() {
+    assert(owner_ != nullptr);
+    return *owner_;
+  }
+
+  template <typename T> T *construct_container(runtime_context_type &context) {
+    return std::addressof(
+        context.template construct_persistent<T>(parent(), get_allocator()));
+  }
+
+  template <typename T> T *construct_container() {
+    return std::addressof(
+        runtime().template construct<T>(parent(), get_allocator()));
+  }
+
+  owner_type *owner_ = nullptr;
   Storage storage_;
-  parent_container_type *parent_;
   InstanceContainer *instance_container_ = nullptr;
 };
 
@@ -140,12 +225,12 @@ using runtime_binding_resolution_container_t =
     std::conditional_t<std::is_void_v<Bindings>, InstanceContainer,
                        binding_resolution<ResolveRoot, Bindings>>;
 
-template <typename ResolveRoot, typename InstanceContainer, typename Storage,
+template <typename Owner, typename InstanceContainer, typename Storage,
           typename Bindings>
-using runtime_binding_state_t =
-    runtime_binding_state<InstanceContainer, Storage,
-                          runtime_binding_resolution_container_t<
-                              ResolveRoot, InstanceContainer, Bindings>>;
+using runtime_binding_state_t = runtime_binding_state<
+    Owner, InstanceContainer, Storage,
+    runtime_binding_resolution_container_t<
+        typename Owner::parent_container_type, InstanceContainer, Bindings>>;
 
 } // namespace detail
 
@@ -161,6 +246,12 @@ template <typename T> struct runtime_binding_state_traits<std::shared_ptr<T>> {
   static T &ref(std::shared_ptr<T> &state) { return *state; }
 };
 
+template <typename T> struct runtime_binding_state_traits<T *> {
+  using state_type = T;
+
+  static T &ref(T *state) { return *state; }
+};
+
 namespace detail {
 template <typename Storage> using registered_type_t = typename Storage::type;
 
@@ -172,6 +263,16 @@ template <typename Types>
 static constexpr bool runtime_binding_has_conversion_cache_v =
     type_list_size_v<Types> != 0;
 
+template <typename Storage, typename = void>
+struct runtime_storage_can_reset : std::false_type {};
+
+template <typename Storage>
+struct runtime_storage_can_reset<
+    Storage,
+    std::void_t<decltype(std::declval<Storage &>().reset()),
+                decltype(std::declval<const Storage &>().is_resolved())>>
+    : std::true_type {};
+
 } // namespace detail
 
 // TODO: the container here is just for RTTI, but it is needed to get the
@@ -179,7 +280,8 @@ static constexpr bool runtime_binding_has_conversion_cache_v =
 // container directly?
 template <typename Container, typename Type, typename Storage, typename State>
 class runtime_binding
-    : public runtime_binding_interface<Container>,
+    : public runtime_binding_interface<
+          Container, runtime_context<typename Container::allocator_type>>,
       private detail::binding_conversion_cache_base<
           Storage::conversions::is_stable &&
               detail::runtime_binding_has_conversion_cache_v<
@@ -187,6 +289,8 @@ class runtime_binding
           detail::runtime_binding_conversion_types_t<Type, Storage>> {
 public:
   using storage_type = Storage;
+  using runtime_context_type =
+      runtime_context<typename Container::allocator_type>;
   using state_traits = runtime_binding_state_traits<State>;
   using state_type = typename state_traits::state_type;
   using container_type = typename state_type::container_type;
@@ -230,7 +334,16 @@ public:
                                             conversion_types>;
 
 private:
-  using conversion_cache_base::construct_conversion;
+  template <typename T, typename Context, typename... Args>
+  T &construct_conversion(Context &context, Args &&...args) {
+    if constexpr (uses_cached_conversions) {
+      return conversion_cache_base::template construct_conversion_with<T>(
+          state().runtime(), context, std::forward<Args>(args)...);
+    } else {
+      return conversion_cache_base::template construct_conversion<T>(
+          context, std::forward<Args>(args)...);
+    }
+  }
 
   struct binding_activation {
     runtime_binding &binding;
@@ -251,21 +364,97 @@ private:
   State state_;
 
   state_type &state() { return state_traits::ref(state_); }
-  auto &closure() { return state().closure(); }
   auto &get_storage() { return state().storage(); }
-  auto &get_resolution_container() { return state().resolution_container(); }
+  template <bool TrackRollback = true, typename Fn>
+  decltype(auto) with_resolution_container(runtime_context_type &context,
+                                           Fn &&fn) {
+    return state().template with_resolution_container<TrackRollback>(
+        context, std::forward<Fn>(fn));
+  }
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
   template <typename Context, typename Fn>
   decltype(auto) materialize_resolution_source(Context &context, Fn &&fn) {
-    try {
-      return detail::materialize_binding_resolution_source(
-          context, get_storage(), get_resolution_container(), closure(),
-          std::forward<Fn>(fn));
-    } catch (...) {
-      if (materialization_traits::preserves_closure(get_storage())) {
-        state().reset_closure();
+    if constexpr (materialization_traits::can_retain_source) {
+      if (materialization_traits::retains_source(get_storage())) {
+        const bool reset_storage = should_reset_storage_on_failure();
+        context.on_rollback([this, reset_storage]() noexcept {
+          reset_runtime_artifacts();
+          reset_storage_after_failure(reset_storage);
+        });
+        auto materialize = [&]() -> decltype(auto) {
+          return with_resolution_container<false>(
+              context, [&](auto &container) -> decltype(auto) {
+                return detail::materialize_runtime_binding_resolution_source(
+                    context, get_storage(), container, std::forward<Fn>(fn));
+              });
+        };
+        using result_type = std::invoke_result_t<decltype(materialize) &>;
+        if constexpr (std::is_void_v<result_type>) {
+          materialize();
+          add_retained_source_runtime_reset_destructor(context);
+        } else if constexpr (std::is_reference_v<result_type>) {
+          result_type result = materialize();
+          add_retained_source_runtime_reset_destructor(context);
+          return std::forward<result_type>(result);
+        } else {
+          auto result = materialize();
+          add_retained_source_runtime_reset_destructor(context);
+          return result;
+        }
       }
-      throw;
+    }
+    return with_resolution_container(
+        context, [&](auto &container) -> decltype(auto) {
+          return detail::materialize_runtime_binding_resolution_source(
+              context, get_storage(), container, std::forward<Fn>(fn));
+        });
+  }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
+
+  void reset_runtime_artifacts() {
+    conversion_cache_base::reset_conversions();
+    state().reset_containers();
+  }
+
+  void reset_retained_source_runtime_artifacts() noexcept {
+    reset_runtime_artifacts();
+    reset_storage_after_failure(true);
+  }
+
+  void
+  add_retained_source_runtime_reset_destructor(runtime_context_type &context) {
+    context.add_runtime_destructor(
+        this,
+        &runtime_binding::reset_retained_source_runtime_artifacts_destructor);
+  }
+
+  static void
+  reset_retained_source_runtime_artifacts_destructor(void *ptr) noexcept {
+    reinterpret_cast<runtime_binding *>(ptr)
+        ->reset_retained_source_runtime_artifacts();
+  }
+
+  bool should_reset_storage_on_failure() {
+    if constexpr (detail::runtime_storage_can_reset<Storage>::value) {
+      return !get_storage().is_resolved();
+    } else {
+      return false;
+    }
+  }
+
+  void reset_storage_after_failure(bool reset_storage) {
+    if constexpr (detail::runtime_storage_can_reset<Storage>::value) {
+      if (reset_storage) {
+        get_storage().reset();
+      }
+    } else {
+      (void)reset_storage;
     }
   }
 
@@ -286,15 +475,13 @@ public:
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-  void *convert(runtime_context &context, const request_type &request,
-                instance_cache_sink cache) {
+  void *convert(runtime_context_type &context, const request_type &request,
+                detail::cache::sink cache) {
     void *ptr = ::dingo::resolve_binding_capability_address<rtti_type>(
         *this, context, ConversionTypes{}, request.lookup_type,
         request.requested_type, registered_type());
-    // Request caching is intentionally stricter than conversion caching.
-    // shared_cyclical shared_ptr storage, for example, can keep converted
-    // handles alive in the storage while still deferring publication of a
-    // request result until the outer resolve has committed successfully.
+    // Request caching is intentionally stricter than conversion caching and
+    // is published with transaction rollback tracking by the registry.
     if constexpr (Storage::conversions::is_stable) {
       cache(ptr);
     }
@@ -306,30 +493,32 @@ public:
 
 public:
   template <typename... Args>
-  runtime_binding(Args &&...args) : state_(std::forward<Args>(args)...) {}
+  runtime_binding(Args &&...args) : state_(std::forward<Args>(args)...) {
+    this->cache_slot(state().cache_slot());
+  }
 
   auto &get_container() { return state().container(); }
 
-  void *get_value(runtime_context &context, const request_type &request,
-                  instance_cache_sink cache) override {
+  void *get_value(runtime_context_type &context, const request_type &request,
+                  detail::cache::sink cache) override {
     return convert<value_capability_types>(context, request, cache);
   }
 
-  void *get_lvalue_reference(runtime_context &context,
+  void *get_lvalue_reference(runtime_context_type &context,
                              const request_type &request,
-                             instance_cache_sink cache) override {
+                             detail::cache::sink cache) override {
     return convert<lvalue_reference_capability_types>(context, request, cache);
   }
 
-  void *get_rvalue_reference(runtime_context &context,
+  void *get_rvalue_reference(runtime_context_type &context,
                              const request_type &request,
-                             instance_cache_sink cache) override {
+                             detail::cache::sink cache) override {
     return convert<typename Storage::conversions::rvalue_reference_types>(
         context, request, cache);
   }
 
-  void *get_pointer(runtime_context &context, const request_type &request,
-                    instance_cache_sink cache) override {
+  void *get_pointer(runtime_context_type &context, const request_type &request,
+                    detail::cache::sink cache) override {
     return convert<pointer_capability_types>(context, request, cache);
   }
 

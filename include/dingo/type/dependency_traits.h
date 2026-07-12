@@ -57,4 +57,14 @@ struct request_type {
   static constexpr bool is_rvalue_request = std::is_rvalue_reference_v<Request>;
 };
 
+template <typename Request>
+struct request_may_escape
+    : std::bool_constant<
+          std::is_lvalue_reference_v<
+              typename request_type<Request>::interface_type> ||
+          std::is_pointer_v<typename request_type<Request>::interface_type>> {};
+
+template <typename Request>
+inline constexpr bool request_may_escape_v = request_may_escape<Request>::value;
+
 } // namespace dingo

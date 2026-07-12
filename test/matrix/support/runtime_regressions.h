@@ -64,6 +64,23 @@ inline void clear_rollback_stats() {
   rollback_b::constructor_count = rollback_b::destructor_count = 0;
 }
 
+struct reentrant_resolution_dependency {
+  reentrant_resolution_dependency() { ++constructor_count; }
+  ~reentrant_resolution_dependency() { ++destructor_count; }
+
+  inline static std::size_t constructor_count = 0;
+  inline static std::size_t destructor_count = 0;
+};
+
+struct reentrant_resolution_service {
+  reentrant_resolution_dependency *dependency;
+};
+
+inline void clear_reentrant_resolution_stats() {
+  reentrant_resolution_dependency::constructor_count = 0;
+  reentrant_resolution_dependency::destructor_count = 0;
+}
+
 struct unique_reference_value {
   unique_reference_value() = default;
   std::shared_ptr<int> token = std::make_shared<int>(1);

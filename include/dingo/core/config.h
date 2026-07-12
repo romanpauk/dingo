@@ -11,12 +11,12 @@
 #define DINGO_CONSTRUCTOR_DETECTION_ARGS 32
 #endif
 
-#if !defined(DINGO_CLOSURE_ARENA_BUFFER_SIZE)
-#define DINGO_CLOSURE_ARENA_BUFFER_SIZE 64
+#if !defined(DINGO_CONTEXT_ARENA_BUFFER_SIZE)
+#define DINGO_CONTEXT_ARENA_BUFFER_SIZE 256
 #endif
 
-#if !defined(DINGO_CONTEXT_ARENA_BUFFER_SIZE)
-#define DINGO_CONTEXT_ARENA_BUFFER_SIZE 128
+#if !defined(DINGO_RUNTIME_ARENA_BLOCK_SIZE)
+#define DINGO_RUNTIME_ARENA_BLOCK_SIZE 256
 #endif
 
 #if !defined(DINGO_ALWAYS_INLINE)
@@ -26,6 +26,16 @@
 #define DINGO_ALWAYS_INLINE inline __attribute__((always_inline))
 #else
 #define DINGO_ALWAYS_INLINE inline
+#endif
+#endif
+
+#if !defined(DINGO_NOINLINE)
+#if defined(_MSC_VER)
+#define DINGO_NOINLINE __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+#define DINGO_NOINLINE __attribute__((noinline))
+#else
+#define DINGO_NOINLINE
 #endif
 #endif
 

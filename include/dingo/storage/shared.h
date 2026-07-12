@@ -23,6 +23,8 @@ namespace dingo {
 struct shared {};
 
 template <typename Type> struct storage_materialization_traits<shared, Type> {
+  static constexpr bool can_retain_source = true;
+
   template <typename Leaf, typename Context, typename Storage>
   static auto make_guard(Context &context, const Storage &storage) {
     return detail::recursion_guard_wrapper<Leaf>(context, &storage,
@@ -30,11 +32,10 @@ template <typename Type> struct storage_materialization_traits<shared, Type> {
   }
 
   template <typename Storage>
-  static bool preserves_closure(const Storage &storage) {
-    // Only unresolved shared storage needs the factory closure to stay on
-    // the active context stack while address-based conversions are
-    // materialized. Once the instance is resolved, there are no temporary
-    // construction artifacts left to preserve.
+  static bool retains_source(const Storage &storage) {
+    // Only unresolved shared storage can retain source/dependency state.
+    // Once the instance is resolved, later materialization reads from stable
+    // storage and does not need new persistent source data.
     return !storage.is_resolved();
   }
 

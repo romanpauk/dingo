@@ -13,6 +13,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -378,6 +379,157 @@ struct value_api {
   explicit value_api(int initial_value) : value(initial_value) {}
   int value;
 };
+
+struct parent_owned_api {
+  parent_owned_api() {
+    ++constructions;
+    ++instances;
+  }
+
+  ~parent_owned_api() { --instances; }
+
+  static int constructions;
+  static int instances;
+};
+int parent_owned_api::constructions = 0;
+int parent_owned_api::instances = 0;
+
+struct failing_child_api {
+  explicit failing_child_api(std::shared_ptr<parent_owned_api>) {
+    throw std::runtime_error("child construction failed");
+  }
+};
+
+template <typename Parent, typename Child>
+void expect_parent_instance_to_outlive_child() {
+  parent_owned_api::constructions = 0;
+  parent_owned_api::instances = 0;
+
+  {
+    Parent parent;
+    parent.template register_type<scope<shared>,
+                                  storage<std::shared_ptr<parent_owned_api>>>();
+
+    std::weak_ptr<parent_owned_api> instance;
+    {
+      Child child(&parent);
+      instance = child.template resolve<std::shared_ptr<parent_owned_api>>();
+      ASSERT_FALSE(instance.expired());
+    }
+
+    ASSERT_FALSE(instance.expired());
+    ASSERT_EQ(parent_owned_api::constructions, 1);
+    ASSERT_EQ(parent_owned_api::instances, 1);
+    ASSERT_EQ(parent.template resolve<std::shared_ptr<parent_owned_api>>(),
+              instance.lock());
+  }
+
+  ASSERT_EQ(parent_owned_api::instances, 0);
+}
+
+template <typename Parent, typename Child>
+void expect_parent_resolution_to_commit_before_child_failure() {
+  parent_owned_api::constructions = 0;
+  parent_owned_api::instances = 0;
+
+  {
+    Parent parent;
+    parent.template register_type<scope<shared>,
+                                  storage<std::shared_ptr<parent_owned_api>>>();
+
+    {
+      Child child(&parent);
+      child.template register_type<
+          scope<shared>, storage<std::shared_ptr<failing_child_api>>>();
+
+      ASSERT_THROW(child.template resolve<std::shared_ptr<failing_child_api>>(),
+                   std::runtime_error);
+      ASSERT_EQ(parent_owned_api::constructions, 1);
+      ASSERT_EQ(parent_owned_api::instances, 1);
+    }
+
+    ASSERT_EQ(parent_owned_api::instances, 1);
+    ASSERT_EQ(parent_owned_api::constructions, 1);
+    ASSERT_NE(parent.template resolve<std::shared_ptr<parent_owned_api>>(),
+              nullptr);
+    ASSERT_EQ(parent_owned_api::constructions, 1);
+  }
+
+  ASSERT_EQ(parent_owned_api::instances, 0);
+}
+
+template <typename Parent, typename Child>
+void expect_failed_parent_resolution_to_roll_back() {
+  parent_owned_api::constructions = 0;
+  parent_owned_api::instances = 0;
+  int attempts = 0;
+
+  {
+    Parent parent;
+    parent.template register_type<scope<shared>,
+                                  storage<std::shared_ptr<parent_owned_api>>>(
+        callable([&attempts]() -> std::shared_ptr<parent_owned_api> {
+          if (++attempts == 1) {
+            throw std::runtime_error("parent construction failed");
+          }
+          return std::make_shared<parent_owned_api>();
+        }));
+    Child child(&parent);
+
+    ASSERT_THROW(child.template resolve<std::shared_ptr<parent_owned_api>>(),
+                 std::runtime_error);
+    ASSERT_EQ(parent_owned_api::constructions, 0);
+    ASSERT_EQ(parent_owned_api::instances, 0);
+
+    ASSERT_NE(child.template resolve<std::shared_ptr<parent_owned_api>>(),
+              nullptr);
+    ASSERT_EQ(attempts, 2);
+    ASSERT_EQ(parent_owned_api::constructions, 1);
+    ASSERT_EQ(parent_owned_api::instances, 1);
+  }
+
+  ASSERT_EQ(parent_owned_api::instances, 0);
+}
+
+using runtime_parent_container = runtime_container<>;
+using runtime_child_container =
+    runtime_container<dynamic_container_traits,
+                      dynamic_container_traits::allocator_type,
+                      runtime_parent_container>;
+
+TEST(parent_container_resolution_test,
+     parent_instance_resolved_by_static_child_uses_parent_lifetime) {
+  expect_parent_instance_to_outlive_child<container<>, container<>>();
+}
+
+TEST(parent_container_resolution_test,
+     parent_instance_resolved_by_runtime_child_uses_parent_lifetime) {
+  expect_parent_instance_to_outlive_child<runtime_parent_container,
+                                          runtime_child_container>();
+}
+
+TEST(parent_container_resolution_test,
+     parent_resolution_commits_before_static_child_failure) {
+  expect_parent_resolution_to_commit_before_child_failure<container<>,
+                                                          container<>>();
+}
+
+TEST(parent_container_resolution_test,
+     parent_resolution_commits_before_runtime_child_failure) {
+  expect_parent_resolution_to_commit_before_child_failure<
+      runtime_parent_container, runtime_child_container>();
+}
+
+TEST(parent_container_resolution_test,
+     failed_static_parent_resolution_rolls_back_parent) {
+  expect_failed_parent_resolution_to_roll_back<container<>, container<>>();
+}
+
+TEST(parent_container_resolution_test,
+     failed_runtime_parent_resolution_rolls_back_parent) {
+  expect_failed_parent_resolution_to_roll_back<runtime_parent_container,
+                                               runtime_child_container>();
+}
 
 // A child container may override a parent binding with a factory that
 // decorates the parent's instance of the same type.

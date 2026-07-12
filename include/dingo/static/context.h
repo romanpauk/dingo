@@ -23,28 +23,28 @@ class basic_static_context;
 namespace detail {
 
 template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_context_closure_choice;
+struct static_context_frame_choice;
 
 template <typename StaticRegistry>
-struct static_context_closure_choice<StaticRegistry, false> {
+struct static_context_frame_choice<StaticRegistry, false> {
   using execution_traits =
       detail::basic_static_execution_traits<StaticRegistry, false>;
-  using type = detail::static_context_closure<
-      execution_traits::max_destructible_slots,
-      execution_traits::max_temporary_slots,
-      execution_traits::max_temporary_size == 0
-          ? 1
-          : execution_traits::max_temporary_size,
-      execution_traits::max_temporary_align == 0
-          ? alignof(std::max_align_t)
-          : execution_traits::max_temporary_align>;
+  using type =
+      detail::static_context_frame<execution_traits::max_destructible_slots,
+                                   execution_traits::max_temporary_slots,
+                                   execution_traits::max_temporary_size == 0
+                                       ? 1
+                                       : execution_traits::max_temporary_size,
+                                   execution_traits::max_temporary_align == 0
+                                       ? alignof(std::max_align_t)
+                                       : execution_traits::max_temporary_align>;
 };
 
 template <typename StaticRegistry>
-struct static_context_closure_choice<StaticRegistry, true> {
+struct static_context_frame_choice<StaticRegistry, true> {
   using execution_traits =
       detail::basic_static_execution_traits<StaticRegistry, true>;
-  using type = detail::fixed_context_closure<
+  using type = detail::fixed_static_context_frame<
       execution_traits::max_destructible_slots,
       execution_traits::max_temporary_slots,
       execution_traits::max_temporary_size == 0
@@ -65,8 +65,8 @@ class basic_static_context : public detail::context_path_state {
   using execution_traits =
       detail::basic_static_execution_traits<StaticRegistry,
                                             RuntimeDependencies>;
-  static constexpr std::size_t closure_capacity_ =
-      execution_traits::max_preserved_closure_depth + 1;
+  static constexpr std::size_t frame_capacity_ =
+      execution_traits::max_retained_frame_depth + 1;
   static constexpr std::size_t destructible_capacity_ =
       execution_traits::max_destructible_slots;
   static constexpr std::size_t temporary_slot_capacity_ =
@@ -79,23 +79,23 @@ class basic_static_context : public detail::context_path_state {
       execution_traits::max_temporary_align == 0
           ? alignof(std::max_align_t)
           : execution_traits::max_temporary_align;
-  using closure_type =
-      typename detail::static_context_closure_choice<StaticRegistry,
-                                                     RuntimeDependencies>::type;
-  // Pure static contexts keep concrete closure pointers so optimized static
+  using frame_type =
+      typename detail::static_context_frame_choice<StaticRegistry,
+                                                   RuntimeDependencies>::type;
+  // Pure static contexts keep concrete frame pointers so optimized static
   // resolution does not emit virtual reset/allocation code. Runtime-dependent
-  // static resolution needs the base pointer to share closures with the runtime
-  // context stack.
-  using closure_pointer_type =
+  // static resolution needs the base pointer because nested local bindings can
+  // share activation frames across static context types.
+  using frame_pointer_type =
       std::conditional_t<RuntimeDependencies,
-                         detail::static_context_closure_base *, closure_type *>;
+                         detail::static_context_frame_base *, frame_type *>;
 
 public:
-  basic_static_context() { closures_[0] = &closure_; }
+  basic_static_context() { frames_[0] = &frame_; }
 
   ~basic_static_context() {
-    while (closure_count_ != 0) {
-      closures_[--closure_count_]->reset();
+    while (frame_count_ != 0) {
+      frames_[--frame_count_]->reset();
     }
   }
 
@@ -104,7 +104,7 @@ public:
   }
 
   template <typename T, typename DetectionTag, typename Container>
-  T construct_temporary(Container &container) {
+  T construct(Container &container) {
     using temporary_type = normalized_type_t<T>;
 
     auto *instance = allocate_temporary_storage<temporary_type>();
@@ -134,29 +134,29 @@ public:
     return allocate_temporary_storage<T>();
   }
 
-  void push(closure_type *closure) {
-    assert(!contains(closure));
-    assert(closure_count_ < closures_.size());
-    closures_[closure_count_++] = closure;
+  void push_frame(frame_type *frame) {
+    assert(!contains_frame(frame));
+    assert(frame_count_ < frames_.size());
+    frames_[frame_count_++] = frame;
   }
 
-  // Only runtime-dependent static contexts accept runtime-compatible closures.
+  // Only runtime-dependent static contexts accept erased static frames.
   template <bool Enabled = RuntimeDependencies,
             std::enable_if_t<Enabled, int> = 0>
-  void push(detail::static_context_closure_base *closure) {
-    assert(!contains(closure));
-    assert(closure_count_ < closures_.size());
-    closures_[closure_count_++] = closure;
+  void push_frame(detail::static_context_frame_base *frame) {
+    assert(!contains_frame(frame));
+    assert(frame_count_ < frames_.size());
+    frames_[frame_count_++] = frame;
   }
 
-  void pop() {
-    assert(closure_count_ != 0);
-    --closure_count_;
+  void pop_frame() {
+    assert(frame_count_ != 0);
+    --frame_count_;
   }
 
-  bool contains(closure_pointer_type candidate) const {
-    for (std::size_t index = 0; index < closure_count_; ++index) {
-      if (closures_[index] == candidate) {
+  bool contains_frame(frame_pointer_type candidate) const {
+    for (std::size_t index = 0; index < frame_count_; ++index) {
+      if (frames_[index] == candidate) {
         return true;
       }
     }
@@ -177,33 +177,33 @@ private:
 
     if constexpr (RuntimeDependencies) {
       auto *fixed =
-          active_closure().try_allocate_temporary(sizeof(T), alignof(T));
+          active_frame().try_allocate_temporary(sizeof(T), alignof(T));
       assert(fixed != nullptr);
       return reinterpret_cast<T *>(fixed);
     } else {
-      auto *fixed = active_closure().template try_allocate_temporary<T>();
+      auto *fixed = active_frame().template try_allocate_temporary<T>();
       assert(fixed != nullptr);
       return fixed;
     }
   }
 
-  auto &active_closure() {
-    assert(closure_count_ != 0);
-    return *closures_[closure_count_ - 1];
+  auto &active_frame() {
+    assert(frame_count_ != 0);
+    return *frames_[frame_count_ - 1];
   }
 
   template <typename T> void register_destructor(T *instance) {
     static_assert(!std::is_trivially_destructible_v<T>);
-    active_closure().add_destructor(instance, &destructor<T>);
+    active_frame().add_destructor(instance, &destructor<T>);
   }
 
   template <typename T> static void destructor(void *ptr) {
     reinterpret_cast<T *>(ptr)->~T();
   }
 
-  std::array<closure_pointer_type, closure_capacity_> closures_{};
-  std::size_t closure_count_ = 1;
-  closure_type closure_;
+  std::array<frame_pointer_type, frame_capacity_> frames_{};
+  std::size_t frame_count_ = 1;
+  frame_type frame_;
 };
 
 template <typename StaticRegistry>

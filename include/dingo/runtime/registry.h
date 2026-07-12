@@ -23,9 +23,11 @@
 #include <dingo/registration/collection_traits.h>
 #include <dingo/registration/requirements.h>
 #include <dingo/resolution/runtime_binding.h>
+#include <dingo/runtime/container_runtime.h>
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
 #include <dingo/runtime/lookup_index.h>
+#include <dingo/runtime/transaction.h>
 #include <dingo/static/local_resolution.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/dependency_traits.h>
@@ -33,6 +35,7 @@
 #include <dingo/type/type_list.h>
 
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <functional>
 #include <map>
@@ -150,8 +153,10 @@ bool should_resolve_missing_from_parent(ParentContainer &parent,
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
           typename ResolveRoot>
 class runtime_registry : public allocator_base<Allocator> {
-  friend class runtime_context;
+  template <typename> friend class runtime_context;
   template <typename> friend class detail::runtime_registration_api;
+  template <typename, typename, typename, typename>
+  friend class runtime_binding_state;
   template <typename T, typename Context, typename Container>
   friend T detail::resolve_context_request(Context &, Container &);
   template <typename, typename> friend class detail::binding_resolution;
@@ -171,8 +176,11 @@ class runtime_registry : public allocator_base<Allocator> {
       std::conditional_t<std::is_same_v<void, ResolveRoot>, registry_type,
                          ResolveRoot>;
   using container_type = resolve_root_type;
+  using runtime_type = container_runtime<Allocator>;
+  using runtime_context_type = runtime_context<Allocator>;
+  using runtime_transaction_type = runtime_transaction<Allocator>;
   using runtime_binding_interface_type =
-      runtime_binding_interface<container_type>;
+      runtime_binding_interface<container_type, runtime_context_type>;
   using runtime_selection =
       detail::runtime_binding_selection<runtime_binding_interface_type>;
   template <typename Registration>
@@ -194,16 +202,16 @@ public:
       detail::container_lookup_definition_type_t<ContainerTraits>;
   runtime_registry()
       : allocator_base<allocator_type>(allocator_type()),
-        runtime_bindings_(get_allocator()) {}
+        runtime_(get_allocator()), runtime_bindings_(get_allocator()) {}
 
   runtime_registry(const allocator_type &alloc)
-      : allocator_base<allocator_type>(alloc),
+      : allocator_base<allocator_type>(alloc), runtime_(get_allocator()),
         runtime_bindings_(get_allocator()) {}
 
   runtime_registry(resolve_root_type *root,
                    const allocator_type &alloc = allocator_type())
       : allocator_base<allocator_type>(alloc), resolve_root_(root),
-        runtime_bindings_(get_allocator()) {
+        runtime_(get_allocator()), runtime_bindings_(get_allocator()) {
 
     if constexpr (!std::is_same_v<void, ParentRegistry>) {
       static_assert(
@@ -227,6 +235,10 @@ public:
 
 protected:
   struct runtime_bindings_state;
+
+  container_runtime<allocator_type> &runtime() { return runtime_; }
+
+  parent_container_type *parent() { return resolve_root(); }
 
   resolve_root_type *resolve_root() {
     if constexpr (std::is_same_v<void, ResolveRoot> ||
@@ -286,7 +298,8 @@ public:
 protected:
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(runtime_context &context, Fn &&fn, LookupKey key) {
+  T construct_collection(runtime_context_type &context, Fn &&fn,
+                         LookupKey key) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
 
@@ -306,7 +319,7 @@ protected:
   }
 
   template <typename Signature = void, typename Callable>
-  auto invoke(runtime_context &context, Callable &&callable) {
+  auto invoke(runtime_context_type &context, Callable &&callable) {
     using callable_type = std::remove_cv_t<std::remove_reference_t<Callable>>;
     using dispatch_signature =
         detail::callable_dispatch_signature_t<Signature, callable_type>;
@@ -330,23 +343,55 @@ protected:
   }
 
   template <typename T, typename Fn>
-  std::size_t append_collection(T &results, runtime_context &context, Fn &&fn) {
+  std::size_t append_collection(T &results, runtime_context_type &context,
+                                Fn &&fn) {
     return append_runtime_collection(results, context, std::forward<Fn>(fn),
                                      detail::no_lookup_key());
   }
 
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t append_collection(T &results, runtime_context &context, Fn &&fn,
-                                LookupKey key) {
+  std::size_t append_collection(T &results, runtime_context_type &context,
+                                Fn &&fn, LookupKey key) {
     return append_runtime_collection(results, context, std::forward<Fn>(fn),
                                      std::move(key));
   }
 
   template <typename Request, typename Result = Request>
   Result resolve_binding(runtime_selection selection,
-                         runtime_context &context) {
-    return resolve<Request, Result>(*selection.binding, context);
+                         runtime_context_type &context) {
+    auto &binding = *selection.binding;
+    if constexpr (detail::cache::supports_v<Request>) {
+      cache_update update{binding.cache_slot(), std::addressof(context),
+                          detail::cache::key<Request>()};
+      return resolve<Request, Result>(binding, context, update.sink());
+    } else {
+      return resolve<Request, Result>(binding, context);
+    }
+  }
+
+  struct cache_result {
+    bool hit = false;
+    void *address = nullptr;
+  };
+
+  template <typename Request>
+  cache_result lookup_cache(runtime_selection selection) const {
+    if constexpr (detail::cache::supports_v<Request>) {
+      if (selection.status == detail::binding_status::found) {
+        auto *entry = selection.binding->cache_slot();
+        if (entry != nullptr && entry->key == detail::cache::key<Request>()) {
+          return {true, entry->address};
+        }
+      }
+    }
+    return {};
+  }
+
+  template <typename Request, typename Result>
+  static Result resolve_cached(cache_result result) {
+    assert(result.hit);
+    return detail::convert_resolved_binding<Request>(result.address);
   }
 
   template <typename Source> class container_proxy {
@@ -386,7 +431,7 @@ protected:
                                          lookup_index_entries>::value;
 
   struct runtime_lookup_binding_view {
-    runtime_binding_interface<container_type> *binding = nullptr;
+    runtime_binding_interface_type *binding = nullptr;
   };
 
   struct runtime_binding_value {
@@ -395,12 +440,9 @@ protected:
     runtime_binding_value(runtime_binding_value &&) = delete;
     runtime_binding_value &operator=(runtime_binding_value &&) = delete;
 
-    virtual ~runtime_binding_value() = default;
-
-    virtual void destroy(allocator_type &allocator) = 0;
-
   protected:
     runtime_binding_value() = default;
+    ~runtime_binding_value() = default;
   };
 
   template <std::size_t Index, typename Binding>
@@ -424,10 +466,12 @@ protected:
     using container_type =
         typename type_list_head_t<type_list<Bindings...>>::container_type;
 
+    // NOLINTBEGIN(bugprone-use-after-move)
     template <typename... Args>
     explicit runtime_binding_value_impl_base(Args &&...args)
         : runtime_binding_member<Indexes, Bindings>(
               std::forward<Args>(args)...)... {}
+    // NOLINTEND(bugprone-use-after-move)
 
     template <typename Interface> runtime_lookup_binding_view view() {
       return view_impl<Interface, 0, Bindings...>();
@@ -438,13 +482,6 @@ protected:
                  typename registry_type::template runtime_binding_member<
                      0, type_list_head_t<type_list<Bindings...>>> &>(*this)
           .container();
-    }
-
-    void destroy(allocator_type &allocator) override {
-      auto alloc = allocator_traits::rebind<Derived>(allocator);
-      auto *derived = static_cast<Derived *>(this);
-      allocator_traits::destroy(alloc, derived);
-      allocator_traits::deallocate(alloc, derived, 1);
     }
 
   private:
@@ -481,38 +518,18 @@ protected:
     using base_type::base_type;
   };
 
-  struct runtime_binding_value_deleter {
-    allocator_type *allocator = nullptr;
-
-    void operator()(runtime_binding_value *value) const {
-      if (value != nullptr) {
-        value->destroy(*allocator);
-      }
-    }
-  };
-
   struct runtime_lookup_value {
-    using unique_owner =
-        std::unique_ptr<runtime_binding_value, runtime_binding_value_deleter>;
-    using shared_owner = std::shared_ptr<runtime_binding_value>;
-
-    runtime_lookup_value(unique_owner &&value, runtime_lookup_binding_view view)
-        : value_(std::move(value)), view_(view) {}
-    runtime_lookup_value(const shared_owner &value,
-                         runtime_lookup_binding_view view)
-        : value_(value), view_(view) {}
+    explicit runtime_lookup_value(runtime_lookup_binding_view view)
+        : view_(view) {}
 
     runtime_lookup_value(runtime_lookup_value &&) noexcept = default;
     runtime_lookup_value &operator=(runtime_lookup_value &&) noexcept = default;
     runtime_lookup_value(const runtime_lookup_value &) = delete;
     runtime_lookup_value &operator=(const runtime_lookup_value &) = delete;
 
-    runtime_binding_interface<container_type> &binding() {
-      return *view_.binding;
-    }
+    runtime_binding_interface_type &binding() { return *view_.binding; }
 
   private:
-    std::variant<unique_owner, shared_owner> value_;
     runtime_lookup_binding_view view_;
   };
 
@@ -862,8 +879,24 @@ protected:
     }
 
     template <typename ResolveRequest, typename Selection>
-    decltype(auto) resolve(runtime_context &context, Selection selection) {
+    decltype(auto) resolve(runtime_context_type &context, Selection selection) {
       return registry.template source_resolve<Request>(selection, context, key);
+    }
+  };
+
+  struct cache_update {
+    detail::cache::entry *entry;
+    runtime_context_type *context;
+    const void *key;
+
+    detail::cache::sink sink() noexcept { return {this, &publish}; }
+
+    static void publish(void *state, void *address) {
+      auto &update = *reinterpret_cast<cache_update *>(state);
+      assert(update.entry != nullptr);
+      update.context->on_rollback(
+          [entry = update.entry]() noexcept { *entry = {}; });
+      *update.entry = {update.key, address};
     }
   };
 
@@ -874,7 +907,7 @@ protected:
 
     template <typename ResolveRequest>
     typename request_type<ResolveRequest>::interface_type
-    resolve(runtime_context &context) {
+    resolve(runtime_context_type &context) {
       using result_type = typename request_type<ResolveRequest>::interface_type;
       return registry.template source_missing<Request, MayAutoConstruct,
                                               LookupKey, result_type>(context,
@@ -889,17 +922,18 @@ protected:
   }
 
   template <typename Request, typename LookupKey>
-  auto source_resolve(runtime_selection selection, runtime_context &context,
-                      const LookupKey &) -> typename Request::interface_type {
-    return resolve<typename Request::lookup_type,
-                   typename Request::interface_type>(*selection.binding,
-                                                     context);
+  auto source_resolve(runtime_selection selection,
+                      runtime_context_type &context, const LookupKey &) ->
+      typename Request::interface_type {
+    return resolve_binding<typename Request::lookup_type,
+                           typename Request::interface_type>(selection,
+                                                             context);
   }
 
   template <typename Request, bool MayAutoConstruct, typename LookupKey,
             typename R = typename Request::lookup_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R source_missing(runtime_context &context, const LookupKey &key) {
+  R source_missing(runtime_context_type &context, const LookupKey &key) {
     using Type = typename Request::value_type;
     using user_type = typename Request::user_type;
     using lookup_key_type = std::decay_t<LookupKey>;
@@ -958,8 +992,9 @@ protected:
 
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t append_runtime_collection(T &results, runtime_context &context,
-                                        Fn &&fn, LookupKey key) {
+  std::size_t append_runtime_collection(T &results,
+                                        runtime_context_type &context, Fn &&fn,
+                                        LookupKey key) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
     return for_each_collection_entry<T>(
@@ -1089,9 +1124,10 @@ public:
 private:
   template <typename... TypeArgs, typename Parent, typename Arg,
             typename... KeyValueArgs>
-  // NOLINTNEXTLINE(readability-function-cognitive-complexity)
+  // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
   auto prepare_binding(Parent *parent, Arg &&arg,
                        KeyValueArgs &&...key_values) {
+    (void)parent;
     static_assert(!detail::has_explicit_void_interface_v<TypeArgs...>,
                   "interfaces<void> is not a valid registration target");
     using registration =
@@ -1119,10 +1155,8 @@ private:
 
       registration_requirements::assert_valid();
 
-      using runtime_binding_state_type =
-          detail::runtime_binding_state_t<resolve_root_type,
-                                          instance_container_type, storage_type,
-                                          bindings_type>;
+      using runtime_binding_state_type = detail::runtime_binding_state_t<
+          registry_type, instance_container_type, storage_type, bindings_type>;
 
       if constexpr (registration_requirements::valid &&
                     type_list_size_v<interface_types> == 1) {
@@ -1159,33 +1193,39 @@ private:
             validate_supplied_runtime_registration_keys<interface_types,
                                                         KeyValueArgs...>();
           }
-          std::shared_ptr<runtime_binding_state_type> data;
+          inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
+          runtime_transaction_type transaction(runtime_, scratch);
+          runtime_binding_state_type *data = nullptr;
           if constexpr (!is_none_v<std::decay_t<Arg>>) {
-            data = std::allocate_shared<runtime_binding_state_type>(
-                allocator_traits::rebind<runtime_binding_state_type>(
-                    get_allocator()),
-                parent, std::forward<Arg>(arg));
+            data =
+                transaction
+                    .template construct_persistent<runtime_binding_state_type>(
+                        this, std::forward<Arg>(arg));
           } else {
-            data = std::allocate_shared<runtime_binding_state_type>(
-                allocator_traits::rebind<runtime_binding_state_type>(
-                    get_allocator()),
-                parent);
+            data =
+                transaction
+                    .template construct_persistent<runtime_binding_state_type>(
+                        this);
           }
 
-          using owner_type = runtime_binding_value_owner_t<
-              interface_types, storage_type,
-              std::shared_ptr<runtime_binding_state_type>, registration_key>;
+          using owner_type =
+              runtime_binding_value_owner_t<interface_types, storage_type,
+                                            runtime_binding_state_type *,
+                                            registration_key>;
           auto &state = runtime_bindings_;
-          auto binding_owner = make_binding_owner<true, owner_type>(data);
-          auto *binding_result = binding_owner.get();
+          auto &binding_owner =
+              *transaction.template construct_persistent<owner_type>(data);
+          auto *binding_result = std::addressof(binding_owner);
           shared_lookup_value_factory<owner_type> value_factory{
-              std::move(binding_owner)};
+              std::addressof(binding_owner)};
 
           for_each(interface_types{}, [&](auto element) {
             using interface_type = typename decltype(element)::type;
             commit_registration<interface_type, storage_type>(
-                state, value_factory, registration_key{}, key_values...);
+                state, value_factory, transaction, registration_key{},
+                key_values...);
           });
+          transaction.commit();
           return container_proxy<owner_type>(binding_result);
         } else {
           return invalid_registration_return<instance_container_type>();
@@ -1257,13 +1297,15 @@ private:
 
   template <typename TypeInterface, typename TypeStorage, typename LookupKey,
             typename ValueFactory, typename KeyResolver>
-  void commit_lookup(runtime_bindings_state &, ValueFactory &, KeyResolver &&,
+  void commit_lookup(runtime_bindings_state &, ValueFactory &,
+                     runtime_transaction_type &, KeyResolver &&,
                      const LookupKey &, type_list<>) {}
 
   template <typename TypeInterface, typename TypeStorage, typename LookupKey,
             typename Head, typename... Tail, typename ValueFactory,
             typename KeyResolver>
   void commit_lookup(runtime_bindings_state &state, ValueFactory &value_factory,
+                     runtime_transaction_type &transaction,
                      KeyResolver &&key_resolver, const LookupKey &lookup_key,
                      type_list<Head, Tail...>) {
     static_assert(ValueFactory::shared_owner || sizeof...(Tail) == 0,
@@ -1272,70 +1314,79 @@ private:
     decltype(auto) key_arg = key_resolver(type_list_iterator<Head>{});
     auto handle = insert_lookup<TypeInterface, TypeStorage, LookupKey, Head>(
         state, value_factory, lookup_key, key_arg);
+    record_lookup_rollback<Head>(transaction, state, handle, key_arg);
+    commit_lookup<TypeInterface, TypeStorage, LookupKey>(
+        state, value_factory, transaction,
+        std::forward<KeyResolver>(key_resolver), lookup_key,
+        type_list<Tail...>{});
+  }
+
+  template <typename LookupEntry, typename Key, typename Binding>
+  static void erase_lookup_binding(runtime_bindings_state &state,
+                                   const Key &key, Binding *binding) noexcept {
+    auto &index = state.lookup_indexes.template get<LookupEntry>();
+    if constexpr (std::is_same_v<
+                      typename lookup_entry_cardinality<LookupEntry>::type,
+                      ::dingo::one>) {
+      auto it = index.find(key);
+      assert(it != index.end());
+      assert(std::addressof(detail::lookup_iterator_value(it).binding()) ==
+             binding);
+      index.erase(it);
+    } else {
+      auto [first, last] = index.equal_range(key);
+      for (auto it = first; it != last; ++it) {
+        if (std::addressof(detail::lookup_iterator_value(it).binding()) ==
+            binding) {
+          index.erase(it);
+          break;
+        }
+      }
+    }
+  }
+
+  template <typename LookupEntry, typename Handle, typename Key>
+  static void record_lookup_rollback(runtime_transaction_type &transaction,
+                                     runtime_bindings_state &state,
+                                     Handle handle, const Key &key) {
+    auto &value = detail::lookup_iterator_value(handle);
+    auto *binding = std::addressof(value.binding());
     try {
-      commit_lookup<TypeInterface, TypeStorage, LookupKey>(
-          state, value_factory, std::forward<KeyResolver>(key_resolver),
-          lookup_key, type_list<Tail...>{});
+      transaction.on_rollback(
+          [&state, key = std::decay_t<Key>(key), binding]() noexcept {
+            erase_lookup_binding<LookupEntry>(state, key, binding);
+          });
     } catch (...) {
-      state.lookup_indexes.template get<Head>().erase(handle);
+      erase_lookup_binding<LookupEntry>(state, key, binding);
       throw;
     }
   }
 
   template <typename Owner> struct unique_lookup_value_factory {
     static constexpr bool shared_owner = false;
-    std::unique_ptr<Owner, runtime_binding_value_deleter> owner;
+    Owner *owner;
 
     template <typename TypeInterface> runtime_lookup_value make() {
       auto view = owner->template view<TypeInterface>();
-      typename runtime_lookup_value::unique_owner erased(std::move(owner));
-      return runtime_lookup_value(std::move(erased), view);
+      return runtime_lookup_value(view);
     }
   };
 
   template <typename Owner> struct shared_lookup_value_factory {
     static constexpr bool shared_owner = true;
-    std::shared_ptr<Owner> owner;
+    Owner *owner;
 
     template <typename TypeInterface> runtime_lookup_value make() {
-      typename runtime_lookup_value::shared_owner erased = owner;
-      return runtime_lookup_value(erased,
-                                  owner->template view<TypeInterface>());
+      return runtime_lookup_value(owner->template view<TypeInterface>());
     }
   };
-
-  template <typename Owner, typename... Args>
-  std::unique_ptr<Owner, runtime_binding_value_deleter>
-  make_allocated_binding_value(Args &&...args) {
-    using owner_type = Owner;
-    auto alloc = allocator_traits::rebind<owner_type>(get_allocator());
-    auto *instance = allocator_traits::allocate(alloc, 1);
-    try {
-      allocator_traits::construct(alloc, instance, std::forward<Args>(args)...);
-    } catch (...) {
-      allocator_traits::deallocate(alloc, instance, 1);
-      throw;
-    }
-    return std::unique_ptr<Owner, runtime_binding_value_deleter>(
-        instance,
-        runtime_binding_value_deleter{std::addressof(get_allocator())});
-  }
-
-  template <bool SharedOwner, typename Owner, typename... Args>
-  auto make_binding_owner(Args &&...args) {
-    auto owner =
-        make_allocated_binding_value<Owner>(std::forward<Args>(args)...);
-    if constexpr (SharedOwner) {
-      return std::shared_ptr<Owner>(std::move(owner));
-    } else {
-      return owner;
-    }
-  }
 
   template <typename TypeInterface, typename TypeStorage, typename LookupKey,
             typename Cardinality, typename ValueFactory>
   void commit_static_lookup(runtime_bindings_state &state,
-                            ValueFactory &value_factory, LookupKey lookup_key) {
+                            ValueFactory &value_factory,
+                            runtime_transaction_type &transaction,
+                            LookupKey lookup_key) {
     using key_domain = typename LookupKey::definition_type;
     using explicit_lookup_entry =
         static_key_lookup_entry_t<TypeInterface, key_domain, Cardinality>;
@@ -1350,7 +1401,7 @@ private:
       static_assert(lookup_entry_indexed_v<routed_lookup_entry>);
       auto key_resolver = [&](auto) { return route::key(lookup_key); };
       commit_lookup<TypeInterface, TypeStorage, LookupKey>(
-          state, value_factory, key_resolver, lookup_key,
+          state, value_factory, transaction, key_resolver, lookup_key,
           type_list<routed_lookup_entry>{});
     } else {
       static_assert(std::is_same_v<Cardinality, ::dingo::one>,
@@ -1363,8 +1414,9 @@ private:
             typename ValueFactory, typename... KeyValueArgs>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity)
   void commit_registration(runtime_bindings_state &state,
-                           ValueFactory &value_factory, LookupKey lookup_key,
-                           KeyValueArgs &&...key_values) {
+                           ValueFactory &value_factory,
+                           runtime_transaction_type &transaction,
+                           LookupKey lookup_key, KeyValueArgs &&...key_values) {
     check_interface_requirements<TypeStorage,
                                  typename annotated_traits<TypeInterface>::type,
                                  typename TypeStorage::type>();
@@ -1385,16 +1437,17 @@ private:
           return qualified_registration_key_value<entry_type>(key_value_tuple);
         };
         commit_lookup<TypeInterface, TypeStorage, LookupKey>(
-            state, value_factory, key_resolver, lookup_key, lookup_entries{});
+            state, value_factory, transaction, key_resolver, lookup_key,
+            lookup_entries{});
       } else {
         commit_static_lookup<TypeInterface, TypeStorage, LookupKey,
                              lookup_cardinality_type>(state, value_factory,
-                                                      lookup_key);
+                                                      transaction, lookup_key);
       }
     } else {
       commit_static_lookup<TypeInterface, TypeStorage, LookupKey,
                            lookup_cardinality_type>(state, value_factory,
-                                                    lookup_key);
+                                                    transaction, lookup_key);
     }
   }
 
@@ -1404,31 +1457,35 @@ private:
   container_proxy<Owner> commit_binding(Parent *parent, LookupKey lookup_key,
                                         KeyValueTuple &&key_values,
                                         Args &&...args) {
+    (void)parent;
     auto &state = runtime_bindings_;
-    auto binding_owner = make_binding_owner<SharedOwner, Owner>(
-        parent, std::forward<Args>(args)...);
-    auto *binding_result = binding_owner.get();
+    inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
+    runtime_transaction_type transaction(runtime_, scratch);
+    auto &binding_owner = *transaction.template construct_persistent<Owner>(
+        this, std::forward<Args>(args)...);
+    auto *binding_result = std::addressof(binding_owner);
     if constexpr (SharedOwner) {
       shared_lookup_value_factory<Owner> value_factory{
-          std::move(binding_owner)};
+          std::addressof(binding_owner)};
       std::apply(
           [&](auto &&...key_value_args) {
             commit_registration<TypeInterface, TypeStorage>(
-                state, value_factory, lookup_key,
+                state, value_factory, transaction, lookup_key,
                 std::forward<decltype(key_value_args)>(key_value_args)...);
           },
           std::forward<KeyValueTuple>(key_values));
     } else {
       unique_lookup_value_factory<Owner> value_factory{
-          std::move(binding_owner)};
+          std::addressof(binding_owner)};
       std::apply(
           [&](auto &&...key_value_args) {
             commit_registration<TypeInterface, TypeStorage>(
-                state, value_factory, lookup_key,
+                state, value_factory, transaction, lookup_key,
                 std::forward<decltype(key_value_args)>(key_value_args)...);
           },
           std::forward<KeyValueTuple>(key_values));
     }
+    transaction.commit();
     return container_proxy<Owner>(binding_result);
   }
 
@@ -1438,7 +1495,7 @@ private:
 #endif
   template <typename Request, bool MayAutoConstruct, typename LookupKey,
             typename R = typename Request::lookup_type>
-  R resolve_impl(runtime_context &context, LookupKey key) {
+  R resolve_impl(runtime_context_type &context, LookupKey key) {
     static_assert(detail::is_lookup_key_v<LookupKey>);
     using Type = typename Request::value_type;
     static_assert(!std::is_const_v<Type>);
@@ -1453,22 +1510,23 @@ private:
   }
 
   template <typename Request>
-  decltype(auto) auto_construct(runtime_context &context) {
+  decltype(auto) auto_construct(runtime_context_type &context) {
     using Type = typename Request::value_type;
 
     static_assert(is_complete<Type>::value,
                   "auto-construction requires a complete type");
 
     using type_detection = detail::automatic;
-    return context.template construct_temporary<
-        typename Request::interface_type, type_detection>(*resolve_root());
+    return context
+        .template construct<typename Request::interface_type, type_detection>(
+            *resolve_root());
   }
 
   template <typename T, bool RemoveRvalueReferences, typename LookupKey,
             typename R =
                 typename request_type<T, RemoveRvalueReferences>::lookup_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(runtime_context &context, LookupKey key) {
+  R resolve(runtime_context_type &context, LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
     return resolve_impl<request,
                         detail::is_runtime_auto_constructible_dependency_v<
@@ -1482,9 +1540,10 @@ private:
 
   template <typename Request, typename Result, typename Binding,
             typename Context>
-  Result resolve(Binding &binding, Context &context) {
+  Result resolve(Binding &binding, Context &context,
+                 detail::cache::sink cache = {}) {
     return ::dingo::resolve_binding_request<Request, rtti_type>(binding,
-                                                                context);
+                                                                context, cache);
   }
 
   template <typename T, typename Binding, typename Context>
@@ -1500,6 +1559,7 @@ private:
 
   resolve_root_type *resolve_root_ = nullptr;
 
+  container_runtime<allocator_type> runtime_;
   runtime_bindings_state runtime_bindings_;
 };
 

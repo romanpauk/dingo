@@ -118,6 +118,7 @@ if(DINGO_DEVELOPMENT_MODE)
         memory/aligned_storage.h
         memory/allocator.h
         memory/arena_allocator.h
+        memory/object_store.h
         memory/object_lifetime.h
         registration/annotated.h
         registration/collection_traits.h
@@ -128,6 +129,7 @@ if(DINGO_DEVELOPMENT_MODE)
         runtime/registration_api.h
         runtime/lookup_index.h
         runtime/registry.h
+        runtime/transaction.h
         static_container.h
         lookup/array.h
         lookup/base.h
@@ -138,6 +140,7 @@ if(DINGO_DEVELOPMENT_MODE)
         lookup/storage.h
         lookup/tags.h
         lookup/unordered.h
+        resolution/cache.h
         resolution/conversion_cache.h
         resolution/runtime_binding_interface.h
         resolution/runtime_binding.h
