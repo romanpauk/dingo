@@ -102,21 +102,6 @@ template <typename T>
 inline constexpr bool has_static_registry_type_v =
     has_static_registry_type<T>::value;
 
-template <typename Container, typename Request, typename LookupKey,
-          typename = void>
-struct has_binding_status : std::false_type {};
-
-template <typename Container, typename Request, typename LookupKey>
-struct has_binding_status<
-    Container, Request, LookupKey,
-    std::void_t<
-        decltype(std::declval<Container &>().template binding_status<Request>(
-            std::declval<LookupKey &>()))>> : std::true_type {};
-
-template <typename Container, typename Request, typename LookupKey>
-inline constexpr bool has_binding_status_v =
-    has_binding_status<Container, Request, LookupKey>::value;
-
 template <typename Container, typename Request, typename LookupKey>
 constexpr bool has_lookup() {
   static_assert(is_lookup_key_v<LookupKey>,
@@ -126,25 +111,6 @@ constexpr bool has_lookup() {
     return true;
   } else {
     return has_key_value_lookup_definition_v<Container, Request, LookupKey>;
-  }
-}
-
-template <typename Request, typename ParentContainer, typename LookupKey>
-bool should_resolve_missing_from_parent(ParentContainer &parent,
-                                        LookupKey &key) {
-  static_assert(is_lookup_key_v<LookupKey>,
-                "internal parent lookup queries require "
-                "dingo::detail::lookup_key");
-  if constexpr (!has_lookup<ParentContainer, Request, LookupKey>()) {
-    return false;
-  } else if constexpr (is_runtime_auto_constructible_dependency_v<Request> &&
-                       !has_static_registry_type_v<ParentContainer> &&
-                       has_binding_status_v<ParentContainer, Request,
-                                            LookupKey>) {
-    return parent.template binding_status<Request>(key) !=
-           binding_status::not_found;
-  } else {
-    return true;
   }
 }
 
