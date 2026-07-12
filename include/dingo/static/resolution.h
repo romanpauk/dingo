@@ -35,7 +35,8 @@ struct static_container_graph_type<StaticRegistry, false> {
 };
 
 struct factory_probe_context {
-  template <typename T, typename Container> T resolve(Container &) = delete;
+  template <typename T, typename Container>
+  T resolve(construction_scope, Container &) = delete;
 };
 
 struct factory_probe_container {};
@@ -48,7 +49,7 @@ template <typename Factory, typename Type>
 Type construct_factory_value_without_dependencies() {
   factory_probe_context context;
   factory_probe_container container;
-  return Factory::template construct<Type>(context, container);
+  return Factory::template construct<Type>(ephemeral_scope, context, container);
 }
 
 template <typename Selection, typename Request,

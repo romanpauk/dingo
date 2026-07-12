@@ -9,11 +9,13 @@
 
 #include <dingo/core/config.h>
 
+#include <dingo/core/construction_scope.h>
 #include <dingo/core/key.h>
 #include <dingo/factory/constructor_traits.h>
 #include <dingo/factory/constructor_typedef.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/type/complete_type.h>
+#include <dingo/type/dependency_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/type_list.h>
 
@@ -100,19 +102,22 @@ class constructor_argument_impl;
 template <typename DisabledType, typename Context, typename Container>
 class constructor_argument_impl<DisabledType, Context, Container, automatic> {
 public:
-  constructor_argument_impl(Context &context, Container &container)
-      : context_(context), container_(container) {}
+  constructor_argument_impl(construction_scope scope, Context &context,
+                            Container &container)
+      : scope_(scope), context_(context), container_(container) {}
 
   template <typename T, typename = typename std::enable_if_t<
                             !std::is_same_v<DisabledType, std::decay_t<T>>>>
   operator const T &() const {
-    return context_.template resolve<const T &>(container_);
+    return context_.template resolve<const T &>(
+        detail::dependency_scope<const T &>(scope_), container_);
   }
 
   template <typename T, typename = typename std::enable_if_t<
                             !std::is_same_v<DisabledType, std::decay_t<T>>>>
   operator T &() const {
-    return context_.template resolve<T &>(container_);
+    return context_.template resolve<T &>(detail::dependency_scope<T &>(scope_),
+                                          container_);
   }
 
   template <typename T, typename = typename std::enable_if_t<
@@ -121,24 +126,30 @@ public:
   operator T() {
     // A prvalue `T` still satisfies `T&&` constructor parameters, so
     // constructor injection can stay on the regular value path here.
-    return context_.template resolve<T>(container_);
+    return context_.template resolve<T>(detail::dependency_scope<T>(scope_),
+                                        container_);
   }
 
   template <typename T, typename Tag,
             typename = std::enable_if_t<
                 !std::is_same_v<DisabledType, std::decay_t<T>>>>
   operator annotated<T, Tag>() {
-    return context_.template resolve<annotated<T, Tag>>(container_);
+    using request_type = annotated<T, Tag>;
+    return context_.template resolve<request_type>(
+        detail::dependency_scope<request_type>(scope_), container_);
   }
 
   template <typename T, typename Selector,
             typename = std::enable_if_t<
                 !std::is_same_v<DisabledType, std::decay_t<T>>>>
   operator detail::selected<T, Selector>() {
-    return context_.template resolve<detail::selected<T, Selector>>(container_);
+    using request_type = detail::selected<T, Selector>;
+    return context_.template resolve<request_type>(
+        detail::dependency_scope<request_type>(scope_), container_);
   }
 
 private:
+  construction_scope scope_;
   Context &context_;
   Container &container_;
 };
@@ -314,34 +325,38 @@ using default_constructor_detection = constructor_detection<
 template <typename T, typename Tag, size_t Arity> struct constructor_methods {
 private:
   template <typename Type, typename Context, typename Container, size_t... Is>
-  static auto construct_impl(Context &ctx, Container &container,
-                             std::index_sequence<Is...>) {
+  static auto construct_impl(construction_scope scope, Context &ctx,
+                             Container &container, std::index_sequence<Is...>) {
+    (void)scope;
     // `Is...` only drives the pack expansion; the runtime construction
     // path still receives `Arity` copies of the same constructor argument
     // adapter without first materializing a type_list of placeholders.
     return detail::construction_dispatch<Type, T>::construct(
         ((void)Is, constructor_argument_impl<T, Context, Container, Tag>(
-                       ctx, container))...);
+                       scope, ctx, container))...);
   }
 
   template <typename Type, typename Context, typename Container, size_t... Is>
-  static void construct_impl(void *ptr, Context &ctx, Container &container,
-                             std::index_sequence<Is...>) {
+  static void construct_impl(void *ptr, construction_scope scope, Context &ctx,
+                             Container &container, std::index_sequence<Is...>) {
+    (void)scope;
     detail::construction_dispatch<Type, T>::construct(
         ptr, ((void)Is, constructor_argument_impl<T, Context, Container, Tag>(
-                            ctx, container))...);
+                            scope, ctx, container))...);
   }
 
 public:
   template <typename Type, typename Context, typename Container>
-  static auto construct(Context &ctx, Container &container) {
-    return construct_impl<Type>(ctx, container,
+  static auto construct(construction_scope scope, Context &ctx,
+                        Container &container) {
+    return construct_impl<Type>(scope, ctx, container,
                                 std::make_index_sequence<Arity>{});
   }
 
   template <typename Type, typename Context, typename Container>
-  static void construct(void *ptr, Context &ctx, Container &container) {
-    construct_impl<Type>(ptr, ctx, container,
+  static void construct(void *ptr, construction_scope scope, Context &ctx,
+                        Container &container) {
+    construct_impl<Type>(ptr, scope, ctx, container,
                          std::make_index_sequence<Arity>{});
   }
 };
@@ -353,15 +368,17 @@ template <typename T, typename Tag, size_t Arity>
 struct constructor_detection_dispatch<T, Tag, Arity,
                                       constructor_kind::concrete> {
   template <typename Type, typename Context, typename Container>
-  static auto construct(Context &ctx, Container &container) {
+  static auto construct(construction_scope scope, Context &ctx,
+                        Container &container) {
     return constructor_methods<T, Tag, Arity>::template construct<Type>(
-        ctx, container);
+        scope, ctx, container);
   }
 
   template <typename Type, typename Context, typename Container>
-  static void construct(void *ptr, Context &ctx, Container &container) {
-    constructor_methods<T, Tag, Arity>::template construct<Type>(ptr, ctx,
-                                                                 container);
+  static void construct(void *ptr, construction_scope scope, Context &ctx,
+                        Container &container) {
+    constructor_methods<T, Tag, Arity>::template construct<Type>(
+        ptr, scope, ctx, container);
   }
 };
 
@@ -369,14 +386,14 @@ template <typename T, typename Tag, size_t Arity>
 struct constructor_detection_dispatch<T, Tag, Arity,
                                       constructor_kind::generic> {
   template <typename Type, typename Context, typename Container>
-  static Type construct(Context &, Container &) {
+  static Type construct(construction_scope, Context &, Container &) {
     static_assert(always_false_v<Type>,
                   "generic constructor detected; use explicit "
                   "factory<constructor<...>>");
   }
 
   template <typename Type, typename Context, typename Container>
-  static void construct(void *, Context &, Container &) {
+  static void construct(void *, construction_scope, Context &, Container &) {
     static_assert(always_false_v<Type>,
                   "generic constructor detected; use explicit "
                   "factory<constructor<...>>");
@@ -387,13 +404,13 @@ template <typename T, typename Tag, size_t Arity>
 struct constructor_detection_dispatch<T, Tag, Arity,
                                       constructor_kind::invalid> {
   template <typename Type, typename Context, typename Container>
-  static Type construct(Context &, Container &) {
+  static Type construct(construction_scope, Context &, Container &) {
     static_assert(always_false_v<Type>,
                   "class T construction not detected or ambiguous");
   }
 
   template <typename Type, typename Context, typename Container>
-  static void construct(void *, Context &, Container &) {
+  static void construct(void *, construction_scope, Context &, Container &) {
     static_assert(always_false_v<Type>,
                   "class T construction not detected or ambiguous");
   }
@@ -427,13 +444,15 @@ struct constructor_detection {
 
 public:
   template <typename Type, typename Context, typename Container>
-  static auto construct(Context &ctx, Container &container) {
-    return dispatch::template construct<Type>(ctx, container);
+  static auto construct(construction_scope scope, Context &ctx,
+                        Container &container) {
+    return dispatch::template construct<Type>(scope, ctx, container);
   }
 
   template <typename Type, typename Context, typename Container>
-  static void construct(void *ptr, Context &ctx, Container &container) {
-    dispatch::template construct<Type>(ptr, ctx, container);
+  static void construct(void *ptr, construction_scope scope, Context &ctx,
+                        Container &container) {
+    dispatch::template construct<Type>(ptr, scope, ctx, container);
   }
 };
 
@@ -452,13 +471,15 @@ public:
   static constexpr size_t arity = detection_type::arity;
 
   template <typename Type, typename Context, typename Container>
-  static auto construct(Context &ctx, Container &container) {
-    return detection_type::template construct<Type>(ctx, container);
+  static auto construct(construction_scope scope, Context &ctx,
+                        Container &container) {
+    return detection_type::template construct<Type>(scope, ctx, container);
   }
 
   template <typename Type, typename Context, typename Container>
-  static void construct(void *ptr, Context &ctx, Container &container) {
-    detection_type::template construct<Type>(ptr, ctx, container);
+  static void construct(void *ptr, construction_scope scope, Context &ctx,
+                        Container &container) {
+    detection_type::template construct<Type>(ptr, scope, ctx, container);
   }
 };
 

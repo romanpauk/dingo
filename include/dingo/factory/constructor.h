@@ -27,15 +27,21 @@ template <typename T, typename... Args> struct constructor<T(Args...)> {
                                 detail::is_direct_initializable_v<T, Args...>;
 
   template <typename Type, typename Context, typename Container>
-  static auto construct(Context &ctx, Container &container) {
+  static auto construct(construction_scope scope, Context &ctx,
+                        Container &container) {
+    (void)scope;
     return detail::construction_dispatch<Type, T>::construct(
-        ctx.template resolve<Args>(container)...);
+        ctx.template resolve<Args>(detail::dependency_scope<Args>(scope),
+                                   container)...);
   }
 
   template <typename Type, typename Context, typename Container>
-  static void construct(void *ptr, Context &ctx, Container &container) {
+  static void construct(void *ptr, construction_scope scope, Context &ctx,
+                        Container &container) {
+    (void)scope;
     detail::construction_dispatch<Type, T>::construct(
-        ptr, ctx.template resolve<Args>(container)...);
+        ptr, ctx.template resolve<Args>(detail::dependency_scope<Args>(scope),
+                                        container)...);
   }
 };
 

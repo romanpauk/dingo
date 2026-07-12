@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <dingo/core/construction_scope.h>
 #include <dingo/core/exceptions.h>
 #include <dingo/core/key.h>
 #include <dingo/factory/constructor_detection.h>
@@ -56,29 +57,6 @@ struct context_destructible {
   void *instance;
   void (*dtor)(void *);
 };
-
-template <typename T, typename Context, typename Container>
-T resolve_context_request(Context &context, Container &container) {
-  if constexpr (is_selected_v<T>) {
-    using request_type = selected_type_t<T>;
-    using selector_type = selected_selector_t<T>;
-    if constexpr (is_type_selector_v<selector_type>) {
-      using selector_key_type = type_selector_type_t<selector_type>;
-      return T(container.template resolve<request_type, false>(
-          context,
-          detail::make_lookup_key(type_selector<selector_key_type>{})));
-    } else {
-      static_assert(is_value_selector_v<selector_type>,
-                    "dingo::dependency<T, Selector> requires "
-                    "dingo::key_type<Key> or dingo::key_type<Key, Value>");
-      return T(container.template resolve<request_type, false>(
-          context, detail::make_lookup_key(selector_type{})));
-    }
-  } else {
-    return container.template resolve<T, false>(context,
-                                                detail::no_lookup_key());
-  }
-}
 
 struct static_context_frame_base {
   virtual ~static_context_frame_base() = default;

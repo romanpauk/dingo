@@ -39,9 +39,10 @@ struct storage_materialization_traits<shared_cyclical, Type> {
   }
 
   template <typename Context, typename Storage, typename Container>
-  static auto materialize_source(Context &context, Storage &storage,
-                                 Container &container) {
-    return detail::make_resolved_source(storage.resolve(context, container));
+  static auto materialize_source(construction_scope scope, Context &context,
+                                 Storage &storage, Container &container) {
+    return detail::make_resolved_source(
+        storage.resolve(scope, context, container));
   }
 };
 
@@ -151,9 +152,10 @@ public:
   Type *get() { return std::launder(reinterpret_cast<Type *>(&instance_)); }
 
   template <typename Context, typename Container>
-  void construct(Context &context, Container &container) {
+  void construct(construction_scope scope, Context &context,
+                 Container &container) {
     assert(resolved_);
-    Factory::template construct<Type *>(&instance_, context, container);
+    Factory::template construct<Type *>(&instance_, scope, context, container);
     constructed_ = true;
   }
 
@@ -189,9 +191,10 @@ public:
   Type *get() { return std::launder(reinterpret_cast<Type *>(&instance_)); }
 
   template <typename Context, typename Container>
-  void construct(Context &context, Container &container) {
+  void construct(construction_scope scope, Context &context,
+                 Container &container) {
     assert(resolved_);
-    Factory::template construct<Type *>(&instance_, context, container);
+    Factory::template construct<Type *>(&instance_, scope, context, container);
   }
 
   bool empty() const { return !resolved_; }
@@ -251,9 +254,11 @@ public:
   std::shared_ptr<StoredType> &get() { return instance_; }
 
   template <typename Context, typename Container>
-  void construct(Context &context, Container &container) {
+  void construct(construction_scope scope, Context &context,
+                 Container &container) {
     assert(instance_);
-    Factory::template construct<Type *>(instance_.get(), context, container);
+    Factory::template construct<Type *>(instance_.get(), scope, context,
+                                        container);
     std::get_deleter<deleter>(instance_)->set_constructed();
   }
 
@@ -319,7 +324,8 @@ public:
   using tag_type = shared_cyclical;
 
   template <typename Context, typename Container>
-  decltype(auto) resolve(Context &context, Container &container) {
+  decltype(auto) resolve(construction_scope scope, Context &context,
+                         Container &container) {
     if (instance_.empty()) {
       // shared_cyclical publishes its owning handle before the pointee
       // is fully constructed so the graph can close over a stable
@@ -329,11 +335,11 @@ public:
       if constexpr (has_on_rollback<Context, rollback_action>::value) {
         context.on_rollback(rollback_action{this});
         instance_.resolve(context);
-        instance_.construct(context, container);
+        instance_.construct(scope, context, container);
       } else {
         local_rollback_guard rollback(this);
         instance_.resolve(context);
-        instance_.construct(context, container);
+        instance_.construct(scope, context, container);
         rollback.release();
       }
       return instance_.get();

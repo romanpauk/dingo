@@ -45,12 +45,13 @@ class binding_resolution<Host, static_bindings<Registrations...>>
         binding::status == binding_status::found;
 
     self_type &self;
+    construction_scope scope;
 
     constexpr binding_status status() const { return binding::status; }
 
     template <typename ResolveRequest, typename Context>
     decltype(auto) resolve(Context &context) {
-      return self.template resolve_binding<Result, LookupKey>(context);
+      return self.template resolve_binding<Result, LookupKey>(scope, context);
     }
   };
 
@@ -59,6 +60,7 @@ class binding_resolution<Host, static_bindings<Registrations...>>
     static constexpr bool can_resolve = true;
 
     Host &host;
+    construction_scope scope;
     LookupKey key;
 
     binding_status status() const {
@@ -69,20 +71,22 @@ class binding_resolution<Host, static_bindings<Registrations...>>
     decltype(auto) resolve(runtime_context_type &context) {
       return host.template resolve<typename Request::user_type,
                                    Request::removes_rvalue_references>(
-          context, std::move(key));
+          scope, context, std::move(key));
     }
   };
 
   template <typename Request, typename LookupKey, typename Context>
-  typename annotated_traits<Request>::type resolve_binding(Context &context) {
+  typename annotated_traits<Request>::type
+  resolve_binding(construction_scope scope, Context &context) {
     using selection = binding_t<Request, LookupKey>;
     using binding = typename selection::binding_type;
-    auto resolver = this->template make_binding_resolver<binding>(*this);
+    auto resolver = this->template make_binding_resolver<binding>(scope, *this);
     return resolver.template resolve<Request>(context);
   }
 
   template <typename T, typename LookupKey, typename Fn>
-  T construct_collection(runtime_context_type &context, Fn &&fn) {
+  T construct_collection(construction_scope scope,
+                         runtime_context_type &context, Fn &&fn) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
 
@@ -94,13 +98,14 @@ class binding_resolution<Host, static_bindings<Registrations...>>
         [&] { return static_count; },
         [&](auto &results, auto &&append) {
           host_->template append_collection<T>(
-              results, context, std::forward<decltype(append)>(append),
+              results, scope, context, std::forward<decltype(append)>(append),
               LookupKey{});
         },
         [&](auto &results, auto &&append) {
           this->template append_static_collection<T, LookupKey,
                                                   static_registry_type>(
-              results, *this, context, std::forward<decltype(append)>(append));
+              scope, results, *this, context,
+              std::forward<decltype(append)>(append));
         },
         std::forward<Fn>(fn));
   }
@@ -138,16 +143,17 @@ public:
   template <typename Request, typename LookupKey,
             typename R = typename Request::result_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(runtime_context_type &context, LookupKey key) {
+  R resolve(construction_scope scope, runtime_context_type &context,
+            LookupKey key) {
     static_assert(detail::is_lookup_key_v<LookupKey>);
     (void)key;
     if constexpr (collection_traits<R>::is_collection) {
       return construct_collection<R, LookupKey>(
-          context, detail::binding_collection_append{});
+          scope, context, detail::binding_collection_append{});
     } else {
       using result_type = R;
-      local_binding_source<Request, LookupKey, result_type> local{*this};
-      host_binding_source<Request, LookupKey, result_type> host{*host_,
+      local_binding_source<Request, LookupKey, result_type> local{*this, scope};
+      host_binding_source<Request, LookupKey, result_type> host{*host_, scope,
                                                                 std::move(key)};
       auto sources = detail::make_two_binding_sources(
           local, host, host, detail::binding_resolution_policy::prefer_primary);
@@ -161,9 +167,10 @@ public:
             typename R =
                 typename request_type<T, RemoveRvalueReferences>::lookup_type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  R resolve(runtime_context_type &context, LookupKey key) {
+  R resolve(construction_scope scope, runtime_context_type &context,
+            LookupKey key) {
     using request = request_type<T, RemoveRvalueReferences>;
-    return resolve<request, LookupKey, R>(context, std::move(key));
+    return resolve<request, LookupKey, R>(scope, context, std::move(key));
   }
 
 private:

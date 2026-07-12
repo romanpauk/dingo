@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/core/config.h>
+#include <dingo/core/construction_scope.h>
 #include <dingo/resolution/cache.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/type/type_descriptor.h>
@@ -41,17 +42,19 @@ public:
   detail::cache::entry *cache_slot() noexcept { return cache_slot_; }
 
   virtual void *
-  get_value(Context &,
+  get_value(construction_scope, Context &,
             const instance_request<typename Container::rtti_type> &request,
             detail::cache::sink) = 0;
   virtual void *get_lvalue_reference(
-      Context &, const instance_request<typename Container::rtti_type> &request,
+      construction_scope, Context &,
+      const instance_request<typename Container::rtti_type> &request,
       detail::cache::sink) = 0;
   virtual void *get_rvalue_reference(
-      Context &, const instance_request<typename Container::rtti_type> &request,
+      construction_scope, Context &,
+      const instance_request<typename Container::rtti_type> &request,
       detail::cache::sink) = 0;
   virtual void *
-  get_pointer(Context &,
+  get_pointer(construction_scope, Context &,
               const instance_request<typename Container::rtti_type> &request,
               detail::cache::sink) = 0;
 

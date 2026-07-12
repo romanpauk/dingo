@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/core/config.h>
+#include <dingo/core/construction_scope.h>
 
 #include <dingo/type/type_list.h>
 
@@ -24,10 +25,10 @@ template <> struct conversion_cache<> {
 
 template <typename T> struct conversion_cache_entry {
   template <typename Owner, typename... Args>
-  T &construct(Owner &owner, Args &&...args) {
+  T &construct(construction_scope scope, Owner &owner, Args &&...args) {
     if (value_ == nullptr) {
       value_ = std::addressof(
-          owner.template construct<T>(std::forward<Args>(args)...));
+          owner.template construct<T>(scope, std::forward<Args>(args)...));
     }
     return *value_;
   }
@@ -36,8 +37,8 @@ template <typename T> struct conversion_cache_entry {
   T &construct_tracked(Context &context, Args &&...args) {
     if (value_ == nullptr) {
       assert(value_ == nullptr);
-      auto *created = std::addressof(context.template construct_persistent<T>(
-          std::forward<Args>(args)...));
+      auto *created = std::addressof(context.template construct<T>(
+          persistent_scope, std::forward<Args>(args)...));
       context.on_rollback([this]() noexcept { value_ = nullptr; });
       value_ = created;
     }
@@ -52,9 +53,9 @@ template <typename T> struct conversion_cache_entry {
 template <typename... Types>
 struct conversion_cache : conversion_cache_entry<Types>... {
   template <typename T, typename Owner, typename... Args>
-  T &construct(Owner &owner, Args &&...args) {
+  T &construct(construction_scope scope, Owner &owner, Args &&...args) {
     return static_cast<conversion_cache_entry<T> &>(*this).construct(
-        owner, std::forward<Args>(args)...);
+        scope, owner, std::forward<Args>(args)...);
   }
 
   template <typename T, typename Context, typename... Args>

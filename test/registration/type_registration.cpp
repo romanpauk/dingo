@@ -126,12 +126,12 @@ struct runtime_registration_lifetime_factory {
   }
 
   template <typename Type, typename Context, typename Container>
-  Type construct(Context &, Container &) const {
+  Type construct(construction_scope, Context &, Container &) const {
     return Type{};
   }
 
   template <typename Type, typename Context, typename Container>
-  void construct(void *ptr, Context &, Container &) const {
+  void construct(void *ptr, construction_scope, Context &, Container &) const {
     using object_type = std::remove_pointer_t<Type>;
     new (ptr) object_type();
   }
@@ -276,15 +276,17 @@ int runtime_retained_source_pointer_dependency::live_count = 0;
 
 struct runtime_retained_source_pointer_factory {
   template <typename Type, typename Context, typename Container>
-  Type construct(Context &context, Container &) const {
+  Type construct(construction_scope scope, Context &context,
+                 Container &) const {
     static_assert(std::is_pointer_v<Type>);
     using object_type = std::remove_pointer_t<Type>;
-    return std::addressof(context.template construct<object_type>());
+    return std::addressof(context.template construct<object_type>(scope));
   }
 
   template <typename Type, typename Context, typename Container>
-  void construct(void *ptr, Context &context, Container &container) const {
-    new (ptr) Type(construct<Type>(context, container));
+  void construct(void *ptr, construction_scope scope, Context &context,
+                 Container &container) const {
+    new (ptr) Type(construct<Type>(scope, context, container));
   }
 };
 
@@ -1202,7 +1204,7 @@ TEST(type_registration_test,
 }
 
 TEST(type_registration_test,
-     runtime_context_construction_policy_stack_routes_nested_lifetimes) {
+     runtime_context_construct_uses_explicit_lifetimes) {
   std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   {
@@ -1211,17 +1213,12 @@ TEST(type_registration_test,
       runtime_transaction transaction(runtime, scratch);
       {
         runtime_context context(scratch, transaction);
-        (void)context.construct<runtime_arena_tracker>(&events, 1);
-        {
-          auto persistent = context.use_persistent_construction();
-          (void)persistent;
-          (void)context.construct<runtime_arena_tracker>(&events, 2);
-          {
-            auto ephemeral = context.use_ephemeral_construction();
-            (void)ephemeral;
-            (void)context.construct<runtime_arena_tracker>(&events, 3);
-          }
-        }
+        (void)context.construct<runtime_arena_tracker>(ephemeral_scope, &events,
+                                                       1);
+        (void)context.construct<runtime_arena_tracker>(persistent_scope,
+                                                       &events, 2);
+        (void)context.construct<runtime_arena_tracker>(ephemeral_scope, &events,
+                                                       3);
         transaction.commit();
       }
 
@@ -1233,7 +1230,7 @@ TEST(type_registration_test,
 }
 
 TEST(type_registration_test,
-     runtime_context_detection_construction_uses_active_policy) {
+     runtime_context_detection_construction_uses_explicit_scope) {
   std::vector<int> events;
   runtime_policy_detected_tracker::events = std::addressof(events);
 
@@ -1248,15 +1245,11 @@ TEST(type_registration_test,
       runtime_policy_detected_tracker::next_value = 1;
       (void)context
           .construct<runtime_policy_detected_tracker &, detail::automatic>(
-              container);
-      {
-        auto persistent = context.use_persistent_construction();
-        (void)persistent;
-        runtime_policy_detected_tracker::next_value = 2;
-        (void)context
-            .construct<runtime_policy_detected_tracker &, detail::automatic>(
-                container);
-      }
+              ephemeral_scope, container);
+      runtime_policy_detected_tracker::next_value = 2;
+      (void)context
+          .construct<runtime_policy_detected_tracker &, detail::automatic>(
+              persistent_scope, container);
       transaction.commit();
     }
 
@@ -1267,8 +1260,7 @@ TEST(type_registration_test,
   runtime_policy_detected_tracker::events = nullptr;
 }
 
-TEST(type_registration_test,
-     runtime_context_ephemeral_policy_uses_scratch_inside_persistent_scope) {
+TEST(type_registration_test, runtime_context_explicit_scopes_are_independent) {
   std::vector<int> events;
   arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
   {
@@ -1276,16 +1268,10 @@ TEST(type_registration_test,
     runtime_transaction transaction(runtime, scratch);
     {
       runtime_context context(scratch, transaction);
-      {
-        auto persistent = context.use_persistent_construction();
-        (void)persistent;
-        (void)context.construct<runtime_arena_tracker>(&events, 2);
-        {
-          auto ephemeral = context.use_ephemeral_construction();
-          (void)ephemeral;
-          (void)context.construct<runtime_arena_tracker>(&events, 1);
-        }
-      }
+      const auto retained = persistent_scope;
+      const auto temporary = ephemeral_scope;
+      (void)context.construct<runtime_arena_tracker>(retained, &events, 2);
+      (void)context.construct<runtime_arena_tracker>(temporary, &events, 1);
       transaction.commit();
     }
 
@@ -1303,7 +1289,7 @@ TEST(type_registration_test,
   runtime_transaction transaction(runtime, scratch);
   {
     runtime_context context(scratch, transaction);
-    (void)context.construct<runtime_scoped_source_dependency>();
+    (void)context.construct<runtime_scoped_source_dependency>(ephemeral_scope);
     transaction.commit();
   }
 
@@ -1319,7 +1305,8 @@ TEST(type_registration_test,
     runtime_transaction transaction(runtime, scratch);
     {
       runtime_context context(scratch, transaction);
-      (void)context.construct<runtime_scoped_source_dependency>();
+      (void)context.construct<runtime_scoped_source_dependency>(
+          ephemeral_scope);
     }
   }
 
@@ -1335,7 +1322,8 @@ TEST(type_registration_test,
     runtime_transaction transaction(runtime, scratch);
     {
       runtime_context context(scratch, transaction);
-      (void)context.construct<runtime_arena_tracker>(&events, 1);
+      (void)context.construct<runtime_arena_tracker>(ephemeral_scope, &events,
+                                                     1);
       context.on_rollback([&events]() noexcept { events.push_back(2); });
     }
 

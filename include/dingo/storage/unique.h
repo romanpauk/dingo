@@ -30,24 +30,27 @@ template <typename Type> struct storage_materialization_traits<unique, Type> {
   }
 
   template <typename Context, typename Storage, typename Container>
-  static auto materialize_source(Context &context, Storage &storage,
-                                 Container &container) {
-    using source_type = std::remove_cv_t<
-        std::remove_reference_t<decltype(storage.resolve(context, container))>>;
+  static auto materialize_source(construction_scope scope, Context &context,
+                                 Storage &storage, Container &container) {
+    using source_type =
+        std::remove_cv_t<std::remove_reference_t<decltype(storage.resolve(
+            scope, context, container))>>;
     return detail::make_rvalue_source<source_type>(
         std::in_place, [&](void *ptr) {
-          new (ptr) source_type(storage.resolve(context, container));
+          new (ptr) source_type(storage.resolve(scope, context, container));
         });
   }
 
   template <typename Context, typename Storage, typename Container>
-  static auto &materialize_source_in_context(Context &context, Storage &storage,
+  static auto &materialize_source_in_context(construction_scope scope,
+                                             Context &context, Storage &storage,
                                              Container &container) {
-    using source_type = std::remove_cv_t<
-        std::remove_reference_t<decltype(storage.resolve(context, container))>>;
+    using source_type =
+        std::remove_cv_t<std::remove_reference_t<decltype(storage.resolve(
+            scope, context, container))>>;
     return context.template construct<detail::rvalue_source<source_type>>(
-        std::in_place, [&](void *ptr) {
-          new (ptr) source_type(storage.resolve(context, container));
+        scope, std::in_place, [&](void *ptr) {
+          new (ptr) source_type(storage.resolve(scope, context, container));
         });
   }
 };
@@ -250,8 +253,9 @@ public:
   using tag_type = unique;
 
   template <typename Context, typename Container>
-  decltype(auto) resolve(Context &context, Container &container) {
-    return Factory::template construct<Type>(context, container);
+  decltype(auto) resolve(construction_scope scope, Context &context,
+                         Container &container) {
+    return Factory::template construct<Type>(scope, context, container);
   }
 };
 
@@ -268,8 +272,9 @@ public:
   using tag_type = unique;
 
   template <typename Context, typename Container>
-  decltype(auto) resolve(Context &context, Container &container) {
-    return Factory::template construct<Type[N]>(context, container);
+  decltype(auto) resolve(construction_scope scope, Context &context,
+                         Container &container) {
+    return Factory::template construct<Type[N]>(scope, context, container);
   }
 };
 } // namespace detail

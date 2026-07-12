@@ -65,7 +65,8 @@ struct cache_value {
 };
 
 struct cache_owner {
-  template <typename T, typename... Args> T &construct(Args &&...args) {
+  template <typename T, typename... Args>
+  T &construct(construction_scope, Args &&...args) {
     static_assert(std::is_same_v<T, cache_value>);
     values.push_back(std::make_unique<T>(std::forward<Args>(args)...));
     return *values.back();
@@ -75,11 +76,6 @@ struct cache_owner {
 };
 
 struct tracked_cache_context : cache_owner {
-  template <typename T, typename... Args>
-  T &construct_persistent(Args &&...args) {
-    return construct<T>(std::forward<Args>(args)...);
-  }
-
   template <typename Fn> void on_rollback(Fn &&fn) {
     rollback_actions.emplace_back(std::forward<Fn>(fn));
   }
@@ -173,15 +169,15 @@ TEST(cache_test, conversion_cache_reuses_value_until_reset) {
   conversion_cache<type_list<cache_value>> cache;
   cache_owner owner;
 
-  auto &first = cache.construct<cache_value>(owner, 1);
-  auto &again = cache.construct<cache_value>(owner, 2);
+  auto &first = cache.construct<cache_value>(persistent_scope, owner, 1);
+  auto &again = cache.construct<cache_value>(persistent_scope, owner, 2);
 
   EXPECT_EQ(std::addressof(again), std::addressof(first));
   EXPECT_EQ(again.value, 1);
   ASSERT_EQ(owner.values.size(), 1u);
 
   cache.reset();
-  auto &after_reset = cache.construct<cache_value>(owner, 3);
+  auto &after_reset = cache.construct<cache_value>(persistent_scope, owner, 3);
 
   EXPECT_NE(std::addressof(after_reset), std::addressof(first));
   EXPECT_EQ(after_reset.value, 3);

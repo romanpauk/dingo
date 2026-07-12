@@ -8,6 +8,8 @@
 #pragma once
 
 #include <dingo/core/config.h>
+#include <dingo/core/construction_scope.h>
+#include <dingo/type/dependency_traits.h>
 #include <dingo/type/normalized_type.h>
 
 #include <functional>
@@ -24,16 +26,20 @@ template <typename Signature> struct callable_invoke;
 
 template <typename R, typename... Args> struct callable_invoke<R(Args...)> {
   template <typename Fn, typename Context, typename Container>
-  static decltype(auto) construct(Fn &&fn, Context &ctx, Container &container) {
-    return std::invoke(std::forward<Fn>(fn),
-                       ctx.template resolve<Args>(container)...);
+  static decltype(auto) construct(Fn &&fn, construction_scope scope,
+                                  Context &ctx, Container &container) {
+    (void)scope;
+    return std::invoke(
+        std::forward<Fn>(fn),
+        ctx.template resolve<Args>(detail::dependency_scope<Args>(scope),
+                                   container)...);
   }
 
   template <typename Type, typename Fn, typename Context, typename Container>
-  static void construct(void *ptr, Fn &&fn, Context &ctx,
-                        Container &container) {
+  static void construct(void *ptr, Fn &&fn, construction_scope scope,
+                        Context &ctx, Container &container) {
     new (ptr) normalized_type_t<Type>(
-        construct(std::forward<Fn>(fn), ctx, container));
+        construct(std::forward<Fn>(fn), scope, ctx, container));
   }
 };
 
@@ -205,13 +211,14 @@ template <typename Signature, typename T> struct callable_factory {
   explicit callable_factory(T fn) : fn_(std::move(fn)) {}
 
   template <typename Type, typename Context, typename Container>
-  auto construct(Context &ctx, Container &container) {
-    return callable_invoke<Signature>::construct(fn_, ctx, container);
+  auto construct(construction_scope scope, Context &ctx, Container &container) {
+    return callable_invoke<Signature>::construct(fn_, scope, ctx, container);
   }
 
   template <typename Type, typename Context, typename Container>
-  void construct(void *ptr, Context &ctx, Container &container) {
-    callable_invoke<Signature>::template construct<Type>(ptr, fn_, ctx,
+  void construct(void *ptr, construction_scope scope, Context &ctx,
+                 Container &container) {
+    callable_invoke<Signature>::template construct<Type>(ptr, fn_, scope, ctx,
                                                          container);
   }
 
