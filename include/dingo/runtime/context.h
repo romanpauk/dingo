@@ -10,7 +10,6 @@
 #include <dingo/core/context_base.h>
 #include <dingo/memory/object_store.h>
 #include <dingo/runtime/transaction.h>
-#include <dingo/type/dependency_traits.h>
 
 #include <memory>
 #include <type_traits>
@@ -21,15 +20,6 @@ namespace dingo {
 template <typename Allocator>
 class runtime_context : public detail::context_path_state {
   using transaction_type = runtime_transaction<Allocator>;
-  enum class construction_kind {
-    ephemeral,
-    persistent,
-  };
-
-  struct construction_policy {
-    construction_kind kind;
-    construction_policy *previous;
-  };
 
 public:
   class transaction_scope {
@@ -51,29 +41,6 @@ public:
     transaction_type *previous_;
   };
 
-  class construction_scope {
-  public:
-    construction_scope(runtime_context &context, construction_kind kind)
-        : context_(std::addressof(context)), policy_{kind, context.policy_} {
-      context_->policy_ = std::addressof(policy_);
-    }
-
-    ~construction_scope() {
-      if (context_ != nullptr) {
-        context_->policy_ = policy_.previous;
-      }
-    }
-
-    construction_scope(const construction_scope &) = delete;
-    construction_scope &operator=(const construction_scope &) = delete;
-    construction_scope(construction_scope &&) = delete;
-    construction_scope &operator=(construction_scope &&) = delete;
-
-  private:
-    runtime_context *context_;
-    construction_policy policy_;
-  };
-
   runtime_context(arena<> &scratch, transaction_type &transaction)
       : scratch_(std::addressof(scratch)),
         transaction_(std::addressof(transaction)) {}
@@ -83,30 +50,26 @@ public:
   runtime_context(const runtime_context &) = delete;
   runtime_context &operator=(const runtime_context &) = delete;
 
-  template <typename T, typename... Args> T &construct(Args &&...args) {
-    return construct_with_policy<T>(
-        [&](void *ptr) { new (ptr) T(std::forward<Args>(args)...); });
+  template <typename T, typename... Args>
+  T &construct(construction_scope scope, Args &&...args) {
+    return construct_with_scope<T>(
+        scope, [&](void *ptr) { new (ptr) T(std::forward<Args>(args)...); });
   }
 
   template <typename T, typename DetectionTag, typename Container>
-  T construct(Container &container) {
+  T construct(construction_scope scope, Container &container) {
     using temporary_type = normalized_type_t<T>;
-    auto &instance = construct_with_policy<temporary_type>([&](void *ptr) {
-      detail::default_constructor_detection<temporary_type, DetectionTag>()
-          .template construct<temporary_type>(ptr, *this, container);
-    });
+    auto &instance =
+        construct_with_scope<temporary_type>(scope, [&](void *ptr) {
+          detail::default_constructor_detection<temporary_type, DetectionTag>()
+              .template construct<temporary_type>(ptr, scope, *this, container);
+        });
 
     if constexpr (std::is_lvalue_reference_v<T>) {
       return instance;
     } else {
       return std::move(instance);
     }
-  }
-
-  template <typename T, typename... Args>
-  T &construct_persistent(Args &&...args) {
-    return *transaction_->template construct_persistent<T>(
-        std::forward<Args>(args)...);
   }
 
   template <typename Fn> void on_rollback(Fn &&fn) {
@@ -125,31 +88,33 @@ public:
     transaction_->add_runtime_destructor(instance, dtor);
   }
 
-  construction_scope use_ephemeral_construction() {
-    return construction_scope(*this, construction_kind::ephemeral);
-  }
-
-  construction_scope use_persistent_construction() {
-    return construction_scope(*this, construction_kind::persistent);
-  }
-
-  bool retains_constructed_sources() const noexcept {
-    return policy_ != nullptr && policy_->kind == construction_kind::persistent;
-  }
-
-  template <typename T, typename Container> T resolve(Container &container) {
-    if (retains_constructed_sources() && !request_may_escape_v<T>) {
-      auto scope = use_ephemeral_construction();
-      return detail::resolve_context_request<T>(*this, container);
+  template <typename T, typename Container>
+  T resolve(construction_scope scope, Container &container) {
+    if constexpr (detail::is_selected_v<T>) {
+      using request_type = detail::selected_type_t<T>;
+      using selector_type = detail::selected_selector_t<T>;
+      if constexpr (detail::is_type_selector_v<selector_type>) {
+        using selector_key_type = detail::type_selector_type_t<selector_type>;
+        return T(container.template resolve<request_type, false>(
+            scope, *this,
+            detail::make_lookup_key(
+                detail::type_selector<selector_key_type>{})));
+      } else {
+        static_assert(detail::is_value_selector_v<selector_type>);
+        return T(container.template resolve<request_type, false>(
+            scope, *this, detail::make_lookup_key(selector_type{})));
+      }
+    } else {
+      return container.template resolve<T, false>(scope, *this,
+                                                  detail::no_lookup_key());
     }
-
-    return detail::resolve_context_request<T>(*this, container);
   }
 
 private:
   template <typename T, typename ConstructFn>
-  T &construct_with_policy(ConstructFn &&construct_fn) {
-    if (policy_ != nullptr && policy_->kind == construction_kind::persistent) {
+  T &construct_with_scope(construction_scope scope,
+                          ConstructFn &&construct_fn) {
+    if (scope.is_persistent()) {
       return *transaction_->template construct_persistent_with<T>(
           std::forward<ConstructFn>(construct_fn));
     }
@@ -161,7 +126,6 @@ private:
   arena<> *scratch_;
   detail::object_store<arena<>> ephemeral_store_;
   transaction_type *transaction_;
-  construction_policy *policy_ = nullptr;
 };
 
 namespace detail {

@@ -99,17 +99,35 @@ public:
     }
   }
 
-  template <typename T, typename Container> T resolve(Container &container) {
-    return detail::resolve_context_request<T>(*this, container);
+  template <typename T, typename Container>
+  T resolve(construction_scope scope, Container &container) {
+    if constexpr (detail::is_selected_v<T>) {
+      using request_type = detail::selected_type_t<T>;
+      using selector_type = detail::selected_selector_t<T>;
+      if constexpr (detail::is_type_selector_v<selector_type>) {
+        using selector_key_type = detail::type_selector_type_t<selector_type>;
+        return T(container.template resolve<request_type, false>(
+            scope, *this,
+            detail::make_lookup_key(
+                detail::type_selector<selector_key_type>{})));
+      } else {
+        static_assert(detail::is_value_selector_v<selector_type>);
+        return T(container.template resolve<request_type, false>(
+            scope, *this, detail::make_lookup_key(selector_type{})));
+      }
+    } else {
+      return container.template resolve<T, false>(scope, *this,
+                                                  detail::no_lookup_key());
+    }
   }
 
   template <typename T, typename DetectionTag, typename Container>
-  T construct(Container &container) {
+  T construct(construction_scope scope, Container &container) {
     using temporary_type = normalized_type_t<T>;
 
     auto *instance = allocate_temporary_storage<temporary_type>();
     detail::default_constructor_detection<temporary_type, DetectionTag>()
-        .template construct<temporary_type>(instance, *this, container);
+        .template construct<temporary_type>(instance, scope, *this, container);
     if constexpr (!std::is_trivially_destructible_v<temporary_type>) {
       register_destructor(instance);
     }
@@ -121,7 +139,8 @@ public:
     }
   }
 
-  template <typename T, typename... Args> T &construct(Args &&...args) {
+  template <typename T, typename... Args>
+  T &construct(construction_scope, Args &&...args) {
     auto *instance = allocate_temporary_storage<T>();
     new (instance) T(std::forward<Args>(args)...);
     if constexpr (!std::is_trivially_destructible_v<T>) {

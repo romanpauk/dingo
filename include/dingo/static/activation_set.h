@@ -226,57 +226,64 @@ template <typename State, typename Host, typename BindingModel>
 struct binding_activation {
   State &state;
   Host &host;
+  construction_scope scope;
 
   template <typename Request, typename Context>
-  decltype(auto) resolve_request(Context &context) {
+  decltype(auto) resolve_request(construction_scope construction,
+                                 Context &context) {
     using local_bindings = typename BindingModel::bindings_type;
     if constexpr (std::is_void_v<local_bindings>) {
       return host.template resolve<typename Request::user_type,
                                    Request::removes_rvalue_references>(
-          context, detail::no_lookup_key());
+          construction, context, detail::no_lookup_key());
     } else {
       return state.template resolve_local_binding<Request, local_bindings,
-                                                  BindingModel>(host, context);
+                                                  BindingModel>(construction,
+                                                                host, context);
     }
   }
 
   template <typename Request, typename Context, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  decltype(auto) resolve_request(Context &context, LookupKey key) {
+  decltype(auto) resolve_request(construction_scope construction,
+                                 Context &context, LookupKey key) {
     using local_bindings = typename BindingModel::bindings_type;
     if constexpr (std::is_void_v<local_bindings>) {
       return host.template resolve<typename Request::user_type,
                                    Request::removes_rvalue_references>(
-          context, std::move(key));
+          construction, context, std::move(key));
     } else {
       return state.template resolve_local_binding<Request, local_bindings,
                                                   BindingModel, LookupKey>(
-          host, context, std::move(key));
+          construction, host, context, std::move(key));
     }
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Context>
-  decltype(auto) resolve(Context &context) {
-    return resolve_request<request_type<T, RemoveRvalueReferences>>(context);
+  decltype(auto) resolve(construction_scope construction, Context &context) {
+    return resolve_request<request_type<T, RemoveRvalueReferences>>(
+        construction, context);
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Context,
             typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  decltype(auto) resolve(Context &context, LookupKey key) {
+  decltype(auto) resolve(construction_scope construction, Context &context,
+                         LookupKey key) {
     return resolve_request<request_type<T, RemoveRvalueReferences>>(
-        context, std::move(key));
+        construction, context, std::move(key));
   }
 
   template <typename T, typename Context>
   decltype(auto) resolve(Context &context) {
-    return state.template resolve_binding_type<T, BindingModel>(host, context);
+    return state.template resolve_binding_type<T, BindingModel>(scope, host,
+                                                                context);
   }
 
   template <typename T, typename Context, typename Source>
   decltype(auto) resolve_conversion(Context &context, Source &&source) {
     return state.template resolve_conversion<T, BindingModel>(
-        context, std::forward<Source>(source));
+        scope, context, std::forward<Source>(source));
   }
 };
 
@@ -370,6 +377,7 @@ struct static_binding_resolver {
 
   State &state;
   Host &host;
+  construction_scope scope;
 
   static constexpr type_descriptor registered_type() {
     return describe_type<typename storage_type::type>();
@@ -442,7 +450,8 @@ struct static_binding_resolver {
     constexpr bool uses_stored_request_identity =
         stored_request_identity_v<Request, storage_type>;
 
-    binding_activation<State, Host, binding_model_type> activation{state, host};
+    binding_activation<State, Host, binding_model_type> activation{state, host,
+                                                                   scope};
     if constexpr (uses_stored_request_identity) {
       if constexpr (!State::runtime_dependencies) {
         auto &&storage =
@@ -452,7 +461,7 @@ struct static_binding_resolver {
               detail::resolve_binding_request<Request, storage_type>(
                   activation, context, std::forward<decltype(source)>(source));
           return detail::get_address_as<target_type>(
-              context, std::forward<decltype(instance)>(instance));
+              scope, context, std::forward<decltype(instance)>(instance));
         };
         if constexpr ((std::is_lvalue_reference_v<Request> ||
                        std::is_pointer_v<Request>) &&
@@ -460,10 +469,10 @@ struct static_binding_resolver {
                           std::remove_reference_t<decltype(storage)>, Context,
                           decltype(activation)>) {
           return detail::materialize_lvalue_binding_source_in_context(
-              context, storage, activation, std::move(materialize));
+              scope, context, storage, activation, std::move(materialize));
         } else {
           return detail::materialize_binding_source(
-              context, storage, activation, std::move(materialize));
+              scope, context, storage, activation, std::move(materialize));
         }
       } else {
         auto &&storage =
@@ -473,7 +482,7 @@ struct static_binding_resolver {
               detail::resolve_binding_request<Request, storage_type>(
                   activation, context, std::forward<decltype(source)>(source));
           return detail::get_address_as<target_type>(
-              context, std::forward<decltype(instance)>(instance));
+              scope, context, std::forward<decltype(instance)>(instance));
         };
         if constexpr ((std::is_lvalue_reference_v<Request> ||
                        std::is_pointer_v<Request>) &&
@@ -481,13 +490,13 @@ struct static_binding_resolver {
                           std::remove_reference_t<decltype(storage)>, Context,
                           decltype(activation)>) {
           return detail::materialize_lvalue_binding_source_in_context(
-              context, storage, activation, std::move(materialize));
+              scope, context, storage, activation, std::move(materialize));
         }
         return detail::forward_binding_request<Request>(
-            context, storage, activation, activation,
+            scope, context, storage, activation, activation,
             [&](auto &&instance) -> void * {
               return detail::get_address_as<target_type>(
-                  context, std::forward<decltype(instance)>(instance));
+                  scope, context, std::forward<decltype(instance)>(instance));
             });
       }
     } else {
@@ -500,22 +509,23 @@ struct static_binding_resolver {
                           std::remove_reference_t<decltype(storage)>, Context,
                           decltype(activation)>) {
           return detail::materialize_lvalue_binding_source_in_context(
-              context, storage, activation, [&](auto &&source) -> void * {
+              scope, context, storage, activation,
+              [&](auto &&source) -> void * {
                 auto &&instance =
                     detail::resolve_binding_request<conversion_request_type,
                                                     storage_type>(
                         activation, context,
                         std::forward<decltype(source)>(source));
                 return detail::get_address_as<target_type>(
-                    context, std::forward<decltype(instance)>(instance));
+                    scope, context, std::forward<decltype(instance)>(instance));
               });
         }
         return detail::forward_runtime_binding_resolution_request<
             conversion_request_type>(
-            context, storage, activation, activation,
+            scope, context, storage, activation, activation,
             [&](auto &&instance) -> void * {
               return detail::get_address_as<target_type>(
-                  context, std::forward<decltype(instance)>(instance));
+                  scope, context, std::forward<decltype(instance)>(instance));
             });
       } else {
         auto &&storage =
@@ -526,7 +536,7 @@ struct static_binding_resolver {
                                               storage_type>(
                   activation, context, std::forward<decltype(source)>(source));
           return detail::get_address_as<target_type>(
-              context, std::forward<decltype(instance)>(instance));
+              scope, context, std::forward<decltype(instance)>(instance));
         };
         if constexpr ((std::is_lvalue_reference_v<Request> ||
                        std::is_pointer_v<Request>) &&
@@ -534,14 +544,14 @@ struct static_binding_resolver {
                           std::remove_reference_t<decltype(storage)>, Context,
                           decltype(activation)>) {
           return detail::materialize_lvalue_binding_source_in_context(
-              context, storage, activation, std::move(materialize));
+              scope, context, storage, activation, std::move(materialize));
         }
         return detail::forward_binding_resolution_request<
             conversion_request_type>(
-            context, storage, activation, get_resolution_frame(context),
+            scope, context, storage, activation, get_resolution_frame(context),
             activation, [&](auto &&instance) -> void * {
               return detail::get_address_as<target_type>(
-                  context, std::forward<decltype(instance)>(instance));
+                  scope, context, std::forward<decltype(instance)>(instance));
             });
       }
     }
@@ -553,8 +563,8 @@ struct static_binding_resolver {
         stored_request_identity_v<Request, storage_type>;
 
     if constexpr (uses_stored_request_identity) {
-      binding_activation<State, Host, binding_model_type> activation{state,
-                                                                     host};
+      binding_activation<State, Host, binding_model_type> activation{
+          state, host, scope};
       if constexpr (!State::runtime_dependencies) {
         auto &&storage =
             state.template get_storage_for_model<binding_model_type>();
@@ -571,10 +581,10 @@ struct static_binding_resolver {
                           std::remove_reference_t<decltype(storage)>, Context,
                           decltype(activation)>) {
           return detail::materialize_lvalue_binding_source_in_context(
-              context, storage, activation, std::move(materialize));
+              scope, context, storage, activation, std::move(materialize));
         } else {
           return detail::materialize_binding_source(
-              context, storage, activation, std::move(materialize));
+              scope, context, storage, activation, std::move(materialize));
         }
       } else {
         auto &&storage =
@@ -592,21 +602,24 @@ struct static_binding_resolver {
                           std::remove_reference_t<decltype(storage)>, Context,
                           decltype(activation)>) {
           return detail::materialize_lvalue_binding_source_in_context(
-              context, storage, activation, std::move(materialize));
+              scope, context, storage, activation, std::move(materialize));
         }
-        return detail::consume_binding_request<Request>(
-            context, storage, activation, activation, std::forward<Fn>(fn));
+        return detail::consume_binding_request<Request>(scope, context, storage,
+                                                        activation, activation,
+                                                        std::forward<Fn>(fn));
       }
     } else {
-      binding_activation<State, Host, binding_model_type> activation{state,
-                                                                     host};
+      binding_activation<State, Host, binding_model_type> activation{
+          state, host, scope};
       if constexpr (State::runtime_dependencies) {
         return detail::consume_runtime_binding_resolution_request<Request>(
-            context, state.template get_storage_for_model<binding_model_type>(),
+            scope, context,
+            state.template get_storage_for_model<binding_model_type>(),
             activation, activation, std::forward<Fn>(fn));
       } else {
         return detail::consume_binding_resolution_request<Request>(
-            context, state.template get_storage_for_model<binding_model_type>(),
+            scope, context,
+            state.template get_storage_for_model<binding_model_type>(),
             activation, get_resolution_frame(context), activation,
             std::forward<Fn>(fn));
       }
@@ -624,35 +637,39 @@ struct static_binding_resolver {
 
 template <typename T, typename BindingModel, typename State, typename Context,
           typename Source>
-decltype(auto) evaluate_static_conversion(State &state, Context &context,
+decltype(auto) evaluate_static_conversion(construction_scope scope,
+                                          State &state, Context &context,
                                           Source &&source) {
   return detail::resolve_binding_conversion<T>(
-      state.template get_storage_for_model<BindingModel>(),
+      scope, state.template get_storage_for_model<BindingModel>(),
       state.template get_conversion_cache_for_model<BindingModel>(), context,
       std::forward<Source>(source));
 }
 
 template <typename T, typename BindingModel, typename State, typename Host,
           typename Context>
-decltype(auto) evaluate_static_binding(State &state, Host &host,
-                                       Context &context) {
-  binding_activation<State, Host, BindingModel> activation{state, host};
+decltype(auto) evaluate_static_binding(construction_scope scope, State &state,
+                                       Host &host, Context &context) {
+  binding_activation<State, Host, BindingModel> activation{state, host, scope};
   return detail::materialize_tracked_binding_source(
-      context, state.template get_storage_for_model<BindingModel>(), activation,
-      [&](auto &&source) -> decltype(auto) {
+      scope, context, state.template get_storage_for_model<BindingModel>(),
+      activation, [&](auto &&source) -> decltype(auto) {
         return detail::resolve_binding_value<T>(
             activation, context, std::forward<decltype(source)>(source));
       });
 }
 
 template <typename InterfaceBinding, typename State, typename Host>
-auto make_static_binding_resolver(State &state, Host &host) {
-  return static_binding_resolver<State, Host, InterfaceBinding>{state, host};
+auto make_static_binding_resolver(construction_scope scope, State &state,
+                                  Host &host) {
+  return static_binding_resolver<State, Host, InterfaceBinding>{state, host,
+                                                                scope};
 }
 
 template <typename T, typename LookupKey, typename StaticRegistryType,
           typename State, typename Host, typename Fn, typename Context>
-std::size_t append_static_collection_impl(State &state, T &results, Host &host,
+std::size_t append_static_collection_impl(construction_scope scope,
+                                          State &state, T &results, Host &host,
                                           Context &context, Fn &&fn) {
   static_assert(is_lookup_key_v<LookupKey>);
   using collection_type = collection_traits<T>;
@@ -667,7 +684,7 @@ std::size_t append_static_collection_impl(State &state, T &results, Host &host,
   if constexpr (count != 0) {
     dingo::for_each(interface_bindings{}, [&](auto binding_iterator) {
       using binding = typename decltype(binding_iterator)::type;
-      auto resolver = make_static_binding_resolver<binding>(state, host);
+      auto resolver = make_static_binding_resolver<binding>(scope, state, host);
       if constexpr (is_copy_constructible_v<resolve_type> &&
                     !std::is_reference_v<resolve_type>) {
         resolver.template consume<resolve_type>(context, [&](auto &&value) {
@@ -684,8 +701,8 @@ std::size_t append_static_collection_impl(State &state, T &results, Host &host,
 
 template <typename T, typename LookupKey, typename StaticRegistryType,
           typename State, typename Host, typename Fn, typename Context>
-T construct_static_collection_impl(State &state, Host &host, Context &context,
-                                   Fn &&fn) {
+T construct_static_collection_impl(construction_scope scope, State &state,
+                                   Host &host, Context &context, Fn &&fn) {
   static_assert(is_lookup_key_v<LookupKey>);
   using collection_type = collection_traits<T>;
   using resolve_type = typename collection_type::resolve_type;
@@ -701,13 +718,14 @@ T construct_static_collection_impl(State &state, Host &host, Context &context,
   T results;
   collection_type::reserve(results, type_list_size_v<interface_bindings>);
   append_static_collection_impl<T, LookupKey, StaticRegistryType>(
-      state, results, host, context, std::forward<Fn>(fn));
+      scope, state, results, host, context, std::forward<Fn>(fn));
   return results;
 }
 
 template <typename T, typename LookupKey, typename StaticRegistryType,
           typename State, typename Host, typename Context>
-T construct_static_collection_default_impl(State &state, Host &host,
+T construct_static_collection_default_impl(construction_scope scope,
+                                           State &state, Host &host,
                                            Context &context) {
   static_assert(is_lookup_key_v<LookupKey>);
   using collection_type = collection_traits<T>;
@@ -726,7 +744,7 @@ T construct_static_collection_default_impl(State &state, Host &host,
         collection_type::make_fixed_size(type_list_size_v<interface_bindings>);
     std::size_t index = 0;
     append_static_collection_impl<T, LookupKey, StaticRegistryType>(
-        state, results, host, context, [&](auto &, auto &&value) {
+        scope, state, results, host, context, [&](auto &, auto &&value) {
           collection_type::set(results, index,
                                std::forward<decltype(value)>(value));
           ++index;
@@ -734,7 +752,7 @@ T construct_static_collection_default_impl(State &state, Host &host,
     return results;
   } else {
     return construct_static_collection_impl<T, LookupKey, StaticRegistryType>(
-        state, host, context, [](auto &collection, auto &&value) {
+        scope, state, host, context, [](auto &collection, auto &&value) {
           collection_type::add(collection,
                                std::forward<decltype(value)>(value));
         });
@@ -750,28 +768,30 @@ public:
 
   template <typename T, typename BindingModel, typename Context,
             typename Source>
-  decltype(auto) resolve_conversion(Context &context, Source &&source) {
+  decltype(auto) resolve_conversion(construction_scope scope, Context &context,
+                                    Source &&source) {
     return detail::evaluate_static_conversion<T, BindingModel>(
-        derived(), context, std::forward<Source>(source));
+        scope, derived(), context, std::forward<Source>(source));
   }
 
   template <typename T, typename BindingModel, typename Host, typename Context>
-  decltype(auto) resolve_binding_type(Host &host, Context &context) {
-    return detail::evaluate_static_binding<T, BindingModel>(derived(), host,
-                                                            context);
+  decltype(auto) resolve_binding_type(construction_scope scope, Host &host,
+                                      Context &context) {
+    return detail::evaluate_static_binding<T, BindingModel>(scope, derived(),
+                                                            host, context);
   }
 
   template <typename InterfaceBinding, typename Host>
-  auto make_binding_resolver(Host &host) {
-    return detail::make_static_binding_resolver<InterfaceBinding>(derived(),
-                                                                  host);
+  auto make_binding_resolver(construction_scope scope, Host &host) {
+    return detail::make_static_binding_resolver<InterfaceBinding>(
+        scope, derived(), host);
   }
 
   template <typename Request, typename LocalRegistry, typename BindingModel,
             typename LookupKey, typename Host, typename Context,
             typename R = typename Request::result_type>
-  decltype(auto) resolve_local_binding(Host &host, Context &context,
-                                       LookupKey key) {
+  decltype(auto) resolve_local_binding(construction_scope scope, Host &host,
+                                       Context &context, LookupKey key) {
     if constexpr (collection_traits<R>::is_collection) {
       using collection_type = collection_traits<R>;
       R results;
@@ -783,9 +803,9 @@ public:
       const auto local_count =
           local_scope
               .template append_static_collection<R, LookupKey, LocalRegistry>(
-                  results, host, context, append);
-      const auto host_count =
-          host.template append_collection<R>(results, context, append, key);
+                  scope, results, host, context, append);
+      const auto host_count = host.template append_collection<R>(
+          scope, results, context, append, key);
       if (local_count + host_count == 0) {
         throw detail::make_collection_type_not_found_exception<
             R, typename collection_type::resolve_type>();
@@ -799,42 +819,44 @@ public:
         auto &local_scope =
             derived().template get_local_scope_for_model<BindingModel>();
         auto resolver =
-            local_scope.template make_binding_resolver<binding>(host);
+            local_scope.template make_binding_resolver<binding>(scope, host);
         return resolver.template resolve<R>(context);
       } else {
         return host.template resolve<typename Request::user_type,
                                      Request::removes_rvalue_references>(
-            context, std::move(key));
+            scope, context, std::move(key));
       }
     }
   }
 
   template <typename T, typename LookupKey, typename StaticRegistryType,
             typename Host, typename Fn, typename Context>
-  std::size_t append_static_collection(T &results, Host &host, Context &context,
-                                       Fn &&fn) {
+  std::size_t append_static_collection(construction_scope scope, T &results,
+                                       Host &host, Context &context, Fn &&fn) {
     static_assert(is_lookup_key_v<LookupKey>);
     return detail::append_static_collection_impl<T, LookupKey,
                                                  StaticRegistryType>(
-        derived(), results, host, context, std::forward<Fn>(fn));
+        scope, derived(), results, host, context, std::forward<Fn>(fn));
   }
 
   template <typename T, typename LookupKey, typename StaticRegistryType,
             typename Host, typename Fn, typename Context>
-  T construct_static_collection(Host &host, Context &context, Fn &&fn) {
+  T construct_static_collection(construction_scope scope, Host &host,
+                                Context &context, Fn &&fn) {
     static_assert(is_lookup_key_v<LookupKey>);
     return detail::construct_static_collection_impl<T, LookupKey,
                                                     StaticRegistryType>(
-        derived(), host, context, std::forward<Fn>(fn));
+        scope, derived(), host, context, std::forward<Fn>(fn));
   }
 
   template <typename T, typename LookupKey, typename StaticRegistryType,
             typename Host, typename Context>
-  T construct_static_collection(Host &host, Context &context) {
+  T construct_static_collection(construction_scope scope, Host &host,
+                                Context &context) {
     static_assert(is_lookup_key_v<LookupKey>);
     return detail::construct_static_collection_default_impl<T, LookupKey,
                                                             StaticRegistryType>(
-        derived(), host, context);
+        scope, derived(), host, context);
   }
 
 private:
@@ -996,26 +1018,28 @@ public:
 
   template <typename Request, typename LookupKey, typename Host,
             typename Context, typename R = typename Request::result_type>
-  R resolve_request(Context &context, Host &host) {
+  R resolve_request(construction_scope construction, Context &context,
+                    Host &host) {
     static_assert(is_lookup_key_v<LookupKey>);
     if constexpr (collection_traits<R>::is_collection) {
-      return construct_collection<R, LookupKey>(host, context);
+      return construct_collection<R, LookupKey>(construction, host, context);
     } else {
       using lookup_type = typename Request::lookup_type;
       using result_type = R;
       using selected = selection_t<lookup_type, LookupKey>;
-      return resolve_binding<lookup_type, result_type, selected>(context, host);
+      return resolve_binding<lookup_type, result_type, selected>(construction,
+                                                                 context, host);
     }
   }
 
   template <typename T, typename LookupKey, typename Host, typename Context,
             typename Fn>
-  std::size_t append_collection(T &results, Host &host, Context &context,
-                                Fn &&fn) {
+  std::size_t append_collection(construction_scope construction, T &results,
+                                Host &host, Context &context, Fn &&fn) {
     static_assert(is_lookup_key_v<LookupKey>);
     scope_type<Context> scope(state_);
     return scope.template append_static_collection<T, LookupKey, bindings_type>(
-        results, host, context, std::forward<Fn>(fn));
+        construction, results, host, context, std::forward<Fn>(fn));
   }
 
   template <typename T, typename LookupKey>
@@ -1025,30 +1049,34 @@ public:
   }
 
   template <typename T, typename LookupKey, typename Host, typename Context>
-  T construct_collection(Host &host, Context &context) {
+  T construct_collection(construction_scope construction, Host &host,
+                         Context &context) {
     static_assert(is_lookup_key_v<LookupKey>);
     scope_type<Context> scope(state_);
     return scope
         .template construct_static_collection<T, LookupKey, bindings_type>(
-            host, context);
+            construction, host, context);
   }
 
   template <typename T, typename LookupKey, typename Host, typename Context,
             typename Fn>
-  T construct_collection(Host &host, Context &context, Fn &&fn) {
+  T construct_collection(construction_scope construction, Host &host,
+                         Context &context, Fn &&fn) {
     static_assert(is_lookup_key_v<LookupKey>);
     scope_type<Context> scope(state_);
     return scope
         .template construct_static_collection<T, LookupKey, bindings_type>(
-            host, context, std::forward<Fn>(fn));
+            construction, host, context, std::forward<Fn>(fn));
   }
 
   template <typename Request, typename ResolveRequest, typename Selection,
             typename Context, typename Host>
-  decltype(auto) resolve_binding(Context &context, Host &host) {
+  decltype(auto) resolve_binding(construction_scope construction,
+                                 Context &context, Host &host) {
     using binding = typename Selection::binding_type;
     scope_type<Context> scope(state_);
-    auto resolver = scope.template make_binding_resolver<binding>(host);
+    auto resolver =
+        scope.template make_binding_resolver<binding>(construction, host);
     return resolver.template resolve<ResolveRequest>(context);
   }
 

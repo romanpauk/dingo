@@ -40,9 +40,10 @@ template <typename Type> struct storage_materialization_traits<shared, Type> {
   }
 
   template <typename Context, typename Storage, typename Container>
-  static auto materialize_source(Context &context, Storage &storage,
-                                 Container &container) {
-    return detail::make_resolved_source(storage.resolve(context, container));
+  static auto materialize_source(construction_scope scope, Context &context,
+                                 Storage &storage, Container &container) {
+    return detail::make_resolved_source(
+        storage.resolve(scope, context, container));
   }
 };
 
@@ -202,9 +203,10 @@ struct storage_instance_base : Factory {
 #pragma warning(disable : 4702)
 #endif
   template <typename Context, typename Container>
-  void construct(Context &context, Container &container) {
+  void construct(construction_scope scope, Context &context,
+                 Container &container) {
     assert(!initialized_);
-    Factory::template construct<Type *>(&instance_, context, container);
+    Factory::template construct<Type *>(&instance_, scope, context, container);
     initialized_ = true;
   }
 #ifdef _MSC_VER
@@ -272,11 +274,12 @@ public:
       : Factory(std::forward<Args>(args)...) {}
 
   template <typename Context, typename Container>
-  void construct(Context &context, Container &container) {
+  void construct(construction_scope scope, Context &context,
+                 Container &container) {
     assert(empty());
     new (&instance_)
         StoredType(type_conversion_traits<StoredType, Type>::convert(
-            Factory::template construct<Type>(context, container)));
+            Factory::template construct<Type>(scope, context, container)));
     initialized_ = true;
   }
 
@@ -321,9 +324,10 @@ public:
   ~storage_instance() { reset(); }
 
   template <typename Context, typename Container>
-  void construct(Context &context, Container &container) {
+  void construct(construction_scope scope, Context &context,
+                 Container &container) {
     assert(empty());
-    Factory::template construct<Type[N]>(&instance_, context, container);
+    Factory::template construct<Type[N]>(&instance_, scope, context, container);
     initialized_ = true;
   }
 
@@ -358,9 +362,10 @@ public:
   ~storage_instance() { reset(); }
 
   template <typename Context, typename Container>
-  void construct(Context &context, Container &container) {
+  void construct(construction_scope scope, Context &context,
+                 Container &container) {
     assert(empty());
-    instance_ = Factory::template construct<Type *>(context, container);
+    instance_ = Factory::template construct<Type *>(scope, context, container);
   }
 
   StoredType *get() const {
@@ -394,9 +399,10 @@ public:
   using tag_type = shared;
 
   template <typename Context, typename Container>
-  decltype(auto) resolve(Context &context, Container &container) {
+  decltype(auto) resolve(construction_scope scope, Context &context,
+                         Container &container) {
     if (instance_.empty())
-      instance_.construct(context, container);
+      instance_.construct(scope, context, container);
     return instance_.get();
   }
 

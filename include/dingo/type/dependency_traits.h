@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <dingo/core/construction_scope.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/type/normalized_type.h>
 
@@ -66,5 +67,14 @@ struct request_may_escape
 
 template <typename Request>
 inline constexpr bool request_may_escape_v = request_may_escape<Request>::value;
+
+namespace detail {
+template <typename Request>
+constexpr construction_scope dependency_scope(construction_scope scope) {
+  return scope.is_persistent() && request_may_escape_v<Request>
+             ? persistent_scope
+             : ephemeral_scope;
+}
+} // namespace detail
 
 } // namespace dingo

@@ -31,9 +31,10 @@ template <typename Type> struct storage_materialization_traits<external, Type> {
   }
 
   template <typename Context, typename Storage, typename Container>
-  static auto materialize_source(Context &context, Storage &storage,
-                                 Container &container) {
-    return detail::make_resolved_source(storage.resolve(context, container));
+  static auto materialize_source(construction_scope scope, Context &context,
+                                 Storage &storage, Container &container) {
+    return detail::make_resolved_source(
+        storage.resolve(scope, context, container));
   }
 };
 
@@ -273,7 +274,7 @@ public:
   storage(T &&instance) : instance_(std::forward<T>(instance)) {}
 
   template <typename Context, typename Container>
-  decltype(auto) resolve(Context &, Container &) {
+  decltype(auto) resolve(construction_scope, Context &, Container &) {
     return instance_.get();
   }
   constexpr bool is_resolved() const { return true; }

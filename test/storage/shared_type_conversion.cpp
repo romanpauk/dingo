@@ -57,7 +57,7 @@ struct destructor_order_array_factory {
   std::vector<int> *order;
 
   template <typename Type, typename Context, typename Container>
-  void construct(void *ptr, Context &, Container &) {
+  void construct(void *ptr, construction_scope, Context &, Container &) {
     auto *values = reinterpret_cast<Type *>(ptr);
     for (int i = 0; i != 3; ++i) {
       new (&(*values)[i]) destructor_order_value(i, *order);
@@ -121,7 +121,7 @@ TEST(type_conversion_test,
   converter_context container;
 
   storage_type storage(destructor_order_array_factory{&order});
-  storage.resolve(context, container);
+  storage.resolve(persistent_scope, context, container);
   storage.reset();
 
   ASSERT_EQ(order, (std::vector<int>{2, 1, 0}));
