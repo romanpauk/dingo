@@ -122,12 +122,7 @@ ResolveRequest resolve_from_binding_sources(Context &context,
     throw make_type_ambiguous_exception<ErrorRequest>(context);
   }
 
-  if (selection.found()) {
-    return sources.template resolve_selected<ResolveRequest>(context,
-                                                             selection);
-  }
-
-  return sources.template resolve_missing<ResolveRequest>(context);
+  return sources.template resolve<ResolveRequest>(context, selection);
 }
 
 template <typename PrimarySource, typename SecondarySource,
@@ -143,8 +138,7 @@ struct two_binding_sources {
   }
 
   template <typename Request, typename Context>
-  decltype(auto) resolve_selected(Context &context,
-                                  binding_source_selection selection) {
+  decltype(auto) resolve(Context &context, binding_source_selection selection) {
     if constexpr (PrimarySource::can_resolve) {
       if (selection.primary()) {
         return primary.template resolve<Request>(context);
@@ -157,11 +151,6 @@ struct two_binding_sources {
       }
     }
 
-    return missing.template resolve<Request>(context);
-  }
-
-  template <typename Request, typename Context>
-  decltype(auto) resolve_missing(Context &context) {
     return missing.template resolve<Request>(context);
   }
 };
@@ -183,12 +172,10 @@ struct selected_binding_sources {
   decltype(auto) select() { return selected.select(); }
 
   template <typename Request, typename Context, typename Selection>
-  decltype(auto) resolve_selected(Context &context, Selection selection) {
-    return selected.template resolve<Request>(context, selection);
-  }
-
-  template <typename Request, typename Context>
-  decltype(auto) resolve_missing(Context &context) {
+  decltype(auto) resolve(Context &context, Selection selection) {
+    if (selection.found()) {
+      return selected.template resolve<Request>(context, selection);
+    }
     return missing.template resolve<Request>(context);
   }
 };
@@ -203,12 +190,6 @@ make_selected_binding_sources(SelectedSource &selected,
 template <typename LookupRequest> struct missing_binding_source {
   template <typename ResolveRequest, typename Context>
   ResolveRequest resolve(Context &context) {
-    (void)context;
-    throw make_type_not_found_exception<LookupRequest>();
-  }
-
-  template <typename ResolveRequest, typename Context>
-  ResolveRequest resolve_missing(Context &context) {
     (void)context;
     throw make_type_not_found_exception<LookupRequest>();
   }

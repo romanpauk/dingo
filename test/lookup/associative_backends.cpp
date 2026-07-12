@@ -23,6 +23,7 @@ namespace dingo {
 
 inline int custom_lookup_backend_constructions = 0;
 inline int custom_lookup_backend_insertions = 0;
+inline int custom_lookup_backend_finds = 0;
 inline int operator_lookup_backend_insertions = 0;
 
 struct custom_lookup_backend {
@@ -48,8 +49,14 @@ struct custom_lookup_backend {
       ++custom_lookup_backend_constructions;
     }
 
-    iterator find(const Key &key) { return values_.find(key); }
-    const_iterator find(const Key &key) const { return values_.find(key); }
+    iterator find(const Key &key) {
+      ++custom_lookup_backend_finds;
+      return values_.find(key);
+    }
+    const_iterator find(const Key &key) const {
+      ++custom_lookup_backend_finds;
+      return values_.find(key);
+    }
     iterator end() { return values_.end(); }
     const_iterator end() const { return values_.end(); }
 
@@ -408,6 +415,43 @@ TEST(associative_backend_test, custom_backend_uses_stl_like_try_emplace) {
   ASSERT_GT(custom_lookup_backend_constructions, 0);
   ASSERT_GT(custom_lookup_backend_insertions, 0);
   ASSERT_EQ(container.template resolve<processor &>(7).id(), 1);
+}
+
+TEST(associative_backend_test, parent_fallback_searches_each_container_once) {
+  struct processor {
+    virtual ~processor() = default;
+  };
+  struct processor_impl : processor {};
+
+  struct traits : dynamic_container_traits {
+    using lookup_definition_type =
+        lookups<associative<int, processor, one, custom_lookup_backend>>;
+  };
+
+  {
+    container<traits> parent;
+    container<traits, std::allocator<char>, decltype(parent)> child(&parent);
+    parent.template register_type<scope<shared>, storage<processor_impl>,
+                                  interfaces<processor>>(key_value{7});
+
+    custom_lookup_backend_finds = 0;
+    (void)child.template resolve<processor &>(7);
+
+    ASSERT_EQ(custom_lookup_backend_finds, 2);
+  }
+
+  {
+    runtime_container<traits> parent;
+    runtime_container<traits, std::allocator<char>, decltype(parent)> child(
+        &parent);
+    parent.template register_type<scope<shared>, storage<processor_impl>,
+                                  interfaces<processor>>(key_value{7});
+
+    custom_lookup_backend_finds = 0;
+    (void)child.template resolve<processor &>(7);
+
+    ASSERT_EQ(custom_lookup_backend_finds, 2);
+  }
 }
 
 TEST(associative_backend_test, custom_backend_storage_uses_arbitrary_mapped) {
