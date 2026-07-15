@@ -188,6 +188,10 @@ namespace detail {
 template <typename Type, typename U>
 struct conversions<shared, Type, U> : type_storage_traits<shared, Type, U> {};
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4324)
+#endif
 template <typename Type, typename Factory>
 struct storage_instance_base : Factory {
   template <typename... Args>
@@ -219,6 +223,9 @@ protected:
   mutable dingo::aligned_storage_t<sizeof(Type), alignof(Type)> instance_;
   bool initialized_ = false;
 };
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 template <typename Type, typename Factory,
           bool IsTriviallyDestructible = std::is_trivially_destructible_v<Type>>

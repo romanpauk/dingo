@@ -4,6 +4,26 @@ The matrix is described as independent axes, then filtered into valid cases. The
 generator should not keep hand-written recipes as the primary model. Recipes are
 an output of axis selection.
 
+## Source Layout
+
+- `axes/` is the Python package containing one declarative catalog per matrix
+  dimension. `data.py` assembles and validates those catalogs before generation.
+- `schema.py`, `plugins.py`, and `generate.py` contain the typed model,
+  registration/policy helpers, and generator CLI respectively.
+- `common/` contains the assertion mechanism and other matrix-wide plumbing.
+- `containers/` contains container types and traits selected by the container
+  axis.
+- `fixtures/` contains passive values and dependency shapes used by generated
+  rows.
+- `policies/` contains generic operations parameterized by a generated row.
+- `scenarios/` contains complete behavioral and regression scenarios. Larger
+  families such as parent-container and runtime regressions have one header per
+  generated shard and share only their fixture definitions.
+
+Axis members declare their required C++ includes through `headers`. Scenario
+headers belong to the feature or feature case that executes them; they are not
+global support code.
+
 ## Axes
 
 ### Feature
@@ -18,6 +38,8 @@ an output of axis selection.
 - `resolve_keyed`: resolve one typed-key lookup binding.
 - `resolve_keyed_collection`: resolve all bindings for a key.
 - `resolve_indexed`: resolve one runtime-key lookup binding.
+- `static_indexed_regressions`: exercise fixed-key resolution, injection,
+  caching, collections, and parent selection in one curated static shard.
 - `construct`: construct an unregistered type from registered dependencies.
 - `invoke`: invoke a callable from registered dependencies.
 - `construct_collection`: construct a collection with default or custom
@@ -36,6 +58,14 @@ an output of axis selection.
   external dependency.
 - `custom_allocator`: use a caller-selected allocator for container bookkeeping.
 - `custom_rtti`: use a caller-selected RTTI provider for runtime lookup.
+- `explicit_dependencies`: verify explicit constructor dependency metadata in
+  representative runtime, static, and mixed containers.
+
+Generic runtime regression scenarios are intentionally limited to
+`runtime_container<>` and `container<>`. Indexed, allocator, and custom-RTTI
+variants run only scenarios whose behavior depends on those configurations.
+This keeps regression coverage representative without multiplying unrelated
+template instantiations.
 
 Negative compile-time checks stay in `test/lit`. The generated matrix covers
 valid behavior combinations.
@@ -48,7 +78,8 @@ to describe the behavior under test without hiding it in resolved-type checks.
 - `invoke`: inferred lambdas, explicit signatures, `std::function`, function
   pointers, static member functions, member function pointers, mutable and
   generic lambdas, ref-qualified and `noexcept` functors, move-only functors,
-  multi-argument callables, and `std::move_only_function` when available.
+  multi-argument callables, keyed value and collection dependencies, and
+  `std::move_only_function` when available.
 - `factory_override`: no-argument function factories, function factories with
   dependencies, explicit constructor factories, detected constructors,
   `DINGO_CONSTRUCTOR` typedef constructors, callable registration factories, and
@@ -192,6 +223,9 @@ Then it should keep only rows that satisfy all rules below.
 - Interface resolution requires an exposed interface.
 - Multiple-interface rows must verify at least two exposed interfaces from the
   same stored object.
+- Runtime multi-interface rows must also verify that interface `shared_ptr`
+  conversions share ownership. Static bindings currently cover reference
+  identity only because their conversion cache does not expose those handles.
 - Collection rows require more than one matching binding.
 - Keyed collection rows require more than one matching binding for the same key.
 - Keyed singular rows require exactly one binding for the requested key.
@@ -207,6 +241,12 @@ Then it should keep only rows that satisfy all rules below.
 - Local-binding collection rows must verify local and host collection merge.
 - Nested-container rows must verify child lookup, parent fallback, and child
   override.
+- Parent regression scenarios must verify recursion detection within each
+  runtime container family and across every family pairing.
+
+String-literal injection into a runtime string index remains a future feature.
+The enabled external fixed-string test covers explicit external-key adaptation,
+but the disabled literal-key test is not considered matrix coverage.
 
 ## Coverage Expectations
 
@@ -216,12 +256,14 @@ The generator should fail if:
 - an explicit feature case produces no rows
 - a registration mode produces no rows
 - a scope produces no rows
-- a stored type category produces no rows
+- a stored type configuration ID produces no rows
 - a resolved type category produces no rows
 - a container produces no rows
 - an applicable feature / registration mode / container combination produces no
   rows
 - a filter rule is declared but never exercised
+- a declared feature, feature-case, resolved-type, or lifetime policy is never
+  selected
 
 Not every axis combination should exist. Completeness means every axis member
 and filter rule is represented by at least one valid generated row, and each
@@ -242,3 +284,18 @@ example `invoke_member_function_pointer.cpp` and
 units tied to matrix meaning instead of arbitrary shard numbers, while limiting
 the amount of template-heavy container and generated test code compiled by one
 compiler process.
+
+Python selects, validates, names, and shards valid rows. Generic row behavior
+lives in typed C++ policies, while complete behavioral and regression cases live
+in scenario headers. Policy headers are split into core, resolution, collection,
+aggregate, lifetime, and special-purpose families; each generated feature shard
+includes only its selected policy and scenario headers.
+
+The Python generator has a pytest suite, also registered with CTest, that checks
+its row-count budget, axis and policy coverage, registration placement,
+rendering stability, and stale source cleanup. Run it with:
+
+```bash
+uv run --locked pytest -q test/matrix/generator_test.py
+ctest --test-dir build -R dingo_matrix_generator_test --output-on-failure
+```

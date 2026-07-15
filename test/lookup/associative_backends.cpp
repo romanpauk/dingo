@@ -429,28 +429,32 @@ TEST(associative_backend_test, parent_fallback_searches_each_container_once) {
   };
 
   {
-    container<traits> parent;
+    container<traits> grandparent;
+    container<traits, std::allocator<char>, decltype(grandparent)> parent(
+        &grandparent);
     container<traits, std::allocator<char>, decltype(parent)> child(&parent);
-    parent.template register_type<scope<shared>, storage<processor_impl>,
-                                  interfaces<processor>>(key_value{7});
+    grandparent.template register_type<scope<shared>, storage<processor_impl>,
+                                       interfaces<processor>>(key_value{7});
 
     custom_lookup_backend_finds = 0;
     (void)child.template resolve<processor &>(7);
 
-    ASSERT_EQ(custom_lookup_backend_finds, 2);
+    ASSERT_EQ(custom_lookup_backend_finds, 3);
   }
 
   {
-    runtime_container<traits> parent;
+    runtime_container<traits> grandparent;
+    runtime_container<traits, std::allocator<char>, decltype(grandparent)>
+        parent(&grandparent);
     runtime_container<traits, std::allocator<char>, decltype(parent)> child(
         &parent);
-    parent.template register_type<scope<shared>, storage<processor_impl>,
-                                  interfaces<processor>>(key_value{7});
+    grandparent.template register_type<scope<shared>, storage<processor_impl>,
+                                       interfaces<processor>>(key_value{7});
 
     custom_lookup_backend_finds = 0;
     (void)child.template resolve<processor &>(7);
 
-    ASSERT_EQ(custom_lookup_backend_finds, 2);
+    ASSERT_EQ(custom_lookup_backend_finds, 3);
   }
 }
 

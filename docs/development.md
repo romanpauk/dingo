@@ -92,6 +92,12 @@ features, registration modes, scopes, stored types, exposed types, resolved
 types, and container shapes, then filters invalid combinations before emitting
 GoogleTest sources.
 
+The hand-written C++ portion is organized by role: `common/` provides matrix
+plumbing, `containers/` and `fixtures/` define axis inputs, `policies/` contains
+generic row behavior, and `scenarios/` contains complete behavioral and
+regression cases. Axis definitions declare the headers needed by each generated
+shard so unrelated scenarios are not compiled together.
+
 ## Code Size Tests
 
 The lit suite also contains code-generation probes in

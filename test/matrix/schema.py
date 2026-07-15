@@ -6,9 +6,17 @@
 # SPDX-License-Identifier: MIT
 #
 
+"""Typed model for generated matrix test configuration."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
+
+
+class MixedRegistrationPlacement(Enum):
+    STATIC = "static"
+    RUNTIME = "runtime"
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,10 +24,11 @@ class Feature:
     name: str
     requires: frozenset[str]
     modes: frozenset[str]
-    checks: tuple[str, ...] = ()
+    policy: str | None = None
+    policy_header: str = "matrix/policies/policy_core.h"
     container_requires: frozenset[str] = frozenset()
     system_headers: tuple[str, ...] = ()
-    support_headers: tuple[str, ...] = ()
+    headers: tuple[str, ...] = ()
     implemented: bool = True
 
 
@@ -31,9 +40,9 @@ class FeatureCaseSpec:
     supported_exposed_types: frozenset[str] = frozenset()
     supported_resolved_types: frozenset[str] = frozenset()
     registrations: tuple[RegistrationSpec, ...] = ()
-    checks: tuple[str, ...] = ()
+    policy: str | None = None
     system_headers: tuple[str, ...] = ()
-    support_headers: tuple[str, ...] = ()
+    headers: tuple[str, ...] = ()
     implemented: bool = True
 
 
@@ -63,7 +72,7 @@ class StoredType:
     runtime_argument: str | None = None
     factory: str | None = None
     system_headers: tuple[str, ...] = ()
-    support_headers: tuple[str, ...] = ()
+    headers: tuple[str, ...] = ()
     implemented: bool = True
 
 
@@ -79,8 +88,8 @@ class RegistrationSpec:
     indexed_key: str | None = None
     runtime_setup: tuple[str, ...] = ()
     runtime_argument: str | None = None
-    mixed: str = "static"
-    static: bool = True
+    mixed_placement: MixedRegistrationPlacement = MixedRegistrationPlacement.STATIC
+    include_in_static: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,7 +103,7 @@ class ExposedType:
     mixed_runtime_prefix: tuple[str, ...] = ()
     mixed: bool = True
     system_headers: tuple[str, ...] = ()
-    support_headers: tuple[str, ...] = ()
+    headers: tuple[str, ...] = ()
     implemented: bool = True
 
 
@@ -105,9 +114,9 @@ class ResolvedType:
     provides: frozenset[str]
     requires: frozenset[str] = frozenset()
     supported_modes: frozenset[str] = frozenset({"runtime", "static", "mixed"})
-    checks: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    policies: tuple[tuple[str, str], ...] = ()
     system_headers: tuple[str, ...] = ()
-    support_headers: tuple[str, ...] = ()
+    headers: tuple[str, ...] = ()
     implemented: bool = True
 
 
@@ -118,5 +127,5 @@ class ContainerSpec:
     container_type: str
     provides: frozenset[str] = frozenset()
     system_headers: tuple[str, ...] = ()
-    support_headers: tuple[str, ...] = ()
+    headers: tuple[str, ...] = ()
     implemented: bool = True

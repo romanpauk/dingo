@@ -171,6 +171,7 @@ PROBE_LIMITS = {
         "gcc13": 0x540,
         "gcc14": 0x590,
         "gcc15": 0x590,
+        "gcc16": 0x590,
         "gcc_arm64": 0x590,
     },
     "probe_runtime_resolution_mixed_container_external_value_storage": {
@@ -187,6 +188,7 @@ PROBE_LIMITS = {
         "gcc13": 0x550,
         "gcc14": 0x5a0,
         "gcc15": 0x5a0,
+        "gcc16": 0x5a0,
         "gcc_arm64": 0x5a0,
     },
     "probe_runtime_resolution_mixed_container_external_reference_storage": {
@@ -351,6 +353,8 @@ def expected_max_for_environment() -> dict[str, int]:
         columns.append("gcc14")
     if compiler_major == "15" or "g++-15" in compiler_id:
         columns.append("gcc15")
+    if compiler_major == "16" or "g++-16" in compiler_id:
+        columns.append("gcc16")
     if is_gcc and is_arm64:
         columns.append("gcc_arm64")
 
