@@ -9,17 +9,20 @@
 from __future__ import annotations
 
 import argparse
-from collections import defaultdict
+from collections import Counter, defaultdict
+from collections.abc import Iterator
 from dataclasses import dataclass, replace
+from enum import StrEnum
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, Template
 
 from data import (
+    CATALOG,
     CONTAINERS,
     EXPOSED_TYPES,
+    FEATURES,
     FEATURE_CASES,
-    FILTER_RULES,
     REGISTRATION_MODES,
     RESOLVED_TYPES,
     SCOPES,
@@ -37,11 +40,29 @@ from schema import (
 )
 from plugins import (
     CaseLines,
-    FEATURE_CASE_PLUGINS,
-    REGISTRATION_PLUGIN,
+    LIFETIME_POLICIES,
     RegistrationPlan,
     bindings_type,
+    build_registration_plan,
+    select_case_lines,
 )
+
+
+class RejectionReason(StrEnum):
+    CONTAINER_MODE = "container_mode"
+    FEATURE_MODE = "feature_mode"
+    STORED_TYPE_SUPPORTS_MODE = "stored_type_supports_mode"
+    SCOPE_SUPPORTS_STORED_TYPE = "scope_supports_stored_type"
+    EXPOSURE_SUPPORTS_STORED_TYPE = "exposure_supports_stored_type"
+    RESOLVED_TYPE_SUPPORTS_EXPOSURE = "resolved_type_supports_exposure"
+    RESOLVED_TYPE_SUPPORTS_MODE = "resolved_type_supports_mode"
+    FEATURE_REQUIRES_TAGS = "feature_requires_tags"
+    RESOLVED_TYPE_REQUIRES_TAGS = "resolved_type_requires_tags"
+    CONTAINER_REQUIRES = "container_requires"
+    FEATURE_CASE_REQUIRES_TAGS = "feature_case_requires_tags"
+    FEATURE_CASE_SUPPORTS_EXPOSURE = "feature_case_supports_exposure"
+    FEATURE_CASE_SUPPORTS_RESOLUTION = "feature_case_supports_resolution"
+    FEATURE_HAS_CHECK = "feature_has_check"
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +81,7 @@ class CandidateRow:
 class MatrixRow(CandidateRow):
     plan: RegistrationPlan
     name: str
-    lines: CaseLines = CaseLines()
+    lines: CaseLines
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,12 +90,10 @@ class GeneratedCase:
     name: str
     container_type: str
     static_bindings: str | None
-    before_lines: tuple[str, ...]
     setup_lines: tuple[str, ...]
-    check_lines: tuple[str, ...]
-    after_lines: tuple[str, ...]
+    policy: str
     system_headers: tuple[str, ...]
-    support_headers: tuple[str, ...]
+    headers: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +110,7 @@ class AxisIndex:
     exposed_by_stored_kind: dict[str, tuple[ExposedType, ...]]
     resolved_by_mode_exposure: dict[tuple[str, str], tuple[ResolvedType, ...]]
     containers_by_mode: dict[str, tuple[ContainerSpec, ...]]
-    rejected: dict[str, int]
+    rejected: Counter[RejectionReason]
 
 
 def implemented(axis: tuple) -> tuple:
@@ -99,7 +118,7 @@ def implemented(axis: tuple) -> tuple:
 
 
 def index_axes() -> AxisIndex:
-    rejected: dict[str, int] = defaultdict(int)
+    rejected: Counter[RejectionReason] = Counter()
     modes = REGISTRATION_MODES
     scopes = implemented(SCOPES)
     stored_types = implemented(STORED_TYPES)
@@ -113,7 +132,7 @@ def index_axes() -> AxisIndex:
         explicit_feature_cases[feature_case.feature].append(feature_case)
 
     feature_cases_by_feature: dict[str, tuple[FeatureCaseSpec, ...]] = {}
-    for feature in implemented(tuple(plugin.feature for plugin in FEATURE_CASE_PLUGINS)):
+    for feature in implemented(FEATURES):
         feature_cases_by_feature[feature.name] = tuple(
             explicit_feature_cases.get(
                 feature.name,
@@ -131,7 +150,7 @@ def index_axes() -> AxisIndex:
         mode_containers: list[ContainerSpec] = []
         for container in containers:
             if mode.name not in container.modes:
-                rejected["container_mode"] += 1
+                rejected[RejectionReason.CONTAINER_MODE] += 1
                 continue
             mode_containers.append(container)
         containers_by_mode[mode.name] = tuple(mode_containers)
@@ -142,10 +161,10 @@ def index_axes() -> AxisIndex:
             mode_scope_stored: list[StoredType] = []
             for stored_type in stored_types:
                 if mode.name not in stored_type.supported_modes:
-                    rejected["stored_type_supports_mode"] += 1
+                    rejected[RejectionReason.STORED_TYPE_SUPPORTS_MODE] += 1
                     continue
                 if scope.name not in stored_type.supported_scopes:
-                    rejected["scope_supports_stored_type"] += 1
+                    rejected[RejectionReason.SCOPE_SUPPORTS_STORED_TYPE] += 1
                     continue
                 mode_scope_stored.append(stored_type)
             stored_by_mode_scope[(mode.name, scope.name)] = tuple(mode_scope_stored)
@@ -156,7 +175,7 @@ def index_axes() -> AxisIndex:
         matching_exposures: list[ExposedType] = []
         for exposed_type in exposed_types:
             if stored_kind not in exposed_type.supported_stored_kinds:
-                rejected["exposure_supports_stored_type"] += 1
+                rejected[RejectionReason.EXPOSURE_SUPPORTS_STORED_TYPE] += 1
                 continue
             matching_exposures.append(exposed_type)
         exposed_by_stored_kind[stored_kind] = tuple(matching_exposures)
@@ -167,10 +186,10 @@ def index_axes() -> AxisIndex:
             matching_resolved: list[ResolvedType] = []
             for resolved_type in resolved_types:
                 if exposed_type.name not in resolved_type.supported_exposed_types:
-                    rejected["resolved_type_supports_exposure"] += 1
+                    rejected[RejectionReason.RESOLVED_TYPE_SUPPORTS_EXPOSURE] += 1
                     continue
                 if mode.name not in resolved_type.supported_modes:
-                    rejected["resolved_type_supports_mode"] += 1
+                    rejected[RejectionReason.RESOLVED_TYPE_SUPPORTS_MODE] += 1
                     continue
                 matching_resolved.append(resolved_type)
             resolved_by_mode_exposure[(mode.name, exposed_type.name)] = tuple(
@@ -188,38 +207,19 @@ def index_axes() -> AxisIndex:
     )
 
 
-def generate_rows() -> tuple[MatrixRow, ...]:
-    rows: list[MatrixRow] = []
-    axes = index_axes()
-    rejected = axes.rejected
-    plan_cache: dict[
-        tuple[ScopeSpec, StoredType, ExposedType, FeatureCaseSpec], RegistrationPlan
-    ] = {}
+PlanCache = dict[
+    tuple[ScopeSpec, StoredType, ExposedType, FeatureCaseSpec], RegistrationPlan
+]
 
-    def build_plan(
-        scope: ScopeSpec,
-        stored_type: StoredType,
-        exposed_type: ExposedType,
-        feature_case: FeatureCaseSpec,
-    ) -> RegistrationPlan:
-        key = (scope, stored_type, exposed_type, feature_case)
-        plan = plan_cache.get(key)
-        if plan is None:
-            if feature_case.registrations:
-                exposed_type = replace(
-                    exposed_type,
-                    registrations=feature_case.registrations,
-                )
-            plan = REGISTRATION_PLUGIN.build(scope, stored_type, exposed_type)
-            plan_cache[key] = plan
-        return plan
 
-    for feature_plugin in FEATURE_CASE_PLUGINS:
-        feature = feature_plugin.feature
+def iter_candidates(
+    axes: AxisIndex, rejected: Counter[RejectionReason]
+) -> Iterator[CandidateRow]:
+    for feature in implemented(FEATURES):
         feature_cases = axes.feature_cases_by_feature[feature.name]
         for mode in REGISTRATION_MODES:
             if mode.name not in feature.modes:
-                rejected["feature_mode"] += 1
+                rejected[RejectionReason.FEATURE_MODE] += 1
                 continue
 
             mode_containers = axes.containers_by_mode[mode.name]
@@ -246,18 +246,22 @@ def generate_rows() -> tuple[MatrixRow, ...]:
                             for container in mode_containers:
                                 tags = base_tags | container.provides
                                 if not feature.requires <= tags:
-                                    rejected["feature_requires_tags"] += 1
+                                    rejected[RejectionReason.FEATURE_REQUIRES_TAGS] += 1
                                     continue
                                 if not resolved_type.requires <= tags:
-                                    rejected["resolved_type_requires_tags"] += 1
+                                    rejected[
+                                        RejectionReason.RESOLVED_TYPE_REQUIRES_TAGS
+                                    ] += 1
                                     continue
                                 if not feature.container_requires <= container.provides:
-                                    rejected["container_requires"] += 1
+                                    rejected[RejectionReason.CONTAINER_REQUIRES] += 1
                                     continue
 
                                 for feature_case in feature_cases:
                                     if not feature_case.requires <= tags:
-                                        rejected["feature_case_requires_tags"] += 1
+                                        rejected[
+                                            RejectionReason.FEATURE_CASE_REQUIRES_TAGS
+                                        ] += 1
                                         continue
                                     if (
                                         feature_case.supported_exposed_types
@@ -265,7 +269,7 @@ def generate_rows() -> tuple[MatrixRow, ...]:
                                         not in feature_case.supported_exposed_types
                                     ):
                                         rejected[
-                                            "feature_case_supports_exposure"
+                                            RejectionReason.FEATURE_CASE_SUPPORTS_EXPOSURE
                                         ] += 1
                                         continue
                                     if (
@@ -274,27 +278,11 @@ def generate_rows() -> tuple[MatrixRow, ...]:
                                         not in feature_case.supported_resolved_types
                                     ):
                                         rejected[
-                                            "feature_case_supports_resolution"
+                                            RejectionReason.FEATURE_CASE_SUPPORTS_RESOLUTION
                                         ] += 1
                                         continue
 
-                                    plan = build_plan(
-                                        scope,
-                                        stored_type,
-                                        exposed_type,
-                                        feature_case,
-                                    )
-                                    if mode.name == "static" and not plan.static_bindings:
-                                        rejected["static_registration_plan"] += 1
-                                        continue
-                                    if (
-                                        mode.name == "mixed"
-                                        and plan.mixed_static_bindings is None
-                                    ):
-                                        rejected["mixed_registration_plan"] += 1
-                                        continue
-
-                                    candidate = CandidateRow(
+                                    yield CandidateRow(
                                         feature=feature,
                                         feature_case=feature_case,
                                         mode=mode,
@@ -304,35 +292,87 @@ def generate_rows() -> tuple[MatrixRow, ...]:
                                         resolved_type=resolved_type,
                                         container=container,
                                     )
-                                    lines = feature_plugin.emit(candidate)
-                                    if lines is None:
-                                        rejected["feature_has_check"] += 1
-                                        continue
 
-                                    rows.append(
-                                        MatrixRow(
-                                            feature=feature,
-                                            feature_case=feature_case,
-                                            mode=mode,
-                                            scope=scope,
-                                            stored_type=stored_type,
-                                            exposed_type=exposed_type,
-                                            resolved_type=resolved_type,
-                                            container=container,
-                                            plan=plan,
-                                            name=case_name(candidate),
-                                            lines=lines,
-                                        )
-                                    )
+
+def plan_for_candidate(candidate: CandidateRow, cache: PlanCache) -> RegistrationPlan:
+    key = (
+        candidate.scope,
+        candidate.stored_type,
+        candidate.exposed_type,
+        candidate.feature_case,
+    )
+    plan = cache.get(key)
+    if plan is not None:
+        return plan
+
+    exposed_type = candidate.exposed_type
+    if candidate.feature_case.registrations:
+        exposed_type = replace(
+            exposed_type,
+            registrations=candidate.feature_case.registrations,
+        )
+    plan = build_registration_plan(
+        candidate.scope,
+        candidate.stored_type,
+        exposed_type,
+    )
+    cache[key] = plan
+    return plan
+
+
+def materialize_row(
+    candidate: CandidateRow,
+    cache: PlanCache,
+    rejected: Counter[RejectionReason],
+) -> MatrixRow | None:
+    plan = plan_for_candidate(candidate, cache)
+    if candidate.mode.name == "static" and not plan.static_bindings:
+        raise RuntimeError(f"static row {case_name(candidate)} has no bindings")
+    if candidate.mode.name == "mixed" and plan.mixed_static_bindings is None:
+        raise RuntimeError(f"mixed row {case_name(candidate)} has no registration plan")
+
+    lines = select_case_lines(candidate)
+    if lines is None:
+        rejected[RejectionReason.FEATURE_HAS_CHECK] += 1
+        return None
+
+    return MatrixRow(
+        feature=candidate.feature,
+        feature_case=candidate.feature_case,
+        mode=candidate.mode,
+        scope=candidate.scope,
+        stored_type=candidate.stored_type,
+        exposed_type=candidate.exposed_type,
+        resolved_type=candidate.resolved_type,
+        container=candidate.container,
+        plan=plan,
+        name=case_name(candidate),
+        lines=lines,
+    )
+
+
+def generate_rows() -> tuple[MatrixRow, ...]:
+    axes = index_axes()
+    rejected = axes.rejected
+    plan_cache: PlanCache = {}
+    rows = tuple(
+        row
+        for candidate in iter_candidates(axes, rejected)
+        if (row := materialize_row(candidate, plan_cache, rejected)) is not None
+    )
 
     assert_coverage(rows, rejected)
-    return tuple(rows)
+    return rows
 
 
 def assert_axis_used(
-    rows: tuple[MatrixRow, ...], axis: str, expected: set[str]
+    rows: tuple[MatrixRow, ...],
+    axis: str,
+    expected: set[str],
+    *,
+    identity: str = "name",
 ) -> None:
-    used = {getattr(row, axis).name for row in rows}
+    used = {getattr(getattr(row, axis), identity) for row in rows}
     missing = sorted(expected - used)
     if missing:
         raise RuntimeError(f"matrix axis {axis} did not generate rows for: {missing}")
@@ -347,8 +387,7 @@ def assert_feature_mode_container_coverage(rows: tuple[MatrixRow, ...]) -> None:
     )
     missing: list[str] = []
 
-    for feature_plugin in FEATURE_CASE_PLUGINS:
-        feature = feature_plugin.feature
+    for feature in implemented(FEATURES):
         required_container_tags = feature.container_requires | (
             feature.requires & container_tags
         )
@@ -371,13 +410,15 @@ def assert_feature_mode_container_coverage(rows: tuple[MatrixRow, ...]) -> None:
         )
 
 
-def assert_coverage(rows: list[MatrixRow], rejected: dict[str, int]) -> None:
+def assert_coverage(
+    rows: tuple[MatrixRow, ...], rejected: Counter[RejectionReason]
+) -> None:
     if not rows:
         raise RuntimeError("matrix did not generate any rows")
 
     row_tuple = tuple(rows)
     assert_axis_used(
-        row_tuple, "feature", {plugin.feature.name for plugin in FEATURE_CASE_PLUGINS}
+        row_tuple, "feature", {feature.name for feature in implemented(FEATURES)}
     )
     used_feature_cases = {
         (row.feature_case.feature, row.feature_case.name)
@@ -406,7 +447,8 @@ def assert_coverage(rows: list[MatrixRow], rejected: dict[str, int]) -> None:
     assert_axis_used(
         row_tuple,
         "stored_type",
-        {stored_type.name for stored_type in implemented(STORED_TYPES)},
+        {stored_type.id for stored_type in implemented(STORED_TYPES)},
+        identity="id",
     )
     assert_axis_used(
         row_tuple,
@@ -425,7 +467,42 @@ def assert_coverage(rows: list[MatrixRow], rejected: dict[str, int]) -> None:
     )
     assert_feature_mode_container_coverage(row_tuple)
 
-    missing_filters = sorted(rule for rule in FILTER_RULES if rejected[rule] == 0)
+    untyped_rows = [row.name for row in row_tuple if not row.lines.policy]
+    if untyped_rows:
+        raise RuntimeError(
+            "matrix rows must use typed C++ policies: " + ", ".join(untyped_rows)
+        )
+
+    declared_policy_sources = {
+        *CATALOG.policy_sources,
+        *(
+            ("lifetime", scope, stored_type, exposed_type, resolved_type)
+            for scope, stored_type, exposed_type, resolved_type in LIFETIME_POLICIES
+        ),
+    }
+    used_policy_sources = {row.lines.policy_source for row in row_tuple}
+    unused_policy_sources = sorted(declared_policy_sources - used_policy_sources)
+    if unused_policy_sources:
+        raise RuntimeError(
+            "matrix policies did not generate rows: "
+            + ", ".join(" / ".join(source) for source in unused_policy_sources)
+        )
+
+    assert_filter_coverage(rejected)
+
+
+def assert_filter_coverage(rejected: Counter[RejectionReason]) -> None:
+    unknown_filters = sorted(
+        str(reason)
+        for reason in rejected
+        if not isinstance(reason, RejectionReason)
+    )
+    if unknown_filters:
+        raise RuntimeError(f"matrix used undeclared filters: {unknown_filters}")
+
+    missing_filters = sorted(
+        reason.value for reason in RejectionReason if not rejected[reason]
+    )
     if missing_filters:
         raise RuntimeError(f"matrix filters were not exercised: {missing_filters}")
 
@@ -464,10 +541,8 @@ def make_case(row: MatrixRow) -> GeneratedCase:
         name=row.name,
         container_type=row.container.container_type,
         static_bindings=static_bindings,
-        before_lines=row.lines.before,
         setup_lines=setup_lines,
-        check_lines=row.lines.check,
-        after_lines=row.lines.after,
+        policy=row.lines.policy,
         system_headers=tuple(
             sorted(
                 {
@@ -480,15 +555,16 @@ def make_case(row: MatrixRow) -> GeneratedCase:
                 }
             )
         ),
-        support_headers=tuple(
+        headers=tuple(
             sorted(
                 {
-                    *row.feature.support_headers,
-                    *row.feature_case.support_headers,
-                    *row.stored_type.support_headers,
-                    *row.exposed_type.support_headers,
-                    *row.resolved_type.support_headers,
-                    *row.container.support_headers,
+                    *row.feature.headers,
+                    *row.feature_case.headers,
+                    *row.stored_type.headers,
+                    *row.exposed_type.headers,
+                    *row.resolved_type.headers,
+                    *row.container.headers,
+                    row.feature.policy_header,
                 }
             )
         ),
@@ -513,8 +589,8 @@ def render_source(
         system_headers=tuple(
             sorted({header for case in cases for header in case.system_headers})
         ),
-        support_headers=tuple(
-            sorted({header for case in cases for header in case.support_headers})
+        headers=tuple(
+            sorted({header for case in cases for header in case.headers})
         ),
     )
     write_text_if_changed(source, rendered)
