@@ -8,26 +8,28 @@
 #include "type_registration_common.h"
 
 TEST(type_registration_test,
-     runtime_local_bindings_use_separate_resolution_container) {
+     runtime_local_bindings_declare_the_registration_container) {
+  using root_container = dingo::container<>;
   using empty_local_registration =
       type_registration<scope<shared>, storage<runtime_binding_local_service>,
                         dingo::bindings<>>;
   using empty_local_model = detail::binding_model<empty_local_registration>;
   static_assert(std::is_void_v<typename empty_local_model::bindings_type>);
-  using empty_resolution_container =
-      detail::runtime_binding_resolution_container_t<
-          dingo::container<>, dingo::container<>,
-          typename empty_local_model::bindings_type>;
+  using empty_proxy =
+      decltype(std::declval<root_container &>()
+                   .template register_type<
+                       scope<shared>, storage<runtime_binding_local_service>,
+                       dingo::bindings<>>());
+  using empty_container = typename empty_proxy::container_type;
   using empty_runtime_state = detail::runtime_binding_state_t<
-      typename dingo::container<>::registry_type, dingo::container<>,
+      typename root_container::registry_type, empty_container,
       typename empty_local_model::storage_type,
       typename empty_local_model::bindings_type>;
-  static_assert(std::is_same_v<empty_resolution_container, dingo::container<>>);
   static_assert(std::is_same_v<typename empty_runtime_state::container_type,
-                               dingo::container<>>);
+                               empty_container>);
   static_assert(
       std::is_same_v<typename empty_runtime_state::resolution_container_type,
-                     dingo::container<>>);
+                     empty_container>);
 
   using non_empty_local_registration = type_registration<
       scope<shared>, storage<runtime_binding_local_service>,
@@ -37,26 +39,29 @@ TEST(type_registration_test,
   using non_empty_local_model =
       detail::binding_model<non_empty_local_registration>;
   static_assert(!std::is_void_v<typename non_empty_local_model::bindings_type>);
-  using non_empty_resolution_container =
-      detail::runtime_binding_resolution_container_t<
-          typename dingo::container<>::registry_type::parent_container_type,
-          dingo::container<>, typename non_empty_local_model::bindings_type>;
-  using non_empty_local_binding =
-      dingo::bind<scope<shared>, storage<runtime_binding_local_dependency>,
-                  factory<function<make_runtime_binding_local_dependency>>>;
+  using non_empty_proxy =
+      decltype(std::declval<root_container &>()
+                   .template register_type<
+                       scope<shared>, storage<runtime_binding_local_service>,
+                       dingo::bindings<dingo::bind<
+                           scope<shared>,
+                           storage<runtime_binding_local_dependency>,
+                           factory<function<
+                               make_runtime_binding_local_dependency>>>>>());
+  using non_empty_container = typename non_empty_proxy::container_type;
   using non_empty_runtime_state = detail::runtime_binding_state_t<
-      typename dingo::container<>::registry_type, dingo::container<>,
+      typename root_container::registry_type, non_empty_container,
       typename non_empty_local_model::storage_type,
       typename non_empty_local_model::bindings_type>;
+  static_assert(!std::is_same_v<non_empty_container, empty_container>);
   static_assert(
-      !std::is_same_v<non_empty_resolution_container, dingo::container<>>);
+      std::is_same_v<typename non_empty_container::static_bindings_type,
+                     typename non_empty_local_model::bindings_type>);
   static_assert(std::is_same_v<typename non_empty_runtime_state::container_type,
-                               dingo::container<>>);
+                               non_empty_container>);
   static_assert(std::is_same_v<
                 typename non_empty_runtime_state::resolution_container_type,
-                non_empty_resolution_container>);
-  static_assert(sizeof(non_empty_resolution_container) <
-                sizeof(detail::binding_scope<non_empty_local_binding>));
+                non_empty_container>);
 
   dingo::container<> container;
   container.register_type<

@@ -83,11 +83,11 @@ keep the child graph local first: a child static or runtime binding wins for
 singular requests, and a missing child dependency can be resolved from the
 parent graph.
 
-Local `bindings<...>` on a registration are different: they describe the private
-dependencies used while building that registered type. For a single dependency,
-the local binding is checked before the host container. For a dependency
-collection, local matches and host matches are merged. If the local binding set
-does not provide a dependency, resolution falls back to the host container.
+Local `bindings<...>` on a registration declare the static part of that
+registration's child container. Runtime bindings added through the returned
+proxy live in the same child. Singular resolution checks that child before the
+root container, while collection resolution merges the child's static and
+runtime matches with root matches.
 
 ## Direct Construction
 

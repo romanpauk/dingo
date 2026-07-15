@@ -7,6 +7,10 @@
 
 #include "type_registration_common.h"
 
+namespace {
+bool runtime_proxy_service_should_throw = false;
+}
+
 TEST(type_registration_test,
      runtime_scoped_source_allocation_is_destroyed_when_resolution_throws) {
   runtime_scoped_source_dependency::destructions = 0;
@@ -645,4 +649,206 @@ TEST(type_registration_test,
   EXPECT_EQ(service.value, 13);
   EXPECT_TRUE(service.dependency_was_live);
   EXPECT_EQ(runtime_unique_local_dependency::live_count, 0);
+}
+
+TEST(type_registration_test,
+     registration_containers_isolate_bindings_in_shared_runtime_domain) {
+  dingo::container<runtime_domain_traits> container;
+  auto first =
+      container
+          .register_type<scope<shared>, storage<runtime_domain_first_service>,
+                         dependencies<runtime_domain_dependency &>>();
+  auto second = container.register_type<
+      scope<shared>, storage<runtime_domain_second_service>,
+      dependencies<std::vector<runtime_domain_dependency *>>>();
+
+  first->register_type<scope<shared>, storage<runtime_domain_dependency>>(
+      callable([] { return runtime_domain_dependency{11}; }));
+  second->register_type<scope<shared>, storage<runtime_domain_dependency>>(
+      callable([] { return runtime_domain_dependency{22}; }));
+
+  EXPECT_EQ(container.resolve<runtime_domain_first_service &>().value, 11);
+  auto &second_service = container.resolve<runtime_domain_second_service &>();
+  EXPECT_EQ(second_service.value, 22);
+  EXPECT_EQ(second_service.count, 1);
+}
+
+TEST(type_registration_test,
+     registration_static_bindings_and_proxy_registrations_compose) {
+  dingo::container<> container;
+  container
+      .register_type<scope<shared>, storage<runtime_composed_root_dependency>>(
+          callable([] { return runtime_composed_root_dependency{11}; }));
+  auto child = container.register_type<
+      scope<shared>, storage<runtime_composed_service>,
+      dependencies<runtime_composed_static_dependency &,
+                   runtime_composed_child_dependency &,
+                   runtime_composed_root_dependency &>,
+      dingo::bindings<dingo::bind<
+          scope<shared>, storage<runtime_composed_static_dependency>>>>();
+
+  child->register_type<scope<shared>,
+                       storage<runtime_composed_child_dependency>>(
+      callable([] { return runtime_composed_child_dependency{13}; }));
+
+  auto &service = container.resolve<runtime_composed_service &>();
+  EXPECT_EQ(service.static_result, 7);
+  EXPECT_EQ(service.child_result, 13);
+  EXPECT_EQ(service.root_result, 11);
+}
+
+TEST(type_registration_test,
+     proxy_binding_dependencies_resolve_through_registration_container) {
+  struct static_dependency {
+    static_dependency() : value(7) {}
+
+    int value;
+  };
+  struct runtime_dependency {
+    runtime_dependency() : value(11) {}
+
+    int value;
+  };
+  struct nested_runtime_dependency {
+    nested_runtime_dependency() : value(13) {}
+
+    int value;
+  };
+  struct proxy_service {
+    proxy_service(static_dependency &static_value,
+                  runtime_dependency &runtime_value,
+                  nested_runtime_dependency &nested_runtime_value)
+        : value(static_value.value + runtime_value.value +
+                nested_runtime_value.value) {
+      if (runtime_proxy_service_should_throw) {
+        throw std::runtime_error("resolution failed");
+      }
+    }
+
+    int value;
+  };
+  struct root_service {
+    explicit root_service(proxy_service &dependency)
+        : value(dependency.value) {}
+
+    int value;
+  };
+
+  dingo::container<> container;
+  runtime_proxy_service_should_throw = true;
+  auto child = container.register_type<
+      scope<shared>, storage<root_service>, dependencies<proxy_service &>,
+      dingo::bindings<
+          dingo::bind<scope<shared>, storage<static_dependency>>>>();
+  child->register_type<scope<shared>, storage<runtime_dependency>>();
+  auto nested = child->register_type<
+      scope<shared>, storage<proxy_service>,
+      dependencies<static_dependency &, runtime_dependency &,
+                   nested_runtime_dependency &>>();
+  nested->register_type<scope<shared>, storage<nested_runtime_dependency>>();
+
+  auto *child_container = std::addressof(child.get());
+  auto *nested_container = std::addressof(nested.get());
+  EXPECT_THROW((container.resolve<root_service &>()), std::runtime_error);
+  runtime_proxy_service_should_throw = false;
+
+  EXPECT_EQ(std::addressof(child.get()), child_container);
+  EXPECT_EQ(std::addressof(nested.get()), nested_container);
+  EXPECT_EQ(container.resolve<root_service &>().value, 31);
+}
+
+TEST(type_registration_test,
+     registration_static_runtime_and_root_collections_compose) {
+  dingo::container<> container;
+  container.register_type<scope<shared>,
+                          storage<runtime_composed_collection_dependency>>(
+      callable([] { return runtime_composed_collection_dependency{11}; }));
+  auto child = container.register_type<
+      scope<shared>, storage<runtime_composed_collection_service>,
+      dependencies<std::vector<runtime_composed_collection_dependency *>>,
+      dingo::bindings<dingo::bind<
+          scope<shared>, storage<runtime_composed_collection_dependency>,
+          factory<function<
+              make_runtime_composed_static_collection_dependency>>>>>();
+
+  child->register_type<scope<shared>,
+                       storage<runtime_composed_collection_dependency>>(
+      callable([] { return runtime_composed_collection_dependency{33}; }));
+
+  auto &service = container.resolve<runtime_composed_collection_service &>();
+  EXPECT_EQ(service.values, (std::vector<int>{11, 33, 22}));
+}
+
+TEST(type_registration_test,
+     shared_runtime_domain_rolls_back_nested_registration) {
+  runtime_domain_retry_factory::should_throw = true;
+
+  dingo::container<> container;
+  container.register_type<scope<shared>, storage<runtime_domain_retry_service>>(
+      runtime_domain_retry_factory{});
+
+  EXPECT_THROW((container.resolve<runtime_domain_retry_service &>()),
+               std::runtime_error);
+
+  runtime_domain_retry_factory::should_throw = false;
+  EXPECT_NO_THROW((container.resolve<runtime_domain_retry_service &>()));
+}
+
+TEST(type_registration_test,
+     registration_container_scopes_preserve_array_lookup_backend) {
+  dingo::container<runtime_domain_array_traits> container;
+  auto first = container.register_type<
+      scope<shared>, storage<runtime_domain_array_service>,
+      dependencies<
+          dependency<runtime_domain_dependency &, key_type<std::size_t, 0>>>,
+      dingo::bindings<dingo::bind<
+          scope<shared>, storage<runtime_composed_static_dependency>>>>();
+  auto second = container.register_type<
+      scope<shared>, storage<runtime_domain_second_array_service>,
+      dependencies<
+          dependency<runtime_domain_dependency &, key_type<std::size_t, 0>>>>();
+
+  first->register_type<scope<shared>, storage<runtime_domain_dependency>>(
+      callable([] { return runtime_domain_dependency{11}; }),
+      dingo::key_value{std::size_t(0)});
+  second->register_type<scope<shared>, storage<runtime_domain_dependency>>(
+      callable([] { return runtime_domain_dependency{22}; }),
+      dingo::key_value{std::size_t(0)});
+
+  EXPECT_EQ(container.resolve<runtime_domain_array_service &>().value.value,
+            11);
+  EXPECT_EQ(
+      container.resolve<runtime_domain_second_array_service &>().value.value,
+      22);
+}
+
+TEST(type_registration_test,
+     registration_container_collections_use_local_entries_or_parent_fallback) {
+  dingo::container<runtime_domain_collection_traits> container;
+  container.register_type<scope<shared>,
+                          storage<runtime_domain_associative_dependency>>(
+      callable([] { return runtime_domain_associative_dependency{11}; }),
+      dingo::key_value{std::size_t(0)});
+  container
+      .register_type<scope<shared>, storage<runtime_domain_typed_dependency>,
+                     key_type<runtime_domain_typed_key>>(
+          callable([] { return runtime_domain_typed_dependency{33}; }));
+  auto child = container.register_type<
+      scope<shared>, storage<runtime_domain_collection_service>,
+      dependencies<
+          dependency<std::vector<runtime_domain_associative_dependency *>,
+                     key_type<std::size_t, 0>>,
+          dependency<std::vector<runtime_domain_typed_dependency *>,
+                     key_type<runtime_domain_typed_key>>>>();
+
+  child->register_type<scope<shared>,
+                       storage<runtime_domain_associative_dependency>>(
+      callable([] { return runtime_domain_associative_dependency{22}; }),
+      dingo::key_value{std::size_t(0)});
+
+  auto &service = container.resolve<runtime_domain_collection_service &>();
+  ASSERT_EQ(service.associative_dependencies.size(), 1);
+  EXPECT_EQ(service.associative_dependencies.front()->value, 22);
+  ASSERT_EQ(service.typed_dependencies.size(), 1);
+  EXPECT_EQ(service.typed_dependencies.front()->value, 33);
 }

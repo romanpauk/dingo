@@ -130,8 +130,10 @@ arena storage.
 Recursive registration and resolution share the enclosing transaction. A nested
 operation may finish successfully, but its changes remain provisional until the
 outermost operation commits. Consequently, a later failure in the same operation
-also rolls back those nested changes. Operations on separate containers use
-separate transactions.
+also rolls back those nested changes. The registration-created child containers
+used for constructor injection share their root container's runtime domain and
+transaction. Independently constructed public containers, including explicit
+parent/child container objects, keep separate runtime domains and transactions.
 
 The atomicity boundary covers container-managed state only. Side effects that
 user constructors, factories, callbacks, or destructors make outside the
@@ -144,8 +146,15 @@ The factory implementation in
 owns:
 
 - a storage object
-- a child container for constructor injection
+- a lightweight child-container view for constructor injection
 - scope-specific materialization and cached-conversion state
+
+The root container owns the runtime arena and a dense table of lookup states for
+those child views. A child stores only its root pointer and scope ID. Resolution
+uses the ID to select the child's state in constant time, then uses the original
+lookup backend and logical key. A child's lookup state is allocated only when it
+first registers a local binding, avoiding a complete runtime arena and lookup
+set in every registration-created container.
 
 When the factory receives one of those calls, it selects the appropriate list of
 possible conversion shapes from `Storage::conversions` and tries to match the
@@ -159,22 +168,21 @@ The static path uses the same binding model and conversion rules, but it selects
 from a validated compile-time binding source instead of mutable runtime binding
 state.
 
-## Local `bindings<...>` Overlays
+## Registration Child Bindings
 
-`register_type<...>()` can also carry local `bindings<...>` used while
-constructing that registered binding.
+`register_type<...>()` can carry local `bindings<...>` that configure the static
+part of its registration-created child container. The returned proxy adds
+runtime bindings to that same child.
 
-Those local bindings are resolved before falling back to the host container, but
-they do get a private singular override rule:
+Dependencies are selected with the following rules:
 
 - local-only singular match: selected
 - local and host both provide the same singular binding: local wins
 - host-only singular match: selected
 - collection request: merge local and host results
 
-That keeps collection behavior aligned with `container<bindings<...>>`
-resolution while still letting local overlays replace host singular
-dependencies.
+Collections combine static and runtime entries from the child with entries from
+the root container.
 
 ## Parent Containers And Auto Construction
 

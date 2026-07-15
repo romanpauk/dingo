@@ -33,6 +33,10 @@ class runtime_container
 
   template <typename> friend class runtime_context;
   template <typename, typename> friend class detail::binding_resolution;
+  template <typename, typename, typename>
+  friend class detail::container_with_static_bindings;
+  template <typename, typename, typename, typename, bool>
+  friend class runtime_registry;
 
 public:
   using container_traits_type = ContainerTraits;
@@ -58,14 +62,15 @@ public:
           type_list<typename container_traits_type::tag_type, Tag>>,
       Allocator, container_type>;
 
-  runtime_container() : runtime_registry_(this) {}
+  runtime_container() : runtime_registry_(detail::runtime_data_owner, this) {}
 
   explicit runtime_container(const allocator_type &alloc)
-      : runtime_registry_(this, alloc) {}
+      : runtime_registry_(detail::runtime_data_owner, this, alloc) {}
 
   runtime_container(parent_container_type *parent,
                     const allocator_type &alloc = allocator_type())
-      : runtime_registry_(this, alloc), parent_(parent) {}
+      : runtime_registry_(detail::runtime_data_owner, this, alloc),
+        parent_(parent) {}
 
 private:
   template <typename Request, typename Origin, typename LookupKey,

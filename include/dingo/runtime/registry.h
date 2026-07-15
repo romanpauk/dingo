@@ -28,7 +28,6 @@
 #include <dingo/runtime/context.h>
 #include <dingo/runtime/lookup_index.h>
 #include <dingo/runtime/transaction.h>
-#include <dingo/static/local_resolution.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/dependency_traits.h>
 #include <dingo/type/normalized_type.h>
@@ -38,6 +37,7 @@
 #include <cassert>
 #include <cstddef>
 #include <functional>
+#include <limits>
 #include <map>
 #include <memory>
 #include <tuple>
@@ -50,8 +50,152 @@
 namespace dingo {
 namespace detail {
 
-template <typename StaticRegistry, typename ParentContainer>
+template <typename StaticRegistry, typename ParentContainer,
+          typename RuntimeConfig>
 class container_with_static_bindings;
+
+struct runtime_data_owner_t {};
+inline constexpr runtime_data_owner_t runtime_data_owner{};
+
+template <typename RootTraits, typename Tag>
+struct registration_container_traits {
+private:
+  using rebound_traits = typename RootTraits::template rebind_t<Tag>;
+  static constexpr bool rebinds_tag =
+      !std::is_same_v<typename rebound_traits::tag_type,
+                      typename RootTraits::tag_type>;
+
+public:
+  template <typename ReboundTag>
+  using rebind_t =
+      std::conditional_t<rebinds_tag,
+                         registration_container_traits<RootTraits, ReboundTag>,
+                         registration_container_traits<RootTraits, Tag>>;
+
+  using tag_type =
+      std::conditional_t<rebinds_tag, typename rebound_traits::tag_type,
+                         typename RootTraits::tag_type>;
+  using rtti_type = typename RootTraits::rtti_type;
+  using allocator_type = typename RootTraits::allocator_type;
+  using lookup_definition_type = container_lookup_definition_type_t<RootTraits>;
+};
+
+template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
+          typename ResolveRoot, bool OwnsRuntimeData,
+          bool MergeParentCollections = false>
+struct static_container_runtime_config {
+  using container_traits_type = ContainerTraits;
+  using allocator_type = Allocator;
+  using parent_registry_type = ParentRegistry;
+  using resolve_root_type = ResolveRoot;
+
+  static constexpr bool owns_runtime_data = OwnsRuntimeData;
+  static constexpr bool merge_parent_collections = MergeParentCollections;
+};
+
+template <typename BindingInterface> struct runtime_lookup_binding_view {
+  BindingInterface *binding = nullptr;
+};
+
+template <typename BindingInterface> class runtime_lookup_value {
+public:
+  using binding_view_type = runtime_lookup_binding_view<BindingInterface>;
+
+  explicit runtime_lookup_value(binding_view_type view) : view_(view) {}
+
+  runtime_lookup_value(runtime_lookup_value &&) noexcept = default;
+  runtime_lookup_value &operator=(runtime_lookup_value &&) noexcept = default;
+  runtime_lookup_value(const runtime_lookup_value &) = delete;
+  runtime_lookup_value &operator=(const runtime_lookup_value &) = delete;
+
+  BindingInterface &binding() { return *view_.binding; }
+
+private:
+  binding_view_type view_;
+};
+
+template <typename LookupEntries, typename BindingInterface, typename Allocator>
+struct runtime_bindings_state {
+  using value_type = runtime_lookup_value<BindingInterface>;
+
+  explicit runtime_bindings_state(Allocator &allocator)
+      : lookup_indexes(allocator) {}
+
+  lookup_index<LookupEntries, value_type, Allocator> lookup_indexes;
+};
+
+template <typename BindingsState> struct runtime_scope_state {
+  template <typename Allocator>
+  runtime_scope_state(Allocator &allocator, void *parent)
+      : bindings(allocator), registration_parent(parent) {}
+
+  BindingsState bindings;
+  void *registration_parent = nullptr;
+};
+
+template <typename Allocator, typename BindingsState>
+struct runtime_registry_data {
+  using scope_state_type = runtime_scope_state<BindingsState>;
+  using scope_pointer_allocator = typename std::allocator_traits<
+      Allocator>::template rebind_alloc<scope_state_type *>;
+
+  explicit runtime_registry_data(Allocator &allocator)
+      : runtime(allocator), bindings(allocator),
+        scope_states(scope_pointer_allocator(allocator)) {}
+
+  std::size_t create_scope(scope_state_type *state) {
+    scope_states.push_back(state);
+    return scope_states.size();
+  }
+
+  void release_scope(std::size_t scope, scope_state_type *state) noexcept {
+    assert(scope > 0 && scope <= scope_states.size());
+    assert(scope_states[scope - 1] == state);
+    (void)state;
+    scope_states[scope - 1] = nullptr;
+    if (scope == scope_states.size()) {
+      scope_states.pop_back();
+    }
+  }
+
+  scope_state_type *find_scope(std::size_t scope) noexcept {
+    assert(scope > 0 && scope <= scope_states.size());
+    return scope_states[scope - 1];
+  }
+
+  container_runtime<Allocator> runtime;
+  BindingsState bindings;
+  std::vector<scope_state_type *, scope_pointer_allocator> scope_states;
+};
+
+template <typename Data, bool OwnsData> class runtime_data_holder;
+
+template <typename Data> class runtime_data_holder<Data, true> {
+public:
+  template <typename Allocator>
+  explicit runtime_data_holder(Allocator &allocator) : data_(allocator) {}
+
+  Data &get() noexcept { return data_; }
+
+  static constexpr std::size_t scope_id() noexcept { return 0; }
+
+private:
+  Data data_;
+};
+
+template <typename Data> class runtime_data_holder<Data, false> {
+public:
+  static constexpr std::size_t invalid_scope =
+      std::numeric_limits<std::size_t>::max();
+
+  runtime_data_holder() = default;
+
+  std::size_t scope_id() const noexcept { return scope_id_; }
+  void scope_id(std::size_t value) noexcept { scope_id_ = value; }
+
+private:
+  std::size_t scope_id_ = invalid_scope;
+};
 
 template <typename Interface> struct key_value_interface {
   using type = normalized_type_t<Interface>;
@@ -117,25 +261,29 @@ constexpr bool has_lookup() {
 } // namespace detail
 
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
-          typename ResolveRoot>
+          typename ResolveRoot, bool OwnsRuntimeData = true>
 class runtime_registry : public allocator_base<Allocator> {
   template <typename> friend class runtime_context;
   template <typename> friend class detail::runtime_registration_api;
-  template <typename, typename, typename, typename>
+  template <typename, typename, typename, typename, typename>
   friend class runtime_binding_state;
   template <typename, typename> friend class detail::binding_resolution;
-  template <typename, typename>
+  template <typename, typename, typename>
   friend class detail::container_with_static_bindings;
   template <typename, typename, typename> friend class runtime_container;
   template <typename ContainerTraitsT, typename AllocatorT,
-            typename ParentRegistryT, typename ResolveRootT>
+            typename ParentRegistryT, typename ResolveRootT,
+            bool OwnsRuntimeDataT>
   friend class runtime_registry;
   template <typename ContainerTraitsT, typename AllocatorT,
-            typename ParentRegistryT, typename ResolveRootT>
-  using rebind_t = runtime_registry<ContainerTraitsT, AllocatorT,
-                                    ParentRegistryT, ResolveRootT>;
+            typename ParentRegistryT, typename ResolveRootT,
+            bool OwnsRuntimeDataT>
+  using rebind_t =
+      runtime_registry<ContainerTraitsT, AllocatorT, ParentRegistryT,
+                       ResolveRootT, OwnsRuntimeDataT>;
   using registry_type =
-      runtime_registry<ContainerTraits, Allocator, ParentRegistry, ResolveRoot>;
+      runtime_registry<ContainerTraits, Allocator, ParentRegistry, ResolveRoot,
+                       OwnsRuntimeData>;
   using resolve_root_type =
       std::conditional_t<std::is_same_v<void, ResolveRoot>, registry_type,
                          ResolveRoot>;
@@ -148,11 +296,24 @@ class runtime_registry : public allocator_base<Allocator> {
   using runtime_selection =
       detail::runtime_binding_selection<runtime_binding_interface_type>;
   template <typename Registration>
-  using registration_container_type =
-      runtime_registry<typename ContainerTraits::template rebind_t<
-                           type_list<typename ContainerTraits::tag_type,
-                                     typename Registration::interface_type>>,
-                       Allocator, resolve_root_type, resolve_root_type>;
+  using registration_container_traits_type =
+      detail::registration_container_traits<
+          ContainerTraits, type_list<typename ContainerTraits::tag_type,
+                                     typename Registration::interface_type>>;
+  template <typename Registration, typename Parent>
+  using registration_runtime_config = detail::static_container_runtime_config<
+      registration_container_traits_type<Registration>, Allocator, Parent,
+      resolve_root_type, false, true>;
+  template <typename Registration, typename Parent>
+  using runtime_registration_container_type =
+      runtime_registry<registration_container_traits_type<Registration>,
+                       Allocator, Parent, resolve_root_type, false>;
+  template <typename Registration, typename Bindings, typename Parent>
+  using registration_container_type = std::conditional_t<
+      std::is_void_v<Bindings>,
+      runtime_registration_container_type<Registration, Parent>,
+      detail::container_with_static_bindings<
+          Bindings, Parent, registration_runtime_config<Registration, Parent>>>;
   using parent_registry_type =
       std::conditional_t<std::is_same_v<void, ParentRegistry>, registry_type,
                          ParentRegistry>;
@@ -160,23 +321,91 @@ class runtime_registry : public allocator_base<Allocator> {
 public:
   using container_traits_type = ContainerTraits;
   using allocator_type = Allocator;
-  using parent_container_type = resolve_root_type;
+  using parent_container_type =
+      std::conditional_t<std::is_same_v<void, ParentRegistry>,
+                         resolve_root_type, ParentRegistry>;
   using rtti_type = typename ContainerTraits::rtti_type;
   using lookup_definition_type =
       detail::container_lookup_definition_type_t<ContainerTraits>;
+
+protected:
+  using normalized_lookup_entries =
+      detail::normalize_lookup_definitions_t<lookup_definition_type>;
+  using base_lookup_definition =
+      detail::base_lookup_definition_t<lookup_definition_type>;
+  using base_lookup_entry =
+      detail::base_lookup_entry<rtti_type,
+                                typename base_lookup_definition::cardinality,
+                                typename base_lookup_definition::backend_type>;
+  using base_lookup_cardinality = typename base_lookup_definition::cardinality;
+  using lookup_index_entries = type_list_unique_t<
+      type_list_cat_t<normalized_lookup_entries, type_list<base_lookup_entry>>>;
+  template <typename LookupEntry>
+  using lookup_entry_cardinality =
+      detail::lookup_entry_cardinality<LookupEntry>;
+
+  template <typename LookupEntry>
+  static constexpr bool lookup_entry_indexed_v =
+      detail::contains_lookup_definition<LookupEntry,
+                                         lookup_index_entries>::value;
+
+  using runtime_lookup_binding_view =
+      detail::runtime_lookup_binding_view<runtime_binding_interface_type>;
+  using runtime_lookup_value =
+      detail::runtime_lookup_value<runtime_binding_interface_type>;
+  using runtime_bindings_state = detail::runtime_bindings_state<
+      lookup_index_entries, runtime_binding_interface_type, allocator_type>;
+  using runtime_data_type =
+      detail::runtime_registry_data<allocator_type, runtime_bindings_state>;
+  using runtime_scope_state = typename runtime_data_type::scope_state_type;
+
+private:
+  static runtime_data_type &borrow_runtime_data(resolve_root_type *root) {
+    auto &data = root->binding_store().shared_runtime_data();
+    static_assert(
+        std::is_same_v<std::remove_reference_t<decltype(data)>,
+                       runtime_data_type>,
+        "registration container traits must preserve the root runtime lookup "
+        "and allocator configuration");
+    return data;
+  }
+
+public:
   runtime_registry()
       : allocator_base<allocator_type>(allocator_type()),
-        runtime_(get_allocator()), runtime_bindings_(get_allocator()) {}
+        runtime_data_(get_allocator()) {
+    static_assert(OwnsRuntimeData);
+    validate_lookup_definitions();
+  }
 
   runtime_registry(const allocator_type &alloc)
-      : allocator_base<allocator_type>(alloc), runtime_(get_allocator()),
-        runtime_bindings_(get_allocator()) {}
+      : allocator_base<allocator_type>(alloc), runtime_data_(get_allocator()) {
+    static_assert(OwnsRuntimeData);
+    validate_lookup_definitions();
+  }
 
-  runtime_registry(resolve_root_type *root,
+  runtime_registry(detail::runtime_data_owner_t, parent_container_type *parent,
                    const allocator_type &alloc = allocator_type())
-      : allocator_base<allocator_type>(alloc), resolve_root_(root),
-        runtime_(get_allocator()), runtime_bindings_(get_allocator()) {
+      : allocator_base<allocator_type>(alloc), parent_(parent),
+        runtime_data_(get_allocator()) {
+    static_assert(OwnsRuntimeData);
+    validate_lookup_definitions();
+    validate_parent_registry();
+  }
 
+  template <bool Enabled = OwnsRuntimeData, std::enable_if_t<!Enabled, int> = 0>
+  runtime_registry(parent_container_type *parent,
+                   const allocator_type &alloc = allocator_type())
+      : allocator_base<allocator_type>(alloc), parent_(parent),
+        runtime_data_() {
+    validate_lookup_definitions();
+    validate_parent_registry();
+  }
+
+private:
+  registry_type &binding_store() { return *this; }
+
+  static constexpr void validate_parent_registry() {
     if constexpr (!std::is_same_v<void, ParentRegistry>) {
       static_assert(
           !detail::is_tagged_container_v<container_traits_type> ||
@@ -188,6 +417,20 @@ public:
     }
   }
 
+  static constexpr void validate_lookup_definitions() {
+    using entries_type = normalized_lookup_entries;
+    static_assert(
+        !detail::has_duplicate_base_lookup_definition_v<lookup_definition_type>,
+        "duplicate dingo base lookup definition");
+    static_assert(!detail::has_duplicate_lookup_definition_v<entries_type>,
+                  "duplicate dingo lookup definition for interface/key "
+                  "domain/cardinality");
+    static_assert(!detail::has_duplicate_lookup_key_type_v<entries_type>,
+                  "conflicting dingo lookup definitions for interface/key "
+                  "domain");
+  }
+
+public:
   runtime_registry(const runtime_registry &) = delete;
   runtime_registry &operator=(const runtime_registry &) = delete;
 
@@ -198,11 +441,80 @@ public:
   }
 
 protected:
-  struct runtime_bindings_state;
+  container_runtime<allocator_type> &runtime() {
+    return shared_runtime_data().runtime;
+  }
 
-  container_runtime<allocator_type> &runtime() { return runtime_; }
+  runtime_data_type &shared_runtime_data() {
+    if constexpr (OwnsRuntimeData) {
+      return runtime_data_.get();
+    } else {
+      return borrow_runtime_data(resolve_root());
+    }
+  }
 
-  parent_container_type *parent() { return resolve_root(); }
+  runtime_bindings_state *runtime_bindings() {
+    if constexpr (OwnsRuntimeData) {
+      return std::addressof(shared_runtime_data().bindings);
+    } else {
+      auto *scope = runtime_scope();
+      return scope != nullptr ? std::addressof(scope->bindings) : nullptr;
+    }
+  }
+
+  runtime_scope_state *runtime_scope() {
+    static_assert(!OwnsRuntimeData);
+    const auto scope = runtime_data_.scope_id();
+    if (scope == decltype(runtime_data_)::invalid_scope) {
+      return nullptr;
+    }
+    return shared_runtime_data().find_scope(scope);
+  }
+
+  template <typename Parent>
+  runtime_bindings_state &
+  ensure_runtime_bindings(runtime_transaction_type &transaction,
+                          Parent *registration_parent) {
+    if constexpr (OwnsRuntimeData) {
+      return *runtime_bindings();
+    } else {
+      if (auto *scope = runtime_scope()) {
+        assert(scope->registration_parent == registration_parent);
+        return scope->bindings;
+      }
+
+      auto &data = shared_runtime_data();
+      auto *state =
+          transaction.template construct_persistent<runtime_scope_state>(
+              get_allocator(), registration_parent);
+      const auto scope = data.create_scope(state);
+      runtime_data_.scope_id(scope);
+      try {
+        transaction.on_rollback([this, &data, scope, state]() noexcept {
+          data.release_scope(scope, state);
+          runtime_data_.scope_id(decltype(runtime_data_)::invalid_scope);
+        });
+      } catch (...) {
+        data.release_scope(scope, state);
+        runtime_data_.scope_id(decltype(runtime_data_)::invalid_scope);
+        throw;
+      }
+      return state->bindings;
+    }
+  }
+
+  template <typename Parent> Parent *runtime_registration_parent() {
+    if constexpr (std::is_same_v<Parent, parent_container_type>) {
+      return parent();
+    } else {
+      static_assert(!OwnsRuntimeData);
+      auto *scope = runtime_scope();
+      assert(scope != nullptr && scope->registration_parent != nullptr);
+      return static_cast<Parent *>(scope->registration_parent);
+    }
+  }
+
+  parent_container_type *parent() { return parent_; }
 
   resolve_root_type *resolve_root() {
     if constexpr (std::is_same_v<void, ResolveRoot> ||
@@ -210,32 +522,29 @@ protected:
       return this;
     } else if constexpr (std::is_base_of_v<registry_type, resolve_root_type>) {
       return static_cast<resolve_root_type *>(this);
+    } else if constexpr (std::is_same_v<parent_container_type,
+                                        resolve_root_type>) {
+      return parent_;
     } else {
-      return resolve_root_;
+      assert(parent_ != nullptr);
+      return parent_->binding_store().resolve_root();
     }
   }
 
   const resolve_root_type *resolve_root() const {
-    if constexpr (std::is_same_v<void, ResolveRoot> ||
-                  std::is_same_v<resolve_root_type, registry_type>) {
-      return this;
-    } else if constexpr (std::is_base_of_v<registry_type, resolve_root_type>) {
-      return static_cast<const resolve_root_type *>(this);
-    } else {
-      return resolve_root_;
-    }
+    return const_cast<registry_type *>(this)->resolve_root();
   }
 
 public:
   template <typename... TypeArgs> auto register_type() {
-    return prepare_binding<TypeArgs...>(resolve_root(), none_t{});
+    return prepare_binding<TypeArgs...>(this, none_t{});
   }
 
   template <typename... TypeArgs, typename Arg,
             std::enable_if_t<!detail::is_runtime_registration_key_arg_v<Arg>,
                              int> = 0>
   auto register_type(Arg &&arg) {
-    return prepare_binding<TypeArgs...>(resolve_root(), std::forward<Arg>(arg));
+    return prepare_binding<TypeArgs...>(this, std::forward<Arg>(arg));
   }
 
   template <typename... TypeArgs, typename... KeyArgs,
@@ -244,7 +553,7 @@ public:
                  detail::are_runtime_registration_key_args_v<KeyArgs...>),
                 int> = 0>
   auto register_type(KeyArgs &&...keys) {
-    return prepare_binding<TypeArgs...>(resolve_root(), none_t{},
+    return prepare_binding<TypeArgs...>(this, none_t{},
                                         std::forward<KeyArgs>(keys)...);
   }
 
@@ -255,7 +564,7 @@ public:
                  detail::are_runtime_registration_key_args_v<KeyArgs...>),
                 int> = 0>
   auto register_type(Arg &&arg, KeyArgs &&...keys) {
-    return prepare_binding<TypeArgs...>(resolve_root(), std::forward<Arg>(arg),
+    return prepare_binding<TypeArgs...>(this, std::forward<Arg>(arg),
                                         std::forward<KeyArgs>(keys)...);
   }
 
@@ -304,7 +613,11 @@ protected:
   template <typename Request, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   detail::binding_status binding_status(LookupKey key) {
-    auto selection = select_binding<Request>(runtime_bindings_, key);
+    auto *state = runtime_bindings();
+    if (!state) {
+      return detail::binding_status::not_found;
+    }
+    auto selection = select_binding<Request>(*state, key);
     return selection.status;
   }
 
@@ -376,30 +689,6 @@ protected:
   };
 
   template <typename T> static T invalid_registration_return();
-
-  using normalized_lookup_entries =
-      detail::normalize_lookup_definitions_t<lookup_definition_type>;
-  using base_lookup_definition =
-      detail::base_lookup_definition_t<lookup_definition_type>;
-  using base_lookup_entry =
-      detail::base_lookup_entry<rtti_type,
-                                typename base_lookup_definition::cardinality,
-                                typename base_lookup_definition::backend_type>;
-  using base_lookup_cardinality = typename base_lookup_definition::cardinality;
-  using lookup_index_entries = type_list_unique_t<
-      type_list_cat_t<normalized_lookup_entries, type_list<base_lookup_entry>>>;
-  template <typename LookupEntry>
-  using lookup_entry_cardinality =
-      detail::lookup_entry_cardinality<LookupEntry>;
-
-  template <typename LookupEntry>
-  static constexpr bool lookup_entry_indexed_v =
-      detail::contains_lookup_definition<LookupEntry,
-                                         lookup_index_entries>::value;
-
-  struct runtime_lookup_binding_view {
-    runtime_binding_interface_type *binding = nullptr;
-  };
 
   struct runtime_binding_value {
     runtime_binding_value(const runtime_binding_value &) = delete;
@@ -483,46 +772,6 @@ protected:
                                         Bindings...>;
 
     using base_type::base_type;
-  };
-
-  struct runtime_lookup_value {
-    explicit runtime_lookup_value(runtime_lookup_binding_view view)
-        : view_(view) {}
-
-    runtime_lookup_value(runtime_lookup_value &&) noexcept = default;
-    runtime_lookup_value &operator=(runtime_lookup_value &&) noexcept = default;
-    runtime_lookup_value(const runtime_lookup_value &) = delete;
-    runtime_lookup_value &operator=(const runtime_lookup_value &) = delete;
-
-    runtime_binding_interface_type &binding() { return *view_.binding; }
-
-  private:
-    runtime_lookup_binding_view view_;
-  };
-
-  struct runtime_bindings_state {
-    explicit runtime_bindings_state(allocator_type &allocator)
-        : lookup_indexes(allocator) {
-      validate_lookup_definitions();
-    }
-
-    detail::lookup_index<lookup_index_entries, runtime_lookup_value,
-                         allocator_type>
-        lookup_indexes;
-
-  private:
-    static void validate_lookup_definitions() {
-      using entries_type = normalized_lookup_entries;
-      static_assert(!detail::has_duplicate_base_lookup_definition_v<
-                        lookup_definition_type>,
-                    "duplicate dingo base lookup definition");
-      static_assert(!detail::has_duplicate_lookup_definition_v<entries_type>,
-                    "duplicate dingo lookup definition for interface/key "
-                    "domain/cardinality");
-      static_assert(!detail::has_duplicate_lookup_key_type_v<entries_type>,
-                    "conflicting dingo lookup definitions for interface/key "
-                    "domain");
-    }
   };
 
 protected:
@@ -888,7 +1137,9 @@ protected:
   template <typename Request, typename LookupKey>
   runtime_selection source_select(LookupKey key) {
     static_assert(detail::is_lookup_key_v<LookupKey>);
-    return select_binding<Request>(runtime_bindings_, key);
+    auto *state = runtime_bindings();
+    return state ? select_binding<Request>(*state, key)
+                 : runtime_selection::miss();
   }
 
   template <typename Request, typename LookupKey>
@@ -909,11 +1160,17 @@ protected:
     using user_type = typename Request::user_type;
     using lookup_key_type = std::decay_t<LookupKey>;
 
+    if constexpr (MayAutoConstruct && collection_traits<R>::is_collection) {
+      if (count_collection<R>(key) != 0) {
+        return this->template construct_collection<R>(
+            scope, context, detail::binding_collection_append{}, key);
+      }
+    }
+
     if constexpr (!std::is_same_v<void, ParentRegistry> &&
-                  !std::is_same_v<void *, decltype(resolve_root_)> &&
                   !std::is_base_of_v<registry_type, resolve_root_type>) {
-      if (resolve_root_) {
-        return resolve_root()
+      if (parent_) {
+        return parent()
             ->template resolve<user_type, Request::removes_rvalue_references>(
                 scope, context, key);
       }
@@ -968,19 +1225,23 @@ protected:
                                         LookupKey key) {
     using collection_type = collection_traits<T>;
     using resolve_type = typename collection_type::resolve_type;
-    return for_each_collection_entry<T>(
-        runtime_bindings_, key, [&](auto &entry) {
-          fn(results, resolve_collection_type<resolve_type>(
-                          scope, entry.binding(), context));
-        });
+    auto *state = runtime_bindings();
+    if (!state) {
+      return 0;
+    }
+    return for_each_collection_entry<T>(*state, key, [&](auto &entry) {
+      fn(results, resolve_collection_type<resolve_type>(scope, entry.binding(),
+                                                        context));
+    });
   }
 
   template <typename T, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   std::size_t count_collection(LookupKey key) {
     std::size_t result = 0;
-    for_each_collection_entry<T>(runtime_bindings_, key,
-                                 [&](auto &) { ++result; });
+    if (auto *state = runtime_bindings()) {
+      for_each_collection_entry<T>(*state, key, [&](auto &) { ++result; });
+    }
     return result;
   }
 
@@ -1098,7 +1359,6 @@ private:
   // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
   auto prepare_binding(Parent *parent, Arg &&arg,
                        KeyValueArgs &&...key_values) {
-    (void)parent;
     static_assert(!detail::has_explicit_void_interface_v<TypeArgs...>,
                   "interfaces<void> is not a valid registration target");
     using registration =
@@ -1111,7 +1371,8 @@ private:
         "runtime-key request");
     using binding_model = detail::binding_model<registration>;
     using bindings_type = typename binding_model::bindings_type;
-    using instance_container_type = registration_container_type<registration>;
+    using instance_container_type =
+        registration_container_type<registration, bindings_type, Parent>;
     (void)arg;
     using interface_types = typename binding_model::interface_types;
     static constexpr bool storage_tag_is_complete =
@@ -1126,8 +1387,10 @@ private:
 
       registration_requirements::assert_valid();
 
-      using runtime_binding_state_type = detail::runtime_binding_state_t<
-          registry_type, instance_container_type, storage_type, bindings_type>;
+      using runtime_binding_state_type =
+          detail::runtime_binding_state_t<registry_type,
+                                          instance_container_type, storage_type,
+                                          bindings_type, Parent>;
 
       if constexpr (registration_requirements::valid &&
                     type_list_size_v<interface_types> == 1) {
@@ -1165,7 +1428,8 @@ private:
                                                         KeyValueArgs...>();
           }
           inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
-          runtime_transaction_type transaction(runtime_, scratch);
+          runtime_transaction_type transaction(runtime(), scratch);
+          auto &state = ensure_runtime_bindings(transaction, parent);
           runtime_binding_state_type *data = nullptr;
           if constexpr (!is_none_v<std::decay_t<Arg>>) {
             data =
@@ -1183,7 +1447,6 @@ private:
               runtime_binding_value_owner_t<interface_types, storage_type,
                                             runtime_binding_state_type *,
                                             registration_key>;
-          auto &state = runtime_bindings_;
           auto &binding_owner =
               *transaction.template construct_persistent<owner_type>(data);
           auto *binding_result = std::addressof(binding_owner);
@@ -1253,13 +1516,13 @@ private:
     if constexpr (std::is_same_v<
                       typename lookup_entry_cardinality<LookupEntry>::type,
                       ::dingo::one>) {
-      auto [it, inserted] = index.try_emplace(
+      auto [handle, inserted] = index.try_emplace(
           key_arg, value_factory.template make<TypeInterface>());
       if (!inserted) {
         throw detail::make_lookup_already_registered_exception<
             TypeInterface, typename TypeStorage::type>(lookup_key, key_arg);
       }
-      return it;
+      return handle;
     } else {
       return index.emplace(key_arg,
                            value_factory.template make<TypeInterface>());
@@ -1300,20 +1563,24 @@ private:
                       typename lookup_entry_cardinality<LookupEntry>::type,
                       ::dingo::one>) {
       auto it = index.find(key);
-      assert(it != index.end());
-      assert(std::addressof(detail::lookup_iterator_value(it).binding()) ==
-             binding);
-      index.erase(it);
+      if (it != index.end()) {
+        auto &value = detail::lookup_iterator_value(it);
+        if (std::addressof(value.binding()) == binding) {
+          index.erase(it);
+          return;
+        }
+      }
     } else {
       auto [first, last] = index.equal_range(key);
       for (auto it = first; it != last; ++it) {
-        if (std::addressof(detail::lookup_iterator_value(it).binding()) ==
-            binding) {
+        auto &value = detail::lookup_iterator_value(it);
+        if (std::addressof(value.binding()) == binding) {
           index.erase(it);
-          break;
+          return;
         }
       }
     }
+    assert(false && "runtime lookup binding was not found");
   }
 
   template <typename LookupEntry, typename Handle, typename Key>
@@ -1428,10 +1695,9 @@ private:
   container_proxy<Owner> commit_binding(Parent *parent, LookupKey lookup_key,
                                         KeyValueTuple &&key_values,
                                         Args &&...args) {
-    (void)parent;
-    auto &state = runtime_bindings_;
     inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
-    runtime_transaction_type transaction(runtime_, scratch);
+    runtime_transaction_type transaction(runtime(), scratch);
+    auto &state = ensure_runtime_bindings(transaction, parent);
     auto &binding_owner = *transaction.template construct_persistent<Owner>(
         this, std::forward<Args>(args)...);
     auto *binding_result = std::addressof(binding_owner);
@@ -1534,10 +1800,9 @@ private:
                                                 Type>::assert_valid();
   }
 
-  resolve_root_type *resolve_root_ = nullptr;
+  parent_container_type *parent_ = nullptr;
 
-  container_runtime<allocator_type> runtime_;
-  runtime_bindings_state runtime_bindings_;
+  detail::runtime_data_holder<runtime_data_type, OwnsRuntimeData> runtime_data_;
 };
 
 } // namespace dingo

@@ -55,13 +55,46 @@
 #endif
 
 namespace dingo {
-template <typename ParentContainer, typename... Registrations>
+namespace detail {
+
+template <typename Self, typename RuntimeConfig>
+struct static_container_runtime_configuration {
+  using runtime_base =
+      runtime_registry<typename RuntimeConfig::container_traits_type,
+                       typename RuntimeConfig::allocator_type,
+                       typename RuntimeConfig::parent_registry_type,
+                       typename RuntimeConfig::resolve_root_type,
+                       RuntimeConfig::owns_runtime_data>;
+
+  static constexpr bool owns_runtime_data = RuntimeConfig::owns_runtime_data;
+  static constexpr bool merge_parent_collections =
+      RuntimeConfig::merge_parent_collections;
+};
+
+template <typename Self>
+struct static_container_runtime_configuration<Self, void> {
+  using runtime_base =
+      runtime_registry<dynamic_container_traits,
+                       typename dynamic_container_traits::allocator_type, Self,
+                       Self>;
+
+  static constexpr bool owns_runtime_data = true;
+  static constexpr bool merge_parent_collections = false;
+};
+
+} // namespace detail
+
+template <typename ParentContainer, typename RuntimeConfig,
+          typename... Registrations>
 class detail::container_with_static_bindings<static_bindings<Registrations...>,
-                                             ParentContainer>
+                                             ParentContainer, RuntimeConfig>
     : public detail::runtime_registration_api<
           detail::container_with_static_bindings<
-              static_bindings<Registrations...>, ParentContainer>> {
+              static_bindings<Registrations...>, ParentContainer,
+              RuntimeConfig>> {
   template <typename> friend class runtime_context;
+  template <typename, typename, typename>
+  friend class detail::container_with_static_bindings;
 
 public:
   using static_bindings_type = static_bindings<Registrations...>;
@@ -70,18 +103,21 @@ public:
                               detail::static_storage_state<Registrations...>>;
 
 private:
-  using self_type = detail::container_with_static_bindings<static_bindings_type,
-                                                           ParentContainer>;
-  using runtime_base =
-      runtime_registry<dynamic_container_traits,
-                       typename dynamic_container_traits::allocator_type,
-                       self_type, self_type>;
+  using self_type =
+      detail::container_with_static_bindings<static_bindings_type,
+                                             ParentContainer, RuntimeConfig>;
+  using runtime_configuration =
+      detail::static_container_runtime_configuration<self_type, RuntimeConfig>;
+  using runtime_base = typename runtime_configuration::runtime_base;
   using runtime_context_type =
-      runtime_context<typename dynamic_container_traits::allocator_type>;
+      runtime_context<typename runtime_base::allocator_type>;
   friend runtime_base;
+  template <typename, typename, typename, typename, bool>
+  friend class ::dingo::runtime_registry;
 
   using index_entries_ = detail::normalize_lookup_definitions_t<
-      detail::container_lookup_definition_type_t<dynamic_container_traits>>;
+      detail::container_lookup_definition_type_t<
+          typename runtime_base::container_traits_type>>;
   static constexpr bool has_parent_v = !std::is_void_v<ParentContainer>;
   using parent_container_type = ParentContainer;
 
@@ -221,11 +257,7 @@ private:
     static_assert(collection_type::is_collection,
                   "missing collection_traits specialization for type T");
 
-    const std::size_t runtime_count =
-        runtime_registry_.template count_collection<T>(key);
-    const std::size_t static_count =
-        static_registry_.template count_collection<T, LookupKey>();
-    const std::size_t total = runtime_count + static_count;
+    const std::size_t total = count_collection<T>(key);
     // A declared collection lookup with no rows is a valid empty collection.
     if (total == 0 &&
         !runtime_registry_.template has_explicit_collection_lookup<T>(key)) {
@@ -236,10 +268,7 @@ private:
     collection_type::reserve(results, total);
 
     auto &&append = fn;
-    runtime_registry_.template append_collection<T>(results, scope, context,
-                                                    append, key);
-    static_registry_.template append_collection<T, LookupKey>(
-        scope, results, *this, context, append);
+    append_collection_impl<T>(scope, results, context, key, append);
     return results;
   }
 
@@ -359,8 +388,15 @@ public:
                     index_entries_>::value,
                 "container fixed runtime-key lookup bindings must be unique "
                 "for one lookups and unique by storage for many lookups");
-  static_assert(detail::graph_analysis<static_bindings_type, true>::resolvable,
-                "container requires a resolvable compile-time binding graph");
+  static_assert(
+      std::is_void_v<RuntimeConfig> ||
+          detail::graph_analysis<static_bindings_type, true>::resolvable,
+      "register_type bindings<...> requires a resolvable compile-time binding "
+      "graph");
+  static_assert(
+      !std::is_void_v<RuntimeConfig> ||
+          detail::graph_analysis<static_bindings_type, true>::resolvable,
+      "container requires a resolvable compile-time binding graph");
   static_assert(
       (detail::binding_factory_is_default_constructible<
            detail::binding_model<Registrations>>::value &&
@@ -372,16 +408,32 @@ public:
                 "container requires default-constructible compile-time "
                 "storage objects");
 
-  container_with_static_bindings() : runtime_registry_(this) {}
+  template <bool OwnsRuntimeData = runtime_configuration::owns_runtime_data,
+            std::enable_if_t<OwnsRuntimeData, int> = 0>
+  container_with_static_bindings()
+      : runtime_registry_(detail::runtime_data_owner, this) {}
 
+  template <bool OwnsRuntimeData = runtime_configuration::owns_runtime_data,
+            std::enable_if_t<OwnsRuntimeData, int> = 0>
   explicit container_with_static_bindings(allocator_type alloc)
-      : runtime_registry_(this, alloc) {}
+      : runtime_registry_(detail::runtime_data_owner, this, alloc) {}
 
-  template <typename Parent = ParentContainer,
-            std::enable_if_t<!std::is_void_v<Parent>, int> = 0>
+  template <
+      typename Parent = ParentContainer,
+      bool OwnsRuntimeData = runtime_configuration::owns_runtime_data,
+      std::enable_if_t<!std::is_void_v<Parent> && OwnsRuntimeData, int> = 0>
   explicit container_with_static_bindings(
       Parent *parent, allocator_type alloc = allocator_type())
-      : runtime_registry_(this, alloc), parent_(parent) {}
+      : runtime_registry_(detail::runtime_data_owner, this, alloc),
+        parent_(parent) {}
+
+  template <
+      typename Parent = ParentContainer,
+      bool OwnsRuntimeData = runtime_configuration::owns_runtime_data,
+      std::enable_if_t<!std::is_void_v<Parent> && !OwnsRuntimeData, int> = 0>
+  explicit container_with_static_bindings(
+      Parent *parent, allocator_type alloc = allocator_type())
+      : runtime_registry_(parent, alloc), parent_(parent) {}
 
   container_with_static_bindings(const self_type &other)
       : runtime_registry_(other.runtime_registry_),
@@ -723,7 +775,15 @@ public:
   std::size_t append_collection_impl(construction_scope scope, T &results,
                                      runtime_context_type &context,
                                      LookupKey key, Fn &&fn) {
-    return detail::append_binding_collection(
+    std::size_t count = 0;
+    if constexpr (runtime_configuration::merge_parent_collections &&
+                  has_parent_v) {
+      if (parent_) {
+        count += parent_->template append_collection<T>(results, scope, context,
+                                                        fn, key);
+      }
+    }
+    count += detail::append_binding_collection(
         results,
         [&](auto &collection, auto &&append) {
           return runtime_registry_.template append_collection<T>(
@@ -736,6 +796,7 @@ public:
               std::forward<decltype(append)>(append));
         },
         std::forward<Fn>(fn));
+    return count;
   }
 
   template <typename T> std::size_t count_collection() {
@@ -749,9 +810,16 @@ public:
   template <typename T, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   std::size_t count_collection(LookupKey key) {
-    return detail::count_binding_collection<T>(
+    std::size_t count = detail::count_binding_collection<T>(
         [&] { return runtime_registry_.template count_collection<T>(key); },
         static_registry_.template count_collection<T, LookupKey>());
+    if constexpr (runtime_configuration::merge_parent_collections &&
+                  has_parent_v) {
+      if (parent_) {
+        count += parent_->template count_collection<T>(key);
+      }
+    }
+    return count;
   }
 
 private:
@@ -824,7 +892,8 @@ private:
   R resolve_collection(construction_scope scope, runtime_context_type &context,
                        Origin &origin, LookupKey key) {
     if constexpr (detail::is_static_lookup_key_definition_v<LookupKey>) {
-      if (count_collection<R>(key) == 0) {
+      if (count_collection<R>(key) == 0 &&
+          !runtime_registry_.template has_explicit_collection_lookup<R>(key)) {
         if constexpr (has_parent_v) {
           if (parent_) {
             return resolve_parent<Request>(scope, context, origin, key);
