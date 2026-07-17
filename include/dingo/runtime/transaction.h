@@ -125,6 +125,8 @@ public:
     return runtime_ == std::addressof(runtime);
   }
 
+  runtime_type &runtime() const noexcept { return *runtime_; }
+
   template <typename T, typename... Args>
   T *construct_persistent(Args &&...args) {
     return construct_persistent_with<T>(

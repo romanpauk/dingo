@@ -14,6 +14,7 @@
 #include <dingo/core/exceptions.h>
 #include <dingo/core/factory_traits.h>
 #include <dingo/core/key.h>
+#include <dingo/introspection.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/rtti/static_provider.h>
@@ -224,6 +225,9 @@ public:
 
 template <typename State, typename Host, typename BindingModel>
 struct binding_activation {
+  static constexpr bool dependency_observation_enabled =
+      detail::dependency_observation_v<Host>;
+
   State &state;
   Host &host;
   construction_scope scope;
@@ -666,6 +670,47 @@ auto make_static_binding_resolver(construction_scope scope, State &state,
                                                                 scope};
 }
 
+template <typename InterfaceBinding, typename State, typename Host, typename Fn>
+decltype(auto) observe_static_dependencies(State &state, Host &host, Fn &&fn) {
+  if constexpr (Host::dependency_observation_enabled) {
+    using binding_model_type = typename InterfaceBinding::binding_model_type;
+    auto &storage = state.template get_storage_for_model<binding_model_type>();
+    const auto container_id = host.introspection_container_id();
+    const auto view =
+        detail::introspect_static_registration<binding_model_type>(
+            storage, container_id);
+    if (view.materialization == registration_materialization::materialized) {
+      return std::forward<Fn>(fn)();
+    }
+    return detail::observe_dependencies<
+        typename binding_model_type::registered_storage_type>(
+        host.introspection_dependency_observer(), view.id, container_id,
+        std::forward<Fn>(fn));
+  } else {
+    return std::forward<Fn>(fn)();
+  }
+}
+
+template <typename T, typename Binding, typename State, typename Host,
+          typename Fn, typename Context>
+void append_static_collection_binding(construction_scope scope, State &state,
+                                      T &results, Host &host, Context &context,
+                                      Fn &fn) {
+  using collection_type = collection_traits<T>;
+  using resolve_type = typename collection_type::resolve_type;
+  auto resolver = make_static_binding_resolver<Binding>(scope, state, host);
+  observe_static_dependencies<Binding>(state, host, [&]() {
+    if constexpr (is_copy_constructible_v<resolve_type> &&
+                  !std::is_reference_v<resolve_type>) {
+      resolver.template consume<resolve_type>(context, [&](auto &&value) {
+        fn(results, std::forward<decltype(value)>(value));
+      });
+    } else {
+      fn(results, resolver.template resolve<resolve_type>(context));
+    }
+  });
+}
+
 template <typename T, typename LookupKey, typename StaticRegistryType,
           typename State, typename Host, typename Fn, typename Context>
 std::size_t append_static_collection_impl(construction_scope scope,
@@ -684,15 +729,8 @@ std::size_t append_static_collection_impl(construction_scope scope,
   if constexpr (count != 0) {
     dingo::for_each(interface_bindings{}, [&](auto binding_iterator) {
       using binding = typename decltype(binding_iterator)::type;
-      auto resolver = make_static_binding_resolver<binding>(scope, state, host);
-      if constexpr (is_copy_constructible_v<resolve_type> &&
-                    !std::is_reference_v<resolve_type>) {
-        resolver.template consume<resolve_type>(context, [&](auto &&value) {
-          fn(results, std::forward<decltype(value)>(value));
-        });
-      } else {
-        fn(results, resolver.template resolve<resolve_type>(context));
-      }
+      append_static_collection_binding<T, binding>(scope, state, results, host,
+                                                   context, fn);
     });
   }
 
@@ -820,7 +858,10 @@ public:
             derived().template get_local_scope_for_model<BindingModel>();
         auto resolver =
             local_scope.template make_binding_resolver<binding>(scope, host);
-        return resolver.template resolve<R>(context);
+        return detail::observe_static_dependencies<binding>(
+            local_scope, host, [&]() -> decltype(auto) {
+              return resolver.template resolve<R>(context);
+            });
       } else {
         return host.template resolve<typename Request::user_type,
                                      Request::removes_rvalue_references>(
@@ -1004,6 +1045,15 @@ public:
 
   static_registry() = default;
 
+  template <typename Visitor>
+  bool visit_registrations(Visitor &&visitor, std::size_t container_id = 0) {
+    (visitor(
+         detail::introspect_static_registration<binding_model<Registrations>>(
+             state_.template get_storage<Registrations>(), container_id)),
+     ...);
+    return true;
+  }
+
   template <typename Request, typename LookupKey>
   static constexpr detail::binding_status binding_status() {
     static_assert(is_lookup_key_v<LookupKey>);
@@ -1077,7 +1127,10 @@ public:
     scope_type<Context> scope(state_);
     auto resolver =
         scope.template make_binding_resolver<binding>(construction, host);
-    return resolver.template resolve<ResolveRequest>(context);
+    return detail::observe_static_dependencies<binding>(
+        scope, host, [&]() -> decltype(auto) {
+          return resolver.template resolve<ResolveRequest>(context);
+        });
   }
 
 private:

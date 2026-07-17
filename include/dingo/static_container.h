@@ -223,6 +223,32 @@ private:
   }
 
 public:
+  template <typename Visitor> bool visit_registrations(Visitor &&visitor) {
+    return static_registry_.visit_registrations(std::forward<Visitor>(visitor));
+  }
+
+  template <typename Observer>
+  dependency_observer_subscription
+  observe_dependencies(Observer &observer) noexcept {
+    static_assert(dependency_observation_enabled,
+                  "dependency observation requires traits with "
+                  "dependency_observation_enabled = true");
+    return dependency_observer_subscription(
+        this, detail::dependency_observer_ref(observer));
+  }
+
+  detail::dependency_observer_ref
+  introspection_dependency_observer() const noexcept {
+    return detail::find_dependency_observer(this);
+  }
+
+  static constexpr std::size_t introspection_container_id() noexcept {
+    return 0;
+  }
+
+  static constexpr bool dependency_observation_enabled =
+      detail::dependency_observation_v<ContainerTraits>;
+
   using static_registry_type =
       static_registry<static_bindings_type, state_type>;
   using container_traits_type = ContainerTraits;
@@ -439,12 +465,31 @@ private:
       } else {
         context_type context;
         auto type_guard = context.template track_type<request_value_type>();
-        return factory.template construct<R>(ephemeral_scope, context, *this);
+        if constexpr (dependency_observation_enabled) {
+          auto perform = [&]() -> R {
+            return factory.template construct<R>(ephemeral_scope, context,
+                                                 *this);
+          };
+          return detail::observe_dependencies<request_value_type>(
+              introspection_dependency_observer(), {},
+              introspection_container_id(), perform);
+        } else {
+          return factory.template construct<R>(ephemeral_scope, context, *this);
+        }
       }
     } else {
       context_type context;
       auto type_guard = context.template track_type<request_value_type>();
-      return factory.template construct<R>(ephemeral_scope, context, *this);
+      if constexpr (dependency_observation_enabled) {
+        auto perform = [&]() -> R {
+          return factory.template construct<R>(ephemeral_scope, context, *this);
+        };
+        return detail::observe_dependencies<request_value_type>(
+            introspection_dependency_observer(), {},
+            introspection_container_id(), perform);
+      } else {
+        return factory.template construct<R>(ephemeral_scope, context, *this);
+      }
     }
   }
 

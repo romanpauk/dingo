@@ -101,6 +101,9 @@ public:
 
   template <typename T, typename Container>
   T resolve(construction_scope scope, Container &container) {
+    if constexpr (detail::dependency_observation_v<Container>) {
+      detail::observe_dependency(describe_type<T>());
+    }
     if constexpr (detail::is_selected_v<T>) {
       using request_type = detail::selected_type_t<T>;
       using selector_type = detail::selected_selector_t<T>;

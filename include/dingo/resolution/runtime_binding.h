@@ -92,7 +92,9 @@ public:
     }
   }
   allocator_type &get_allocator() { return owner().get_allocator(); }
+  std::size_t container_id() const { return owner().container_id(); }
   Storage &storage() { return storage_; }
+  const Storage &storage() const { return storage_; }
   detail::cache::entry *cache_slot() noexcept {
     return state_base::binding_cache_slot();
   }
@@ -145,6 +147,10 @@ private:
     assert(owner_ != nullptr);
     return *owner_;
   }
+  const owner_type &owner() const {
+    assert(owner_ != nullptr);
+    return *owner_;
+  }
 
   template <typename T> T *construct_container(runtime_context_type &context) {
     return std::addressof(context.template construct<T>(
@@ -194,7 +200,9 @@ public:
     }
   }
   allocator_type &get_allocator() { return owner().get_allocator(); }
+  std::size_t container_id() const { return owner().container_id(); }
   Storage &storage() { return storage_; }
+  const Storage &storage() const { return storage_; }
   detail::cache::entry *cache_slot() noexcept {
     return state_base::binding_cache_slot();
   }
@@ -247,6 +255,10 @@ private:
     assert(owner_ != nullptr);
     return *owner_;
   }
+  const owner_type &owner() const {
+    assert(owner_ != nullptr);
+    return *owner_;
+  }
 
   template <typename T> T *construct_container(runtime_context_type &context) {
     return std::addressof(context.template construct<T>(
@@ -278,18 +290,21 @@ template <typename T> struct runtime_binding_state_traits {
   using state_type = T;
 
   static T &ref(T &state) { return state; }
+  static const T &cref(const T &state) { return state; }
 };
 
 template <typename T> struct runtime_binding_state_traits<std::shared_ptr<T>> {
   using state_type = T;
 
   static T &ref(std::shared_ptr<T> &state) { return *state; }
+  static const T &cref(const std::shared_ptr<T> &state) { return *state; }
 };
 
 template <typename T> struct runtime_binding_state_traits<T *> {
   using state_type = T;
 
   static T &ref(T *state) { return *state; }
+  static const T &cref(T *const &state) { return *state; }
 };
 
 namespace detail {
@@ -407,7 +422,9 @@ private:
   State state_;
 
   state_type &state() { return state_traits::ref(state_); }
+  const state_type &state() const { return state_traits::cref(state_); }
   auto &get_storage() { return state().storage(); }
+  const auto &get_storage() const { return state().storage(); }
   template <bool TrackRollback = true, typename Fn>
   decltype(auto) with_resolution_container(runtime_context_type &context,
                                            Fn &&fn) {
@@ -420,8 +437,8 @@ private:
 #pragma warning(disable : 4702)
 #endif
   template <typename Context, typename Fn>
-  decltype(auto) materialize_resolution_source(construction_scope scope,
-                                               Context &context, Fn &&fn) {
+  decltype(auto) perform_materialization(construction_scope scope,
+                                         Context &context, Fn &&fn) {
     if constexpr (materialization_traits::can_retain_source) {
       if (materialization_traits::retains_source(get_storage())) {
         const bool reset_storage = should_reset_storage_on_failure();
@@ -441,6 +458,7 @@ private:
         if constexpr (std::is_void_v<result_type>) {
           materialize();
           add_retained_source_runtime_reset_destructor(context);
+          return;
         } else if constexpr (std::is_reference_v<result_type>) {
           result_type result = materialize();
           add_retained_source_runtime_reset_destructor(context);
@@ -457,6 +475,32 @@ private:
           return detail::materialize_runtime_binding_resolution_source(
               scope, context, get_storage(), container, std::forward<Fn>(fn));
         });
+  }
+
+  template <typename Context, typename Fn>
+  decltype(auto) materialize_resolution_source(construction_scope scope,
+                                               Context &context, Fn &&fn) {
+    auto perform = [&]() -> decltype(auto) {
+      return perform_materialization(scope, context, std::forward<Fn>(fn));
+    };
+
+    if constexpr (detail::dependency_observation_v<
+                      typename Container::container_traits_type>) {
+      const registration_id id{std::addressof(state())};
+      const auto container_id = state().container_id();
+
+      bool constructs = true;
+      if constexpr (detail::runtime_storage_can_reset<Storage>::value) {
+        constructs = !get_storage().is_resolved();
+      }
+      if (constructs) {
+        return detail::observe_dependencies<typename Storage::type>(
+            context.dependency_observer(), id, container_id, perform);
+      }
+      return perform();
+    } else {
+      return perform();
+    }
   }
 #ifdef _MSC_VER
 #pragma warning(pop)
@@ -507,6 +551,34 @@ private:
   }
 
 public:
+  registration_view introspection(std::size_t container_id) const override {
+    registration_materialization materialization =
+        registration_materialization::unknown;
+    if constexpr (detail::runtime_storage_can_reset<Storage>::value) {
+      materialization = get_storage().is_resolved()
+                            ? registration_materialization::materialized
+                            : registration_materialization::not_materialized;
+    }
+
+    using factory_type = typename Storage::factory_type;
+    using dependency_types =
+        typename factory_traits<factory_type>::dependencies;
+    return {{std::addressof(state())},
+            container_id,
+            registration_origin::runtime_binding,
+            describe_type<typename Storage::type>(),
+            describe_type<typename Storage::stored_type>(),
+            describe_type<typename Storage::tag_type>(),
+            describe_type<factory_type>(),
+            describe_type<Type>(),
+            {},
+            detail::describe_types<type_list<Type>>(),
+            detail::describe_types<dependency_types>(),
+            !std::is_same_v<dependency_types, void>,
+            materialization,
+            {}};
+  }
+
   template <typename T, typename Context, typename Source>
   decltype(auto) resolve_conversion(construction_scope scope, Context &context,
                                     Source &&source) {

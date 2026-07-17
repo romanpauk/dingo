@@ -265,6 +265,7 @@ class storage<external, Type, StoredType, Factory, Conversions> {
   storage_instance<external, Type, StoredType, void> instance_;
 
 public:
+  using factory_type = Factory;
   using conversions = Conversions;
   using type = Type;
   using stored_type = StoredType;

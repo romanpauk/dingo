@@ -48,6 +48,8 @@ public:
                          ParentContainer>;
   using rtti_type = typename registry_type::rtti_type;
   using lookup_definition_type = typename registry_type::lookup_definition_type;
+  static constexpr bool dependency_observation_enabled =
+      registry_type::dependency_observation_enabled;
   static constexpr bool has_parent_v =
       !std::is_same_v<void, parent_container_type>;
 
@@ -235,7 +237,16 @@ private:
     }
 
     if constexpr (construct_factory_request_v<user_type>) {
-      return factory.template construct<R>(scope, context, *this);
+      if constexpr (dependency_observation_enabled) {
+        auto perform = [&]() -> R {
+          return factory.template construct<R>(scope, context, *this);
+        };
+        return detail::observe_dependencies<request_value_type>(
+            context.dependency_observer(), {}, introspection_container_id(),
+            perform);
+      } else {
+        return factory.template construct<R>(scope, context, *this);
+      }
     } else if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
                              user_type>) {
       ::dingo::throw_missing_rvalue_conversion<user_type>(false, context);
@@ -249,6 +260,25 @@ private:
   }
 
 public:
+  template <typename Visitor> bool visit_registrations(Visitor &&visitor) {
+    return runtime_registry_.visit_registrations(
+        std::forward<Visitor>(visitor));
+  }
+
+  template <typename Observer>
+  dependency_observer_subscription
+  observe_dependencies(Observer &observer) noexcept {
+    return runtime_registry_.observe_dependencies(observer);
+  }
+
+  detail::dependency_observer_ref introspection_dependency_observer() {
+    return runtime_registry_.runtime().dependency_observer();
+  }
+
+  std::size_t introspection_container_id() const noexcept {
+    return runtime_registry_.container_id();
+  }
+
   template <typename T, typename IdType>
   detail::binding_status binding_status(IdType &&id) {
     using request = request_type<T>;

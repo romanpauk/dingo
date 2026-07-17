@@ -9,6 +9,7 @@
 
 #include <dingo/core/config.h>
 #include <dingo/core/construction_scope.h>
+#include <dingo/introspection.h>
 #include <dingo/resolution/cache.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/type/type_descriptor.h>
@@ -40,6 +41,8 @@ public:
   virtual ~runtime_binding_interface() = default;
 
   detail::cache::entry *cache_slot() noexcept { return cache_slot_; }
+
+  virtual registration_view introspection(std::size_t container_id) const = 0;
 
   virtual void *
   get_value(construction_scope, Context &,

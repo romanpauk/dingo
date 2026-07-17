@@ -78,6 +78,8 @@ public:
   using rtti_type = typename RootTraits::rtti_type;
   using allocator_type = typename RootTraits::allocator_type;
   using lookup_definition_type = container_lookup_definition_type_t<RootTraits>;
+  static constexpr bool dependency_observation_enabled =
+      dependency_observation_v<RootTraits>;
 };
 
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
@@ -109,6 +111,7 @@ public:
   runtime_lookup_value &operator=(const runtime_lookup_value &) = delete;
 
   BindingInterface &binding() { return *view_.binding; }
+  const BindingInterface &binding() const { return *view_.binding; }
 
 private:
   binding_view_type view_;
@@ -327,6 +330,8 @@ public:
   using rtti_type = typename ContainerTraits::rtti_type;
   using lookup_definition_type =
       detail::container_lookup_definition_type_t<ContainerTraits>;
+  static constexpr bool dependency_observation_enabled =
+      detail::dependency_observation_v<container_traits_type>;
 
 protected:
   using normalized_lookup_entries =
@@ -435,6 +440,45 @@ public:
   runtime_registry &operator=(const runtime_registry &) = delete;
 
   ~runtime_registry() = default;
+
+  template <typename Visitor> bool visit_registrations(Visitor &&visitor) {
+    auto *state = runtime_bindings();
+    if (state == nullptr) {
+      return true;
+    }
+
+    bool complete = true;
+    const std::size_t container_id = runtime_data_.scope_id();
+    for_each(lookup_index_entries{}, [&](auto element) {
+      using entry_type = typename decltype(element)::type;
+      auto &backend = state->lookup_indexes.template get<entry_type>();
+      const bool inspected = backend.for_each([&](const auto &key,
+                                                  const auto &value) {
+        auto view = value.binding().introspection(container_id);
+        if constexpr (!std::is_same_v<entry_type, base_lookup_entry>) {
+          view.key_type =
+              describe_type<typename entry_type::key_domain::definition_type>();
+          if constexpr (!std::is_same_v<std::decay_t<decltype(key)>, none_t>) {
+            view.key = introspection_key::from(key);
+          }
+        }
+        visitor(view);
+      });
+      complete = inspected && complete;
+    });
+    return complete;
+  }
+
+  template <typename Observer>
+  dependency_observer_subscription
+  observe_dependencies(Observer &observer) noexcept {
+    static_assert(dependency_observation_enabled,
+                  "dependency observation requires traits with "
+                  "dependency_observation_enabled = true");
+    return runtime().observe_dependencies(observer);
+  }
+
+  std::size_t container_id() const noexcept { return runtime_data_.scope_id(); }
 
   allocator_type &get_allocator() {
     return allocator_base<allocator_type>::get_allocator();
@@ -1757,9 +1801,19 @@ private:
                   "auto-construction requires a complete type");
 
     using type_detection = detail::automatic;
-    return context
-        .template construct<typename Request::interface_type, type_detection>(
-            scope, *resolve_root());
+    if constexpr (dependency_observation_enabled) {
+      auto perform = [&]() -> decltype(auto) {
+        return context.template construct<typename Request::interface_type,
+                                          type_detection>(scope,
+                                                          *resolve_root());
+      };
+      return detail::observe_dependencies<Type>(context.dependency_observer(),
+                                                {}, container_id(), perform);
+    } else {
+      return context
+          .template construct<typename Request::interface_type, type_detection>(
+              scope, *resolve_root());
+    }
   }
 
   template <typename T, bool RemoveRvalueReferences, typename LookupKey,

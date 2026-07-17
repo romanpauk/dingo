@@ -136,6 +136,14 @@ public:
     }
   }
 
+  template <typename Visitor> void for_each(Visitor &&visitor) const {
+    for (std::size_t index = 0; index < Size; ++index) {
+      if (entries_[index].second) {
+        visitor(static_cast<Key>(index), *entries_[index].second);
+      }
+    }
+  }
+
 private:
   static std::optional<std::size_t> to_index(const Key &key) {
     return array_lookup_index(key, Size);
@@ -280,6 +288,14 @@ public:
   }
 
   void erase(iterator handle) { values_[handle.index_].erase(handle.it_); }
+
+  template <typename Visitor> void for_each(Visitor &&visitor) const {
+    for (std::size_t index = 0; index < Size; ++index) {
+      for (const auto &value : values_[index]) {
+        visitor(static_cast<Key>(index), value);
+      }
+    }
+  }
 
 private:
   static std::optional<std::size_t> to_index(const Key &key) {

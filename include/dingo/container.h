@@ -360,7 +360,16 @@ private:
 
     if constexpr (construct_factory_request_v<user_type>) {
       auto type_guard = context.template track_type<request_value_type>();
-      return factory.template construct<R>(scope, context, *this);
+      if constexpr (dependency_observation_enabled) {
+        auto perform = [&]() -> R {
+          return factory.template construct<R>(scope, context, *this);
+        };
+        return detail::observe_dependencies<request_value_type>(
+            context.dependency_observer(), {}, introspection_container_id(),
+            perform);
+      } else {
+        return factory.template construct<R>(scope, context, *this);
+      }
     } else if constexpr (::dingo::rvalue_request_requires_explicit_conversion_v<
                              user_type>) {
       ::dingo::throw_missing_rvalue_conversion<user_type>(false, context);
@@ -374,6 +383,8 @@ public:
   using container_traits_type = typename runtime_base::container_traits_type;
   using allocator_type = typename runtime_base::allocator_type;
   using rtti_type = typename runtime_base::rtti_type;
+  static constexpr bool dependency_observation_enabled =
+      runtime_base::dependency_observation_enabled;
 
   static_assert(static_bindings_type::valid,
                 "container requires a valid compile-time bindings source");
@@ -407,6 +418,27 @@ public:
                  ...),
                 "container requires default-constructible compile-time "
                 "storage objects");
+
+  template <typename Visitor> bool visit_registrations(Visitor &&visitor) {
+    auto &&visitor_ref = visitor;
+    static_registry_.visit_registrations(visitor_ref,
+                                         runtime_registry_.container_id());
+    return runtime_registry_.visit_registrations(visitor_ref);
+  }
+
+  template <typename Observer>
+  dependency_observer_subscription
+  observe_dependencies(Observer &observer) noexcept {
+    return runtime_registry_.observe_dependencies(observer);
+  }
+
+  detail::dependency_observer_ref introspection_dependency_observer() {
+    return runtime_registry_.runtime().dependency_observer();
+  }
+
+  std::size_t introspection_container_id() const noexcept {
+    return runtime_registry_.container_id();
+  }
 
   template <bool OwnsRuntimeData = runtime_configuration::owns_runtime_data,
             std::enable_if_t<OwnsRuntimeData, int> = 0>
@@ -643,8 +675,18 @@ public:
 
           if constexpr (construct_factory_request_v<T>) {
             auto type_guard = context.template track_type<value_type>();
-            return factory.template construct<R>(ephemeral_scope, context,
-                                                 *this);
+            if constexpr (dependency_observation_enabled) {
+              auto perform = [&]() -> R {
+                return factory.template construct<R>(ephemeral_scope, context,
+                                                     *this);
+              };
+              return detail::observe_dependencies<value_type>(
+                  context.dependency_observer(), {},
+                  introspection_container_id(), perform);
+            } else {
+              return factory.template construct<R>(ephemeral_scope, context,
+                                                   *this);
+            }
           } else {
             return resolve<request, typename request::lookup_type>(
                 ephemeral_scope, context, *this, detail::no_lookup_key());

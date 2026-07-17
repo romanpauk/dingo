@@ -94,6 +94,12 @@ public:
     }
   }
 
+  template <typename Visitor> void for_each(Visitor &&visitor) const {
+    if (value_) {
+      visitor(::dingo::none_t{}, *value_);
+    }
+  }
+
 private:
   std::optional<Value> value_;
 };
@@ -139,6 +145,12 @@ public:
 
   void erase(iterator handle) { values_.erase(handle); }
 
+  template <typename Visitor> void for_each(Visitor &&visitor) const {
+    for (const auto &value : values_) {
+      visitor(::dingo::none_t{}, value);
+    }
+  }
+
 private:
   storage_type values_;
 };
@@ -179,6 +191,11 @@ class lookup_backend
 public:
   explicit lookup_backend(Allocator &allocator)
       : base_type(make_lookup_storage<base_type>(allocator)) {}
+
+  template <typename Visitor> bool for_each(Visitor &&visitor) const {
+    return visit_lookup_storage(static_cast<const base_type &>(*this),
+                                std::forward<Visitor>(visitor));
+  }
 };
 
 template <typename Entry, typename Value, typename Allocator>

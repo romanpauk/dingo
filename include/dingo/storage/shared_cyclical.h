@@ -315,6 +315,7 @@ class storage<shared_cyclical, Type, StoredType, Factory, Conversions> {
   };
 
 public:
+  using factory_type = Factory;
   template <typename... Args>
   storage(Args &&...args) : instance_(std::forward<Args>(args)...) {}
 

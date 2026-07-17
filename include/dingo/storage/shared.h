@@ -404,6 +404,7 @@ public:
   using type = Type;
   using stored_type = StoredType;
   using tag_type = shared;
+  using factory_type = Factory;
 
   template <typename Context, typename Container>
   decltype(auto) resolve(construction_scope scope, Context &context,

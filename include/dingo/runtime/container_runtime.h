@@ -9,6 +9,7 @@
 
 #include <dingo/core/config.h>
 
+#include <dingo/introspection.h>
 #include <dingo/memory/arena_allocator.h>
 #include <dingo/memory/object_store.h>
 
@@ -65,6 +66,17 @@ public:
   }
 
   void commit(checkpoint) {}
+
+  template <typename Observer>
+  dependency_observer_subscription
+  observe_dependencies(Observer &observer) noexcept {
+    return dependency_observer_subscription(
+        this, detail::dependency_observer_ref(observer));
+  }
+
+  detail::dependency_observer_ref dependency_observer() const noexcept {
+    return detail::find_dependency_observer(this);
+  }
 
 private:
   arena_type arena_;

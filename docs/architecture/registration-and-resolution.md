@@ -168,6 +168,16 @@ The static path uses the same binding model and conversion rules, but it selects
 from a validated compile-time binding source instead of mutable runtime binding
 state.
 
+Introspection stays outside the binding and lookup algorithms. Registration
+visitation projects the existing static storage slots and runtime lookup rows as
+borrowed `registration_view` values, so it does not maintain a second
+registration catalog. Opt-in dependency observation emits a format-neutral
+`dependency_view` whenever construction requests a dependency. Observers are
+scoped thread-local attachments keyed by the root runtime, which keeps the
+normal container, binding, and context object sizes unchanged. Instrumentation
+is selected at compile time by the container traits, leaving the default
+resolution path unchanged.
+
 ## Registration Child Bindings
 
 `register_type<...>()` can carry local `bindings<...>` that configure the static

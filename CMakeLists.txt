@@ -104,6 +104,7 @@ if(DINGO_DEVELOPMENT_MODE)
         core/dependency.h
         core/factory_traits.h
         core/key.h
+        introspection.h
         core/none.h
         static/activation_set.h
         static/container_traits.h

@@ -72,7 +72,9 @@ container API. For `one`, Dingo uses `find(key)`, `end()`,
 `try_emplace(key, mapped)`, and `erase(iterator)`. For `many`, Dingo uses
 `equal_range(key)`, `emplace(key, mapped)`, and `erase(iterator)`. Collection
 iteration order is defined by the backend; `many` backends are not required to
-preserve registration order.
+preserve registration order. To make registrations in a custom backend
+introspectable, also expose either an iterable mapped-container interface or
+`for_each(visitor)`, where the visitor receives `(key, mapped)`.
 
 Registration-created child containers use a root-owned dense table of lookup
 scopes. A child indexes that table by scope ID, then performs the lookup in its
@@ -399,6 +401,73 @@ See:
 - [include/dingo/container.h](../include/dingo/container.h)
 - [include/dingo/runtime_container.h](../include/dingo/runtime_container.h)
 - [include/dingo/static_container.h](../include/dingo/static_container.h)
+
+## Container Introspection
+
+Introspection is split into two format-neutral capabilities: registration
+visitation describes the configuration currently stored in a container, while
+dependency observation reports dependency requests made during actual
+construction. Dingo does not render, log, or retain these records.
+
+`visit_registrations()` invokes a callback with a non-owning `registration_view`
+for each lookup route:
+
+```c++
+const bool complete = container.visit_registrations(
+    [&](const dingo::registration_view &registration) {
+      introspect_registration(registration);
+    });
+```
+
+The view contains a stable registration ID, container scope ID, static or
+runtime origin, registered/stored/scope/factory/interface/key types, declared
+interfaces and dependencies, current materialization state, and the lookup key
+when one exists. Multiple lookup routes for one runtime registration have the
+same registration ID. The view and its key are borrowed from the container and
+should be consumed during the callback.
+
+The return value is `true` when every lookup backend could be enumerated. It is
+`false` when a custom backend does not provide an iterable interface or a
+`for_each(visitor)` hook; registrations in that backend are then omitted.
+
+Declared dependencies are included in `registration_view` when the factory
+exposes them. Constructor detection can leave them unknown until construction.
+Dependency observation covers that case by reporting each dependency request
+made while an object is being constructed. It is an opt-in container policy so
+containers that do not use it retain their normal code size:
+
+```c++
+struct debug_container_traits : dingo::dynamic_container_traits {
+  template <typename> using rebind_t = debug_container_traits;
+  static constexpr bool dependency_observation_enabled = true;
+};
+
+dingo::container<debug_container_traits> container;
+auto observer = [&](const dingo::dependency_view &dependency) noexcept {
+  graph.add_edge(dependency.constructed_type, dependency.dependency_type);
+};
+auto subscription = container.observe_dependencies(observer);
+
+auto &service = container.resolve<IService &>();
+```
+
+Each `dependency_view` contains the constructed and requested dependency types,
+plus the registration and container IDs of the constructed object. An automatic
+or explicitly constructed type has no registration ID. The registration ID can
+be joined with `visit_registrations()` data without imposing a reporting format.
+Construction with no dependencies produces no callback, and resolving an already
+constructed instance does not repeat its dependencies.
+
+Observers must be `noexcept`, subscriptions must be destroyed in reverse order,
+and only resolutions performed on the subscription's thread are observed.
+Registration-created runtime child containers share the root runtime observer.
+The callback runs synchronously inside resolution, so it must not throw or
+re-enter the observed container.
+
+Pure static containers use the same policy through traits derived from
+`static_container_traits<>`. The default runtime and static traits leave
+dependency observation disabled; registration visitation remains available
+without opting in.
 
 ## Container Nesting
 
