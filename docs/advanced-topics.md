@@ -74,6 +74,11 @@ container API. For `one`, Dingo uses `find(key)`, `end()`,
 iteration order is defined by the backend; `many` backends are not required to
 preserve registration order.
 
+Registration-created child containers use a root-owned dense table of lookup
+scopes. A child indexes that table by scope ID, then performs the lookup in its
+own state with the declared backend, cardinality, and logical key. Lookup state
+is allocated lazily when a child first registers a local binding.
+
 Typed-key registrations can also use explicit lookups:
 
 ```c++

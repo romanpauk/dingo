@@ -166,6 +166,172 @@ struct runtime_unique_local_service {
   bool dependency_was_live;
 };
 
+struct runtime_domain_dependency {
+  explicit runtime_domain_dependency(int init_value = 0) : value(init_value) {}
+
+  int value;
+};
+
+struct runtime_domain_traits : dynamic_container_traits {
+  using lookup_definition_type = lookups<base<many, ordered>>;
+};
+
+struct runtime_domain_first_service {
+  explicit runtime_domain_first_service(runtime_domain_dependency &dependency)
+      : value(dependency.value) {}
+
+  int value;
+};
+
+struct runtime_domain_second_service {
+  explicit runtime_domain_second_service(
+      std::vector<runtime_domain_dependency *> dependencies)
+      : value(dependencies.front()->value), count(dependencies.size()) {}
+
+  int value;
+  std::size_t count;
+};
+
+struct runtime_domain_retry_service {};
+
+struct runtime_domain_array_traits : dynamic_container_traits {
+  using lookup_definition_type = lookups<
+      associative<std::size_t, runtime_domain_dependency, one, array<1>>>;
+};
+
+struct runtime_domain_array_service {
+  explicit runtime_domain_array_service(
+      dependency<runtime_domain_dependency &, key_type<std::size_t, 0>>
+          dependency)
+      : value(dependency) {}
+
+  runtime_domain_dependency &value;
+};
+
+struct runtime_domain_second_array_service {
+  explicit runtime_domain_second_array_service(
+      dependency<runtime_domain_dependency &, key_type<std::size_t, 0>>
+          dependency)
+      : value(dependency) {}
+
+  runtime_domain_dependency &value;
+};
+
+struct runtime_domain_associative_dependency {
+  explicit runtime_domain_associative_dependency(int init_value = 0)
+      : value(init_value) {}
+
+  int value;
+};
+
+struct runtime_domain_typed_dependency {
+  explicit runtime_domain_typed_dependency(int init_value = 0)
+      : value(init_value) {}
+
+  int value;
+};
+
+struct runtime_domain_typed_key {};
+
+struct runtime_domain_collection_traits : dynamic_container_traits {
+  using lookup_definition_type = lookups<
+      associative<std::size_t, runtime_domain_associative_dependency, many,
+                  ordered>,
+      typed<runtime_domain_typed_key, runtime_domain_typed_dependency, many>>;
+};
+
+struct runtime_domain_collection_service {
+  runtime_domain_collection_service(
+      dependency<std::vector<runtime_domain_associative_dependency *>,
+                 key_type<std::size_t, 0>>
+          associative,
+      dependency<std::vector<runtime_domain_typed_dependency *>,
+                 key_type<runtime_domain_typed_key>>
+          typed)
+      : associative_dependencies(associative), typed_dependencies(typed) {}
+
+  std::vector<runtime_domain_associative_dependency *> associative_dependencies;
+  std::vector<runtime_domain_typed_dependency *> typed_dependencies;
+};
+
+struct runtime_composed_static_dependency {
+  runtime_composed_static_dependency() : value(7) {}
+
+  int value;
+};
+
+struct runtime_composed_child_dependency {
+  explicit runtime_composed_child_dependency(int init_value = 0)
+      : value(init_value) {}
+
+  int value;
+};
+
+struct runtime_composed_root_dependency {
+  explicit runtime_composed_root_dependency(int init_value = 0)
+      : value(init_value) {}
+
+  int value;
+};
+
+struct runtime_composed_service {
+  runtime_composed_service(runtime_composed_static_dependency &static_value,
+                           runtime_composed_child_dependency &child_value,
+                           runtime_composed_root_dependency &root_value)
+      : static_result(static_value.value), child_result(child_value.value),
+        root_result(root_value.value) {}
+
+  int static_result;
+  int child_result;
+  int root_result;
+};
+
+struct runtime_composed_collection_dependency {
+  explicit runtime_composed_collection_dependency(int init_value = 0)
+      : value(init_value) {}
+
+  int value;
+};
+
+[[maybe_unused]] runtime_composed_collection_dependency
+make_runtime_composed_static_collection_dependency() {
+  return runtime_composed_collection_dependency{22};
+}
+
+struct runtime_composed_collection_service {
+  explicit runtime_composed_collection_service(
+      std::vector<runtime_composed_collection_dependency *> dependencies) {
+    for (auto *dependency : dependencies) {
+      values.push_back(dependency->value);
+    }
+  }
+
+  std::vector<int> values;
+};
+
+struct runtime_domain_retry_factory {
+  template <typename Type, typename Context, typename Container>
+  Type construct(construction_scope, Context &, Container &container) const {
+    container.template register_type<scope<shared>,
+                                     storage<runtime_domain_dependency>>();
+    if (should_throw) {
+      throw std::runtime_error("runtime domain construction failed");
+    }
+    return Type{};
+  }
+
+  template <typename Type, typename Context, typename Container>
+  void construct(void *ptr, construction_scope scope, Context &context,
+                 Container &container) const {
+    using object_type = std::remove_pointer_t<Type>;
+    new (ptr) object_type(construct<object_type>(scope, context, container));
+  }
+
+  static bool should_throw;
+};
+
+bool runtime_domain_retry_factory::should_throw = false;
+
 struct runtime_scoped_source_dependency {
   runtime_scoped_source_dependency() = default;
   runtime_scoped_source_dependency(const runtime_scoped_source_dependency &) {}

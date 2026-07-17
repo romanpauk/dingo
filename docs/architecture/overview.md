@@ -37,6 +37,12 @@ Below that API, the runtime registration path owns:
 - parent lookup for nested containers
 - the public registration and resolution entry points
 
+The root container owns one runtime domain for itself and for the internal child
+containers created by runtime bindings. Those child containers retain their own
+lazily allocated lookup state, reached through a dense root-owned scope table,
+while borrowing the root arena. Explicit public parent/child containers remain
+independent owners.
+
 The compile-time binding path owns:
 
 - compile-time binding normalization
@@ -133,8 +139,8 @@ For `container<bindings<...>>`:
 
 - singular runtime/static conflicts are ambiguous
 - collection requests merge runtime and static results
-- local `bindings<...>` overlays override host singular bindings and merge
-  collections with the host container
+- registration child bindings take precedence for singular requests and merge
+  child static and runtime collections with the root container
 
 The pieces above are not independent extension systems. They cooperate in one
 pipeline.

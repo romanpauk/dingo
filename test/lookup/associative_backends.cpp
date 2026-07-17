@@ -24,6 +24,8 @@ namespace dingo {
 inline int custom_lookup_backend_constructions = 0;
 inline int custom_lookup_backend_insertions = 0;
 inline int custom_lookup_backend_finds = 0;
+inline int custom_lookup_backend_try_emplacements = 0;
+inline int custom_lookup_backend_emplaces = 0;
 inline int operator_lookup_backend_insertions = 0;
 
 struct custom_lookup_backend {
@@ -61,23 +63,27 @@ struct custom_lookup_backend {
     const_iterator end() const { return values_.end(); }
 
     std::pair<iterator, iterator> equal_range(const Key &key) {
+      ++custom_lookup_backend_finds;
       return values_.equal_range(key);
     }
 
     std::pair<const_iterator, const_iterator>
     equal_range(const Key &key) const {
+      ++custom_lookup_backend_finds;
       return values_.equal_range(key);
     }
 
     template <typename Inserted>
     std::pair<iterator, bool> try_emplace(const Key &key, Inserted &&value) {
       ++custom_lookup_backend_insertions;
+      ++custom_lookup_backend_try_emplacements;
       return values_.try_emplace(key, std::forward<Inserted>(value));
     }
 
     template <typename Inserted>
     iterator emplace(const Key &key, Inserted &&value) {
       ++custom_lookup_backend_insertions;
+      ++custom_lookup_backend_emplaces;
       return values_.emplace(key, std::forward<Inserted>(value));
     }
 
@@ -407,6 +413,8 @@ TEST(associative_backend_test, custom_backend_uses_stl_like_try_emplace) {
 
   custom_lookup_backend_constructions = 0;
   custom_lookup_backend_insertions = 0;
+  custom_lookup_backend_try_emplacements = 0;
+  custom_lookup_backend_emplaces = 0;
 
   container<traits> container;
   container.template register_type<scope<shared>, storage<processor_impl>,
@@ -414,6 +422,8 @@ TEST(associative_backend_test, custom_backend_uses_stl_like_try_emplace) {
 
   ASSERT_GT(custom_lookup_backend_constructions, 0);
   ASSERT_GT(custom_lookup_backend_insertions, 0);
+  ASSERT_EQ(custom_lookup_backend_try_emplacements, 1);
+  ASSERT_EQ(custom_lookup_backend_emplaces, 0);
   ASSERT_EQ(container.template resolve<processor &>(7).id(), 1);
 }
 
