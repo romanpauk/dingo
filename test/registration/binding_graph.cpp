@@ -221,7 +221,7 @@ TEST(static_execution_traits_test,
 }
 
 TEST(static_execution_traits_test,
-     unknown_auto_constructor_dependencies_use_full_context_bounds) {
+     detected_auto_constructor_dependencies_control_context_bounds) {
   struct left {};
   struct right {};
   struct root {
@@ -232,10 +232,13 @@ TEST(static_execution_traits_test,
                                  dingo::bind<scope<shared>, storage<right>>,
                                  dingo::bind<scope<unique>, storage<root>>>;
   using static_traits = detail::static_execution_traits<typename source::type>;
+  using detection = constructor_detection<root>;
 
   static_assert(static_traits::acyclic);
-  static_assert(!static_traits::static_context_eligible);
-  static_assert(static_traits::max_retained_frame_depth == 2);
+  static_assert(static_traits::static_context_eligible ==
+                !std::is_void_v<typename detection::arguments>);
+  static_assert(static_traits::max_retained_frame_depth ==
+                (static_traits::static_context_eligible ? 1 : 2));
 }
 
 TEST(static_execution_traits_test,

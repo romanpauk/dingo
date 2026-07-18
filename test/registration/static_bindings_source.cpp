@@ -92,7 +92,7 @@ TEST(static_bindings_source_test,
 }
 
 TEST(static_bindings_source_test,
-     plain_constructor_dependencies_are_unknown_for_static_metadata) {
+     plain_constructor_dependencies_follow_default_detection_metadata) {
   struct config {};
   struct logger {};
   struct service {
@@ -103,17 +103,23 @@ TEST(static_bindings_source_test,
                                  dingo::bind<scope<shared>, storage<logger>>,
                                  dingo::bind<scope<unique>, storage<service>>>;
   using registry_type = typename source::type;
+  using dependencies = typename constructor_detection<service>::arguments;
+  using expected_dependency_bindings = std::conditional_t<
+      std::is_void_v<dependencies>, void,
+      type_list<
+          typename registry_type::binding<config, detail::no_lookup_key_t>,
+          typename registry_type::binding<logger, detail::no_lookup_key_t>>>;
 
   static_assert(registry_type::valid);
-  static_assert(
-      std::is_same_v<typename registry_type::dependencies<service>, void>);
+  static_assert(std::is_same_v<typename registry_type::dependencies<service>,
+                               dependencies>);
   static_assert(
       std::is_same_v<typename registry_type::dependency_bindings<service>,
-                     void>);
+                     expected_dependency_bindings>);
 }
 
 TEST(static_bindings_source_test,
-     plain_constructor_still_resolves_selected_conversion_dependencies) {
+     plain_constructor_resolves_default_detected_dependencies) {
   struct config {};
   struct service {
     explicit service(config &init_dependency) : dependency(&init_dependency) {}
@@ -123,13 +129,18 @@ TEST(static_bindings_source_test,
   using source = dingo::bindings<dingo::bind<scope<shared>, storage<config>>,
                                  dingo::bind<scope<unique>, storage<service>>>;
   using registry_type = typename source::type;
+  using dependencies = typename constructor_detection<service>::arguments;
+  using expected_dependency_bindings =
+      std::conditional_t<std::is_void_v<dependencies>, void,
+                         type_list<typename registry_type::binding<
+                             config, detail::no_lookup_key_t>>>;
 
   static_assert(registry_type::valid);
-  static_assert(
-      std::is_same_v<typename registry_type::dependencies<service>, void>);
+  static_assert(std::is_same_v<typename registry_type::dependencies<service>,
+                               dependencies>);
   static_assert(
       std::is_same_v<typename registry_type::dependency_bindings<service>,
-                     void>);
+                     expected_dependency_bindings>);
 
   dingo::static_container<source> container;
   auto instance = container.resolve<service>();

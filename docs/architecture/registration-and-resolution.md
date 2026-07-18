@@ -195,11 +195,20 @@ behavior also lives in
 
 The deduction logic itself lives in
 [include/dingo/factory/constructor_detection.h](../../include/dingo/factory/constructor_detection.h).
-Architecturally, the important limit is that Dingo picks the highest-arity
-constructor shape it can prove constructible under its detection rules. It does
-not try to model the full C++ overload-resolution space, which is why ambiguous,
-policy-sensitive, or readability-critical cases should move to an explicit
-factory.
+Constructor detection first selects a shape: its constructor kind and the
+highest arity Dingo can prove constructible. The default construction path uses
+that result directly and supplies conversion-based arguments at the selected
+arity.
+
+When compile-time dependency information is needed, signature detection reuses
+the selected shape and recovers the concrete parameter types. Its construction
+path consumes that recovered type list, making it the single source of truth for
+both dependency reporting and injection. Signature recovery does not choose a
+different overload or expand the search range.
+
+Dingo does not try to model the full C++ overload-resolution space, which is why
+ambiguous, policy-sensitive, or readability-critical cases should move to an
+explicit factory.
 
 `container<bindings<...>>` also checks statically known static cycles at compile
 time. Ordinary static cycles are rejected; cycles where every participating

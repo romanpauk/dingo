@@ -374,13 +374,13 @@ TEST(type_registration_test,
       runtime_context context(scratch, transaction);
 
       runtime_policy_detected_tracker::next_value = 1;
-      (void)context
-          .construct<runtime_policy_detected_tracker &, detail::automatic>(
-              ephemeral_scope, container);
+      (void)context.construct<runtime_policy_detected_tracker &,
+                              detail::constructor_shape>(ephemeral_scope,
+                                                         container);
       runtime_policy_detected_tracker::next_value = 2;
-      (void)context
-          .construct<runtime_policy_detected_tracker &, detail::automatic>(
-              persistent_scope, container);
+      (void)context.construct<runtime_policy_detected_tracker &,
+                              detail::constructor_shape>(persistent_scope,
+                                                         container);
       transaction.commit();
     }
 

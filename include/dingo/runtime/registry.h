@@ -1756,7 +1756,7 @@ private:
     static_assert(is_complete<Type>::value,
                   "auto-construction requires a complete type");
 
-    using type_detection = detail::automatic;
+    using type_detection = detail::constructor_shape;
     return context
         .template construct<typename Request::interface_type, type_detection>(
             scope, *resolve_root());

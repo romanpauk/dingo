@@ -121,12 +121,12 @@ public:
     }
   }
 
-  template <typename T, typename DetectionTag, typename Container>
+  template <typename T, typename DetectionMode, typename Container>
   T construct(construction_scope scope, Container &container) {
     using temporary_type = normalized_type_t<T>;
 
     auto *instance = allocate_temporary_storage<temporary_type>();
-    detail::default_constructor_detection<temporary_type, DetectionTag>()
+    constructor_detection<temporary_type, DetectionMode>()
         .template construct<temporary_type>(instance, scope, *this, container);
     if constexpr (!std::is_trivially_destructible_v<temporary_type>) {
       register_destructor(instance);
