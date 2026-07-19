@@ -465,8 +465,7 @@ template <typename T, typename DetectionMode,
 struct constructor_detection
     : constructor_detection_impl<
           constructor_probe,
-          constructor_arity<constructor_probe, T, DetectionMode, IsConstructible,
-                            N>,
+          constructor_arity<T, DetectionMode, IsConstructible, N>,
           T, DetectionMode, IsConstructible, N> {};
 
 template <typename T, template <typename...> typename IsConstructible, size_t N>

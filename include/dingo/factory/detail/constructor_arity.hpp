@@ -15,40 +15,25 @@
 // constructor_detection.hpp inside dingo::detail after the constructor probe
 // primitives are defined.
 
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, typename DetectionMode,
+template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible, size_t Arity,
-          bool Match = ConstructorProbe<T, DetectionMode, constructor_argument,
-                                        IsConstructible, Arity>::value>
+          bool Match = constructor_probe_value<
+              T, DetectionMode, constructor_argument, IsConstructible>(
+              std::make_index_sequence<Arity>{})>
 struct constructor_arity
-    : constructor_arity<ConstructorProbe, T, DetectionMode, IsConstructible,
-                        Arity - 1> {};
+    : constructor_arity<T, DetectionMode, IsConstructible, Arity - 1> {};
 
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, typename DetectionMode,
+template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible, size_t Arity>
-struct constructor_arity<ConstructorProbe, T, DetectionMode, IsConstructible,
-                         Arity, true>
+struct constructor_arity<T, DetectionMode, IsConstructible, Arity, true>
     : std::integral_constant<size_t, Arity> {};
 
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, typename DetectionMode,
+template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible>
-struct constructor_arity<ConstructorProbe, T, DetectionMode, IsConstructible, 0,
-                         false>
+struct constructor_arity<T, DetectionMode, IsConstructible, 0, false>
     : std::integral_constant<size_t, invalid_arity> {};
 
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, typename DetectionMode,
+template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible>
-struct constructor_arity<ConstructorProbe, T, DetectionMode, IsConstructible, 0,
-                         true>
+struct constructor_arity<T, DetectionMode, IsConstructible, 0, true>
     : std::integral_constant<size_t, 0> {};
