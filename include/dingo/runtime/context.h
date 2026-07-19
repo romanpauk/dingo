@@ -56,12 +56,12 @@ public:
         scope, [&](void *ptr) { new (ptr) T(std::forward<Args>(args)...); });
   }
 
-  template <typename T, typename DetectionTag, typename Container>
+  template <typename T, typename DetectionMode, typename Container>
   T construct(construction_scope scope, Container &container) {
     using temporary_type = normalized_type_t<T>;
     auto &instance =
         construct_with_scope<temporary_type>(scope, [&](void *ptr) {
-          detail::default_constructor_detection<temporary_type, DetectionTag>()
+          constructor_detection<temporary_type, DetectionMode>()
               .template construct<temporary_type>(ptr, scope, *this, container);
         });
 

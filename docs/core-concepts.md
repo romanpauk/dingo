@@ -388,6 +388,22 @@ In practice, the default path is:
 
 `construct<T>()` uses the same deduction machinery for unmanaged objects.
 
+Constructor detection has two result forms:
+
+- shape detection reports whether the selected constructor is concrete, generic,
+  or invalid, together with its arity; this is the default used for normal
+  container construction
+- signature detection starts from that same selected shape and additionally
+  recovers its parameter types as a `type_list`; construction then uses the
+  recovered list, so reported dependencies and injected dependencies cannot
+  diverge
+
+The lower-level detection result exposes `kind` and `arity`. A concrete
+signature result also exposes `arguments`; zero-argument construction produces
+`type_list<>`, while an unavailable signature produces `void`. Explicit
+constructor declarations already contain their argument list and therefore do
+not require signature recovery.
+
 ### Constructor-Deduction Limits
 
 Constructor deduction is intentionally useful, not magical. The main limits are:

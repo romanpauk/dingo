@@ -40,7 +40,7 @@ if(NOT CMAKE_SKIP_INSTALL_RULES AND DINGO_INSTALL)
     install(
         DIRECTORY "${PROJECT_SOURCE_DIR}/include/dingo"
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-        FILES_MATCHING PATTERN "*.h"
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     )
 endif()
 
@@ -109,6 +109,12 @@ if(DINGO_DEVELOPMENT_MODE)
         static/container_traits.h
         core/exceptions.h
         factory/callable.h
+        factory/detail/constructor_arity.hpp
+        factory/detail/constructor_arity_msvc.hpp
+        factory/detail/constructor_detection.hpp
+        factory/detail/constructor_detection_msvc.hpp
+        factory/detail/constructor_signature.hpp
+        factory/detail/constructor_signature_msvc.hpp
         factory/constructor_traits.h
         factory/constructor_detection.h
         factory/constructor_typedef.h
