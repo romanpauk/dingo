@@ -32,6 +32,9 @@ struct constructor_probe_msvc_impl<T, DetectionMode, ConstructorArg, IsConstruct
           T, std::conditional_t<true, ConstructorArg<T, DetectionMode>,
                                 std::integral_constant<size_t, Is>>...> {};
 
+// Arity search can never receive invalid_arity, so it bypasses the guarded
+// wrapper below. The direct alias avoids one class instantiation per tested
+// arity while constructor_probe_msvc remains safe for the shared result code.
 template <typename T, typename DetectionMode,
           template <class, class> class ConstructorArg,
           template <typename...> typename IsConstructible, size_t Arity>
@@ -59,6 +62,8 @@ struct constructor_probe_msvc<T, DetectionMode, ConstructorArg, IsConstructible,
 #include <dingo/factory/detail/constructor_signature.hpp>
 #include <dingo/factory/detail/constructor_signature_msvc.hpp>
 
+// Keep the shape result as an alias and reuse it for signature recovery. This
+// avoids another inheritance wrapper around each MSVC detection result.
 template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible,
           size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS>

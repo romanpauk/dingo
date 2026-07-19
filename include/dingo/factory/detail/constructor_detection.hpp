@@ -454,6 +454,9 @@ struct constructor_probe
 #include <dingo/factory/detail/constructor_arity.hpp>
 #include <dingo/factory/detail/constructor_signature.hpp>
 
+// Keep shape/signature selection specialization-based on this path. Expressing
+// it as a conditional alias makes Clang instantiate more signature machinery
+// and loses part of the direct-arity-probe compile-time improvement.
 // Searches constructor arity in the inclusive range [0, N].
 template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible,

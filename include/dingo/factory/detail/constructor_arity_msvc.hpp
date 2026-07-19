@@ -14,6 +14,11 @@
 // recursion available only through a nonzero specialization, so zero can never
 // decrement the unsigned arity.
 //
+// The detector also names constructor_arity_probe_msvc directly and selects
+// the recursive or terminal case on constructor_arity_msvc itself. Keeping the
+// probe out of the template arguments and avoiding a separate step class keeps
+// every tested arity to one detector node.
+//
 // This header is included from constructor_detection_msvc.hpp inside
 // dingo::detail after the constructor probe primitives are defined.
 

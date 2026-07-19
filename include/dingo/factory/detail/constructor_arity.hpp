@@ -14,6 +14,11 @@
 // specialization ordering. This header is included from
 // constructor_detection.hpp inside dingo::detail after the constructor probe
 // primitives are defined.
+//
+// The recursion deliberately calls constructor_probe_value directly instead
+// of carrying constructor_probe as a template-template argument. This keeps
+// each tested arity to one detector node and avoids materializing a probe
+// wrapper class for every step of the search.
 
 template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible, size_t Arity,
