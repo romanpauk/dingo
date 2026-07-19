@@ -14,7 +14,6 @@ from schema import (
 
 
 VALUE_HEADERS = ("matrix/fixtures/values.h",)
-SCENARIO_HEADERS = ("matrix/common/scenario.h",)
 CUSTOM_WRAPPER_HEADERS = ("matrix/fixtures/values.h", "support/custom_wrappers.h")
 
 
@@ -58,15 +57,6 @@ STORED_TYPES = (
         supported_scopes=frozenset({"unique"}),
         provides=frozenset({"stored_explicit_dependencies"}),
         headers=VALUE_HEADERS,
-    ),
-    StoredType(
-        id="scenario",
-        name="scenario_type",
-        kind="scenario",
-        storage="dingo::storage<scenario_type>",
-        supported_scopes=frozenset({"shared"}),
-        provides=frozenset({"scenario"}),
-        headers=SCENARIO_HEADERS,
     ),
     StoredType(
         id="external_value_type",

@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "matrix/fixtures/dependency_shapes.h"
 #include "matrix/policies/policy_core.h"
 
 #include <dingo/core/dependency.h>
@@ -15,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <utility>
+#include <variant>
 
 namespace dingo::matrix::resolution {
 
@@ -206,6 +208,87 @@ struct construct_invoke {
     auto invoked = container.invoke(
         [](Dependency &dependency) { return dependency.marker(); });
     ASSERT_EQ(invoked, Expected);
+  }
+};
+
+template <typename Type> struct dependency_marker_value {
+  static int get(const Type &dependency) { return dependency.marker(); }
+};
+
+template <typename Type> struct dependency_marker_value<Type *> {
+  static int get(Type *dependency) { return dependency->marker(); }
+};
+
+template <typename Type> struct dependency_marker_value<std::shared_ptr<Type>> {
+  static int get(const std::shared_ptr<Type> &dependency) {
+    return dependency->marker();
+  }
+};
+
+template <typename Type> struct dependency_marker_value<std::unique_ptr<Type>> {
+  static int get(const std::unique_ptr<Type> &dependency) {
+    return dependency->marker();
+  }
+};
+
+template <typename Type> struct dependency_marker_value<std::optional<Type>> {
+  static int get(const std::optional<Type> &dependency) {
+    return dependency->marker();
+  }
+};
+
+template <typename Type, std::size_t Size>
+struct dependency_marker_value<Type[Size]> {
+  static_assert(Size > 0);
+  static int get(const Type (&dependency)[Size]) {
+    return dependency[0].marker();
+  }
+};
+
+template <> struct dependency_marker_value<variant_a> {
+  static int get(const variant_a &dependency) { return dependency.value; }
+};
+
+template <> struct dependency_marker_value<variant_b> {
+  static int get(const variant_b &dependency) { return dependency.value; }
+};
+
+template <typename... Types>
+struct dependency_marker_value<std::variant<Types...>> {
+  static int get(const std::variant<Types...> &dependency) {
+    return std::visit(
+        [](const auto &alternative) {
+          using alternative_type = std::decay_t<decltype(alternative)>;
+          return dependency_marker_value<alternative_type>::get(alternative);
+        },
+        dependency);
+  }
+};
+
+template <typename Type> int dependency_marker(Type &&dependency) {
+  using dependency_type = std::remove_cv_t<std::remove_reference_t<Type>>;
+  return dependency_marker_value<dependency_type>::get(dependency);
+}
+
+template <typename Request, typename Value = Request> struct dependency_invoke {
+  template <typename Container> static void check(Container &container) {
+    auto invoked = container.invoke([](Request dependency) {
+      return dependency_marker(
+          static_cast<Value>(std::forward<Request>(dependency)));
+    });
+    ASSERT_EQ(invoked, 3);
+  }
+};
+
+template <typename Request, typename Value = Request>
+struct dependency_invoke_explicit {
+  template <typename Container> static void check(Container &container) {
+    auto invoked =
+        container.template invoke<int(Request)>([](Request dependency) {
+          return dependency_marker(
+              static_cast<Value>(std::forward<Request>(dependency)));
+        });
+    ASSERT_EQ(invoked, 3);
   }
 };
 

@@ -76,13 +76,6 @@ EXPOSED_TYPES = (
         ),
     ),
     ExposedType(
-        name="scenario",
-        kind="scenario",
-        supported_stored_kinds=frozenset({"scenario"}),
-        provides=frozenset({"scenario"}),
-        registrations=(),
-    ),
-    ExposedType(
         name="interface_type",
         kind="interface",
         supported_stored_kinds=frozenset({"implementation_type"}),

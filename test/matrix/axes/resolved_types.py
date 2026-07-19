@@ -17,11 +17,6 @@ from schema import (
 
 RESOLVED_TYPES = (
     ResolvedType(
-        name="scenario",
-        supported_exposed_types=frozenset({"scenario"}),
-        provides=frozenset({"scenario"}),
-    ),
-    ResolvedType(
         name="value_ref_ptr",
         supported_exposed_types=frozenset({"concrete", "interface_type"}),
         provides=frozenset(
@@ -29,21 +24,23 @@ RESOLVED_TYPES = (
                 "resolved_concrete",
                 "constructable_dependency",
                 "invokable_dependency",
-                "unkeyed_invokable_dependency",
             }
         ),
+        dependency_forms=frozenset({"lvalue_reference", "pointer"}),
         requires=frozenset({"stable_concrete_storage", "direct_value_resolution"}),
     ),
     ResolvedType(
         name="value",
         supported_exposed_types=frozenset({"concrete"}),
         provides=frozenset({"resolved_concrete", "resolved_concrete_value"}),
+        dependency_forms=frozenset({"value"}),
         requires=frozenset({"direct_value_resolution"}),
     ),
     ResolvedType(
         name="value_rvalue",
         supported_exposed_types=frozenset({"concrete"}),
         provides=frozenset({"resolved_concrete"}),
+        dependency_forms=frozenset({"rvalue_reference"}),
         requires=frozenset({"unique_storage", "stored_value"}),
     ),
     ResolvedType(
@@ -72,12 +69,14 @@ RESOLVED_TYPES = (
         name="const_value_ref",
         supported_exposed_types=frozenset({"concrete"}),
         provides=frozenset({"resolved_concrete", "resolved_const_concrete"}),
+        dependency_forms=frozenset({"const_lvalue_reference"}),
         requires=frozenset({"stable_concrete_storage", "direct_value_resolution"}),
     ),
     ResolvedType(
         name="const_value_ptr",
         supported_exposed_types=frozenset({"concrete"}),
         provides=frozenset({"resolved_concrete", "resolved_const_concrete"}),
+        dependency_forms=frozenset({"const_pointer"}),
         requires=frozenset({"stable_concrete_storage", "direct_value_resolution"}),
     ),
     ResolvedType(
@@ -114,7 +113,7 @@ RESOLVED_TYPES = (
         supported_exposed_types=frozenset({"multiple_interfaces"}),
         provides=frozenset({"resolved_interface"}),
         requires=frozenset(
-            {"runtime_regression_container", "shared_storage"}
+            {"runtime_reference_conversion_container", "shared_storage"}
         ),
         supported_modes=frozenset({"runtime"}),
     ),
@@ -128,6 +127,7 @@ RESOLVED_TYPES = (
         name="value_unique_ptr",
         supported_exposed_types=frozenset({"concrete"}),
         provides=frozenset({"resolved_wrapper"}),
+        dependency_forms=frozenset({"unique_pointer"}),
         requires=frozenset({"unique_storage", "stored_unique_ptr"}),
     ),
     ResolvedType(
@@ -140,24 +140,30 @@ RESOLVED_TYPES = (
         name="value_shared_ptr",
         supported_exposed_types=frozenset({"concrete"}),
         provides=frozenset({"resolved_wrapper"}),
+        dependency_forms=frozenset({"shared_pointer"}),
         requires=frozenset({"shared_storage", "stored_shared_ptr"}),
     ),
     ResolvedType(
         name="value_shared_ptr_ref",
         supported_exposed_types=frozenset({"concrete"}),
         provides=frozenset({"resolved_wrapper"}),
+        dependency_forms=frozenset(
+            {"shared_pointer_lvalue_reference"}
+        ),
         requires=frozenset({"shared_storage", "stored_shared_ptr"}),
     ),
     ResolvedType(
         name="value_optional",
         supported_exposed_types=frozenset({"concrete"}),
         provides=frozenset({"resolved_wrapper"}),
+        dependency_forms=frozenset({"optional"}),
         requires=frozenset({"unique_storage", "stored_optional"}),
     ),
     ResolvedType(
         name="value_optional_ref",
         supported_exposed_types=frozenset({"concrete"}),
         provides=frozenset({"resolved_wrapper"}),
+        dependency_forms=frozenset({"optional_lvalue_reference"}),
         requires=frozenset({"shared_storage", "stored_optional"}),
     ),
     ResolvedType(
@@ -216,7 +222,8 @@ RESOLVED_TYPES = (
     ResolvedType(
         name="keyed_value_dependency",
         supported_exposed_types=frozenset({"keyed_concrete"}),
-        provides=frozenset({"constructable_dependency", "invokable_dependency"}),
+        provides=frozenset({"constructable_dependency"}),
+        dependency_forms=frozenset({"selected_lvalue_reference"}),
         requires=frozenset({"direct_value_resolution", "stable_concrete_storage"}),
     ),
     ResolvedType(
@@ -246,7 +253,8 @@ RESOLVED_TYPES = (
     ResolvedType(
         name="keyed_collection_dependency",
         supported_exposed_types=frozenset({"element_keyed_collection"}),
-        provides=frozenset({"constructable_dependency", "invokable_dependency"}),
+        provides=frozenset({"constructable_dependency"}),
+        dependency_forms=frozenset({"selected_value"}),
         supported_modes=frozenset({"static", "mixed"}),
     ),
     ResolvedType(
@@ -265,6 +273,7 @@ RESOLVED_TYPES = (
         name="raw_array_ref",
         supported_exposed_types=frozenset({"array_concrete"}),
         provides=frozenset({"resolved_array"}),
+        dependency_forms=frozenset({"array_lvalue_reference"}),
         requires=frozenset({"array_1d"}),
     ),
     ResolvedType(
@@ -349,6 +358,7 @@ RESOLVED_TYPES = (
         name="variant_value",
         supported_exposed_types=frozenset({"variant_concrete"}),
         provides=frozenset({"resolved_variant"}),
+        dependency_forms=frozenset({"variant"}),
     ),
     ResolvedType(
         name="variant_alternative_value",
@@ -371,30 +381,37 @@ RESOLVED_TYPES = (
         name="annotated_value_ref",
         supported_exposed_types=frozenset({"annotated_concrete"}),
         provides=frozenset({"resolved_annotated"}),
+        dependency_forms=frozenset({"annotated_lvalue_reference"}),
         requires=frozenset({"stable_concrete_storage"}),
     ),
     ResolvedType(
         name="annotated_interface_ref",
         supported_exposed_types=frozenset({"annotated_interface"}),
         provides=frozenset({"resolved_annotated"}),
+        dependency_forms=frozenset({"annotated_lvalue_reference"}),
         requires=frozenset({"shared_storage"}),
     ),
     ResolvedType(
         name="annotated_interface_ptr",
         supported_exposed_types=frozenset({"annotated_interface"}),
         provides=frozenset({"resolved_annotated"}),
+        dependency_forms=frozenset({"annotated_pointer"}),
         requires=frozenset({"shared_storage"}),
     ),
     ResolvedType(
         name="annotated_interface_shared_ptr",
         supported_exposed_types=frozenset({"annotated_interface"}),
         provides=frozenset({"resolved_annotated"}),
+        dependency_forms=frozenset({"annotated_shared_pointer"}),
         requires=frozenset({"shared_storage", "stored_shared_ptr"}),
     ),
     ResolvedType(
         name="annotated_interface_shared_ptr_ref",
         supported_exposed_types=frozenset({"annotated_interface"}),
         provides=frozenset({"resolved_annotated"}),
+        dependency_forms=frozenset(
+            {"annotated_shared_pointer_lvalue_reference"}
+        ),
         requires=frozenset({"shared_storage", "stored_shared_ptr"}),
     ),
     ResolvedType(
@@ -459,17 +476,9 @@ _RESOLUTION_POLICIES = {
         "construct",
     ): "resolution::construct_member_value<keyed_value_dependency_type, 3>",
     (
-        "keyed_value_dependency",
-        "invoke",
-    ): "resolution::keyed_invoke<value_type, dingo::key_type<key_a>, 3>",
-    (
         "keyed_collection_dependency",
         "construct",
     ): "resolution::construct_count_sum<keyed_collection_dependency_type>",
-    (
-        "keyed_collection_dependency",
-        "invoke",
-    ): "resolution::keyed_collection_invoke<std::vector<std::shared_ptr<element_interface>>, dingo::key_type<key_a>, 2>",
     ("cycle_ref", "resolve_concrete"): "resolution::cycle_ref<cycle_a_type>",
     (
         "dependent_type_ref",

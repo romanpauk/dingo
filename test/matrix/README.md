@@ -1,15 +1,20 @@
 # Generated Matrix Test Model
 
-The matrix is described as independent axes, then filtered into valid cases. The
-generator should not keep hand-written recipes as the primary model. Recipes are
-an output of axis selection.
+Each matrix family declares independent axes, then filters or materializes their
+Cartesian product into valid cases. The generator should not keep hand-written
+recipes as the primary model. Recipes are an output of axis selection.
 
 ## Source Layout
 
 - `axes/` is the Python package containing one declarative catalog per matrix
-  dimension. `data.py` assembles and validates those catalogs before generation.
-- `schema.py`, `plugins.py`, and `generate.py` contain the typed model,
-  registration/policy helpers, and generator CLI respectively.
+  dimension. `data.py` assembles and validates the registration catalogs;
+  family-local generators validate their own catalogs before generation.
+- `axes/dependency_forms.py` defines independent dependency carrier and
+  decoration axes, derives their supported product, and declares exhaustive
+  provisioning recipes used across matrix families.
+- `schema.py`, `plugins.py`, `family.py`, and `generate.py` contain the typed
+  model, registration/policy helpers, shared family rendering lifecycle, and
+  generator CLI respectively.
 - `common/` contains the assertion mechanism and other matrix-wide plumbing.
 - `containers/` contains container types and traits selected by the container
   axis.
@@ -20,11 +25,58 @@ an output of axis selection.
   families such as parent-container and runtime regressions have one header per
   generated shard and share only their fixture definitions.
 
+The registration family uses the application-wide registration and resolution
+axes below. Invocation has callable, dependency-provisioning,
+registration-mode, and container axes. Complete behavioral scenarios use their
+own scenario and container axes. Constructor detection is a separate family
+with backend, detection mode, and constructor-shape axes, plus an
+argument-storage and conversion-category sub-matrix. Family-local axes do not
+add irrelevant dimensions to other families.
+
+Dependency request forms are the supported `carrier x decoration` product.
+Carriers own the C++ type shape (`T`, `T &`, `const T *`, and smart-pointer
+forms); decorations wrap that shape as plain, selected, or annotated requests.
+Each decoration explicitly lists the carriers and test families for which it
+is supported. Constructor detection and templated invocation cases are derived
+from this product, while resolved types and provisioning recipes declare the
+same form identities. The shared contract rejects missing, extra, renamed, or
+duplicate product cells and requires every form in each applicable family.
+Family-local compatibility still applies after that selection; for example,
+annotated invocation excludes hybrid containers whose compile-time binding path
+cannot materialize the wrapper safely.
+
+Dependency provisionings are exhaustive registration recipes: scope, stored
+type, exposed type, exact form/resolved-type/feature cases, and registration
+modes. Invocation consumes every compatible recipe through templated request
+policies. The registration family must produce a row for each
+`form x provisioning x resolved type x mode x container` combination, so an
+unrelated feature or another container cannot mask missing shared, unique,
+external, annotated, or keyed resolution coverage.
+
+Every family owns its row model and semantic sharding, but exposes the same
+generation contract. It produces source-shard descriptions, and `family.py`
+renders each description into a stable implementation/runner pair before
+grouping the files by executable. This keeps validation, file writing, and
+executable assembly consistent without forcing unrelated families into one row
+schema or C++ template.
+
 Axis members declare their required C++ includes through `headers`. Scenario
 headers belong to the feature or feature case that executes them; they are not
 global support code.
 
 ## Axes
+
+### Matrix Family
+
+- `registration`: container registration, resolution, construction, and
+  lifetime coverage.
+- `invoke`: callable dispatch across shared dependency provisionings and
+  containers.
+- `scenario`: complete regression and parent-container behaviors across the
+  container implementations to which each scenario applies.
+- `constructor_detection`: constructor backend and metadata recovery coverage
+  across constructor shapes, plus constructor-probe argument conversion
+  selection.
 
 ### Feature
 
@@ -38,10 +90,7 @@ global support code.
 - `resolve_keyed`: resolve one typed-key lookup binding.
 - `resolve_keyed_collection`: resolve all bindings for a key.
 - `resolve_indexed`: resolve one runtime-key lookup binding.
-- `static_indexed_regressions`: exercise fixed-key resolution, injection,
-  caching, collections, and parent selection in one curated static shard.
 - `construct`: construct an unregistered type from registered dependencies.
-- `invoke`: invoke a callable from registered dependencies.
 - `construct_collection`: construct a collection with default or custom
   insertion.
 - `local_bindings`: resolve dependencies from bindings attached to a
@@ -72,14 +121,10 @@ valid behavior combinations.
 
 ### Feature Case
 
-Most features use a single default case. Dispatch-heavy features use this axis
-to describe the behavior under test without hiding it in resolved-type checks.
+Most features use a single default case. Dispatch-heavy registration features
+use this axis to describe the behavior under test without hiding it in
+resolved-type checks.
 
-- `invoke`: inferred lambdas, explicit signatures, `std::function`, function
-  pointers, static member functions, member function pointers, mutable and
-  generic lambdas, ref-qualified and `noexcept` functors, move-only functors,
-  multi-argument callables, keyed value and collection dependencies, and
-  `std::move_only_function` when available.
 - `factory_override`: no-argument function factories, function factories with
   dependencies, explicit constructor factories, detected constructors,
   `DINGO_CONSTRUCTOR` typedef constructors, callable registration factories, and
@@ -88,6 +133,45 @@ to describe the behavior under test without hiding it in resolved-type checks.
 Factory case entries own the registration factory expression for the behavior
 under test. The stored, exposed, and resolved type axes only select the C++
 fixture type needed by that case.
+
+### Invoke Callable
+
+The invoke family covers inferred lambdas, explicit signatures,
+`std::function`, function pointers, static and non-static member functions,
+mutable and generic lambdas, ref-qualified and `noexcept` functors, move-only
+functors, multi-argument callables, keyed value and collection dependencies,
+and `std::move_only_function` when available.
+
+### Invoke Dependency Shape
+
+Invocation selects compatible registration shapes independently from the
+callable: shared and unique values; external values, references, pointers,
+stored pointers, stored references, and shared pointers; typed-key values; and
+typed-key collections. Plain dependency carriers use one templated request
+policy. Each provisioning reuses the registration family's typed
+registration-plan builder and declares its supported registration modes.
+
+### Scenario
+
+The scenario family contains complete behaviors that own their registration
+recipes instead of borrowing stored, exposed, and resolved type members:
+
+- runtime container, construction, exception, reference, and cycle regressions
+- indexed registration and static indexed regressions
+- unkeyed, typed-key, and runtime-key lookup routing
+- cross-parent behavior and static-parent combinations
+
+### Scenario Container
+
+- `standalone`: the scenario creates every required container itself.
+- `runtime_container` and `container_runtime`: the two dynamic container
+  implementations used by general runtime regressions.
+- runtime and general indexed containers for `std::size_t`, `int`,
+  `std::string`, and DSL-defined indexes.
+
+Each scenario declares the subset it supports. Parent scenarios are standalone
+because their C++ scenario functions construct and compare multiple parent and
+child container families in one behavioral case.
 
 ### Registration Mode
 
@@ -118,6 +202,8 @@ fixture type needed by that case.
 - `std::shared_ptr<T[]>`
 - `std::variant<A, B>`
 - nested smart-pointer, variant, and array wrapper combinations
+- optional and variant compositions containing shared, unique, move-only, and
+  copy-only values
 - local-binding target types
 - factory-override target types
 - cycle-shaped shared types
@@ -199,13 +285,61 @@ fixture type needed by that case.
 - allocator-parameterized `container`
 - custom-RTTI `container`
 
+### Constructor Detection Backend
+
+- `portable`: the generic detector used by GCC and Clang. This backend is not
+  instantiated when the test suite itself is compiled by MSVC.
+- `msvc`: the category-based MSVC detector. It is also instantiated by GCC and
+  Clang so both algorithms are covered on those hosts.
+
+### Constructor Detection Mode
+
+- `shape`: reports constructor kind and arity without retaining argument types.
+- `signature`: reports kind and arity and recovers the selected argument types.
+
+The constructor-shape axis covers values, pointers, lvalue and
+rvalue references, copy-only and move-only values, selected and annotated
+dependencies, incomplete references, aggregates, default construction, generic
+and ambiguous constructors, explicit constructors, initializer lists, and
+same-arity overloads.
+
+Defaulted, generic, ambiguous, initializer-list, and same-arity-overload shapes
+exercise detector behavior but do not describe independently resolvable
+dependency forms. They are marked `detector_only`; all other constructor shapes
+must declare at least one shared dependency form.
+
+The constructor argument-conversion sub-matrix crosses unique and shared
+argument storage with value, lvalue-reference, const-lvalue-reference,
+rvalue-reference, and pointer conversion categories. The pointer category only
+applies to unique storage, matching the supported constructor-probe shapes.
+Each conversion category references the same shared dependency-form catalog.
+
 ## Filters
 
-The generator should form candidate rows from:
+The registration family forms candidate rows from:
 
 `feature x feature_case x registration_mode x scope x stored_type x exposed_type x resolved_type x container`
 
-Then it should keep only rows that satisfy all rules below.
+It then keeps only rows that satisfy all rules below. The scenario family uses:
+
+`scenario x supported_scenario_container`
+
+The constructor-detection family is the unfiltered product:
+
+`backend x detection_mode x constructor_shape`
+
+Known unsupported backend/mode/shape cells remain in that product and generate
+skipped tests with their limitation reason. Dependency shapes own limitations
+that apply to their carrier/decorator combinations, so optional and variant
+value recovery are explicit without disabling supported reference forms.
+Representative nested standard and user-defined forwarding wrappers document
+the outer-wrapper recovery limitation. An unconstrained forwarding wrapper also
+records the separate shape-detection limitation caused by accepting the opaque
+probe.
+
+Its argument-conversion sub-matrix uses the supported combinations of:
+
+`argument_storage x conversion_category`
 
 - The container must support the registration mode.
 - Static-only containers cannot use runtime registration.
@@ -264,6 +398,21 @@ The generator should fail if:
 - a filter rule is declared but never exercised
 - a declared feature, feature-case, resolved-type, or lifetime policy is never
   selected
+- a scenario or scenario container has no supported row
+- a scenario or scenario-container axis contains duplicate identities
+- a shared dependency form lacks constructor-detection, resolution, or invoke
+  coverage required by its catalog entry
+- a dependency provisioning does not map to compatible registration metadata
+- a declared dependency form / provisioning / resolved type / mode / container
+  combination has no resolution row
+- an invoke callable requests a form unsupported by one of its provisionings
+- an invoke callable, provisioning, mode, or container has no compatible row
+- an invoke callable, provisioning, mode, or container axis contains
+  duplicate identities
+- a constructor backend / detection mode shard does not contain every
+  constructor shape
+- a constructor argument storage or conversion category has no compatible row
+- two matrix families claim the same generated source path
 
 Not every axis combination should exist. Completeness means every axis member
 and filter rule is represented by at least one valid generated row, and each
@@ -272,18 +421,32 @@ valid generated row.
 
 ## Generated Sources
 
-Generated test executables are split by feature. Implementation and runner
+Registration test executables are split by feature. Implementation and runner
 sources are split by:
 
 `feature x feature_case`
 
 Features with only the default case keep a single source and runner named after
-the feature. Dispatch-heavy features get one source and runner per case, for
-example `invoke_member_function_pointer.cpp` and
-`matrix_runner_invoke_member_function_pointer.cpp`. The split keeps translation
-units tied to matrix meaning instead of arbitrary shard numbers, while limiting
-the amount of template-heavy container and generated test code compiled by one
-compiler process.
+the feature. Dispatch-heavy features get one source and runner per case. The
+split keeps translation units tied to matrix meaning instead of arbitrary shard
+numbers, while limiting the amount of template-heavy container and generated
+test code compiled by one compiler process.
+
+Invocation has one executable and one source/runner pair per callable. Its rows
+are the filtered product:
+
+`callable x dependency_provisioning x registration_mode x container`
+
+Constructor detection has one executable and four semantic source shards split
+by `backend x detection_mode`. Every shard contains the complete
+constructor-shape axis. A fifth shard contains the supported argument-storage
+and conversion-category combinations.
+
+Behavioral scenarios retain executables named for their suites and are sharded
+by scenario. A suite may combine registration and scenario sources; for
+example, `nested_container` keeps native parent resolution in the registration
+family and adds the standalone cross-parent scenario shards to the same test
+executable.
 
 Python selects, validates, names, and shards valid rows. Generic row behavior
 lives in typed C++ policies, while complete behavioral and regression cases live

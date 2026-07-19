@@ -10,6 +10,9 @@
 #include "matrix/common/assertions.h"
 
 #include <dingo/container.h>
+#include <dingo/static_container.h>
+#include <dingo/storage/shared.h>
+#include <dingo/storage/unique.h>
 
 #include <cstddef>
 #include <vector>

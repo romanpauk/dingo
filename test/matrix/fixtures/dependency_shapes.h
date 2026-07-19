@@ -7,8 +7,15 @@
 
 #pragma once
 
+#include "matrix/fixtures/variant_types.h"
+
+#include <variant>
+
 namespace dingo::matrix {
 
-struct scenario_type {};
+template <typename Type> using dependency_array = Type[2];
+
+template <typename Type>
+using dependency_variant = std::variant<Type, variant_b>;
 
 } // namespace dingo::matrix

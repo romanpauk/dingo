@@ -17,6 +17,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, Template
 
+from axes.dependency_forms import DEPENDENCY_PROVISIONINGS
 from data import (
     CATALOG,
     CONTAINERS,
@@ -28,16 +29,21 @@ from data import (
     SCOPES,
     STORED_TYPES,
 )
+from dependency_contract import validate_dependency_contract
 from schema import (
     ContainerSpec,
     ExposedType,
     Feature,
     FeatureCaseSpec,
+    GeneratedExecutable,
     RegistrationMode,
     ResolvedType,
     ScopeSpec,
     StoredType,
 )
+from constructor_detection import generate_constructor_detection_executables
+from family import SourceShard, render_family_executables, write_text_if_changed
+from invoke import generate_invoke_executables
 from plugins import (
     CaseLines,
     LIFETIME_POLICIES,
@@ -46,6 +52,7 @@ from plugins import (
     build_registration_plan,
     select_case_lines,
 )
+from scenarios import generate_scenario_executables
 
 
 class RejectionReason(StrEnum):
@@ -59,9 +66,7 @@ class RejectionReason(StrEnum):
     FEATURE_REQUIRES_TAGS = "feature_requires_tags"
     RESOLVED_TYPE_REQUIRES_TAGS = "resolved_type_requires_tags"
     CONTAINER_REQUIRES = "container_requires"
-    FEATURE_CASE_REQUIRES_TAGS = "feature_case_requires_tags"
     FEATURE_CASE_SUPPORTS_EXPOSURE = "feature_case_supports_exposure"
-    FEATURE_CASE_SUPPORTS_RESOLUTION = "feature_case_supports_resolution"
     FEATURE_HAS_CHECK = "feature_has_check"
 
 
@@ -94,12 +99,6 @@ class GeneratedCase:
     policy: str
     system_headers: tuple[str, ...]
     headers: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class GeneratedExecutable:
-    name: str
-    sources: tuple[Path, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,11 +257,6 @@ def iter_candidates(
                                     continue
 
                                 for feature_case in feature_cases:
-                                    if not feature_case.requires <= tags:
-                                        rejected[
-                                            RejectionReason.FEATURE_CASE_REQUIRES_TAGS
-                                        ] += 1
-                                        continue
                                     if (
                                         feature_case.supported_exposed_types
                                         and exposed_type.name
@@ -272,16 +266,6 @@ def iter_candidates(
                                             RejectionReason.FEATURE_CASE_SUPPORTS_EXPOSURE
                                         ] += 1
                                         continue
-                                    if (
-                                        feature_case.supported_resolved_types
-                                        and resolved_type.name
-                                        not in feature_case.supported_resolved_types
-                                    ):
-                                        rejected[
-                                            RejectionReason.FEATURE_CASE_SUPPORTS_RESOLUTION
-                                        ] += 1
-                                        continue
-
                                     yield CandidateRow(
                                         feature=feature,
                                         feature_case=feature_case,
@@ -352,6 +336,7 @@ def materialize_row(
 
 
 def generate_rows() -> tuple[MatrixRow, ...]:
+    validate_dependency_contract()
     axes = index_axes()
     rejected = axes.rejected
     plan_cache: PlanCache = {}
@@ -407,6 +392,61 @@ def assert_feature_mode_container_coverage(rows: tuple[MatrixRow, ...]) -> None:
         raise RuntimeError(
             "matrix feature/mode/container combinations did not generate rows: "
             + ", ".join(sorted(missing))
+        )
+
+
+def assert_dependency_provisioning_coverage(
+    rows: tuple[MatrixRow, ...],
+) -> None:
+    declared_resolution_cases = {
+        (form, resolved_type, feature)
+        for provisioning in DEPENDENCY_PROVISIONINGS
+        for form, resolved_type, feature in provisioning.resolution_cases
+    }
+    generated_resolution_cases = {
+        (
+            row.feature.name,
+            row.scope.name,
+            row.stored_type.id,
+            row.exposed_type.name,
+            row.resolved_type.name,
+            form,
+            row.mode.name,
+            row.container.name,
+        )
+        for row in rows
+        for form in row.resolved_type.dependency_forms
+        if (form, row.resolved_type.name, row.feature.name)
+        in declared_resolution_cases
+    }
+    expected_resolution_cases = {
+        (
+            feature,
+            provisioning.scope,
+            provisioning.stored_type,
+            provisioning.exposed_type,
+            resolved_type,
+            form,
+            mode,
+            container.name,
+        )
+        for provisioning in DEPENDENCY_PROVISIONINGS
+        for form, resolved_type, feature in provisioning.resolution_cases
+        for mode in provisioning.supported_modes
+        for container in implemented(CONTAINERS)
+        if mode in container.modes
+    }
+    missing_resolution_cases = sorted(
+        expected_resolution_cases - generated_resolution_cases
+    )
+    if missing_resolution_cases:
+        raise RuntimeError(
+            "dependency provisionings: "
+            "form/resolution/mode/container "
+            "combinations did not generate registration rows: "
+            + ", ".join(
+                " / ".join(case) for case in missing_resolution_cases
+            )
         )
 
 
@@ -466,6 +506,7 @@ def assert_coverage(
         {container.name for container in implemented(CONTAINERS)},
     )
     assert_feature_mode_container_coverage(row_tuple)
+    assert_dependency_provisioning_coverage(row_tuple)
 
     untyped_rows = [row.name for row in row_tuple if not row.lines.policy]
     if untyped_rows:
@@ -571,43 +612,6 @@ def make_case(row: MatrixRow) -> GeneratedCase:
     )
 
 
-def render_source(
-    source: Path,
-    rows: list[MatrixRow],
-    template: Template,
-) -> Path:
-    cases: list[GeneratedCase] = []
-
-    for row in rows:
-        cases.append(make_case(row))
-
-    if not cases:
-        raise RuntimeError(f"source {source} did not generate any tests")
-
-    rendered = template.render(
-        cases=cases,
-        system_headers=tuple(
-            sorted({header for case in cases for header in case.system_headers})
-        ),
-        headers=tuple(
-            sorted({header for case in cases for header in case.headers})
-        ),
-    )
-    write_text_if_changed(source, rendered)
-    return source
-
-
-def render_runner(
-    source: Path,
-    rows: tuple[MatrixRow, ...],
-    template: Template,
-) -> Path:
-    cases = [make_case(row) for row in rows]
-    rendered = template.render(cases=cases)
-    write_text_if_changed(source, rendered)
-    return source
-
-
 def executable_name(feature_name: str) -> str:
     return f"dingo_matrix_test_{feature_name}"
 
@@ -630,44 +634,92 @@ def source_groups(rows: list[MatrixRow]) -> dict[str, list[MatrixRow]]:
     return grouped
 
 
-def generate_sources(
-    rows: tuple[MatrixRow, ...],
+def generate_registration_executables(
     out_dir: Path,
     source_template: Template,
     runner_template: Template,
+    claimed_sources: set[Path] | None = None,
 ) -> tuple[GeneratedExecutable, ...]:
-    executables: list[GeneratedExecutable] = []
+    rows = generate_rows()
+    shards: list[SourceShard] = []
     for feature_name, feature_rows in executable_groups(rows).items():
-        sources: list[Path] = []
         for source_name, source_rows in sorted(source_groups(feature_rows).items()):
-            sources.append(
-                render_source(
-                    out_dir / f"{source_name}.cpp",
-                    source_rows,
-                    source_template,
+            cases = tuple(make_case(row) for row in source_rows)
+            shards.append(
+                SourceShard(
+                    executable=executable_name(feature_name),
+                    name=source_name,
+                    source_context={
+                        "cases": cases,
+                        "system_headers": tuple(
+                            sorted(
+                                {
+                                    header
+                                    for case in cases
+                                    for header in case.system_headers
+                                }
+                            )
+                        ),
+                        "headers": tuple(
+                            sorted(
+                                {
+                                    header
+                                    for case in cases
+                                    for header in case.headers
+                                }
+                            )
+                        ),
+                    },
+                    runner_context={"cases": cases},
                 )
             )
-            sources.append(
-                render_runner(
-                    out_dir / f"matrix_runner_{source_name}.cpp",
-                    tuple(source_rows),
-                    runner_template,
-                )
-            )
-        executables.append(
-            GeneratedExecutable(
-                name=executable_name(feature_name),
-                sources=tuple(sources),
-            )
-        )
-
-    return tuple(sorted(executables, key=lambda executable: executable.name))
+    return render_family_executables(
+        out_dir,
+        source_template,
+        runner_template,
+        tuple(shards),
+        claimed_sources,
+    )
 
 
 def remove_stale_sources(out_dir: Path, live_sources: set[Path]) -> None:
     for source in out_dir.glob("*.cpp"):
         if source not in live_sources:
             source.unlink()
+
+
+def merge_executables(
+    *executable_groups: tuple[GeneratedExecutable, ...],
+) -> tuple[GeneratedExecutable, ...]:
+    all_sources = [
+        source
+        for group in executable_groups
+        for executable in group
+        for source in executable.sources
+    ]
+    duplicate_sources = sorted(
+        source for source, count in Counter(all_sources).items() if count > 1
+    )
+    if duplicate_sources:
+        raise RuntimeError(
+            "matrix families generated duplicate sources: "
+            + ", ".join(str(source) for source in duplicate_sources)
+        )
+
+    sources_by_executable: dict[str, list[Path]] = defaultdict(list)
+    for executable in (
+        executable
+        for group in executable_groups
+        for executable in group
+    ):
+        sources_by_executable[executable.name].extend(executable.sources)
+
+    executables: list[GeneratedExecutable] = []
+    for name, sources in sources_by_executable.items():
+        executables.append(
+            GeneratedExecutable(name=name, sources=tuple(sorted(sources)))
+        )
+    return tuple(sorted(executables, key=lambda executable: executable.name))
 
 
 def generate(out_dir: Path, cmake_file: Path) -> None:
@@ -680,12 +732,27 @@ def generate(out_dir: Path, cmake_file: Path) -> None:
     )
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    rows = generate_rows()
-    executables = generate_sources(
-        rows,
-        out_dir,
-        env.get_template("source.cpp.j2"),
-        env.get_template("runner.cpp.j2"),
+    claimed_sources: set[Path] = set()
+    family_specs = (
+        (generate_registration_executables, "source.cpp.j2", "runner.cpp.j2"),
+        (generate_scenario_executables, "scenario.cpp.j2", "runner.cpp.j2"),
+        (
+            generate_constructor_detection_executables,
+            "constructor_detection.cpp.j2",
+            "constructor_detection_runner.cpp.j2",
+        ),
+        (generate_invoke_executables, "source.cpp.j2", "runner.cpp.j2"),
+    )
+    executables = merge_executables(
+        *(
+            generator(
+                out_dir,
+                env.get_template(source_template),
+                env.get_template(runner_template),
+                claimed_sources,
+            )
+            for generator, source_template, runner_template in family_specs
+        )
     )
     remove_stale_sources(
         out_dir,
@@ -704,12 +771,6 @@ def generate(out_dir: Path, cmake_file: Path) -> None:
             ]
         ),
     )
-
-
-def write_text_if_changed(path: Path, content: str) -> None:
-    if path.exists() and path.read_text(encoding="utf-8") == content:
-        return
-    path.write_text(content, encoding="utf-8")
 
 
 def main() -> None:

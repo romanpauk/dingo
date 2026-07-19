@@ -11,7 +11,6 @@ file(GLOB DINGO_MATRIX_AXIS_SOURCES CONFIGURE_DEPENDS
 
 set(DINGO_MATRIX_TEST_HEADERS
     matrix/common/assertions.h
-    matrix/common/scenario.h
     matrix/containers/allocator.h
     matrix/containers/container.h
     matrix/containers/custom_rtti.h
@@ -19,11 +18,13 @@ set(DINGO_MATRIX_TEST_HEADERS
     matrix/containers/runtime.h
     matrix/containers/static.h
     matrix/containers/storage.h
+    matrix/fixtures/constructor_detection.h
     matrix/fixtures/factory.h
     matrix/fixtures/local_bindings.h
     matrix/fixtures/nested_wrappers.h
     matrix/fixtures/values.h
     matrix/fixtures/variant_types.h
+    matrix/policies/constructor_detection.h
     matrix/policies/policy_aggregate.h
     matrix/policies/policy_collection.h
     matrix/policies/policy_core.h
@@ -63,10 +64,18 @@ list(TRANSFORM DINGO_MATRIX_TEST_HEADER_DEPENDS
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     ${DINGO_MATRIX_AXIS_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/data.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/constructor_detection.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/dependency_contract.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/family.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/invoke.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/plugins.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/scenarios.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/schema.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/cmake.cmake.j2"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/constructor_detection.cpp.j2"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/constructor_detection_runner.cpp.j2"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/runner.cpp.j2"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/scenario.cpp.j2"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/source.cpp.j2"
     ${DINGO_MATRIX_TEST_HEADER_DEPENDS}
     "${DINGO_MATRIX_GENERATOR}")
