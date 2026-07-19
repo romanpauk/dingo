@@ -17,64 +17,32 @@
 // This header is included from constructor_detection_msvc.hpp inside
 // dingo::detail after the constructor probe primitives are defined.
 
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, typename DetectionMode,
+template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible, size_t Arity,
+          bool Match = constructor_arity_probe_msvc<
+              T, DetectionMode, constructor_argument, IsConstructible,
+              Arity>::value,
           typename = void>
 struct constructor_arity_msvc;
 
-template <bool Match,
-          template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, typename DetectionMode,
+template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible, size_t Arity>
-struct constructor_arity_msvc_step;
-
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, typename DetectionMode,
-          template <typename...> typename IsConstructible, size_t Arity>
-struct constructor_arity_msvc<ConstructorProbe, T, DetectionMode,
-                              IsConstructible, Arity,
+struct constructor_arity_msvc<T, DetectionMode, IsConstructible, Arity, false,
                               std::enable_if_t<(Arity > 0)>>
-    : constructor_arity_msvc_step<
-          ConstructorProbe<T, DetectionMode, constructor_argument,
-                           IsConstructible, Arity>::value,
-          ConstructorProbe, T, DetectionMode, IsConstructible, Arity> {};
+    : constructor_arity_msvc<T, DetectionMode, IsConstructible, Arity - 1> {};
 
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, typename DetectionMode,
-          template <typename...> typename IsConstructible>
-struct constructor_arity_msvc<ConstructorProbe, T, DetectionMode,
-                              IsConstructible, 0, void>
-    : std::integral_constant<
-          size_t,
-          ConstructorProbe<T, DetectionMode, constructor_argument,
-                           IsConstructible, 0>::value
-              ? 0
-              : invalid_arity> {};
-
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, typename DetectionMode,
+template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible, size_t Arity>
-struct constructor_arity_msvc_step<
-    false, ConstructorProbe, T, DetectionMode, IsConstructible, Arity>
-    : constructor_arity_msvc<ConstructorProbe, T, DetectionMode,
-                             IsConstructible, Arity - 1> {};
-
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, typename DetectionMode,
-          template <typename...> typename IsConstructible, size_t Arity>
-struct constructor_arity_msvc_step<
-    true, ConstructorProbe, T, DetectionMode, IsConstructible, Arity>
+struct constructor_arity_msvc<T, DetectionMode, IsConstructible, Arity, true,
+                              std::enable_if_t<(Arity > 0)>>
     : std::integral_constant<size_t, Arity> {};
+
+template <typename T, typename DetectionMode,
+          template <typename...> typename IsConstructible>
+struct constructor_arity_msvc<T, DetectionMode, IsConstructible, 0, false, void>
+    : std::integral_constant<size_t, invalid_arity> {};
+
+template <typename T, typename DetectionMode,
+          template <typename...> typename IsConstructible>
+struct constructor_arity_msvc<T, DetectionMode, IsConstructible, 0, true, void>
+    : std::integral_constant<size_t, 0> {};

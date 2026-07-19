@@ -35,6 +35,13 @@ struct constructor_probe_msvc_impl<T, DetectionMode, ConstructorArg, IsConstruct
 template <typename T, typename DetectionMode,
           template <class, class> class ConstructorArg,
           template <typename...> typename IsConstructible, size_t Arity>
+using constructor_arity_probe_msvc = constructor_probe_msvc_impl<
+    T, DetectionMode, ConstructorArg, IsConstructible,
+    std::make_index_sequence<Arity>>;
+
+template <typename T, typename DetectionMode,
+          template <class, class> class ConstructorArg,
+          template <typename...> typename IsConstructible, size_t Arity>
 struct constructor_probe_msvc
     : constructor_probe_msvc_impl<T, DetectionMode, ConstructorArg, IsConstructible,
                                   std::make_index_sequence<Arity>> {};
@@ -52,26 +59,24 @@ struct constructor_probe_msvc<T, DetectionMode, ConstructorArg, IsConstructible,
 #include <dingo/factory/detail/constructor_signature.hpp>
 #include <dingo/factory/detail/constructor_signature_msvc.hpp>
 
+template <typename T, typename DetectionMode,
+          template <typename...> typename IsConstructible,
+          size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS>
+using constructor_detection_msvc_shape = constructor_detection_impl<
+    constructor_probe_msvc,
+    constructor_arity_msvc<T, DetectionMode, IsConstructible, N>, T,
+    DetectionMode, IsConstructible, N>;
+
 // Searches constructor arity in the inclusive range [0, N].
 template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible,
           size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS>
-struct constructor_detection_msvc;
-
-template <typename T, typename DetectionMode,
-          template <typename...> typename IsConstructible, size_t N>
-struct constructor_detection_msvc
-    : constructor_detection_impl<
-          constructor_probe_msvc,
-          constructor_arity_msvc<
-              constructor_probe_msvc, T, DetectionMode, IsConstructible, N>,
-          T, DetectionMode, IsConstructible, N> {};
-
-template <typename T, template <typename...> typename IsConstructible, size_t N>
-struct constructor_detection_msvc<T, constructor_signature, IsConstructible, N>
-    : constructor_detection_signature_impl<
-          constructor_detection_msvc, constructor_signature_recovery_msvc, T,
-          IsConstructible, N> {};
+using constructor_detection_msvc = std::conditional_t<
+    std::is_same_v<DetectionMode, constructor_signature>,
+    constructor_detection_signature_impl<
+        constructor_detection_msvc_shape,
+        constructor_signature_recovery_msvc, T, IsConstructible, N>,
+    constructor_detection_msvc_shape<T, DetectionMode, IsConstructible, N>>;
 
 } // namespace detail
 } // namespace dingo
