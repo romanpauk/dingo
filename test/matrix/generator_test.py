@@ -74,11 +74,13 @@ from dependency_composition import (
     DEPENDENCY_COMPOSITION_COVERAGE_REPORT,
     DEPENDENCY_COMPOSITION_CONTAINERS,
     DEPENDENCY_COMPOSITION_OPERATIONS,
+    DEPENDENCY_COMPOSITION_PROFILES,
     DEPENDENCY_COMPOSITION_SCOPES,
     DEPENDENCY_COMPOSITION_SCOPE_RULES,
     DependencyCompositionRow,
     build_dependency_composition_coverage,
     generate_dependency_composition_rows,
+    project_dependency_composition_rows,
     render_dependency_composition_coverage,
 )
 from family import SourceShard, render_family_executables
@@ -881,6 +883,99 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
     assert "| 16800 | 6064 | 10736 |" in report
     assert "| `variant` | 11040 | 4860 | 6180 |" in report
     assert "## Unsupported Reasons" in report
+
+
+def _composition_projection_structure(
+    row: DependencyCompositionRow,
+) -> tuple[object, ...]:
+    assert row.composition.operator is not None
+    return (
+        row.operation.name,
+        row.composition.operator.name,
+        *(
+            operand.operator.name if operand.operator else "leaf"
+            for operand in row.composition.operands
+        ),
+        dependency_composition_depth(row.composition),
+        row.composition.copyable,
+        row.composition.movable,
+    )
+
+
+def _composition_projection_environment(
+    row: DependencyCompositionRow,
+) -> tuple[object, ...]:
+    assert row.composition.operator is not None
+    return (
+        row.operation.name,
+        row.composition.operator.name,
+        row.container.name,
+        row.scope.name,
+        row.request_strategy.name,
+    )
+
+
+def _composition_projection_mobility_scope(
+    row: DependencyCompositionRow,
+) -> tuple[object, ...]:
+    return (
+        row.operation.name,
+        row.composition.copyable,
+        row.composition.movable,
+        row.scope.name,
+        row.request_strategy.name,
+    )
+
+
+@pytest.mark.parametrize(
+    ("profile", "expected_count"), (("full", 624), ("portable", 328))
+)
+def test_dependency_composition_projection_covers_its_execution_contract(
+    composition_rows: tuple[DependencyCompositionRow, ...],
+    profile: str,
+    expected_count: int,
+) -> None:
+    supported_rows = tuple(row for row in composition_rows if row.supported)
+    projected = project_dependency_composition_rows(
+        composition_rows, profile
+    )
+
+    assert len(projected) == expected_count
+    assert len(projected) == len(set(projected))
+    assert all(
+        row.supported and row.unsupported_reason is None for row in projected
+    )
+    assert {
+        _composition_projection_environment(row) for row in projected
+    } == {
+        _composition_projection_environment(row) for row in supported_rows
+    }
+    assert {
+        _composition_projection_mobility_scope(row) for row in projected
+    } == {
+        _composition_projection_mobility_scope(row) for row in supported_rows
+    }
+    if profile == "full":
+        assert {
+            (row.operation.name, row.composition.name) for row in projected
+        } == {
+            (row.operation.name, row.composition.name)
+            for row in supported_rows
+        }
+    else:
+        assert {
+            _composition_projection_structure(row) for row in projected
+        } == {
+            _composition_projection_structure(row) for row in supported_rows
+        }
+
+
+def test_dependency_composition_projection_rejects_unknown_profiles(
+    composition_rows: tuple[DependencyCompositionRow, ...],
+) -> None:
+    assert DEPENDENCY_COMPOSITION_PROFILES == {"full", "portable"}
+    with pytest.raises(ValueError, match="unknown.*profile"):
+        project_dependency_composition_rows(composition_rows, "missing")
 
 
 def test_dependency_compositions_reject_excessive_depth() -> None:
@@ -1780,9 +1875,18 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
     coverage_report = out_dir / DEPENDENCY_COMPOSITION_COVERAGE_REPORT
     assert coverage_report.read_text(encoding="utf-8") == (
         render_dependency_composition_coverage(
-            build_dependency_composition_coverage(composition_rows)
+            build_dependency_composition_coverage(composition_rows),
+            profile="full",
+            compiled_rows=624,
         )
     )
+    dependency_runners = tuple(
+        out_dir.glob("matrix_runner_dependency_composition_*.cpp")
+    )
+    assert sum(
+        source.read_text(encoding="utf-8").count("\nTEST(")
+        for source in dependency_runners
+    ) == 624
     assert cmake_file.is_file()
     timestamps = {
         path: path.stat().st_mtime_ns

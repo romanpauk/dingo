@@ -19,7 +19,6 @@
 namespace dingo::matrix {
 
 {% for case in cases %}
-{% if case.supported %}
 struct {{ case.suite }}_{{ case.name }}_case {
     using policy = {{ case.policy }};
 
@@ -39,7 +38,6 @@ struct {{ case.suite }}_{{ case.name }}_case {
 void run_{{ case.suite }}_{{ case.name }}() {
     run_resolution<{{ case.suite }}_{{ case.name }}_case>();
 }
-{% endif %}
 
 {% endfor %}
 } // namespace dingo::matrix

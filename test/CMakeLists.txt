@@ -1,6 +1,14 @@
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 find_program(UV_EXECUTABLE NAMES uv REQUIRED)
 
+set(DINGO_MATRIX_PROFILE "full" CACHE STRING
+    "Generated matrix execution profile (full or portable)")
+set_property(CACHE DINGO_MATRIX_PROFILE PROPERTY STRINGS full portable)
+if(NOT DINGO_MATRIX_PROFILE MATCHES "^(full|portable)$")
+    message(FATAL_ERROR
+        "DINGO_MATRIX_PROFILE must be either full or portable")
+endif()
+
 set(DINGO_MATRIX_TEST_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/matrix")
 set(DINGO_MATRIX_TEST_CMAKE
     "${PROJECT_BINARY_DIR}/generated/matrix-tests.cmake")
@@ -94,7 +102,8 @@ set(DINGO_MATRIX_GENERATOR_COMMAND
         ${UV_EXECUTABLE} run --locked python
         ${DINGO_MATRIX_GENERATOR}
         --out ${DINGO_MATRIX_TEST_DIR}
-        --cmake ${DINGO_MATRIX_TEST_CMAKE})
+        --cmake ${DINGO_MATRIX_TEST_CMAKE}
+        --profile ${DINGO_MATRIX_PROFILE})
 
 execute_process(
     COMMAND ${DINGO_MATRIX_GENERATOR_COMMAND}

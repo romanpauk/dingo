@@ -13,7 +13,7 @@ env:
 
 jobs:
   linux:
-    name: ubuntu-24.04 / ${{ matrix.compiler.CXX }} / std-${{ matrix.compiler.STD }} / ${{ matrix.config.label }}
+    name: ubuntu-24.04 / ${{ matrix.compiler.CXX }} / std-${{ matrix.compiler.STD }} / ${{ matrix.compiler.PROFILE }} / ${{ matrix.config.label }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -26,10 +26,10 @@ jobs:
           - id: Release
             label: release
         compiler:
-          - { CC: gcc-13, CXX: g++-13, STD: 17, SANITIZER: ON }
-          - { CC: gcc-14, CXX: g++-14, STD: 23, SANITIZER: ON }
-          - { CC: clang-18, CXX: clang++-18, STD: 20, SANITIZER: ON }
-          - { CC: clang-19, CXX: clang++-19, STD: 26, SANITIZER: ON }
+          - { CC: gcc-13, CXX: g++-13, STD: 17, SANITIZER: ON, PROFILE: portable, CCACHE: ON }
+          - { CC: gcc-14, CXX: g++-14, STD: 23, SANITIZER: ON, PROFILE: full, CCACHE: OFF }
+          - { CC: clang-18, CXX: clang++-18, STD: 20, SANITIZER: ON, PROFILE: portable, CCACHE: ON }
+          - { CC: clang-19, CXX: clang++-19, STD: 26, SANITIZER: ON, PROFILE: portable, CCACHE: ON }
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout workflow repo
@@ -59,9 +59,11 @@ jobs:
         uses: ./.github/actions/linux-build
         with:
           build_type: ${{ matrix.config.id }}
-          ccache_key: ubuntu-24.04-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
+          ccache_enabled: ${{ matrix.compiler.CCACHE }}
+          ccache_key: ubuntu-24.04-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}-${{ matrix.compiler.PROFILE }}
           compiler_cc: ${{ matrix.compiler.CC }}
           compiler_cxx: ${{ matrix.compiler.CXX }}
+          matrix_profile: ${{ matrix.compiler.PROFILE }}
           sanitizer: ${{ matrix.compiler.SANITIZER }}
           source_dir: ${{ env.SOURCE_DIR }}
           std: ${{ matrix.compiler.STD }}
@@ -127,10 +129,11 @@ jobs:
         uses: ./.github/actions/linux-build
         with:
           build_type: ${{ matrix.config.id }}
-          ccache_key: ubuntu-25.04-image-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
+          ccache_key: ubuntu-25.04-image-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}-portable
           container_image: dingo-toolchains:ubuntu-25.04-${{ matrix.compiler.TOOLCHAIN }}
           compiler_cc: ${{ matrix.compiler.CC }}
           compiler_cxx: ${{ matrix.compiler.CXX }}
+          matrix_profile: portable
           sanitizer: ${{ matrix.compiler.SANITIZER }}
           source_dir: ${{ env.SOURCE_DIR }}
           std: ${{ matrix.compiler.STD }}
@@ -176,9 +179,10 @@ jobs:
         uses: ./.github/actions/linux-build
         with:
           build_type: ${{ matrix.config.id }}
-          ccache_key: ubuntu-24.04-arm-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
+          ccache_key: ubuntu-24.04-arm-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}-portable
           compiler_cc: ${{ matrix.compiler.CC }}
           compiler_cxx: ${{ matrix.compiler.CXX }}
+          matrix_profile: portable
           sanitizer: ${{ matrix.compiler.SANITIZER }}
           source_dir: ${{ env.SOURCE_DIR }}
           std: ${{ matrix.compiler.STD }}
@@ -249,9 +253,10 @@ jobs:
       - name: Run Windows build
         uses: ./.github/actions/windows-build
         with:
-          ccache_key: ${{ matrix.vs_label }}-x64-${{ matrix.config_id }}-${{ matrix.std }}
+          ccache_key: ${{ matrix.vs_label }}-x64-${{ matrix.config_id }}-${{ matrix.std }}-portable
           config_id: ${{ matrix.config_id }}
           generator: ${{ matrix.generator }}
+          matrix_profile: portable
           source_dir: ${{ env.SOURCE_DIR }}
           std: ${{ matrix.std }}
 
@@ -318,12 +323,20 @@ jobs:
       - name: Configure
         shell: pwsh
         run: |
-          cmake -S "${{ env.SOURCE_DIR }}" -B build -G "Visual Studio 18 2026" -A ARM64 -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+          cmake -S "${{ env.SOURCE_DIR }}" -B build -G "Visual Studio 18 2026" -A ARM64 -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_MATRIX_PROFILE=portable -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
 
       - name: Build
         shell: pwsh
         run: |
           cmake --build build --config ${{ matrix.config.id }} -j $env:BUILD_JOBS -- /nodeReuse:false
+
+      - name: Report main build disk usage
+        shell: pwsh
+        run: |
+          Get-PSDrive -Name (Get-Location).Drive.Name
+          $buildSize = (Get-ChildItem build -Recurse -File | Measure-Object -Property Length -Sum).Sum
+          Write-Host "Main build bytes: $buildSize"
+          cmake --build build --target clean --config ${{ matrix.config.id }}
 
       - name: FetchContent
         shell: pwsh

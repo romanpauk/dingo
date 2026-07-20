@@ -20,6 +20,7 @@ from axes.containers import CONTAINERS
 from axes.dependency_compositions import (
     DEPENDENCY_COMPOSITIONS,
     DEPENDENCY_COMPOSITION_REQUEST_STRATEGIES,
+    dependency_composition_depth,
     render_dependency_composition,
     render_dependency_composition_request,
 )
@@ -87,8 +88,6 @@ class GeneratedDependencyCompositionCase:
     policy: str
     system_headers: tuple[str, ...]
     headers: tuple[str, ...]
-    supported: bool
-    unsupported_reason: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +174,10 @@ DEPENDENCY_COMPOSITION_SCOPE_RULES = (
 
 _MIXED_ANCHOR_TYPE = "dependency_composition_mixed_anchor"
 DEPENDENCY_COMPOSITION_COVERAGE_REPORT = "dependency-composition-coverage.md"
+DEPENDENCY_COMPOSITION_PROFILES = frozenset({"full", "portable"})
+
+
+ProjectionObligation = tuple[str, ...]
 
 
 def _operator_limitation_reason(
@@ -422,6 +425,153 @@ def generate_dependency_composition_rows(
     return rows
 
 
+def _composition_structure(
+    composition: DependencyComposition,
+) -> tuple[str, ...]:
+    if composition.operator is None:
+        raise ValueError(
+            f"composition {composition.name} has no outer operator"
+        )
+    return (
+        composition.operator.name,
+        *(
+            operand.operator.name if operand.operator else "leaf"
+            for operand in composition.operands
+        ),
+        f"depth_{dependency_composition_depth(composition)}",
+        f"copyable_{composition.copyable}",
+        f"movable_{composition.movable}",
+    )
+
+
+def _projection_obligations(
+    row: DependencyCompositionRow,
+    profile: str,
+) -> frozenset[ProjectionObligation]:
+    if row.composition.operator is None:
+        raise ValueError(
+            f"composition {row.composition.name} has no outer operator"
+        )
+    operation = row.operation.name
+    obligations = {
+        (
+            "operator_environment",
+            operation,
+            row.composition.operator.name,
+            row.container.name,
+            row.scope.name,
+            row.request_strategy.name,
+        ),
+        (
+            "mobility_scope",
+            operation,
+            f"copyable_{row.composition.copyable}",
+            f"movable_{row.composition.movable}",
+            row.scope.name,
+            row.request_strategy.name,
+        ),
+    }
+    if profile == "full":
+        obligations.add(
+            (
+                "composition_operation",
+                operation,
+                row.composition.name,
+            )
+        )
+    else:
+        obligations.add(
+            (
+                "structure_operation",
+                operation,
+                *_composition_structure(row.composition),
+            )
+        )
+    return frozenset(obligations)
+
+
+def _projection_row_key(row: DependencyCompositionRow) -> tuple[str, ...]:
+    if row.composition.operator is None:
+        raise ValueError(
+            f"composition {row.composition.name} has no outer operator"
+        )
+    return (
+        row.operation.name,
+        row.composition.operator.name,
+        row.composition.name,
+        row.container.name,
+        row.scope.name,
+        row.request_strategy.name,
+    )
+
+
+def project_dependency_composition_rows(
+    rows: tuple[DependencyCompositionRow, ...],
+    profile: str,
+) -> tuple[DependencyCompositionRow, ...]:
+    """Select supported C++ witnesses while keeping the model exhaustive."""
+    if profile not in DEPENDENCY_COMPOSITION_PROFILES:
+        raise ValueError(
+            "unknown dependency composition profile: "
+            f"{profile}; expected one of {sorted(DEPENDENCY_COMPOSITION_PROFILES)}"
+        )
+    candidates = tuple(row for row in rows if row.supported)
+    if not candidates:
+        raise RuntimeError(
+            "dependency composition projection has no supported rows"
+        )
+    obligations_by_row = {
+        row: _projection_obligations(row, profile) for row in candidates
+    }
+    rows_by_obligation: dict[
+        ProjectionObligation, list[DependencyCompositionRow]
+    ] = defaultdict(list)
+    for row, obligations in obligations_by_row.items():
+        for obligation in obligations:
+            rows_by_obligation[obligation].append(row)
+
+    uncovered = set(rows_by_obligation)
+    selected: list[DependencyCompositionRow] = []
+    selected_rows: set[DependencyCompositionRow] = set()
+    for obligation in sorted(
+        rows_by_obligation,
+        key=lambda item: (len(rows_by_obligation[item]), item),
+    ):
+        if obligation not in uncovered:
+            continue
+        row = min(
+            (
+                candidate
+                for candidate in rows_by_obligation[obligation]
+                if candidate not in selected_rows
+            ),
+            key=lambda candidate: (
+                -len(obligations_by_row[candidate] & uncovered),
+                _projection_row_key(candidate),
+            ),
+        )
+        selected.append(row)
+        selected_rows.add(row)
+        uncovered -= obligations_by_row[row]
+
+    if uncovered:
+        raise RuntimeError(
+            "dependency composition projection cannot satisfy: "
+            + ", ".join(" / ".join(item) for item in sorted(uncovered))
+        )
+
+    projected = tuple(sorted(selected, key=_projection_row_key))
+    covered = set().union(
+        *(_projection_obligations(row, profile) for row in projected)
+    )
+    expected = set().union(*obligations_by_row.values())
+    if covered != expected:
+        raise RuntimeError(
+            "dependency composition projection did not satisfy its contract"
+        )
+    return projected
+
+
 def _coverage_count(
     rows: tuple[DependencyCompositionRow, ...],
 ) -> DependencyCompositionCoverageCount:
@@ -495,6 +645,9 @@ def build_dependency_composition_coverage(
 
 def render_dependency_composition_coverage(
     coverage: DependencyCompositionCoverage,
+    *,
+    profile: str | None = None,
+    compiled_rows: int | None = None,
 ) -> str:
     lines = [
         "# Dependency Composition Coverage",
@@ -512,6 +665,31 @@ def render_dependency_composition_coverage(
             f"{coverage.overall.skipped} |"
         ),
     ]
+    if profile is not None or compiled_rows is not None:
+        if profile not in DEPENDENCY_COMPOSITION_PROFILES:
+            raise ValueError(
+                "coverage report requires a known dependency composition "
+                f"profile, got: {profile}"
+            )
+        if compiled_rows is None or compiled_rows < 1:
+            raise ValueError(
+                "coverage report requires at least one compiled row"
+            )
+        lines.extend(
+            (
+                "",
+                "## Compiled Projection",
+                "",
+                "The exhaustive counts above remain the compatibility model. "
+                "Only supported witnesses selected by the active profile are "
+                "emitted as C++ tests; unsupported cells remain explicit in "
+                "this report.",
+                "",
+                "| Profile | Compiled Supported Rows |",
+                "| --- | ---: |",
+                f"| `{profile}` | {compiled_rows} |",
+            )
+        )
     for axis in coverage.axes:
         lines.extend(
             (
@@ -637,8 +815,6 @@ def _make_case(
                 }
             )
         ),
-        supported=row.supported,
-        unsupported_reason=row.unsupported_reason,
     )
 
 
@@ -647,11 +823,15 @@ def generate_dependency_composition_executables(
     source_template: Template,
     runner_template: Template,
     claimed_sources: set[Path] | None = None,
+    profile: str = "full",
 ) -> tuple[GeneratedExecutable, ...]:
     grouped: dict[tuple[str, str, str], list[DependencyCompositionRow]] = (
         defaultdict(list)
     )
-    for row in generate_dependency_composition_rows():
+    rows = project_dependency_composition_rows(
+        generate_dependency_composition_rows(), profile
+    )
+    for row in rows:
         if row.composition.operator is None:
             raise ValueError(
                 f"composition {row.composition.name} has no outer operator"
@@ -700,11 +880,13 @@ __all__ = (
     "DEPENDENCY_COMPOSITION_COVERAGE_REPORT",
     "DEPENDENCY_COMPOSITION_CONTAINERS",
     "DEPENDENCY_COMPOSITION_OPERATIONS",
+    "DEPENDENCY_COMPOSITION_PROFILES",
     "DEPENDENCY_COMPOSITION_SCOPES",
     "DEPENDENCY_COMPOSITION_SCOPE_RULES",
     "DependencyCompositionRow",
     "build_dependency_composition_coverage",
     "generate_dependency_composition_executables",
     "generate_dependency_composition_rows",
+    "project_dependency_composition_rows",
     "render_dependency_composition_coverage",
 )

@@ -48,11 +48,22 @@ cannot materialize the wrapper safely.
 
 Recursive dependency compositions are a separate shared type axis. Constructor
 detection projects each type into a one-argument constructor shape. Resolution
-and invocation cross the same type with their container, scope, and request
-strategy axes. Exact stored wrappers use the request category selected by the
-scope rule, while a top-level raw pointer registers its leaf and requests the
-pointer value. This keeps carrier semantics out of this axis while still
-exercising both exact-wrapper resolution and the supported pointer conversion.
+and invocation model the full product of the same type with their container,
+scope, and request-strategy axes. The generated coverage report keeps every
+supported and unsupported cell explicit. C++ generation projects supported
+cells into a smaller witness set: the `full` profile executes every supported
+composition for resolve and invoke, and the `portable` profile executes every
+structural category. Both profiles additionally cover every feasible outer
+operator, container, scope, request-strategy, copyability, and movability
+combination for both operations. Unsupported cells are reported and contract
+tested. Exact stored wrappers use the request category selected by the scope
+rule, while a top-level raw pointer registers its leaf and requests the pointer
+value. This keeps carrier semantics out of this axis while still exercising
+both exact-wrapper resolution and the supported pointer conversion.
+
+Select the execution profile with `-DDINGO_MATRIX_PROFILE=full` or
+`-DDINGO_MATRIX_PROFILE=portable`. Local development defaults to `full`; CI
+runs it on one primary compiler and uses `portable` for portability jobs.
 
 Shared-cyclical graphs use a dedicated compositional family. It crosses
 container implementation, registration mode, the value or `shared_ptr`

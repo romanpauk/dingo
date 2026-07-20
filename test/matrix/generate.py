@@ -44,8 +44,11 @@ from schema import (
 from constructor_detection import generate_constructor_detection_executables
 from dependency_composition import (
     DEPENDENCY_COMPOSITION_COVERAGE_REPORT,
+    DEPENDENCY_COMPOSITION_PROFILES,
     build_dependency_composition_coverage,
     generate_dependency_composition_executables,
+    generate_dependency_composition_rows,
+    project_dependency_composition_rows,
     render_dependency_composition_coverage,
 )
 from family import SourceShard, render_family_executables, write_text_if_changed
@@ -727,7 +730,7 @@ def merge_executables(
     return tuple(sorted(executables, key=lambda executable: executable.name))
 
 
-def generate(out_dir: Path, cmake_file: Path) -> None:
+def generate(out_dir: Path, cmake_file: Path, profile: str = "full") -> None:
     script_dir = Path(__file__).resolve().parent
     env = Environment(
         loader=FileSystemLoader(script_dir / "templates"),
@@ -739,23 +742,41 @@ def generate(out_dir: Path, cmake_file: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     claimed_sources: set[Path] = set()
     family_specs = (
-        (generate_registration_executables, "source.cpp.j2", "runner.cpp.j2"),
-        (generate_scenario_executables, "scenario.cpp.j2", "runner.cpp.j2"),
+        (
+            generate_registration_executables,
+            "source.cpp.j2",
+            "runner.cpp.j2",
+            {},
+        ),
+        (
+            generate_scenario_executables,
+            "scenario.cpp.j2",
+            "runner.cpp.j2",
+            {},
+        ),
         (
             generate_constructor_detection_executables,
             "constructor_detection.cpp.j2",
             "constructor_detection_runner.cpp.j2",
+            {},
         ),
-        (generate_invoke_executables, "source.cpp.j2", "runner.cpp.j2"),
+        (
+            generate_invoke_executables,
+            "source.cpp.j2",
+            "runner.cpp.j2",
+            {},
+        ),
         (
             generate_dependency_composition_executables,
             "dependency_composition.cpp.j2",
             "dependency_composition_runner.cpp.j2",
+            {"profile": profile},
         ),
         (
             generate_shared_cyclical_executables,
             "shared_cyclical.cpp.j2",
             "shared_cyclical_runner.cpp.j2",
+            {},
         ),
     )
     executables = merge_executables(
@@ -765,8 +786,9 @@ def generate(out_dir: Path, cmake_file: Path) -> None:
                 env.get_template(source_template),
                 env.get_template(runner_template),
                 claimed_sources,
+                **kwargs,
             )
-            for generator, source_template, runner_template in family_specs
+            for generator, source_template, runner_template, kwargs in family_specs
         )
     )
     remove_stale_sources(
@@ -774,10 +796,16 @@ def generate(out_dir: Path, cmake_file: Path) -> None:
         {source for executable in executables for source in executable.sources},
     )
     coverage_report = out_dir / DEPENDENCY_COMPOSITION_COVERAGE_REPORT
+    composition_rows = generate_dependency_composition_rows()
+    projected_composition_rows = project_dependency_composition_rows(
+        composition_rows, profile
+    )
     write_text_if_changed(
         coverage_report,
         render_dependency_composition_coverage(
-            build_dependency_composition_coverage()
+            build_dependency_composition_coverage(composition_rows),
+            profile=profile,
+            compiled_rows=len(projected_composition_rows),
         ),
     )
     remove_stale_reports(out_dir, {coverage_report})
@@ -800,9 +828,14 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--cmake", required=True, type=Path)
+    parser.add_argument(
+        "--profile",
+        choices=sorted(DEPENDENCY_COMPOSITION_PROFILES),
+        default="full",
+    )
     args = parser.parse_args()
 
-    generate(args.out, args.cmake)
+    generate(args.out, args.cmake, args.profile)
 
 
 if __name__ == "__main__":
