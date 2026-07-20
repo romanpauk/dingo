@@ -19,9 +19,11 @@ set(DINGO_MATRIX_TEST_HEADERS
     matrix/containers/static.h
     matrix/containers/storage.h
     matrix/fixtures/constructor_detection.h
+    matrix/fixtures/dependency_shapes.h
     matrix/fixtures/factory.h
     matrix/fixtures/local_bindings.h
     matrix/fixtures/nested_wrappers.h
+    matrix/fixtures/shared_cyclical.h
     matrix/fixtures/values.h
     matrix/fixtures/variant_types.h
     matrix/policies/constructor_detection.h
@@ -66,16 +68,22 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/data.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/constructor_detection.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/dependency_contract.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/dependency_composition.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/family.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/invoke.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/plugins.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/scenarios.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/shared_cyclical.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/schema.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/cmake.cmake.j2"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/constructor_detection.cpp.j2"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/constructor_detection_runner.cpp.j2"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/dependency_composition.cpp.j2"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/dependency_composition_runner.cpp.j2"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/runner.cpp.j2"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/scenario.cpp.j2"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/shared_cyclical.cpp.j2"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/shared_cyclical_runner.cpp.j2"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/templates/source.cpp.j2"
     ${DINGO_MATRIX_TEST_HEADER_DEPENDS}
     "${DINGO_MATRIX_GENERATOR}")

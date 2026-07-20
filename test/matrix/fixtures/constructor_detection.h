@@ -7,11 +7,14 @@
 
 #pragma once
 
+#include "matrix/fixtures/dependency_shapes.h"
+
 #include <dingo/core/auto_constructible.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/detail/constructor_detection_msvc.hpp>
 #include <dingo/registration/constructor.h>
 
+#include <array>
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -20,23 +23,14 @@
 
 namespace dingo::matrix {
 
-struct constructor_config {};
+using constructor_config = dependency_regular;
 
 template <typename Dependency> struct constructor_dependency {
   explicit constructor_dependency(Dependency) {}
 };
 
-struct constructor_copy_only_config {
-  constructor_copy_only_config() = default;
-  constructor_copy_only_config(const constructor_copy_only_config &) = default;
-  constructor_copy_only_config(constructor_copy_only_config &&) = delete;
-};
-
-struct constructor_move_only_config {
-  constructor_move_only_config() = default;
-  constructor_move_only_config(const constructor_move_only_config &) = delete;
-  constructor_move_only_config(constructor_move_only_config &&) = default;
-};
+using constructor_copy_only_config = dependency_copy_only;
+using constructor_move_only_config = dependency_move_only;
 
 struct constructor_two_values {
   constructor_two_values(int init_integer, float init_real)
@@ -63,49 +57,6 @@ struct constructor_nested_forwarding_wrapper {
   explicit constructor_nested_forwarding_wrapper(
       constructor_nested_forwarding_dependency) {}
 };
-
-using constructor_nested_optional_dependency =
-    std::optional<std::shared_ptr<constructor_config>>;
-
-struct constructor_nested_optional_shared_pointer {
-  explicit constructor_nested_optional_shared_pointer(
-      constructor_nested_optional_dependency) {}
-};
-
-using constructor_nested_variant_dependency =
-    std::variant<std::optional<constructor_config>,
-                 constructor_move_only_config>;
-
-struct constructor_nested_variant_optional {
-  explicit constructor_nested_variant_optional(
-      constructor_nested_variant_dependency) {}
-};
-
-using constructor_optional_unique_pointer_dependency =
-    std::optional<std::unique_ptr<constructor_config>>;
-using constructor_optional_unique_pointer =
-    constructor_dependency<constructor_optional_unique_pointer_dependency>;
-
-using constructor_variant_shared_unique_pointers_dependency =
-    std::variant<std::shared_ptr<constructor_config>,
-                 std::unique_ptr<constructor_config>>;
-using constructor_variant_shared_unique_pointers = constructor_dependency<
-    constructor_variant_shared_unique_pointers_dependency>;
-
-using constructor_optional_move_only_dependency =
-    std::optional<constructor_move_only_config>;
-using constructor_optional_move_only =
-    constructor_dependency<constructor_optional_move_only_dependency>;
-
-using constructor_optional_copy_only_dependency =
-    std::optional<constructor_copy_only_config>;
-using constructor_optional_copy_only =
-    constructor_dependency<constructor_optional_copy_only_dependency>;
-
-using constructor_variant_move_copy_only_dependency =
-    std::variant<constructor_move_only_config, constructor_copy_only_config>;
-using constructor_variant_move_copy_only =
-    constructor_dependency<constructor_variant_move_copy_only_dependency>;
 
 template <typename T> struct constructor_unconstrained_forwarding_wrapper {
   template <typename U> constructor_unconstrained_forwarding_wrapper(U &&) {}

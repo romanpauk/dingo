@@ -177,14 +177,6 @@ template <typename Type> struct optional_ref {
   }
 };
 
-template <typename Cycle> struct cycle_ref {
-  template <typename Container> static void check(Container &container) {
-    auto &instance = container.template resolve<Cycle &>();
-    ASSERT_NE(instance.dependency, nullptr);
-    ASSERT_EQ(instance.dependency->dependency, &instance);
-  }
-};
-
 template <typename Type, int Expected> struct construct_member_value {
   template <typename Container> static void check(Container &container) {
     auto constructed = container.template construct<Type>();
@@ -289,6 +281,24 @@ struct dependency_invoke_explicit {
               static_cast<Value>(std::forward<Request>(dependency)));
         });
     ASSERT_EQ(invoked, 3);
+  }
+};
+
+template <typename Type, typename Request> struct composition_resolve {
+  template <typename Container> static void check(Container &container) {
+    decltype(auto) dependency = container.template resolve<Request>();
+    static_assert(
+        std::is_same_v<
+            std::remove_cv_t<std::remove_reference_t<decltype(dependency)>>,
+            std::remove_cv_t<std::remove_reference_t<Type>>>);
+    (void)dependency;
+  }
+};
+
+template <typename Type, typename Request> struct composition_invoke {
+  template <typename Container> static void check(Container &container) {
+    auto invoked = container.invoke([](Request) { return true; });
+    ASSERT_TRUE(invoked);
   }
 };
 

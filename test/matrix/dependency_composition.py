@@ -1,0 +1,710 @@
+#!/usr/bin/env python3
+#
+# This file is part of dingo project <https://github.com/romanpauk/dingo>
+#
+# See LICENSE for license and copyright information
+# SPDX-License-Identifier: MIT
+#
+
+"""Project dependency compositions into resolution and invocation tests."""
+
+from __future__ import annotations
+
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+from pathlib import Path
+
+from jinja2 import Template
+
+from axes.containers import CONTAINERS
+from axes.dependency_compositions import (
+    DEPENDENCY_COMPOSITIONS,
+    DEPENDENCY_COMPOSITION_REQUEST_STRATEGIES,
+    render_dependency_composition,
+    render_dependency_composition_request,
+)
+from axes.scopes import SCOPES
+from family import (
+    SourceShard,
+    assert_axis_members_used,
+    assert_unique_axis_members,
+    render_family_executables,
+)
+from plugins import (
+    RegistrationRecipe,
+    build_registration_plan_from_recipe,
+    render_registration_plan,
+)
+from schema import (
+    ContainerSpec,
+    DependencyComposition,
+    DependencyCompositionRequestStrategy,
+    DependencyCompositionResolutionLimitation,
+    GeneratedExecutable,
+    MixedRegistrationPlacement,
+    RegistrationSpec,
+    ScopeSpec,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class DependencyCompositionOperation:
+    name: str
+    policy: str
+
+
+@dataclass(frozen=True, slots=True)
+class DependencyCompositionScopeRule:
+    scope: str
+    request_strategies: frozenset[str]
+    requires_movable: bool = False
+    non_movable_reason: str | None = None
+    requires_runtime_registration: bool = False
+    static_registration_reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DependencyCompositionRow:
+    composition: DependencyComposition
+    operation: DependencyCompositionOperation
+    container: ContainerSpec
+    scope: ScopeSpec
+    request_strategy: DependencyCompositionRequestStrategy
+    type_name: str
+    request_type: str
+    name: str
+    supported: bool
+    unsupported_reason: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class GeneratedDependencyCompositionCase:
+    suite: str
+    name: str
+    container_type: str
+    static_bindings: str | None
+    setup_lines: tuple[str, ...]
+    policy: str
+    system_headers: tuple[str, ...]
+    headers: tuple[str, ...]
+    supported: bool
+    unsupported_reason: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class DependencyCompositionCoverageCount:
+    generated: int
+    supported: int
+    skipped: int
+
+
+@dataclass(frozen=True, slots=True)
+class DependencyCompositionCoverageCell:
+    name: str
+    count: DependencyCompositionCoverageCount
+
+
+@dataclass(frozen=True, slots=True)
+class DependencyCompositionCoverageAxis:
+    name: str
+    cells: tuple[DependencyCompositionCoverageCell, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DependencyCompositionCoverage:
+    overall: DependencyCompositionCoverageCount
+    axes: tuple[DependencyCompositionCoverageAxis, ...]
+    unsupported_reasons: tuple[tuple[str, int], ...]
+
+
+DEPENDENCY_COMPOSITION_OPERATIONS = (
+    DependencyCompositionOperation("resolve", "resolution::composition_resolve"),
+    DependencyCompositionOperation("invoke", "resolution::composition_invoke"),
+)
+
+
+_CONTAINERS_BY_NAME = {container.name: container for container in CONTAINERS}
+DEPENDENCY_COMPOSITION_CONTAINERS = tuple(
+    _CONTAINERS_BY_NAME[name]
+    for name in (
+        "runtime_container",
+        "container_runtime",
+        "static_container",
+        "container_static",
+        "container_mixed",
+    )
+)
+
+
+_SCOPES_BY_NAME = {scope.name: scope for scope in SCOPES}
+DEPENDENCY_COMPOSITION_SCOPES = tuple(
+    _SCOPES_BY_NAME[name] for name in ("shared", "unique", "external")
+)
+
+
+DEPENDENCY_COMPOSITION_SCOPE_RULES = (
+    DependencyCompositionScopeRule(
+        scope="shared",
+        request_strategies=frozenset({"stable"}),
+        requires_movable=True,
+        non_movable_reason=(
+            "shared storage cannot materialize a composition that is not "
+            "movable"
+        ),
+    ),
+    DependencyCompositionScopeRule(
+        scope="unique",
+        request_strategies=frozenset({"value", "rvalue"}),
+        requires_movable=True,
+        non_movable_reason=(
+            "unique storage cannot materialize a composition that is not "
+            "movable"
+        ),
+    ),
+    DependencyCompositionScopeRule(
+        scope="external",
+        request_strategies=frozenset({"stable"}),
+        requires_runtime_registration=True,
+        static_registration_reason=(
+            "external storage requires runtime registration and cannot be "
+            "provided by a static-only container"
+        ),
+    ),
+)
+
+
+_MIXED_ANCHOR_TYPE = "dependency_composition_mixed_anchor"
+DEPENDENCY_COMPOSITION_COVERAGE_REPORT = "dependency-composition-coverage.md"
+
+
+def _operator_limitation_reason(
+    composition: DependencyComposition,
+    request_strategy: DependencyCompositionRequestStrategy,
+) -> str | None:
+    def matches_filters(
+        node: DependencyComposition,
+        limitation: DependencyCompositionResolutionLimitation,
+    ) -> bool:
+        if (
+            limitation.request_strategies
+            and request_strategy.name not in limitation.request_strategies
+        ):
+            return False
+        return not limitation.operand_operators or any(
+            operand.operator is not None
+            and operand.operator.name in limitation.operand_operators
+            for operand in node.operands
+        )
+
+    if composition.operator is None:
+        return None
+    for limitation in composition.operator.resolution_limitations:
+        if (
+            limitation.position == "request_composed_operand"
+            and any(
+                operand.operator is not None
+                for operand in composition.operands
+            )
+            and matches_filters(composition, limitation)
+        ):
+            return limitation.reason
+
+    def nested_limitation(node: DependencyComposition) -> str | None:
+        if node.operator is not None:
+            for limitation in node.operator.resolution_limitations:
+                if limitation.position == "nested" and matches_filters(
+                    node, limitation
+                ):
+                    return limitation.reason
+        for operand in node.operands:
+            reason = nested_limitation(operand)
+            if reason is not None:
+                return reason
+        return None
+
+    for operand in composition.operands:
+        reason = nested_limitation(operand)
+        if reason is not None:
+            return reason
+    return None
+
+
+def _container_mode(container: ContainerSpec) -> str:
+    if len(container.modes) != 1:
+        raise ValueError(
+            "dependency composition container "
+            f"{container.name} must select exactly one registration mode"
+        )
+    mode = next(iter(container.modes))
+    if mode not in {"runtime", "static", "mixed"}:
+        raise ValueError(
+            "dependency composition container "
+            f"{container.name} has an unsupported registration mode: {mode}"
+        )
+    return mode
+
+
+def generate_dependency_composition_rows(
+    compositions: tuple[DependencyComposition, ...] = DEPENDENCY_COMPOSITIONS,
+    operations: tuple[
+        DependencyCompositionOperation, ...
+    ] = DEPENDENCY_COMPOSITION_OPERATIONS,
+    containers: tuple[
+        ContainerSpec, ...
+    ] = DEPENDENCY_COMPOSITION_CONTAINERS,
+    scopes: tuple[ScopeSpec, ...] = DEPENDENCY_COMPOSITION_SCOPES,
+    scope_rules: tuple[
+        DependencyCompositionScopeRule, ...
+    ] = DEPENDENCY_COMPOSITION_SCOPE_RULES,
+    request_strategies: tuple[
+        DependencyCompositionRequestStrategy, ...
+    ] = DEPENDENCY_COMPOSITION_REQUEST_STRATEGIES,
+) -> tuple[DependencyCompositionRow, ...]:
+    assert_unique_axis_members(
+        "dependency composition",
+        "request strategy",
+        tuple(strategy.name for strategy in request_strategies),
+    )
+    assert_unique_axis_members(
+        "dependency composition",
+        "composition",
+        tuple(composition.name for composition in compositions),
+    )
+    assert_unique_axis_members(
+        "dependency composition",
+        "operation",
+        tuple(operation.name for operation in operations),
+    )
+    assert_unique_axis_members(
+        "dependency composition",
+        "container",
+        tuple(container.name for container in containers),
+    )
+    assert_unique_axis_members(
+        "dependency composition",
+        "scope",
+        tuple(scope.name for scope in scopes),
+    )
+    assert_unique_axis_members(
+        "dependency composition",
+        "scope rule",
+        tuple(rule.scope for rule in scope_rules),
+    )
+    request_strategies_by_name = {
+        strategy.name: strategy for strategy in request_strategies
+    }
+    scope_rules_by_name = {rule.scope: rule for rule in scope_rules}
+    if scope_rules_by_name.keys() != {scope.name for scope in scopes}:
+        raise ValueError(
+            "dependency composition scope rules do not match the scope axis"
+        )
+    for container in containers:
+        _container_mode(container)
+    for rule in scope_rules:
+        if rule.requires_movable != (
+            rule.non_movable_reason is not None
+        ):
+            raise ValueError(
+                "dependency composition scope rule "
+                f"{rule.scope} has an incomplete movable requirement"
+            )
+        if rule.requires_runtime_registration != (
+            rule.static_registration_reason is not None
+        ):
+            raise ValueError(
+                "dependency composition scope rule "
+                f"{rule.scope} has an incomplete registration requirement"
+            )
+        unknown_request_strategies = (
+            rule.request_strategies - request_strategies_by_name.keys()
+        )
+        if not rule.request_strategies or unknown_request_strategies:
+            raise ValueError(
+                "dependency composition scope rule "
+                f"{rule.scope} has invalid request strategies: "
+                f"{sorted(unknown_request_strategies)}"
+            )
+
+    rows_list: list[DependencyCompositionRow] = []
+    for operation in operations:
+        for container in containers:
+            container_mode = _container_mode(container)
+            for scope in scopes:
+                scope_rule = scope_rules_by_name[scope.name]
+                for request_strategy_name in sorted(
+                    scope_rule.request_strategies
+                ):
+                    request_strategy = request_strategies_by_name[
+                        request_strategy_name
+                    ]
+                    for composition in compositions:
+                        unsupported_reason = None
+                        if (
+                            scope_rule.requires_runtime_registration
+                            and container_mode == "static"
+                        ):
+                            unsupported_reason = (
+                                scope_rule.static_registration_reason
+                            )
+                        elif (
+                            scope_rule.requires_movable
+                            and not composition.movable
+                        ):
+                            unsupported_reason = scope_rule.non_movable_reason
+                        elif (
+                            composition.operator is not None
+                            and request_strategy.name
+                            not in composition.operator.supported_request_strategies
+                        ):
+                            unsupported_reason = (
+                                f"{composition.operator.name} compositions do "
+                                f"not support {request_strategy.name} requests"
+                            )
+                        else:
+                            unsupported_reason = _operator_limitation_reason(
+                                composition,
+                                request_strategy,
+                            )
+                        rows_list.append(
+                            DependencyCompositionRow(
+                                composition=composition,
+                                operation=operation,
+                                container=container,
+                                scope=scope,
+                                request_strategy=request_strategy,
+                                type_name=render_dependency_composition(
+                                    composition
+                                ),
+                                request_type=(
+                                    render_dependency_composition_request(
+                                        composition,
+                                        request_strategy,
+                                    )
+                                ),
+                                name=(
+                                    f"{container.name}_{scope.name}_"
+                                    f"{request_strategy.name}_"
+                                    f"{composition.name}"
+                                ),
+                                supported=unsupported_reason is None,
+                                unsupported_reason=unsupported_reason,
+                            )
+                        )
+    rows = tuple(rows_list)
+    for axis, declared, used in (
+        (
+            "composition",
+            {composition.name for composition in compositions},
+            {row.composition.name for row in rows},
+        ),
+        (
+            "operation",
+            {operation.name for operation in operations},
+            {row.operation.name for row in rows},
+        ),
+        (
+            "request strategy",
+            {strategy.name for strategy in request_strategies},
+            {row.request_strategy.name for row in rows},
+        ),
+        (
+            "container",
+            {container.name for container in containers},
+            {row.container.name for row in rows},
+        ),
+        (
+            "scope",
+            {scope.name for scope in scopes},
+            {row.scope.name for row in rows},
+        ),
+    ):
+        assert_axis_members_used("dependency composition", axis, declared, used)
+    return rows
+
+
+def _coverage_count(
+    rows: tuple[DependencyCompositionRow, ...],
+) -> DependencyCompositionCoverageCount:
+    supported = sum(row.supported for row in rows)
+    return DependencyCompositionCoverageCount(
+        generated=len(rows),
+        supported=supported,
+        skipped=len(rows) - supported,
+    )
+
+
+def build_dependency_composition_coverage(
+    rows: tuple[DependencyCompositionRow, ...] | None = None,
+) -> DependencyCompositionCoverage:
+    if rows is None:
+        rows = generate_dependency_composition_rows()
+
+    grouped: dict[str, dict[str, list[DependencyCompositionRow]]] = {
+        axis: defaultdict(list)
+        for axis in (
+            "operation",
+            "operator",
+            "container",
+            "scope",
+            "request strategy",
+        )
+    }
+    for row in rows:
+        if row.composition.operator is None:
+            raise ValueError(
+                f"composition {row.composition.name} has no outer operator"
+            )
+        values = {
+            "operation": row.operation.name,
+            "operator": row.composition.operator.name,
+            "container": row.container.name,
+            "scope": row.scope.name,
+            "request strategy": row.request_strategy.name,
+        }
+        for axis, value in values.items():
+            grouped[axis][value].append(row)
+
+    axes = tuple(
+        DependencyCompositionCoverageAxis(
+            name=axis,
+            cells=tuple(
+                DependencyCompositionCoverageCell(
+                    name=value,
+                    count=_coverage_count(tuple(group_rows)),
+                )
+                for value, group_rows in sorted(grouped[axis].items())
+            ),
+        )
+        for axis in grouped
+    )
+    unsupported_reasons = Counter(
+        row.unsupported_reason for row in rows if not row.supported
+    )
+    if None in unsupported_reasons:
+        raise ValueError("unsupported composition row has no reason")
+    return DependencyCompositionCoverage(
+        overall=_coverage_count(rows),
+        axes=axes,
+        unsupported_reasons=tuple(
+            (reason, count)
+            for reason, count in sorted(unsupported_reasons.items())
+            if reason is not None
+        ),
+    )
+
+
+def render_dependency_composition_coverage(
+    coverage: DependencyCompositionCoverage,
+) -> str:
+    lines = [
+        "# Dependency Composition Coverage",
+        "",
+        "This file is generated by `test/matrix/generate.py`.",
+        "Counts include both resolution and invocation operations.",
+        "",
+        "## Overall",
+        "",
+        "| Generated | Supported | Skipped |",
+        "| ---: | ---: | ---: |",
+        (
+            f"| {coverage.overall.generated} | "
+            f"{coverage.overall.supported} | "
+            f"{coverage.overall.skipped} |"
+        ),
+    ]
+    for axis in coverage.axes:
+        lines.extend(
+            (
+                "",
+                f"## By {axis.name.title()}",
+                "",
+                f"| {axis.name.title()} | Generated | Supported | Skipped |",
+                "| --- | ---: | ---: | ---: |",
+            )
+        )
+        lines.extend(
+            f"| `{cell.name}` | {cell.count.generated} | "
+            f"{cell.count.supported} | {cell.count.skipped} |"
+            for cell in axis.cells
+        )
+    lines.extend(
+        (
+            "",
+            "## Unsupported Reasons",
+            "",
+            "| Reason | Skipped |",
+            "| --- | ---: |",
+        )
+    )
+    lines.extend(
+        f"| {_escape_markdown_cell(reason)} | {count} |"
+        for reason, count in coverage.unsupported_reasons
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _escape_markdown_cell(value: str) -> str:
+    return value.replace("|", "\\|")
+
+
+def _make_case(
+    row: DependencyCompositionRow,
+) -> GeneratedDependencyCompositionCase:
+    registration_type = row.type_name
+    if (
+        row.composition.operator is not None
+        and row.composition.operator.name in {"pointer", "const_pointer"}
+        and row.composition.operands[0].operator is None
+    ):
+        registration_type = render_dependency_composition(
+            row.composition.operands[0]
+        )
+    storage = f"dingo::storage<{registration_type}>"
+    interfaces = f"dingo::interfaces<{registration_type}>"
+    factory = (
+        "dingo::factory<dingo::function<&make_dependency_composition<"
+        f"{registration_type}>>>"
+    )
+    container_mode = _container_mode(row.container)
+    static_registration = RegistrationSpec(
+        storage=storage,
+        interfaces=interfaces,
+        factory=factory,
+        include_in_runtime=False,
+        include_in_mixed=False,
+    )
+    if row.scope.name == "external":
+        runtime_registration = RegistrationSpec(
+            storage=f"dingo::storage<{registration_type} &>",
+            interfaces=interfaces,
+            runtime_setup=(f"{registration_type} external_value{{}};",),
+            runtime_argument="external_value",
+            mixed_placement=MixedRegistrationPlacement.RUNTIME,
+            include_in_static=False,
+        )
+    else:
+        runtime_registration = RegistrationSpec(
+            interfaces=interfaces,
+            mixed_placement=MixedRegistrationPlacement.RUNTIME,
+            include_in_static=False,
+        )
+    anchor_storage = f"dingo::storage<{_MIXED_ANCHOR_TYPE}>"
+    anchor_factory = (
+        "dingo::factory<dingo::function<&make_dependency_composition<"
+        f"{_MIXED_ANCHOR_TYPE}>>>"
+    )
+    mixed_anchor = RegistrationSpec(
+        scope="dingo::scope<dingo::shared>",
+        storage=anchor_storage,
+        interfaces=f"dingo::interfaces<{_MIXED_ANCHOR_TYPE}>",
+        factory=anchor_factory,
+        include_in_static=False,
+        include_in_runtime=False,
+    )
+    plan = build_registration_plan_from_recipe(
+        RegistrationRecipe(
+            scope=row.scope,
+            storage=storage,
+            factory=factory,
+            registrations=(
+                static_registration,
+                runtime_registration,
+                mixed_anchor,
+            ),
+        )
+    )
+    registration = render_registration_plan(
+        container_mode,
+        plan,
+        context=f"dependency composition row {row.name}",
+    )
+    return GeneratedDependencyCompositionCase(
+        suite=f"dependency_composition_{row.operation.name}",
+        name=row.name,
+        container_type=row.container.container_type,
+        static_bindings=registration.static_bindings,
+        setup_lines=registration.setup_lines,
+        policy=(
+            f"{row.operation.policy}<{row.type_name}, {row.request_type}>"
+        ),
+        system_headers=row.container.system_headers,
+        headers=tuple(
+            sorted(
+                {
+                    *row.container.headers,
+                    "matrix/fixtures/dependency_shapes.h",
+                    "matrix/policies/resolution.h",
+                }
+            )
+        ),
+        supported=row.supported,
+        unsupported_reason=row.unsupported_reason,
+    )
+
+
+def generate_dependency_composition_executables(
+    out_dir: Path,
+    source_template: Template,
+    runner_template: Template,
+    claimed_sources: set[Path] | None = None,
+) -> tuple[GeneratedExecutable, ...]:
+    grouped: dict[tuple[str, str, str], list[DependencyCompositionRow]] = (
+        defaultdict(list)
+    )
+    for row in generate_dependency_composition_rows():
+        if row.composition.operator is None:
+            raise ValueError(
+                f"composition {row.composition.name} has no outer operator"
+            )
+        grouped[
+            (
+                row.operation.name,
+                row.composition.operator.name,
+                row.container.name,
+            )
+        ].append(row)
+
+    shards = tuple(
+        SourceShard(
+            executable=f"dingo_matrix_test_dependency_composition_{operation}",
+            name=(
+                f"dependency_composition_{operation}_{operator}_{container}"
+            ),
+            source_context={
+                "cases": tuple(_make_case(row) for row in rows),
+                "system_headers": (),
+                "headers": tuple(
+                    sorted(
+                        {
+                            header
+                            for row in rows
+                            for header in _make_case(row).headers
+                        }
+                    )
+                ),
+            },
+            runner_context={"cases": tuple(_make_case(row) for row in rows)},
+        )
+        for (operation, operator, container), rows in sorted(grouped.items())
+    )
+    return render_family_executables(
+        out_dir,
+        source_template,
+        runner_template,
+        shards,
+        claimed_sources,
+    )
+
+
+__all__ = (
+    "DEPENDENCY_COMPOSITION_COVERAGE_REPORT",
+    "DEPENDENCY_COMPOSITION_CONTAINERS",
+    "DEPENDENCY_COMPOSITION_OPERATIONS",
+    "DEPENDENCY_COMPOSITION_SCOPES",
+    "DEPENDENCY_COMPOSITION_SCOPE_RULES",
+    "DependencyCompositionRow",
+    "build_dependency_composition_coverage",
+    "generate_dependency_composition_executables",
+    "generate_dependency_composition_rows",
+    "render_dependency_composition_coverage",
+)

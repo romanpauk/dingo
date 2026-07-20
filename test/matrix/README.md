@@ -33,17 +33,33 @@ with backend, detection mode, and constructor-shape axes, plus an
 argument-storage and conversion-category sub-matrix. Family-local axes do not
 add irrelevant dimensions to other families.
 
-Dependency request forms are the supported `carrier x decoration` product.
-Carriers own the C++ type shape (`T`, `T &`, `const T *`, and smart-pointer
-forms); decorations wrap that shape as plain, selected, or annotated requests.
-Each decoration explicitly lists the carriers and test families for which it
-is supported. Constructor detection and templated invocation cases are derived
-from this product, while resolved types and provisioning recipes declare the
-same form identities. The shared contract rejects missing, extra, renamed, or
-duplicate product cells and requires every form in each applicable family.
+Dependency request forms are the supported
+`shape x carrier x decoration` product. Shapes own the C++ type transformation,
+carriers select value or reference categories, and decorations wrap that result
+as plain, selected, or annotated requests. Each decoration explicitly lists the
+shape/carrier cells and test families for which it is supported. Constructor
+detection and templated invocation cases are derived from this product, while
+resolved types and provisioning recipes declare the same form identities. The
+shared contract rejects missing, extra, renamed, or duplicate product cells and
+requires every form in each applicable family.
 Family-local compatibility still applies after that selection; for example,
 annotated invocation excludes hybrid containers whose compile-time binding path
 cannot materialize the wrapper safely.
+
+Recursive dependency compositions are a separate shared type axis. Constructor
+detection projects each type into a one-argument constructor shape. Resolution
+and invocation cross the same type with their container, scope, and request
+strategy axes. Exact stored wrappers use the request category selected by the
+scope rule, while a top-level raw pointer registers its leaf and requests the
+pointer value. This keeps carrier semantics out of this axis while still
+exercising both exact-wrapper resolution and the supported pointer conversion.
+
+Shared-cyclical graphs use a dedicated compositional family. It crosses
+container implementation, registration mode, the value or `shared_ptr`
+representation of each node, and the dependency edge used in each direction.
+The edge catalog covers references, pointers, and all three `shared_ptr`
+request forms exposed by cyclical storage. Unsupported container/mode and
+storage/edge cells remain generated skips with an explicit reason.
 
 Dependency provisionings are exhaustive registration recipes: scope, stored
 type, exposed type, exact form/resolved-type/feature cases, and registration
@@ -52,6 +68,14 @@ policies. The registration family must produce a row for each
 `form x provisioning x resolved type x mode x container` combination, so an
 unrelated feature or another container cannot mask missing shared, unique,
 external, annotated, or keyed resolution coverage.
+
+All registration families lower their selected axes into the same generic
+registration recipe. Each registration entry independently declares whether it
+participates in static, runtime, and mixed generation. The shared renderer then
+selects static bindings and runtime setup from the requested container mode.
+Recursive dependency compositions use this path with arbitrary rendered C++
+types; mixed rows add a static anchor through the recipe instead of constructing
+container setup separately.
 
 Every family owns its row model and semantic sharding, but exposes the same
 generation contract. It produces source-shard descriptions, and `family.py`
@@ -77,6 +101,11 @@ global support code.
 - `constructor_detection`: constructor backend and metadata recovery coverage
   across constructor shapes, plus constructor-probe argument conversion
   selection.
+- `dependency_composition_resolve` and `dependency_composition_invoke`: the
+  shared recursive dependency type axis across representative registration
+  modes and storage scopes.
+- `shared_cyclical`: real two-node cycles across independent container,
+  registration-mode, node-storage, and directed dependency-edge axes.
 
 ### Feature
 
@@ -186,6 +215,10 @@ child container families in one behavioral case.
 - `unique`: each resolution creates a new value.
 - `shared`: resolution reuses the same stored value.
 - `shared_cyclical`: shared resolution with two-phase cycle support.
+
+`shared_cyclical` is consumed by its dedicated graph family rather than the
+flat registration matrix because a valid row requires two registrations and
+two directed dependency edges.
 
 ### Stored Type
 
@@ -337,6 +370,50 @@ the outer-wrapper recovery limitation. An unconstrained forwarding wrapper also
 records the separate shape-detection limitation caused by accepting the opaque
 probe.
 
+Standard wrapper combinations use a recursive composition model with regular,
+move-only, and copy-only leaves. Its operators mirror every non-identity
+dependency shape: pointer, const-pointer, shared-pointer, unique-pointer,
+optional, array, and variant. The model has an explicit maximum depth of two. It
+generates every unary application and every distinct canonical variant pair at
+each level, then renders the C++ dependency type once. Constructor detection,
+resolution, and invocation consume that same catalog. The latter two form the
+full product:
+
+`composition x operation x container x scope x compatible request_strategy`
+
+The container axis reuses the core runtime, static, generic runtime/static, and
+mixed containers. The scope axis covers shared, unique, and external storage.
+Shared and external storage use a stable request; unique storage crosses value
+and rvalue requests. Static-only external cells remain in the product as explicit
+skips because external storage requires runtime registration. Mixed cells use a
+static anchor and register the composition at runtime, so they exercise both
+halves of the mixed container. The contract rejects missing product cells, so
+adding a leaf, operator, container, scope, or request strategy expands resolution
+and invocation without requiring hand-written wrapper cases.
+
+Every product cell is generated. Supported cells compile and execute; unsupported
+cells remain visible as skipped tests with a reason. Shared storage requires a
+movable composition. The current container also cannot publish an exact composed
+type when a raw or smart pointer is the outer wrapper around another wrapper, or
+when pointer-to-const normalization occurs inside a wrapper. These limitations do
+not disable supported stable inverse compositions such as
+`optional<shared_ptr<T>>` and `optional<unique_ptr<T>>`, or exact owning
+`variant<shared_ptr<T>, unique_ptr<T>>` requests. Owning optional requests with a
+composed operand and owning arrays of optionals remain explicit unsupported
+cells because resolution selects an inner conversion instead of materializing
+the exact outer type.
+
+Operators declare positional resolution limitations alongside their type and
+copy/move rules. A limitation may select request strategies and operand operator
+categories; scope rules declare materialization and registration requirements.
+The row generator evaluates this metadata without procedural wrapper-specific
+branches.
+
+The complete product also records shape-detection limitations for optional
+values containing pointers or copy-only array/variant composites. These cells
+remain in the matrix as skips with their reason, like signature-recovery
+limitations.
+
 Its argument-conversion sub-matrix uses the supported combinations of:
 
 `argument_storage x conversion_category`
@@ -352,8 +429,10 @@ Its argument-conversion sub-matrix uses the supported combinations of:
 - `external` scope requires caller-supplied storage.
 - `unique` scope can resolve owning values and wrappers, but not stable shared
   references across resolutions.
-- `shared` and `shared_cyclical` can resolve stable references and pointers.
-- `shared_cyclical` rows require at least one cycle-shaped dependency graph.
+- `shared` can resolve stable references and pointers.
+- `shared_cyclical` graph rows require two cyclical bindings; value storage
+  exposes reference and pointer edges, while `shared_ptr` storage additionally
+  exposes `shared_ptr` value, reference, and pointer edges.
 - Interface resolution requires an exposed interface.
 - Multiple-interface rows must verify at least two exposed interfaces from the
   same stored object.
@@ -442,6 +521,13 @@ by `backend x detection_mode`. Every shard contains the complete
 constructor-shape axis. A fifth shard contains the supported argument-storage
 and conversion-category combinations.
 
+Dependency composition has one executable per operation and shards by outer
+operator and container. Generation also writes
+`build/test/generated/matrix/dependency-composition-coverage.md`. The report
+records generated, supported, and skipped cells by operation, operator,
+container, scope, and request strategy, followed by the unsupported-reason
+totals. These aggregates are contract-tested against the row catalog.
+
 Behavioral scenarios retain executables named for their suites and are sharded
 by scenario. A suite may combine registration and scenario sources; for
 example, `nested_container` keeps native parent resolution in the registration
@@ -456,7 +542,7 @@ includes only its selected policy and scenario headers.
 
 The Python generator has a pytest suite, also registered with CTest, that checks
 its row-count budget, axis and policy coverage, registration placement,
-rendering stability, and stale source cleanup. Run it with:
+rendering stability, and stale generated-output cleanup. Run it with:
 
 ```bash
 uv run --locked pytest -q test/matrix/generator_test.py

@@ -31,7 +31,11 @@ from family import (
     assert_unique_axis_members,
     render_family_executables,
 )
-from plugins import RegistrationPlan, bindings_type, build_registration_plan
+from plugins import (
+    RegistrationPlan,
+    build_registration_plan,
+    render_registration_plan,
+)
 from schema import (
     ContainerSpec,
     DependencyProvisioning,
@@ -196,7 +200,7 @@ def generate_invoke_rows(
                             f"invoke provisioning {provisioning.name} has no "
                             "static bindings"
                         )
-                    if mode.name == "mixed" and plan.mixed_static_bindings is None:
+                    if mode.name == "mixed" and not plan.mixed_static_bindings:
                         raise RuntimeError(
                             f"invoke provisioning {provisioning.name} has no mixed plan"
                         )
@@ -250,25 +254,17 @@ def generate_invoke_rows(
 
 
 def _make_case(row: InvokeRow) -> GeneratedInvokeCase:
-    static_bindings = None
-    setup_lines = ()
-    if row.mode.name == "static":
-        static_bindings = bindings_type(row.plan.static_bindings)
-    elif row.mode.name == "runtime":
-        setup_lines = row.plan.runtime_setup
-    elif row.mode.name == "mixed":
-        if row.plan.mixed_static_bindings is None:
-            raise RuntimeError(f"invoke row {row.name} has no mixed plan")
-        static_bindings = bindings_type(row.plan.mixed_static_bindings)
-        setup_lines = row.plan.mixed_runtime_setup
-    else:
-        raise RuntimeError(f"unknown invoke registration mode: {row.mode.name}")
+    registration = render_registration_plan(
+        row.mode.name,
+        row.plan,
+        context=f"invoke row {row.name}",
+    )
 
     return GeneratedInvokeCase(
         name=row.name,
         container_type=row.container.container_type,
-        static_bindings=static_bindings,
-        setup_lines=setup_lines,
+        static_bindings=registration.static_bindings,
+        setup_lines=registration.setup_lines,
         policy=row.callable.policy,
         system_headers=tuple(
             sorted(

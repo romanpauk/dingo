@@ -479,15 +479,6 @@ STORED_TYPES = (
         headers=("matrix/fixtures/factory.h",),
     ),
     StoredType(
-        id="cycle_a_type",
-        name="cycle_a_type",
-        kind="cycle_type",
-        storage="dingo::storage<cycle_a_type>",
-        supported_scopes=frozenset({"shared_cyclical"}),
-        provides=frozenset({"stored_value", "cycle_graph"}),
-        headers=VALUE_HEADERS,
-    ),
-    StoredType(
         id="implementation_shared_ptr",
         name="std::shared_ptr<implementation_type>",
         kind="implementation_type",

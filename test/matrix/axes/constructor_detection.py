@@ -8,6 +8,10 @@
 
 from __future__ import annotations
 
+from axes.dependency_compositions import (
+    DEPENDENCY_COMPOSITIONS,
+    render_dependency_composition,
+)
 from axes.dependency_forms import (
     DEPENDENCY_FORMS,
     DEPENDENCY_SHAPES,
@@ -156,58 +160,21 @@ DEPENDENCY_CONSTRUCTOR_SHAPES = tuple(
 )
 
 
-_WRAPPED_DEPENDENCY_CASES = (
-    (
-        "nested_optional_shared_pointer",
-        "constructor_nested_optional_shared_pointer",
-        "constructor_nested_optional_dependency",
-    ),
-    (
-        "nested_variant_optional",
-        "constructor_nested_variant_optional",
-        "constructor_nested_variant_dependency",
-    ),
-    (
-        "optional_unique_pointer",
-        "constructor_optional_unique_pointer",
-        "constructor_optional_unique_pointer_dependency",
-    ),
-    (
-        "variant_shared_unique_pointers",
-        "constructor_variant_shared_unique_pointers",
-        "constructor_variant_shared_unique_pointers_dependency",
-    ),
-    (
-        "optional_move_only",
-        "constructor_optional_move_only",
-        "constructor_optional_move_only_dependency",
-    ),
-    (
-        "optional_copy_only",
-        "constructor_optional_copy_only",
-        "constructor_optional_copy_only_dependency",
-    ),
-    (
-        "variant_move_copy_only",
-        "constructor_variant_move_copy_only",
-        "constructor_variant_move_copy_only_dependency",
-    ),
-)
-
-
 WRAPPED_DEPENDENCY_CONSTRUCTOR_SHAPES = tuple(
     ConstructorShape(
-        name=name,
-        target_type=target_type,
+        name=composition.name,
+        target_type=f"constructor_dependency<{type_name}>",
         expected_kind="dingo::detail::constructor_kind::concrete",
         expected_arity=1,
-        signature_arguments=f"dingo::type_list<{dependency_type}>",
+        signature_arguments=f"dingo::type_list<{type_name}>",
         detector_only=True,
         constructor_detection_limitations=(
             WRAPPER_SIGNATURE_RECOVERY_LIMITATION,
+            *composition.constructor_detection_limitations,
         ),
     )
-    for name, target_type, dependency_type in _WRAPPED_DEPENDENCY_CASES
+    for composition in DEPENDENCY_COMPOSITIONS
+    for type_name in (render_dependency_composition(composition),)
 )
 
 

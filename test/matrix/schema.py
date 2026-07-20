@@ -89,6 +89,8 @@ class RegistrationSpec:
     runtime_argument: str | None = None
     mixed_placement: MixedRegistrationPlacement = MixedRegistrationPlacement.STATIC
     include_in_static: bool = True
+    include_in_runtime: bool = True
+    include_in_mixed: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,6 +167,48 @@ class DependencyShape:
     required_families: frozenset[str]
     constructor_detection_limitations: tuple[
         DependencyShapeConstructorDetectionLimitation, ...
+    ] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class DependencyCompositionResolutionLimitation:
+    position: str
+    reason: str
+    request_strategies: frozenset[str] = frozenset()
+    operand_operators: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True, slots=True)
+class DependencyCompositionRequestStrategy:
+    name: str
+    type_expression: str
+    uses_operator_expression: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class DependencyCompositionOperator:
+    name: str
+    arity: int
+    type_expression: str
+    copyability: str
+    movability: str
+    request_expression: str
+    supported_request_strategies: frozenset[str]
+    resolution_limitations: tuple[
+        DependencyCompositionResolutionLimitation, ...
+    ] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class DependencyComposition:
+    name: str
+    type_name: str | None = None
+    operator: DependencyCompositionOperator | None = None
+    operands: tuple[DependencyComposition, ...] = ()
+    copyable: bool = False
+    movable: bool = False
+    constructor_detection_limitations: tuple[
+        ConstructorDetectionLimitation, ...
     ] = ()
 
 
@@ -254,6 +298,45 @@ class ScenarioSpec:
     supported_containers: frozenset[str]
     system_headers: tuple[str, ...] = ()
     headers: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SharedCyclicalContainer:
+    name: str
+    container_types: tuple[tuple[str, str], ...]
+    headers: tuple[str, ...]
+
+    @property
+    def supported_modes(self) -> frozenset[str]:
+        return frozenset(mode for mode, _ in self.container_types)
+
+
+@dataclass(frozen=True, slots=True)
+class SharedCyclicalStorageRepresentation:
+    name: str
+    type_expression: str
+    supported_dependency_edges: frozenset[str]
+    shared_ownership: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SharedCyclicalStorageShape:
+    name: str
+    a: SharedCyclicalStorageRepresentation
+    b: SharedCyclicalStorageRepresentation
+
+
+@dataclass(frozen=True, slots=True)
+class SharedCyclicalDependencyEdge:
+    name: str
+    type_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class SharedCyclicalDependencyEdgeShape:
+    name: str
+    a_to_b: SharedCyclicalDependencyEdge
+    b_to_a: SharedCyclicalDependencyEdge
 
 
 @dataclass(frozen=True, slots=True)

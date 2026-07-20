@@ -345,16 +345,6 @@ EXPOSED_TYPES = (
         registrations=(),
     ),
     ExposedType(
-        name="cycle_concrete",
-        kind="cycle",
-        supported_stored_kinds=frozenset({"cycle_type"}),
-        provides=frozenset({"concrete_binding"}),
-        registrations=(
-            RegistrationSpec(),
-            RegistrationSpec(storage="dingo::storage<std::shared_ptr<cycle_b_type>>"),
-        ),
-    ),
-    ExposedType(
         name="unique_interface_type",
         kind="interface",
         supported_stored_kinds=frozenset({"unique_implementation_type"}),

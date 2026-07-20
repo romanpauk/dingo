@@ -16,6 +16,12 @@ from axes.constructor_detection import (
     CONSTRUCTOR_SHAPES,
 )
 from axes.containers import CONTAINERS
+from axes.dependency_compositions import (
+    DEPENDENCY_COMPOSITION_LEAVES,
+    DEPENDENCY_COMPOSITION_OPERATORS,
+    DEPENDENCY_COMPOSITIONS,
+    validate_dependency_compositions,
+)
 from axes.dependency_forms import (
     DEPENDENCY_CARRIERS,
     DEPENDENCY_DECORATIONS,
@@ -35,6 +41,8 @@ from schema import (
     ConstructorArgumentCategory,
     ConstructorShape,
     DependencyCarrier,
+    DependencyComposition,
+    DependencyCompositionOperator,
     DependencyDecoration,
     DependencyForm,
     DependencyProvisioning,
@@ -89,6 +97,15 @@ def validate_dependency_contract(
     carriers: tuple[DependencyCarrier, ...] = DEPENDENCY_CARRIERS,
     decorations: tuple[DependencyDecoration, ...] = DEPENDENCY_DECORATIONS,
     forms: tuple[DependencyForm, ...] = DEPENDENCY_FORMS,
+    compositions: tuple[
+        DependencyComposition, ...
+    ] = DEPENDENCY_COMPOSITIONS,
+    composition_operators: tuple[
+        DependencyCompositionOperator, ...
+    ] = DEPENDENCY_COMPOSITION_OPERATORS,
+    composition_leaves: tuple[
+        DependencyComposition, ...
+    ] = DEPENDENCY_COMPOSITION_LEAVES,
     provisionings: tuple[DependencyProvisioning, ...] = DEPENDENCY_PROVISIONINGS,
     constructor_shapes: tuple[ConstructorShape, ...] = CONSTRUCTOR_SHAPES,
     argument_categories: tuple[ConstructorArgumentCategory, ...] = (
@@ -102,6 +119,11 @@ def validate_dependency_contract(
     exposed_types: tuple[ExposedType, ...] = EXPOSED_TYPES,
     features: tuple[Feature, ...] = FEATURES,
 ) -> None:
+    validate_dependency_compositions(
+        compositions,
+        composition_operators,
+        composition_leaves,
+    )
     shapes_by_name = _by_name(shapes)
     carriers_by_name = _by_name(carriers)
     decorations_by_name = _by_name(decorations)

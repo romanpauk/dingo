@@ -42,17 +42,24 @@ from schema import (
     StoredType,
 )
 from constructor_detection import generate_constructor_detection_executables
+from dependency_composition import (
+    DEPENDENCY_COMPOSITION_COVERAGE_REPORT,
+    build_dependency_composition_coverage,
+    generate_dependency_composition_executables,
+    render_dependency_composition_coverage,
+)
 from family import SourceShard, render_family_executables, write_text_if_changed
 from invoke import generate_invoke_executables
 from plugins import (
     CaseLines,
     LIFETIME_POLICIES,
     RegistrationPlan,
-    bindings_type,
     build_registration_plan,
+    render_registration_plan,
     select_case_lines,
 )
 from scenarios import generate_scenario_executables
+from shared_cyclical import generate_shared_cyclical_executables
 
 
 class RejectionReason(StrEnum):
@@ -312,7 +319,7 @@ def materialize_row(
     plan = plan_for_candidate(candidate, cache)
     if candidate.mode.name == "static" and not plan.static_bindings:
         raise RuntimeError(f"static row {case_name(candidate)} has no bindings")
-    if candidate.mode.name == "mixed" and plan.mixed_static_bindings is None:
+    if candidate.mode.name == "mixed" and not plan.mixed_static_bindings:
         raise RuntimeError(f"mixed row {case_name(candidate)} has no registration plan")
 
     lines = select_case_lines(candidate)
@@ -563,26 +570,18 @@ def case_name(row: CandidateRow) -> str:
 
 
 def make_case(row: MatrixRow) -> GeneratedCase:
-    static_bindings = None
-    setup_lines = ()
-    if row.mode.name == "static":
-        static_bindings = bindings_type(row.plan.static_bindings)
-    elif row.mode.name == "runtime":
-        setup_lines = row.plan.runtime_setup
-    elif row.mode.name == "mixed":
-        if row.plan.mixed_static_bindings is None:
-            raise RuntimeError(f"row {row.name} has no mixed static bindings")
-        static_bindings = bindings_type(row.plan.mixed_static_bindings)
-        setup_lines = row.plan.mixed_runtime_setup
-    else:
-        raise RuntimeError(f"unknown registration mode: {row.mode.name}")
+    registration = render_registration_plan(
+        row.mode.name,
+        row.plan,
+        context=f"row {row.name}",
+    )
 
     return GeneratedCase(
         suite=row.feature.name,
         name=row.name,
         container_type=row.container.container_type,
-        static_bindings=static_bindings,
-        setup_lines=setup_lines,
+        static_bindings=registration.static_bindings,
+        setup_lines=registration.setup_lines,
         policy=row.lines.policy,
         system_headers=tuple(
             sorted(
@@ -688,6 +687,12 @@ def remove_stale_sources(out_dir: Path, live_sources: set[Path]) -> None:
             source.unlink()
 
 
+def remove_stale_reports(out_dir: Path, live_reports: set[Path]) -> None:
+    for report in out_dir.glob("*-coverage.md"):
+        if report not in live_reports:
+            report.unlink()
+
+
 def merge_executables(
     *executable_groups: tuple[GeneratedExecutable, ...],
 ) -> tuple[GeneratedExecutable, ...]:
@@ -742,6 +747,16 @@ def generate(out_dir: Path, cmake_file: Path) -> None:
             "constructor_detection_runner.cpp.j2",
         ),
         (generate_invoke_executables, "source.cpp.j2", "runner.cpp.j2"),
+        (
+            generate_dependency_composition_executables,
+            "dependency_composition.cpp.j2",
+            "dependency_composition_runner.cpp.j2",
+        ),
+        (
+            generate_shared_cyclical_executables,
+            "shared_cyclical.cpp.j2",
+            "shared_cyclical_runner.cpp.j2",
+        ),
     )
     executables = merge_executables(
         *(
@@ -758,6 +773,14 @@ def generate(out_dir: Path, cmake_file: Path) -> None:
         out_dir,
         {source for executable in executables for source in executable.sources},
     )
+    coverage_report = out_dir / DEPENDENCY_COMPOSITION_COVERAGE_REPORT
+    write_text_if_changed(
+        coverage_report,
+        render_dependency_composition_coverage(
+            build_dependency_composition_coverage()
+        ),
+    )
+    remove_stale_reports(out_dir, {coverage_report})
     cmake_file.parent.mkdir(parents=True, exist_ok=True)
     write_text_if_changed(
         cmake_file,

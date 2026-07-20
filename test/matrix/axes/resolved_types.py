@@ -44,12 +44,6 @@ RESOLVED_TYPES = (
         requires=frozenset({"unique_storage", "stored_value"}),
     ),
     ResolvedType(
-        name="cycle_ref",
-        supported_exposed_types=frozenset({"cycle_concrete"}),
-        provides=frozenset({"resolved_concrete"}),
-        requires=frozenset({"cycle_graph"}),
-    ),
-    ResolvedType(
         name="dependent_type_ref",
         supported_exposed_types=frozenset({"mixed_external_dependency"}),
         provides=frozenset({"resolved_mixed_external_dependency"}),
@@ -479,7 +473,6 @@ _RESOLUTION_POLICIES = {
         "keyed_collection_dependency",
         "construct",
     ): "resolution::construct_count_sum<keyed_collection_dependency_type>",
-    ("cycle_ref", "resolve_concrete"): "resolution::cycle_ref<cycle_a_type>",
     (
         "dependent_type_ref",
         "mixed_external_dependency",
