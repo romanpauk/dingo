@@ -191,6 +191,7 @@ _MIXED_ANCHOR_TYPE = "dependency_composition_mixed_anchor"
 DEPENDENCY_COMPOSITION_COVERAGE_REPORT = "dependency-composition-coverage.md"
 DEPENDENCY_COMPOSITION_PROFILES = frozenset({"full", "portable"})
 DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION = 4
+DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT = 12
 
 
 ProjectionObligation = tuple[str, ...]
@@ -950,7 +951,11 @@ def generate_dependency_composition_executables(
     runner_template: Template,
     claimed_sources: set[Path] | None = None,
     profile: str = "full",
+    implementation_case_limit: int | None = None,
 ) -> tuple[GeneratedExecutable, ...]:
+    if implementation_case_limit is not None and implementation_case_limit <= 0:
+        raise ValueError("implementation case limit must be positive")
+
     grouped: dict[DependencyCompositionShardKey, list[DependencyCompositionRow]] = (
         defaultdict(list)
     )
@@ -1028,28 +1033,50 @@ def generate_dependency_composition_executables(
     for (operation, bucket), executable_rows in sorted(
         rows_by_executable.items()
     ):
-        cases = tuple(_make_case(row) for row in executable_rows)
-        name = f"dependency_composition_{operation}_{bucket + 1}"
-        shards.append(
-            SourceShard(
-                executable=f"dingo_matrix_test_{name}",
-                name=name,
-                source_context={
-                    "cases": cases,
-                    "system_headers": (),
-                    "headers": tuple(
-                        sorted(
-                            {
-                                header
-                                for case in cases
-                                for header in case.headers
-                            }
-                        )
-                    ),
-                },
-                runner_context={"cases": cases},
-            )
+        executable_name = (
+            f"dingo_matrix_test_dependency_composition_{operation}_{bucket + 1}"
         )
+        implementation_count = 1
+        if implementation_case_limit is not None:
+            implementation_count = (
+                len(executable_rows) + implementation_case_limit - 1
+            ) // implementation_case_limit
+        implementation_size, larger_implementation_count = divmod(
+            len(executable_rows), implementation_count
+        )
+        offset = 0
+        for part in range(1, implementation_count + 1):
+            part_size = implementation_size + (
+                part <= larger_implementation_count
+            )
+            cases = tuple(
+                _make_case(row)
+                for row in executable_rows[offset : offset + part_size]
+            )
+            offset += part_size
+            name = (
+                f"dependency_composition_{operation}_{bucket + 1}_part_{part}"
+            )
+            shards.append(
+                SourceShard(
+                    executable=executable_name,
+                    name=name,
+                    source_context={
+                        "cases": cases,
+                        "system_headers": (),
+                        "headers": tuple(
+                            sorted(
+                                {
+                                    header
+                                    for case in cases
+                                    for header in case.headers
+                                }
+                            )
+                        ),
+                    },
+                    runner_context={"cases": cases},
+                )
+            )
     return render_case_family_executables(
         out_dir,
         source_template,
@@ -1063,6 +1090,7 @@ __all__ = (
     "DEPENDENCY_COMPOSITION_COVERAGE_REPORT",
     "DEPENDENCY_COMPOSITION_CONTAINERS",
     "DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION",
+    "DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT",
     "DEPENDENCY_COMPOSITION_OPERATIONS",
     "DEPENDENCY_COMPOSITION_PROFILES",
     "DEPENDENCY_COMPOSITION_SCOPES",

@@ -16,6 +16,11 @@ set(DINGO_MATRIX_TEST_CMAKE
     "${PROJECT_BINARY_DIR}/generated/matrix-tests.cmake")
 set(DINGO_MATRIX_GENERATOR
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/generate.py")
+if(MSVC)
+    set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT 12)
+else()
+    set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT 0)
+endif()
 file(GLOB DINGO_MATRIX_AXIS_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/axes/*.py")
 
@@ -105,7 +110,9 @@ set(DINGO_MATRIX_GENERATOR_COMMAND
         ${DINGO_MATRIX_GENERATOR}
         --out ${DINGO_MATRIX_TEST_DIR}
         --cmake ${DINGO_MATRIX_TEST_CMAKE}
-        --profile ${DINGO_MATRIX_PROFILE})
+        --profile ${DINGO_MATRIX_PROFILE}
+        --dependency-composition-case-limit
+            ${DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT})
 
 execute_process(
     COMMAND ${DINGO_MATRIX_GENERATOR_COMMAND}

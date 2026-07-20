@@ -734,7 +734,12 @@ def merge_executables(
     return tuple(sorted(executables, key=lambda executable: executable.name))
 
 
-def generate(out_dir: Path, cmake_file: Path, profile: str = "full") -> None:
+def generate(
+    out_dir: Path,
+    cmake_file: Path,
+    profile: str = "full",
+    dependency_composition_case_limit: int | None = None,
+) -> None:
     script_dir = Path(__file__).resolve().parent
     env = Environment(
         loader=FileSystemLoader(script_dir / "templates"),
@@ -774,7 +779,12 @@ def generate(out_dir: Path, cmake_file: Path, profile: str = "full") -> None:
             generate_dependency_composition_executables,
             "dependency_composition.cpp.j2",
             "dependency_composition_runner.cpp.j2",
-            {"profile": profile},
+            {
+                "profile": profile,
+                "implementation_case_limit": (
+                    dependency_composition_case_limit
+                ),
+            },
         ),
         (
             generate_shared_cyclical_executables,
@@ -837,9 +847,22 @@ def main() -> None:
         choices=sorted(DEPENDENCY_COMPOSITION_PROFILES),
         default="full",
     )
+    parser.add_argument(
+        "--dependency-composition-case-limit",
+        type=int,
+        default=0,
+        help="maximum composition cases per implementation source; 0 disables",
+    )
     args = parser.parse_args()
+    if args.dependency_composition_case_limit < 0:
+        parser.error("--dependency-composition-case-limit cannot be negative")
 
-    generate(args.out, args.cmake, args.profile)
+    generate(
+        args.out,
+        args.cmake,
+        args.profile,
+        args.dependency_composition_case_limit or None,
+    )
 
 
 if __name__ == "__main__":

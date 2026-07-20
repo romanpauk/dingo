@@ -74,6 +74,7 @@ from dependency_composition import (
     DEPENDENCY_COMPOSITION_COVERAGE_REPORT,
     DEPENDENCY_COMPOSITION_CONTAINERS,
     DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION,
+    DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
     DEPENDENCY_COMPOSITION_OPERATIONS,
     DEPENDENCY_COMPOSITION_PROFILES,
     DEPENDENCY_COMPOSITION_SCOPES,
@@ -1111,9 +1112,14 @@ def test_dependency_composition_projection_rejects_unknown_profiles(
 
 
 @pytest.mark.parametrize("profile", ("full", "portable"))
+@pytest.mark.parametrize(
+    "implementation_case_limit",
+    (None, DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT),
+)
 def test_dependency_composition_executables_are_bounded_and_balanced(
     tmp_path: Path,
     profile: str,
+    implementation_case_limit: int | None,
 ) -> None:
     script_dir = Path(__file__).resolve().parent
     environment = Environment(
@@ -1127,6 +1133,7 @@ def test_dependency_composition_executables_are_bounded_and_balanced(
         environment.get_template("dependency_composition.cpp.j2"),
         environment.get_template("dependency_composition_runner.cpp.j2"),
         profile=profile,
+        implementation_case_limit=implementation_case_limit,
     )
 
     assert len(executables) == (
@@ -1144,26 +1151,42 @@ def test_dependency_composition_executables_are_bounded_and_balanced(
         assert len(operation_executables) == (
             DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION
         )
-        assert all(
-            len(executable.sources) == 2
-            for executable in operation_executables
-        )
-        assert all(
-            sum(
-                source.name.startswith("matrix_runner_")
-                for source in executable.sources
-            )
-            == 1
-            for executable in operation_executables
-        )
-        witness_counts = tuple(
-            sum(
-                source.read_text(encoding="utf-8").count("\nTEST(")
+        witness_counts: list[int] = []
+        for executable in operation_executables:
+            runner_sources = tuple(
+                source
                 for source in executable.sources
                 if source.name.startswith("matrix_runner_")
             )
-            for executable in operation_executables
-        )
+            implementation_sources = tuple(
+                source
+                for source in executable.sources
+                if not source.name.startswith("matrix_runner_")
+            )
+            assert len(runner_sources) == 1
+            witness_count = sum(
+                source.read_text(encoding="utf-8").count("\nTEST(")
+                for source in runner_sources
+            )
+            witness_counts.append(witness_count)
+            expected_implementation_count = 1
+            if implementation_case_limit is not None:
+                expected_implementation_count = (
+                    witness_count + implementation_case_limit - 1
+                ) // implementation_case_limit
+            assert len(implementation_sources) == expected_implementation_count
+            implementation_case_counts = tuple(
+                source.read_text(encoding="utf-8").count("\nstruct ")
+                for source in implementation_sources
+            )
+            assert sum(implementation_case_counts) == witness_count
+            if implementation_case_limit is not None:
+                assert max(implementation_case_counts) <= (
+                    implementation_case_limit
+                )
+            assert max(implementation_case_counts) - min(
+                implementation_case_counts
+            ) <= 1
         assert max(witness_counts) - min(witness_counts) <= 1
 
 
@@ -2086,9 +2109,15 @@ def test_invalid_registration_plan_is_an_error(
         materialize_row(invalid_candidate, {}, Counter[RejectionReason]())
 
 
+@pytest.mark.parametrize(
+    ("dependency_composition_case_limit", "expected_implementation_sources"),
+    ((None, 113), (DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT, 161)),
+)
 def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
     tmp_path: Path,
     composition_rows: tuple[DependencyCompositionRow, ...],
+    dependency_composition_case_limit: int | None,
+    expected_implementation_sources: int,
 ) -> None:
     out_dir = tmp_path / "matrix"
     out_dir.mkdir()
@@ -2098,7 +2127,11 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
     stale_report.write_text("stale", encoding="utf-8")
     cmake_file = tmp_path / "matrix-tests.cmake"
 
-    generate(out_dir, cmake_file)
+    generate(
+        out_dir,
+        cmake_file,
+        dependency_composition_case_limit=dependency_composition_case_limit,
+    )
 
     assert not stale_source.exists()
     assert not stale_report.exists()
@@ -2108,7 +2141,7 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
         if not source.name.startswith("matrix_runner_")
     )
     runner_sources = tuple(out_dir.glob("matrix_runner_*.cpp"))
-    assert len(implementation_sources) == 113
+    assert len(implementation_sources) == expected_implementation_sources
     assert len(runner_sources) == 55
     coverage_report = out_dir / DEPENDENCY_COMPOSITION_COVERAGE_REPORT
     assert coverage_report.read_text(encoding="utf-8") == (
@@ -2144,6 +2177,10 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
         for path in (*out_dir.glob("*.cpp"), coverage_report, cmake_file)
     }
 
-    generate(out_dir, cmake_file)
+    generate(
+        out_dir,
+        cmake_file,
+        dependency_composition_case_limit=dependency_composition_case_limit,
+    )
 
     assert {path: path.stat().st_mtime_ns for path in timestamps} == timestamps

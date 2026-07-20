@@ -540,10 +540,13 @@ by `backend x detection_mode`. Every shard contains the complete
 constructor-shape axis. A fifth shard contains the supported argument-storage
 and conversion-category combinations.
 
-Dependency composition has four balanced executables per operation. Every
-executable has one implementation source and one runner containing its assigned
-rows; outer operator and container remain coverage axes rather than compilation
-boundaries. Generation also writes
+Dependency composition has four balanced executables per operation. Each
+executable keeps one runner containing all assigned rows. GCC and Clang keep one
+implementation source per executable. MSVC splits that implementation across
+balanced sources capped at 12 cases, working around a compiler crash without
+increasing the eight-binary bound or penalizing other toolchains. Outer operator
+and container remain coverage axes rather than compilation boundaries.
+Generation also writes
 `build/test/generated/matrix/dependency-composition-coverage.md`. This
 build-local diagnostic records supported cases, functionality gaps, and
 intentional constraints by operation, operator, container, scope, and request
