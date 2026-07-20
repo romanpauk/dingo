@@ -58,13 +58,6 @@ runs:
       shell: pwsh
       run: |
         ctest --test-dir "${{ inputs.build_dir }}" --verbose --output-on-failure -C ${{ inputs.config_id }}
-    - name: Report and reclaim main build outputs
-      shell: pwsh
-      run: |
-        Get-PSDrive -Name (Get-Location).Drive.Name
-        $buildSize = (Get-ChildItem "${{ inputs.build_dir }}" -Recurse -File | Measure-Object -Property Length -Sum).Sum
-        Write-Host "Main build bytes: $buildSize"
-        cmake --build "${{ inputs.build_dir }}" --target clean --config ${{ inputs.config_id }}
     - name: FetchContent
       shell: pwsh
       run: |

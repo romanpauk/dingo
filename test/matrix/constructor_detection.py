@@ -67,6 +67,11 @@ class ConstructorDetectionRow:
         return self.limitation is None
 
     @property
+    def conditionally_supported(self) -> bool:
+        limitation = self.limitation
+        return limitation is not None and limitation.guard is not None
+
+    @property
     def limitation(self) -> ConstructorDetectionLimitation | None:
         return next(
             (
@@ -159,6 +164,11 @@ def generate_constructor_detection_rows(
             raise ValueError(
                 f"constructor shape {constructor_shape.name} has a limitation "
                 "without a reason"
+            )
+        if any(limitation.guard == "" for limitation in limitations):
+            raise ValueError(
+                f"constructor shape {constructor_shape.name} has a limitation "
+                "with an empty guard"
             )
         for backend in known_backends:
             for mode in known_modes:

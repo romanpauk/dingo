@@ -151,6 +151,7 @@ class ConstructorDetectionLimitation:
     backend: str | None
     mode: str
     reason: str
+    guard: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

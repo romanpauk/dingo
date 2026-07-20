@@ -8,10 +8,6 @@ inputs:
   build_type:
     description: CMake build type
     required: true
-  ccache_enabled:
-    description: Enable ccache for this build
-    required: false
-    default: 'ON'
   ccache_key:
     description: Cache key for ccache-action
     required: true
@@ -55,7 +51,6 @@ runs:
           ${{ inputs.source_dir }}/pyproject.toml
           ${{ inputs.source_dir }}/uv.lock
     - name: CCache
-      if: ${{ inputs.ccache_enabled == 'ON' }}
       uses: hendrikmuhs/ccache-action@v1.2.23
       with:
         key: ${{ inputs.ccache_key }}
@@ -75,7 +70,7 @@ runs:
         CC: ${{ inputs.compiler_cc }}
         CXX: ${{ inputs.compiler_cxx }}
       run: |
-        cmake -S "${{ inputs.source_dir }}" -B "${{ inputs.build_dir }}" -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=${{ inputs.ccache_enabled }} -DDINGO_MATRIX_PROFILE=${{ inputs.matrix_profile }} -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DDINGO_SANITIZER=${{ inputs.sanitizer }} -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
+        cmake -S "${{ inputs.source_dir }}" -B "${{ inputs.build_dir }}" -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_MATRIX_PROFILE=${{ inputs.matrix_profile }} -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DDINGO_SANITIZER=${{ inputs.sanitizer }} -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
     - name: Build
       if: ${{ inputs.container_image == '' }}
       shell: bash
@@ -88,14 +83,6 @@ runs:
         ASAN_OPTIONS: use_sigaltstack=false
       run: |
         cd "${{ inputs.build_dir }}" && ctest --verbose --output-on-failure
-    - name: Report and reclaim main build outputs
-      if: ${{ inputs.container_image == '' }}
-      shell: bash
-      run: |
-        df -h .
-        du -sh "${{ inputs.build_dir }}"
-        du -ch "${{ inputs.build_dir }}"/test/CMakeFiles/dingo_matrix_test_dependency_composition_*.dir 2>/dev/null | tail -1 || true
-        cmake --build "${{ inputs.build_dir }}" --target clean
     - name: FetchContent
       if: ${{ inputs.container_image == '' }}
       shell: bash
@@ -117,7 +104,6 @@ runs:
           --user "$(id -u):$(id -g)" \
           -e BUILD_JOBS="${BUILD_JOBS}" \
           -e CCACHE_DIR=/ccache \
-          -e DINGO_CCACHE=${{ inputs.ccache_enabled }} \
           -e DINGO_MATRIX_PROFILE=${{ inputs.matrix_profile }} \
           -e CC="${{ inputs.compiler_cc }}" \
           -e CXX="${{ inputs.compiler_cxx }}" \
@@ -131,18 +117,16 @@ runs:
             command -v uv
             uv --version
 
-            if [[ "${DINGO_CCACHE}" == "ON" ]]; then
-              echo "::group::Initial ccache stats"
-              ccache --show-stats --verbose
-              ccache --zero-stats
-              echo "::endgroup::"
-            fi
+            echo "::group::Initial ccache stats"
+            ccache --show-stats --verbose
+            ccache --zero-stats
+            echo "::endgroup::"
 
             cmake -S "/workspace/${{ inputs.source_dir }}" \
               -B "/workspace/${{ inputs.build_dir }}" \
               -DDINGO_DEVELOPMENT_MODE=ON \
               -DDINGO_BENCHMARK_ENABLED=OFF \
-              -DDINGO_CCACHE="${DINGO_CCACHE}" \
+              -DDINGO_CCACHE=ON \
               -DDINGO_MATRIX_PROFILE="${DINGO_MATRIX_PROFILE}" \
               -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON \
               -DDINGO_SANITIZER=${{ inputs.sanitizer }} \
@@ -151,34 +135,24 @@ runs:
 
             cmake --build "/workspace/${{ inputs.build_dir }}" -j "$BUILD_JOBS"
 
-            if [[ "${DINGO_CCACHE}" == "ON" ]]; then
-              echo "::group::Main build ccache stats"
-              ccache --show-stats --verbose
-              echo "::endgroup::"
-            fi
+            echo "::group::Main build ccache stats"
+            ccache --show-stats --verbose
+            echo "::endgroup::"
 
             cd "/workspace/${{ inputs.build_dir }}"
             ASAN_OPTIONS=use_sigaltstack=false ctest --verbose --output-on-failure
-            cd /workspace
-
-            df -h .
-            du -sh "/workspace/${{ inputs.build_dir }}"
-            du -ch "/workspace/${{ inputs.build_dir }}"/test/CMakeFiles/dingo_matrix_test_dependency_composition_*.dir 2>/dev/null | tail -1 || true
-            cmake --build "/workspace/${{ inputs.build_dir }}" --target clean
 
             cmake -S "/workspace/${{ inputs.source_dir }}/test/fetchcontent" \
               -B "/workspace/${{ inputs.fetchcontent_dir }}" \
-              -DDINGO_CCACHE="${DINGO_CCACHE}" \
+              -DDINGO_CCACHE=ON \
               -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} \
               -DCMAKE_CXX_STANDARD=${{ inputs.std }}
 
             cmake --build "/workspace/${{ inputs.fetchcontent_dir }}" -j "$BUILD_JOBS"
 
-            if [[ "${DINGO_CCACHE}" == "ON" ]]; then
-              echo "::group::Final ccache stats"
-              ccache --show-stats --verbose
-              echo "::endgroup::"
-            fi
+            echo "::group::Final ccache stats"
+            ccache --show-stats --verbose
+            echo "::endgroup::"
           '
     - name: Upload Failure Artifacts
       if: ${{ failure() }}

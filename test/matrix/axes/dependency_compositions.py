@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from itertools import combinations
 
+from axes.dependency_forms import NON_GNU_WRAPPER_SHAPE_LIMITATION
 from schema import (
     ConstructorDetectionLimitation,
     DependencyComposition,
@@ -286,6 +287,22 @@ def _composition_limitations(
         and operands[0].operator.name in {"pointer", "const_pointer"}
     ):
         limitations += _OPTIONAL_POINTER_SHAPE_LIMITATION
+    non_gnu_ambiguous_wrapper = operator.name == "optional" or (
+        operator.name == "variant"
+        and any(
+            operand.operator is not None
+            and operand.operator.name == "optional"
+            for operand in operands
+        )
+    )
+    has_unconditional_shape_limitation = any(
+        limitation.mode == "shape"
+        and limitation.guard is None
+        and limitation.backend is None
+        for limitation in limitations
+    )
+    if non_gnu_ambiguous_wrapper and not has_unconditional_shape_limitation:
+        limitations += (NON_GNU_WRAPPER_SHAPE_LIMITATION,)
     return limitations
 
 

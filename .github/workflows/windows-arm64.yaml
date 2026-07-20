@@ -69,7 +69,7 @@ jobs:
       - name: CCache
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
-          key: ${{ inputs.vs_label }}-arm64-${{ inputs.config_id }}-${{ inputs.std }}-portable
+          key: ${{ inputs.vs_label }}-arm64-${{ inputs.config_id }}-${{ inputs.std }}
           max-size: ${{ env.CCACHE_MAX_SIZE }}
           evict-old-files: job
       - name: Configure
@@ -91,13 +91,6 @@ jobs:
           if-no-files-found: error
           path: |
             build/test/${{ inputs.config_id }}
-      - name: Report and reclaim main build outputs
-        shell: pwsh
-        run: |
-          Get-PSDrive -Name (Get-Location).Drive.Name
-          $buildSize = (Get-ChildItem build -Recurse -File | Measure-Object -Property Length -Sum).Sum
-          Write-Host "Main build bytes: $buildSize"
-          cmake --build build --target clean --config ${{ inputs.config_id }}
       - name: FetchContent
         shell: pwsh
         run: |

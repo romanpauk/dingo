@@ -301,7 +301,7 @@ def test_constructor_detection_is_an_independent_full_product() -> None:
             } == expected_shapes
 
 
-def test_constructor_signature_recovery_limitations_are_explicit() -> None:
+def test_constructor_detection_limitations_are_explicit() -> None:
     rows = generate_constructor_detection_rows()
     unsupported = {
         (row.backend.name, row.mode.name, row.constructor_shape.name)
@@ -332,6 +332,15 @@ def test_constructor_signature_recovery_limitations_are_explicit() -> None:
             for backend in CONSTRUCTOR_DETECTION_BACKENDS
             for mode in CONSTRUCTOR_DETECTION_MODES
         }
+        | {
+            (backend.name, "shape", shape)
+            for backend in CONSTRUCTOR_DETECTION_BACKENDS
+            for shape in {
+                "dependency_optional",
+                "mixed_wrappers",
+                "nested_forwarding_wrapper",
+            }
+        }
         | composition_limitations
     )
     assert all(row.unsupported_reason for row in rows if not row.supported)
@@ -347,7 +356,12 @@ def test_constructor_signature_recovery_limitations_are_explicit() -> None:
         row.constructor_shape.name
         for row in rows
         if row.mode.name == "shape" and not row.supported
-    } == shape_limited_compositions | {"unconstrained_forwarding_wrapper"}
+    } == shape_limited_compositions | {
+        "dependency_optional",
+        "mixed_wrappers",
+        "nested_forwarding_wrapper",
+        "unconstrained_forwarding_wrapper",
+    }
 
 
 def test_dependency_shapes_own_constructor_detection_limitations() -> None:
@@ -358,12 +372,21 @@ def test_dependency_shapes_own_constructor_detection_limitations() -> None:
     }
     assert set(limitations) == {"optional", "variant"}
     for capabilities in limitations.values():
-        assert len(capabilities) == 1
         capability = capabilities[0]
         assert capability.carriers == frozenset({"value"})
         assert capability.decorations == frozenset({"plain"})
         assert capability.limitation.backend is None
         assert capability.limitation.mode == "signature"
+    assert len(limitations["variant"]) == 1
+    assert len(limitations["optional"]) == 2
+    optional_shape_limitation = limitations["optional"][1]
+    assert optional_shape_limitation.carriers == frozenset({"value"})
+    assert optional_shape_limitation.decorations == frozenset({"plain"})
+    assert optional_shape_limitation.limitation.backend is None
+    assert optional_shape_limitation.limitation.mode == "shape"
+    assert optional_shape_limitation.limitation.guard == (
+        "defined(__clang__) || defined(_MSC_VER)"
+    )
 
     constructor_limitations = {
         next(iter(shape.dependency_forms)): shape.constructor_detection_limitations
@@ -372,12 +395,9 @@ def test_dependency_shapes_own_constructor_detection_limitations() -> None:
     }
     assert set(constructor_limitations) == {"optional", "variant"}
     assert {
-        form: limitations[form][0].limitation
+        form: tuple(capability.limitation for capability in limitations[form])
         for form in constructor_limitations
-    } == {
-        form: constructor_limitations[form][0]
-        for form in constructor_limitations
-    }
+    } == constructor_limitations
 
 
 def test_dependency_compositions_are_bounded_and_rendered_structurally() -> None:
@@ -424,13 +444,40 @@ def test_dependency_compositions_are_bounded_and_rendered_structurally() -> None
         in {"pointer", "const_pointer"}
     }
     assert len(optional_pointer_compositions) == 6
-    assert set(limited) == optional_pointer_compositions | {
+    unconditional_shape_limitations = optional_pointer_compositions | {
         "optional_array_copy_only",
         "optional_variant_regular_copy_only",
     }
-    for limitations in limited.values():
-        assert limitations[0].backend is None
-        assert limitations[0].mode == "shape"
+    non_gnu_ambiguous_compositions = {
+        composition.name
+        for composition in DEPENDENCY_COMPOSITIONS
+        if composition.operator is not None
+        and (
+            composition.operator.name == "optional"
+            or (
+                composition.operator.name == "variant"
+                and any(
+                    operand.operator is not None
+                    and operand.operator.name == "optional"
+                    for operand in composition.operands
+                )
+            )
+        )
+    }
+    assert len(non_gnu_ambiguous_compositions) == 90
+    assert set(limited) == non_gnu_ambiguous_compositions
+    for name, limitations in limited.items():
+        assert len(limitations) == 1
+        limitation = limitations[0]
+        assert limitation.mode == "shape"
+        if name in unconditional_shape_limitations:
+            assert limitation.backend is None
+            assert limitation.guard is None
+        else:
+            assert limitation.backend is None
+            assert limitation.guard == (
+                "defined(__clang__) || defined(_MSC_VER)"
+            )
     assert {
         name: rendered[name]
         for name in {
@@ -1208,6 +1255,19 @@ def test_constructor_detection_requires_a_limitation_reason() -> None:
         generate_constructor_detection_rows(constructor_shapes=(shape,))
 
 
+def test_constructor_detection_requires_a_nonempty_limitation_guard() -> None:
+    shape = replace(
+        CONSTRUCTOR_SHAPES[0],
+        constructor_detection_limitations=(
+            ConstructorDetectionLimitation(
+                None, "signature", "not supported", guard=""
+            ),
+        ),
+    )
+    with pytest.raises(ValueError, match="empty guard"):
+        generate_constructor_detection_rows(constructor_shapes=(shape,))
+
+
 def test_constructor_detection_rejects_overlapping_limitations() -> None:
     shape = replace(
         CONSTRUCTOR_SHAPES[0],
@@ -1887,6 +1947,18 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
         source.read_text(encoding="utf-8").count("\nTEST(")
         for source in dependency_runners
     ) == 624
+    for backend in ("portable", "msvc"):
+        shape_source = (
+            out_dir / f"constructor_detection_{backend}_shape.cpp"
+        ).read_text(encoding="utf-8")
+        shape_runner = (
+            out_dir
+            / f"matrix_runner_constructor_detection_{backend}_shape.cpp"
+        ).read_text(encoding="utf-8")
+        assert "#if !(defined(__clang__) || defined(_MSC_VER))" in (
+            shape_source
+        )
+        assert "#if defined(__clang__) || defined(_MSC_VER)" in shape_runner
     assert cmake_file.is_file()
     timestamps = {
         path: path.stat().st_mtime_ns

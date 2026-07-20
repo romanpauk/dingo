@@ -372,10 +372,12 @@ The constructor-detection family is the unfiltered product:
 
 `backend x detection_mode x constructor_shape`
 
-Known unsupported backend/mode/shape cells remain in that product and generate
-skipped tests with their limitation reason. Dependency shapes own limitations
+Known unsupported and compiler-conditioned backend/mode/shape cells remain in
+that product with their limitation reason. Dependency shapes own limitations
 that apply to their carrier/decorator combinations, so optional and variant
-value recovery are explicit without disabling supported reference forms.
+value recovery are explicit without disabling supported reference forms. The
+shape probe records the Clang/MSVC conversion-instantiation limitation only for
+the affected outer wrapper structures.
 Representative nested standard and user-defined forwarding wrappers document
 the outer-wrapper recovery limitation. An unconstrained forwarding wrapper also
 records the separate shape-detection limitation caused by accepting the opaque

@@ -12,8 +12,14 @@
 namespace dingo::matrix {
 
 {% for row in detection_rows %}
-{% if row.supported %}
+{% if row.supported or row.conditionally_supported %}
+{% if row.conditionally_supported %}
+#if !({{ row.limitation.guard }})
+{% endif %}
 void run_constructor_detection_{{ row.name }}();
+{% if row.conditionally_supported %}
+#endif
+{% endif %}
 {% endif %}
 {% endfor %}
 {% for row in conversion_rows %}
@@ -32,6 +38,12 @@ void run_constructor_argument_conversion_{{ row.name }}();
 TEST(constructor_detection, {{ row.name }}) {
 {% if row.supported %}
   dingo::matrix::run_constructor_detection_{{ row.name }}();
+{% elif row.conditionally_supported %}
+#if {{ row.limitation.guard }}
+  GTEST_SKIP() << "{{ row.unsupported_reason }}";
+#else
+  dingo::matrix::run_constructor_detection_{{ row.name }}();
+#endif
 {% else %}
   GTEST_SKIP() << "{{ row.unsupported_reason }}";
 {% endif %}
