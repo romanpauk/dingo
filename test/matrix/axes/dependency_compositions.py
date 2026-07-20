@@ -91,17 +91,6 @@ _OWNING_ARRAY_OPTIONAL_REQUEST_LIMITATION = (
         operand_operators=frozenset({"optional"}),
     )
 )
-_OWNING_OPTIONAL_COMPOSED_REQUEST_LIMITATION = (
-    DependencyCompositionResolutionLimitation(
-        position="request_composed_operand",
-        disposition=LimitationDisposition.KNOWN_GAP,
-        reason=(
-            "owning optional requests containing a composed dependency are "
-            "not published as exact outer conversions"
-        ),
-        request_strategies=frozenset({"value", "rvalue"}),
-    )
-)
 DEPENDENCY_COMPOSITION_OPERATORS = (
     DependencyCompositionOperator(
         name="pointer",
@@ -160,9 +149,6 @@ DEPENDENCY_COMPOSITION_OPERATORS = (
         movability="all_operands",
         request_expression="{0} &",
         supported_request_strategies=_ALL_REQUEST_STRATEGIES,
-        resolution_limitations=(
-            _OWNING_OPTIONAL_COMPOSED_REQUEST_LIMITATION,
-        ),
     ),
     DependencyCompositionOperator(
         name="array",

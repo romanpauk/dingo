@@ -213,11 +213,11 @@ struct storage_traits<unique, std::optional<T>, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
-  using value_types = type_list<std::optional<U>>;
+  using value_types = type_list<std::optional<T>>;
   using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types = type_list<std::optional<U> &&>;
+  using rvalue_reference_types = type_list<std::optional<T> &&>;
   using pointer_types = type_list<>;
-  using conversion_types = type_list<std::optional<U>>;
+  using conversion_types = type_list<std::optional<T>>;
 };
 
 template <typename Type, typename U>
