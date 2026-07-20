@@ -29,7 +29,7 @@ jobs:
           - { CC: gcc-13, CXX: g++-13, STD: 17, SANITIZER: ON, PROFILE: portable }
           - { CC: gcc-14, CXX: g++-14, STD: 23, SANITIZER: ON, PROFILE: full }
           - { CC: clang-18, CXX: clang++-18, STD: 20, SANITIZER: ON, PROFILE: portable }
-          - { CC: clang-19, CXX: clang++-19, STD: 26, SANITIZER: ON, PROFILE: portable }
+          - { CC: clang-19, CXX: clang++-19, STD: 26, SANITIZER: ON, PROFILE: full }
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout workflow repo
@@ -207,18 +207,21 @@ jobs:
             std: 17
             runner: windows-2022
             generator: Visual Studio 17 2022
+            matrix_profile: portable
           - vs_label: vs2022
             config_id: Release
             config_label: release
             std: 20
             runner: windows-2022
             generator: Visual Studio 17 2022
+            matrix_profile: portable
           - vs_label: vs2026
             config_id: Release
             config_label: release
             std: 23
             runner: windows-2025-vs2026
             generator: Visual Studio 18 2026
+            matrix_profile: full
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Setup MSVC Developer Command Prompt
@@ -255,7 +258,7 @@ jobs:
           ccache_key: ${{ matrix.vs_label }}-x64-${{ matrix.config_id }}-${{ matrix.std }}
           config_id: ${{ matrix.config_id }}
           generator: ${{ matrix.generator }}
-          matrix_profile: portable
+          matrix_profile: ${{ matrix.matrix_profile }}
           source_dir: ${{ env.SOURCE_DIR }}
           std: ${{ matrix.std }}
 

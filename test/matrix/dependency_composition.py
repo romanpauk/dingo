@@ -29,7 +29,7 @@ from family import (
     SourceShard,
     assert_axis_members_used,
     assert_unique_axis_members,
-    render_family_executables,
+    render_case_family_executables,
 )
 from plugins import (
     RegistrationRecipe,
@@ -894,43 +894,43 @@ def generate_dependency_composition_executables(
             assigned_shards.append((key, chunk, bucket, shard_rows))
             bucket_sizes[bucket] += len(shard_rows)
 
-    shards = tuple(
-        SourceShard(
-            executable=(
-                f"dingo_matrix_test_dependency_composition_{operation}_"
-                f"{bucket + 1}"
-            ),
-            name=(
-                f"dependency_composition_{operation}_{operator}_{container}_"
-                f"{chunk + 1}"
-            ),
-            source_context={
-                "cases": tuple(_make_case(row) for row in rows),
-                "system_headers": (),
-                "headers": tuple(
-                    sorted(
-                        {
-                            header
-                            for row in rows
-                            for header in _make_case(row).headers
-                        }
-                    )
-                ),
-            },
-            runner_context={"cases": tuple(_make_case(row) for row in rows)},
+    rows_by_executable: dict[
+        tuple[str, int], list[DependencyCompositionRow]
+    ] = defaultdict(list)
+    for (operation, _, _), _, bucket, shard_rows in sorted(assigned_shards):
+        rows_by_executable[(operation, bucket)].extend(shard_rows)
+
+    shards: list[SourceShard] = []
+    for (operation, bucket), executable_rows in sorted(
+        rows_by_executable.items()
+    ):
+        cases = tuple(_make_case(row) for row in executable_rows)
+        name = f"dependency_composition_{operation}_{bucket + 1}"
+        shards.append(
+            SourceShard(
+                executable=f"dingo_matrix_test_{name}",
+                name=name,
+                source_context={
+                    "cases": cases,
+                    "system_headers": (),
+                    "headers": tuple(
+                        sorted(
+                            {
+                                header
+                                for case in cases
+                                for header in case.headers
+                            }
+                        )
+                    ),
+                },
+                runner_context={"cases": cases},
+            )
         )
-        for (
-            (operation, operator, container),
-            chunk,
-            bucket,
-            rows,
-        ) in sorted(assigned_shards)
-    )
-    return render_family_executables(
+    return render_case_family_executables(
         out_dir,
         source_template,
         runner_template,
-        shards,
+        tuple(shards),
         claimed_sources,
     )
 

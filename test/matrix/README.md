@@ -94,10 +94,10 @@ container setup separately.
 
 Every family owns its row model and semantic sharding, but exposes the same
 generation contract. It produces source-shard descriptions, and `family.py`
-renders each description into a stable implementation/runner pair before
-grouping the files by executable. This keeps validation, file writing, and
-executable assembly consistent without forcing unrelated families into one row
-schema or C++ template.
+renders the implementation shards while batching case-based runners by
+executable. Runner batches contain at most 512 tests. This keeps validation,
+file writing, and executable assembly consistent without recompiling the
+GoogleTest runner headers for every template-heavy implementation shard.
 
 Axis members declare their required C++ includes through `headers`. Scenario
 headers belong to the feature or feature case that executes them; they are not
@@ -517,19 +517,20 @@ valid generated row.
 
 ## Generated Sources
 
-Registration test executables are split by feature. Implementation and runner
-sources are split by:
+Registration test executables are split by feature. Implementation sources are
+split by:
 
 `feature x feature_case`
 
-Features with only the default case keep a single source and runner named after
-the feature. Dispatch-heavy features get one source and runner per case. The
-split keeps translation units tied to matrix meaning instead of arbitrary shard
-numbers, while limiting the amount of template-heavy container and generated
-test code compiled by one compiler process.
+Features with only the default case keep a single implementation source named
+after the feature. Dispatch-heavy features get one implementation source per
+case. Runners are batched independently by executable. The split keeps
+template-heavy translation units tied to matrix meaning while avoiding one
+GoogleTest translation unit per semantic shard.
 
-Invocation has one executable and one source/runner pair per callable. Its rows
-are the filtered product:
+Invocation has one executable and one implementation source per callable. Its
+runners are bounded batches over the complete executable. Its rows are the
+filtered product:
 
 `callable x dependency_provisioning x registration_mode x container`
 
@@ -538,17 +539,20 @@ by `backend x detection_mode`. Every shard contains the complete
 constructor-shape axis. A fifth shard contains the supported argument-storage
 and conversion-category combinations.
 
-Dependency composition has one executable per operation and shards by outer
-operator and container. Generation also writes
+Dependency composition has four balanced executables per operation. Every
+executable has one implementation source and one runner containing its assigned
+rows; outer operator and container remain coverage axes rather than compilation
+boundaries. Generation also writes
 `build/test/generated/matrix/dependency-composition-coverage.md`. The report
 records generated, supported, and skipped cells by operation, operator,
 container, scope, and request strategy, followed by the unsupported-reason
 totals. These aggregates are contract-tested against the row catalog.
 
-Behavioral scenarios retain executables named for their suites and are sharded
-by scenario. A suite may combine registration and scenario sources; for
-example, `nested_container` keeps native parent resolution in the registration
-family and adds the standalone cross-parent scenario shards to the same test
+Behavioral scenarios retain executables named for their suites and
+implementation sources sharded by scenario. Their runners are batched by
+executable. A suite may combine registration and scenario sources; for example,
+`nested_container` keeps native parent resolution in the registration family
+and adds the standalone cross-parent scenario shards to the same test
 executable.
 
 Python selects, validates, names, and shards valid rows. Generic row behavior

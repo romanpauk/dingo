@@ -20,7 +20,7 @@ from family import (
     SourceShard,
     assert_axis_members_used,
     assert_unique_axis_members,
-    render_family_executables,
+    render_case_family_executables,
 )
 from schema import GeneratedExecutable, ScenarioContainer, ScenarioSpec
 
@@ -146,7 +146,7 @@ def generate_scenario_executables(
                 runner_context={"cases": cases},
             )
         )
-    return render_family_executables(
+    return render_case_family_executables(
         out_dir,
         source_template,
         runner_template,

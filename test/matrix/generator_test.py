@@ -85,7 +85,11 @@ from dependency_composition import (
     project_dependency_composition_rows,
     render_dependency_composition_coverage,
 )
-from family import SourceShard, render_family_executables
+from family import (
+    SourceShard,
+    render_case_family_executables,
+    render_family_executables,
+)
 from generate import (
     MatrixRow,
     RejectionReason,
@@ -1061,6 +1065,18 @@ def test_dependency_composition_executables_are_bounded_and_balanced(
         assert len(operation_executables) == (
             DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION
         )
+        assert all(
+            len(executable.sources) == 2
+            for executable in operation_executables
+        )
+        assert all(
+            sum(
+                source.name.startswith("matrix_runner_")
+                for source in executable.sources
+            )
+            == 1
+            for executable in operation_executables
+        )
         witness_counts = tuple(
             sum(
                 source.read_text(encoding="utf-8").count("\nTEST(")
@@ -1713,6 +1729,35 @@ def test_family_renderer_assembles_source_and_runner_pairs(
     ).read_text(encoding="utf-8") == "runner 1"
 
 
+def test_case_family_renderer_batches_runners_by_executable(
+    tmp_path: Path,
+) -> None:
+    executables = render_case_family_executables(
+        tmp_path,
+        Template("source {{ value }}"),
+        Template("runner {{ cases | join(',') }}"),
+        (
+            SourceShard("test", "beta", {"value": 2}, {"cases": (3, 4)}),
+            SourceShard("test", "alpha", {"value": 1}, {"cases": (1, 2)}),
+        ),
+        runner_case_limit=3,
+    )
+
+    assert len(executables) == 1
+    assert tuple(source.name for source in executables[0].sources) == (
+        "beta.cpp",
+        "alpha.cpp",
+        "matrix_runner_alpha_batch_1.cpp",
+        "matrix_runner_alpha_batch_2.cpp",
+    )
+    assert (
+        tmp_path / "matrix_runner_alpha_batch_1.cpp"
+    ).read_text(encoding="utf-8") == "runner 1,2,3"
+    assert (
+        tmp_path / "matrix_runner_alpha_batch_2.cpp"
+    ).read_text(encoding="utf-8") == "runner 4"
+
+
 def test_family_renderer_rejects_duplicate_source_shards(tmp_path: Path) -> None:
     shard = SourceShard(
         executable="test",
@@ -1978,7 +2023,14 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
 
     assert not stale_source.exists()
     assert not stale_report.exists()
-    assert len(tuple(out_dir.glob("*.cpp"))) == 358
+    implementation_sources = tuple(
+        source
+        for source in out_dir.glob("*.cpp")
+        if not source.name.startswith("matrix_runner_")
+    )
+    runner_sources = tuple(out_dir.glob("matrix_runner_*.cpp"))
+    assert len(implementation_sources) == 113
+    assert len(runner_sources) == 55
     coverage_report = out_dir / DEPENDENCY_COMPOSITION_COVERAGE_REPORT
     assert coverage_report.read_text(encoding="utf-8") == (
         render_dependency_composition_coverage(
@@ -1990,6 +2042,7 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
     dependency_runners = tuple(
         out_dir.glob("matrix_runner_dependency_composition_*.cpp")
     )
+    assert len(dependency_runners) == 8
     assert sum(
         source.read_text(encoding="utf-8").count("\nTEST(")
         for source in dependency_runners

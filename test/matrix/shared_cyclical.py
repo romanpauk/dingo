@@ -25,7 +25,7 @@ from family import (
     SourceShard,
     assert_axis_members_used,
     assert_unique_axis_members,
-    render_family_executables,
+    render_case_family_executables,
 )
 from plugins import (
     RegistrationRecipe,
@@ -323,7 +323,7 @@ def generate_shared_cyclical_executables(
         )
         for (container, mode), rows in sorted(grouped.items())
     )
-    return render_family_executables(
+    return render_case_family_executables(
         out_dir,
         source_template,
         runner_template,

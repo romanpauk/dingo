@@ -51,7 +51,11 @@ from dependency_composition import (
     project_dependency_composition_rows,
     render_dependency_composition_coverage,
 )
-from family import SourceShard, render_family_executables, write_text_if_changed
+from family import (
+    SourceShard,
+    render_case_family_executables,
+    write_text_if_changed,
+)
 from invoke import generate_invoke_executables
 from plugins import (
     CaseLines,
@@ -675,7 +679,7 @@ def generate_registration_executables(
                     runner_context={"cases": cases},
                 )
             )
-    return render_family_executables(
+    return render_case_family_executables(
         out_dir,
         source_template,
         runner_template,
