@@ -46,6 +46,7 @@ from dependency_composition import (
     DEPENDENCY_COMPOSITION_COVERAGE_REPORT,
     DEPENDENCY_COMPOSITION_PROFILES,
     build_dependency_composition_coverage,
+    disable_dependency_composition_projected_cases,
     generate_dependency_composition_executables,
     generate_dependency_composition_rows,
     project_dependency_composition_rows,
@@ -719,17 +720,35 @@ def merge_executables(
         )
 
     sources_by_executable: dict[str, list[Path]] = defaultdict(list)
+    isolated_sources_by_executable: dict[str, list[Path]] = defaultdict(list)
     for executable in (
         executable
         for group in executable_groups
         for executable in group
     ):
+        unknown_isolated_sources = set(executable.isolated_sources) - set(
+            executable.sources
+        )
+        if unknown_isolated_sources:
+            raise ValueError(
+                f"matrix executable {executable.name} isolates unknown "
+                f"sources: {sorted(unknown_isolated_sources)}"
+            )
         sources_by_executable[executable.name].extend(executable.sources)
+        isolated_sources_by_executable[executable.name].extend(
+            executable.isolated_sources
+        )
 
     executables: list[GeneratedExecutable] = []
     for name, sources in sources_by_executable.items():
         executables.append(
-            GeneratedExecutable(name=name, sources=tuple(sorted(sources)))
+            GeneratedExecutable(
+                name=name,
+                sources=tuple(sorted(sources)),
+                isolated_sources=tuple(
+                    sorted(isolated_sources_by_executable[name])
+                ),
+            )
         )
     return tuple(sorted(executables, key=lambda executable: executable.name))
 
@@ -739,6 +758,12 @@ def generate(
     cmake_file: Path,
     profile: str = "full",
     dependency_composition_case_limit: int | None = None,
+    dependency_composition_isolated_executables: frozenset[
+        tuple[str, int]
+    ] = frozenset(),
+    dependency_composition_disabled_projected_cases: frozenset[
+        tuple[str, str]
+    ] = frozenset(),
 ) -> None:
     script_dir = Path(__file__).resolve().parent
     env = Environment(
@@ -784,6 +809,12 @@ def generate(
                 "implementation_case_limit": (
                     dependency_composition_case_limit
                 ),
+                "isolated_implementation_executables": (
+                    dependency_composition_isolated_executables
+                ),
+                "disabled_projected_cases": (
+                    dependency_composition_disabled_projected_cases
+                ),
             },
         ),
         (
@@ -811,8 +842,10 @@ def generate(
     )
     coverage_report = out_dir / DEPENDENCY_COMPOSITION_COVERAGE_REPORT
     composition_rows = generate_dependency_composition_rows()
-    projected_composition_rows = project_dependency_composition_rows(
-        composition_rows, profile
+    projected_composition_rows = disable_dependency_composition_projected_cases(
+        project_dependency_composition_rows(composition_rows, profile),
+        dependency_composition_disabled_projected_cases,
+        composition_rows,
     )
     write_text_if_changed(
         coverage_report,
@@ -830,7 +863,15 @@ def generate(
             executables=[
                 {
                     "name": executable.name,
-                    "sources": [source.as_posix() for source in executable.sources],
+                    "sources": [
+                        source.as_posix()
+                        for source in executable.sources
+                        if source not in executable.isolated_sources
+                    ],
+                    "isolated_sources": [
+                        source.as_posix()
+                        for source in executable.isolated_sources
+                    ],
                 }
                 for executable in executables
             ]
@@ -853,15 +894,63 @@ def main() -> None:
         default=0,
         help="maximum composition cases per implementation source; 0 disables",
     )
+    parser.add_argument(
+        "--dependency-composition-isolate-executable",
+        action="append",
+        default=[],
+        metavar="OPERATION:EXECUTABLE",
+        help="compile every case in the selected executable separately",
+    )
+    parser.add_argument(
+        "--dependency-composition-disable-case",
+        action="append",
+        default=[],
+        metavar="OPERATION:ROW",
+        help="omit a selected compiler-crashing projected case",
+    )
     args = parser.parse_args()
     if args.dependency_composition_case_limit < 0:
         parser.error("--dependency-composition-case-limit cannot be negative")
+
+    isolated_executables: set[tuple[str, int]] = set()
+    for value in args.dependency_composition_isolate_executable:
+        fields = value.split(":")
+        if len(fields) != 2:
+            parser.error(
+                "--dependency-composition-isolate-executable must be "
+                "OPERATION:EXECUTABLE"
+            )
+        try:
+            executable = int(fields[1])
+        except ValueError:
+            parser.error(
+                "--dependency-composition-isolate-executable executable "
+                "must be an integer"
+            )
+        if executable <= 0:
+            parser.error(
+                "--dependency-composition-isolate-executable executable "
+                "must be positive"
+            )
+        isolated_executables.add((fields[0], executable))
+
+    disabled_projected_cases: set[tuple[str, str]] = set()
+    for value in args.dependency_composition_disable_case:
+        fields = value.split(":", 1)
+        if len(fields) != 2 or not all(fields):
+            parser.error(
+                "--dependency-composition-disable-case must be "
+                "OPERATION:ROW"
+            )
+        disabled_projected_cases.add((fields[0], fields[1]))
 
     generate(
         args.out,
         args.cmake,
         args.profile,
         args.dependency_composition_case_limit or None,
+        frozenset(isolated_executables),
+        frozenset(disabled_projected_cases),
     )
 
 

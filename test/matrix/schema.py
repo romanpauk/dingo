@@ -362,3 +362,4 @@ class InvokeCallable:
 class GeneratedExecutable:
     name: str
     sources: tuple[Path, ...]
+    isolated_sources: tuple[Path, ...] = ()

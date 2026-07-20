@@ -27,6 +27,7 @@ class SourceShard:
     name: str
     source_context: Mapping[str, object]
     runner_context: Mapping[str, object]
+    isolate_compilation: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,11 +127,14 @@ def render_family_executables(
         claimed_sources.update(generated_paths)
 
     sources_by_executable: dict[str, list[Path]] = defaultdict(list)
+    isolated_sources_by_executable: dict[str, list[Path]] = defaultdict(list)
     for shard, source in source_paths:
         write_text_if_changed(
             source, source_template.render(**shard.source_context)
         )
         sources_by_executable[shard.executable].append(source)
+        if shard.isolate_compilation:
+            isolated_sources_by_executable[shard.executable].append(source)
     for shard, runner in runner_paths:
         write_text_if_changed(
             runner, runner_template.render(**shard.context)
@@ -138,7 +142,11 @@ def render_family_executables(
         sources_by_executable[shard.executable].append(runner)
 
     return tuple(
-        GeneratedExecutable(name=name, sources=tuple(sources))
+        GeneratedExecutable(
+            name=name,
+            sources=tuple(sources),
+            isolated_sources=tuple(isolated_sources_by_executable[name]),
+        )
         for name, sources in sorted(sources_by_executable.items())
     )
 

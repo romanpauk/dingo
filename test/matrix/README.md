@@ -50,9 +50,9 @@ detection projects each type into a one-argument constructor shape. Resolution
 and invocation model the full product of the same type with their container,
 scope, and request-strategy axes. The model classifies every case as supported
 behavior, a functionality gap, or an intentional constraint. C++ generation
-projects supported cases into a smaller witness set: the `full` profile executes
-every supported composition for resolve and invoke, and the `portable` profile
-executes every structural category. Both profiles additionally cover every
+projects supported cases into a smaller projected case set: the `full` profile
+executes every supported composition for resolve and invoke, and the `portable`
+profile executes every structural category. Both profiles additionally cover every
 feasible outer operator, container, scope, request-strategy, copyability, and
 movability combination for both operations. Aggregate tests pin each
 classification count. Functionality gaps and intentional constraints are not
@@ -546,6 +546,18 @@ implementation source per executable. MSVC splits that implementation across
 balanced sources capped at 12 cases, working around a compiler crash without
 increasing the eight-binary bound or penalizing other toolchains. Outer operator
 and container remain coverage axes rather than compilation boundaries.
+VS2026 x64 additionally emits every case from the fourth resolve and invoke
+executables as a row-named source in a one-source object-library target when the
+commented diagnostic arguments in `test/CMakeLists.txt` are enabled. The
+configure log maps each short diagnostic target name to its source, so a
+compiler crash identifies the exact template instantiation without adding test
+executables. The diagnostic is disabled by default.
+
+MSVC 19.5x x64 crashes while compiling the otherwise-supported
+`runtime_container_unique_value_array_shared_pointer_copy_only` projected case
+for both resolution and invocation. CMake disables only those two projected
+cases for the 19.5x and newer compiler series on x64 until the compiler issue is
+revisited; all other toolchains keep them enabled.
 Generation also writes
 `build/test/generated/matrix/dependency-composition-coverage.md`. This
 build-local diagnostic records supported cases, functionality gaps, and

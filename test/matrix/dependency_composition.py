@@ -196,6 +196,8 @@ DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT = 12
 
 ProjectionObligation = tuple[str, ...]
 DependencyCompositionShardKey = tuple[str, str, str]
+DependencyCompositionImplementationExecutable = tuple[str, int]
+DependencyCompositionProjectedCaseId = tuple[str, str]
 
 
 def _operator_limitation(
@@ -568,7 +570,7 @@ def project_dependency_composition_rows(
     rows: tuple[DependencyCompositionRow, ...],
     profile: str,
 ) -> tuple[DependencyCompositionRow, ...]:
-    """Select supported C++ witnesses while keeping the model exhaustive."""
+    """Select supported C++ cases while keeping the model exhaustive."""
     if profile not in DEPENDENCY_COMPOSITION_PROFILES:
         raise ValueError(
             "unknown dependency composition profile: "
@@ -629,6 +631,29 @@ def project_dependency_composition_rows(
             "dependency composition projection did not satisfy its contract"
         )
     return projected
+
+
+def disable_dependency_composition_projected_cases(
+    rows: tuple[DependencyCompositionRow, ...],
+    disabled_projected_cases: frozenset[DependencyCompositionProjectedCaseId],
+    known_rows: tuple[DependencyCompositionRow, ...] | None = None,
+) -> tuple[DependencyCompositionRow, ...]:
+    if not disabled_projected_cases:
+        return rows
+
+    identity_rows = known_rows if known_rows is not None else rows
+    identities = {(row.operation.name, row.name) for row in identity_rows}
+    unmatched = disabled_projected_cases - identities
+    if unmatched:
+        raise ValueError(
+            "dependency composition disabled projected cases did not match: "
+            f"{sorted(unmatched)}"
+        )
+    return tuple(
+        row
+        for row in rows
+        if (row.operation.name, row.name) not in disabled_projected_cases
+    )
 
 
 def _coverage_count(
@@ -952,6 +977,12 @@ def generate_dependency_composition_executables(
     claimed_sources: set[Path] | None = None,
     profile: str = "full",
     implementation_case_limit: int | None = None,
+    isolated_implementation_executables: frozenset[
+        DependencyCompositionImplementationExecutable
+    ] = frozenset(),
+    disabled_projected_cases: frozenset[
+        DependencyCompositionProjectedCaseId
+    ] = frozenset(),
 ) -> tuple[GeneratedExecutable, ...]:
     if implementation_case_limit is not None and implementation_case_limit <= 0:
         raise ValueError("implementation case limit must be positive")
@@ -959,8 +990,11 @@ def generate_dependency_composition_executables(
     grouped: dict[DependencyCompositionShardKey, list[DependencyCompositionRow]] = (
         defaultdict(list)
     )
-    rows = project_dependency_composition_rows(
-        generate_dependency_composition_rows(), profile
+    model_rows = generate_dependency_composition_rows()
+    rows = disable_dependency_composition_projected_cases(
+        project_dependency_composition_rows(model_rows, profile),
+        disabled_projected_cases,
+        model_rows,
     )
     for row in rows:
         if row.composition.operator is None:
@@ -1029,13 +1063,59 @@ def generate_dependency_composition_executables(
     for (operation, _, _), _, bucket, shard_rows in sorted(assigned_shards):
         rows_by_executable[(operation, bucket)].extend(shard_rows)
 
+    def make_source_shard(
+        executable: str,
+        name: str,
+        source_rows: list[DependencyCompositionRow],
+        isolate_compilation: bool = False,
+    ) -> SourceShard:
+        cases = tuple(_make_case(row) for row in source_rows)
+        return SourceShard(
+            executable=executable,
+            name=name,
+            source_context={
+                "cases": cases,
+                "system_headers": (),
+                "headers": tuple(
+                    sorted(
+                        {
+                            header
+                            for case in cases
+                            for header in case.headers
+                        }
+                    )
+                ),
+            },
+            runner_context={"cases": cases},
+            isolate_compilation=isolate_compilation,
+        )
+
     shards: list[SourceShard] = []
+    matched_isolated_executables: set[
+        DependencyCompositionImplementationExecutable
+    ] = set()
     for (operation, bucket), executable_rows in sorted(
         rows_by_executable.items()
     ):
         executable_name = (
             f"dingo_matrix_test_dependency_composition_{operation}_{bucket + 1}"
         )
+        executable_identity = (operation, bucket + 1)
+        if executable_identity in isolated_implementation_executables:
+            matched_isolated_executables.add(executable_identity)
+            shards.extend(
+                make_source_shard(
+                    executable_name,
+                    (
+                        f"dependency_composition_{operation}_{bucket + 1}_"
+                        f"{row.name}"
+                    ),
+                    [row],
+                    isolate_compilation=True,
+                )
+                for row in executable_rows
+            )
+            continue
         implementation_count = 1
         if implementation_case_limit is not None:
             implementation_count = (
@@ -1049,34 +1129,23 @@ def generate_dependency_composition_executables(
             part_size = implementation_size + (
                 part <= larger_implementation_count
             )
-            cases = tuple(
-                _make_case(row)
-                for row in executable_rows[offset : offset + part_size]
-            )
+            part_rows = executable_rows[offset : offset + part_size]
             offset += part_size
             name = (
                 f"dependency_composition_{operation}_{bucket + 1}_part_{part}"
             )
             shards.append(
-                SourceShard(
-                    executable=executable_name,
-                    name=name,
-                    source_context={
-                        "cases": cases,
-                        "system_headers": (),
-                        "headers": tuple(
-                            sorted(
-                                {
-                                    header
-                                    for case in cases
-                                    for header in case.headers
-                                }
-                            )
-                        ),
-                    },
-                    runner_context={"cases": cases},
-                )
+                make_source_shard(executable_name, name, part_rows)
             )
+    unmatched_isolated_executables = (
+        isolated_implementation_executables
+        - matched_isolated_executables
+    )
+    if unmatched_isolated_executables:
+        raise ValueError(
+            "dependency composition implementation executables did not match: "
+            f"{sorted(unmatched_isolated_executables)}"
+        )
     return render_case_family_executables(
         out_dir,
         source_template,
@@ -1097,6 +1166,7 @@ __all__ = (
     "DEPENDENCY_COMPOSITION_SCOPE_RULES",
     "DependencyCompositionRow",
     "build_dependency_composition_coverage",
+    "disable_dependency_composition_projected_cases",
     "generate_dependency_composition_executables",
     "generate_dependency_composition_rows",
     "project_dependency_composition_rows",

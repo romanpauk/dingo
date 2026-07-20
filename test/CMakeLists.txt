@@ -18,6 +18,22 @@ set(DINGO_MATRIX_GENERATOR
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/generate.py")
 if(MSVC)
     set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT 12)
+    if(MSVC_VERSION GREATER_EQUAL 1950 AND
+            CMAKE_GENERATOR_PLATFORM STREQUAL "x64")
+        # MSVC crashes while instantiating these otherwise-supported projected cases.
+        set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_DISABLED_ARGS
+            --dependency-composition-disable-case
+            invoke:runtime_container_unique_value_array_shared_pointer_copy_only
+            --dependency-composition-disable-case
+            resolve:runtime_container_unique_value_array_shared_pointer_copy_only)
+
+        # To retry these projected cases after a toolset update, comment out the
+        # DISABLED_ARGS assignment above. To identify any future crashing row,
+        # uncomment these lines after its failing executable is known.
+        # list(APPEND DINGO_MATRIX_DEPENDENCY_COMPOSITION_DIAGNOSTIC_ARGS
+        #     --dependency-composition-isolate-executable invoke:4
+        #     --dependency-composition-isolate-executable resolve:4)
+    endif()
 else()
     set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT 0)
 endif()
@@ -112,7 +128,9 @@ set(DINGO_MATRIX_GENERATOR_COMMAND
         --cmake ${DINGO_MATRIX_TEST_CMAKE}
         --profile ${DINGO_MATRIX_PROFILE}
         --dependency-composition-case-limit
-            ${DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT})
+            ${DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT}
+        ${DINGO_MATRIX_DEPENDENCY_COMPOSITION_DISABLED_ARGS}
+        ${DINGO_MATRIX_DEPENDENCY_COMPOSITION_DIAGNOSTIC_ARGS})
 
 execute_process(
     COMMAND ${DINGO_MATRIX_GENERATOR_COMMAND}
@@ -198,6 +216,17 @@ target_compile_options(dingo_unit_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI win
 add_custom_target(dingo_matrix_test
     DEPENDS ${DINGO_MATRIX_TEST_TARGETS})
 
+function(dingo_configure_matrix_compile_target DINGO_MATRIX_TARGET)
+    target_link_libraries(${DINGO_MATRIX_TARGET}
+        PRIVATE dingo::dingo gtest_main)
+    target_include_directories(${DINGO_MATRIX_TARGET}
+        PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_options(${DINGO_MATRIX_TARGET} PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
+    target_compile_options(${DINGO_MATRIX_TARGET} PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
+endfunction()
+
 foreach(DINGO_MATRIX_TEST_TARGET IN LISTS DINGO_MATRIX_TEST_TARGETS)
     add_executable(${DINGO_MATRIX_TEST_TARGET}
         ${${DINGO_MATRIX_TEST_TARGET}_SOURCES}
@@ -216,14 +245,27 @@ foreach(DINGO_MATRIX_TEST_TARGET IN LISTS DINGO_MATRIX_TEST_TARGETS)
     endif()
     set_tests_properties(${DINGO_MATRIX_TEST_TARGET}
         PROPERTIES LABELS "runtime")
-    target_link_libraries(${DINGO_MATRIX_TEST_TARGET}
-        dingo::dingo gtest_main)
-    target_include_directories(${DINGO_MATRIX_TEST_TARGET}
-        PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_compile_options(${DINGO_MATRIX_TEST_TARGET} PRIVATE
-        $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
-    target_compile_options(${DINGO_MATRIX_TEST_TARGET} PRIVATE
-        $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
+    dingo_configure_matrix_compile_target(${DINGO_MATRIX_TEST_TARGET})
+
+    set(DINGO_MATRIX_DIAGNOSTIC_INDEX 0)
+    foreach(DINGO_MATRIX_ISOLATED_SOURCE IN LISTS
+            ${DINGO_MATRIX_TEST_TARGET}_ISOLATED_SOURCES)
+        math(EXPR DINGO_MATRIX_DIAGNOSTIC_INDEX
+            "${DINGO_MATRIX_DIAGNOSTIC_INDEX} + 1")
+        string(REPLACE "dingo_matrix_test_" "dingo_matrix_diag_"
+            DINGO_MATRIX_DIAGNOSTIC_PREFIX ${DINGO_MATRIX_TEST_TARGET})
+        set(DINGO_MATRIX_DIAGNOSTIC_TARGET
+            "${DINGO_MATRIX_DIAGNOSTIC_PREFIX}_${DINGO_MATRIX_DIAGNOSTIC_INDEX}")
+        message(STATUS
+            "${DINGO_MATRIX_DIAGNOSTIC_TARGET}: "
+            "${DINGO_MATRIX_ISOLATED_SOURCE}")
+        add_library(${DINGO_MATRIX_DIAGNOSTIC_TARGET} OBJECT
+            "${DINGO_MATRIX_ISOLATED_SOURCE}")
+        dingo_configure_matrix_compile_target(
+            ${DINGO_MATRIX_DIAGNOSTIC_TARGET})
+        target_sources(${DINGO_MATRIX_TEST_TARGET} PRIVATE
+            $<TARGET_OBJECTS:${DINGO_MATRIX_DIAGNOSTIC_TARGET}>)
+    endforeach()
 endforeach()
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")

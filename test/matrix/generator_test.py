@@ -81,6 +81,7 @@ from dependency_composition import (
     DEPENDENCY_COMPOSITION_SCOPE_RULES,
     DependencyCompositionRow,
     build_dependency_composition_coverage,
+    disable_dependency_composition_projected_cases,
     generate_dependency_composition_executables,
     generate_dependency_composition_rows,
     project_dependency_composition_rows,
@@ -1151,7 +1152,7 @@ def test_dependency_composition_executables_are_bounded_and_balanced(
         assert len(operation_executables) == (
             DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION
         )
-        witness_counts: list[int] = []
+        projected_case_counts: list[int] = []
         for executable in operation_executables:
             runner_sources = tuple(
                 source
@@ -1164,22 +1165,22 @@ def test_dependency_composition_executables_are_bounded_and_balanced(
                 if not source.name.startswith("matrix_runner_")
             )
             assert len(runner_sources) == 1
-            witness_count = sum(
+            projected_case_count = sum(
                 source.read_text(encoding="utf-8").count("\nTEST(")
                 for source in runner_sources
             )
-            witness_counts.append(witness_count)
+            projected_case_counts.append(projected_case_count)
             expected_implementation_count = 1
             if implementation_case_limit is not None:
                 expected_implementation_count = (
-                    witness_count + implementation_case_limit - 1
+                    projected_case_count + implementation_case_limit - 1
                 ) // implementation_case_limit
             assert len(implementation_sources) == expected_implementation_count
             implementation_case_counts = tuple(
                 source.read_text(encoding="utf-8").count("\nstruct ")
                 for source in implementation_sources
             )
-            assert sum(implementation_case_counts) == witness_count
+            assert sum(implementation_case_counts) == projected_case_count
             if implementation_case_limit is not None:
                 assert max(implementation_case_counts) <= (
                     implementation_case_limit
@@ -1187,7 +1188,166 @@ def test_dependency_composition_executables_are_bounded_and_balanced(
             assert max(implementation_case_counts) - min(
                 implementation_case_counts
             ) <= 1
-        assert max(witness_counts) - min(witness_counts) <= 1
+        assert max(projected_case_counts) - min(projected_case_counts) <= 1
+
+
+def test_dependency_composition_selected_executables_are_isolated_by_case(
+    tmp_path: Path,
+) -> None:
+    script_dir = Path(__file__).resolve().parent
+    environment = Environment(
+        loader=FileSystemLoader(script_dir / "templates"),
+        undefined=StrictUndefined,
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    isolated_executables = frozenset({("invoke", 4), ("resolve", 4)})
+    executables = generate_dependency_composition_executables(
+        tmp_path,
+        environment.get_template("dependency_composition.cpp.j2"),
+        environment.get_template("dependency_composition_runner.cpp.j2"),
+        implementation_case_limit=(
+            DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT
+        ),
+        isolated_implementation_executables=isolated_executables,
+    )
+
+    for operation in ("invoke", "resolve"):
+        executable = next(
+            executable
+            for executable in executables
+            if executable.name
+            == f"dingo_matrix_test_dependency_composition_{operation}_4"
+        )
+        implementation_sources = tuple(
+            source
+            for source in executable.sources
+            if not source.name.startswith("matrix_runner_")
+        )
+        assert len(implementation_sources) == 78
+        assert executable.isolated_sources == implementation_sources
+        assert all(
+            source.read_text(encoding="utf-8").count("\nstruct ") == 1
+            for source in executable.isolated_sources
+        )
+        assert any(
+            source.name.endswith(
+                "container_mixed_external_stable_array_array_copy_only.cpp"
+            )
+            for source in executable.isolated_sources
+        )
+        runner_sources = tuple(
+            source
+            for source in executable.sources
+            if source.name.startswith("matrix_runner_")
+        )
+        assert len(runner_sources) == 1
+        assert runner_sources[0].read_text(encoding="utf-8").count(
+            "\nTEST("
+        ) == 78
+    assert all(
+        not executable.isolated_sources
+        for executable in executables
+        if executable.name
+        not in {
+            "dingo_matrix_test_dependency_composition_invoke_4",
+            "dingo_matrix_test_dependency_composition_resolve_4",
+        }
+    )
+
+
+def test_dependency_composition_disabled_projected_cases_are_omitted(
+    tmp_path: Path,
+) -> None:
+    script_dir = Path(__file__).resolve().parent
+    environment = Environment(
+        loader=FileSystemLoader(script_dir / "templates"),
+        undefined=StrictUndefined,
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    row_name = (
+        "runtime_container_unique_value_array_shared_pointer_copy_only"
+    )
+    disabled_projected_cases = frozenset(
+        (operation, row_name) for operation in ("invoke", "resolve")
+    )
+    executables = generate_dependency_composition_executables(
+        tmp_path,
+        environment.get_template("dependency_composition.cpp.j2"),
+        environment.get_template("dependency_composition_runner.cpp.j2"),
+        implementation_case_limit=(
+            DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT
+        ),
+        disabled_projected_cases=disabled_projected_cases,
+    )
+
+    generated = "\n".join(
+        source.read_text(encoding="utf-8")
+        for executable in executables
+        for source in executable.sources
+    )
+    assert row_name not in generated
+    assert sum(
+        source.read_text(encoding="utf-8").count("\nTEST(")
+        for executable in executables
+        for source in executable.sources
+        if source.name.startswith("matrix_runner_")
+    ) == 622
+
+
+def test_dependency_composition_rejects_unmatched_disabled_projected_cases() -> None:
+    projected = project_dependency_composition_rows(
+        generate_dependency_composition_rows(), "full"
+    )
+    with pytest.raises(ValueError, match="did not match.*missing"):
+        disable_dependency_composition_projected_cases(
+            projected,
+            frozenset({("resolve", "missing")}),
+        )
+
+
+def test_dependency_composition_disabled_full_case_is_optional_in_portable(
+) -> None:
+    rows = generate_dependency_composition_rows()
+    portable = project_dependency_composition_rows(rows, "portable")
+    assert disable_dependency_composition_projected_cases(
+        portable,
+        frozenset(
+            {
+                (
+                    "resolve",
+                    "runtime_container_unique_value_"
+                    "array_shared_pointer_copy_only",
+                )
+            }
+        ),
+        rows,
+    ) == portable
+
+
+def test_dependency_composition_rejects_unmatched_isolated_executables(
+    tmp_path: Path,
+) -> None:
+    script_dir = Path(__file__).resolve().parent
+    environment = Environment(
+        loader=FileSystemLoader(script_dir / "templates"),
+        undefined=StrictUndefined,
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    with pytest.raises(ValueError, match="did not match.*resolve.*5"):
+        generate_dependency_composition_executables(
+            tmp_path,
+            environment.get_template("dependency_composition.cpp.j2"),
+            environment.get_template(
+                "dependency_composition_runner.cpp.j2"
+            ),
+            implementation_case_limit=(
+                DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT
+            ),
+            isolated_implementation_executables=frozenset({("resolve", 5)}),
+        )
 
 
 def test_dependency_compositions_reject_excessive_depth() -> None:
@@ -1912,6 +2072,41 @@ def test_executable_merge_rejects_cross_family_source_collisions(
         )
 
 
+def test_executable_merge_preserves_isolated_sources(tmp_path: Path) -> None:
+    regular_source = tmp_path / "regular.cpp"
+    isolated_source = tmp_path / "isolated.cpp"
+
+    assert merge_executables(
+        (GeneratedExecutable("test", (regular_source,)),),
+        (
+            GeneratedExecutable(
+                "test", (isolated_source,), (isolated_source,)
+            ),
+        ),
+    ) == (
+        GeneratedExecutable(
+            "test",
+            (isolated_source, regular_source),
+            (isolated_source,),
+        ),
+    )
+
+
+def test_executable_merge_rejects_unknown_isolated_sources(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="isolates unknown sources"):
+        merge_executables(
+            (
+                GeneratedExecutable(
+                    "test",
+                    (tmp_path / "regular.cpp",),
+                    (tmp_path / "unknown.cpp",),
+                ),
+            )
+        )
+
+
 def test_every_policy_source_kind_is_selected(rows: tuple[MatrixRow, ...]) -> None:
     assert {row.lines.policy_source[0] for row in rows} == {
         "feature",
@@ -2110,14 +2305,58 @@ def test_invalid_registration_plan_is_an_error(
 
 
 @pytest.mark.parametrize(
-    ("dependency_composition_case_limit", "expected_implementation_sources"),
-    ((None, 113), (DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT, 161)),
+    (
+        "dependency_composition_case_limit",
+        "dependency_composition_isolated_executables",
+        "dependency_composition_disabled_projected_cases",
+        "expected_implementation_sources",
+        "expected_isolated_sources",
+        "expected_compiled_rows",
+    ),
+    (
+        (None, frozenset(), frozenset(), 113, 0, 624),
+        (
+            DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
+            frozenset(),
+            frozenset(),
+            161,
+            0,
+            624,
+        ),
+        (
+            DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
+            frozenset({("invoke", 4), ("resolve", 4)}),
+            frozenset(),
+            303,
+            156,
+            624,
+        ),
+        (
+            DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
+            frozenset(),
+            frozenset(
+                (operation, row_name)
+                for operation in ("invoke", "resolve")
+                for row_name in (
+                    "runtime_container_unique_value_"
+                    "array_shared_pointer_copy_only",
+                )
+            ),
+            161,
+            0,
+            622,
+        ),
+    ),
 )
 def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
     tmp_path: Path,
     composition_rows: tuple[DependencyCompositionRow, ...],
     dependency_composition_case_limit: int | None,
+    dependency_composition_isolated_executables: frozenset[tuple[str, int]],
+    dependency_composition_disabled_projected_cases: frozenset[tuple[str, str]],
     expected_implementation_sources: int,
+    expected_isolated_sources: int,
+    expected_compiled_rows: int,
 ) -> None:
     out_dir = tmp_path / "matrix"
     out_dir.mkdir()
@@ -2131,6 +2370,12 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
         out_dir,
         cmake_file,
         dependency_composition_case_limit=dependency_composition_case_limit,
+        dependency_composition_isolated_executables=(
+            dependency_composition_isolated_executables
+        ),
+        dependency_composition_disabled_projected_cases=(
+            dependency_composition_disabled_projected_cases
+        ),
     )
 
     assert not stale_source.exists()
@@ -2148,7 +2393,7 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
         render_dependency_composition_coverage(
             build_dependency_composition_coverage(composition_rows),
             profile="full",
-            compiled_rows=624,
+            compiled_rows=expected_compiled_rows,
         )
     )
     dependency_runners = tuple(
@@ -2158,7 +2403,7 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
     assert sum(
         source.read_text(encoding="utf-8").count("\nTEST(")
         for source in dependency_runners
-    ) == 624
+    ) == expected_compiled_rows
     for backend in ("portable", "msvc"):
         shape_source = (
             out_dir / f"constructor_detection_{backend}_shape.cpp"
@@ -2172,6 +2417,32 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
         )
         assert "#if defined(__clang__) || defined(_MSC_VER)" in shape_runner
     assert cmake_file.is_file()
+    cmake_content = cmake_file.read_text(encoding="utf-8")
+    isolated_source_count = 0
+    in_isolated_sources = False
+    for line in cmake_content.splitlines():
+        if line.startswith("set(") and line.endswith("_ISOLATED_SOURCES"):
+            in_isolated_sources = True
+        elif in_isolated_sources and line == ")":
+            in_isolated_sources = False
+        elif in_isolated_sources and line.strip().endswith('.cpp"'):
+            isolated_source_count += 1
+    assert isolated_source_count == expected_isolated_sources
+    for operation in ("invoke", "resolve"):
+        sources_marker = (
+            "set(dingo_matrix_test_dependency_composition_"
+            f"{operation}_4_SOURCES\n"
+        )
+        sources_start = cmake_content.index(sources_marker)
+        sources_end = cmake_content.index("\n)\n", sources_start)
+        sources_block = cmake_content[sources_start:sources_end]
+        if (operation, 4) in dependency_composition_isolated_executables:
+            expected_source_count = 1
+        elif dependency_composition_case_limit is None:
+            expected_source_count = 2
+        else:
+            expected_source_count = 8
+        assert sources_block.count('.cpp"') == expected_source_count
     timestamps = {
         path: path.stat().st_mtime_ns
         for path in (*out_dir.glob("*.cpp"), coverage_report, cmake_file)
@@ -2181,6 +2452,12 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
         out_dir,
         cmake_file,
         dependency_composition_case_limit=dependency_composition_case_limit,
+        dependency_composition_isolated_executables=(
+            dependency_composition_isolated_executables
+        ),
+        dependency_composition_disabled_projected_cases=(
+            dependency_composition_disabled_projected_cases
+        ),
     )
 
     assert {path: path.stat().st_mtime_ns for path in timestamps} == timestamps
