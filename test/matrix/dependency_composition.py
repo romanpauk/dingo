@@ -175,9 +175,11 @@ DEPENDENCY_COMPOSITION_SCOPE_RULES = (
 _MIXED_ANCHOR_TYPE = "dependency_composition_mixed_anchor"
 DEPENDENCY_COMPOSITION_COVERAGE_REPORT = "dependency-composition-coverage.md"
 DEPENDENCY_COMPOSITION_PROFILES = frozenset({"full", "portable"})
+DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION = 4
 
 
 ProjectionObligation = tuple[str, ...]
+DependencyCompositionShardKey = tuple[str, str, str]
 
 
 def _operator_limitation_reason(
@@ -825,7 +827,7 @@ def generate_dependency_composition_executables(
     claimed_sources: set[Path] | None = None,
     profile: str = "full",
 ) -> tuple[GeneratedExecutable, ...]:
-    grouped: dict[tuple[str, str, str], list[DependencyCompositionRow]] = (
+    grouped: dict[DependencyCompositionShardKey, list[DependencyCompositionRow]] = (
         defaultdict(list)
     )
     rows = project_dependency_composition_rows(
@@ -844,11 +846,63 @@ def generate_dependency_composition_executables(
             )
         ].append(row)
 
+    assigned_shards: list[
+        tuple[
+            DependencyCompositionShardKey,
+            int,
+            int,
+            list[DependencyCompositionRow],
+        ]
+    ] = []
+    for operation in sorted(
+        {operation.name for operation in DEPENDENCY_COMPOSITION_OPERATIONS}
+    ):
+        operation_shards = tuple(
+            (key, shard_rows)
+            for key, shard_rows in grouped.items()
+            if key[0] == operation
+        )
+        if len(operation_shards) < DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION:
+            raise RuntimeError(
+                f"dependency composition operation {operation} has too few "
+                "source shards to balance"
+            )
+        operation_size = sum(
+            len(shard_rows) for _, shard_rows in operation_shards
+        )
+        maximum_shard_size = (
+            operation_size + DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION - 1
+        ) // DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION
+        chunked_shards = tuple(
+            (key, chunk, shard_rows[offset : offset + maximum_shard_size])
+            for key, shard_rows in sorted(operation_shards)
+            for chunk, offset in enumerate(
+                range(0, len(shard_rows), maximum_shard_size)
+            )
+        )
+        bucket_sizes = [
+            0 for _ in range(DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION)
+        ]
+        for key, chunk, shard_rows in sorted(
+            chunked_shards,
+            key=lambda item: (-len(item[2]), item[0], item[1]),
+        ):
+            bucket = min(
+                range(DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION),
+                key=lambda candidate: (bucket_sizes[candidate], candidate),
+            )
+            assigned_shards.append((key, chunk, bucket, shard_rows))
+            bucket_sizes[bucket] += len(shard_rows)
+
     shards = tuple(
         SourceShard(
-            executable=f"dingo_matrix_test_dependency_composition_{operation}",
+            executable=(
+                f"dingo_matrix_test_dependency_composition_{operation}_"
+                f"{bucket + 1}"
+            ),
             name=(
-                f"dependency_composition_{operation}_{operator}_{container}"
+                f"dependency_composition_{operation}_{operator}_{container}_"
+                f"{chunk + 1}"
             ),
             source_context={
                 "cases": tuple(_make_case(row) for row in rows),
@@ -865,7 +919,12 @@ def generate_dependency_composition_executables(
             },
             runner_context={"cases": tuple(_make_case(row) for row in rows)},
         )
-        for (operation, operator, container), rows in sorted(grouped.items())
+        for (
+            (operation, operator, container),
+            chunk,
+            bucket,
+            rows,
+        ) in sorted(assigned_shards)
     )
     return render_family_executables(
         out_dir,
@@ -879,6 +938,7 @@ def generate_dependency_composition_executables(
 __all__ = (
     "DEPENDENCY_COMPOSITION_COVERAGE_REPORT",
     "DEPENDENCY_COMPOSITION_CONTAINERS",
+    "DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION",
     "DEPENDENCY_COMPOSITION_OPERATIONS",
     "DEPENDENCY_COMPOSITION_PROFILES",
     "DEPENDENCY_COMPOSITION_SCOPES",

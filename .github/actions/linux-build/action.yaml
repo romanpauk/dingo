@@ -70,7 +70,7 @@ runs:
         CC: ${{ inputs.compiler_cc }}
         CXX: ${{ inputs.compiler_cxx }}
       run: |
-        cmake -S "${{ inputs.source_dir }}" -B "${{ inputs.build_dir }}" -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_MATRIX_PROFILE=${{ inputs.matrix_profile }} -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DDINGO_SANITIZER=${{ inputs.sanitizer }} -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
+        cmake -S "${{ inputs.source_dir }}" -B "${{ inputs.build_dir }}" -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_MATRIX_PROFILE=${{ inputs.matrix_profile }} -DDINGO_MATRIX_TEST_AFTER_BUILD=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DDINGO_SANITIZER=${{ inputs.sanitizer }} -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
     - name: Build
       if: ${{ inputs.container_image == '' }}
       shell: bash
@@ -128,6 +128,7 @@ runs:
               -DDINGO_BENCHMARK_ENABLED=OFF \
               -DDINGO_CCACHE=ON \
               -DDINGO_MATRIX_PROFILE="${DINGO_MATRIX_PROFILE}" \
+              -DDINGO_MATRIX_TEST_AFTER_BUILD=ON \
               -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON \
               -DDINGO_SANITIZER=${{ inputs.sanitizer }} \
               -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} \

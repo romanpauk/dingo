@@ -8,6 +8,8 @@ if(NOT DINGO_MATRIX_PROFILE MATCHES "^(full|portable)$")
     message(FATAL_ERROR
         "DINGO_MATRIX_PROFILE must be either full or portable")
 endif()
+option(DINGO_MATRIX_TEST_AFTER_BUILD
+    "Run each matrix test executable immediately after linking" OFF)
 
 set(DINGO_MATRIX_TEST_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/matrix")
 set(DINGO_MATRIX_TEST_CMAKE
@@ -196,6 +198,15 @@ foreach(DINGO_MATRIX_TEST_TARGET IN LISTS DINGO_MATRIX_TEST_TARGETS)
     )
     add_test(NAME ${DINGO_MATRIX_TEST_TARGET}
         COMMAND ${DINGO_MATRIX_TEST_TARGET})
+    if(DINGO_MATRIX_TEST_AFTER_BUILD)
+        add_custom_command(TARGET ${DINGO_MATRIX_TEST_TARGET} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E env
+                ASAN_OPTIONS=use_sigaltstack=false
+                $<TARGET_FILE:${DINGO_MATRIX_TEST_TARGET}>
+            COMMENT "Running ${DINGO_MATRIX_TEST_TARGET}"
+            USES_TERMINAL
+            VERBATIM)
+    endif()
     set_tests_properties(${DINGO_MATRIX_TEST_TARGET}
         PROPERTIES LABELS "runtime")
     target_link_libraries(${DINGO_MATRIX_TEST_TARGET}

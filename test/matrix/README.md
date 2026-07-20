@@ -64,6 +64,10 @@ both exact-wrapper resolution and the supported pointer conversion.
 Select the execution profile with `-DDINGO_MATRIX_PROFILE=full` or
 `-DDINGO_MATRIX_PROFILE=portable`. Local development defaults to `full`; CI
 runs it on one primary compiler and uses `portable` for portability jobs.
+Dependency-composition sources are balanced across four resolve and four
+invoke executables. Native CI enables `DINGO_MATRIX_TEST_AFTER_BUILD`, so each
+matrix executable runs immediately after linking and stops the build on a
+failure. Cross-compiled executables remain registered for their native runner.
 
 Shared-cyclical graphs use a dedicated compositional family. It crosses
 container implementation, registration mode, the value or `shared_ptr`

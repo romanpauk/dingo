@@ -13,7 +13,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from jinja2 import Template
+from jinja2 import Environment, FileSystemLoader, StrictUndefined, Template
 
 from data import CATALOG, CONTAINERS, STORED_TYPES, validate_catalog
 from axes.constructor_detection import (
@@ -73,12 +73,14 @@ from dependency_contract import validate_dependency_contract
 from dependency_composition import (
     DEPENDENCY_COMPOSITION_COVERAGE_REPORT,
     DEPENDENCY_COMPOSITION_CONTAINERS,
+    DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION,
     DEPENDENCY_COMPOSITION_OPERATIONS,
     DEPENDENCY_COMPOSITION_PROFILES,
     DEPENDENCY_COMPOSITION_SCOPES,
     DEPENDENCY_COMPOSITION_SCOPE_RULES,
     DependencyCompositionRow,
     build_dependency_composition_coverage,
+    generate_dependency_composition_executables,
     generate_dependency_composition_rows,
     project_dependency_composition_rows,
     render_dependency_composition_coverage,
@@ -1025,6 +1027,51 @@ def test_dependency_composition_projection_rejects_unknown_profiles(
         project_dependency_composition_rows(composition_rows, "missing")
 
 
+@pytest.mark.parametrize("profile", ("full", "portable"))
+def test_dependency_composition_executables_are_bounded_and_balanced(
+    tmp_path: Path,
+    profile: str,
+) -> None:
+    script_dir = Path(__file__).resolve().parent
+    environment = Environment(
+        loader=FileSystemLoader(script_dir / "templates"),
+        undefined=StrictUndefined,
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    executables = generate_dependency_composition_executables(
+        tmp_path,
+        environment.get_template("dependency_composition.cpp.j2"),
+        environment.get_template("dependency_composition_runner.cpp.j2"),
+        profile=profile,
+    )
+
+    assert len(executables) == (
+        len(DEPENDENCY_COMPOSITION_OPERATIONS)
+        * DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION
+    )
+    for operation in DEPENDENCY_COMPOSITION_OPERATIONS:
+        operation_executables = tuple(
+            executable
+            for executable in executables
+            if executable.name.startswith(
+                f"dingo_matrix_test_dependency_composition_{operation.name}_"
+            )
+        )
+        assert len(operation_executables) == (
+            DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION
+        )
+        witness_counts = tuple(
+            sum(
+                source.read_text(encoding="utf-8").count("\nTEST(")
+                for source in executable.sources
+                if source.name.startswith("matrix_runner_")
+            )
+            for executable in operation_executables
+        )
+        assert max(witness_counts) - min(witness_counts) <= 1
+
+
 def test_dependency_compositions_reject_excessive_depth() -> None:
     too_deep = compose_dependency(
         "too_deep",
@@ -1931,7 +1978,7 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
 
     assert not stale_source.exists()
     assert not stale_report.exists()
-    assert len(tuple(out_dir.glob("*.cpp"))) == 350
+    assert len(tuple(out_dir.glob("*.cpp"))) == 358
     coverage_report = out_dir / DEPENDENCY_COMPOSITION_COVERAGE_REPORT
     assert coverage_report.read_text(encoding="utf-8") == (
         render_dependency_composition_coverage(
