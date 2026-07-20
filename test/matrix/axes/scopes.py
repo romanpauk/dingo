@@ -11,6 +11,13 @@ from __future__ import annotations
 from schema import ScopeSpec
 
 
+SHARED_CYCLICAL_SCOPE = ScopeSpec(
+    name="shared_cyclical",
+    type_name="dingo::scope<dingo::shared_cyclical>",
+    provides=frozenset({"shared_storage", "stable_concrete_storage"}),
+)
+
+
 SCOPES = (
     ScopeSpec(
         name="shared",
@@ -26,10 +33,5 @@ SCOPES = (
         name="external",
         type_name="dingo::scope<dingo::external>",
         provides=frozenset({"external_storage", "stable_concrete_storage"}),
-    ),
-    ScopeSpec(
-        name="shared_cyclical",
-        type_name="dingo::scope<dingo::shared_cyclical>",
-        provides=frozenset({"shared_storage", "stable_concrete_storage"}),
     ),
 )

@@ -88,28 +88,6 @@ FEATURES = (
         container_requires=frozenset({"indexed_container"}),
     ),
     Feature(
-        name="indexed_registration_regressions",
-        requires=frozenset({"scenario"}),
-        modes=frozenset({"runtime"}),
-        container_requires=frozenset({"indexed_regression_container"}),
-        headers=("matrix/scenarios/indexed_registration.h",),
-    ),
-    Feature(
-        name="static_indexed_regressions",
-        requires=frozenset(
-            {
-                "concrete_binding",
-                "constructable_dependency",
-                "direct_value_resolution",
-                "resolved_concrete",
-                "stable_concrete_storage",
-            }
-        ),
-        modes=frozenset({"static"}),
-        container_requires=frozenset({"static_indexed_regression_container"}),
-        headers=("matrix/scenarios/static_indexed.h",),
-    ),
-    Feature(
         name="resolve_keyed_collection",
         requires=frozenset({"keyed_collection_binding", "resolved_keyed_collection"}),
         modes=frozenset({"static", "mixed"}),
@@ -119,12 +97,6 @@ FEATURES = (
         name="construct",
         requires=frozenset({"constructable_dependency"}),
         modes=frozenset({"runtime", "static", "mixed"}),
-    ),
-    Feature(
-        name="invoke",
-        requires=frozenset({"invokable_dependency"}),
-        modes=frozenset({"runtime", "static", "mixed"}),
-        headers=("matrix/scenarios/invoke.h",),
     ),
     Feature(
         name="construct_collection",
@@ -151,19 +123,6 @@ FEATURES = (
         system_headers=("type_traits",),
     ),
     Feature(
-        name="static_parent_container",
-        requires=frozenset(
-            {
-                "concrete_binding",
-                "direct_value_resolution",
-                "resolved_concrete",
-                "stable_concrete_storage",
-            }
-        ),
-        modes=frozenset({"static"}),
-        headers=("matrix/scenarios/static_parent.h",),
-    ),
-    Feature(
         name="annotated",
         requires=frozenset({"annotated_binding", "resolved_annotated"}),
         modes=frozenset({"runtime", "static", "mixed"}),
@@ -183,56 +142,6 @@ FEATURES = (
         requires=frozenset({"factory_override"}),
         modes=frozenset({"runtime", "static", "mixed"}),
         headers=("matrix/scenarios/factory.h",),
-    ),
-    Feature(
-        name="runtime_container_regressions",
-        requires=frozenset({"scenario"}),
-        modes=frozenset({"runtime"}),
-        container_requires=frozenset({"runtime_regression_container"}),
-        headers=("matrix/scenarios/runtime/container.h",),
-    ),
-    Feature(
-        name="runtime_lookup_routing_regressions",
-        requires=frozenset({"scenario"}),
-        modes=frozenset({"runtime"}),
-        container_requires=frozenset({"runtime_lookup_routing_container"}),
-        headers=("matrix/scenarios/lookup/runtime_routing.h",),
-    ),
-    Feature(
-        name="lookup_route_regressions",
-        requires=frozenset({"scenario"}),
-        modes=frozenset({"runtime"}),
-        container_requires=frozenset({"runtime_lookup_routing_container"}),
-        headers=("matrix/scenarios/lookup/routes.h",),
-    ),
-    Feature(
-        name="runtime_construct_dependency_regressions",
-        requires=frozenset({"scenario"}),
-        modes=frozenset({"runtime"}),
-        container_requires=frozenset({"runtime_regression_container"}),
-        headers=("matrix/scenarios/runtime/construct_dependency.h",),
-    ),
-    Feature(
-        name="runtime_exception_regressions",
-        requires=frozenset({"scenario"}),
-        modes=frozenset({"runtime"}),
-        container_requires=frozenset({"runtime_regression_container"}),
-        system_headers=("dingo/type/type_name.h",),
-        headers=("matrix/scenarios/runtime/exceptions.h",),
-    ),
-    Feature(
-        name="runtime_unique_reference_regressions",
-        requires=frozenset({"scenario"}),
-        modes=frozenset({"runtime"}),
-        container_requires=frozenset({"runtime_regression_container"}),
-        headers=("matrix/scenarios/runtime/unique_reference.h",),
-    ),
-    Feature(
-        name="shared_cyclical_regressions",
-        requires=frozenset({"scenario"}),
-        modes=frozenset({"runtime"}),
-        container_requires=frozenset({"runtime_regression_container"}),
-        headers=("matrix/scenarios/runtime/shared_cyclical.h",),
     ),
     Feature(
         name="explicit_dependencies",
@@ -288,34 +197,10 @@ _FEATURE_POLICIES = {
     "construct_invoke": (
         "resolution::construct_invoke<dependent_type, value_type, 3>"
     ),
-    "indexed_registration_regressions": (
-        "resolution::scenario<indexed_registration_scenario>"
-    ),
-    "static_indexed_regressions": (
-        "resolution::no_container_function<&exercise_static_indexed_regressions>"
-    ),
     "construct": "resolution::construct_member_value<dependent_type, 3>",
     "construct_collection": (
         "resolution::construct_collection_values<"
         "std::vector<std::shared_ptr<element_interface>>>"
-    ),
-    "runtime_container_regressions": (
-        "resolution::scenario<runtime_container_regression_scenario>"
-    ),
-    "runtime_lookup_routing_regressions": (
-        "resolution::scenario<runtime_lookup_routing_scenario>"
-    ),
-    "runtime_construct_dependency_regressions": (
-        "resolution::scenario<runtime_construct_dependency_regression_scenario>"
-    ),
-    "runtime_exception_regressions": (
-        "resolution::scenario<runtime_exception_regression_scenario>"
-    ),
-    "runtime_unique_reference_regressions": (
-        "resolution::scenario<runtime_unique_reference_regression_scenario>"
-    ),
-    "shared_cyclical_regressions": (
-        "resolution::scenario<shared_cyclical_regression_scenario>"
     ),
     "explicit_dependencies": (
         "resolution::member_value<explicit_dependencies_type, 17>"
@@ -340,7 +225,6 @@ POLICY_HEADERS = {
     "custom_allocator": "matrix/policies/policy_special.h",
     "custom_rtti": "matrix/policies/policy_special.h",
     "custom_wrappers": "matrix/policies/resolution.h",
-    "invoke": "matrix/policies/resolution.h",
     "lifetime_counts": "matrix/policies/policy_lifetime.h",
     "local_bindings": "matrix/policies/policy_special.h",
     "mixed_singular_ambiguity": "matrix/policies/policy_special.h",

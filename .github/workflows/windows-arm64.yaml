@@ -75,7 +75,7 @@ jobs:
       - name: Configure
         shell: pwsh
         run: |
-          cmake -S "${{ env.SOURCE_DIR }}" -B build -G "${{ inputs.cross_generator }}" -A ARM64 -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ inputs.config_id }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
+          cmake -S "${{ env.SOURCE_DIR }}" -B build -G "${{ inputs.cross_generator }}" -A ARM64 -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_MATRIX_PROFILE=portable -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ inputs.config_id }} -DCMAKE_CXX_STANDARD=${{ inputs.std }}
       - name: Build
         shell: pwsh
         run: |

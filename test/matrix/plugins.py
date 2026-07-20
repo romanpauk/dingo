@@ -48,6 +48,25 @@ class RegistrationPlan:
     mixed_runtime_setup: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class RegistrationRecipe:
+    scope: ScopeSpec
+    storage: str
+    registrations: tuple[RegistrationSpec, ...]
+    runtime_setup: tuple[str, ...] = ()
+    runtime_argument: str | None = None
+    factory: str | None = None
+    runtime_prefix: tuple[str, ...] = ()
+    mixed_runtime_prefix: tuple[str, ...] = ()
+    mixed: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class RenderedRegistrationPlan:
+    static_bindings: str | None
+    setup_lines: tuple[str, ...]
+
+
 LIFETIME_POLICIES: dict[tuple[str, str, str, str], str] = {
     (
         "shared",
@@ -208,55 +227,61 @@ def bindings_type(bindings: tuple[str, ...]) -> str:
     return "dingo::bindings<" + ", ".join(bindings) + ">"
 
 
-def spec_storage(spec: RegistrationSpec, stored_type: StoredType) -> str:
-    return spec.storage or stored_type.storage
+def spec_storage(spec: RegistrationSpec, recipe: RegistrationRecipe) -> str:
+    return spec.storage or recipe.storage
 
 
-def spec_scope(scope: ScopeSpec, spec: RegistrationSpec) -> str:
-    return spec.scope or scope.type_name
+def spec_scope(recipe: RegistrationRecipe, spec: RegistrationSpec) -> str:
+    return spec.scope or recipe.scope.type_name
 
 
-def spec_runtime_argument(spec: RegistrationSpec, stored_type: StoredType) -> str | None:
+def spec_runtime_argument(
+    spec: RegistrationSpec, recipe: RegistrationRecipe
+) -> str | None:
     if spec.runtime_argument is not None:
         return spec.runtime_argument
     if spec.storage is None:
-        return stored_type.runtime_argument
+        return recipe.runtime_argument
     return None
 
 
-def spec_runtime_setup(spec: RegistrationSpec, stored_type: StoredType) -> tuple[str, ...]:
+def spec_runtime_setup(
+    spec: RegistrationSpec, recipe: RegistrationRecipe
+) -> tuple[str, ...]:
     if spec.runtime_argument is not None:
         return spec.runtime_setup
-    if spec.storage is None and stored_type.runtime_argument is not None:
-        return stored_type.runtime_setup
+    if spec.storage is None and recipe.runtime_argument is not None:
+        return recipe.runtime_setup
     return ()
 
 
-def stored_type_factory(stored_type: StoredType, spec: RegistrationSpec) -> str | None:
+def recipe_factory(
+    recipe: RegistrationRecipe, spec: RegistrationSpec
+) -> str | None:
     if spec.storage is None:
-        return stored_type.factory
+        return recipe.factory
     return None
 
 
 def render_static_binding(
-    scope: ScopeSpec, stored_type: StoredType, spec: RegistrationSpec
+    recipe: RegistrationRecipe, spec: RegistrationSpec
 ) -> str:
     return binding(
-        spec_scope(scope, spec),
-        spec_storage(spec, stored_type),
+        spec_scope(recipe, spec),
+        spec_storage(spec, recipe),
         interfaces=spec.interfaces,
         local_bindings=spec.local_bindings,
-        factory=spec.factory or stored_type_factory(stored_type, spec),
+        factory=spec.factory or recipe_factory(recipe, spec),
         dependencies=spec.dependencies,
         key=spec.key,
     )
 
 
 def render_runtime_registration(
-    scope: ScopeSpec, stored_type: StoredType, spec: RegistrationSpec
+    recipe: RegistrationRecipe, spec: RegistrationSpec
 ) -> str:
-    storage = spec_storage(spec, stored_type)
-    scope_type = spec_scope(scope, spec)
+    storage = spec_storage(spec, recipe)
+    scope_type = spec_scope(recipe, spec)
     if spec.indexed_key is not None:
         return register_type(
             scope_type,
@@ -270,65 +295,115 @@ def render_runtime_registration(
         storage,
         interfaces=spec.interfaces,
         local_bindings=spec.local_bindings,
-        factory=spec.factory or stored_type_factory(stored_type, spec),
+        factory=spec.factory or recipe_factory(recipe, spec),
         dependencies=spec.dependencies,
         key=spec.key,
-        argument=spec_runtime_argument(spec, stored_type),
+        argument=spec_runtime_argument(spec, recipe),
     )
 
 
 def runtime_setup_prefix(
-    stored_type: StoredType, specs: tuple[RegistrationSpec, ...]
+    recipe: RegistrationRecipe, specs: tuple[RegistrationSpec, ...]
 ) -> tuple[str, ...]:
     lines: list[str] = []
     for spec in specs:
-        for line in spec_runtime_setup(spec, stored_type):
+        for line in spec_runtime_setup(spec, recipe):
             if line not in lines:
                 lines.append(line)
     return tuple(lines)
 
 
-def build_registration_plan(
-    scope: ScopeSpec, stored_type: StoredType, exposed_type: ExposedType
+def build_registration_plan_from_recipe(
+    recipe: RegistrationRecipe,
 ) -> RegistrationPlan:
-    specs = exposed_type.registrations
+    specs = recipe.registrations
     static_specs = tuple(spec for spec in specs if spec.include_in_static)
+    runtime_specs = tuple(spec for spec in specs if spec.include_in_runtime)
     mixed_static_specs = tuple(
         spec
         for spec in specs
+        if spec.include_in_mixed
         if spec.mixed_placement is MixedRegistrationPlacement.STATIC
     )
     mixed_runtime_specs = tuple(
         spec
         for spec in specs
+        if spec.include_in_mixed
         if spec.mixed_placement is MixedRegistrationPlacement.RUNTIME
     )
 
     return RegistrationPlan(
         static_bindings=tuple(
-            render_static_binding(scope, stored_type, spec) for spec in static_specs
+            render_static_binding(recipe, spec) for spec in static_specs
         ),
         runtime_setup=(
-            runtime_setup_prefix(stored_type, specs)
-            + exposed_type.runtime_prefix
+            runtime_setup_prefix(recipe, runtime_specs)
+            + recipe.runtime_prefix
             + tuple(
-                render_runtime_registration(scope, stored_type, spec) for spec in specs
+                render_runtime_registration(recipe, spec)
+                for spec in runtime_specs
             )
         ),
         mixed_static_bindings=(
             tuple(
-                render_static_binding(scope, stored_type, spec)
+                render_static_binding(recipe, spec)
                 for spec in mixed_static_specs
             )
-            if exposed_type.mixed
+            if recipe.mixed
             else None
         ),
         mixed_runtime_setup=(
-            runtime_setup_prefix(stored_type, mixed_runtime_specs)
-            + exposed_type.mixed_runtime_prefix
+            runtime_setup_prefix(recipe, mixed_runtime_specs)
+            + recipe.mixed_runtime_prefix
             + tuple(
-                render_runtime_registration(scope, stored_type, spec)
+                render_runtime_registration(recipe, spec)
                 for spec in mixed_runtime_specs
             )
         ),
     )
+
+
+def build_registration_plan(
+    scope: ScopeSpec, stored_type: StoredType, exposed_type: ExposedType
+) -> RegistrationPlan:
+    return build_registration_plan_from_recipe(
+        RegistrationRecipe(
+            scope=scope,
+            storage=stored_type.storage,
+            registrations=exposed_type.registrations,
+            runtime_setup=stored_type.runtime_setup,
+            runtime_argument=stored_type.runtime_argument,
+            factory=stored_type.factory,
+            runtime_prefix=exposed_type.runtime_prefix,
+            mixed_runtime_prefix=exposed_type.mixed_runtime_prefix,
+            mixed=exposed_type.mixed,
+        )
+    )
+
+
+def render_registration_plan(
+    mode: str,
+    plan: RegistrationPlan,
+    *,
+    context: str,
+) -> RenderedRegistrationPlan:
+    if mode == "static":
+        if not plan.static_bindings:
+            raise RuntimeError(f"{context} has no static bindings")
+        return RenderedRegistrationPlan(
+            static_bindings=bindings_type(plan.static_bindings),
+            setup_lines=(),
+        )
+    if mode == "runtime":
+        return RenderedRegistrationPlan(
+            static_bindings=None,
+            setup_lines=plan.runtime_setup,
+        )
+    if mode == "mixed":
+        if not plan.mixed_static_bindings:
+            raise RuntimeError(f"{context} has no mixed registration plan")
+        return RenderedRegistrationPlan(
+            static_bindings=bindings_type(plan.mixed_static_bindings),
+            setup_lines=plan.mixed_runtime_setup,
+        )
+    raise RuntimeError(f"{context} has unknown registration mode: {mode}")

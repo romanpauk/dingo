@@ -17,6 +17,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, Template
 
+from axes.dependency_forms import DEPENDENCY_PROVISIONINGS
 from data import (
     CATALOG,
     CONTAINERS,
@@ -28,24 +29,45 @@ from data import (
     SCOPES,
     STORED_TYPES,
 )
+from dependency_contract import validate_dependency_contract
 from schema import (
     ContainerSpec,
     ExposedType,
     Feature,
     FeatureCaseSpec,
+    GeneratedExecutable,
     RegistrationMode,
     ResolvedType,
     ScopeSpec,
     StoredType,
 )
+from constructor_detection import generate_constructor_detection_executables
+from dependency_composition import (
+    DEPENDENCY_COMPOSITION_COVERAGE_REPORT,
+    DEPENDENCY_COMPOSITION_PROFILES,
+    build_dependency_composition_coverage,
+    disable_dependency_composition_projected_cases,
+    generate_dependency_composition_executables,
+    generate_dependency_composition_rows,
+    project_dependency_composition_rows,
+    render_dependency_composition_coverage,
+)
+from family import (
+    SourceShard,
+    render_case_family_executables,
+    write_text_if_changed,
+)
+from invoke import generate_invoke_executables
 from plugins import (
     CaseLines,
     LIFETIME_POLICIES,
     RegistrationPlan,
-    bindings_type,
     build_registration_plan,
+    render_registration_plan,
     select_case_lines,
 )
+from scenarios import generate_scenario_executables
+from shared_cyclical import generate_shared_cyclical_executables
 
 
 class RejectionReason(StrEnum):
@@ -59,9 +81,7 @@ class RejectionReason(StrEnum):
     FEATURE_REQUIRES_TAGS = "feature_requires_tags"
     RESOLVED_TYPE_REQUIRES_TAGS = "resolved_type_requires_tags"
     CONTAINER_REQUIRES = "container_requires"
-    FEATURE_CASE_REQUIRES_TAGS = "feature_case_requires_tags"
     FEATURE_CASE_SUPPORTS_EXPOSURE = "feature_case_supports_exposure"
-    FEATURE_CASE_SUPPORTS_RESOLUTION = "feature_case_supports_resolution"
     FEATURE_HAS_CHECK = "feature_has_check"
 
 
@@ -94,12 +114,6 @@ class GeneratedCase:
     policy: str
     system_headers: tuple[str, ...]
     headers: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class GeneratedExecutable:
-    name: str
-    sources: tuple[Path, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,11 +272,6 @@ def iter_candidates(
                                     continue
 
                                 for feature_case in feature_cases:
-                                    if not feature_case.requires <= tags:
-                                        rejected[
-                                            RejectionReason.FEATURE_CASE_REQUIRES_TAGS
-                                        ] += 1
-                                        continue
                                     if (
                                         feature_case.supported_exposed_types
                                         and exposed_type.name
@@ -272,16 +281,6 @@ def iter_candidates(
                                             RejectionReason.FEATURE_CASE_SUPPORTS_EXPOSURE
                                         ] += 1
                                         continue
-                                    if (
-                                        feature_case.supported_resolved_types
-                                        and resolved_type.name
-                                        not in feature_case.supported_resolved_types
-                                    ):
-                                        rejected[
-                                            RejectionReason.FEATURE_CASE_SUPPORTS_RESOLUTION
-                                        ] += 1
-                                        continue
-
                                     yield CandidateRow(
                                         feature=feature,
                                         feature_case=feature_case,
@@ -328,7 +327,7 @@ def materialize_row(
     plan = plan_for_candidate(candidate, cache)
     if candidate.mode.name == "static" and not plan.static_bindings:
         raise RuntimeError(f"static row {case_name(candidate)} has no bindings")
-    if candidate.mode.name == "mixed" and plan.mixed_static_bindings is None:
+    if candidate.mode.name == "mixed" and not plan.mixed_static_bindings:
         raise RuntimeError(f"mixed row {case_name(candidate)} has no registration plan")
 
     lines = select_case_lines(candidate)
@@ -352,6 +351,7 @@ def materialize_row(
 
 
 def generate_rows() -> tuple[MatrixRow, ...]:
+    validate_dependency_contract()
     axes = index_axes()
     rejected = axes.rejected
     plan_cache: PlanCache = {}
@@ -407,6 +407,61 @@ def assert_feature_mode_container_coverage(rows: tuple[MatrixRow, ...]) -> None:
         raise RuntimeError(
             "matrix feature/mode/container combinations did not generate rows: "
             + ", ".join(sorted(missing))
+        )
+
+
+def assert_dependency_provisioning_coverage(
+    rows: tuple[MatrixRow, ...],
+) -> None:
+    declared_resolution_cases = {
+        (form, resolved_type, feature)
+        for provisioning in DEPENDENCY_PROVISIONINGS
+        for form, resolved_type, feature in provisioning.resolution_cases
+    }
+    generated_resolution_cases = {
+        (
+            row.feature.name,
+            row.scope.name,
+            row.stored_type.id,
+            row.exposed_type.name,
+            row.resolved_type.name,
+            form,
+            row.mode.name,
+            row.container.name,
+        )
+        for row in rows
+        for form in row.resolved_type.dependency_forms
+        if (form, row.resolved_type.name, row.feature.name)
+        in declared_resolution_cases
+    }
+    expected_resolution_cases = {
+        (
+            feature,
+            provisioning.scope,
+            provisioning.stored_type,
+            provisioning.exposed_type,
+            resolved_type,
+            form,
+            mode,
+            container.name,
+        )
+        for provisioning in DEPENDENCY_PROVISIONINGS
+        for form, resolved_type, feature in provisioning.resolution_cases
+        for mode in provisioning.supported_modes
+        for container in implemented(CONTAINERS)
+        if mode in container.modes
+    }
+    missing_resolution_cases = sorted(
+        expected_resolution_cases - generated_resolution_cases
+    )
+    if missing_resolution_cases:
+        raise RuntimeError(
+            "dependency provisionings: "
+            "form/resolution/mode/container "
+            "combinations did not generate registration rows: "
+            + ", ".join(
+                " / ".join(case) for case in missing_resolution_cases
+            )
         )
 
 
@@ -466,6 +521,7 @@ def assert_coverage(
         {container.name for container in implemented(CONTAINERS)},
     )
     assert_feature_mode_container_coverage(row_tuple)
+    assert_dependency_provisioning_coverage(row_tuple)
 
     untyped_rows = [row.name for row in row_tuple if not row.lines.policy]
     if untyped_rows:
@@ -522,26 +578,18 @@ def case_name(row: CandidateRow) -> str:
 
 
 def make_case(row: MatrixRow) -> GeneratedCase:
-    static_bindings = None
-    setup_lines = ()
-    if row.mode.name == "static":
-        static_bindings = bindings_type(row.plan.static_bindings)
-    elif row.mode.name == "runtime":
-        setup_lines = row.plan.runtime_setup
-    elif row.mode.name == "mixed":
-        if row.plan.mixed_static_bindings is None:
-            raise RuntimeError(f"row {row.name} has no mixed static bindings")
-        static_bindings = bindings_type(row.plan.mixed_static_bindings)
-        setup_lines = row.plan.mixed_runtime_setup
-    else:
-        raise RuntimeError(f"unknown registration mode: {row.mode.name}")
+    registration = render_registration_plan(
+        row.mode.name,
+        row.plan,
+        context=f"row {row.name}",
+    )
 
     return GeneratedCase(
         suite=row.feature.name,
         name=row.name,
         container_type=row.container.container_type,
-        static_bindings=static_bindings,
-        setup_lines=setup_lines,
+        static_bindings=registration.static_bindings,
+        setup_lines=registration.setup_lines,
         policy=row.lines.policy,
         system_headers=tuple(
             sorted(
@@ -571,43 +619,6 @@ def make_case(row: MatrixRow) -> GeneratedCase:
     )
 
 
-def render_source(
-    source: Path,
-    rows: list[MatrixRow],
-    template: Template,
-) -> Path:
-    cases: list[GeneratedCase] = []
-
-    for row in rows:
-        cases.append(make_case(row))
-
-    if not cases:
-        raise RuntimeError(f"source {source} did not generate any tests")
-
-    rendered = template.render(
-        cases=cases,
-        system_headers=tuple(
-            sorted({header for case in cases for header in case.system_headers})
-        ),
-        headers=tuple(
-            sorted({header for case in cases for header in case.headers})
-        ),
-    )
-    write_text_if_changed(source, rendered)
-    return source
-
-
-def render_runner(
-    source: Path,
-    rows: tuple[MatrixRow, ...],
-    template: Template,
-) -> Path:
-    cases = [make_case(row) for row in rows]
-    rendered = template.render(cases=cases)
-    write_text_if_changed(source, rendered)
-    return source
-
-
 def executable_name(feature_name: str) -> str:
     return f"dingo_matrix_test_{feature_name}"
 
@@ -630,38 +641,52 @@ def source_groups(rows: list[MatrixRow]) -> dict[str, list[MatrixRow]]:
     return grouped
 
 
-def generate_sources(
-    rows: tuple[MatrixRow, ...],
+def generate_registration_executables(
     out_dir: Path,
     source_template: Template,
     runner_template: Template,
+    claimed_sources: set[Path] | None = None,
 ) -> tuple[GeneratedExecutable, ...]:
-    executables: list[GeneratedExecutable] = []
+    rows = generate_rows()
+    shards: list[SourceShard] = []
     for feature_name, feature_rows in executable_groups(rows).items():
-        sources: list[Path] = []
         for source_name, source_rows in sorted(source_groups(feature_rows).items()):
-            sources.append(
-                render_source(
-                    out_dir / f"{source_name}.cpp",
-                    source_rows,
-                    source_template,
+            cases = tuple(make_case(row) for row in source_rows)
+            shards.append(
+                SourceShard(
+                    executable=executable_name(feature_name),
+                    name=source_name,
+                    source_context={
+                        "cases": cases,
+                        "system_headers": tuple(
+                            sorted(
+                                {
+                                    header
+                                    for case in cases
+                                    for header in case.system_headers
+                                }
+                            )
+                        ),
+                        "headers": tuple(
+                            sorted(
+                                {
+                                    header
+                                    for case in cases
+                                    for header in case.headers
+                                }
+                            )
+                        ),
+                    },
+                    runner_context={"cases": cases},
                 )
             )
-            sources.append(
-                render_runner(
-                    out_dir / f"matrix_runner_{source_name}.cpp",
-                    tuple(source_rows),
-                    runner_template,
-                )
-            )
-        executables.append(
-            GeneratedExecutable(
-                name=executable_name(feature_name),
-                sources=tuple(sources),
-            )
-        )
-
-    return tuple(sorted(executables, key=lambda executable: executable.name))
+    return render_case_family_executables(
+        out_dir,
+        source_template,
+        runner_template,
+        tuple(shards),
+        claimed_sources,
+    )
 
 
 def remove_stale_sources(out_dir: Path, live_sources: set[Path]) -> None:
@@ -670,7 +695,76 @@ def remove_stale_sources(out_dir: Path, live_sources: set[Path]) -> None:
             source.unlink()
 
 
-def generate(out_dir: Path, cmake_file: Path) -> None:
+def remove_stale_reports(out_dir: Path, live_reports: set[Path]) -> None:
+    for report in out_dir.glob("*-coverage.md"):
+        if report not in live_reports:
+            report.unlink()
+
+
+def merge_executables(
+    *executable_groups: tuple[GeneratedExecutable, ...],
+) -> tuple[GeneratedExecutable, ...]:
+    all_sources = [
+        source
+        for group in executable_groups
+        for executable in group
+        for source in executable.sources
+    ]
+    duplicate_sources = sorted(
+        source for source, count in Counter(all_sources).items() if count > 1
+    )
+    if duplicate_sources:
+        raise RuntimeError(
+            "matrix families generated duplicate sources: "
+            + ", ".join(str(source) for source in duplicate_sources)
+        )
+
+    sources_by_executable: dict[str, list[Path]] = defaultdict(list)
+    isolated_sources_by_executable: dict[str, list[Path]] = defaultdict(list)
+    for executable in (
+        executable
+        for group in executable_groups
+        for executable in group
+    ):
+        unknown_isolated_sources = set(executable.isolated_sources) - set(
+            executable.sources
+        )
+        if unknown_isolated_sources:
+            raise ValueError(
+                f"matrix executable {executable.name} isolates unknown "
+                f"sources: {sorted(unknown_isolated_sources)}"
+            )
+        sources_by_executable[executable.name].extend(executable.sources)
+        isolated_sources_by_executable[executable.name].extend(
+            executable.isolated_sources
+        )
+
+    executables: list[GeneratedExecutable] = []
+    for name, sources in sources_by_executable.items():
+        executables.append(
+            GeneratedExecutable(
+                name=name,
+                sources=tuple(sorted(sources)),
+                isolated_sources=tuple(
+                    sorted(isolated_sources_by_executable[name])
+                ),
+            )
+        )
+    return tuple(sorted(executables, key=lambda executable: executable.name))
+
+
+def generate(
+    out_dir: Path,
+    cmake_file: Path,
+    profile: str = "full",
+    dependency_composition_case_limit: int | None = None,
+    dependency_composition_isolated_executables: frozenset[
+        tuple[str, int]
+    ] = frozenset(),
+    dependency_composition_disabled_projected_cases: frozenset[
+        tuple[str, str]
+    ] = frozenset(),
+) -> None:
     script_dir = Path(__file__).resolve().parent
     env = Environment(
         loader=FileSystemLoader(script_dir / "templates"),
@@ -680,17 +774,88 @@ def generate(out_dir: Path, cmake_file: Path) -> None:
     )
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    rows = generate_rows()
-    executables = generate_sources(
-        rows,
-        out_dir,
-        env.get_template("source.cpp.j2"),
-        env.get_template("runner.cpp.j2"),
+    claimed_sources: set[Path] = set()
+    family_specs = (
+        (
+            generate_registration_executables,
+            "source.cpp.j2",
+            "runner.cpp.j2",
+            {},
+        ),
+        (
+            generate_scenario_executables,
+            "scenario.cpp.j2",
+            "runner.cpp.j2",
+            {},
+        ),
+        (
+            generate_constructor_detection_executables,
+            "constructor_detection.cpp.j2",
+            "constructor_detection_runner.cpp.j2",
+            {},
+        ),
+        (
+            generate_invoke_executables,
+            "source.cpp.j2",
+            "runner.cpp.j2",
+            {},
+        ),
+        (
+            generate_dependency_composition_executables,
+            "dependency_composition.cpp.j2",
+            "dependency_composition_runner.cpp.j2",
+            {
+                "profile": profile,
+                "implementation_case_limit": (
+                    dependency_composition_case_limit
+                ),
+                "isolated_implementation_executables": (
+                    dependency_composition_isolated_executables
+                ),
+                "disabled_projected_cases": (
+                    dependency_composition_disabled_projected_cases
+                ),
+            },
+        ),
+        (
+            generate_shared_cyclical_executables,
+            "shared_cyclical.cpp.j2",
+            "shared_cyclical_runner.cpp.j2",
+            {},
+        ),
+    )
+    executables = merge_executables(
+        *(
+            generator(
+                out_dir,
+                env.get_template(source_template),
+                env.get_template(runner_template),
+                claimed_sources,
+                **kwargs,
+            )
+            for generator, source_template, runner_template, kwargs in family_specs
+        )
     )
     remove_stale_sources(
         out_dir,
         {source for executable in executables for source in executable.sources},
     )
+    coverage_report = out_dir / DEPENDENCY_COMPOSITION_COVERAGE_REPORT
+    composition_rows = generate_dependency_composition_rows()
+    projected_composition_rows = disable_dependency_composition_projected_cases(
+        project_dependency_composition_rows(composition_rows, profile),
+        dependency_composition_disabled_projected_cases,
+        composition_rows,
+    )
+    write_text_if_changed(
+        coverage_report,
+        render_dependency_composition_coverage(
+            build_dependency_composition_coverage(composition_rows),
+            profile=profile,
+            compiled_rows=len(projected_composition_rows),
+        ),
+    )
+    remove_stale_reports(out_dir, {coverage_report})
     cmake_file.parent.mkdir(parents=True, exist_ok=True)
     write_text_if_changed(
         cmake_file,
@@ -698,7 +863,15 @@ def generate(out_dir: Path, cmake_file: Path) -> None:
             executables=[
                 {
                     "name": executable.name,
-                    "sources": [source.as_posix() for source in executable.sources],
+                    "sources": [
+                        source.as_posix()
+                        for source in executable.sources
+                        if source not in executable.isolated_sources
+                    ],
+                    "isolated_sources": [
+                        source.as_posix()
+                        for source in executable.isolated_sources
+                    ],
                 }
                 for executable in executables
             ]
@@ -706,19 +879,79 @@ def generate(out_dir: Path, cmake_file: Path) -> None:
     )
 
 
-def write_text_if_changed(path: Path, content: str) -> None:
-    if path.exists() and path.read_text(encoding="utf-8") == content:
-        return
-    path.write_text(content, encoding="utf-8")
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--cmake", required=True, type=Path)
+    parser.add_argument(
+        "--profile",
+        choices=sorted(DEPENDENCY_COMPOSITION_PROFILES),
+        default="full",
+    )
+    parser.add_argument(
+        "--dependency-composition-case-limit",
+        type=int,
+        default=0,
+        help="maximum composition cases per implementation source; 0 disables",
+    )
+    parser.add_argument(
+        "--dependency-composition-isolate-executable",
+        action="append",
+        default=[],
+        metavar="OPERATION:EXECUTABLE",
+        help="compile every case in the selected executable separately",
+    )
+    parser.add_argument(
+        "--dependency-composition-disable-case",
+        action="append",
+        default=[],
+        metavar="OPERATION:ROW",
+        help="omit a selected compiler-crashing projected case",
+    )
     args = parser.parse_args()
+    if args.dependency_composition_case_limit < 0:
+        parser.error("--dependency-composition-case-limit cannot be negative")
 
-    generate(args.out, args.cmake)
+    isolated_executables: set[tuple[str, int]] = set()
+    for value in args.dependency_composition_isolate_executable:
+        fields = value.split(":")
+        if len(fields) != 2:
+            parser.error(
+                "--dependency-composition-isolate-executable must be "
+                "OPERATION:EXECUTABLE"
+            )
+        try:
+            executable = int(fields[1])
+        except ValueError:
+            parser.error(
+                "--dependency-composition-isolate-executable executable "
+                "must be an integer"
+            )
+        if executable <= 0:
+            parser.error(
+                "--dependency-composition-isolate-executable executable "
+                "must be positive"
+            )
+        isolated_executables.add((fields[0], executable))
+
+    disabled_projected_cases: set[tuple[str, str]] = set()
+    for value in args.dependency_composition_disable_case:
+        fields = value.split(":", 1)
+        if len(fields) != 2 or not all(fields):
+            parser.error(
+                "--dependency-composition-disable-case must be "
+                "OPERATION:ROW"
+            )
+        disabled_projected_cases.add((fields[0], fields[1]))
+
+    generate(
+        args.out,
+        args.cmake,
+        args.profile,
+        args.dependency_composition_case_limit or None,
+        frozenset(isolated_executables),
+        frozenset(disabled_projected_cases),
+    )
 
 
 if __name__ == "__main__":

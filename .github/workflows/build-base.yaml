@@ -13,7 +13,7 @@ env:
 
 jobs:
   linux:
-    name: ubuntu-24.04 / ${{ matrix.compiler.CXX }} / std-${{ matrix.compiler.STD }} / ${{ matrix.config.label }}
+    name: ubuntu-24.04 / ${{ matrix.compiler.CXX }} / std-${{ matrix.compiler.STD }} / ${{ matrix.compiler.PROFILE }} / ${{ matrix.config.label }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -26,10 +26,10 @@ jobs:
           - id: Release
             label: release
         compiler:
-          - { CC: gcc-13, CXX: g++-13, STD: 17, SANITIZER: ON }
-          - { CC: gcc-14, CXX: g++-14, STD: 23, SANITIZER: ON }
-          - { CC: clang-18, CXX: clang++-18, STD: 20, SANITIZER: ON }
-          - { CC: clang-19, CXX: clang++-19, STD: 26, SANITIZER: ON }
+          - { CC: gcc-13, CXX: g++-13, STD: 17, SANITIZER: ON, PROFILE: portable }
+          - { CC: gcc-14, CXX: g++-14, STD: 23, SANITIZER: ON, PROFILE: full }
+          - { CC: clang-18, CXX: clang++-18, STD: 20, SANITIZER: ON, PROFILE: portable }
+          - { CC: clang-19, CXX: clang++-19, STD: 26, SANITIZER: ON, PROFILE: full }
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout workflow repo
@@ -62,6 +62,7 @@ jobs:
           ccache_key: ubuntu-24.04-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
           compiler_cc: ${{ matrix.compiler.CC }}
           compiler_cxx: ${{ matrix.compiler.CXX }}
+          matrix_profile: ${{ matrix.compiler.PROFILE }}
           sanitizer: ${{ matrix.compiler.SANITIZER }}
           source_dir: ${{ env.SOURCE_DIR }}
           std: ${{ matrix.compiler.STD }}
@@ -131,6 +132,7 @@ jobs:
           container_image: dingo-toolchains:ubuntu-25.04-${{ matrix.compiler.TOOLCHAIN }}
           compiler_cc: ${{ matrix.compiler.CC }}
           compiler_cxx: ${{ matrix.compiler.CXX }}
+          matrix_profile: portable
           sanitizer: ${{ matrix.compiler.SANITIZER }}
           source_dir: ${{ env.SOURCE_DIR }}
           std: ${{ matrix.compiler.STD }}
@@ -179,6 +181,7 @@ jobs:
           ccache_key: ubuntu-24.04-arm-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
           compiler_cc: ${{ matrix.compiler.CC }}
           compiler_cxx: ${{ matrix.compiler.CXX }}
+          matrix_profile: portable
           sanitizer: ${{ matrix.compiler.SANITIZER }}
           source_dir: ${{ env.SOURCE_DIR }}
           std: ${{ matrix.compiler.STD }}
@@ -204,18 +207,21 @@ jobs:
             std: 17
             runner: windows-2022
             generator: Visual Studio 17 2022
+            matrix_profile: portable
           - vs_label: vs2022
             config_id: Release
             config_label: release
             std: 20
             runner: windows-2022
             generator: Visual Studio 17 2022
+            matrix_profile: portable
           - vs_label: vs2026
             config_id: Release
             config_label: release
             std: 23
             runner: windows-2025-vs2026
             generator: Visual Studio 18 2026
+            matrix_profile: full
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Setup MSVC Developer Command Prompt
@@ -252,6 +258,7 @@ jobs:
           ccache_key: ${{ matrix.vs_label }}-x64-${{ matrix.config_id }}-${{ matrix.std }}
           config_id: ${{ matrix.config_id }}
           generator: ${{ matrix.generator }}
+          matrix_profile: ${{ matrix.matrix_profile }}
           source_dir: ${{ env.SOURCE_DIR }}
           std: ${{ matrix.std }}
 
@@ -318,7 +325,7 @@ jobs:
       - name: Configure
         shell: pwsh
         run: |
-          cmake -S "${{ env.SOURCE_DIR }}" -B build -G "Visual Studio 18 2026" -A ARM64 -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+          cmake -S "${{ env.SOURCE_DIR }}" -B build -G "Visual Studio 18 2026" -A ARM64 -DDINGO_DEVELOPMENT_MODE=ON -DDINGO_BENCHMARK_ENABLED=OFF -DDINGO_EXAMPLES_ENABLED=OFF -DDINGO_CCACHE=ON -DDINGO_MATRIX_PROFILE=portable -DDINGO_TREAT_WARNINGS_AS_ERRORS=ON -DCMAKE_BUILD_TYPE=${{ matrix.config.id }} -DCMAKE_CXX_STANDARD=${{ matrix.std }}
 
       - name: Build
         shell: pwsh

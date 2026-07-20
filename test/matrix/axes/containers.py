@@ -24,11 +24,9 @@ CONTAINERS = (
         container_type="dingo::runtime_container<>",
         provides=frozenset(
             {
-                "cross_parent_container_matrix",
                 "explicit_dependencies_container",
                 "nested_container",
-                "runtime_regression_container",
-                "runtime_lookup_routing_container",
+                "runtime_reference_conversion_container",
             }
         ),
         headers=("matrix/containers/runtime.h",),
@@ -40,8 +38,7 @@ CONTAINERS = (
         provides=frozenset(
             {
                 "nested_container",
-                "runtime_lookup_routing_container",
-                "runtime_regression_container",
+                "runtime_reference_conversion_container",
             }
         ),
         headers=("matrix/containers/container.h",),
@@ -53,8 +50,6 @@ CONTAINERS = (
         provides=frozenset(
             {
                 "explicit_dependencies_container",
-                "static_indexed_regression_container",
-                "static_parent_static_child",
             }
         ),
         headers=("matrix/containers/static.h",),
@@ -63,7 +58,7 @@ CONTAINERS = (
         name="container_static",
         modes=frozenset({"static"}),
         container_type="dingo::container<static_bindings>",
-        provides=frozenset({"static_parent_container_child"}),
+        provides=frozenset(),
         headers=("matrix/containers/container.h",),
     ),
     container(
@@ -77,56 +72,56 @@ CONTAINERS = (
         name="runtime_container_indexed",
         modes=frozenset({"runtime"}),
         container_type="dingo::runtime_container<indexed_container_traits>",
-        provides=frozenset({"indexed_container", "indexed_regression_container"}),
+        provides=frozenset({"indexed_container"}),
         headers=("matrix/containers/indexed.h",),
     ),
     container(
         name="container_indexed",
         modes=frozenset({"runtime"}),
         container_type="dingo::container<indexed_container_traits>",
-        provides=frozenset({"indexed_container", "indexed_regression_container"}),
+        provides=frozenset({"indexed_container"}),
         headers=("matrix/containers/indexed.h",),
     ),
     container(
         name="runtime_container_indexed_int",
         modes=frozenset({"runtime"}),
         container_type="dingo::runtime_container<indexed_int_container_traits>",
-        provides=frozenset({"indexed_regression_container"}),
+        provides=frozenset(),
         headers=("matrix/containers/indexed.h",),
     ),
     container(
         name="container_indexed_int",
         modes=frozenset({"runtime"}),
         container_type="dingo::container<indexed_int_container_traits>",
-        provides=frozenset({"indexed_regression_container"}),
+        provides=frozenset(),
         headers=("matrix/containers/indexed.h",),
     ),
     container(
         name="runtime_container_indexed_string",
         modes=frozenset({"runtime"}),
         container_type="dingo::runtime_container<indexed_string_container_traits>",
-        provides=frozenset({"indexed_regression_container"}),
+        provides=frozenset(),
         headers=("matrix/containers/indexed.h",),
     ),
     container(
         name="container_indexed_string",
         modes=frozenset({"runtime"}),
         container_type="dingo::container<indexed_string_container_traits>",
-        provides=frozenset({"indexed_regression_container"}),
+        provides=frozenset(),
         headers=("matrix/containers/indexed.h",),
     ),
     container(
         name="runtime_container_indexed_dsl",
         modes=frozenset({"runtime"}),
         container_type="dingo::runtime_container<indexed_dsl_container_traits>",
-        provides=frozenset({"indexed_container", "indexed_regression_container"}),
+        provides=frozenset({"indexed_container"}),
         headers=("matrix/containers/indexed.h",),
     ),
     container(
         name="container_indexed_dsl",
         modes=frozenset({"runtime"}),
         container_type="dingo::container<indexed_dsl_container_traits>",
-        provides=frozenset({"indexed_container", "indexed_regression_container"}),
+        provides=frozenset({"indexed_container"}),
         headers=("matrix/containers/indexed.h",),
     ),
     container(

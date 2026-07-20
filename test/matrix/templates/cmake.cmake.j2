@@ -10,5 +10,10 @@ set({{ executable.name }}_SOURCES
     "{{ source }}"
 {% endfor %}
 )
+set({{ executable.name }}_ISOLATED_SOURCES
+{% for source in executable.isolated_sources %}
+    "{{ source }}"
+{% endfor %}
+)
 
 {% endfor %}

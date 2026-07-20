@@ -110,7 +110,6 @@ def validate_catalog(catalog: AxisCatalog) -> None:
     scopes = {scope.name for scope in catalog.scopes}
     stored_kinds = {stored_type.kind for stored_type in catalog.stored_types}
     exposures = {exposed_type.name for exposed_type in catalog.exposed_types}
-    resolutions = {resolved_type.name for resolved_type in catalog.resolved_types}
     features = {feature.name for feature in catalog.features}
 
     for container in catalog.containers:
@@ -168,12 +167,6 @@ def validate_catalog(catalog: AxisCatalog) -> None:
             "exposed types",
             feature_case.supported_exposed_types,
             exposures,
-        )
-        _assert_known(
-            f"feature case {feature_case.feature}/{feature_case.name}",
-            "resolved types",
-            feature_case.supported_resolved_types,
-            resolutions,
         )
 
 

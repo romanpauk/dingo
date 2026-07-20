@@ -251,22 +251,6 @@ struct keyed_collection_dependency_type {
   int sum;
 };
 
-struct cycle_b_type;
-
-struct cycle_a_type {
-  explicit cycle_a_type(cycle_b_type &init_dependency)
-      : dependency(&init_dependency) {}
-
-  cycle_b_type *dependency;
-};
-
-struct cycle_b_type {
-  explicit cycle_b_type(cycle_a_type &init_dependency)
-      : dependency(&init_dependency) {}
-
-  cycle_a_type *dependency;
-};
-
 struct key_a : std::integral_constant<int, 0> {};
 struct key_b : std::integral_constant<int, 1> {};
 struct tag_a {};
