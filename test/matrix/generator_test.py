@@ -118,6 +118,7 @@ from schema import (
     DependencyCompositionResolutionLimitation,
     ExposedType,
     GeneratedExecutable,
+    LimitationDisposition,
     MixedRegistrationPlacement,
     RegistrationSpec,
 )
@@ -564,8 +565,15 @@ def test_dependency_composition_resolution_constraints_are_declarative(
     assert not limitations["variant"]
     assert all(
         limitation.reason
+        and limitation.disposition is LimitationDisposition.KNOWN_GAP
         for operator_limitations in limitations.values()
         for limitation in operator_limitations
+    )
+    assert all(
+        operator.unsupported_request_disposition
+        is LimitationDisposition.INTENTIONAL_CONSTRAINT
+        for operator in DEPENDENCY_COMPOSITION_OPERATORS
+        if operator.supported_request_strategies != {"stable", "value", "rvalue"}
     )
     assert limitations["array"][0].request_strategies == {"value", "rvalue"}
     assert limitations["array"][0].operand_operators == {"optional"}
@@ -585,8 +593,18 @@ def test_dependency_composition_resolution_constraints_are_declarative(
     }
     assert all(movable_requirements.values())
     assert movable_requirements.keys() == {"shared", "unique"}
+    assert all(
+        rule.non_movable_disposition
+        is LimitationDisposition.INTENTIONAL_CONSTRAINT
+        for rule in scope_rules.values()
+        if rule.requires_movable
+    )
     assert scope_rules["external"].requires_runtime_registration
     assert scope_rules["external"].static_registration_reason
+    assert (
+        scope_rules["external"].static_registration_disposition
+        is LimitationDisposition.INTENTIONAL_CONSTRAINT
+    )
     assert {
         container.name
         for container in DEPENDENCY_COMPOSITION_CONTAINERS
@@ -610,15 +628,18 @@ def test_dependency_composition_resolution_constraints_are_declarative(
         DependencyCompositionResolutionLimitation(
             position="unknown",
             reason="invalid test limitation",
+            disposition=LimitationDisposition.KNOWN_GAP,
         ),
         DependencyCompositionResolutionLimitation(
             position="nested",
             reason="invalid test limitation",
+            disposition=LimitationDisposition.KNOWN_GAP,
             request_strategies=frozenset({"unknown"}),
         ),
         DependencyCompositionResolutionLimitation(
             position="nested",
             reason="invalid test limitation",
+            disposition=LimitationDisposition.KNOWN_GAP,
             operand_operators=frozenset({"unknown"}),
         ),
     ),
@@ -640,6 +661,32 @@ def test_dependency_compositions_reject_invalid_resolution_constraints(
         )
 
 
+def test_dependency_compositions_reject_unclassified_limitations() -> None:
+    pointer = DEPENDENCY_COMPOSITION_OPERATORS[0]
+    with pytest.raises(
+        ValueError,
+        match="incomplete unsupported request disposition",
+    ):
+        validate_dependency_compositions(
+            operators=(
+                replace(pointer, unsupported_request_disposition=None),
+                *DEPENDENCY_COMPOSITION_OPERATORS[1:],
+            )
+        )
+
+    shared_rule = DEPENDENCY_COMPOSITION_SCOPE_RULES[0]
+    with pytest.raises(
+        ValueError,
+        match="incomplete movable requirement",
+    ):
+        generate_dependency_composition_rows(
+            scope_rules=(
+                replace(shared_rule, non_movable_disposition=None),
+                *DEPENDENCY_COMPOSITION_SCOPE_RULES[1:],
+            )
+        )
+
+
 def test_dependency_compositions_allow_independently_filtered_limitations(
 ) -> None:
     pointer = DEPENDENCY_COMPOSITION_OPERATORS[0]
@@ -649,11 +696,13 @@ def test_dependency_compositions_allow_independently_filtered_limitations(
             DependencyCompositionResolutionLimitation(
                 position="request_composed_operand",
                 reason="value limitation",
+                disposition=LimitationDisposition.KNOWN_GAP,
                 request_strategies=frozenset({"value"}),
             ),
             DependencyCompositionResolutionLimitation(
                 position="request_composed_operand",
                 reason="rvalue limitation",
+                disposition=LimitationDisposition.KNOWN_GAP,
                 request_strategies=frozenset({"rvalue"}),
             ),
         ),
@@ -741,7 +790,9 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
     composition_rows: tuple[DependencyCompositionRow, ...],
 ) -> None:
     assert all(
-        row.supported == (row.unsupported_reason is None)
+        row.supported
+        == (row.unsupported_reason is None)
+        == (row.unsupported_disposition is None)
         for row in composition_rows
     )
     assert Counter(
@@ -803,6 +854,7 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
             row.composition.name,
         ): (
             row.supported,
+            row.unsupported_disposition,
             row.unsupported_reason,
         )
         for row in composition_rows
@@ -816,6 +868,7 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
             row.composition.name,
         ): (
             row.supported,
+            row.unsupported_disposition,
             row.unsupported_reason,
         )
         for row in composition_rows
@@ -880,62 +933,88 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
     coverage = build_dependency_composition_coverage(composition_rows)
 
     assert (
-        coverage.overall.generated,
         coverage.overall.supported,
-        coverage.overall.skipped,
-    ) == (16800, 6064, 10736)
+        coverage.overall.functionality_gaps,
+        coverage.overall.intentional_constraints,
+    ) == (6064, 4646, 6090)
     assert {
         axis.name: {
             cell.name: (
-                cell.count.generated,
                 cell.count.supported,
-                cell.count.skipped,
+                cell.count.functionality_gaps,
+                cell.count.intentional_constraints,
             )
             for cell in axis.cells
         }
         for axis in coverage.axes
     } == {
         "operation": {
-            "invoke": (8400, 3032, 5368),
-            "resolve": (8400, 3032, 5368),
+            "invoke": (3032, 2323, 3045),
+            "resolve": (3032, 2323, 3045),
         },
         "operator": {
-            "array": (960, 566, 394),
-            "const_pointer": (960, 48, 912),
-            "optional": (960, 326, 634),
-            "pointer": (960, 48, 912),
-            "shared_pointer": (960, 108, 852),
-            "unique_pointer": (960, 108, 852),
-            "variant": (11040, 4860, 6180),
+            "array": (566, 148, 246),
+            "const_pointer": (48, 336, 576),
+            "optional": (326, 388, 246),
+            "pointer": (48, 336, 576),
+            "shared_pointer": (108, 756, 96),
+            "unique_pointer": (108, 756, 96),
+            "variant": (4860, 1926, 4254),
         },
         "container": {
-            "container_mixed": (3360, 1424, 1936),
-            "container_runtime": (3360, 1424, 1936),
-            "container_static": (3360, 896, 2464),
-            "runtime_container": (3360, 1424, 1936),
-            "static_container": (3360, 896, 2464),
+            "container_mixed": (1424, 1054, 882),
+            "container_runtime": (1424, 1054, 882),
+            "container_static": (896, 742, 1722),
+            "runtime_container": (1424, 1054, 882),
+            "static_container": (896, 742, 1722),
         },
         "scope": {
-            "external": (4200, 1584, 2616),
-            "shared": (4200, 1640, 2560),
-            "unique": (8400, 2840, 5560),
+            "external": (1584, 936, 1680),
+            "shared": (1640, 1410, 1150),
+            "unique": (2840, 2300, 3260),
         },
         "request strategy": {
-            "rvalue": (4200, 1420, 2780),
-            "stable": (8400, 3224, 5176),
-            "value": (4200, 1420, 2780),
+            "rvalue": (1420, 1150, 1630),
+            "stable": (3224, 2346, 2830),
+            "value": (1420, 1150, 1630),
+        },
+        "copyability": {
+            "copyable": (2268, 2976, 3716),
+            "non_copyable": (3796, 1670, 2374),
+        },
+        "movability": {
+            "movable": (5464, 4556, 2180),
+            "non_movable": (600, 90, 3910),
+        },
+        "depth": {
+            "1": (516, 0, 324),
+            "2": (5548, 4646, 5766),
         },
     }
     for axis in coverage.axes:
-        assert sum(cell.count.generated for cell in axis.cells) == 16800
         assert sum(cell.count.supported for cell in axis.cells) == 6064
-        assert sum(cell.count.skipped for cell in axis.cells) == 10736
-    assert sum(count for _, count in coverage.unsupported_reasons) == 10736
+        assert sum(cell.count.functionality_gaps for cell in axis.cells) == 4646
+        assert sum(
+            cell.count.intentional_constraints for cell in axis.cells
+        ) == 6090
+    assert {
+        disposition: sum(
+            count
+            for item_disposition, _, count
+            in coverage.limitations
+            if item_disposition is disposition
+        )
+        for disposition in LimitationDisposition
+    } == {
+        LimitationDisposition.KNOWN_GAP: 4646,
+        LimitationDisposition.INTENTIONAL_CONSTRAINT: 6090,
+    }
 
     report = render_dependency_composition_coverage(coverage)
-    assert "| 16800 | 6064 | 10736 |" in report
-    assert "| `variant` | 11040 | 4860 | 6180 |" in report
-    assert "## Unsupported Reasons" in report
+    assert "| 6064 | 4646 | 6090 |" in report
+    assert "| `variant` | 4860 | 1926 | 4254 |" in report
+    assert "## Functionality Gaps" in report
+    assert "## Intentional Constraints" in report
 
 
 def _composition_projection_structure(

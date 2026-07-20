@@ -26,55 +26,56 @@ recipes as the primary model. Recipes are an output of axis selection.
   generated shard and share only their fixture definitions.
 
 The registration family uses the application-wide registration and resolution
-axes below. Invocation has callable, dependency-provisioning,
-registration-mode, and container axes. Complete behavioral scenarios use their
-own scenario and container axes. Constructor detection is a separate family
-with backend, detection mode, and constructor-shape axes, plus an
-argument-storage and conversion-category sub-matrix. Family-local axes do not
-add irrelevant dimensions to other families.
+axes below. Invocation has callable, dependency-provisioning, registration-mode,
+and container axes. Complete behavioral scenarios use their own scenario and
+container axes. Constructor detection is a separate family with backend,
+detection mode, and constructor-shape axes, plus an argument-storage and
+conversion-category sub-matrix. Family-local axes do not add irrelevant
+dimensions to other families.
 
-Dependency request forms are the supported
-`shape x carrier x decoration` product. Shapes own the C++ type transformation,
-carriers select value or reference categories, and decorations wrap that result
-as plain, selected, or annotated requests. Each decoration explicitly lists the
-shape/carrier cells and test families for which it is supported. Constructor
-detection and templated invocation cases are derived from this product, while
-resolved types and provisioning recipes declare the same form identities. The
-shared contract rejects missing, extra, renamed, or duplicate product cells and
-requires every form in each applicable family.
-Family-local compatibility still applies after that selection; for example,
-annotated invocation excludes hybrid containers whose compile-time binding path
-cannot materialize the wrapper safely.
+Dependency request forms are the supported `shape x carrier x decoration`
+product. Shapes own the C++ type transformation, carriers select value or
+reference categories, and decorations wrap that result as plain, selected, or
+annotated requests. Each decoration explicitly lists the shape/carrier cells and
+test families for which it is supported. Constructor detection and templated
+invocation cases are derived from this product, while resolved types and
+provisioning recipes declare the same form identities. The shared contract
+rejects missing, extra, renamed, or duplicate product cells and requires every
+form in each applicable family. Family-local compatibility still applies after
+that selection; for example, annotated invocation excludes hybrid containers
+whose compile-time binding path cannot materialize the wrapper safely.
 
 Recursive dependency compositions are a separate shared type axis. Constructor
 detection projects each type into a one-argument constructor shape. Resolution
 and invocation model the full product of the same type with their container,
-scope, and request-strategy axes. The generated coverage report keeps every
-supported and unsupported cell explicit. C++ generation projects supported
-cells into a smaller witness set: the `full` profile executes every supported
-composition for resolve and invoke, and the `portable` profile executes every
-structural category. Both profiles additionally cover every feasible outer
-operator, container, scope, request-strategy, copyability, and movability
-combination for both operations. Unsupported cells are reported and contract
-tested. Exact stored wrappers use the request category selected by the scope
-rule, while a top-level raw pointer registers its leaf and requests the pointer
-value. This keeps carrier semantics out of this axis while still exercising
-both exact-wrapper resolution and the supported pointer conversion.
+scope, and request-strategy axes. The model classifies every case as supported
+behavior, a functionality gap, or an intentional constraint. C++ generation
+projects supported cases into a smaller witness set: the `full` profile executes
+every supported composition for resolve and invoke, and the `portable` profile
+executes every structural category. Both profiles additionally cover every
+feasible outer operator, container, scope, request-strategy, copyability, and
+movability combination for both operations. Aggregate tests pin each
+classification count. Functionality gaps and intentional constraints are not
+emitted as C++ tests. Exact stored wrappers use the request category selected by
+the scope rule, while a top-level raw pointer registers its leaf and requests
+the pointer value. This keeps carrier semantics out of this axis while still
+exercising both exact-wrapper resolution and the supported pointer conversion.
 
 Select the execution profile with `-DDINGO_MATRIX_PROFILE=full` or
-`-DDINGO_MATRIX_PROFILE=portable`. Local development defaults to `full`; CI
-runs it on one primary compiler and uses `portable` for portability jobs.
-Dependency-composition sources are balanced across four resolve and four
-invoke executables. Native CI enables `DINGO_MATRIX_TEST_AFTER_BUILD`, so each
-matrix executable runs immediately after linking and stops the build on a
-failure. Cross-compiled executables remain registered for their native runner.
+`-DDINGO_MATRIX_PROFILE=portable`. Local development defaults to `full`; CI runs
+it on selected primary GCC, Clang, and MSVC jobs and uses `portable` for the
+remaining portability jobs. Dependency-composition sources are balanced across
+four resolve and four invoke executables. Native CI enables
+`DINGO_MATRIX_TEST_AFTER_BUILD`, so each matrix executable runs immediately
+after linking and stops the build on a failure. Cross-compiled executables
+remain registered for their native runner.
 
 Shared-cyclical graphs use a dedicated compositional family. It crosses
 container implementation, registration mode, the value or `shared_ptr`
-representation of each node, and the dependency edge used in each direction.
-The edge catalog covers references, pointers, and all three `shared_ptr`
-request forms exposed by cyclical storage. Unsupported container/mode and
-storage/edge cells remain generated skips with an explicit reason.
+representation of each node, and the dependency edge used in each direction. The
+edge catalog covers references, pointers, and all three `shared_ptr` request
+forms exposed by cyclical storage. Unsupported container/mode and storage/edge
+cells remain generated skips with an explicit reason.
 
 Dependency provisionings are exhaustive registration recipes: scope, stored
 type, exposed type, exact form/resolved-type/feature cases, and registration
@@ -107,8 +108,8 @@ global support code.
 
 ### Matrix Family
 
-- `registration`: container registration, resolution, construction, and
-  lifetime coverage.
+- `registration`: container registration, resolution, construction, and lifetime
+  coverage.
 - `invoke`: callable dispatch across shared dependency provisionings and
   containers.
 - `scenario`: complete regression and parent-container behaviors across the
@@ -117,8 +118,8 @@ global support code.
   across constructor shapes, plus constructor-probe argument conversion
   selection.
 - `dependency_composition_resolve` and `dependency_composition_invoke`: the
-  shared recursive dependency type axis across representative registration
-  modes and storage scopes.
+  shared recursive dependency type axis across representative registration modes
+  and storage scopes.
 - `shared_cyclical`: real two-node cycles across independent container,
   registration-mode, node-storage, and directed dependency-edge axes.
 
@@ -156,9 +157,9 @@ global support code.
 
 Generic runtime regression scenarios are intentionally limited to
 `runtime_container<>` and `container<>`. Indexed, allocator, and custom-RTTI
-variants run only scenarios whose behavior depends on those configurations.
-This keeps regression coverage representative without multiplying unrelated
-template instantiations.
+variants run only scenarios whose behavior depends on those configurations. This
+keeps regression coverage representative without multiplying unrelated template
+instantiations.
 
 Negative compile-time checks stay in `test/lit`. The generated matrix covers
 valid behavior combinations.
@@ -180,11 +181,11 @@ fixture type needed by that case.
 
 ### Invoke Callable
 
-The invoke family covers inferred lambdas, explicit signatures,
-`std::function`, function pointers, static and non-static member functions,
-mutable and generic lambdas, ref-qualified and `noexcept` functors, move-only
-functors, multi-argument callables, keyed value and collection dependencies,
-and `std::move_only_function` when available.
+The invoke family covers inferred lambdas, explicit signatures, `std::function`,
+function pointers, static and non-static member functions, mutable and generic
+lambdas, ref-qualified and `noexcept` functors, move-only functors,
+multi-argument callables, keyed value and collection dependencies, and
+`std::move_only_function` when available.
 
 ### Invoke Dependency Shape
 
@@ -231,9 +232,9 @@ child container families in one behavioral case.
 - `shared`: resolution reuses the same stored value.
 - `shared_cyclical`: shared resolution with two-phase cycle support.
 
-`shared_cyclical` is consumed by its dedicated graph family rather than the
-flat registration matrix because a valid row requires two registrations and
-two directed dependency edges.
+`shared_cyclical` is consumed by its dedicated graph family rather than the flat
+registration matrix because a valid row requires two registrations and two
+directed dependency edges.
 
 ### Stored Type
 
@@ -345,11 +346,11 @@ two directed dependency edges.
 - `shape`: reports constructor kind and arity without retaining argument types.
 - `signature`: reports kind and arity and recovers the selected argument types.
 
-The constructor-shape axis covers values, pointers, lvalue and
-rvalue references, copy-only and move-only values, selected and annotated
-dependencies, incomplete references, aggregates, default construction, generic
-and ambiguous constructors, explicit constructors, initializer lists, and
-same-arity overloads.
+The constructor-shape axis covers values, pointers, lvalue and rvalue
+references, copy-only and move-only values, selected and annotated dependencies,
+incomplete references, aggregates, default construction, generic and ambiguous
+constructors, explicit constructors, initializer lists, and same-arity
+overloads.
 
 Defaulted, generic, ambiguous, initializer-list, and same-arity-overload shapes
 exercise detector behavior but do not describe independently resolvable
@@ -359,8 +360,8 @@ must declare at least one shared dependency form.
 The constructor argument-conversion sub-matrix crosses unique and shared
 argument storage with value, lvalue-reference, const-lvalue-reference,
 rvalue-reference, and pointer conversion categories. The pointer category only
-applies to unique storage, matching the supported constructor-probe shapes.
-Each conversion category references the same shared dependency-form catalog.
+applies to unique storage, matching the supported constructor-probe shapes. Each
+conversion category references the same shared dependency-form catalog.
 
 ## Filters
 
@@ -381,11 +382,10 @@ that product with their limitation reason. Dependency shapes own limitations
 that apply to their carrier/decorator combinations, so optional and variant
 value recovery are explicit without disabling supported reference forms. The
 shape probe records the Clang/MSVC conversion-instantiation limitation only for
-the affected outer wrapper structures.
-Representative nested standard and user-defined forwarding wrappers document
-the outer-wrapper recovery limitation. An unconstrained forwarding wrapper also
-records the separate shape-detection limitation caused by accepting the opaque
-probe.
+the affected outer wrapper structures. Representative nested standard and
+user-defined forwarding wrappers document the outer-wrapper recovery limitation.
+An unconstrained forwarding wrapper also records the separate shape-detection
+limitation caused by accepting the opaque probe.
 
 Standard wrapper combinations use a recursive composition model with regular,
 move-only, and copy-only leaves. Its operators mirror every non-identity
@@ -401,24 +401,25 @@ full product:
 The container axis reuses the core runtime, static, generic runtime/static, and
 mixed containers. The scope axis covers shared, unique, and external storage.
 Shared and external storage use a stable request; unique storage crosses value
-and rvalue requests. Static-only external cells remain in the product as explicit
-skips because external storage requires runtime registration. Mixed cells use a
-static anchor and register the composition at runtime, so they exercise both
-halves of the mixed container. The contract rejects missing product cells, so
-adding a leaf, operator, container, scope, or request strategy expands resolution
-and invocation without requiring hand-written wrapper cases.
+and rvalue requests. Static-only external cases remain in the model as an
+intentional constraint because external storage requires runtime registration.
+Mixed cells use a static anchor and register the composition at runtime, so they
+exercise both halves of the mixed container. The contract rejects missing
+product cells, so adding a leaf, operator, container, scope, or request strategy
+expands resolution and invocation without requiring hand-written wrapper cases.
 
-Every product cell is generated. Supported cells compile and execute; unsupported
-cells remain visible as skipped tests with a reason. Shared storage requires a
+Every product case is classified. Supported cases may be selected as direct C++
+tests; functionality gaps remain visible with a reason, and intentional
+constraints remain outside the support contract. Shared storage requires a
 movable composition. The current container also cannot publish an exact composed
 type when a raw or smart pointer is the outer wrapper around another wrapper, or
-when pointer-to-const normalization occurs inside a wrapper. These limitations do
-not disable supported stable inverse compositions such as
+when pointer-to-const normalization occurs inside a wrapper. These limitations
+do not disable supported stable inverse compositions such as
 `optional<shared_ptr<T>>` and `optional<unique_ptr<T>>`, or exact owning
-`variant<shared_ptr<T>, unique_ptr<T>>` requests. Owning optional requests with a
-composed operand and owning arrays of optionals remain explicit unsupported
-cells because resolution selects an inner conversion instead of materializing
-the exact outer type.
+`variant<shared_ptr<T>, unique_ptr<T>>` requests. Owning optional requests with
+a composed operand and owning arrays of optionals remain explicit functionality
+gaps because resolution selects an inner conversion instead of materializing the
+exact outer type.
 
 Operators declare positional resolution limitations alongside their type and
 copy/move rules. A limitation may select request strategies and operand operator
@@ -503,8 +504,8 @@ The generator should fail if:
   combination has no resolution row
 - an invoke callable requests a form unsupported by one of its provisionings
 - an invoke callable, provisioning, mode, or container has no compatible row
-- an invoke callable, provisioning, mode, or container axis contains
-  duplicate identities
+- an invoke callable, provisioning, mode, or container axis contains duplicate
+  identities
 - a constructor backend / detection mode shard does not contain every
   constructor shape
 - a constructor argument storage or conversion category has no compatible row
@@ -543,17 +544,17 @@ Dependency composition has four balanced executables per operation. Every
 executable has one implementation source and one runner containing its assigned
 rows; outer operator and container remain coverage axes rather than compilation
 boundaries. Generation also writes
-`build/test/generated/matrix/dependency-composition-coverage.md`. The report
-records generated, supported, and skipped cells by operation, operator,
-container, scope, and request strategy, followed by the unsupported-reason
-totals. These aggregates are contract-tested against the row catalog.
+`build/test/generated/matrix/dependency-composition-coverage.md`. This
+build-local diagnostic records supported cases, functionality gaps, and
+intentional constraints by operation, operator, container, scope, and request
+strategy. It also records how many supported cases the active profile tests
+directly. It is not committed; the aggregate tests are the stability contract.
 
 Behavioral scenarios retain executables named for their suites and
 implementation sources sharded by scenario. Their runners are batched by
 executable. A suite may combine registration and scenario sources; for example,
-`nested_container` keeps native parent resolution in the registration family
-and adds the standalone cross-parent scenario shards to the same test
-executable.
+`nested_container` keeps native parent resolution in the registration family and
+adds the standalone cross-parent scenario shards to the same test executable.
 
 Python selects, validates, names, and shards valid rows. Generic row behavior
 lives in typed C++ policies, while complete behavioral and regression cases live

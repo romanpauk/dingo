@@ -20,6 +20,11 @@ class MixedRegistrationPlacement(Enum):
     RUNTIME = "runtime"
 
 
+class LimitationDisposition(Enum):
+    KNOWN_GAP = "known_gap"
+    INTENTIONAL_CONSTRAINT = "intentional_constraint"
+
+
 @dataclass(frozen=True, slots=True)
 class Feature:
     name: str
@@ -175,6 +180,7 @@ class DependencyShape:
 class DependencyCompositionResolutionLimitation:
     position: str
     reason: str
+    disposition: LimitationDisposition
     request_strategies: frozenset[str] = frozenset()
     operand_operators: frozenset[str] = frozenset()
 
@@ -195,6 +201,7 @@ class DependencyCompositionOperator:
     movability: str
     request_expression: str
     supported_request_strategies: frozenset[str]
+    unsupported_request_disposition: LimitationDisposition | None = None
     resolution_limitations: tuple[
         DependencyCompositionResolutionLimitation, ...
     ] = ()

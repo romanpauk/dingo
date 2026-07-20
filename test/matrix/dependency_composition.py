@@ -42,6 +42,7 @@ from schema import (
     DependencyCompositionRequestStrategy,
     DependencyCompositionResolutionLimitation,
     GeneratedExecutable,
+    LimitationDisposition,
     MixedRegistrationPlacement,
     RegistrationSpec,
     ScopeSpec,
@@ -60,8 +61,10 @@ class DependencyCompositionScopeRule:
     request_strategies: frozenset[str]
     requires_movable: bool = False
     non_movable_reason: str | None = None
+    non_movable_disposition: LimitationDisposition | None = None
     requires_runtime_registration: bool = False
     static_registration_reason: str | None = None
+    static_registration_disposition: LimitationDisposition | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +79,7 @@ class DependencyCompositionRow:
     name: str
     supported: bool
     unsupported_reason: str | None
+    unsupported_disposition: LimitationDisposition | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,9 +96,9 @@ class GeneratedDependencyCompositionCase:
 
 @dataclass(frozen=True, slots=True)
 class DependencyCompositionCoverageCount:
-    generated: int
     supported: int
-    skipped: int
+    functionality_gaps: int
+    intentional_constraints: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,7 +117,9 @@ class DependencyCompositionCoverageAxis:
 class DependencyCompositionCoverage:
     overall: DependencyCompositionCoverageCount
     axes: tuple[DependencyCompositionCoverageAxis, ...]
-    unsupported_reasons: tuple[tuple[str, int], ...]
+    limitations: tuple[
+        tuple[LimitationDisposition, str, int], ...
+    ]
 
 
 DEPENDENCY_COMPOSITION_OPERATIONS = (
@@ -150,6 +156,9 @@ DEPENDENCY_COMPOSITION_SCOPE_RULES = (
             "shared storage cannot materialize a composition that is not "
             "movable"
         ),
+        non_movable_disposition=(
+            LimitationDisposition.INTENTIONAL_CONSTRAINT
+        ),
     ),
     DependencyCompositionScopeRule(
         scope="unique",
@@ -159,6 +168,9 @@ DEPENDENCY_COMPOSITION_SCOPE_RULES = (
             "unique storage cannot materialize a composition that is not "
             "movable"
         ),
+        non_movable_disposition=(
+            LimitationDisposition.INTENTIONAL_CONSTRAINT
+        ),
     ),
     DependencyCompositionScopeRule(
         scope="external",
@@ -167,6 +179,9 @@ DEPENDENCY_COMPOSITION_SCOPE_RULES = (
         static_registration_reason=(
             "external storage requires runtime registration and cannot be "
             "provided by a static-only container"
+        ),
+        static_registration_disposition=(
+            LimitationDisposition.INTENTIONAL_CONSTRAINT
         ),
     ),
 )
@@ -182,10 +197,10 @@ ProjectionObligation = tuple[str, ...]
 DependencyCompositionShardKey = tuple[str, str, str]
 
 
-def _operator_limitation_reason(
+def _operator_limitation(
     composition: DependencyComposition,
     request_strategy: DependencyCompositionRequestStrategy,
-) -> str | None:
+) -> DependencyCompositionResolutionLimitation | None:
     def matches_filters(
         node: DependencyComposition,
         limitation: DependencyCompositionResolutionLimitation,
@@ -212,25 +227,27 @@ def _operator_limitation_reason(
             )
             and matches_filters(composition, limitation)
         ):
-            return limitation.reason
+            return limitation
 
-    def nested_limitation(node: DependencyComposition) -> str | None:
+    def nested_limitation(
+        node: DependencyComposition,
+    ) -> DependencyCompositionResolutionLimitation | None:
         if node.operator is not None:
             for limitation in node.operator.resolution_limitations:
                 if limitation.position == "nested" and matches_filters(
                     node, limitation
                 ):
-                    return limitation.reason
+                    return limitation
         for operand in node.operands:
-            reason = nested_limitation(operand)
-            if reason is not None:
-                return reason
+            limitation = nested_limitation(operand)
+            if limitation is not None:
+                return limitation
         return None
 
     for operand in composition.operands:
-        reason = nested_limitation(operand)
-        if reason is not None:
-            return reason
+        limitation = nested_limitation(operand)
+        if limitation is not None:
+            return limitation
     return None
 
 
@@ -308,6 +325,13 @@ def generate_dependency_composition_rows(
     for rule in scope_rules:
         if rule.requires_movable != (
             rule.non_movable_reason is not None
+            and rule.non_movable_disposition is not None
+        ) or (
+            rule.non_movable_disposition is not None
+            and not isinstance(
+                rule.non_movable_disposition,
+                LimitationDisposition,
+            )
         ):
             raise ValueError(
                 "dependency composition scope rule "
@@ -315,6 +339,13 @@ def generate_dependency_composition_rows(
             )
         if rule.requires_runtime_registration != (
             rule.static_registration_reason is not None
+            and rule.static_registration_disposition is not None
+        ) or (
+            rule.static_registration_disposition is not None
+            and not isinstance(
+                rule.static_registration_disposition,
+                LimitationDisposition,
+            )
         ):
             raise ValueError(
                 "dependency composition scope rule "
@@ -344,6 +375,7 @@ def generate_dependency_composition_rows(
                     ]
                     for composition in compositions:
                         unsupported_reason = None
+                        unsupported_disposition = None
                         if (
                             scope_rule.requires_runtime_registration
                             and container_mode == "static"
@@ -351,11 +383,17 @@ def generate_dependency_composition_rows(
                             unsupported_reason = (
                                 scope_rule.static_registration_reason
                             )
+                            unsupported_disposition = (
+                                scope_rule.static_registration_disposition
+                            )
                         elif (
                             scope_rule.requires_movable
                             and not composition.movable
                         ):
                             unsupported_reason = scope_rule.non_movable_reason
+                            unsupported_disposition = (
+                                scope_rule.non_movable_disposition
+                            )
                         elif (
                             composition.operator is not None
                             and request_strategy.name
@@ -365,10 +403,25 @@ def generate_dependency_composition_rows(
                                 f"{composition.operator.name} compositions do "
                                 f"not support {request_strategy.name} requests"
                             )
+                            unsupported_disposition = (
+                                composition.operator.unsupported_request_disposition
+                            )
                         else:
-                            unsupported_reason = _operator_limitation_reason(
+                            limitation = _operator_limitation(
                                 composition,
                                 request_strategy,
+                            )
+                            if limitation is not None:
+                                unsupported_reason = limitation.reason
+                                unsupported_disposition = (
+                                    limitation.disposition
+                                )
+                        if (unsupported_reason is None) != (
+                            unsupported_disposition is None
+                        ):
+                            raise ValueError(
+                                "dependency composition limitation has an "
+                                "incomplete disposition"
                             )
                         rows_list.append(
                             DependencyCompositionRow(
@@ -393,6 +446,9 @@ def generate_dependency_composition_rows(
                                 ),
                                 supported=unsupported_reason is None,
                                 unsupported_reason=unsupported_reason,
+                                unsupported_disposition=(
+                                    unsupported_disposition
+                                ),
                             )
                         )
     rows = tuple(rows_list)
@@ -577,12 +633,26 @@ def project_dependency_composition_rows(
 def _coverage_count(
     rows: tuple[DependencyCompositionRow, ...],
 ) -> DependencyCompositionCoverageCount:
-    supported = sum(row.supported for row in rows)
-    return DependencyCompositionCoverageCount(
-        generated=len(rows),
-        supported=supported,
-        skipped=len(rows) - supported,
+    count = DependencyCompositionCoverageCount(
+        supported=sum(row.supported for row in rows),
+        functionality_gaps=sum(
+            row.unsupported_disposition is LimitationDisposition.KNOWN_GAP
+            for row in rows
+        ),
+        intentional_constraints=sum(
+            row.unsupported_disposition
+            is LimitationDisposition.INTENTIONAL_CONSTRAINT
+            for row in rows
+        ),
     )
+    if (
+        count.supported
+        + count.functionality_gaps
+        + count.intentional_constraints
+        != len(rows)
+    ):
+        raise ValueError("composition rows have an incomplete support category")
+    return count
 
 
 def build_dependency_composition_coverage(
@@ -599,6 +669,9 @@ def build_dependency_composition_coverage(
             "container",
             "scope",
             "request strategy",
+            "copyability",
+            "movability",
+            "depth",
         )
     }
     for row in rows:
@@ -612,6 +685,13 @@ def build_dependency_composition_coverage(
             "container": row.container.name,
             "scope": row.scope.name,
             "request strategy": row.request_strategy.name,
+            "copyability": (
+                "copyable" if row.composition.copyable else "non_copyable"
+            ),
+            "movability": (
+                "movable" if row.composition.movable else "non_movable"
+            ),
+            "depth": str(dependency_composition_depth(row.composition)),
         }
         for axis, value in values.items():
             grouped[axis][value].append(row)
@@ -629,18 +709,35 @@ def build_dependency_composition_coverage(
         )
         for axis in grouped
     )
-    unsupported_reasons = Counter(
-        row.unsupported_reason for row in rows if not row.supported
+    limitations = Counter(
+        (row.unsupported_disposition, row.unsupported_reason)
+        for row in rows
+        if not row.supported
     )
-    if None in unsupported_reasons:
-        raise ValueError("unsupported composition row has no reason")
+    if any(
+        disposition is None or reason is None
+        for disposition, reason in limitations
+    ):
+        raise ValueError(
+            "unsupported composition row has an incomplete disposition"
+        )
+    if any(
+        row.unsupported_disposition is not None
+        or row.unsupported_reason is not None
+        for row in rows
+        if row.supported
+    ):
+        raise ValueError("supported composition row has a limitation")
     return DependencyCompositionCoverage(
         overall=_coverage_count(rows),
         axes=axes,
-        unsupported_reasons=tuple(
-            (reason, count)
-            for reason, count in sorted(unsupported_reasons.items())
-            if reason is not None
+        limitations=tuple(
+            (disposition, reason, count)
+            for (disposition, reason), count in sorted(
+                limitations.items(),
+                key=lambda item: (item[0][0].value, item[0][1]),
+            )
+            if disposition is not None and reason is not None
         ),
     )
 
@@ -654,17 +751,18 @@ def render_dependency_composition_coverage(
     lines = [
         "# Dependency Composition Coverage",
         "",
-        "This file is generated by `test/matrix/generate.py`.",
-        "Counts include both resolution and invocation operations.",
+        "This summary separates supported behavior from functionality gaps and ",
+        "intentional constraints. Counts include both resolution and invocation ",
+        "operations.",
         "",
-        "## Overall",
+        "## Support Status",
         "",
-        "| Generated | Supported | Skipped |",
+        "| Supported Cases | Functionality-gap Cases | Intentional-constraint Cases |",
         "| ---: | ---: | ---: |",
         (
-            f"| {coverage.overall.generated} | "
-            f"{coverage.overall.supported} | "
-            f"{coverage.overall.skipped} |"
+            f"| {coverage.overall.supported} | "
+            f"{coverage.overall.functionality_gaps} | "
+            f"{coverage.overall.intentional_constraints} |"
         ),
     ]
     if profile is not None or compiled_rows is not None:
@@ -680,17 +778,19 @@ def render_dependency_composition_coverage(
         lines.extend(
             (
                 "",
-                "## Compiled Projection",
+                "## Tested Supported Cases",
                 "",
-                "The exhaustive counts above remain the compatibility model. "
-                "Only supported witnesses selected by the active profile are "
-                "emitted as C++ tests; unsupported cells remain explicit in "
-                "this report.",
+                "Each profile emits a representative projection of supported ",
+                "cases as C++ tests. Supported cases not selected directly are ",
+                "covered by the profile's structural and axis obligations.",
                 "",
-                "| Profile | Compiled Supported Rows |",
-                "| --- | ---: |",
-                f"| `{profile}` | {compiled_rows} |",
+                "| Profile | Directly Tested | Supported Not Directly Tested |",
+                "| --- | ---: | ---: |",
             )
+        )
+        lines.append(
+            f"| `{profile}` | {compiled_rows} | "
+            f"{coverage.overall.supported - compiled_rows} |"
         )
     for axis in coverage.axes:
         lines.extend(
@@ -698,28 +798,52 @@ def render_dependency_composition_coverage(
                 "",
                 f"## By {axis.name.title()}",
                 "",
-                f"| {axis.name.title()} | Generated | Supported | Skipped |",
+                f"| {axis.name.title()} | Supported | Functionality Gap | "
+                "Intentional Constraint |",
                 "| --- | ---: | ---: | ---: |",
             )
         )
         lines.extend(
-            f"| `{cell.name}` | {cell.count.generated} | "
-            f"{cell.count.supported} | {cell.count.skipped} |"
+            f"| `{cell.name}` | {cell.count.supported} | "
+            f"{cell.count.functionality_gaps} | "
+            f"{cell.count.intentional_constraints} |"
             for cell in axis.cells
         )
-    lines.extend(
+    for disposition, title, description in (
         (
-            "",
-            "## Unsupported Reasons",
-            "",
-            "| Reason | Skipped |",
-            "| --- | ---: |",
+            LimitationDisposition.KNOWN_GAP,
+            "Functionality Gaps",
+            (
+                "These intended behaviors cannot currently be tested because "
+                "of implementation limitations that should be addressed."
+            ),
+        ),
+        (
+            LimitationDisposition.INTENTIONAL_CONSTRAINT,
+            "Intentional Constraints",
+            (
+                "These cases are outside the declared ownership or request "
+                "model and are not implementation backlog."
+            ),
+        ),
+    ):
+        lines.extend(
+            (
+                "",
+                f"## {title}",
+                "",
+                description,
+                "",
+                "| Reason | Affected Cells |",
+                "| --- | ---: |",
+            )
         )
-    )
-    lines.extend(
-        f"| {_escape_markdown_cell(reason)} | {count} |"
-        for reason, count in coverage.unsupported_reasons
-    )
+        lines.extend(
+            f"| {_escape_markdown_cell(reason)} | {count} |"
+            for item_disposition, reason, count
+            in coverage.limitations
+            if item_disposition is disposition
+        )
     return "\n".join(lines) + "\n"
 
 

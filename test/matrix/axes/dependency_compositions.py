@@ -19,6 +19,7 @@ from schema import (
     DependencyCompositionOperator,
     DependencyCompositionRequestStrategy,
     DependencyCompositionResolutionLimitation,
+    LimitationDisposition,
 )
 
 
@@ -51,6 +52,7 @@ _ALL_REQUEST_STRATEGIES = frozenset(
 _NESTED_RAW_POINTER_REQUEST_LIMITATION = (
     DependencyCompositionResolutionLimitation(
         position="request_composed_operand",
+        disposition=LimitationDisposition.KNOWN_GAP,
         reason=(
             "container storage does not publish nested raw-pointer "
             "compositions as exact wrapper requests"
@@ -60,6 +62,7 @@ _NESTED_RAW_POINTER_REQUEST_LIMITATION = (
 _NESTED_SMART_POINTER_REQUEST_LIMITATION = (
     DependencyCompositionResolutionLimitation(
         position="request_composed_operand",
+        disposition=LimitationDisposition.KNOWN_GAP,
         reason=(
             "nested smart-pointer storage exposes inner conversion "
             "capabilities that cannot materialize the exact composition"
@@ -69,6 +72,7 @@ _NESTED_SMART_POINTER_REQUEST_LIMITATION = (
 _NESTED_CONST_POINTER_LIMITATION = (
     DependencyCompositionResolutionLimitation(
         position="nested",
+        disposition=LimitationDisposition.KNOWN_GAP,
         reason=(
             "wrapper storage normalizes a nested pointer-to-const and cannot "
             "publish the exact composed type"
@@ -78,6 +82,7 @@ _NESTED_CONST_POINTER_LIMITATION = (
 _OWNING_ARRAY_OPTIONAL_REQUEST_LIMITATION = (
     DependencyCompositionResolutionLimitation(
         position="request_composed_operand",
+        disposition=LimitationDisposition.KNOWN_GAP,
         reason=(
             "owning array requests use constructor-shape materialization and "
             "cannot construct an optional element"
@@ -89,6 +94,7 @@ _OWNING_ARRAY_OPTIONAL_REQUEST_LIMITATION = (
 _OWNING_OPTIONAL_COMPOSED_REQUEST_LIMITATION = (
     DependencyCompositionResolutionLimitation(
         position="request_composed_operand",
+        disposition=LimitationDisposition.KNOWN_GAP,
         reason=(
             "owning optional requests containing a composed dependency are "
             "not published as exact outer conversions"
@@ -105,6 +111,9 @@ DEPENDENCY_COMPOSITION_OPERATORS = (
         movability="always",
         request_expression="{0}",
         supported_request_strategies=_STABLE_REQUEST,
+        unsupported_request_disposition=(
+            LimitationDisposition.INTENTIONAL_CONSTRAINT
+        ),
         resolution_limitations=(_NESTED_RAW_POINTER_REQUEST_LIMITATION,),
     ),
     DependencyCompositionOperator(
@@ -115,6 +124,9 @@ DEPENDENCY_COMPOSITION_OPERATORS = (
         movability="always",
         request_expression="{0}",
         supported_request_strategies=_STABLE_REQUEST,
+        unsupported_request_disposition=(
+            LimitationDisposition.INTENTIONAL_CONSTRAINT
+        ),
         resolution_limitations=(
             _NESTED_RAW_POINTER_REQUEST_LIMITATION,
             _NESTED_CONST_POINTER_LIMITATION,
@@ -473,6 +485,22 @@ def validate_dependency_compositions(
                 f"dependency composition operator {operator.name} has an "
                 "invalid request strategy"
             )
+        has_unsupported_requests = (
+            operator.supported_request_strategies != request_strategy_names
+        )
+        if has_unsupported_requests != (
+            operator.unsupported_request_disposition is not None
+        ) or (
+            operator.unsupported_request_disposition is not None
+            and not isinstance(
+                operator.unsupported_request_disposition,
+                LimitationDisposition,
+            )
+        ):
+            raise ValueError(
+                f"dependency composition operator {operator.name} has an "
+                "incomplete unsupported request disposition"
+            )
         limitation_keys = [
             (
                 limitation.position,
@@ -484,6 +512,10 @@ def validate_dependency_compositions(
         if any(
             limitation.position not in resolution_limitation_positions
             or not limitation.reason
+            or not isinstance(
+                limitation.disposition,
+                LimitationDisposition,
+            )
             or not limitation.request_strategies <= request_strategy_names
             or not limitation.operand_operators <= {
                 candidate.name for candidate in operators
