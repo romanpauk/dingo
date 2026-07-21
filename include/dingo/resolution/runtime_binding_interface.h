@@ -27,6 +27,10 @@ template <typename T> struct request_lookup_type {
   using type = rebind_leaf_t<T, runtime_type>;
 };
 
+template <typename T> struct request_lookup_type<const T *> {
+  using type = rebind_leaf_t<T *, runtime_type>;
+};
+
 template <typename T> struct request_lookup_type<const T &> {
   using type = rebind_leaf_t<T &, runtime_type>;
 };

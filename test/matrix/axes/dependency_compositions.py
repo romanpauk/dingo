@@ -69,16 +69,6 @@ _NESTED_SMART_POINTER_REQUEST_LIMITATION = (
         ),
     )
 )
-_NESTED_CONST_POINTER_LIMITATION = (
-    DependencyCompositionResolutionLimitation(
-        position="nested",
-        disposition=LimitationDisposition.KNOWN_GAP,
-        reason=(
-            "wrapper storage normalizes a nested pointer-to-const and cannot "
-            "publish the exact composed type"
-        ),
-    )
-)
 _OWNING_ARRAY_OPTIONAL_REQUEST_LIMITATION = (
     DependencyCompositionResolutionLimitation(
         position="request_composed_operand",
@@ -118,7 +108,6 @@ DEPENDENCY_COMPOSITION_OPERATORS = (
         ),
         resolution_limitations=(
             _NESTED_RAW_POINTER_REQUEST_LIMITATION,
-            _NESTED_CONST_POINTER_LIMITATION,
         ),
     ),
     DependencyCompositionOperator(

@@ -18,22 +18,39 @@ set(DINGO_MATRIX_GENERATOR
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/generate.py")
 if(MSVC)
     set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT 12)
-    if(MSVC_VERSION GREATER_EQUAL 1950 AND
-            CMAKE_GENERATOR_PLATFORM STREQUAL "x64")
-        # MSVC crashes while instantiating these otherwise-supported projected cases.
+    if(MSVC_VERSION LESS 1950)
+        # VS2022 crashes in CloseTypeServerPDB while instantiating these
+        # otherwise-supported projected cases on x64 and ARM64.
+        set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_DISABLED_ARGS
+            --dependency-composition-disable-case
+            invoke:runtime_container_unique_value_array_unique_pointer_copy_only
+            --dependency-composition-disable-case
+            resolve:runtime_container_unique_value_array_unique_pointer_copy_only)
+    else()
+        # VS2026 crashes while instantiating this otherwise-supported
+        # projected case on x64 and ARM64.
         set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_DISABLED_ARGS
             --dependency-composition-disable-case
             invoke:runtime_container_unique_value_array_shared_pointer_copy_only
             --dependency-composition-disable-case
             resolve:runtime_container_unique_value_array_shared_pointer_copy_only)
 
-        # To retry these projected cases after a toolset update, comment out the
-        # DISABLED_ARGS assignment above. To identify any future crashing row,
-        # uncomment these lines after its failing executable is known.
-        # list(APPEND DINGO_MATRIX_DEPENDENCY_COMPOSITION_DIAGNOSTIC_ARGS
-        #     --dependency-composition-isolate-executable invoke:4
-        #     --dependency-composition-isolate-executable resolve:4)
+        if(CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
+            # The ARM64 compiler additionally crashes on this projected case.
+            list(APPEND DINGO_MATRIX_DEPENDENCY_COMPOSITION_DISABLED_ARGS
+                --dependency-composition-disable-case
+                invoke:runtime_container_unique_value_array_unique_pointer_copy_only
+                --dependency-composition-disable-case
+                resolve:runtime_container_unique_value_array_unique_pointer_copy_only)
+        endif()
     endif()
+
+    # To retry the projected cases after a toolset update, comment out the
+    # relevant DISABLED_ARGS entries above. To identify any future crashing
+    # row, uncomment these lines after its failing executable is known.
+    # list(APPEND DINGO_MATRIX_DEPENDENCY_COMPOSITION_DIAGNOSTIC_ARGS
+    #     --dependency-composition-isolate-executable invoke:4
+    #     --dependency-composition-isolate-executable resolve:4)
 else()
     set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT 0)
 endif()
