@@ -78,7 +78,8 @@ struct storage_traits<shared_cyclical, std::shared_ptr<Type>, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
-  using value_types = type_list<std::shared_ptr<U>>;
+  using value_types = type_list<>;
+  using copy_value_types = type_list<std::shared_ptr<U>>;
   using lvalue_reference_types = type_list<U &, std::shared_ptr<U> &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, std::shared_ptr<U> *>;
@@ -111,7 +112,14 @@ static constexpr bool is_virtual_base_v = is_virtual_base<Base, Derived>::value;
 namespace detail {
 template <typename Type, typename U>
 struct conversions<shared_cyclical, Type, U>
-    : type_storage_traits<shared_cyclical, Type, U> {};
+    : type_storage_traits<shared_cyclical, Type, U> {
+private:
+  using base = type_storage_traits<shared_cyclical, Type, U>;
+
+public:
+  using copy_value_types = type_list_cat_t<type_list<runtime_interface>,
+                                           typename base::copy_value_types>;
+};
 
 template <typename Context, typename Fn, typename = void>
 struct has_on_rollback : std::false_type {};

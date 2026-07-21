@@ -588,8 +588,8 @@ struct type_conversion<
                        detail::unqualified_t<
                            detail::source_value_type_t<SourceCapability>>>>> {
   template <typename Factory, typename Context, typename Capability>
-  static Target &apply(Factory &, Context &, Capability &&source,
-                       type_descriptor, type_descriptor) {
+  static decltype(auto) apply(Factory &, Context &, Capability &&source,
+                              type_descriptor, type_descriptor) {
     return detail::materialized_reference(source);
   }
 };
@@ -665,7 +665,7 @@ struct type_conversion<
   template <typename Factory, typename Context, typename Capability>
   static Target *apply(Factory &, Context &, Capability &&source,
                        type_descriptor, type_descriptor) {
-    return std::addressof(detail::materialized_reference(source));
+    return detail::materialized_pointer(source);
   }
 };
 
@@ -989,14 +989,22 @@ struct type_conversion<
 template <typename Target, typename Source>
 struct type_conversion<
     Target, detail::pointer_source<Source>,
-    std::enable_if_t<!is_pointer_like_type_v<Target> &&
-                     !std::is_pointer_v<Target> &&
+    std::enable_if_t<!std::is_pointer_v<Target> &&
                      !std::is_array_v<std::remove_reference_t<Target>> &&
-                     !is_alternative_type_v<Source>>> {
+                     !is_alternative_type_v<Source> &&
+                     std::is_convertible_v<
+                         Source *, std::add_pointer_t<std::add_const_t<
+                                       std::remove_reference_t<Target>>>>>> {
   template <typename Factory, typename Context, typename SourceCapability>
-  static Target &apply(Factory &, Context &, SourceCapability &&source,
-                       type_descriptor, type_descriptor) {
-    return detail::materialized_reference(source);
+  static decltype(auto) apply(Factory &, Context &, SourceCapability &&source,
+                              type_descriptor, type_descriptor) {
+    using target_type = std::remove_reference_t<Target>;
+    if constexpr (std::is_const_v<Source>) {
+      return static_cast<const target_type &>(
+          detail::materialized_reference(source));
+    } else {
+      return static_cast<target_type &>(detail::materialized_reference(source));
+    }
   }
 };
 

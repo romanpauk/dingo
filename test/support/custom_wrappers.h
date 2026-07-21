@@ -257,7 +257,8 @@ struct storage_traits<shared, test_shared<T>, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = true;
 
-  using value_types = type_list<U, test_shared<U>>;
+  using value_types = type_list<>;
+  using copy_value_types = type_list<U, test_shared<U>>;
   using lvalue_reference_types = type_list<U &, test_shared<U> &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, test_shared<U> *>;
@@ -269,7 +270,8 @@ struct storage_traits<external, test_shared<T>, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = true;
 
-  using value_types = type_list<test_shared<U>>;
+  using value_types = type_list<>;
+  using copy_value_types = type_list<test_shared<U>>;
   using lvalue_reference_types = type_list<U &, test_shared<U> &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, test_shared<U> *>;
@@ -294,7 +296,8 @@ struct storage_traits<shared, test_unique<T>, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = true;
 
-  using value_types = type_list<U>;
+  using value_types = type_list<>;
+  using copy_value_types = type_list<U>;
   using lvalue_reference_types = type_list<U &, test_unique<U> &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, test_unique<U> *>;

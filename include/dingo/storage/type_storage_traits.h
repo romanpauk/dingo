@@ -11,6 +11,7 @@
 
 #include <dingo/resolution/recursion_guard.h>
 #include <dingo/storage/materialized_source.h>
+#include <dingo/type/rebind_type.h>
 #include <dingo/type/type_list.h>
 #include <dingo/type/type_traits.h>
 
@@ -57,6 +58,7 @@ struct storage_materialization_traits {
 template <typename StorageTag, typename Type, typename U, typename = void>
 struct resolution_traits {
   using value_types = type_list<>;
+  using copy_value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<>;
@@ -64,10 +66,23 @@ struct resolution_traits {
 };
 
 namespace detail {
+template <typename Traits, typename = void> struct copy_value_types {
+  using type = type_list<>;
+};
+
+template <typename Traits>
+struct copy_value_types<Traits,
+                        std::void_t<typename Traits::copy_value_types>> {
+  using type = typename Traits::copy_value_types;
+};
+
 template <typename AccessTraits, typename ResolutionTraits>
 struct combined_storage_types {
   using value_types = type_list_cat_t<typename AccessTraits::value_types,
                                       typename ResolutionTraits::value_types>;
+  using copy_value_types =
+      type_list_cat_t<typename copy_value_types<AccessTraits>::type,
+                      typename copy_value_types<ResolutionTraits>::type>;
   using lvalue_reference_types =
       type_list_cat_t<typename AccessTraits::lvalue_reference_types,
                       typename ResolutionTraits::lvalue_reference_types>;
@@ -84,6 +99,143 @@ struct combined_storage_types {
 
 template <typename T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
+
+template <typename Capability, typename ExactLeaf>
+struct exact_capability_type {
+private:
+  using outer = outer_traits<Capability>;
+  static constexpr bool is_runtime_interface =
+      std::is_same_v<typename outer::type, runtime_interface>;
+  using rebound = wrapper_rebind_leaf_t<typename outer::type, ExactLeaf>;
+  using exact_type =
+      std::conditional_t<std::is_reference_v<Capability> ||
+                             std::is_pointer_v<remove_cvref_t<Capability>>,
+                         rebound, std::remove_cv_t<rebound>>;
+
+public:
+  using type = std::conditional_t<
+      is_runtime_interface, Capability,
+      typename outer::template rebind_t<exact_lookup<exact_type>>>;
+};
+
+template <typename Types, typename ExactLeaf> struct exact_capability_types;
+
+template <typename ExactLeaf, typename... Types>
+struct exact_capability_types<type_list<Types...>, ExactLeaf> {
+  using type =
+      type_list<typename exact_capability_type<Types, ExactLeaf>::type...>;
+};
+
+template <typename Types, typename ExactLeaf>
+using exact_capability_types_t =
+    typename exact_capability_types<Types, ExactLeaf>::type;
+
+template <typename Capability, typename Interface>
+struct runtime_interface_capability {
+private:
+  using outer = outer_traits<Capability>;
+  static constexpr bool is_runtime_interface =
+      std::is_same_v<typename outer::type, runtime_interface>;
+  static constexpr bool supports_exact_interface =
+      type_traits<Interface>::enabled && !std::is_pointer_v<Interface>;
+  using resolved =
+      typename outer::template rebind_t<std::remove_cv_t<Interface>>;
+
+public:
+  using type =
+      std::conditional_t<is_runtime_interface,
+                         std::conditional_t<supports_exact_interface,
+                                            type_list<resolved>, type_list<>>,
+                         type_list<Capability>>;
+};
+
+template <typename Types, typename Interface>
+struct runtime_interface_capabilities;
+
+template <typename Interface, typename... Types>
+struct runtime_interface_capabilities<type_list<Types...>, Interface> {
+  using type = type_list_cat_t<
+      typename runtime_interface_capability<Types, Interface>::type...>;
+};
+
+template <typename Types, typename Interface>
+using runtime_interface_capabilities_t =
+    typename runtime_interface_capabilities<Types, Interface>::type;
+
+template <typename Types, typename Interface> struct copyable_capabilities;
+
+template <typename Interface, typename... Types>
+struct copyable_capabilities<type_list<Types...>, Interface> {
+  template <typename Capability>
+  using copyable_type = std::conditional_t<
+      is_copy_constructible_v<resolved_type_t<Capability, Interface>>,
+      type_list<Capability>, type_list<>>;
+
+  using type = type_list_cat_t<copyable_type<Types>...>;
+};
+
+template <typename Types, typename Interface>
+using copyable_capabilities_t =
+    typename copyable_capabilities<Types, Interface>::type;
+
+template <bool PublishesLeafCapabilities, typename Types, typename ExactLeaf>
+struct storage_capability_types {
+  using type = exact_capability_types_t<Types, ExactLeaf>;
+};
+
+template <typename Types, typename ExactLeaf>
+struct storage_capability_types<true, Types, ExactLeaf> {
+  using type = Types;
+};
+
+template <typename Interface, typename Storage>
+struct binding_capability_types {
+private:
+  using conversions = typename Storage::conversions;
+  using stored_type = remove_cvref_t<typename Storage::type>;
+  using stored_pointee = std::remove_pointer_t<stored_type>;
+  using generic_pointer_type = resolved_type_t<runtime_type *, Interface>;
+
+  static constexpr bool has_pointer_source = std::is_pointer_v<stored_type>;
+  static constexpr bool publishes_leaf_capabilities =
+      !has_pointer_source ||
+      std::is_convertible_v<stored_type, generic_pointer_type>;
+
+  template <typename Types>
+  using storage_capabilities =
+      typename storage_capability_types<publishes_leaf_capabilities, Types,
+                                        stored_pointee>::type;
+
+  template <typename Types>
+  using declared_capabilities =
+      runtime_interface_capabilities_t<storage_capabilities<Types>, Interface>;
+
+  using exact_lvalue_reference_types =
+      std::conditional_t<conversions::is_stable &&
+                             type_traits<Interface>::enabled &&
+                             !std::is_pointer_v<Interface>,
+                         type_list<Interface &>, type_list<>>;
+  using exact_pointer_types =
+      std::conditional_t<conversions::is_stable &&
+                             type_traits<Interface>::enabled &&
+                             !std::is_pointer_v<Interface>,
+                         type_list<Interface *>, type_list<>>;
+  using copy_value_types = declared_capabilities<
+      typename detail::copy_value_types<conversions>::type>;
+
+public:
+  using value_types =
+      type_list_cat_t<declared_capabilities<typename conversions::value_types>,
+                      copyable_capabilities_t<copy_value_types, Interface>>;
+  using lvalue_reference_types = type_list_cat_t<
+      exact_lvalue_reference_types,
+      declared_capabilities<typename conversions::lvalue_reference_types>>;
+  using rvalue_reference_types =
+      declared_capabilities<typename conversions::rvalue_reference_types>;
+  using pointer_types = type_list_cat_t<
+      exact_pointer_types,
+      declared_capabilities<typename conversions::pointer_types>>;
+};
 
 template <typename T, typename List> struct has_distinct_conversion_type;
 

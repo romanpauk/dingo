@@ -236,6 +236,7 @@ struct storage_traits {
   static constexpr bool is_stable = false;
 
   using value_types = type_list<>;
+  using copy_value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<>;

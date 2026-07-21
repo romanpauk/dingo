@@ -49,16 +49,6 @@ _ALL_REQUEST_STRATEGIES = frozenset(
 )
 
 
-_NESTED_RAW_POINTER_REQUEST_LIMITATION = (
-    DependencyCompositionResolutionLimitation(
-        position="request_composed_operand",
-        disposition=LimitationDisposition.KNOWN_GAP,
-        reason=(
-            "container storage does not publish nested raw-pointer "
-            "compositions as exact wrapper requests"
-        ),
-    )
-)
 _NESTED_SMART_POINTER_REQUEST_LIMITATION = (
     DependencyCompositionResolutionLimitation(
         position="request_composed_operand",
@@ -93,7 +83,6 @@ DEPENDENCY_COMPOSITION_OPERATORS = (
         unsupported_request_disposition=(
             LimitationDisposition.INTENTIONAL_CONSTRAINT
         ),
-        resolution_limitations=(_NESTED_RAW_POINTER_REQUEST_LIMITATION,),
     ),
     DependencyCompositionOperator(
         name="const_pointer",
@@ -105,9 +94,6 @@ DEPENDENCY_COMPOSITION_OPERATORS = (
         supported_request_strategies=_STABLE_REQUEST,
         unsupported_request_disposition=(
             LimitationDisposition.INTENTIONAL_CONSTRAINT
-        ),
-        resolution_limitations=(
-            _NESTED_RAW_POINTER_REQUEST_LIMITATION,
         ),
     ),
     DependencyCompositionOperator(

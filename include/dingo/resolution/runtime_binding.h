@@ -340,28 +340,11 @@ public:
   using request_type = instance_request<rtti_type>;
   using conversion_types =
       detail::runtime_binding_conversion_types_t<Type, Storage>;
-  using exact_value_types =
-      std::conditional_t<type_traits<Type>::enabled && !std::is_pointer_v<Type>,
-                         type_list<Type>, type_list<>>;
-  using exact_lvalue_reference_types =
-      std::conditional_t<Storage::conversions::is_stable &&
-                             type_traits<Type>::enabled &&
-                             !std::is_pointer_v<Type>,
-                         type_list<Type &>, type_list<>>;
-  using exact_pointer_types =
-      std::conditional_t<Storage::conversions::is_stable &&
-                             type_traits<Type>::enabled &&
-                             !std::is_pointer_v<Type>,
-                         type_list<Type *>, type_list<>>;
-  using value_capability_types =
-      type_list_cat_t<exact_value_types,
-                      typename Storage::conversions::value_types>;
+  using capability_types = detail::binding_capability_types<Type, Storage>;
+  using value_capability_types = typename capability_types::value_types;
   using lvalue_reference_capability_types =
-      type_list_cat_t<exact_lvalue_reference_types,
-                      typename Storage::conversions::lvalue_reference_types>;
-  using pointer_capability_types =
-      type_list_cat_t<exact_pointer_types,
-                      typename Storage::conversions::pointer_types>;
+      typename capability_types::lvalue_reference_types;
+  using pointer_capability_types = typename capability_types::pointer_types;
   static constexpr bool has_conversion_cache =
       detail::runtime_binding_has_conversion_cache_v<conversion_types>;
   static constexpr bool uses_cached_conversions =
@@ -563,7 +546,7 @@ public:
                              runtime_context_type &context,
                              const request_type &request,
                              detail::cache::sink cache) override {
-    return convert<typename Storage::conversions::rvalue_reference_types>(
+    return convert<typename capability_types::rvalue_reference_types>(
         scope, context, request, cache);
   }
 

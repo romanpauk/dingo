@@ -288,17 +288,17 @@ struct binding_activation {
 };
 
 template <typename Request, typename StorageType> struct request_capabilities {
-  using conversions = typename StorageType::conversions;
   using request_leaf_type =
       leaf_type_t<std::remove_cv_t<std::remove_reference_t<Request>>>;
+  using capabilities = binding_capability_types<request_leaf_type, StorageType>;
   using base_types = std::conditional_t<
-      std::is_pointer_v<Request>, typename conversions::pointer_types,
+      std::is_pointer_v<Request>, typename capabilities::pointer_types,
       std::conditional_t<
           std::is_lvalue_reference_v<Request>,
-          typename conversions::lvalue_reference_types,
+          typename capabilities::lvalue_reference_types,
           std::conditional_t<std::is_rvalue_reference_v<Request>,
-                             typename conversions::rvalue_reference_types,
-                             typename conversions::value_types>>>;
+                             typename capabilities::rvalue_reference_types,
+                             typename capabilities::value_types>>>;
 
   template <typename Type, typename Leaf,
             bool NeedsResolution =

@@ -238,7 +238,14 @@ struct storage_traits<
 
 namespace detail {
 template <typename Type, typename U>
-struct conversions<unique, Type, U> : type_storage_traits<unique, Type, U> {};
+struct conversions<unique, Type, U> : type_storage_traits<unique, Type, U> {
+private:
+  using base = type_storage_traits<unique, Type, U>;
+
+public:
+  using value_types =
+      type_list_cat_t<type_list<runtime_interface>, typename base::value_types>;
+};
 
 template <typename Type, typename StoredType, typename Factory,
           typename Conversions>

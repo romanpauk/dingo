@@ -46,6 +46,12 @@ This trait defines whether a registration can service requests such as:
 The same wrapper may have different exposure rules under `unique`, `shared`, or
 `external` storage.
 
+Use `value_types` for values the storage may consume or freshly produce, and
+`copy_value_types` for values that must be copied from retained storage.
+`runtime_type` represents the registered leaf, while `runtime_interface`
+represents the complete registered interface when an exact wrapper capability is
+needed.
+
 ### 3. `type_conversion_traits`
 
 Specialize `type_conversion_traits` in

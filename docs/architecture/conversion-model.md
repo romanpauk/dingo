@@ -27,12 +27,21 @@ The important source files are:
 That combined type lists the result forms a stored object may service:
 
 - `value_types`
+- `copy_value_types`
 - `lvalue_reference_types`
 - `rvalue_reference_types`
 - `pointer_types`
 - `conversion_types`
 
 Those lists are the contract between storage policy and runtime conversion.
+`value_types` may consume or otherwise produce a fresh value. `copy_value_types`
+describes values that must be copied from retained storage; Dingo publishes
+those capabilities only when the resolved target is copy constructible.
+
+Capability patterns use `runtime_type` for the registered interface leaf and
+`runtime_interface` for the complete registered interface. The latter lets a
+storage policy explicitly expose exact wrapper values without the binding layer
+inferring that behavior from the storage lifetime.
 
 ## Factory Dispatch
 
