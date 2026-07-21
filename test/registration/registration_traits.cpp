@@ -7,6 +7,8 @@
 
 #include "type_registration_common.h"
 
+#include <optional>
+
 TEST(type_registration_test,
      runtime_local_bindings_declare_the_registration_container) {
   using root_container = dingo::container<>;
@@ -142,6 +144,14 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   static_assert(std::is_same_v<rebind_leaf_t<nested_list, I>,
                                type_list<std::shared_ptr<std::unique_ptr<I>> &,
                                          std::unique_ptr<I *>>>);
+  static_assert(std::is_same_v<leaf_type_t<std::optional<const A *>>, A>);
+  static_assert(std::is_same_v<rebind_leaf_t<const A *, I>, const I *>);
+  static_assert(std::is_same_v<rebind_leaf_t<std::optional<const A *>, I>,
+                               std::optional<const I *>>);
+  static_assert(
+      std::is_same_v<request_lookup_type_t<const A *>, runtime_type *>);
+  static_assert(std::is_same_v<request_lookup_type_t<std::optional<const A *>>,
+                               std::optional<const runtime_type *>>);
 }
 
 TEST(type_registration_test, normalized_type_trait) {

@@ -68,7 +68,8 @@ template <class T> struct pointer_traits<const T *> {
   using type = typename pointer_traits<T>::type;
 
   template <class U>
-  using rebind_t = typename pointer_traits<T>::template rebind_t<U> *;
+  using rebind_t = std::add_pointer_t<
+      std::add_const_t<typename pointer_traits<T>::template rebind_t<U>>>;
 };
 
 template <class T> struct outer_traits {

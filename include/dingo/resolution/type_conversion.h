@@ -90,15 +90,17 @@ Target *borrow_pointer(Source &source, type_descriptor requested_type,
                        type_descriptor registered_type) {
   if constexpr (std::is_convertible_v<Source *, Target *>) {
     return static_cast<Target *>(&source);
-  } else if constexpr (type_traits<Source>::enabled &&
-                       std::is_convertible_v<decltype(type_traits<Source>::get(
-                                                 source)),
-                                             Target *>) {
-    return type_traits<Source>::get(source);
-  } else if constexpr (type_traits<Source>::enabled &&
-                       type_traits<Source>::is_value_borrowable) {
-    return borrow_pointer<Target>(type_traits<Source>::borrow(source),
-                                  requested_type, registered_type);
+  } else if constexpr (type_traits<Source>::enabled) {
+    if constexpr (std::is_convertible_v<
+                      decltype(type_traits<Source>::get(source)), Target *>) {
+      return type_traits<Source>::get(source);
+    } else if constexpr (type_traits<Source>::is_value_borrowable) {
+      return borrow_pointer<Target>(type_traits<Source>::borrow(source),
+                                    requested_type, registered_type);
+    } else {
+      throw make_type_not_convertible_exception(requested_type,
+                                                registered_type);
+    }
   } else {
     throw make_type_not_convertible_exception(requested_type, registered_type);
   }
