@@ -16,6 +16,7 @@
 
 namespace dingo {
 struct runtime_type {};
+struct runtime_interface {};
 template <class T> struct exact_lookup {
   using type = T;
 };

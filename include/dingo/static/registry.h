@@ -13,6 +13,7 @@
 #include <dingo/lookup/lookup.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
+#include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/type_list.h>
 
@@ -84,33 +85,16 @@ private:
   using interface_type = typename Binding::interface_type;
   using binding_model_type = typename Binding::binding_model_type;
   using raw_interface_type = typename annotated_traits<interface_type>::type;
-  using storage_conversions =
-      typename binding_model_type::storage_type::conversions;
-  using exact_interface_value_types =
-      std::conditional_t<type_traits<raw_interface_type>::enabled &&
-                             !std::is_pointer_v<raw_interface_type>,
-                         type_list<raw_interface_type>, type_list<>>;
-  using exact_interface_lvalue_reference_types =
-      std::conditional_t<storage_conversions::is_stable &&
-                             type_traits<raw_interface_type>::enabled &&
-                             !std::is_pointer_v<raw_interface_type>,
-                         type_list<raw_interface_type &>, type_list<>>;
-  using exact_interface_pointer_types =
-      std::conditional_t<storage_conversions::is_stable &&
-                             type_traits<raw_interface_type>::enabled &&
-                             !std::is_pointer_v<raw_interface_type>,
-                         type_list<raw_interface_type *>, type_list<>>;
+  using storage_type = typename binding_model_type::storage_type;
+  using capabilities =
+      binding_capability_types<raw_interface_type, storage_type>;
   using base_types = type_list_cat_t<
-      exact_interface_value_types, exact_interface_lvalue_reference_types,
-      exact_interface_pointer_types,
-      rebind_leaf_t<typename storage_conversions::value_types,
+      rebind_leaf_t<typename capabilities::value_types, raw_interface_type>,
+      rebind_leaf_t<typename capabilities::lvalue_reference_types,
                     raw_interface_type>,
-      rebind_leaf_t<typename storage_conversions::lvalue_reference_types,
+      rebind_leaf_t<typename capabilities::rvalue_reference_types,
                     raw_interface_type>,
-      rebind_leaf_t<typename storage_conversions::rvalue_reference_types,
-                    raw_interface_type>,
-      rebind_leaf_t<typename storage_conversions::pointer_types,
-                    raw_interface_type>>;
+      rebind_leaf_t<typename capabilities::pointer_types, raw_interface_type>>;
 
 public:
   using type = type_list_unique_t<typename keyed_dependency_types<

@@ -46,7 +46,8 @@ struct storage_traits<
   static constexpr bool enabled = true;
   static constexpr bool is_stable = true;
 
-  using value_types = type_list<U>;
+  using value_types = type_list<>;
+  using copy_value_types = type_list<U>;
   using lvalue_reference_types = type_list<U &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *>;
@@ -58,7 +59,8 @@ struct storage_traits<external, Type *, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = true;
 
-  using value_types = type_list<U>;
+  using value_types = type_list<>;
+  using copy_value_types = type_list<U>;
   using lvalue_reference_types = type_list<U &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *>;
@@ -140,7 +142,8 @@ struct storage_traits<external, std::shared_ptr<Array>, U,
   using pointer_types = typename detail::smart_array_pointer_types<
       handle_type, std::remove_extent_t<Array>, U>::type;
 
-  using value_types = type_list<handle_type>;
+  using value_types = type_list<>;
+  using copy_value_types = type_list<handle_type>;
   using lvalue_reference_types = type_list<handle_type &>;
   using rvalue_reference_types = type_list<>;
   using conversion_types = type_list<handle_type>;
@@ -155,7 +158,8 @@ struct storage_traits<external, std::shared_ptr<T>, U,
   using handle_type = detail::wrapper_rebind_leaf_t<std::shared_ptr<T>, U>;
   using types = detail::wrapper_storage_types<handle_type>;
 
-  using value_types = typename types::copyable_value_types;
+  using value_types = type_list<>;
+  using copy_value_types = typename types::copyable_value_types;
   using lvalue_reference_types = typename types::lvalue_reference_types;
   using rvalue_reference_types = type_list<>;
   using pointer_types = typename types::pointer_types;
@@ -178,15 +182,35 @@ struct storage_traits<external, std::optional<T>, U> {
 namespace detail {
 template <typename Type, typename U>
 struct conversions<external, Type, U> : type_storage_traits<external, Type, U> {
+private:
+  using base = type_storage_traits<external, Type, U>;
+
+public:
+  using copy_value_types = type_list_cat_t<type_list<runtime_interface>,
+                                           typename base::copy_value_types>;
 };
 
 template <typename Type, typename U>
 struct conversions<external, Type &, U>
-    : public type_storage_traits<external, Type &, U> {};
+    : public type_storage_traits<external, Type &, U> {
+private:
+  using base = type_storage_traits<external, Type &, U>;
+
+public:
+  using copy_value_types = type_list_cat_t<type_list<runtime_interface>,
+                                           typename base::copy_value_types>;
+};
 
 template <typename Type, typename U>
 struct conversions<external, Type *, U>
-    : public type_storage_traits<external, Type *, U> {};
+    : public type_storage_traits<external, Type *, U> {
+private:
+  using base = type_storage_traits<external, Type *, U>;
+
+public:
+  using copy_value_types = type_list_cat_t<type_list<runtime_interface>,
+                                           typename base::copy_value_types>;
+};
 
 template <typename Type, typename StoredType, typename = void>
 class external_storage_instance_impl {
