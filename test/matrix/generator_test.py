@@ -551,8 +551,8 @@ def test_dependency_composition_resolution_constraints_are_declarative(
         operator: {limitation.position for limitation in operator_limitations}
         for operator, operator_limitations in limitations.items()
     }
-    assert limitation_positions["pointer"] == {"request_composed_operand"}
-    assert limitation_positions["const_pointer"] == {"request_composed_operand"}
+    assert not limitation_positions["pointer"]
+    assert not limitation_positions["const_pointer"]
     assert limitation_positions["shared_pointer"] == {
         "request_composed_operand"
     }
@@ -792,10 +792,10 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
     assert Counter(
         (row.operation.name, row.supported) for row in composition_rows
     ) == {
-        ("resolve", True): 4243,
-        ("resolve", False): 4157,
-        ("invoke", True): 4243,
-        ("invoke", False): 4157,
+        ("resolve", True): 4579,
+        ("resolve", False): 3821,
+        ("invoke", True): 4579,
+        ("invoke", False): 3821,
     }
     assert Counter(
         row.unsupported_reason
@@ -806,10 +806,6 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
             "shared storage cannot materialize a composition that is not "
             "movable"
         ): 1150,
-        (
-            "container storage does not publish nested raw-pointer "
-            "compositions as exact wrapper requests"
-        ): 672,
         (
             "nested smart-pointer storage exposes inner conversion "
             "capabilities that cannot materialize the exact composition"
@@ -922,7 +918,7 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
         coverage.overall.supported,
         coverage.overall.functionality_gaps,
         coverage.overall.intentional_constraints,
-    ) == (8486, 2224, 6090)
+    ) == (9158, 1552, 6090)
     assert {
         axis.name: {
             cell.name: (
@@ -935,51 +931,51 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
         for axis in coverage.axes
     } == {
         "operation": {
-            "invoke": (4243, 1112, 3045),
-            "resolve": (4243, 1112, 3045),
+            "invoke": (4579, 776, 3045),
+            "resolve": (4579, 776, 3045),
         },
         "operator": {
             "array": (674, 40, 246),
-            "const_pointer": (48, 336, 576),
+            "const_pointer": (384, 0, 576),
             "optional": (714, 0, 246),
-            "pointer": (48, 336, 576),
+            "pointer": (384, 0, 576),
             "shared_pointer": (108, 756, 96),
             "unique_pointer": (108, 756, 96),
             "variant": (6786, 0, 4254),
         },
         "container": {
-            "container_mixed": (1966, 512, 882),
-            "container_runtime": (1966, 512, 882),
-            "container_static": (1294, 344, 1722),
-            "runtime_container": (1966, 512, 882),
-            "static_container": (1294, 344, 1722),
+            "container_mixed": (2134, 344, 882),
+            "container_runtime": (2134, 344, 882),
+            "container_static": (1378, 260, 1722),
+            "runtime_container": (2134, 344, 882),
+            "static_container": (1378, 260, 1722),
         },
         "scope": {
-            "external": (2016, 504, 1680),
-            "shared": (2210, 840, 1150),
+            "external": (2268, 252, 1680),
+            "shared": (2630, 420, 1150),
             "unique": (4260, 880, 3260),
         },
         "request strategy": {
             "rvalue": (2130, 440, 1630),
-            "stable": (4226, 1344, 2830),
+            "stable": (4898, 672, 2830),
             "value": (2130, 440, 1630),
         },
         "copyability": {
-            "copyable": (3796, 1448, 3716),
+            "copyable": (4468, 776, 3716),
             "non_copyable": (4690, 776, 2374),
         },
         "movability": {
-            "movable": (7796, 2224, 2180),
+            "movable": (8468, 1552, 2180),
             "non_movable": (690, 0, 3910),
         },
         "depth": {
             "1": (516, 0, 324),
-            "2": (7970, 2224, 5766),
+            "2": (8642, 1552, 5766),
         },
     }
     for axis in coverage.axes:
-        assert sum(cell.count.supported for cell in axis.cells) == 8486
-        assert sum(cell.count.functionality_gaps for cell in axis.cells) == 2224
+        assert sum(cell.count.supported for cell in axis.cells) == 9158
+        assert sum(cell.count.functionality_gaps for cell in axis.cells) == 1552
         assert sum(
             cell.count.intentional_constraints for cell in axis.cells
         ) == 6090
@@ -992,12 +988,12 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
         )
         for disposition in LimitationDisposition
     } == {
-        LimitationDisposition.KNOWN_GAP: 2224,
+        LimitationDisposition.KNOWN_GAP: 1552,
         LimitationDisposition.INTENTIONAL_CONSTRAINT: 6090,
     }
 
     report = render_dependency_composition_coverage(coverage)
-    assert "| 8486 | 2224 | 6090 |" in report
+    assert "| 9158 | 1552 | 6090 |" in report
     assert "| `variant` | 6786 | 0 | 4254 |" in report
     assert "## Functionality Gaps" in report
     assert "## Intentional Constraints" in report
@@ -1046,7 +1042,7 @@ def _composition_projection_mobility_scope(
 
 
 @pytest.mark.parametrize(
-    ("profile", "expected_count"), (("full", 752), ("portable", 354))
+    ("profile", "expected_count"), (("full", 816), ("portable", 354))
 )
 def test_dependency_composition_projection_covers_its_execution_contract(
     composition_rows: tuple[DependencyCompositionRow, ...],
@@ -1208,7 +1204,7 @@ def test_dependency_composition_selected_executables_are_isolated_by_case(
             for source in executable.sources
             if not source.name.startswith("matrix_runner_")
         )
-        assert len(implementation_sources) == 94
+        assert len(implementation_sources) == 102
         assert executable.isolated_sources == implementation_sources
         assert all(
             source.read_text(encoding="utf-8").count("\nstruct ") == 1
@@ -1228,7 +1224,7 @@ def test_dependency_composition_selected_executables_are_isolated_by_case(
         assert len(runner_sources) == 1
         assert runner_sources[0].read_text(encoding="utf-8").count(
             "\nTEST("
-        ) == 94
+        ) == 102
     assert all(
         not executable.isolated_sources
         for executable in executables
@@ -1278,7 +1274,7 @@ def test_dependency_composition_disabled_projected_cases_are_omitted(
         for executable in executables
         for source in executable.sources
         if source.name.startswith("matrix_runner_")
-    ) == 750
+    ) == 814
 
 
 def test_dependency_composition_rejects_unmatched_disabled_projected_cases() -> None:
@@ -2299,22 +2295,22 @@ def test_invalid_registration_plan_is_an_error(
         "expected_compiled_rows",
     ),
     (
-        (None, frozenset(), frozenset(), 113, 0, 752),
+        (None, frozenset(), frozenset(), 113, 0, 816),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
             frozenset(),
-            169,
+            177,
             0,
-            752,
+            816,
         ),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset({("invoke", 4), ("resolve", 4)}),
             frozenset(),
-            341,
-            188,
-            752,
+            363,
+            204,
+            816,
         ),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
@@ -2327,9 +2323,9 @@ def test_invalid_registration_plan_is_an_error(
                     "variant_const_pointer_copy_only_optional_move_only",
                 )
             ),
-            169,
+            177,
             0,
-            750,
+            814,
         ),
     ),
 )
@@ -2426,7 +2422,7 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
         elif dependency_composition_case_limit is None:
             expected_source_count = 2
         else:
-            expected_source_count = 9
+            expected_source_count = 10
         assert sources_block.count('.cpp"') == expected_source_count
     timestamps = {
         path: path.stat().st_mtime_ns

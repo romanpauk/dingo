@@ -87,6 +87,31 @@ struct combined_storage_types {
 template <typename T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
+template <typename Request, typename ExactLeaf> struct exact_request_type {
+private:
+  using outer = outer_traits<Request>;
+  using rebound = wrapper_rebind_leaf_t<typename outer::type, ExactLeaf>;
+  using exact_type =
+      std::conditional_t<std::is_reference_v<Request> ||
+                             std::is_pointer_v<remove_cvref_t<Request>>,
+                         rebound, std::remove_cv_t<rebound>>;
+
+public:
+  using type = typename outer::template rebind_t<exact_lookup<exact_type>>;
+};
+
+template <typename Types, typename ExactLeaf> struct exact_request_types;
+
+template <typename ExactLeaf, typename... Types>
+struct exact_request_types<type_list<Types...>, ExactLeaf> {
+  using type =
+      type_list<typename exact_request_type<Types, ExactLeaf>::type...>;
+};
+
+template <typename Types, typename ExactLeaf>
+using exact_request_types_t =
+    typename exact_request_types<Types, ExactLeaf>::type;
+
 template <typename Request, typename Interface>
 using binding_request_target_t = std::remove_cv_t<
     std::remove_reference_t<resolved_type_t<Request, Interface>>>;
@@ -147,10 +172,34 @@ using borrowed_binding_source_t =
 template <typename Storage>
 using consumed_binding_source_t = typename Storage::type &&;
 
+template <bool PublishesLeafRequests, typename Types, typename ExactLeaf>
+struct storage_request_types {
+  using type = exact_request_types_t<Types, ExactLeaf>;
+};
+
+template <typename Types, typename ExactLeaf>
+struct storage_request_types<true, Types, ExactLeaf> {
+  using type = Types;
+};
+
 template <typename Interface, typename Storage> struct binding_request_types {
 private:
   using conversions = typename Storage::conversions;
-  template <typename Types> using declared_requests = Types;
+  using stored_type = remove_cvref_t<typename Storage::type>;
+  using stored_pointee = std::remove_pointer_t<stored_type>;
+  using generic_pointer_type = resolved_type_t<runtime_type *, Interface>;
+
+  static constexpr bool has_pointer_source = std::is_pointer_v<stored_type>;
+  static constexpr bool publishes_leaf_requests =
+      !has_pointer_source ||
+      std::is_convertible_v<stored_type, generic_pointer_type>;
+
+  template <typename Types>
+  using storage_requests =
+      typename storage_request_types<publishes_leaf_requests, Types,
+                                     stored_pointee>::type;
+
+  template <typename Types> using declared_requests = storage_requests<Types>;
 
   using borrowed_source_type = borrowed_binding_source_t<Storage>;
   using consumed_source_type = consumed_binding_source_t<Storage>;
