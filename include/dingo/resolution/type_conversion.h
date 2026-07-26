@@ -424,7 +424,9 @@ struct type_conversion<Target, detail::rvalue_source<Source>,
   template <typename Factory, typename Context, typename SourceCapability>
   static decltype(auto) apply(Factory &, Context &, SourceCapability &&source,
                               type_descriptor, type_descriptor) {
-    return std::move(*source.get_ptr());
+    using target_type = detail::unqualified_t<Target>;
+    return type_conversion_traits<target_type, Source>::convert(
+        std::move(*source.get_ptr()));
   }
 };
 

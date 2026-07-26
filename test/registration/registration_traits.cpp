@@ -7,7 +7,68 @@
 
 #include "type_registration_common.h"
 
+#include "support/custom_wrappers.h"
+
 #include <optional>
+
+namespace conversion_compatibility_test {
+struct source {};
+struct target {};
+struct borrowed_value {};
+struct non_borrowable_wrapper {};
+} // namespace conversion_compatibility_test
+
+namespace dingo {
+template <>
+struct type_conversion_traits<conversion_compatibility_test::target,
+                              conversion_compatibility_test::source> {
+  static conversion_compatibility_test::target
+  convert(const conversion_compatibility_test::source &) {
+    return {};
+  }
+};
+
+template <>
+struct type_traits<conversion_compatibility_test::non_borrowable_wrapper> {
+  static constexpr bool enabled = true;
+  static constexpr bool is_pointer_like = false;
+  static constexpr bool is_value_borrowable = false;
+
+  template <typename> static constexpr bool is_handle_rebindable = false;
+  template <typename> static constexpr bool is_rebindable = false;
+
+  static conversion_compatibility_test::borrowed_value &
+  borrow(conversion_compatibility_test::non_borrowable_wrapper &);
+};
+} // namespace dingo
+
+TEST(type_registration_test,
+     conversion_availability_supports_convert_only_customizations) {
+  static_assert(detail::is_type_conversion_available_v<
+                conversion_compatibility_test::target,
+                const conversion_compatibility_test::source &>);
+  static_assert(!detail::is_type_conversion_available_v<
+                conversion_compatibility_test::borrowed_value,
+                conversion_compatibility_test::non_borrowable_wrapper &>);
+}
+
+TEST(type_registration_test, consumed_binding_executes_custom_type_conversion) {
+  struct interface {
+    virtual ~interface() = default;
+    virtual int value() const = 0;
+  };
+  struct implementation : interface {
+    int value() const override { return 7; }
+  };
+
+  container<> container;
+  container.register_type<scope<unique>, storage<test_shared<implementation>>,
+                          interfaces<interface>>();
+
+  auto resolved = container.resolve<test_shared<interface>>();
+  ASSERT_NE(resolved.get(), nullptr);
+  EXPECT_EQ(resolved.get()->value(), 7);
+}
 
 TEST(type_registration_test,
      runtime_local_bindings_declare_the_registration_container) {

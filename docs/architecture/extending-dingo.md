@@ -46,6 +46,13 @@ This trait defines whether a registration can service requests such as:
 The same wrapper may have different exposure rules under `unique`, `shared`, or
 `external` storage.
 
+Put a result shape in `value_types` when it is copied from borrowed storage;
+Dingo exposes it only when the resolved type is copy constructible. Put `T&&` in
+`rvalue_reference_types` when the storage produces `T` for consumption; Dingo
+derives the corresponding value request when `type_conversion_traits` accepts
+the concrete source category. A consumable result does not also need to appear
+in `value_types`.
+
 ### 3. `type_conversion_traits`
 
 Specialize `type_conversion_traits` in
@@ -53,7 +60,11 @@ Specialize `type_conversion_traits` in
 when two wrapper types need a concrete conversion step that is not covered by a
 direct converting constructor or pointer cast.
 
-This is the last-mile "build target wrapper from source wrapper" hook.
+The `convert` function performs the last-mile "build target wrapper from source
+wrapper" step and provides the default availability signal. Add an `enabled`
+member when the specialization needs to restrict accepted source categories.
+Keeping both in one specialization prevents request discovery and execution from
+describing different conversions.
 
 ## Extension Example
 
@@ -70,7 +81,7 @@ and then specializes the exact traits Dingo needs:
 
 - `type_traits` for wrapper semantics
 - `storage_traits` for scope-specific exposure
-- `type_conversion_traits` for wrapper conversion
+- `type_conversion_traits` for conversion availability and execution
 
 That file is worth treating as executable documentation.
 

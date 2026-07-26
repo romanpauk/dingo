@@ -38,6 +38,11 @@ template <typename T> struct request_lookup_type<const T &> {
 template <typename T>
 using request_lookup_type_t = typename request_lookup_type<T>::type;
 
+struct resolved_value {
+  void *address;
+  bool owned;
+};
+
 template <typename Container, typename Context>
 class runtime_binding_interface {
 public:
@@ -45,7 +50,7 @@ public:
 
   detail::cache::entry *cache_slot() noexcept { return cache_slot_; }
 
-  virtual void *
+  virtual resolved_value
   get_value(construction_scope, Context &,
             const instance_request<typename Container::rtti_type> &request,
             detail::cache::sink) = 0;

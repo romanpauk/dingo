@@ -245,7 +245,7 @@ struct storage_traits<unique, test_shared<T>, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
-  using value_types = type_list<test_shared<U>>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types = type_list<test_shared<U> &&>;
   using pointer_types = type_list<>;
@@ -281,7 +281,7 @@ struct storage_traits<unique, test_unique<T>, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
-  using value_types = type_list<test_unique<U>, test_shared<U>>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types =
       type_list<test_unique<U> &&, test_shared<U> &&>;
@@ -318,7 +318,7 @@ struct storage_traits<unique, test_optional<T>, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
-  using value_types = type_list<test_optional<U>>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types = type_list<test_optional<U> &&>;
   using pointer_types = type_list<>;
@@ -353,6 +353,9 @@ struct storage_traits<external, test_optional<T>, U> {
 
 template <typename T, typename U>
 struct type_conversion_traits<test_shared<U>, test_shared<T>> {
+  template <typename>
+  static constexpr bool enabled = std::is_convertible_v<T *, U *>;
+
   static test_shared<U> convert(const test_shared<T> &source) {
     return test_shared<U>(std::static_pointer_cast<U>(source.ptr_));
   }
@@ -364,6 +367,11 @@ struct type_conversion_traits<test_shared<U>, test_shared<T>> {
 
 template <typename T, typename U>
 struct type_conversion_traits<test_optional<U>, test_optional<T>> {
+  template <typename Source>
+  static constexpr bool enabled = std::is_rvalue_reference_v<Source>
+                                      ? std::is_constructible_v<U, T &&>
+                                      : std::is_constructible_v<U, const T &>;
+
   static test_optional<U> convert(const test_optional<T> &source) {
     test_optional<U> target;
     if (source.value_) {

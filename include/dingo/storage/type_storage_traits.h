@@ -11,6 +11,8 @@
 
 #include <dingo/resolution/recursion_guard.h>
 #include <dingo/storage/materialized_source.h>
+#include <dingo/type/rebind_type.h>
+#include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_list.h>
 #include <dingo/type/type_traits.h>
 
@@ -84,6 +86,126 @@ struct combined_storage_types {
 
 template <typename T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
+
+template <typename Request, typename Interface>
+using binding_request_target_t = std::remove_cv_t<
+    std::remove_reference_t<resolved_type_t<Request, Interface>>>;
+
+template <typename Requests, typename Interface, typename Source>
+struct convertible_binding_requests;
+
+template <typename Interface, typename Source, typename... Requests>
+struct convertible_binding_requests<type_list<Requests...>, Interface, Source> {
+  template <typename Request>
+  using if_convertible = std::conditional_t<
+      is_type_conversion_available_v<
+          binding_request_target_t<Request, Interface>, Source>,
+      type_list<Request>, type_list<>>;
+
+  using type = type_list_cat_t<if_convertible<Requests>...>;
+};
+
+template <typename Requests, typename Interface, typename Source>
+using convertible_binding_requests_t =
+    typename convertible_binding_requests<Requests, Interface, Source>::type;
+
+template <typename Requests> struct value_request_types;
+
+template <typename... Requests>
+struct value_request_types<type_list<Requests...>> {
+  using type =
+      type_list<std::remove_cv_t<std::remove_reference_t<Requests>>...>;
+};
+
+template <typename Requests>
+using value_request_types_t = typename value_request_types<Requests>::type;
+
+template <typename Storage, typename = void> struct stored_binding_source {
+  using type = remove_cvref_t<typename Storage::type>;
+};
+
+template <typename Storage>
+struct stored_binding_source<Storage,
+                             std::void_t<typename Storage::stored_type>> {
+  using type = remove_cvref_t<typename Storage::stored_type>;
+};
+
+template <typename Storage> struct borrowed_binding_source {
+private:
+  using stored_type = typename stored_binding_source<Storage>::type;
+
+public:
+  using type =
+      std::conditional_t<std::is_pointer_v<stored_type>,
+                         std::remove_pointer_t<stored_type> &, stored_type &>;
+};
+
+template <typename Storage>
+using borrowed_binding_source_t =
+    typename borrowed_binding_source<Storage>::type;
+
+template <typename Storage>
+using consumed_binding_source_t = typename Storage::type &&;
+
+template <typename Interface, typename Storage> struct binding_request_types {
+private:
+  using conversions = typename Storage::conversions;
+  template <typename Types> using declared_requests = Types;
+
+  using borrowed_source_type = borrowed_binding_source_t<Storage>;
+  using consumed_source_type = consumed_binding_source_t<Storage>;
+  using exact_interface = std::remove_cv_t<Interface>;
+  static constexpr bool supports_borrowed_exact_interface =
+      type_traits<exact_interface>::enabled &&
+      !std::is_pointer_v<exact_interface> &&
+      is_type_conversion_available_v<exact_interface, borrowed_source_type>;
+  static constexpr bool supports_consumed_exact_interface =
+      type_traits<exact_interface>::enabled &&
+      !std::is_pointer_v<exact_interface> &&
+      is_type_conversion_available_v<exact_interface, consumed_source_type>;
+  using exact_interface_value_types =
+      std::conditional_t<conversions::is_stable &&
+                             supports_borrowed_exact_interface,
+                         type_list<exact_lookup<exact_interface>>, type_list<>>;
+  using exact_interface_rvalue_reference_types = std::conditional_t<
+      !conversions::is_stable && supports_consumed_exact_interface,
+      type_list<exact_lookup<exact_interface> &&>, type_list<>>;
+
+  using exact_lvalue_reference_types =
+      std::conditional_t<conversions::is_stable &&
+                             type_traits<Interface>::enabled &&
+                             !std::is_pointer_v<Interface>,
+                         type_list<Interface &>, type_list<>>;
+  using exact_pointer_types =
+      std::conditional_t<conversions::is_stable &&
+                             type_traits<Interface>::enabled &&
+                             !std::is_pointer_v<Interface>,
+                         type_list<Interface *>, type_list<>>;
+  using declared_value_types =
+      declared_requests<typename conversions::value_types>;
+  using declared_rvalue_reference_types =
+      declared_requests<typename conversions::rvalue_reference_types>;
+  using convertible_rvalue_reference_types =
+      convertible_binding_requests_t<declared_rvalue_reference_types, Interface,
+                                     consumed_source_type>;
+  using rvalue_reference_requests =
+      type_list_cat_t<exact_interface_rvalue_reference_types,
+                      convertible_rvalue_reference_types>;
+
+public:
+  using value_types = type_list_unique_t<type_list_cat_t<
+      exact_interface_value_types,
+      convertible_binding_requests_t<declared_value_types, Interface,
+                                     borrowed_source_type>,
+      value_request_types_t<rvalue_reference_requests>>>;
+  using lvalue_reference_types = type_list_cat_t<
+      exact_lvalue_reference_types,
+      declared_requests<typename conversions::lvalue_reference_types>>;
+  using rvalue_reference_types = rvalue_reference_requests;
+  using pointer_types =
+      type_list_cat_t<exact_pointer_types,
+                      declared_requests<typename conversions::pointer_types>>;
+};
 
 template <typename T, typename List> struct has_distinct_conversion_type;
 

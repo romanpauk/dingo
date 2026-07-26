@@ -287,79 +287,31 @@ struct binding_activation {
   }
 };
 
-template <typename Request, typename StorageType> struct request_capabilities {
-  using conversions = typename StorageType::conversions;
-  using request_leaf_type =
-      leaf_type_t<std::remove_cv_t<std::remove_reference_t<Request>>>;
-  using base_types = std::conditional_t<
-      std::is_pointer_v<Request>, typename conversions::pointer_types,
-      std::conditional_t<
-          std::is_lvalue_reference_v<Request>,
-          typename conversions::lvalue_reference_types,
-          std::conditional_t<std::is_rvalue_reference_v<Request>,
-                             typename conversions::rvalue_reference_types,
-                             typename conversions::value_types>>>;
-
-  template <typename Type, typename Leaf,
-            bool NeedsResolution =
-                std::is_same_v<leaf_type_t<Type>, runtime_type>>
-  struct resolved_request_conversion_type {
-    using type = Type;
-  };
-
-  template <typename Type, typename Leaf>
-  struct resolved_request_conversion_type<Type, Leaf, true> {
-    using type = resolved_type_t<Type, Leaf>;
-  };
-
-  template <typename Types, typename Leaf>
-  struct resolved_request_conversion_list;
-
-  template <typename Leaf, typename... Types>
-  struct resolved_request_conversion_list<type_list<Types...>, Leaf> {
-    using type = type_list<
-        typename resolved_request_conversion_type<Types, Leaf>::type...>;
-  };
-
-  using type =
-      typename resolved_request_conversion_list<base_types,
-                                                request_leaf_type>::type;
-};
-
-template <typename Request, typename CapabilityTypes>
-struct request_capability_match;
-
-template <typename Capability>
-using unwrapped_static_capability_t = typename annotated_traits<
-    std::conditional_t<is_selected_v<Capability>, selected_type_t<Capability>,
-                       Capability>>::type;
+template <typename Request, typename RequestTypes> struct binding_request_match;
 
 template <typename Request>
 using unwrapped_static_request_t = typename annotated_traits<std::conditional_t<
     is_selected_v<Request>, selected_type_t<Request>, Request>>::type;
 
-template <typename Request>
-struct request_capability_match<Request, type_list<>> {
+template <typename Request> struct binding_request_match<Request, type_list<>> {
   using type = void;
 };
 
 template <typename Request, typename Head, typename... Tail>
-struct request_capability_match<Request, type_list<Head, Tail...>> {
+struct binding_request_match<Request, type_list<Head, Tail...>> {
   using type = std::conditional_t<
       std::is_same_v<lookup_type_t<Head>, request_lookup_type_t<Request>> ||
           std::is_same_v<
-              request_lookup_type_t<unwrapped_static_capability_t<Head>>,
+              request_lookup_type_t<unwrapped_static_request_t<Head>>,
               request_lookup_type_t<unwrapped_static_request_t<Request>>>,
-      Head,
-      typename request_capability_match<Request, type_list<Tail...>>::type>;
+      Head, typename binding_request_match<Request, type_list<Tail...>>::type>;
 };
 
 template <typename Request, typename InterfaceBinding>
 struct binding_supports_request {
-  using capability_types =
+  using request_types =
       typename binding_dependency_types<InterfaceBinding>::type;
-  using type =
-      typename request_capability_match<Request, capability_types>::type;
+  using type = typename binding_request_match<Request, request_types>::type;
 
   static constexpr bool value = !std::is_void_v<type>;
 };
@@ -389,28 +341,27 @@ struct static_binding_resolver {
                       binding_supports_request_v<Request, InterfaceBinding>,
                   "static resolution cannot satisfy a request the storage "
                   "does not publish");
-    using capability_types =
+    using request_types =
         typename binding_dependency_types<InterfaceBinding>::type;
-    using capability =
-        typename request_capability_match<Request, capability_types>::type;
-    if constexpr (!std::is_void_v<capability> &&
-                  !storage_type::conversions::is_stable &&
+    using matched_request =
+        typename binding_request_match<Request, request_types>::type;
+    if constexpr (!std::is_void_v<matched_request> &&
                   !std::is_reference_v<Request> &&
                   !std::is_pointer_v<Request>) {
-      return consume_request<Request, capability>(
+      return consume_request<Request, matched_request>(
           context, [](auto &&instance) -> Request {
             return std::forward<decltype(instance)>(instance);
           });
     }
 
     void *ptr = nullptr;
-    if constexpr (!std::is_void_v<capability>) {
+    if constexpr (!std::is_void_v<matched_request>) {
       // Stay on the normal materialization path even for identity
       // pointer/reference requests. Some storages publish the stored
-      // instance through pointer-like source capabilities, so taking the
+      // instance through pointer-like source wrappers, so taking the
       // address of `storage.resolve(...)` would capture the address of a
       // stack-local pointer variable instead of the bound object.
-      ptr = resolve_request_address<Request, capability>(context);
+      ptr = resolve_request_address<Request, matched_request>(context);
     } else {
       throw detail::make_type_not_convertible_exception(
           describe_type<Request>(), registered_type(), context);
@@ -427,14 +378,14 @@ struct static_binding_resolver {
                       binding_supports_request_v<Request, InterfaceBinding>,
                   "static resolution cannot satisfy a request the storage "
                   "does not publish");
-    using capability_types =
+    using request_types =
         typename binding_dependency_types<InterfaceBinding>::type;
-    using capability =
-        typename request_capability_match<Request, capability_types>::type;
+    using matched_request =
+        typename binding_request_match<Request, request_types>::type;
 
-    if constexpr (!std::is_void_v<capability>) {
-      return consume_request<Request, capability>(context,
-                                                  std::forward<Fn>(fn));
+    if constexpr (!std::is_void_v<matched_request>) {
+      return consume_request<Request, matched_request>(context,
+                                                       std::forward<Fn>(fn));
     } else {
       throw detail::make_type_not_convertible_exception(
           describe_type<Request>(), registered_type(), context);

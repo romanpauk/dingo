@@ -340,28 +340,11 @@ public:
   using request_type = instance_request<rtti_type>;
   using conversion_types =
       detail::runtime_binding_conversion_types_t<Type, Storage>;
-  using exact_value_types =
-      std::conditional_t<type_traits<Type>::enabled && !std::is_pointer_v<Type>,
-                         type_list<Type>, type_list<>>;
-  using exact_lvalue_reference_types =
-      std::conditional_t<Storage::conversions::is_stable &&
-                             type_traits<Type>::enabled &&
-                             !std::is_pointer_v<Type>,
-                         type_list<Type &>, type_list<>>;
-  using exact_pointer_types =
-      std::conditional_t<Storage::conversions::is_stable &&
-                             type_traits<Type>::enabled &&
-                             !std::is_pointer_v<Type>,
-                         type_list<Type *>, type_list<>>;
-  using value_capability_types =
-      type_list_cat_t<exact_value_types,
-                      typename Storage::conversions::value_types>;
-  using lvalue_reference_capability_types =
-      type_list_cat_t<exact_lvalue_reference_types,
-                      typename Storage::conversions::lvalue_reference_types>;
-  using pointer_capability_types =
-      type_list_cat_t<exact_pointer_types,
-                      typename Storage::conversions::pointer_types>;
+  using request_types = detail::binding_request_types<Type, Storage>;
+  using value_request_types = typename request_types::value_types;
+  using lvalue_reference_request_types =
+      typename request_types::lvalue_reference_types;
+  using pointer_request_types = typename request_types::pointer_types;
   static constexpr bool has_conversion_cache =
       detail::runtime_binding_has_conversion_cache_v<conversion_types>;
   static constexpr bool uses_cached_conversions =
@@ -521,17 +504,20 @@ public:
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-  void *convert(construction_scope scope, runtime_context_type &context,
-                const request_type &request, detail::cache::sink cache) {
-    void *ptr = ::dingo::resolve_binding_capability_address<rtti_type>(
+  resolved_value
+  convert(construction_scope scope, runtime_context_type &context,
+          const request_type &request, detail::cache::sink cache) {
+    auto result = ::dingo::resolve_binding_request_address<rtti_type>(
         scope, *this, context, ConversionTypes{}, request.lookup_type,
         request.requested_type, registered_type());
     // Request caching is intentionally stricter than conversion caching and
     // is published with transaction rollback tracking by the registry.
     if constexpr (Storage::conversions::is_stable) {
-      cache(ptr);
+      if (!result.owned) {
+        cache(result.address);
+      }
     }
-    return ptr;
+    return result;
   }
 #ifdef _MSC_VER
 #pragma warning(pop)
@@ -545,42 +531,53 @@ public:
 
   auto &get_container() { return state().container(); }
 
-  void *get_value(construction_scope scope, runtime_context_type &context,
-                  const request_type &request,
-                  detail::cache::sink cache) override {
-    return convert<value_capability_types>(scope, context, request, cache);
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+  resolved_value get_value(construction_scope scope,
+                           runtime_context_type &context,
+                           const request_type &request,
+                           detail::cache::sink cache) override {
+    return convert<value_request_types>(scope, context, request, cache);
   }
 
   void *get_lvalue_reference(construction_scope scope,
                              runtime_context_type &context,
                              const request_type &request,
                              detail::cache::sink cache) override {
-    return convert<lvalue_reference_capability_types>(scope, context, request,
-                                                      cache);
+    return convert<lvalue_reference_request_types>(scope, context, request,
+                                                   cache)
+        .address;
   }
 
   void *get_rvalue_reference(construction_scope scope,
                              runtime_context_type &context,
                              const request_type &request,
                              detail::cache::sink cache) override {
-    return convert<typename Storage::conversions::rvalue_reference_types>(
-        scope, context, request, cache);
+    return convert<typename request_types::rvalue_reference_types>(
+               scope, context, request, cache)
+        .address;
   }
 
   void *get_pointer(construction_scope scope, runtime_context_type &context,
                     const request_type &request,
                     detail::cache::sink cache) override {
-    return convert<pointer_capability_types>(scope, context, request, cache);
+    return convert<pointer_request_types>(scope, context, request, cache)
+        .address;
   }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
   template <typename T, typename Context>
-  void *resolve_address(construction_scope scope, Context &context,
-                        type_descriptor requested_type,
-                        type_descriptor registered_type) {
+  resolved_value resolve_address(construction_scope scope, Context &context,
+                                 type_descriptor requested_type,
+                                 type_descriptor registered_type) {
     if constexpr (is_exact_lookup_v<T>) {
       if (!detail::matches_exact_lookup<resolved_type_t<T, Type>>(
               requested_type)) {
@@ -592,7 +589,7 @@ public:
     using Target = std::remove_reference_t<resolved_type_t<T, Type>>;
     binding_activation activation{*this, scope};
     return materialize_resolution_source(
-        scope, context, [&](auto &&source) -> void * {
+        scope, context, [&](auto &&source) -> resolved_value {
           return detail::resolve_binding_address_from_source<Target>(
               scope, activation, context,
               std::forward<decltype(source)>(source), requested_type,

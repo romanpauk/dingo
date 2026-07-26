@@ -128,20 +128,31 @@ constexpr binding_request<RTTI> make_binding_request(cache::sink cache = {}) {
                                       : binding_request_kind::value};
 }
 
-template <typename T> T convert_resolved_binding(void *ptr) {
+template <typename T> T convert_resolved_binding(resolved_value result) {
   using result_type = std::remove_reference_t<T>;
 
   if constexpr (std::is_lvalue_reference_v<T>) {
-    return *static_cast<result_type *>(ptr);
+    return *static_cast<result_type *>(result.address);
   } else if constexpr (std::is_rvalue_reference_v<T>) {
-    return std::move(*static_cast<result_type *>(ptr));
+    return std::move(*static_cast<result_type *>(result.address));
   } else if constexpr (std::is_pointer_v<T>) {
-    return static_cast<T>(ptr);
-  } else if constexpr (is_copy_constructible_v<T>) {
-    return *static_cast<T *>(ptr);
+    return static_cast<T>(result.address);
+  } else if constexpr (std::is_move_constructible_v<T> &&
+                       is_copy_constructible_v<T>) {
+    if (result.owned) {
+      return std::move(*static_cast<T *>(result.address));
+    }
+    return *static_cast<T *>(result.address);
+  } else if constexpr (std::is_move_constructible_v<T>) {
+    assert(result.owned);
+    return std::move(*static_cast<T *>(result.address));
   } else {
-    return std::move(*static_cast<T *>(ptr));
+    return *static_cast<T *>(result.address);
   }
+}
+
+template <typename T> T convert_resolved_binding(void *ptr) {
+  return convert_resolved_binding<T>({ptr, false});
 }
 
 template <typename T, typename Instance, typename Fn>
@@ -511,32 +522,36 @@ decltype(auto) apply_binding_conversion_from_source(
 }
 
 template <typename Target, typename Context, typename Instance>
-void *resolve_binding_address_from_instance(construction_scope scope,
-                                            Context &context,
-                                            Instance &&instance) {
-  return detail::get_address_as<Target>(
-      scope, context, std::forward<decltype(instance)>(instance));
+resolved_value resolve_binding_address_from_instance(construction_scope scope,
+                                                     Context &context,
+                                                     Instance &&instance) {
+  constexpr bool owns_value =
+      !std::is_reference_v<Instance> &&
+      !std::is_pointer_v<std::remove_reference_t<Instance>>;
+  return {detail::get_address_as<Target>(
+              scope, context, std::forward<decltype(instance)>(instance)),
+          owns_value};
 }
 
 template <typename Target, typename Resolver, typename Context,
           typename SourceCapability>
-void *resolve_binding_address_from_source(construction_scope scope,
-                                          Resolver &resolver, Context &context,
-                                          SourceCapability &&source,
-                                          type_descriptor requested_type,
-                                          type_descriptor registered_type) {
+resolved_value resolve_binding_address_from_source(
+    construction_scope scope, Resolver &resolver, Context &context,
+    SourceCapability &&source, type_descriptor requested_type,
+    type_descriptor registered_type) {
   using source_value_type = detail::source_value_type_t<SourceCapability>;
   if constexpr (std::is_pointer_v<Target> &&
                 std::is_same_v<detail::unqualified_t<Target>,
                                detail::unqualified_t<source_value_type>>) {
-    return const_cast<
-        std::remove_const_t<std::remove_pointer_t<source_value_type>> *>(
-        detail::materialized_reference(source));
+    return {
+        const_cast<std::remove_const_t<std::remove_pointer_t<source_value_type>>
+                       *>(detail::materialized_reference(source)),
+        false};
   } else if constexpr (std::is_lvalue_reference_v<SourceCapability> &&
                        std::is_same_v<
                            detail::unqualified_t<Target>,
                            detail::unqualified_t<source_value_type>>) {
-    return std::addressof(detail::materialized_reference(source));
+    return {std::addressof(detail::materialized_reference(source)), false};
   } else {
     return resolve_binding_address_from_instance<Target>(
         scope, context,
@@ -547,24 +562,27 @@ void *resolve_binding_address_from_source(construction_scope scope,
 }
 
 template <typename RTTI, typename Binding, typename Context>
-void *dispatch_binding_request(construction_scope scope, Binding &binding,
-                               Context &context,
-                               const binding_request<RTTI> &request) {
+resolved_value dispatch_binding_request(construction_scope scope,
+                                        Binding &binding, Context &context,
+                                        const binding_request<RTTI> &request) {
   switch (request.kind) {
   case binding_request_kind::pointer:
-    return binding.get_pointer(scope, context, request.request, request.cache);
+    return {binding.get_pointer(scope, context, request.request, request.cache),
+            false};
   case binding_request_kind::lvalue_reference:
-    return binding.get_lvalue_reference(scope, context, request.request,
-                                        request.cache);
+    return {binding.get_lvalue_reference(scope, context, request.request,
+                                         request.cache),
+            false};
   case binding_request_kind::rvalue_reference:
-    return binding.get_rvalue_reference(scope, context, request.request,
-                                        request.cache);
+    return {binding.get_rvalue_reference(scope, context, request.request,
+                                         request.cache),
+            false};
   case binding_request_kind::value:
     return binding.get_value(scope, context, request.request, request.cache);
   }
 
   assert(false);
-  return nullptr;
+  return {};
 }
 
 } // namespace detail
@@ -573,23 +591,21 @@ template <typename T, typename RTTI, typename Binding, typename Context>
 T resolve_binding_request(construction_scope scope, Binding &binding,
                           Context &context, detail::cache::sink cache = {}) {
   auto request = detail::make_binding_request<T, RTTI>(cache);
-  void *ptr =
+  auto result =
       detail::dispatch_binding_request<RTTI>(scope, binding, context, request);
-  return detail::convert_resolved_binding<T>(ptr);
+  return detail::convert_resolved_binding<T>(result);
 }
 
 template <typename RTTI, typename Factory, typename Context, typename... Types>
-void *resolve_binding_capability_address(construction_scope scope,
-                                         Factory &factory, Context &context,
-                                         type_list<Types...>,
-                                         const typename RTTI::type_index &type,
-                                         type_descriptor requested_type,
-                                         type_descriptor registered_type) {
-  void *address = nullptr;
+resolved_value resolve_binding_request_address(
+    construction_scope scope, Factory &factory, Context &context,
+    type_list<Types...>, const typename RTTI::type_index &type,
+    type_descriptor requested_type, type_descriptor registered_type) {
+  resolved_value result{};
   (void)scope;
   const bool matched =
       ((RTTI::template get_type_index<lookup_type_t<Types>>() == type
-            ? (address = factory.template resolve_address<Types>(
+            ? (result = factory.template resolve_address<Types>(
                    scope, context, requested_type, registered_type),
                true)
             : false) ||
@@ -600,7 +616,7 @@ void *resolve_binding_capability_address(construction_scope scope,
                                                       registered_type, context);
   }
 
-  return address;
+  return result;
 }
 
 template <typename Request>
