@@ -34,8 +34,15 @@ template <typename Type, std::size_t Size> struct raw_array_ref {
 template <typename Type, std::size_t Size> struct raw_array_ptr_to_array {
   template <typename Container> static void check(Container &container) {
     auto values = container.template resolve<Type(*)[Size]>();
+    auto const_values = container.template resolve<const Type(*)[Size]>();
+    auto volatile_values = container.template resolve<volatile Type(*)[Size]>();
+    auto cv_values = container.template resolve<const volatile Type(*)[Size]>();
+
     ASSERT_TRUE(is_constructed_value((*values)[0]));
     ASSERT_TRUE(is_constructed_value((*values)[Size - 1]));
+    ASSERT_EQ(values, const_values);
+    ASSERT_EQ(values, volatile_values);
+    ASSERT_EQ(values, cv_values);
   }
 };
 
@@ -43,8 +50,18 @@ template <typename Type, std::size_t Rows, std::size_t Columns>
 struct raw_nd_array_ref {
   template <typename Container> static void check(Container &container) {
     auto &values = container.template resolve<Type(&)[Rows][Columns]>();
+    auto &const_values =
+        container.template resolve<const Type(&)[Rows][Columns]>();
+    auto &volatile_values =
+        container.template resolve<volatile Type(&)[Rows][Columns]>();
+    auto &cv_values =
+        container.template resolve<const volatile Type(&)[Rows][Columns]>();
+
     ASSERT_TRUE(is_constructed_value(values[0][0]));
     ASSERT_TRUE(is_constructed_value(values[Rows - 1][Columns - 1]));
+    ASSERT_EQ(std::addressof(values), std::addressof(const_values));
+    ASSERT_EQ(std::addressof(values), std::addressof(volatile_values));
+    ASSERT_EQ(std::addressof(values), std::addressof(cv_values));
   }
 };
 

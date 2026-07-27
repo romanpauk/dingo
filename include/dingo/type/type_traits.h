@@ -47,11 +47,15 @@ template <typename T, typename = void> struct type_traits {
   static constexpr bool enabled = false;
   static constexpr bool is_pointer_like = false;
   static constexpr bool is_value_borrowable = false;
+  static constexpr bool is_owning_handle = false;
 
   template <typename> static constexpr bool is_handle_rebindable = false;
 
   template <typename> static constexpr bool is_rebindable = false;
 };
+
+template <typename T> struct type_traits<const T> : type_traits<T> {};
+
 template <typename T>
 inline constexpr bool is_pointer_like_type_v =
     type_traits<T>::enabled && type_traits<T>::is_pointer_like &&
@@ -97,11 +101,6 @@ template <typename T>
 inline constexpr bool is_copy_constructible_v =
     copy_constructible_traits<T>::value;
 
-template <typename Type, typename Selected, typename = void>
-struct construction_traits {
-  static constexpr bool enabled = false;
-};
-
 template <typename T, typename = void> struct alternative_type_traits {
   static constexpr bool enabled = false;
 };
@@ -146,6 +145,34 @@ template <typename Type>
 using alternative_type_alternatives_t =
     typename alternative_type_alternatives<Type>::type;
 
+template <typename T> struct variant_conversion_array {
+  T value[1];
+};
+
+template <typename Alternative, typename Source, typename = void>
+struct variant_conversion_candidate {
+  static void select();
+};
+
+template <typename Alternative, typename Source>
+struct variant_conversion_candidate<
+    Alternative, Source,
+    std::void_t<decltype(variant_conversion_array<Alternative>{
+        {std::declval<Source>()}})>> {
+  static type_list_iterator<Alternative> select(Alternative);
+};
+
+template <typename Source, typename... Alternatives>
+struct variant_conversion_candidates
+    : variant_conversion_candidate<Alternatives, Source>... {
+  using variant_conversion_candidate<Alternatives, Source>::select...;
+};
+
+template <typename Source, typename... Alternatives>
+using selected_variant_alternative_t =
+    typename decltype(variant_conversion_candidates<Source, Alternatives...>::
+                          select(std::declval<Source>()))::type;
+
 template <typename Type, typename Selected, typename = void>
 struct alternative_type_count : std::integral_constant<size_t, 0> {};
 
@@ -174,6 +201,10 @@ struct alternative_type_traits<std::variant<Alternatives...>> {
 
   using alternatives = type_list<Alternatives...>;
 
+  template <typename Source>
+  using selected_type =
+      detail::selected_variant_alternative_t<Source, Alternatives...>;
+
   template <typename Selected, typename Value>
   static std::variant<Alternatives...> wrap(Value &&value) {
     return std::variant<Alternatives...>(std::in_place_type<Selected>,
@@ -196,40 +227,6 @@ inline constexpr bool is_alternative_type_interface_compatible_v =
     detail::alternative_type_count<std::remove_cv_t<Type>,
                                    std::remove_cv_t<Interface>>::value == 1;
 
-template <typename Type, typename Selected>
-struct construction_traits<
-    Type, Selected,
-    std::enable_if_t<is_alternative_type_v<Type> &&
-                     (detail::alternative_type_count<Type, Selected>::value ==
-                      1)>> {
-  static constexpr bool enabled = true;
-
-  using type = std::remove_cv_t<Type>;
-
-  template <typename Value> static type wrap(Value &&value) {
-    return alternative_type_traits<type>::template wrap<Selected>(
-        std::forward<Value>(value));
-  }
-};
-
-template <typename Type, typename Selected>
-struct construction_traits<
-    Type, Selected,
-    std::enable_if_t<type_traits<Type>::enabled && !std::is_pointer_v<Type> &&
-                     construction_traits<typename type_traits<Type>::value_type,
-                                         Selected>::enabled>> {
-  static constexpr bool enabled = true;
-
-  using value_type = typename type_traits<Type>::value_type;
-  using type = Type;
-
-  template <typename Value> static type wrap(Value &&value) {
-    return type_traits<Type>::make(
-        construction_traits<value_type, Selected>::wrap(
-            std::forward<Value>(value)));
-  }
-};
-
 template <typename StorageTag, typename Type, typename U, typename = void>
 struct storage_traits {
   static constexpr bool enabled = false;
@@ -239,7 +236,6 @@ struct storage_traits {
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<>;
-  using conversion_types = type_list<>;
 };
 
 template <typename StorageTag, typename Type, typename U>
@@ -410,6 +406,7 @@ template <typename T> struct type_traits<T *> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = true;
+  static constexpr bool is_owning_handle = false;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -444,6 +441,7 @@ template <> struct type_traits<void *> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = false;
+  static constexpr bool is_owning_handle = false;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -477,6 +475,7 @@ template <> struct type_traits<const void *> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = false;
+  static constexpr bool is_owning_handle = false;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -514,6 +513,7 @@ struct type_traits<std::unique_ptr<Array, Deleter>,
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = false;
+  static constexpr bool is_owning_handle = true;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -572,6 +572,7 @@ struct type_traits<std::unique_ptr<T, Deleter>,
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = true;
+  static constexpr bool is_owning_handle = true;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -638,6 +639,7 @@ struct type_traits<std::shared_ptr<Array>,
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = false;
+  static constexpr bool is_owning_handle = true;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -687,6 +689,7 @@ struct type_traits<std::shared_ptr<T>, std::enable_if_t<!std::is_array_v<T>>> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = true;
+  static constexpr bool is_owning_handle = true;
 
   template <typename Target>
   static constexpr bool is_handle_rebindable =
@@ -742,6 +745,7 @@ template <typename T> struct type_traits<std::optional<T>> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = false;
   static constexpr bool is_value_borrowable = true;
+  static constexpr bool is_owning_handle = false;
 
   template <typename> static constexpr bool is_handle_rebindable = false;
 
@@ -771,6 +775,12 @@ template <typename T> struct type_traits<std::optional<T>> {
   }
 
   static void reset(std::optional<T> &wrapper) { wrapper.reset(); }
+
+  template <typename Value> static std::optional<T> wrap(Value &&value) {
+    return std::optional<T>(std::in_place, std::forward<Value>(value));
+  }
+
+  static std::optional<T> make_empty() { return std::nullopt; }
 
   template <typename... Args> static std::optional<T> make(Args &&...args) {
     if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)

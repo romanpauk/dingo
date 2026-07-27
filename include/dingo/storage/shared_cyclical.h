@@ -58,7 +58,6 @@ struct storage_traits<
   using lvalue_reference_types = type_list<U &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *>;
-  using conversion_types = type_list<>;
 };
 
 template <typename Type, typename U>
@@ -70,7 +69,6 @@ struct storage_traits<shared_cyclical, Type *, U> {
   using lvalue_reference_types = type_list<U &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *>;
-  using conversion_types = type_list<>;
 };
 
 template <typename Type, typename U>
@@ -82,7 +80,6 @@ struct storage_traits<shared_cyclical, std::shared_ptr<Type>, U> {
   using lvalue_reference_types = type_list<U &, std::shared_ptr<U> &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, std::shared_ptr<U> *>;
-  using conversion_types = type_list<std::shared_ptr<U>>;
 };
 
 template <typename Base, typename Derived> struct is_virtual_base {
@@ -321,6 +318,10 @@ public:
   using conversions = Conversions;
   using type = Type;
   using stored_type = StoredType;
+  using resolved_type =
+      decltype(std::declval<storage_instance<shared_cyclical, Type, StoredType,
+                                             Factory> &>()
+                   .get());
   using tag_type = shared_cyclical;
 
   template <typename Context, typename Container>

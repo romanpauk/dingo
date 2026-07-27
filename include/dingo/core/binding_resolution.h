@@ -12,8 +12,8 @@
 #include <dingo/core/exceptions.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/resolution/conversion_cache.h>
+#include <dingo/resolution/resolution_operation.h>
 #include <dingo/resolution/runtime_binding_interface.h>
-#include <dingo/resolution/type_conversion.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/dependency_traits.h>
 #include <dingo/type/normalized_type.h>
@@ -128,20 +128,33 @@ constexpr binding_request<RTTI> make_binding_request(cache::sink cache = {}) {
                                       : binding_request_kind::value};
 }
 
-template <typename T> T convert_resolved_binding(void *ptr) {
+template <typename T> T convert_resolved_binding(resolved_address result) {
   using result_type = std::remove_reference_t<T>;
+  using value_type = std::remove_cv_t<result_type>;
 
   if constexpr (std::is_lvalue_reference_v<T>) {
-    return *static_cast<result_type *>(ptr);
+    return *static_cast<result_type *>(result.address);
   } else if constexpr (std::is_rvalue_reference_v<T>) {
-    return std::move(*static_cast<result_type *>(ptr));
+    return std::move(*static_cast<result_type *>(result.address));
   } else if constexpr (std::is_pointer_v<T>) {
-    return static_cast<T>(ptr);
-  } else if constexpr (is_copy_constructible_v<T>) {
-    return *static_cast<T *>(ptr);
+    return static_cast<T>(result.address);
+  } else if constexpr (std::is_move_constructible_v<value_type> &&
+                       is_copy_constructible_v<value_type>) {
+    if (result.access == resolved_address::access_kind::consume) {
+      return std::move(*static_cast<value_type *>(result.address));
+    }
+    return *static_cast<value_type *>(result.address);
+  } else if constexpr (std::is_move_constructible_v<value_type>) {
+    assert(result.access == resolved_address::access_kind::consume);
+    return std::move(*static_cast<value_type *>(result.address));
   } else {
-    return std::move(*static_cast<T *>(ptr));
+    return *static_cast<value_type *>(result.address);
   }
+}
+
+template <typename T> T convert_resolved_binding(void *ptr) {
+  return convert_resolved_binding<T>(
+      {ptr, resolved_address::access_kind::borrow});
 }
 
 template <typename T, typename Instance, typename Fn>
@@ -158,54 +171,43 @@ decltype(auto) forward_resolved_binding(Instance &&instance, Fn &&fn) {
 
 template <typename T, typename Instance, typename Fn>
 decltype(auto) consume_resolved_binding(Instance &&instance, Fn &&fn) {
-  if constexpr (std::is_lvalue_reference_v<T> || std::is_pointer_v<T>) {
+  if constexpr (std::is_lvalue_reference_v<T> || std::is_pointer_v<T> ||
+                (!std::is_rvalue_reference_v<T> &&
+                 !std::is_constructible_v<T, Instance &&>)) {
     return std::forward<Fn>(fn)(instance);
-  } else if constexpr (!std::is_rvalue_reference_v<T> &&
-                       is_copy_constructible_v<T>) {
-    using value_type = std::remove_reference_t<T>;
-    return std::forward<Fn>(fn)(value_type(std::forward<Instance>(instance)));
   } else {
-    return std::forward<Fn>(fn)(
-        static_cast<std::remove_reference_t<Instance> &&>(instance));
+    return std::forward<Fn>(fn)(std::forward<Instance>(instance));
   }
 }
 
-template <typename ExactLookup>
-constexpr bool matches_exact_lookup(type_descriptor requested_type) {
-  if (requested_type == describe_type<ExactLookup>()) {
-    return true;
-  }
-
-  if constexpr (std::is_lvalue_reference_v<ExactLookup>) {
-    using target_type = std::remove_reference_t<ExactLookup>;
-    return requested_type == describe_type<const target_type &>();
-  } else if constexpr (std::is_pointer_v<ExactLookup>) {
-    using target_type = std::remove_pointer_t<ExactLookup>;
-    return requested_type == describe_type<const target_type *>();
-  } else {
-    return false;
-  }
+template <typename... Requests>
+constexpr bool matches_resolution_request(type_descriptor requested_type,
+                                          type_list<Requests...>) {
+  return ((requested_type == describe_type<Requests>()) || ...);
 }
 
 template <typename Target, typename Context, typename T>
-void *get_address_as(construction_scope scope, Context &context, T &&instance) {
+void *result_address(construction_scope scope, Context &context, T &&instance) {
   using instance_type = std::remove_reference_t<T>;
 
   if constexpr (std::is_pointer_v<instance_type>) {
-    return const_cast<
-        std::remove_const_t<std::remove_pointer_t<instance_type>> *>(instance);
+    return const_cast<std::remove_cv_t<std::remove_pointer_t<instance_type>> *>(
+        instance);
   } else if constexpr (std::is_reference_v<T>) {
-    return const_cast<std::remove_const_t<instance_type> *>(&instance);
-  } else {
+    return const_cast<std::remove_cv_t<instance_type> *>(&instance);
+  } else if constexpr (std::is_constructible_v<Target, T &&>) {
     return &context.template construct<Target>(scope,
                                                std::forward<T>(instance));
+  } else {
+    static_assert(std::is_constructible_v<Target, T &>,
+                  "resolution result must construct the requested type");
+    return &context.template construct<Target>(scope, instance);
   }
 }
 
 template <typename Storage, typename Context, typename Owner, typename Fn>
-decltype(auto) materialize_binding_source(construction_scope scope,
-                                          Context &context, Storage &storage,
-                                          Owner &owner, Fn &&fn) {
+decltype(auto) with_binding_source(construction_scope scope, Context &context,
+                                   Storage &storage, Owner &owner, Fn &&fn) {
   using materialization_traits =
       storage_materialization_traits<typename Storage::tag_type,
                                      typename Storage::type>;
@@ -238,9 +240,9 @@ inline constexpr bool materializes_value_source_v = [] {
 }();
 
 template <typename Storage, typename Context, typename Owner, typename Fn>
-decltype(auto)
-materialize_tracked_binding_source(construction_scope scope, Context &context,
-                                   Storage &storage, Owner &owner, Fn &&fn) {
+decltype(auto) with_tracked_binding_source(construction_scope scope,
+                                           Context &context, Storage &storage,
+                                           Owner &owner, Fn &&fn) {
   using materialization_traits =
       storage_materialization_traits<typename Storage::tag_type,
                                      typename Storage::type>;
@@ -254,10 +256,9 @@ materialize_tracked_binding_source(construction_scope scope, Context &context,
 }
 
 template <typename Storage, typename Context, typename Owner, typename Fn>
-decltype(auto)
-materialize_lvalue_binding_source_in_context(construction_scope scope,
-                                             Context &context, Storage &storage,
-                                             Owner &owner, Fn &&fn) {
+decltype(auto) with_context_lvalue_source(construction_scope scope,
+                                          Context &context, Storage &storage,
+                                          Owner &owner, Fn &&fn) {
   using materialization_traits =
       storage_materialization_traits<typename Storage::tag_type,
                                      typename Storage::type>;
@@ -276,10 +277,10 @@ materialize_lvalue_binding_source_in_context(construction_scope scope,
 
 template <typename Storage, typename Context, typename Owner, typename Frame,
           typename Fn>
-decltype(auto)
-materialize_binding_resolution_source(construction_scope scope,
-                                      Context &context, Storage &storage,
-                                      Owner &owner, Frame &frame, Fn &&fn) {
+decltype(auto) with_retained_binding_source(construction_scope scope,
+                                            Context &context, Storage &storage,
+                                            Owner &owner, Frame &frame,
+                                            Fn &&fn) {
   using materialization_traits =
       storage_materialization_traits<typename Storage::tag_type,
                                      typename Storage::type>;
@@ -304,9 +305,9 @@ materialize_binding_resolution_source(construction_scope scope,
 }
 
 template <typename Storage, typename Context, typename Owner, typename Fn>
-decltype(auto) materialize_runtime_binding_resolution_source(
-    construction_scope scope, Context &context, Storage &storage, Owner &owner,
-    Fn &&fn) {
+decltype(auto) with_runtime_binding_source(construction_scope scope,
+                                           Context &context, Storage &storage,
+                                           Owner &owner, Fn &&fn) {
   using materialization_traits =
       storage_materialization_traits<typename Storage::tag_type,
                                      typename Storage::type>;
@@ -348,10 +349,10 @@ decltype(auto) materialize_runtime_binding_resolution_source(
 
 template <typename T, typename Storage, typename ConversionResolver,
           typename Context, typename Source>
-decltype(auto) resolve_binding_conversion(construction_scope scope,
-                                          Storage &storage,
-                                          ConversionResolver &resolver,
-                                          Context &context, Source &&source) {
+decltype(auto) retain_binding_conversion(construction_scope scope,
+                                         Storage &storage,
+                                         ConversionResolver &resolver,
+                                         Context &context, Source &&source) {
   if constexpr (has_storage_resolve_conversion<Storage, T, Context,
                                                Source &&>::value) {
     return storage.template resolve_conversion<T>(context,
@@ -363,208 +364,126 @@ decltype(auto) resolve_binding_conversion(construction_scope scope,
 }
 
 template <typename Target, typename Resolver, typename Context,
-          typename SourceCapability>
+          typename MaterializedSource>
 decltype(auto) resolve_binding_value(Resolver &resolver, Context &context,
-                                     SourceCapability &&source) {
-  using source_capability = std::remove_reference_t<SourceCapability>;
-  using source_type = decltype(std::declval<source_capability>().get());
-
-  if constexpr (std::is_same_v<Target, source_type>) {
-    return std::forward<SourceCapability>(source).get();
-  } else {
-    return resolver.template resolve_conversion<Target>(
-        context, std::forward<SourceCapability>(source).get());
-  }
+                                     MaterializedSource &&source) {
+  using source_type = decltype(std::forward<MaterializedSource>(source).get());
+  using conversion = type_conversion_path_t<Target &, source_type, borrow>;
+  static_assert(conversion::available);
+  return type_conversion<conversion>::apply(
+      resolver, context, std::forward<MaterializedSource>(source).get(),
+      describe_type<Target>(),
+      describe_type<std::remove_reference_t<source_type>>());
 }
 
-template <typename Request, typename Storage, typename Resolver,
-          typename Context, typename SourceCapability>
-decltype(auto) resolve_binding_request(Resolver &resolver, Context &context,
-                                       SourceCapability &&source) {
-  using source_capability = std::remove_reference_t<SourceCapability>;
-  using source_type = decltype(std::declval<source_capability>().get());
-
-  if constexpr (std::is_same_v<Request, source_type>) {
-    return std::forward<SourceCapability>(source).get();
-  } else {
-    return type_conversion<Request, source_capability>::apply(
-        resolver, context, std::forward<SourceCapability>(source),
-        describe_type<Request>(), describe_type<typename Storage::type>());
-  }
+template <typename Request, typename Resolution, typename Storage,
+          typename Resolver, typename Context, typename MaterializedSource>
+decltype(auto) apply_resolution(Resolver &resolver, Context &context,
+                                MaterializedSource &&source) {
+  using operation = typename Resolution::operation;
+  return operation::template apply<Storage>(
+      resolver, context, std::forward<MaterializedSource>(source),
+      describe_type<Request>(), describe_type<typename Storage::type>());
 }
 
-template <typename Request, typename Storage, typename Resolver,
-          typename Context, typename SourceCapability, typename Fn>
-decltype(auto)
-handle_resolved_binding_request(Resolver &resolver, Context &context,
-                                SourceCapability &&source, Fn &&fn) {
-  auto &&instance = resolve_binding_request<Request, Storage>(
-      resolver, context, std::forward<SourceCapability>(source));
-  return forward_resolved_binding<Request>(
-      std::forward<decltype(instance)>(instance), std::forward<Fn>(fn));
-}
-
-template <typename Request, typename Storage, typename Resolver,
-          typename Context, typename SourceCapability, typename Fn>
-decltype(auto)
-consume_resolved_binding_request(Resolver &resolver, Context &context,
-                                 SourceCapability &&source, Fn &&fn) {
-  auto &&instance = resolve_binding_request<Request, Storage>(
-      resolver, context, std::forward<SourceCapability>(source));
+template <typename Request, typename Resolution, typename Storage,
+          typename Resolver, typename Context, typename MaterializedSource,
+          typename Fn>
+decltype(auto) apply_consumed_resolution(Resolver &resolver, Context &context,
+                                         MaterializedSource &&source, Fn &&fn) {
+  auto &&instance = apply_resolution<Request, Resolution, Storage>(
+      resolver, context, std::forward<MaterializedSource>(source));
   return consume_resolved_binding<Request>(
       std::forward<decltype(instance)>(instance), std::forward<Fn>(fn));
 }
 
-template <typename Request, typename Storage, typename Resolver,
-          typename Context, typename Owner, typename Fn>
-decltype(auto) forward_binding_request(construction_scope scope,
-                                       Context &context, Storage &storage,
-                                       Owner &owner, Resolver &resolver,
-                                       Fn &&fn) {
-  return materialize_tracked_binding_source(
-      scope, context, storage, owner, [&](auto &&source) -> decltype(auto) {
-        return handle_resolved_binding_request<Request, Storage>(
-            resolver, context, std::forward<decltype(source)>(source),
-            std::forward<Fn>(fn));
-      });
-}
-
-template <typename Request, typename Storage, typename Resolver,
-          typename Context, typename Owner, typename Frame, typename Fn>
-decltype(auto)
-forward_binding_resolution_request(construction_scope scope, Context &context,
-                                   Storage &storage, Owner &owner, Frame &frame,
-                                   Resolver &resolver, Fn &&fn) {
-  return materialize_binding_resolution_source(
-      scope, context, storage, owner, frame,
-      [&](auto &&source) -> decltype(auto) {
-        return handle_resolved_binding_request<Request, Storage>(
-            resolver, context, std::forward<decltype(source)>(source),
-            std::forward<Fn>(fn));
-      });
-}
-
-template <typename Request, typename Storage, typename Resolver,
-          typename Context, typename Owner, typename Fn>
-decltype(auto) forward_runtime_binding_resolution_request(
-    construction_scope scope, Context &context, Storage &storage, Owner &owner,
-    Resolver &resolver, Fn &&fn) {
-  return materialize_runtime_binding_resolution_source(
-      scope, context, storage, owner, [&](auto &&source) -> decltype(auto) {
-        return handle_resolved_binding_request<Request, Storage>(
-            resolver, context, std::forward<decltype(source)>(source),
-            std::forward<Fn>(fn));
-      });
-}
-
-template <typename Request, typename Storage, typename Resolver,
-          typename Context, typename Owner, typename Fn>
-decltype(auto) consume_binding_request(construction_scope scope,
-                                       Context &context, Storage &storage,
-                                       Owner &owner, Resolver &resolver,
-                                       Fn &&fn) {
-  return materialize_tracked_binding_source(
-      scope, context, storage, owner, [&](auto &&source) -> decltype(auto) {
-        return consume_resolved_binding_request<Request, Storage>(
-            resolver, context, std::forward<decltype(source)>(source),
-            std::forward<Fn>(fn));
-      });
-}
-
-template <typename Request, typename Storage, typename Resolver,
-          typename Context, typename Owner, typename Fn>
+template <typename Request, typename Resolution, typename Storage,
+          typename Resolver, typename Context, typename Owner, typename Fn>
 decltype(auto) consume_runtime_binding_resolution_request(
     construction_scope scope, Context &context, Storage &storage, Owner &owner,
     Resolver &resolver, Fn &&fn) {
-  return materialize_runtime_binding_resolution_source(
+  return with_runtime_binding_source(
       scope, context, storage, owner, [&](auto &&source) -> decltype(auto) {
-        return consume_resolved_binding_request<Request, Storage>(
+        return apply_consumed_resolution<Request, Resolution, Storage>(
             resolver, context, std::forward<decltype(source)>(source),
             std::forward<Fn>(fn));
       });
 }
 
-template <typename Request, typename Storage, typename Resolver,
-          typename Context, typename Owner, typename Frame, typename Fn>
+template <typename Request, typename Resolution, typename Storage,
+          typename Resolver, typename Context, typename Owner, typename Frame,
+          typename Fn>
 decltype(auto)
 consume_binding_resolution_request(construction_scope scope, Context &context,
                                    Storage &storage, Owner &owner, Frame &frame,
                                    Resolver &resolver, Fn &&fn) {
-  return materialize_binding_resolution_source(
-      scope, context, storage, owner, frame,
-      [&](auto &&source) -> decltype(auto) {
-        return consume_resolved_binding_request<Request, Storage>(
-            resolver, context, std::forward<decltype(source)>(source),
-            std::forward<Fn>(fn));
-      });
-}
-
-template <typename Target, typename Resolver, typename Context,
-          typename SourceCapability>
-decltype(auto) apply_binding_conversion_from_source(
-    Resolver &resolver, Context &context, SourceCapability &&source,
-    type_descriptor requested_type, type_descriptor registered_type) {
-  using source_capability = std::remove_reference_t<SourceCapability>;
-  return type_conversion<Target, source_capability>::apply(
-      resolver, context, std::forward<SourceCapability>(source), requested_type,
-      registered_type);
-}
-
-template <typename Target, typename Context, typename Instance>
-void *resolve_binding_address_from_instance(construction_scope scope,
-                                            Context &context,
-                                            Instance &&instance) {
-  return detail::get_address_as<Target>(
-      scope, context, std::forward<decltype(instance)>(instance));
-}
-
-template <typename Target, typename Resolver, typename Context,
-          typename SourceCapability>
-void *resolve_binding_address_from_source(construction_scope scope,
-                                          Resolver &resolver, Context &context,
-                                          SourceCapability &&source,
-                                          type_descriptor requested_type,
-                                          type_descriptor registered_type) {
-  using source_value_type = detail::source_value_type_t<SourceCapability>;
-  if constexpr (std::is_pointer_v<Target> &&
-                std::is_same_v<detail::unqualified_t<Target>,
-                               detail::unqualified_t<source_value_type>>) {
-    return const_cast<
-        std::remove_const_t<std::remove_pointer_t<source_value_type>> *>(
-        detail::materialized_reference(source));
-  } else if constexpr (std::is_lvalue_reference_v<SourceCapability> &&
-                       std::is_same_v<
-                           detail::unqualified_t<Target>,
-                           detail::unqualified_t<source_value_type>>) {
-    return std::addressof(detail::materialized_reference(source));
+  auto consume = [&](auto &&source) -> decltype(auto) {
+    return apply_consumed_resolution<Request, Resolution, Storage>(
+        resolver, context, std::forward<decltype(source)>(source),
+        std::forward<Fn>(fn));
+  };
+  using operation = typename Resolution::operation;
+  if constexpr (operation_requires_source_retention_v<operation, Storage>) {
+    return with_retained_binding_source(scope, context, storage, owner, frame,
+                                        std::move(consume));
   } else {
-    return resolve_binding_address_from_instance<Target>(
-        scope, context,
-        apply_binding_conversion_from_source<Target>(
-            resolver, context, std::forward<SourceCapability>(source),
-            requested_type, registered_type));
+    return with_binding_source(scope, context, storage, owner,
+                               std::move(consume));
   }
 }
 
+template <typename Target, typename Context, typename Instance>
+resolved_address resolve_binding_address_from_instance(construction_scope scope,
+                                                       Context &context,
+                                                       Instance &&instance) {
+  constexpr bool owns_value =
+      !std::is_reference_v<Instance> &&
+      !std::is_pointer_v<std::remove_reference_t<Instance>>;
+  return {detail::result_address<Target>(
+              scope, context, std::forward<decltype(instance)>(instance)),
+          owns_value ? resolved_address::access_kind::consume
+                     : resolved_address::access_kind::borrow};
+}
+
+template <typename Resolution, typename Storage, typename Resolver,
+          typename Context, typename MaterializedSource>
+resolved_address
+resolve_address_from_source(construction_scope scope, Resolver &resolver,
+                            Context &context, MaterializedSource &&source,
+                            type_descriptor requested_type,
+                            type_descriptor registered_type) {
+  using address_type = typename Resolution::result_type;
+  using operation = typename Resolution::operation;
+  auto &&instance = operation::template apply<Storage>(
+      resolver, context, std::forward<MaterializedSource>(source),
+      requested_type, registered_type);
+  return resolve_binding_address_from_instance<address_type>(
+      scope, context, std::forward<decltype(instance)>(instance));
+}
+
 template <typename RTTI, typename Binding, typename Context>
-void *dispatch_binding_request(construction_scope scope, Binding &binding,
-                               Context &context,
-                               const binding_request<RTTI> &request) {
+resolved_address
+dispatch_binding_request(construction_scope scope, Binding &binding,
+                         Context &context,
+                         const binding_request<RTTI> &request) {
   switch (request.kind) {
   case binding_request_kind::pointer:
-    return binding.get_pointer(scope, context, request.request, request.cache);
+    return {binding.get_pointer(scope, context, request.request, request.cache),
+            resolved_address::access_kind::borrow};
   case binding_request_kind::lvalue_reference:
-    return binding.get_lvalue_reference(scope, context, request.request,
-                                        request.cache);
+    return {binding.get_lvalue_reference(scope, context, request.request,
+                                         request.cache),
+            resolved_address::access_kind::borrow};
   case binding_request_kind::rvalue_reference:
-    return binding.get_rvalue_reference(scope, context, request.request,
-                                        request.cache);
+    return {binding.get_rvalue_reference(scope, context, request.request,
+                                         request.cache),
+            resolved_address::access_kind::consume};
   case binding_request_kind::value:
     return binding.get_value(scope, context, request.request, request.cache);
   }
 
   assert(false);
-  return nullptr;
+  return {};
 }
 
 } // namespace detail
@@ -573,23 +492,23 @@ template <typename T, typename RTTI, typename Binding, typename Context>
 T resolve_binding_request(construction_scope scope, Binding &binding,
                           Context &context, detail::cache::sink cache = {}) {
   auto request = detail::make_binding_request<T, RTTI>(cache);
-  void *ptr =
+  auto result =
       detail::dispatch_binding_request<RTTI>(scope, binding, context, request);
-  return detail::convert_resolved_binding<T>(ptr);
+  return detail::convert_resolved_binding<T>(result);
 }
 
-template <typename RTTI, typename Factory, typename Context, typename... Types>
-void *resolve_binding_capability_address(construction_scope scope,
+template <typename Factory, typename Context, typename... Resolutions>
+resolved_address resolve_request_address(construction_scope scope,
                                          Factory &factory, Context &context,
-                                         type_list<Types...>,
-                                         const typename RTTI::type_index &type,
+                                         type_list<Resolutions...>,
                                          type_descriptor requested_type,
                                          type_descriptor registered_type) {
-  void *address = nullptr;
+  resolved_address result{};
   (void)scope;
   const bool matched =
-      ((RTTI::template get_type_index<lookup_type_t<Types>>() == type
-            ? (address = factory.template resolve_address<Types>(
+      ((detail::matches_resolution_request(
+            requested_type, typename Resolutions::request_types{})
+            ? (result = factory.template resolve_address<Resolutions>(
                    scope, context, requested_type, registered_type),
                true)
             : false) ||
@@ -600,7 +519,7 @@ void *resolve_binding_capability_address(construction_scope scope,
                                                       registered_type, context);
   }
 
-  return address;
+  return result;
 }
 
 template <typename Request>
@@ -633,8 +552,6 @@ inline constexpr bool construct_factory_request_v =
     (std::is_pointer_v<ResolvedRequest> ||
      (type_traits<ResolvedRequest>::enabled &&
       !std::is_reference_v<ResolvedRequest>) ||
-     construction_traits<ResolvedRequest,
-                         normalized_type_t<Request>>::enabled ||
      std::is_constructible_v<ResolvedRequest, normalized_type_t<Request>>);
 
 template <typename Request, typename MakeNotConvertible, typename MakeNotFound>

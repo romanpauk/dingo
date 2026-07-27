@@ -99,7 +99,7 @@ problem into:
 
 - wrapper semantics in `type_traits`
 - storage exposure in `storage_traits`
-- runtime conversion in `type_conversion`
+- the operation carried by the matched `resolution`
 
 The rebinding utilities are what allow those three layers to compose.
 

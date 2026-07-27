@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/core/config.h>
+#include <dingo/resolution/resolution_operation.h>
 #include <dingo/type/type_traits.h>
 
 #include <type_traits>
@@ -74,7 +75,17 @@ struct constructor_traits<
 };
 
 namespace detail {
-template <typename Type, typename Selected, typename = void>
+template <typename Type>
+using construction_result_t =
+    std::conditional_t<std::is_pointer_v<Type>, std::remove_pointer_t<Type>,
+                       Type>;
+
+template <typename Type, typename Selected>
+using construction_conversion_t =
+    type_conversion_path_t<construction_result_t<Type>, Selected &&, consume>;
+
+template <typename Type, typename Selected,
+          typename Conversion = construction_conversion_t<Type, Selected>>
 struct construction_dispatch {
   template <typename... Args> static auto construct(Args &&...args) {
     return constructor_traits<Type>::construct(std::forward<Args>(args)...);
@@ -85,37 +96,27 @@ struct construction_dispatch {
   }
 };
 
-template <typename Type, typename Selected>
-struct construction_dispatch<
-    Type, Selected,
-    std::enable_if_t<construction_traits<Type, Selected>::enabled>> {
-  using type = typename construction_traits<Type, Selected>::type;
+template <typename Type, typename Selected, typename Conversion>
+struct construction_dispatch<Type, Selected,
+                             converted_construction<Conversion>> {
+  using type = construction_result_t<Type>;
 
   template <typename... Args> static auto construct(Args &&...args) {
-    return construction_traits<Type, Selected>::wrap(
-        constructor_traits<Selected>::construct(std::forward<Args>(args)...));
+    if constexpr (std::is_pointer_v<Type>) {
+      return new type(convert_type<type>(
+          constructor_traits<Selected>::construct(std::forward<Args>(args)...),
+          Conversion{}));
+    } else {
+      return convert_type<type>(
+          constructor_traits<Selected>::construct(std::forward<Args>(args)...),
+          Conversion{});
+    }
   }
 
   template <typename... Args> static void construct(void *ptr, Args &&...args) {
-    new (ptr) type(construction_traits<Type, Selected>::wrap(
-        constructor_traits<Selected>::construct(std::forward<Args>(args)...)));
-  }
-};
-
-template <typename Type, typename Selected>
-struct construction_dispatch<
-    Type *, Selected,
-    std::enable_if_t<construction_traits<Type, Selected>::enabled>> {
-  using type = typename construction_traits<Type, Selected>::type;
-
-  template <typename... Args> static auto construct(Args &&...args) {
-    return new type(construction_traits<Type, Selected>::wrap(
-        constructor_traits<Selected>::construct(std::forward<Args>(args)...)));
-  }
-
-  template <typename... Args> static void construct(void *ptr, Args &&...args) {
-    new (ptr) type(construction_traits<Type, Selected>::wrap(
-        constructor_traits<Selected>::construct(std::forward<Args>(args)...)));
+    new (ptr) type(convert_type<type>(
+        constructor_traits<Selected>::construct(std::forward<Args>(args)...),
+        Conversion{}));
   }
 };
 } // namespace detail

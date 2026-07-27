@@ -87,8 +87,12 @@ void check_shared_cyclical_storage(Container &container, Type &instance) {
   ASSERT_EQ(&container.template resolve<Type &>(), &instance);
   ASSERT_EQ(container.template resolve<Type *>(), &instance);
   if constexpr (SharedOwnership) {
-    auto handle = container.template resolve<std::shared_ptr<Type>>();
-    ASSERT_EQ(handle.get(), &instance);
+    auto first_handle = container.template resolve<std::shared_ptr<Type>>();
+    auto second_handle = container.template resolve<std::shared_ptr<Type>>();
+    ASSERT_EQ(first_handle.get(), &instance);
+    ASSERT_EQ(second_handle.get(), &instance);
+    ASSERT_FALSE(first_handle.owner_before(second_handle));
+    ASSERT_FALSE(second_handle.owner_before(first_handle));
     ASSERT_EQ(container.template resolve<std::shared_ptr<Type> &>().get(),
               &instance);
     ASSERT_EQ(container.template resolve<std::shared_ptr<Type> *>()->get(),

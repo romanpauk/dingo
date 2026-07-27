@@ -96,11 +96,11 @@ using size_multi_interface_model =
     detail::binding_model<size_multi_interface_registration>;
 using size_multi_interface_storage =
     typename size_multi_interface_model::storage_type;
-using size_multi_interface_conversion_types =
-    detail::runtime_binding_conversion_types_t<size_interface,
-                                               size_multi_interface_storage>;
+using size_multi_interface_cache_types =
+    detail::runtime_binding_cache_types_t<size_interface,
+                                          size_multi_interface_storage>;
 using size_multi_interface_conversion_cache =
-    conversion_cache<size_multi_interface_conversion_types>;
+    conversion_cache<size_multi_interface_cache_types>;
 using size_multi_interface_state = detail::runtime_binding_state_t<
     size_registry_type, size_instance_container, size_multi_interface_storage,
     typename size_multi_interface_model::bindings_type>;
@@ -254,7 +254,7 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
   static_assert(!std::is_polymorphic_v<size_storage>);
   static_assert(sizeof(size_multi_interface_conversion_cache) <=
                 sizeof(void *) *
-                    type_list_size_v<size_multi_interface_conversion_types>);
+                    type_list_size_v<size_multi_interface_cache_types>);
   static_assert(sizeof(size_base_lookup_key) == sizeof(size_type_index) * 2);
   static_assert(sizeof(size_probe_registry::runtime_lookup_binding_view) ==
                 sizeof(void *));

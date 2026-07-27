@@ -171,7 +171,7 @@ if(DINGO_DEVELOPMENT_MODE)
         type/type_list.h
         type/type_name.h
         type/type_traits.h
-        resolution/type_conversion.h
+        resolution/resolution_operation.h
     )
 
     set(DINGO_INTERFACE_SOURCES "")

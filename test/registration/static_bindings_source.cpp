@@ -6,6 +6,7 @@
 //
 
 #include <dingo/container.h>
+#include <dingo/factory/function.h>
 #include <dingo/registration/constructor.h>
 #include <dingo/static/registry.h>
 #include <dingo/static_container.h>
@@ -16,8 +17,50 @@
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <optional>
+#include <variant>
 
 using namespace dingo;
+
+namespace {
+std::optional<int> make_optional() { return 11; }
+
+using nested_optional = std::optional<std::optional<std::variant<int, float>>>;
+
+nested_optional make_nested_optional() {
+  return nested_optional{std::in_place, std::in_place, std::in_place_type<int>,
+                         17};
+}
+} // namespace
+
+TEST(static_bindings_source_test,
+     borrowable_storage_constructs_and_borrows_its_value) {
+  using source = dingo::bindings<
+      dingo::bind<scope<shared>, storage<std::optional<int>>, interfaces<int>,
+                  factory<function<make_optional>>>>;
+
+  dingo::static_container<source> container;
+  auto &optional = container.resolve<const std::optional<int> &>();
+
+  EXPECT_EQ(container.resolve<int>(), 11);
+  EXPECT_EQ(container.resolve<const int>(), 11);
+  EXPECT_EQ(&container.resolve<const int &>(), &*optional);
+  EXPECT_EQ(container.resolve<const int *>(), &*optional);
+}
+
+TEST(static_bindings_source_test,
+     nested_borrowable_storage_uses_the_published_conversion) {
+  using source = dingo::bindings<
+      dingo::bind<scope<shared>, storage<nested_optional>, interfaces<int>,
+                  factory<function<make_nested_optional>>>>;
+
+  dingo::static_container<source> container;
+  auto &value = container.resolve<const int &>();
+
+  EXPECT_EQ(container.resolve<int>(), 17);
+  EXPECT_EQ(value, 17);
+  EXPECT_EQ(container.resolve<const int *>(), &value);
+}
 
 TEST(static_bindings_source_test, exposes_models_and_dependency_bindings) {
   struct config {};

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/registration/type_registration.h>
+#include <dingo/resolution/resolution_operation.h>
 #include <dingo/static/registry.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/type_list.h>
@@ -323,10 +324,41 @@ template <typename InterfaceBinding>
 inline constexpr bool static_binding_is_stable_v =
     InterfaceBinding::binding_model_type::storage_type::conversions::is_stable;
 
+template <typename Types> struct temporary_storage_traits;
+
+template <> struct temporary_storage_traits<type_list<>> {
+  static constexpr std::size_t slots = 0;
+  static constexpr std::size_t destructible_slots = 0;
+  static constexpr std::size_t size = 0;
+  static constexpr std::size_t align = 0;
+};
+
+template <typename... Types>
+struct temporary_storage_traits<type_list<Types...>> {
+  static constexpr std::size_t slots = 1;
+  static constexpr std::size_t destructible_slots =
+      (!std::is_trivially_destructible_v<Types> || ...) ? 1 : 0;
+  static constexpr std::size_t size =
+      std::max({sizeof(Types)..., std::size_t{0}});
+  static constexpr std::size_t align =
+      std::max({alignof(Types)..., std::size_t{0}});
+};
+
+template <typename InterfaceBinding>
+using binding_temporary_types_t = resolution_temporary_types_t<
+    typename binding_resolutions<
+        typename annotated_traits<
+            typename InterfaceBinding::interface_type>::type,
+        typename InterfaceBinding::binding_model_type::storage_type>::type,
+    typename InterfaceBinding::binding_model_type::storage_type>;
+
+template <typename InterfaceBinding>
+using binding_temporary_storage_traits =
+    temporary_storage_traits<binding_temporary_types_t<InterfaceBinding>>;
+
 template <typename InterfaceBinding>
 inline constexpr std::size_t static_binding_self_temporary_slot_cost_v =
-    std::max({static_conversion_temporary_slots_v<
-                  typename InterfaceBinding::binding_model_type::storage_type>,
+    std::max({binding_temporary_storage_traits<InterfaceBinding>::slots,
               static_storage_temporary_slot_cost_v<
                   typename InterfaceBinding::binding_model_type::storage_tag>,
               std::size_t{0}});
@@ -334,8 +366,7 @@ inline constexpr std::size_t static_binding_self_temporary_slot_cost_v =
 template <typename InterfaceBinding>
 inline constexpr std::size_t static_binding_self_destructible_slot_cost_v =
     std::max(
-        {static_conversion_destructible_slots_v<
-             typename InterfaceBinding::binding_model_type::storage_type>,
+        {binding_temporary_storage_traits<InterfaceBinding>::destructible_slots,
          static_binding_self_temporary_slot_cost_v<InterfaceBinding> != 0 &&
                  !std::is_trivially_destructible_v<
                      typename InterfaceBinding::binding_model_type::
@@ -492,8 +523,7 @@ inline constexpr std::size_t static_binding_destructible_slot_cost_v =
     static_dependency_destructible_cost<
         typename InterfaceBinding::binding_model_type::dependencies_type::
             type>::value +
-    static_conversion_destructible_slots_v<
-        typename InterfaceBinding::binding_model_type::storage_type> +
+    binding_temporary_storage_traits<InterfaceBinding>::destructible_slots +
     (!std::is_trivially_destructible_v<
          typename InterfaceBinding::binding_model_type::storage_type::type>
          ? 1
@@ -506,8 +536,7 @@ inline constexpr std::size_t static_binding_temporary_slot_cost_v =
     static_dependency_temporary_slot_cost<
         typename InterfaceBinding::binding_model_type::dependencies_type::
             type>::value +
-    static_conversion_temporary_slots_v<
-        typename InterfaceBinding::binding_model_type::storage_type> +
+    binding_temporary_storage_traits<InterfaceBinding>::slots +
     static_storage_temporary_slot_cost_v<
         typename InterfaceBinding::binding_model_type::storage_tag>;
 
@@ -516,8 +545,7 @@ inline constexpr std::size_t static_binding_max_temporary_size_v = std::max(
     {static_dependency_temporary_size<
          typename InterfaceBinding::binding_model_type::dependencies_type::
              type>::value,
-     static_conversion_temporary_size_v<
-         typename InterfaceBinding::binding_model_type::storage_type>,
+     binding_temporary_storage_traits<InterfaceBinding>::size,
      sizeof(typename InterfaceBinding::binding_model_type::storage_type::type),
      static_storage_temporary_size_v<
          typename InterfaceBinding::binding_model_type::storage_tag>,
@@ -528,8 +556,7 @@ inline constexpr std::size_t static_binding_max_temporary_align_v = std::max(
     {static_dependency_temporary_align<
          typename InterfaceBinding::binding_model_type::dependencies_type::
              type>::value,
-     static_conversion_temporary_align_v<
-         typename InterfaceBinding::binding_model_type::storage_type>,
+     binding_temporary_storage_traits<InterfaceBinding>::align,
      alignof(typename InterfaceBinding::binding_model_type::storage_type::type),
      static_storage_temporary_align_v<
          typename InterfaceBinding::binding_model_type::storage_tag>,

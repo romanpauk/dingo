@@ -10,11 +10,13 @@
 #include <dingo/core/config.h>
 
 #include <dingo/resolution/recursion_guard.h>
+#include <dingo/resolution/resolution.h>
 #include <dingo/storage/materialized_source.h>
+#include <dingo/type/rebind_type.h>
+#include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_list.h>
 #include <dingo/type/type_traits.h>
 
-#include <cstddef>
 #include <type_traits>
 
 namespace dingo {
@@ -60,7 +62,6 @@ struct resolution_traits {
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<>;
-  using conversion_types = type_list<>;
 };
 
 namespace detail {
@@ -77,189 +78,287 @@ struct combined_storage_types {
   using pointer_types =
       type_list_cat_t<typename AccessTraits::pointer_types,
                       typename ResolutionTraits::pointer_types>;
-  using conversion_types =
-      type_list_cat_t<typename AccessTraits::conversion_types,
-                      typename ResolutionTraits::conversion_types>;
 };
 
 template <typename T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
-template <typename T, typename List> struct has_distinct_conversion_type;
-
-template <typename T>
-struct has_distinct_conversion_type<T, type_list<>> : std::false_type {};
-
-template <typename T, typename Head, typename... Tail>
-struct has_distinct_conversion_type<T, type_list<Head, Tail...>>
-    : std::bool_constant<
-          !std::is_same_v<T, remove_cvref_t<Head>> ||
-          has_distinct_conversion_type<T, type_list<Tail...>>::value> {};
-
-template <typename T, typename List>
-inline constexpr bool has_distinct_conversion_type_v =
-    has_distinct_conversion_type<T, List>::value;
-
-template <typename T, typename List> struct max_distinct_conversion_size;
-
-template <typename T>
-struct max_distinct_conversion_size<T, type_list<>>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename T, typename Head, typename... Tail>
-struct max_distinct_conversion_size<T, type_list<Head, Tail...>>
-    : std::integral_constant<
-          std::size_t,
-          !std::is_same_v<T, remove_cvref_t<Head>>
-              ? (sizeof(remove_cvref_t<Head>) >
-                         max_distinct_conversion_size<T,
-                                                      type_list<Tail...>>::value
-                     ? sizeof(remove_cvref_t<Head>)
-                     : max_distinct_conversion_size<T,
-                                                    type_list<Tail...>>::value)
-              : max_distinct_conversion_size<T, type_list<Tail...>>::value> {};
-
-template <typename T, typename List>
-inline constexpr std::size_t max_distinct_conversion_size_v =
-    max_distinct_conversion_size<T, List>::value;
-
-template <typename T, typename List> struct max_distinct_conversion_align;
-
-template <typename T>
-struct max_distinct_conversion_align<T, type_list<>>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename T, typename Head, typename... Tail>
-struct max_distinct_conversion_align<T, type_list<Head, Tail...>>
-    : std::integral_constant<
-          std::size_t,
-          !std::is_same_v<T, remove_cvref_t<Head>>
-              ? (alignof(remove_cvref_t<Head>) >
-                         max_distinct_conversion_align<
-                             T, type_list<Tail...>>::value
-                     ? alignof(remove_cvref_t<Head>)
-                     : max_distinct_conversion_align<T,
-                                                     type_list<Tail...>>::value)
-              : max_distinct_conversion_align<T, type_list<Tail...>>::value> {};
-
-template <typename T, typename List>
-inline constexpr std::size_t max_distinct_conversion_align_v =
-    max_distinct_conversion_align<T, List>::value;
-
-template <typename T, typename List>
-struct has_nontrivial_distinct_conversion_destructor;
-
-template <typename T>
-struct has_nontrivial_distinct_conversion_destructor<T, type_list<>>
-    : std::false_type {};
-
-template <typename T, typename Head, typename... Tail>
-struct has_nontrivial_distinct_conversion_destructor<T,
-                                                     type_list<Head, Tail...>>
-    : std::bool_constant<
-          (!std::is_same_v<T, remove_cvref_t<Head>> &&
-           !std::is_trivially_destructible_v<remove_cvref_t<Head>>) ||
-          has_nontrivial_distinct_conversion_destructor<
-              T, type_list<Tail...>>::value> {};
-
-template <typename T, typename List>
-inline constexpr bool has_nontrivial_distinct_conversion_destructor_v =
-    has_nontrivial_distinct_conversion_destructor<T, List>::value;
-
-template <typename Storage, typename = void>
-struct static_conversion_temporary_slots_base
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename Storage>
-struct static_conversion_temporary_slots_base<
-    Storage, std::void_t<decltype(Storage::static_conversion_temporary_slots)>>
-    : std::integral_constant<std::size_t,
-                             Storage::static_conversion_temporary_slots> {};
-
-template <typename Storage, typename = void>
-struct static_conversion_temporary_size_base
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename Storage>
-struct static_conversion_temporary_size_base<
-    Storage, std::void_t<decltype(Storage::static_conversion_temporary_size)>>
-    : std::integral_constant<std::size_t,
-                             Storage::static_conversion_temporary_size> {};
-
-template <typename Storage, typename = void>
-struct static_conversion_temporary_align_base
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename Storage>
-struct static_conversion_temporary_align_base<
-    Storage, std::void_t<decltype(Storage::static_conversion_temporary_align)>>
-    : std::integral_constant<std::size_t,
-                             Storage::static_conversion_temporary_align> {};
-
-template <typename Storage, typename = void>
-struct static_conversion_destructible_slots_base
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename Storage>
-struct static_conversion_destructible_slots_base<
-    Storage,
-    std::void_t<decltype(Storage::static_conversion_destructible_slots)>>
-    : std::integral_constant<std::size_t,
-                             Storage::static_conversion_destructible_slots> {};
-
-template <typename Storage, typename = void>
-struct static_conversion_temporary_slots
-    : static_conversion_temporary_slots_base<Storage> {};
-
-template <typename Storage>
-struct static_conversion_temporary_slots<
-    Storage, std::void_t<typename Storage::conversions>>
-    : static_conversion_temporary_slots_base<typename Storage::conversions> {};
-
-template <typename Storage, typename = void>
-struct static_conversion_temporary_size
-    : static_conversion_temporary_size_base<Storage> {};
-
-template <typename Storage>
-struct static_conversion_temporary_size<
-    Storage, std::void_t<typename Storage::conversions>>
-    : static_conversion_temporary_size_base<typename Storage::conversions> {};
-
-template <typename Storage, typename = void>
-struct static_conversion_temporary_align
-    : static_conversion_temporary_align_base<Storage> {};
-
-template <typename Storage>
-struct static_conversion_temporary_align<
-    Storage, std::void_t<typename Storage::conversions>>
-    : static_conversion_temporary_align_base<typename Storage::conversions> {};
-
-template <typename Storage, typename = void>
-struct static_conversion_destructible_slots
-    : static_conversion_destructible_slots_base<Storage> {};
-
-template <typename Storage>
-struct static_conversion_destructible_slots<
-    Storage, std::void_t<typename Storage::conversions>>
-    : static_conversion_destructible_slots_base<typename Storage::conversions> {
+template <typename Storage, typename = void> struct storage_source_type {
+  using type = std::remove_reference_t<typename Storage::type>;
 };
+
+template <typename Storage>
+struct storage_source_type<Storage,
+                           std::void_t<typename Storage::resolved_type>> {
+  using type = std::remove_reference_t<typename Storage::resolved_type>;
+};
+
+template <typename Storage>
+using storage_source_type_t = typename storage_source_type<Storage>::type;
+
+template <typename Storage> struct storage_borrow_source {
+private:
+  using source_type = storage_source_type_t<Storage>;
+
+public:
+  using type = std::conditional_t<std::is_pointer_v<source_type>, source_type,
+                                  source_type &>;
+};
+
+template <typename Storage>
+using storage_borrow_source_t = typename storage_borrow_source<Storage>::type;
+
+template <typename Storage>
+using storage_consume_source_t = storage_source_type_t<Storage> &&;
+
+template <typename Storage> struct storage_source_traits {
+private:
+  using stored_value_type = remove_cvref_t<typename Storage::type>;
+  using resolved_type = storage_source_type_t<Storage>;
+  using resolved_leaf_type =
+      std::conditional_t<std::is_pointer_v<resolved_type>,
+                         std::remove_pointer_t<resolved_type>, resolved_type>;
+
+public:
+  using stored_type = stored_value_type;
+  using direct_leaf_type =
+      std::remove_cv_t<std::remove_pointer_t<stored_value_type>>;
+  using borrowed_type = storage_borrow_source_t<Storage>;
+  using consumed_type = storage_consume_source_t<Storage>;
+  using qualification_type = resolved_leaf_type;
+
+  static constexpr bool is_pointer = std::is_pointer_v<stored_value_type>;
+  static constexpr bool is_const = std::is_const_v<resolved_leaf_type>;
+
+  template <typename Interface>
+  using interface_type = copy_cv_t<resolved_leaf_type, Interface>;
+
+  template <typename Interface>
+  static constexpr bool publishes_interface =
+      !is_pointer ||
+      std::is_convertible_v<stored_value_type, interface_type<Interface> *>;
+};
+
+template <typename Target, typename Qualification> struct qualified_target {
+  using type = Target;
+};
+
+template <typename Target, typename Qualification>
+struct qualified_target<Target &, Qualification> {
+  using type = copy_cv_t<Qualification, Target> &;
+};
+
+template <typename Target, typename Qualification>
+struct qualified_target<Target &&, Qualification> {
+  using type = copy_cv_t<Qualification, Target> &&;
+};
+
+template <typename Target, typename Qualification>
+struct qualified_target<Target *, Qualification> {
+  using type = copy_cv_t<Qualification, Target> *;
+};
+
+template <typename Target, typename Qualification>
+using qualified_target_t =
+    typename qualified_target<Target, Qualification>::type;
+
+template <typename Request>
+using request_qualification_t = std::conditional_t<
+    std::is_reference_v<Request>, std::remove_reference_t<Request>,
+    std::conditional_t<std::is_pointer_v<remove_cvref_t<Request>>,
+                       std::remove_pointer_t<remove_cvref_t<Request>>,
+                       Request>>;
+
+template <typename Request, typename Interface>
+using request_target_t = qualified_target_t<resolved_type_t<Request, Interface>,
+                                            request_qualification_t<Request>>;
+
+template <typename Request, typename Leaf> struct rebind_request_leaf {
+private:
+  using outer = outer_traits<Request>;
+  using rebound = wrapper_rebind_leaf_t<typename outer::type, Leaf>;
+  using qualified =
+      std::conditional_t<std::is_reference_v<Request> ||
+                             std::is_pointer_v<remove_cvref_t<Request>>,
+                         rebound, std::remove_cv_t<rebound>>;
+
+public:
+  using type = typename outer::template rebind_t<qualified>;
+};
+
+template <typename Request, typename Leaf>
+using rebind_request_leaf_t = typename rebind_request_leaf<Request, Leaf>::type;
+
+template <typename Request, typename Interface, typename Storage,
+          typename Access, bool PublishValue>
+struct storage_resolution {
+private:
+  using source = storage_source_traits<Storage>;
+  static constexpr bool uses_stored_leaf =
+      source::is_pointer && !source::template publishes_interface<Interface>;
+  using target_leaf_type =
+      std::conditional_t<uses_stored_leaf, typename source::direct_leaf_type,
+                         std::remove_cv_t<Interface>>;
+  using unqualified_published_type =
+      std::conditional_t<source::is_pointer,
+                         rebind_request_leaf_t<Request, target_leaf_type>,
+                         request_target_t<Request, target_leaf_type>>;
+  using published_type =
+      qualified_target_t<unqualified_published_type,
+                         typename source::qualification_type>;
+
+public:
+  using target_type =
+      std::conditional_t<PublishValue, remove_cvref_t<published_type>,
+                         published_type>;
+  using conversion_source_type =
+      std::conditional_t<std::is_same_v<Access, borrow>,
+                         typename source::borrowed_type,
+                         typename source::consumed_type>;
+  using type =
+      conversion_resolution<target_type, conversion_source_type, Access>;
+};
+
+template <typename Requests, typename Interface, typename Storage,
+          typename Access, bool PublishValue>
+struct storage_resolutions;
+
+template <typename Interface, typename Storage, typename Access,
+          bool PublishValue, typename... Requests>
+struct storage_resolutions<type_list<Requests...>, Interface, Storage, Access,
+                           PublishValue> {
+private:
+  template <typename Request>
+  using candidate =
+      storage_resolution<Request, Interface, Storage, Access, PublishValue>;
+
+  template <typename Request>
+  using selected = std::conditional_t<
+      is_type_conversion_available_v<
+          conversion_target_t<typename candidate<Request>::type::target_type>,
+          typename candidate<Request>::conversion_source_type, Access>,
+      type_list<typename candidate<Request>::type>, type_list<>>;
+
+public:
+  using type = type_list_unique_t<type_list_cat_t<selected<Requests>...>>;
+};
+
+template <typename Requests, typename Interface, typename Storage,
+          typename Access, bool PublishValue = false>
+using storage_resolutions_t =
+    typename storage_resolutions<Requests, Interface, Storage, Access,
+                                 PublishValue>::type;
+
+template <typename Interface, typename Storage> struct interface_resolutions {
+private:
+  using conversions = typename Storage::conversions;
+  using source = storage_source_traits<Storage>;
+  using interface_type = std::remove_cv_t<Interface>;
+  using borrowed_interface_type =
+      typename source::template interface_type<interface_type>;
+  static constexpr bool interface_is_resolvable =
+      type_traits<interface_type>::enabled &&
+      !std::is_pointer_v<interface_type>;
+
+  template <typename Target, typename SourceType, typename Access>
+  using if_convertible = std::conditional_t<
+      interface_is_resolvable &&
+          is_type_conversion_available_v<Target, SourceType, Access>,
+      type_list<conversion_resolution<Target, SourceType, Access>>,
+      type_list<>>;
+
+  using borrowed_interface_value = std::conditional_t<
+      type_list_size_v<typename conversions::value_types> != 0,
+      if_convertible<interface_type, typename source::borrowed_type, borrow>,
+      type_list<>>;
+  using consumed_interface_value = std::conditional_t<
+      type_list_size_v<typename conversions::rvalue_reference_types> != 0,
+      if_convertible<interface_type, typename source::consumed_type, consume>,
+      type_list<>>;
+  using consumed_interface_rvalue = std::conditional_t<
+      type_list_size_v<typename conversions::rvalue_reference_types> != 0,
+      std::conditional_t<
+          interface_is_resolvable &&
+              is_type_conversion_available_v<
+                  interface_type, typename source::consumed_type, consume>,
+          type_list<conversion_resolution<
+              interface_type &&, typename source::consumed_type, consume>>,
+          type_list<>>,
+      type_list<>>;
+  using borrowed_interface_reference = std::conditional_t<
+      type_list_size_v<typename conversions::lvalue_reference_types> != 0,
+      if_convertible<borrowed_interface_type &, typename source::borrowed_type,
+                     borrow>,
+      type_list<>>;
+  using borrowed_interface_pointer = std::conditional_t<
+      type_list_size_v<typename conversions::pointer_types> != 0,
+      if_convertible<borrowed_interface_type *, typename source::borrowed_type,
+                     borrow>,
+      type_list<>>;
+
+public:
+  using value_resolutions = type_list_unique_t<
+      type_list_cat_t<borrowed_interface_value, consumed_interface_value>>;
+  using lvalue_reference_resolutions = borrowed_interface_reference;
+  using rvalue_reference_resolutions = consumed_interface_rvalue;
+  using pointer_resolutions = borrowed_interface_pointer;
+};
+
+template <typename Interface, typename Storage> struct wrapper_resolutions {
+private:
+  using conversions = typename Storage::conversions;
+  using source = storage_source_traits<Storage>;
+
+  using borrowed_composition = std::conditional_t<
+      type_list_size_v<typename conversions::value_types> != 0,
+      typename wrapper_resolution_traits<typename source::borrowed_type,
+                                         Interface, borrow>::type,
+      type_list<>>;
+  using consumed_composition = std::conditional_t<
+      type_list_size_v<typename conversions::rvalue_reference_types> != 0,
+      typename wrapper_resolution_traits<typename source::consumed_type,
+                                         Interface, consume>::type,
+      type_list<>>;
+
+public:
+  using value_resolutions = type_list_unique_t<
+      type_list_cat_t<borrowed_composition, consumed_composition>>;
+};
+
+template <typename Interface, typename Storage> struct binding_resolutions {
+private:
+  using conversions = typename Storage::conversions;
+  using stored_values = storage_resolutions_t<typename conversions::value_types,
+                                              Interface, Storage, borrow>;
+  using consumed_values =
+      storage_resolutions_t<typename conversions::rvalue_reference_types,
+                            Interface, Storage, consume, true>;
+
+public:
+  using value_resolutions = type_list_unique_t<type_list_cat_t<
+      typename interface_resolutions<Interface, Storage>::value_resolutions,
+      typename wrapper_resolutions<Interface, Storage>::value_resolutions,
+      stored_values, consumed_values>>;
+  using lvalue_reference_resolutions = type_list_unique_t<type_list_cat_t<
+      typename interface_resolutions<Interface,
+                                     Storage>::lvalue_reference_resolutions,
+      storage_resolutions_t<typename conversions::lvalue_reference_types,
+                            Interface, Storage, borrow>>>;
+  using rvalue_reference_resolutions = type_list_unique_t<type_list_cat_t<
+      typename interface_resolutions<Interface,
+                                     Storage>::rvalue_reference_resolutions,
+      storage_resolutions_t<typename conversions::rvalue_reference_types,
+                            Interface, Storage, consume>>>;
+  using pointer_resolutions = type_list_unique_t<type_list_cat_t<
+      typename interface_resolutions<Interface, Storage>::pointer_resolutions,
+      storage_resolutions_t<typename conversions::pointer_types, Interface,
+                            Storage, borrow>>>;
+  using type = type_list_unique_t<
+      type_list_cat_t<value_resolutions, lvalue_reference_resolutions,
+                      rvalue_reference_resolutions, pointer_resolutions>>;
+};
+
 } // namespace detail
-
-template <typename Storage>
-inline constexpr std::size_t static_conversion_temporary_slots_v =
-    detail::static_conversion_temporary_slots<Storage>::value;
-
-template <typename Storage>
-inline constexpr std::size_t static_conversion_temporary_size_v =
-    detail::static_conversion_temporary_size<Storage>::value;
-
-template <typename Storage>
-inline constexpr std::size_t static_conversion_temporary_align_v =
-    detail::static_conversion_temporary_align<Storage>::value;
-
-template <typename Storage>
-inline constexpr std::size_t static_conversion_destructible_slots_v =
-    detail::static_conversion_destructible_slots<Storage>::value;
 
 template <typename StorageTag, typename Type, typename U, typename = void>
 struct type_storage_traits;
@@ -270,32 +369,8 @@ struct type_storage_traits<
     std::enable_if_t<storage_traits<StorageTag, Type, U>::enabled>>
     : detail::combined_storage_types<storage_traits<StorageTag, Type, U>,
                                      resolution_traits<StorageTag, Type, U>> {
-private:
-  using combined_types =
-      detail::combined_storage_types<storage_traits<StorageTag, Type, U>,
-                                     resolution_traits<StorageTag, Type, U>>;
-
 public:
   static constexpr bool is_stable =
       storage_traits<StorageTag, Type, U>::is_stable;
-  static constexpr std::size_t static_conversion_temporary_slots =
-      detail::has_distinct_conversion_type_v<
-          Type, typename combined_types::conversion_types> &&
-              !is_stable
-          ? 1
-          : 0;
-  static constexpr std::size_t static_conversion_temporary_size =
-      !is_stable ? detail::max_distinct_conversion_size_v<
-                       Type, typename combined_types::conversion_types>
-                 : 0;
-  static constexpr std::size_t static_conversion_temporary_align =
-      !is_stable ? detail::max_distinct_conversion_align_v<
-                       Type, typename combined_types::conversion_types>
-                 : 0;
-  static constexpr std::size_t static_conversion_destructible_slots =
-      !is_stable && detail::has_nontrivial_distinct_conversion_destructor_v<
-                        Type, typename combined_types::conversion_types>
-          ? 1
-          : 0;
 };
 } // namespace dingo

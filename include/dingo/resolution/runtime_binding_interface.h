@@ -27,16 +27,39 @@ template <typename T> struct request_lookup_type {
   using type = rebind_leaf_t<T, runtime_type>;
 };
 
-template <typename T> struct request_lookup_type<const T *> {
-  using type = rebind_leaf_t<T *, runtime_type>;
+template <typename T>
+struct request_lookup_type<const T> : request_lookup_type<T> {};
+
+template <typename T>
+struct request_lookup_type<volatile T> : request_lookup_type<T> {};
+
+template <typename T>
+struct request_lookup_type<const volatile T> : request_lookup_type<T> {};
+
+template <typename T> struct request_lookup_type<T *> {
+  using type = std::add_pointer_t<typename request_lookup_type<T>::type>;
 };
 
-template <typename T> struct request_lookup_type<const T &> {
-  using type = rebind_leaf_t<T &, runtime_type>;
+template <typename T> struct request_lookup_type<T &> {
+  using type =
+      std::add_lvalue_reference_t<typename request_lookup_type<T>::type>;
+};
+
+template <typename T> struct request_lookup_type<T &&> {
+  using type =
+      std::add_rvalue_reference_t<typename request_lookup_type<T>::type>;
 };
 
 template <typename T>
 using request_lookup_type_t = typename request_lookup_type<T>::type;
+
+struct resolved_address {
+  void *address;
+  enum class access_kind {
+    borrow,
+    consume,
+  } access;
+};
 
 template <typename Container, typename Context>
 class runtime_binding_interface {
@@ -45,7 +68,7 @@ public:
 
   detail::cache::entry *cache_slot() noexcept { return cache_slot_; }
 
-  virtual void *
+  virtual resolved_address
   get_value(construction_scope, Context &,
             const instance_request<typename Container::rtti_type> &request,
             detail::cache::sink) = 0;
