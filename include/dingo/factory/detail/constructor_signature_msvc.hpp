@@ -32,6 +32,7 @@ struct lvalue_probe {};
 struct rvalue_probe {};
 struct value_probe {};
 struct selected_probe {};
+struct annotated_probe {};
 
 // Keep the friend key separate from the category placeholder. MSVC can
 // canonicalize an injected placeholder name across specializations, whereas
@@ -111,6 +112,16 @@ struct argument<DisabledType, Probe, I, value_probe> {
 };
 
 template <class DisabledType, typename Probe, size_t I>
+struct argument<DisabledType, Probe, I, annotated_probe> {
+  template <typename T, typename Annotation,
+            typename = typename std::enable_if_t<
+                !std::is_same_v<DisabledType, std::decay_t<T>>>>
+  operator annotated<T, Annotation>() const
+      noexcept(category_definition<annotated<T, Annotation>, DisabledType,
+                                   Probe, I>::value);
+};
+
+template <class DisabledType, typename Probe, size_t I>
 struct argument<DisabledType, Probe, I, selected_probe> {
   template <typename T, typename Selector,
             typename = typename std::enable_if_t<
@@ -182,29 +193,44 @@ public:
 template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible, size_t Arity,
           size_t Target,
+          typename Annotated =
+              typename category_result<T, DetectionMode, IsConstructible, Arity,
+                                       Target, annotated_probe>::type,
           typename Lvalue =
               typename category_result<T, DetectionMode, IsConstructible, Arity,
                                        Target, lvalue_probe>::type,
           typename Rvalue =
               typename category_result<T, DetectionMode, IsConstructible, Arity,
                                        Target, rvalue_probe>::type,
+          bool AnnotatedFound = !std::is_void_v<Annotated>,
           bool Missing = std::is_void_v<Lvalue> && std::is_void_v<Rvalue>,
           bool LvalueOnly = !std::is_void_v<Lvalue> && std::is_void_v<Rvalue>>
 struct resolve_argument : resolve_reference_argument<Lvalue, Rvalue> {};
 
 template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible, size_t Arity,
-          size_t Target, typename Lvalue, typename Rvalue>
+          size_t Target, typename Annotated, typename Lvalue, typename Rvalue,
+          bool Missing, bool LvalueOnly>
 struct resolve_argument<T, DetectionMode, IsConstructible, Arity, Target,
-                        Lvalue, Rvalue, true, false>
+                        Annotated, Lvalue, Rvalue, true, Missing, LvalueOnly> {
+  // An annotation can also expose conversions from its contained value.
+  // Preserve the exact wrapper whenever that dedicated probe is viable.
+  using type = Annotated;
+};
+
+template <typename T, typename DetectionMode,
+          template <typename...> typename IsConstructible, size_t Arity,
+          size_t Target, typename Annotated, typename Lvalue, typename Rvalue>
+struct resolve_argument<T, DetectionMode, IsConstructible, Arity, Target,
+                        Annotated, Lvalue, Rvalue, false, true, false>
     : category_result<T, DetectionMode, IsConstructible, Arity, Target,
                       selected_probe> {};
 
 template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible, size_t Arity,
-          size_t Target, typename Lvalue, typename Rvalue>
+          size_t Target, typename Annotated, typename Lvalue, typename Rvalue>
 struct resolve_argument<T, DetectionMode, IsConstructible, Arity, Target,
-                        Lvalue, Rvalue, false, true> {
+                        Annotated, Lvalue, Rvalue, false, false, true> {
 private:
   using value = typename category_result<T, DetectionMode, IsConstructible,
                                          Arity, Target, value_probe>::type;

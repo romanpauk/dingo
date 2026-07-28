@@ -130,18 +130,11 @@ def _annotated_dependency(form: DependencyForm) -> InvokeCallable:
         supported_provisionings = frozenset({"shared_annotated_interface"})
     request = render_dependency_request(form, base, "tag_a")
     value = render_dependency_type(form, base)
-    # Hybrid containers cannot yet materialize an annotated wrapper from a
-    # compile-time binding; keep that compatibility limit explicit in the axis.
     return InvokeCallable(
         name=f"{form.name}_dependency",
         policy=f"resolution::dependency_invoke<{request}, {value}>",
         dependency_forms=frozenset({form.name}),
         supported_provisionings=supported_provisionings,
-        supported_containers=frozenset(
-            container.name
-            for container in CONTAINERS
-            if container.name not in {"container_static", "container_mixed"}
-        ),
     )
 
 

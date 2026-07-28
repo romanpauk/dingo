@@ -23,7 +23,9 @@ template <typename Tag> struct type_selector {};
 template <typename Key, auto Value> struct value_selector {};
 
 template <typename T, typename Selector,
-          bool IsConstructible = std::is_constructible_v<T>>
+          bool StoresValue =
+              !std::is_reference_v<T> && (std::is_move_constructible_v<T> ||
+                                          std::is_copy_constructible_v<T>)>
 struct selected_base;
 
 template <typename T, typename Selector>
@@ -33,9 +35,20 @@ struct selected_base<T, Selector, true> {
   selected_base &operator=(const selected_base &) = default;
   selected_base &operator=(selected_base &&) = default;
 
+  template <typename U = T,
+            std::enable_if_t<std::is_copy_constructible_v<U>, int> = 0>
+  explicit selected_base(const T &value) : value_(value) {}
+  template <typename U = T,
+            std::enable_if_t<std::is_move_constructible_v<U>, int> = 0>
   explicit selected_base(T &&value) : value_(std::move(value)) {}
 
-  operator T() { return std::move(value_); }
+  operator T() {
+    if constexpr (std::is_move_constructible_v<T>) {
+      return std::move(value_);
+    } else {
+      return value_;
+    }
+  }
 
 private:
   T value_;
