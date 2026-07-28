@@ -142,6 +142,16 @@ using list_initialization_expr = decltype(T{std::declval<Args>()...});
 template <typename T, typename... Args>
 using direct_initialization_expr = decltype(T(std::declval<Args>()...));
 
+template <typename T, size_t N, typename, typename... Args>
+struct array_list_initialization : std::false_type {};
+
+template <typename T, size_t N, typename... Args>
+struct array_list_initialization<
+    T, N,
+    std::void_t<decltype(std::array<T, N>{
+        {std::declval<Args>()...}})>,
+    Args...> : std::true_type {};
+
 #if defined(_MSC_VER)
 template <typename T, typename = void, typename... Args>
 struct list_initialization_impl : std::false_type {};
@@ -158,10 +168,6 @@ template <typename T, typename Arg>
 struct list_initialization<T, Arg>
     : std::conjunction<list_initialization_impl<T, void, Arg>,
                        std::negation<std::is_same<std::decay_t<Arg>, T>>> {};
-
-template <typename T, typename... Args>
-inline constexpr bool is_list_initializable_v =
-    list_initialization<T, Args...>::value;
 
 template <typename T, typename = void, typename... Args>
 struct direct_initialization_impl : std::false_type {};
@@ -201,13 +207,21 @@ struct list_initialization
     : initialization_impl<list_initialization_expr, T, void, Args...> {};
 
 template <typename T, typename... Args>
-inline constexpr bool is_list_initializable_v =
-    list_initialization<T, Args...>::value;
-
-template <typename T, typename... Args>
 struct direct_initialization
     : initialization_impl<direct_initialization_expr, T, void, Args...> {};
 #endif
+
+// std::array stores its elements in a nested native array. MSVC does not apply
+// brace elision while probing that aggregate, which otherwise makes every
+// std::array appear to have arity one. Model the required braces explicitly on
+// every compiler so detection and construction agree on the element count.
+template <typename T, size_t N, typename... Args>
+struct list_initialization<std::array<T, N>, Args...>
+    : array_list_initialization<T, N, void, Args...> {};
+
+template <typename T, typename... Args>
+inline constexpr bool is_list_initializable_v =
+    list_initialization<T, Args...>::value;
 
 template <typename T, typename... Args>
 inline constexpr bool is_direct_initializable_v =
@@ -219,7 +233,8 @@ inline constexpr size_t invalid_arity = static_cast<size_t>(-1);
 
 template <typename T, size_t> using repeated_type = T;
 
-template <typename T, typename DetectionMode, size_t Arity> struct constructor_methods {
+template <typename T, typename DetectionMode, size_t Arity>
+struct constructor_methods {
 private:
   template <typename Type, typename Context, typename Container, size_t... Is>
   static auto construct_impl(construction_scope scope, Context &ctx,
@@ -255,6 +270,44 @@ public:
                         Container &container) {
     construct_impl<Type>(ptr, scope, ctx, container,
                          std::make_index_sequence<Arity>{});
+  }
+};
+
+template <typename T, size_t N, typename DetectionMode>
+struct constructor_methods<std::array<T, N>, DetectionMode, N> {
+private:
+  template <typename Type, typename Context, typename Container, size_t... Is>
+  static auto construct_impl(construction_scope scope, Context &ctx,
+                             Container &container, std::index_sequence<Is...>) {
+    // std::array publishes its complete construction signature. Resolve its
+    // elements as T before aggregate initialization instead of asking the
+    // aggregate to select conversions from constructor-shape arguments.
+    return ::dingo::constructor<
+        std::array<T, N>(repeated_type<T, Is>...)>::template construct<Type>(
+        scope, ctx, container);
+  }
+
+  template <typename Type, typename Context, typename Container, size_t... Is>
+  static void construct_impl(void *ptr, construction_scope scope, Context &ctx,
+                             Container &container, std::index_sequence<Is...>) {
+    ::dingo::constructor<
+        std::array<T, N>(repeated_type<T, Is>...)>::template construct<Type>(
+        ptr, scope, ctx, container);
+  }
+
+public:
+  template <typename Type, typename Context, typename Container>
+  static auto construct(construction_scope scope, Context &ctx,
+                        Container &container) {
+    return construct_impl<Type>(scope, ctx, container,
+                                std::make_index_sequence<N>{});
+  }
+
+  template <typename Type, typename Context, typename Container>
+  static void construct(void *ptr, construction_scope scope, Context &ctx,
+                        Container &container) {
+    construct_impl<Type>(ptr, scope, ctx, container,
+                         std::make_index_sequence<N>{});
   }
 };
 

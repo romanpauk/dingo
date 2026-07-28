@@ -18,7 +18,6 @@ from schema import (
     DependencyComposition,
     DependencyCompositionOperator,
     DependencyCompositionRequestStrategy,
-    DependencyCompositionResolutionLimitation,
     LimitationDisposition,
 )
 
@@ -49,28 +48,6 @@ _ALL_REQUEST_STRATEGIES = frozenset(
 )
 
 
-_NESTED_SMART_POINTER_REQUEST_LIMITATION = (
-    DependencyCompositionResolutionLimitation(
-        position="request_composed_operand",
-        disposition=LimitationDisposition.KNOWN_GAP,
-        reason=(
-            "nested smart-pointer storage exposes inner conversion "
-            "capabilities that cannot materialize the exact composition"
-        ),
-    )
-)
-_OWNING_ARRAY_OPTIONAL_REQUEST_LIMITATION = (
-    DependencyCompositionResolutionLimitation(
-        position="request_composed_operand",
-        disposition=LimitationDisposition.KNOWN_GAP,
-        reason=(
-            "owning array requests use constructor-shape materialization and "
-            "cannot construct an optional element"
-        ),
-        request_strategies=frozenset({"value", "rvalue"}),
-        operand_operators=frozenset({"optional"}),
-    )
-)
 DEPENDENCY_COMPOSITION_OPERATORS = (
     DependencyCompositionOperator(
         name="pointer",
@@ -104,7 +81,6 @@ DEPENDENCY_COMPOSITION_OPERATORS = (
         movability="always",
         request_expression="{0} &",
         supported_request_strategies=_ALL_REQUEST_STRATEGIES,
-        resolution_limitations=(_NESTED_SMART_POINTER_REQUEST_LIMITATION,),
     ),
     DependencyCompositionOperator(
         name="unique_pointer",
@@ -114,7 +90,6 @@ DEPENDENCY_COMPOSITION_OPERATORS = (
         movability="always",
         request_expression="{0} &",
         supported_request_strategies=_ALL_REQUEST_STRATEGIES,
-        resolution_limitations=(_NESTED_SMART_POINTER_REQUEST_LIMITATION,),
     ),
     DependencyCompositionOperator(
         name="optional",
@@ -133,7 +108,6 @@ DEPENDENCY_COMPOSITION_OPERATORS = (
         movability="all_operands",
         request_expression="{0} &",
         supported_request_strategies=_ALL_REQUEST_STRATEGIES,
-        resolution_limitations=(_OWNING_ARRAY_OPTIONAL_REQUEST_LIMITATION,),
     ),
     DependencyCompositionOperator(
         name="variant",

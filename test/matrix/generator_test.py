@@ -557,13 +557,9 @@ def test_dependency_composition_resolution_constraints_are_declarative(
     }
     assert not limitation_positions["pointer"]
     assert not limitation_positions["const_pointer"]
-    assert limitation_positions["shared_pointer"] == {
-        "request_composed_operand"
-    }
-    assert limitation_positions["unique_pointer"] == {
-        "request_composed_operand"
-    }
-    assert limitation_positions["array"] == {"request_composed_operand"}
+    assert not limitation_positions["shared_pointer"]
+    assert not limitation_positions["unique_pointer"]
+    assert not limitation_positions["array"]
     assert not limitation_positions["optional"]
     assert not limitations["variant"]
     assert all(
@@ -578,8 +574,6 @@ def test_dependency_composition_resolution_constraints_are_declarative(
         for operator in DEPENDENCY_COMPOSITION_OPERATORS
         if operator.supported_request_strategies != {"stable", "value", "rvalue"}
     )
-    assert limitations["array"][0].request_strategies == {"value", "rvalue"}
-    assert limitations["array"][0].operand_operators == {"optional"}
 
     scope_rules = {
         rule.scope: rule for rule in DEPENDENCY_COMPOSITION_SCOPE_RULES
@@ -796,10 +790,10 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
     assert Counter(
         (row.operation.name, row.supported) for row in composition_rows
     ) == {
-        ("resolve", True): 4579,
-        ("resolve", False): 3821,
-        ("invoke", True): 4579,
-        ("invoke", False): 3821,
+        ("resolve", True): 5355,
+        ("resolve", False): 3045,
+        ("invoke", True): 5355,
+        ("invoke", False): 3045,
     }
     assert Counter(
         row.unsupported_reason
@@ -810,10 +804,6 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
             "shared storage cannot materialize a composition that is not "
             "movable"
         ): 1150,
-        (
-            "nested smart-pointer storage exposes inner conversion "
-            "capabilities that cannot materialize the exact composition"
-        ): 1512,
         "pointer compositions do not support rvalue requests": 240,
         "const_pointer compositions do not support rvalue requests": 240,
         (
@@ -822,10 +812,6 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
         ): 2300,
         "pointer compositions do not support value requests": 240,
         "const_pointer compositions do not support value requests": 240,
-        (
-            "owning array requests use constructor-shape materialization and "
-            "cannot construct an optional element"
-        ): 40,
         (
             "external storage requires runtime registration and cannot be "
             "provided by a static-only container"
@@ -922,7 +908,7 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
         coverage.overall.supported,
         coverage.overall.functionality_gaps,
         coverage.overall.intentional_constraints,
-    ) == (9158, 1552, 6090)
+    ) == (10710, 0, 6090)
     assert {
         axis.name: {
             cell.name: (
@@ -935,51 +921,51 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
         for axis in coverage.axes
     } == {
         "operation": {
-            "invoke": (4579, 776, 3045),
-            "resolve": (4579, 776, 3045),
+            "invoke": (5355, 0, 3045),
+            "resolve": (5355, 0, 3045),
         },
         "operator": {
-            "array": (674, 40, 246),
+            "array": (714, 0, 246),
             "const_pointer": (384, 0, 576),
             "optional": (714, 0, 246),
             "pointer": (384, 0, 576),
-            "shared_pointer": (108, 756, 96),
-            "unique_pointer": (108, 756, 96),
+            "shared_pointer": (864, 0, 96),
+            "unique_pointer": (864, 0, 96),
             "variant": (6786, 0, 4254),
         },
         "container": {
-            "container_mixed": (2134, 344, 882),
-            "container_runtime": (2134, 344, 882),
-            "container_static": (1378, 260, 1722),
-            "runtime_container": (2134, 344, 882),
-            "static_container": (1378, 260, 1722),
+            "container_mixed": (2478, 0, 882),
+            "container_runtime": (2478, 0, 882),
+            "container_static": (1638, 0, 1722),
+            "runtime_container": (2478, 0, 882),
+            "static_container": (1638, 0, 1722),
         },
         "scope": {
-            "external": (2268, 252, 1680),
-            "shared": (2630, 420, 1150),
-            "unique": (4260, 880, 3260),
+            "external": (2520, 0, 1680),
+            "shared": (3050, 0, 1150),
+            "unique": (5140, 0, 3260),
         },
         "request strategy": {
-            "rvalue": (2130, 440, 1630),
-            "stable": (4898, 672, 2830),
-            "value": (2130, 440, 1630),
+            "rvalue": (2570, 0, 1630),
+            "stable": (5570, 0, 2830),
+            "value": (2570, 0, 1630),
         },
         "copyability": {
-            "copyable": (4468, 776, 3716),
-            "non_copyable": (4690, 776, 2374),
+            "copyable": (5244, 0, 3716),
+            "non_copyable": (5466, 0, 2374),
         },
         "movability": {
-            "movable": (8468, 1552, 2180),
+            "movable": (10020, 0, 2180),
             "non_movable": (690, 0, 3910),
         },
         "depth": {
             "1": (516, 0, 324),
-            "2": (8642, 1552, 5766),
+            "2": (10194, 0, 5766),
         },
     }
     for axis in coverage.axes:
-        assert sum(cell.count.supported for cell in axis.cells) == 9158
-        assert sum(cell.count.functionality_gaps for cell in axis.cells) == 1552
+        assert sum(cell.count.supported for cell in axis.cells) == 10710
+        assert sum(cell.count.functionality_gaps for cell in axis.cells) == 0
         assert sum(
             cell.count.intentional_constraints for cell in axis.cells
         ) == 6090
@@ -992,14 +978,14 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
         )
         for disposition in LimitationDisposition
     } == {
-        LimitationDisposition.KNOWN_GAP: 1552,
+        LimitationDisposition.KNOWN_GAP: 0,
         LimitationDisposition.INTENTIONAL_CONSTRAINT: 6090,
     }
 
     report = render_dependency_composition_coverage(coverage)
-    assert "| 9158 | 1552 | 6090 |" in report
+    assert "| 10710 | 0 | 6090 |" in report
     assert "| `variant` | 6786 | 0 | 4254 |" in report
-    assert "## Functionality Gaps" in report
+    assert "## Functionality Gaps" not in report
     assert "## Intentional Constraints" in report
 
 
@@ -1046,7 +1032,7 @@ def _composition_projection_mobility_scope(
 
 
 @pytest.mark.parametrize(
-    ("profile", "expected_count"), (("full", 816), ("portable", 354))
+    ("profile", "expected_count"), (("full", 840), ("portable", 358))
 )
 def test_dependency_composition_projection_covers_its_execution_contract(
     composition_rows: tuple[DependencyCompositionRow, ...],
@@ -1208,7 +1194,7 @@ def test_dependency_composition_selected_executables_are_isolated_by_case(
             for source in executable.sources
             if not source.name.startswith("matrix_runner_")
         )
-        assert len(implementation_sources) == 102
+        assert len(implementation_sources) == 105
         assert executable.isolated_sources == implementation_sources
         assert all(
             source.read_text(encoding="utf-8").count("\nstruct ") == 1
@@ -1228,7 +1214,7 @@ def test_dependency_composition_selected_executables_are_isolated_by_case(
         assert len(runner_sources) == 1
         assert runner_sources[0].read_text(encoding="utf-8").count(
             "\nTEST("
-        ) == 102
+        ) == 105
     assert all(
         not executable.isolated_sources
         for executable in executables
@@ -1278,7 +1264,7 @@ def test_dependency_composition_disabled_projected_cases_are_omitted(
         for executable in executables
         for source in executable.sources
         if source.name.startswith("matrix_runner_")
-    ) == 814
+    ) == 838
 
 
 def test_dependency_composition_rejects_unmatched_disabled_projected_cases() -> None:
@@ -1747,7 +1733,9 @@ def test_dependency_contract_covers_required_families() -> None:
         "generic",
         "initializer_list",
         "nested_forwarding_wrapper",
+        "nested_std_array_aggregate_move_only",
         "same_arity_overload",
+        "std_array_aggregate_move_only",
         "unconstrained_forwarding_wrapper",
     } | {composition.name for composition in DEPENDENCY_COMPOSITIONS}
 
@@ -2299,22 +2287,22 @@ def test_invalid_registration_plan_is_an_error(
         "expected_compiled_rows",
     ),
     (
-        (None, frozenset(), frozenset(), 115, 0, 816),
+        (None, frozenset(), frozenset(), 115, 0, 840),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
             frozenset(),
             179,
             0,
-            816,
+            840,
         ),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset({("invoke", 4), ("resolve", 4)}),
             frozenset(),
-            365,
-            204,
-            816,
+            371,
+            210,
+            840,
         ),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
@@ -2329,7 +2317,7 @@ def test_invalid_registration_plan_is_an_error(
             ),
             179,
             0,
-            814,
+            838,
         ),
     ),
 )
