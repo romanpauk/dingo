@@ -24,6 +24,14 @@ namespace dingo {
 namespace {
 struct request_type_tag;
 struct request_type_service;
+
+struct non_default_copy_only {
+  explicit non_default_copy_only(int init_value) : value(init_value) {}
+  non_default_copy_only(const non_default_copy_only &) = default;
+  non_default_copy_only(non_default_copy_only &&) = delete;
+
+  int value;
+};
 } // namespace
 
 static_assert(
@@ -85,6 +93,32 @@ static_assert(
                    annotated<request_type_service, request_type_tag>>);
 static_assert(std::is_same_v<request_type<annotated_request>::exact_type,
                              request_type_service>);
+
+using copyable_annotated_request =
+    annotated<std::shared_ptr<request_type_service>, request_type_tag>;
+using move_only_annotated_request =
+    annotated<std::unique_ptr<request_type_service>, request_type_tag>;
+using non_default_annotated_request =
+    annotated<non_default_copy_only, request_type_tag>;
+static_assert(std::is_copy_constructible_v<non_default_copy_only>);
+static_assert(!std::is_move_constructible_v<non_default_copy_only>);
+static_assert(
+    std::is_constructible_v<copyable_annotated_request,
+                            const std::shared_ptr<request_type_service> &>);
+static_assert(
+    !std::is_constructible_v<move_only_annotated_request,
+                             const std::unique_ptr<request_type_service> &>);
+static_assert(std::is_constructible_v<non_default_annotated_request,
+                                      const non_default_copy_only &>);
+
+TEST(type_traits_test,
+     annotated_copies_non_default_constructible_copy_only_values) {
+  const non_default_copy_only value(17);
+
+  non_default_annotated_request request(value);
+
+  EXPECT_EQ(static_cast<non_default_copy_only>(request).value, 17);
+}
 
 using keyed_request =
     dependency<request_type_service &, key_type<request_type_tag>>;

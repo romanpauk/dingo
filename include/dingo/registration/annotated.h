@@ -10,14 +10,22 @@
 #include <dingo/core/config.h>
 #include <dingo/core/selected.h>
 
+#include <type_traits>
 #include <utility>
 
 namespace dingo {
 
 template <typename T, typename Tag>
 struct annotated : detail::selected<T, detail::type_selector<Tag>> {
-  annotated(T &&value)
-      : detail::selected<T, detail::type_selector<Tag>>(std::move(value)) {}
+  using base_type = detail::selected<T, detail::type_selector<Tag>>;
+
+  template <
+      typename U = T,
+      std::enable_if_t<std::is_constructible_v<base_type, const U &>, int> = 0>
+  annotated(const T &value) : base_type(value) {}
+  template <typename U = T,
+            std::enable_if_t<std::is_constructible_v<base_type, U &&>, int> = 0>
+  annotated(T &&value) : base_type(std::move(value)) {}
 };
 
 template <typename T, typename Tag>

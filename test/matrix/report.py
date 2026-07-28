@@ -51,14 +51,6 @@ COVERAGE_LIMITS = (
     ),
     CoverageLimit(
         area="Invocation",
-        disposition=LimitationDisposition.KNOWN_GAP,
-        reason=(
-            "Annotated wrapper invocation through compile-time bindings is "
-            "excluded from static and mixed hybrid containers."
-        ),
-    ),
-    CoverageLimit(
-        area="Invocation",
         disposition=LimitationDisposition.COMPILER_LIMITATION,
         reason=(
             "The `std::move_only_function` scenario runs only when "

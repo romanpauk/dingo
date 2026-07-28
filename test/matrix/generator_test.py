@@ -1040,7 +1040,7 @@ def test_matrix_report_includes_every_limitation_family(
     assert "| Constructor argument conversion | 0 | 0 | 2 |" in report
     assert "| Shared cyclical | 0 | 655 | 0 |" in report
     assert "| Omitted compiler cases | 0 | 0 | 2 |" in report
-    assert "| Coverage limits | 6 | 0 | 2 |" in report
+    assert "| Coverage limits | 5 | 0 | 2 |" in report
     assert (
         "| `msvc-before-19.50-array-unique-pointer-copy-only` | "
         "MSVC < 19.50 | yes | 2 | 2 |"
@@ -1779,11 +1779,12 @@ def test_invoke_uses_independent_callable_and_provisioning_axes(
         } == callable_spec.supported_provisionings
 
     for callable_spec in ANNOTATED_DEPENDENCY_CALLABLES:
+        assert callable_spec.supported_containers is None
         assert {
             row.container.name
             for row in invoke_rows
             if row.callable == callable_spec
-        } == callable_spec.supported_containers
+        } == {container.name for container in INVOKE_CONTAINERS}
 
 
 def test_invoke_axis_rejects_duplicate_members() -> None:
@@ -1859,7 +1860,7 @@ def test_matrix_families_preserve_total_registration_behavior(
         + len(scenario_rows)
         + len(invoke_rows)
         + len(shared_cyclical_rows)
-        == 4879
+        == 4887
     )
 
 

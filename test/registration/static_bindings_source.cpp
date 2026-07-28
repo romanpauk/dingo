@@ -18,6 +18,7 @@
 
 #include <memory>
 #include <optional>
+#include <utility>
 #include <variant>
 
 using namespace dingo;
@@ -219,6 +220,40 @@ TEST(static_bindings_source_test,
                     annotated<service &, service_tag>>,
                 type_list<typename registry_type::binding<
                     annotated<config, config_tag>, detail::no_lookup_key_t>>>);
+}
+
+TEST(static_bindings_source_test,
+     container_invokes_annotated_static_bindings_by_tag) {
+  struct first_tag {};
+  struct second_tag {};
+  struct service_interface {
+    virtual ~service_interface() = default;
+    virtual int value() const = 0;
+  };
+  struct first_service : service_interface {
+    int value() const override { return 11; }
+  };
+  struct second_service : service_interface {
+    int value() const override { return 17; }
+  };
+
+  using source = dingo::bindings<
+      dingo::bind<scope<shared>, storage<std::shared_ptr<first_service>>,
+                  interfaces<annotated<service_interface, first_tag>>>,
+      dingo::bind<scope<shared>, storage<std::shared_ptr<second_service>>,
+                  interfaces<annotated<service_interface, second_tag>>>>;
+
+  dingo::container<source> container;
+  const auto values = container.invoke(
+      [](annotated<std::shared_ptr<service_interface>, first_tag> first,
+         annotated<std::shared_ptr<service_interface>, second_tag> second) {
+        return std::pair(
+            static_cast<std::shared_ptr<service_interface>>(first)->value(),
+            static_cast<std::shared_ptr<service_interface>>(second)->value());
+      });
+
+  EXPECT_EQ(values.first, 11);
+  EXPECT_EQ(values.second, 17);
 }
 
 TEST(static_bindings_source_test,

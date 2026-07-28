@@ -137,6 +137,26 @@ template <typename T> struct constructor_detection_construction_check {
   template <typename Detection, typename DetectionMode> static void run() {}
 };
 
+struct constructor_annotation_probe {};
+
+template <typename Dependency>
+using constructor_annotation_argument_t = typename detail::category_result<
+    constructor_dependency<Dependency>, constructor_annotation_probe,
+    detail::list_initialization, 1, 0, detail::annotated_probe>::type;
+
+using constructor_annotated_pointer =
+    annotated<constructor_config *, constructor_selector>;
+using constructor_annotated_shared_pointer =
+    annotated<std::shared_ptr<constructor_config>, constructor_selector>;
+
+static_assert(std::is_same_v<
+              constructor_annotation_argument_t<constructor_annotated_pointer>,
+              constructor_annotated_pointer>);
+static_assert(
+    std::is_same_v<
+        constructor_annotation_argument_t<constructor_annotated_shared_pointer>,
+        constructor_annotated_shared_pointer>);
+
 template <>
 struct constructor_detection_construction_check<constructor_two_values> {
   template <typename Detection, typename DetectionMode> static void run() {
