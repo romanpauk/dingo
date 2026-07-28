@@ -17,6 +17,7 @@ from schema import (
     DependencyProvisioning,
     DependencyShape,
     DependencyShapeConstructorDetectionLimitation,
+    LimitationDisposition,
 )
 
 
@@ -28,6 +29,7 @@ WRAPPER_SIGNATURE_RECOVERY_LIMITATION = ConstructorDetectionLimitation(
     backend=None,
     mode="signature",
     reason=WRAPPER_SIGNATURE_RECOVERY_REASON,
+    disposition=LimitationDisposition.KNOWN_GAP,
 )
 
 NON_GNU_WRAPPER_SHAPE_LIMITATION = ConstructorDetectionLimitation(
@@ -37,6 +39,7 @@ NON_GNU_WRAPPER_SHAPE_LIMITATION = ConstructorDetectionLimitation(
         "Clang and MSVC cannot reliably instantiate the constructor-shape "
         "probe when an outer wrapper exposes competing converting constructors"
     ),
+    disposition=LimitationDisposition.COMPILER_LIMITATION,
     guard="defined(__clang__) || defined(_MSC_VER)",
 )
 

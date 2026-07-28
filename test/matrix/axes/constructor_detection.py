@@ -27,6 +27,7 @@ from schema import (
     ConstructorDetectionBackend,
     ConstructorDetectionMode,
     DependencyForm,
+    LimitationDisposition,
 )
 
 
@@ -47,7 +48,13 @@ CONSTRUCTOR_ARGUMENT_CATEGORIES = (
         type_name="constructor_argument_value",
         dependency_form="value",
         supported_storages=frozenset({"unique", "shared"}),
-        guard="!defined(_MSC_VER) || DINGO_CXX_STANDARD > 17",
+        limitation_reason=(
+            "MSVC C++17 cannot instantiate value constructor arguments"
+        ),
+        limitation_disposition=LimitationDisposition.COMPILER_LIMITATION,
+        limitation_guard=(
+            "defined(_MSC_VER) && DINGO_CXX_STANDARD <= 17"
+        ),
     ),
     ConstructorArgumentCategory(
         name="lvalue_reference",
@@ -118,6 +125,7 @@ _UNCONSTRAINED_FORWARDING_LIMITATIONS = tuple(
             "with an unconstrained forwarding constructor from a generic "
             "constructor"
         ),
+        disposition=LimitationDisposition.KNOWN_GAP,
     )
     for mode in ("shape", "signature")
 )

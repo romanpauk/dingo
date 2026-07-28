@@ -23,6 +23,7 @@ class MixedRegistrationPlacement(Enum):
 class LimitationDisposition(Enum):
     KNOWN_GAP = "known_gap"
     INTENTIONAL_CONSTRAINT = "intentional_constraint"
+    COMPILER_LIMITATION = "compiler_limitation"
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,6 +157,7 @@ class ConstructorDetectionLimitation:
     backend: str | None
     mode: str
     reason: str
+    disposition: LimitationDisposition
     guard: str | None = None
 
 
@@ -287,7 +289,9 @@ class ConstructorArgumentCategory:
     type_name: str
     dependency_form: str
     supported_storages: frozenset[str]
-    guard: str | None = None
+    limitation_reason: str | None = None
+    limitation_disposition: LimitationDisposition | None = None
+    limitation_guard: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

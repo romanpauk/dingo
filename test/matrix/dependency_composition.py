@@ -188,7 +188,6 @@ DEPENDENCY_COMPOSITION_SCOPE_RULES = (
 
 
 _MIXED_ANCHOR_TYPE = "dependency_composition_mixed_anchor"
-DEPENDENCY_COMPOSITION_COVERAGE_REPORT = "dependency-composition-coverage.md"
 DEPENDENCY_COMPOSITION_PROFILES = frozenset({"full", "portable"})
 DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION = 4
 DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT = 12
@@ -773,15 +772,20 @@ def render_dependency_composition_coverage(
     *,
     profile: str | None = None,
     compiled_rows: int | None = None,
+    heading_level: int = 1,
 ) -> str:
+    if heading_level < 1:
+        raise ValueError("coverage report heading level must be positive")
+    heading = "#" * heading_level
+    section = "#" * (heading_level + 1)
     lines = [
-        "# Dependency Composition Coverage",
+        f"{heading} Dependency Compositions",
         "",
         "This summary separates supported behavior from functionality gaps and ",
         "intentional constraints. Counts include both resolution and invocation ",
         "operations.",
         "",
-        "## Support Status",
+        f"{section} Support Status",
         "",
         "| Supported Cases | Functionality-gap Cases | Intentional-constraint Cases |",
         "| ---: | ---: | ---: |",
@@ -804,7 +808,7 @@ def render_dependency_composition_coverage(
         lines.extend(
             (
                 "",
-                "## Tested Supported Cases",
+                f"{section} Tested Supported Cases",
                 "",
                 "Each profile emits a representative projection of supported ",
                 "cases as C++ tests. Supported cases not selected directly are ",
@@ -822,7 +826,7 @@ def render_dependency_composition_coverage(
         lines.extend(
             (
                 "",
-                f"## By {axis.name.title()}",
+                f"{section} By {axis.name.title()}",
                 "",
                 f"| {axis.name.title()} | Supported | Functionality Gap | "
                 "Intentional Constraint |",
@@ -863,7 +867,7 @@ def render_dependency_composition_coverage(
         lines.extend(
             (
                 "",
-                f"## {title}",
+                f"{section} {title}",
                 "",
                 description,
                 "",
@@ -875,7 +879,7 @@ def render_dependency_composition_coverage(
             f"| {_escape_markdown_cell(reason)} | {count} |"
             for reason, count in limitations
         )
-    return "\n".join(lines) + "\n"
+    return "\n".join(line.rstrip() for line in lines) + "\n"
 
 
 def _escape_markdown_cell(value: str) -> str:
@@ -1166,7 +1170,6 @@ def generate_dependency_composition_executables(
 
 
 __all__ = (
-    "DEPENDENCY_COMPOSITION_COVERAGE_REPORT",
     "DEPENDENCY_COMPOSITION_CONTAINERS",
     "DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION",
     "DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT",

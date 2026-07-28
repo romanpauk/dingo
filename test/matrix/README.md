@@ -552,17 +552,19 @@ configure log maps each short diagnostic target name to its source, so a
 compiler crash identifies the exact template instantiation without adding test
 executables. The diagnostic is disabled by default.
 
-MSVC 19.5x x64 crashes while compiling the otherwise-supported
-`runtime_container_unique_value_array_shared_pointer_copy_only` projected case
-for both resolution and invocation. CMake disables only those two projected
-cases for the 19.5x and newer compiler series on x64 until the compiler issue is
-revisited; all other toolchains keep them enabled.
-Generation also writes
-`build/test/generated/matrix/dependency-composition-coverage.md`. This
-build-local diagnostic records supported cases, functionality gaps, and
-intentional constraints by operation, operator, container, scope, and request
-strategy. It also records how many supported cases the active profile tests
-directly. It is not committed; the aggregate tests are the stability contract.
+Compiler exclusions are declared with their compiler, version, and architecture
+conditions in `test/matrix/exclusions.py`. CMake passes generic toolchain metadata
+to the generator and contains no exclusion policy. An enabled exclusion may
+match no case in the active projection; the report distinguishes enabled
+exclusions from cases actually omitted.
+
+Generation also writes `build/test/generated/matrix/matrix-coverage.md`. This
+build-local diagnostic records dependency composition coverage, constructor
+detection gaps, conditionally skipped constructor conversions, configured
+compiler exclusions, and known behavior outside the current axes. It also
+records how many supported composition cases the active profile tests directly.
+The report identifies the toolchain used to select compiler exclusions. It is
+not committed; the aggregate tests are the stability contract.
 
 Behavioral scenarios retain executables named for their suites and
 implementation sources sharded by scenario. Their runners are batched by

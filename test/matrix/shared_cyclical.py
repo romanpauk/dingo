@@ -34,6 +34,7 @@ from plugins import (
 )
 from schema import (
     GeneratedExecutable,
+    LimitationDisposition,
     MixedRegistrationPlacement,
     RegistrationMode,
     RegistrationSpec,
@@ -52,6 +53,7 @@ class SharedCyclicalRow:
     name: str
     supported: bool
     unsupported_reason: str | None
+    unsupported_disposition: LimitationDisposition | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +136,11 @@ def generate_shared_cyclical_rows(
             ))
             is None,
             unsupported_reason=reason,
+            unsupported_disposition=(
+                None
+                if reason is None
+                else LimitationDisposition.INTENTIONAL_CONSTRAINT
+            ),
         )
         for container in containers
         for mode in modes
