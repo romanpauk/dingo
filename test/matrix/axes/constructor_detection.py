@@ -190,6 +190,31 @@ CONSTRUCTOR_SHAPES = (
         dependency_forms=frozenset({"value"}),
     ),
     ConstructorShape(
+        name="std_array_aggregate_move_only",
+        target_type="std::array<constructor_move_only_config, 2>",
+        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_arity=2,
+        signature_arguments=(
+            "dingo::type_list<constructor_move_only_config, "
+            "constructor_move_only_config>"
+        ),
+        detector_only=True,
+    ),
+    ConstructorShape(
+        name="nested_std_array_aggregate_move_only",
+        target_type=(
+            "std::array<std::array<constructor_move_only_config, 2>, 2>"
+        ),
+        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_arity=2,
+        signature_arguments=(
+            "dingo::type_list<"
+            "std::array<constructor_move_only_config, 2>, "
+            "std::array<constructor_move_only_config, 2>>"
+        ),
+        detector_only=True,
+    ),
+    ConstructorShape(
         name="mixed_wrappers",
         target_type="constructor_mixed_wrappers",
         expected_kind="dingo::detail::constructor_kind::concrete",

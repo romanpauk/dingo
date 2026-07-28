@@ -559,7 +559,7 @@ def test_dependency_composition_resolution_constraints_are_declarative(
     assert not limitation_positions["const_pointer"]
     assert not limitation_positions["shared_pointer"]
     assert not limitation_positions["unique_pointer"]
-    assert limitation_positions["array"] == {"request_composed_operand"}
+    assert not limitation_positions["array"]
     assert not limitation_positions["optional"]
     assert not limitations["variant"]
     assert all(
@@ -574,8 +574,6 @@ def test_dependency_composition_resolution_constraints_are_declarative(
         for operator in DEPENDENCY_COMPOSITION_OPERATORS
         if operator.supported_request_strategies != {"stable", "value", "rvalue"}
     )
-    assert limitations["array"][0].request_strategies == {"value", "rvalue"}
-    assert limitations["array"][0].operand_operators == {"optional"}
 
     scope_rules = {
         rule.scope: rule for rule in DEPENDENCY_COMPOSITION_SCOPE_RULES
@@ -792,10 +790,10 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
     assert Counter(
         (row.operation.name, row.supported) for row in composition_rows
     ) == {
-        ("resolve", True): 5335,
-        ("resolve", False): 3065,
-        ("invoke", True): 5335,
-        ("invoke", False): 3065,
+        ("resolve", True): 5355,
+        ("resolve", False): 3045,
+        ("invoke", True): 5355,
+        ("invoke", False): 3045,
     }
     assert Counter(
         row.unsupported_reason
@@ -814,10 +812,6 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
         ): 2300,
         "pointer compositions do not support value requests": 240,
         "const_pointer compositions do not support value requests": 240,
-        (
-            "owning array requests use constructor-shape materialization and "
-            "cannot construct an optional element"
-        ): 40,
         (
             "external storage requires runtime registration and cannot be "
             "provided by a static-only container"
@@ -914,7 +908,7 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
         coverage.overall.supported,
         coverage.overall.functionality_gaps,
         coverage.overall.intentional_constraints,
-    ) == (10670, 40, 6090)
+    ) == (10710, 0, 6090)
     assert {
         axis.name: {
             cell.name: (
@@ -927,11 +921,11 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
         for axis in coverage.axes
     } == {
         "operation": {
-            "invoke": (5335, 20, 3045),
-            "resolve": (5335, 20, 3045),
+            "invoke": (5355, 0, 3045),
+            "resolve": (5355, 0, 3045),
         },
         "operator": {
-            "array": (674, 40, 246),
+            "array": (714, 0, 246),
             "const_pointer": (384, 0, 576),
             "optional": (714, 0, 246),
             "pointer": (384, 0, 576),
@@ -940,38 +934,38 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
             "variant": (6786, 0, 4254),
         },
         "container": {
-            "container_mixed": (2470, 8, 882),
-            "container_runtime": (2470, 8, 882),
-            "container_static": (1630, 8, 1722),
-            "runtime_container": (2470, 8, 882),
-            "static_container": (1630, 8, 1722),
+            "container_mixed": (2478, 0, 882),
+            "container_runtime": (2478, 0, 882),
+            "container_static": (1638, 0, 1722),
+            "runtime_container": (2478, 0, 882),
+            "static_container": (1638, 0, 1722),
         },
         "scope": {
             "external": (2520, 0, 1680),
             "shared": (3050, 0, 1150),
-            "unique": (5100, 40, 3260),
+            "unique": (5140, 0, 3260),
         },
         "request strategy": {
-            "rvalue": (2550, 20, 1630),
+            "rvalue": (2570, 0, 1630),
             "stable": (5570, 0, 2830),
-            "value": (2550, 20, 1630),
+            "value": (2570, 0, 1630),
         },
         "copyability": {
-            "copyable": (5224, 20, 3716),
-            "non_copyable": (5446, 20, 2374),
+            "copyable": (5244, 0, 3716),
+            "non_copyable": (5466, 0, 2374),
         },
         "movability": {
-            "movable": (9980, 40, 2180),
+            "movable": (10020, 0, 2180),
             "non_movable": (690, 0, 3910),
         },
         "depth": {
             "1": (516, 0, 324),
-            "2": (10154, 40, 5766),
+            "2": (10194, 0, 5766),
         },
     }
     for axis in coverage.axes:
-        assert sum(cell.count.supported for cell in axis.cells) == 10670
-        assert sum(cell.count.functionality_gaps for cell in axis.cells) == 40
+        assert sum(cell.count.supported for cell in axis.cells) == 10710
+        assert sum(cell.count.functionality_gaps for cell in axis.cells) == 0
         assert sum(
             cell.count.intentional_constraints for cell in axis.cells
         ) == 6090
@@ -984,14 +978,14 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
         )
         for disposition in LimitationDisposition
     } == {
-        LimitationDisposition.KNOWN_GAP: 40,
+        LimitationDisposition.KNOWN_GAP: 0,
         LimitationDisposition.INTENTIONAL_CONSTRAINT: 6090,
     }
 
     report = render_dependency_composition_coverage(coverage)
-    assert "| 10670 | 40 | 6090 |" in report
+    assert "| 10710 | 0 | 6090 |" in report
     assert "| `variant` | 6786 | 0 | 4254 |" in report
-    assert "## Functionality Gaps" in report
+    assert "## Functionality Gaps" not in report
     assert "## Intentional Constraints" in report
 
 
@@ -1739,7 +1733,9 @@ def test_dependency_contract_covers_required_families() -> None:
         "generic",
         "initializer_list",
         "nested_forwarding_wrapper",
+        "nested_std_array_aggregate_move_only",
         "same_arity_overload",
+        "std_array_aggregate_move_only",
         "unconstrained_forwarding_wrapper",
     } | {composition.name for composition in DEPENDENCY_COMPOSITIONS}
 

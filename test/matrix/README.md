@@ -417,8 +417,8 @@ stable, value, and rvalue requests even when their operand is another wrapper,
 including pointer-to-const operands. Stable inverse compositions such as
 `optional<shared_ptr<T>>` and `optional<unique_ptr<T>>`, and exact owning
 `variant<shared_ptr<T>, unique_ptr<T>>` requests are supported as well. Owning
-arrays of optionals remain an explicit functionality gap because constructor
-shape materialization cannot construct an optional element.
+arrays of optionals are supported as well; array construction materializes each
+value through its declared element type.
 
 Operators declare positional resolution limitations alongside their type and
 copy/move rules. A limitation may select request strategies and operand operator

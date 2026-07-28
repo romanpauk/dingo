@@ -853,6 +853,13 @@ def render_dependency_composition_coverage(
             ),
         ),
     ):
+        limitations = tuple(
+            (reason, count)
+            for item_disposition, reason, count in coverage.limitations
+            if item_disposition is disposition
+        )
+        if not limitations:
+            continue
         lines.extend(
             (
                 "",
@@ -866,9 +873,7 @@ def render_dependency_composition_coverage(
         )
         lines.extend(
             f"| {_escape_markdown_cell(reason)} | {count} |"
-            for item_disposition, reason, count
-            in coverage.limitations
-            if item_disposition is disposition
+            for reason, count in limitations
         )
     return "\n".join(lines) + "\n"
 

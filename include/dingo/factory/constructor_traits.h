@@ -11,6 +11,8 @@
 #include <dingo/resolution/resolution_operation.h>
 #include <dingo/type/type_traits.h>
 
+#include <array>
+#include <cstddef>
 #include <type_traits>
 #include <utility>
 
@@ -48,6 +50,25 @@ template <typename T, size_t N> struct constructor_traits<T[N]> {
 
   template <typename... Args> static void construct(void *ptr, Args &&...args) {
     detail::construct_bounded_array<T, N>(ptr, std::forward<Args>(args)...);
+  }
+};
+
+template <typename T, std::size_t N>
+struct constructor_traits<std::array<T, N>> {
+  template <typename... Args>
+  static std::array<T, N> construct(Args &&...args) {
+    return {{std::forward<Args>(args)...}};
+  }
+
+  template <typename... Args> static void construct(void *ptr, Args &&...args) {
+#if defined(_MSC_VER)
+    // MSVC rejects direct placement-new aggregate initialization for nested
+    // arrays of move-only elements. Constructing from the returned prvalue uses
+    // C++17 guaranteed copy elision and does not require a copy or move.
+    new (ptr) std::array<T, N>(construct(std::forward<Args>(args)...));
+#else
+    new (ptr) std::array<T, N>{{std::forward<Args>(args)...}};
+#endif
   }
 };
 
