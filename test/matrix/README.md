@@ -411,15 +411,14 @@ expands resolution and invocation without requiring hand-written wrapper cases.
 Every product case is classified. Supported cases may be selected as direct C++
 tests; functionality gaps remain visible with a reason, and intentional
 constraints remain outside the support contract. Shared storage requires a
-movable composition. The current container also cannot publish an exact composed
-type when a raw or smart pointer is the outer wrapper around another wrapper, or
-when pointer-to-const normalization occurs inside a wrapper. These limitations
-do not disable supported stable inverse compositions such as
-`optional<shared_ptr<T>>` and `optional<unique_ptr<T>>`, or exact owning
-`variant<shared_ptr<T>, unique_ptr<T>>` requests. Owning optional requests with
-a composed operand and owning arrays of optionals remain explicit functionality
-gaps because resolution selects an inner conversion instead of materializing the
-exact outer type.
+movable composition. Raw and const pointer compositions intentionally expose
+only stable exact requests. Shared and unique pointer compositions support exact
+stable, value, and rvalue requests even when their operand is another wrapper,
+including pointer-to-const operands. Stable inverse compositions such as
+`optional<shared_ptr<T>>` and `optional<unique_ptr<T>>`, and exact owning
+`variant<shared_ptr<T>, unique_ptr<T>>` requests are supported as well. Owning
+arrays of optionals remain an explicit functionality gap because constructor
+shape materialization cannot construct an optional element.
 
 Operators declare positional resolution limitations alongside their type and
 copy/move rules. A limitation may select request strategies and operand operator
