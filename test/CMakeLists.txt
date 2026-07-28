@@ -196,7 +196,7 @@ add_executable(dingo_unit_test
     resolution/cache.cpp
     runtime/container_runtime.cpp
     runtime/transaction.cpp
-    storage/shared_type_conversion.cpp
+    resolution/resolution_operation.cpp
     container/construct_common.h
     lookup/index_common.h
     registration/type_registration_common.h

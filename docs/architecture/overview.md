@@ -102,7 +102,7 @@ now owns the conversion-facing resolution flow. It is responsible for:
 - applying guard and closure scope through `storage_materialization_traits`
 - constructing cached conversion objects for shared and external cases
 
-[include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)
+[include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
 contains the last-mile conversion rules from the stored source shape to the
 requested target shape.
 
@@ -133,7 +133,8 @@ At a high level, Dingo runs this sequence:
    lvalue reference, rvalue reference, or pointer resolution.
 6. The factory or static resolution path gets or builds the stored instance
    using its scope-specific state.
-7. `type_conversion` converts that stored source shape into the requested `T`.
+7. The matched resolution operation converts that materialized source into the
+   requested `T`.
 
 For `container<bindings<...>>`:
 
@@ -157,4 +158,4 @@ For the core path in source order, start here:
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/resolution/runtime_binding.h](../../include/dingo/resolution/runtime_binding.h)
-- [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)
+- [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)

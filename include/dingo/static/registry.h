@@ -13,6 +13,7 @@
 #include <dingo/lookup/lookup.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
+#include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/type_list.h>
 
@@ -53,70 +54,6 @@ using binding_exact_dependency_interface_t = std::remove_cv_t<
 template <typename Request>
 using binding_dependency_key_t =
     make_lookup_key_t<selected_selector_t<Request>>;
-
-template <typename Interface, typename RequestTypes>
-struct annotated_dependency_types {
-  using type = RequestTypes;
-};
-
-template <typename T, typename Tag, typename... RequestTypes>
-struct annotated_dependency_types<annotated<T, Tag>,
-                                  type_list<RequestTypes...>> {
-  using type = type_list<annotated<RequestTypes, Tag>...>;
-};
-
-template <typename LookupKey, typename RequestTypes>
-struct keyed_dependency_types {
-  using type = RequestTypes;
-};
-
-template <typename LookupKey, typename... RequestTypes>
-struct keyed_dependency_types<LookupKey, type_list<RequestTypes...>> {
-private:
-  using selector = typename std::decay_t<LookupKey>::selector_type;
-
-public:
-  using type = type_list<dependency<RequestTypes, selector>...>;
-};
-
-template <typename Binding> struct binding_dependency_types {
-private:
-  using interface_type = typename Binding::interface_type;
-  using binding_model_type = typename Binding::binding_model_type;
-  using raw_interface_type = typename annotated_traits<interface_type>::type;
-  using storage_conversions =
-      typename binding_model_type::storage_type::conversions;
-  using exact_interface_value_types =
-      std::conditional_t<type_traits<raw_interface_type>::enabled &&
-                             !std::is_pointer_v<raw_interface_type>,
-                         type_list<raw_interface_type>, type_list<>>;
-  using exact_interface_lvalue_reference_types =
-      std::conditional_t<storage_conversions::is_stable &&
-                             type_traits<raw_interface_type>::enabled &&
-                             !std::is_pointer_v<raw_interface_type>,
-                         type_list<raw_interface_type &>, type_list<>>;
-  using exact_interface_pointer_types =
-      std::conditional_t<storage_conversions::is_stable &&
-                             type_traits<raw_interface_type>::enabled &&
-                             !std::is_pointer_v<raw_interface_type>,
-                         type_list<raw_interface_type *>, type_list<>>;
-  using base_types = type_list_cat_t<
-      exact_interface_value_types, exact_interface_lvalue_reference_types,
-      exact_interface_pointer_types,
-      rebind_leaf_t<typename storage_conversions::value_types,
-                    raw_interface_type>,
-      rebind_leaf_t<typename storage_conversions::lvalue_reference_types,
-                    raw_interface_type>,
-      rebind_leaf_t<typename storage_conversions::rvalue_reference_types,
-                    raw_interface_type>,
-      rebind_leaf_t<typename storage_conversions::pointer_types,
-                    raw_interface_type>>;
-
-public:
-  using type = type_list_unique_t<typename keyed_dependency_types<
-      typename Binding::key_type, typename annotated_dependency_types<
-                                      interface_type, base_types>::type>::type>;
-};
 
 template <typename DependencyList, typename InterfaceBindings>
 struct dependency_bindings;

@@ -55,4 +55,4 @@ The main owners for the current architecture are:
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 - [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
-- [include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)
+- [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)

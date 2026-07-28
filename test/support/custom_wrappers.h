@@ -104,7 +104,6 @@ public:
 
 private:
   template <typename> friend class test_optional;
-  template <typename, typename, typename> friend struct type_conversion_traits;
 
   std::optional<T> value_;
 };
@@ -113,6 +112,7 @@ template <typename T> struct type_traits<test_shared<T>> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = true;
+  static constexpr bool is_owning_handle = true;
 
   template <typename> static constexpr bool is_handle_rebindable = true;
 
@@ -153,6 +153,7 @@ template <typename T> struct type_traits<test_unique<T>> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
   static constexpr bool is_value_borrowable = true;
+  static constexpr bool is_owning_handle = true;
 
   template <typename> static constexpr bool is_handle_rebindable = true;
 
@@ -198,6 +199,7 @@ template <typename T> struct type_traits<test_optional<T>> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = false;
   static constexpr bool is_value_borrowable = true;
+  static constexpr bool is_owning_handle = false;
 
   template <typename> static constexpr bool is_handle_rebindable = false;
 
@@ -218,6 +220,12 @@ template <typename T> struct type_traits<test_optional<T>> {
     return !wrapper.has_value();
   }
   static void reset(test_optional<T> &wrapper) { wrapper.reset(); }
+
+  template <typename Value> static test_optional<T> wrap(Value &&value) {
+    return test_optional<T>(T(std::forward<Value>(value)));
+  }
+
+  static test_optional<T> make_empty() { return {}; }
 
   template <typename... Args> static test_optional<T> make(Args &&...args) {
     if constexpr (std::is_constructible_v<T, Args...>) {
@@ -245,11 +253,10 @@ struct storage_traits<unique, test_shared<T>, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
-  using value_types = type_list<test_shared<U>>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types = type_list<test_shared<U> &&>;
   using pointer_types = type_list<>;
-  using conversion_types = type_list<test_shared<U>>;
 };
 
 template <typename T, typename U>
@@ -261,7 +268,6 @@ struct storage_traits<shared, test_shared<T>, U> {
   using lvalue_reference_types = type_list<U &, test_shared<U> &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, test_shared<U> *>;
-  using conversion_types = type_list<test_shared<U>>;
 };
 
 template <typename T, typename U>
@@ -273,7 +279,6 @@ struct storage_traits<external, test_shared<T>, U> {
   using lvalue_reference_types = type_list<U &, test_shared<U> &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, test_shared<U> *>;
-  using conversion_types = type_list<test_shared<U>>;
 };
 
 template <typename T, typename U>
@@ -281,12 +286,11 @@ struct storage_traits<unique, test_unique<T>, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
-  using value_types = type_list<test_unique<U>, test_shared<U>>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types =
       type_list<test_unique<U> &&, test_shared<U> &&>;
   using pointer_types = type_list<>;
-  using conversion_types = type_list<test_unique<U>, test_shared<U>>;
 };
 
 template <typename T, typename U>
@@ -298,7 +302,6 @@ struct storage_traits<shared, test_unique<T>, U> {
   using lvalue_reference_types = type_list<U &, test_unique<U> &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, test_unique<U> *>;
-  using conversion_types = type_list<>;
 };
 
 template <typename T, typename U>
@@ -310,7 +313,6 @@ struct storage_traits<external, test_unique<T>, U> {
   using lvalue_reference_types = type_list<U &, test_unique<U> &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, test_unique<U> *>;
-  using conversion_types = type_list<>;
 };
 
 template <typename T, typename U>
@@ -318,11 +320,10 @@ struct storage_traits<unique, test_optional<T>, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
-  using value_types = type_list<test_optional<U>>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types = type_list<test_optional<U> &&>;
   using pointer_types = type_list<>;
-  using conversion_types = type_list<test_optional<U>>;
 };
 
 template <typename T, typename U>
@@ -330,12 +331,11 @@ struct storage_traits<shared, test_optional<T>, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = true;
 
-  using value_types = type_list<>;
+  using value_types = type_list<U>;
   using lvalue_reference_types =
       type_list<U &, exact_lookup<test_optional<T>> &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, exact_lookup<test_optional<T>> *>;
-  using conversion_types = type_list<>;
 };
 
 template <typename T, typename U>
@@ -343,41 +343,27 @@ struct storage_traits<external, test_optional<T>, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = true;
 
-  using value_types = type_list<>;
+  using value_types = type_list<U>;
   using lvalue_reference_types =
       type_list<U &, exact_lookup<test_optional<T>> &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, exact_lookup<test_optional<T>> *>;
-  using conversion_types = type_list<>;
 };
 
 template <typename T, typename U>
-struct type_conversion_traits<test_shared<U>, test_shared<T>> {
+struct type_conversion_traits<
+    test_shared<U>, test_shared<T>,
+    std::enable_if_t<std::is_convertible_v<T *, U *>>> {
+  template <typename Source>
+  using required_access =
+      std::conditional_t<std::is_rvalue_reference_v<Source>, consume, borrow>;
+
   static test_shared<U> convert(const test_shared<T> &source) {
     return test_shared<U>(std::static_pointer_cast<U>(source.ptr_));
   }
 
   static test_shared<U> convert(test_shared<T> &&source) {
     return test_shared<U>(std::static_pointer_cast<U>(std::move(source.ptr_)));
-  }
-};
-
-template <typename T, typename U>
-struct type_conversion_traits<test_optional<U>, test_optional<T>> {
-  static test_optional<U> convert(const test_optional<T> &source) {
-    test_optional<U> target;
-    if (source.value_) {
-      target.value_.emplace(*source.value_);
-    }
-    return target;
-  }
-
-  static test_optional<U> convert(test_optional<T> &&source) {
-    test_optional<U> target;
-    if (source.value_) {
-      target.value_.emplace(std::move(*source.value_));
-    }
-    return target;
   }
 };
 

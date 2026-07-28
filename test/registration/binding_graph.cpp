@@ -18,35 +18,6 @@
 
 using namespace dingo;
 
-namespace {
-struct same_conversion_storage_tag {};
-struct larger_conversion_storage_tag {};
-} // namespace
-
-template <typename Type, typename U>
-struct dingo::storage_traits<same_conversion_storage_tag, Type, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-
-  using value_types = type_list<Type>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<>;
-  using conversion_types = type_list<Type>;
-};
-
-template <typename Type, typename U>
-struct dingo::storage_traits<larger_conversion_storage_tag, Type, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-
-  using value_types = type_list<Type>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<>;
-  using conversion_types = type_list<U>;
-};
-
 TEST(static_graph_test, exposes_dependency_nodes_and_topological_order) {
   struct config {};
   struct service_interface {
@@ -242,7 +213,7 @@ TEST(static_execution_traits_test,
 }
 
 TEST(static_execution_traits_test,
-     static_conversion_cost_traits_live_with_storage_types) {
+     resolution_operations_publish_static_temporary_requirements) {
   struct payload {
     ~payload() {}
   };
@@ -250,51 +221,30 @@ TEST(static_execution_traits_test,
     alignas(16) char bytes[32];
   };
 
-  using unique_value_storage = detail::conversions<unique, payload, payload>;
-  using unique_same_value_storage =
-      type_storage_traits<same_conversion_storage_tag, payload, payload>;
-  using unique_larger_value_storage =
-      type_storage_traits<larger_conversion_storage_tag, payload,
-                          larger_payload>;
-  using unique_handle_storage =
-      detail::conversions<unique, std::shared_ptr<payload>, payload>;
-  using shared_handle_storage =
-      detail::conversions<shared, std::shared_ptr<payload>, payload>;
+  using registration = dingo::bind<scope<unique>, storage<payload>>;
+  using model = detail::binding_model<registration>;
+  using storage_type = typename model::storage_type;
+  using resolutions =
+      typename detail::binding_resolutions<payload, storage_type>::type;
+  using temporary_types =
+      detail::resolution_temporary_types_t<resolutions, storage_type>;
+  using temporary_traits = detail::temporary_storage_traits<temporary_types>;
 
-  static_assert(unique_value_storage::static_conversion_temporary_slots == 1);
-  static_assert(unique_value_storage::static_conversion_destructible_slots ==
-                1);
-  static_assert(unique_value_storage::static_conversion_temporary_size ==
-                sizeof(std::optional<payload>));
-  static_assert(unique_value_storage::static_conversion_temporary_align ==
-                alignof(std::optional<payload>));
-  static_assert(unique_same_value_storage::static_conversion_temporary_slots ==
-                0);
   static_assert(
-      unique_same_value_storage::static_conversion_destructible_slots == 0);
-  static_assert(unique_same_value_storage::static_conversion_temporary_size ==
-                0);
-  static_assert(unique_same_value_storage::static_conversion_temporary_align ==
-                0);
-  static_assert(
-      unique_larger_value_storage::static_conversion_temporary_slots == 1);
-  static_assert(
-      unique_larger_value_storage::static_conversion_destructible_slots == 0);
-  static_assert(unique_larger_value_storage::static_conversion_temporary_size ==
-                sizeof(larger_payload));
-  static_assert(
-      unique_larger_value_storage::static_conversion_temporary_align ==
-      alignof(larger_payload));
-  static_assert(unique_handle_storage::static_conversion_temporary_slots == 0);
-  static_assert(unique_handle_storage::static_conversion_destructible_slots ==
-                0);
-  static_assert(unique_handle_storage::static_conversion_temporary_size == 0);
-  static_assert(unique_handle_storage::static_conversion_temporary_align == 0);
-  static_assert(shared_handle_storage::static_conversion_temporary_slots == 0);
-  static_assert(shared_handle_storage::static_conversion_destructible_slots ==
-                0);
-  static_assert(shared_handle_storage::static_conversion_temporary_size == 0);
-  static_assert(shared_handle_storage::static_conversion_temporary_align == 0);
+      std::is_same_v<temporary_types, type_list<std::optional<payload>>>);
+  static_assert(temporary_traits::slots == 1);
+  static_assert(temporary_traits::destructible_slots == 1);
+  static_assert(temporary_traits::size == sizeof(std::optional<payload>));
+  static_assert(temporary_traits::align == alignof(std::optional<payload>));
+
+  using exact_types = detail::resolution_temporary_types_t<
+      type_list<detail::conversion_resolution<payload, payload &&>>,
+      storage_type>;
+  using larger_types = detail::resolution_temporary_types_t<
+      type_list<detail::conversion_resolution<larger_payload, payload &&>>,
+      storage_type>;
+  static_assert(std::is_same_v<exact_types, type_list<>>);
+  static_assert(std::is_same_v<larger_types, type_list<larger_payload>>);
 }
 
 TEST(static_execution_traits_test,

@@ -161,7 +161,7 @@ possible conversion shapes from `Storage::conversions` and tries to match the
 requested lookup type against that list.
 
 If a match is found, the factory produces the source object and
-[include/dingo/resolution/type_conversion.h](../../include/dingo/resolution/type_conversion.h)
+[include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
 converts it to the requested shape.
 
 The static path uses the same binding model and conversion rules, but it selects

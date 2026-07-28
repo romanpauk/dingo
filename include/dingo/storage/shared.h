@@ -12,10 +12,10 @@
 #include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
 #include <dingo/memory/object_lifetime.h>
+#include <dingo/resolution/resolution_operation.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
-#include <dingo/type/type_conversion_traits.h>
 
 #include <new>
 
@@ -59,7 +59,6 @@ struct storage_traits<
   using lvalue_reference_types = type_list<U &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *>;
-  using conversion_types = type_list<>;
 };
 
 template <typename Type, typename U> struct storage_traits<shared, Type *, U> {
@@ -70,7 +69,6 @@ template <typename Type, typename U> struct storage_traits<shared, Type *, U> {
   using lvalue_reference_types = type_list<U &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *>;
-  using conversion_types = type_list<>;
 };
 
 template <typename T, typename U> struct storage_traits<shared, T[], U> {
@@ -82,7 +80,6 @@ template <typename T, typename U> struct storage_traits<shared, T[], U> {
   using rvalue_reference_types = type_list<>;
   using pointer_types =
       type_list<typename detail::wrapper_rebind_leaf<T, U>::type *>;
-  using conversion_types = type_list<>;
 };
 
 template <typename T, size_t N, typename U>
@@ -99,7 +96,6 @@ struct storage_traits<shared, T[N], U> {
   using rvalue_reference_types = type_list<>;
   using pointer_types =
       type_list<rebound_row_type *, exact_lookup<rebound_exact_type> *>;
-  using conversion_types = type_list<>;
 };
 
 template <typename Array, typename Deleter, typename U>
@@ -117,7 +113,6 @@ struct storage_traits<shared, std::unique_ptr<Array, Deleter>, U,
   using value_types = type_list<>;
   using lvalue_reference_types = type_list<handle_type &>;
   using rvalue_reference_types = type_list<>;
-  using conversion_types = type_list<>;
 };
 
 template <typename T, typename Deleter, typename U>
@@ -134,7 +129,6 @@ struct storage_traits<shared, std::unique_ptr<T, Deleter>, U,
   using lvalue_reference_types = typename types::lvalue_reference_types;
   using rvalue_reference_types = type_list<>;
   using pointer_types = typename types::pointer_types;
-  using conversion_types = type_list<>;
 };
 
 template <typename Array, typename U>
@@ -151,7 +145,6 @@ struct storage_traits<shared, std::shared_ptr<Array>, U,
   using value_types = type_list<handle_type>;
   using lvalue_reference_types = type_list<handle_type &>;
   using rvalue_reference_types = type_list<>;
-  using conversion_types = type_list<handle_type>;
 };
 
 template <typename T, typename U>
@@ -168,7 +161,6 @@ struct storage_traits<shared, std::shared_ptr<T>, U,
   using lvalue_reference_types = typename types::lvalue_reference_types;
   using rvalue_reference_types = type_list<>;
   using pointer_types = typename types::pointer_types;
-  using conversion_types = typename types::copyable_value_types;
 };
 
 template <typename T, typename U>
@@ -176,12 +168,11 @@ struct storage_traits<shared, std::optional<T>, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = true;
 
-  using value_types = type_list<>;
+  using value_types = type_list<U>;
   using lvalue_reference_types =
       type_list<U &, exact_lookup<std::optional<T>> &>;
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, exact_lookup<std::optional<T>> *>;
-  using conversion_types = type_list<>;
 };
 
 namespace detail {
@@ -284,9 +275,8 @@ public:
   void construct(construction_scope scope, Context &context,
                  Container &container) {
     assert(empty());
-    new (&instance_)
-        StoredType(type_conversion_traits<StoredType, Type>::convert(
-            Factory::template construct<Type>(scope, context, container)));
+    new (&instance_) StoredType(detail::convert_type<StoredType, consume>(
+        Factory::template construct<Type>(scope, context, container)));
     initialized_ = true;
   }
 
@@ -376,7 +366,7 @@ public:
   }
 
   StoredType *get() const {
-    return type_conversion_traits<StoredType *, Type *>::convert(instance_);
+    return detail::convert_type<StoredType *, borrow>(instance_);
   }
   void reset() {
     delete instance_;
@@ -403,6 +393,10 @@ public:
   using conversions = Conversions;
   using type = Type;
   using stored_type = StoredType;
+  using resolved_type =
+      decltype(std::declval<
+                   storage_instance<shared, Type, StoredType, Factory> &>()
+                   .get());
   using tag_type = shared;
 
   template <typename Context, typename Container>

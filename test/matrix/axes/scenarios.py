@@ -150,6 +150,22 @@ REGRESSION_SCENARIOS = (
         supported_containers=RUNTIME_CONTAINERS,
         headers=("matrix/scenarios/runtime/shared_cyclical.h",),
     ),
+    ScenarioSpec(
+        suite="conversion_qualification_regressions",
+        name="default",
+        test_name="borrowed_qualification_{container}",
+        function="conversion_qualification_regression_scenario::run",
+        supported_containers=RUNTIME_CONTAINERS,
+        headers=("matrix/scenarios/conversion_regressions.h",),
+    ),
+    ScenarioSpec(
+        suite="conversion_delivery_regressions",
+        name="default",
+        test_name="all_container_modes",
+        function="exercise_conversion_delivery_regressions",
+        supported_containers=frozenset({STANDALONE}),
+        headers=("matrix/scenarios/conversion_regressions.h",),
+    ),
 )
 
 PARENT_SCENARIOS = (

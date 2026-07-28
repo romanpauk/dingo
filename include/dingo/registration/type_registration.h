@@ -296,7 +296,7 @@ using registration_factory_t = std::conditional_t<
 
 template <typename StorageType, typename ScopeType, typename = void>
 struct deduced_interface_type {
-  using type = ::dingo::interfaces<leaf_type_t<StorageType>>;
+  using type = ::dingo::interfaces<std::remove_cv_t<leaf_type_t<StorageType>>>;
 };
 
 template <typename StorageType, typename ScopeType>

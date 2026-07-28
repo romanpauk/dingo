@@ -21,6 +21,7 @@ introducing a new wrapper or handle type.
 
 - whether the type participates in Dingo's wrapper machinery
 - whether it behaves like a pointer-like handle
+- whether it owns the pointee
 - how to get or borrow the underlying object
 - how to reset it
 - how to rebind it to a different leaf type
@@ -28,6 +29,19 @@ introducing a new wrapper or handle type.
 - how wrapper-shaped resolution should behave for that type
 
 If Dingo needs to understand a wrapper's shape, start here.
+
+Set `is_owning_handle` to `true` for adopting or shared-ownership handles and to
+`false` for observers. Dingo does not create an owning handle from a borrowed
+non-owning source through a default conversion. This rule applies to the leaf
+handle conversion. Alternative and optional-style conversions first select or
+unwrap their contained conversion, then inherit its `borrow` or `consume`
+requirement.
+
+An optional-style wrapper provides `value_type`, `get`, `empty`, `wrap`, and
+`make_empty`. These operations let Dingo preserve an empty source and construct
+the target wrapper around the converted contained value. An alternative provides
+`selected_type<Source>` and `wrap<Selected>` so Dingo can apply the same rule to
+the alternative selected by overload resolution.
 
 ### 2. `storage_traits`
 
@@ -46,6 +60,15 @@ This trait defines whether a registration can service requests such as:
 The same wrapper may have different exposure rules under `unique`, `shared`, or
 `external` storage.
 
+Put a result shape in `value_types` when it is copied from borrowed storage;
+Dingo exposes it only when the resolved type is copy constructible. Put `T&&` in
+`rvalue_reference_types` when the storage produces `T` for consumption; Dingo
+derives the corresponding value request when `type_conversion_traits` accepts
+the concrete source category. A consumable result does not also need to appear
+in `value_types`. These declarations are converted into concrete `resolution`
+descriptors, so the downstream resolver no longer has to infer source ownership
+or exact lookup behavior from the request spelling.
+
 ### 3. `type_conversion_traits`
 
 Specialize `type_conversion_traits` in
@@ -53,7 +76,24 @@ Specialize `type_conversion_traits` in
 when two wrapper types need a concrete conversion step that is not covered by a
 direct converting constructor or pointer cast.
 
-This is the last-mile "build target wrapper from source wrapper" hook.
+The `convert` function performs the last-mile "build target wrapper from source
+wrapper" step and is the availability signal. A conversion is available exactly
+when `convert(Source)` is well-formed and its result can construct the target.
+Restrict source categories through `convert` overloads or SFINAE.
+
+Every specialization also declares `required_access<Source>` as `borrow` or
+`consume`. Use `borrow` when conversion may read the source without transferring
+from it, including conversions that allocate an independent copy. Use `consume`
+when conversion can move from the source or acquire ownership represented by it.
+Route selection applies this declaration in the same way as requirements derived
+for built-in conversion operations, so request discovery and execution describe
+one conversion.
+
+An applicable specialization that omits `required_access<Source>` is rejected
+instead of falling through to another conversion route. Default value
+construction from an lvalue is borrowable only when it accepts a const view of
+the source. Direct compatible lvalue-reference binding remains borrowable
+because it aliases the existing object rather than constructing a value.
 
 ## Extension Example
 
@@ -70,7 +110,7 @@ and then specializes the exact traits Dingo needs:
 
 - `type_traits` for wrapper semantics
 - `storage_traits` for scope-specific exposure
-- `type_conversion_traits` for wrapper conversion
+- `type_conversion_traits` for conversion availability and execution
 
 That file is worth treating as executable documentation.
 

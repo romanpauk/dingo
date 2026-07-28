@@ -57,7 +57,10 @@ template <typename Request> struct pointee_constructed {
 template <typename Type> struct value {
   template <typename Container> static void check(Container &container) {
     auto instance = container.template resolve<Type>();
+    auto const_instance = container.template resolve<const Type>();
+
     ASSERT_TRUE(is_constructed_value(instance));
+    ASSERT_TRUE(is_constructed_value(const_instance));
   }
 };
 
@@ -65,9 +68,30 @@ template <typename Type> struct ref_ptr {
   template <typename Container> static void check(Container &container) {
     Type &instance = container.template resolve<Type &>();
     Type *pointer = container.template resolve<Type *>();
+    const Type &const_instance = container.template resolve<const Type &>();
+    volatile Type &volatile_instance =
+        container.template resolve<volatile Type &>();
+    const volatile Type &cv_instance =
+        container.template resolve<const volatile Type &>();
+    const Type *const_pointer = container.template resolve<const Type *>();
+    volatile Type *volatile_pointer =
+        container.template resolve<volatile Type *>();
+    const volatile Type *cv_pointer =
+        container.template resolve<const volatile Type *>();
+
     ASSERT_TRUE(is_constructed_value(instance));
     ASSERT_TRUE(is_constructed_value(*pointer));
     ASSERT_EQ(&instance, pointer);
+    ASSERT_EQ(static_cast<const Type *>(pointer),
+              std::addressof(const_instance));
+    ASSERT_EQ(static_cast<volatile Type *>(pointer),
+              std::addressof(volatile_instance));
+    ASSERT_EQ(static_cast<const volatile Type *>(pointer),
+              std::addressof(cv_instance));
+    ASSERT_EQ(static_cast<const Type *>(pointer), const_pointer);
+    ASSERT_EQ(static_cast<volatile Type *>(pointer), volatile_pointer);
+    ASSERT_EQ(static_cast<const volatile Type *>(pointer), cv_pointer);
+    ASSERT_EQ(pointer, container.template resolve<Type *const>());
   }
 };
 
@@ -203,29 +227,33 @@ struct construct_invoke {
   }
 };
 
+template <typename Type> int dependency_marker(Type &&dependency);
+
 template <typename Type> struct dependency_marker_value {
   static int get(const Type &dependency) { return dependency.marker(); }
 };
 
 template <typename Type> struct dependency_marker_value<Type *> {
-  static int get(Type *dependency) { return dependency->marker(); }
+  static int get(Type *dependency) {
+    return dependency != nullptr ? dependency_marker(*dependency) : -1;
+  }
 };
 
 template <typename Type> struct dependency_marker_value<std::shared_ptr<Type>> {
   static int get(const std::shared_ptr<Type> &dependency) {
-    return dependency->marker();
+    return dependency ? dependency_marker(*dependency) : -1;
   }
 };
 
 template <typename Type> struct dependency_marker_value<std::unique_ptr<Type>> {
   static int get(const std::unique_ptr<Type> &dependency) {
-    return dependency->marker();
+    return dependency ? dependency_marker(*dependency) : -1;
   }
 };
 
 template <typename Type> struct dependency_marker_value<std::optional<Type>> {
   static int get(const std::optional<Type> &dependency) {
-    return dependency->marker();
+    return dependency ? dependency_marker(*dependency) : -1;
   }
 };
 
@@ -233,7 +261,15 @@ template <typename Type, std::size_t Size>
 struct dependency_marker_value<Type[Size]> {
   static_assert(Size > 0);
   static int get(const Type (&dependency)[Size]) {
-    return dependency[0].marker();
+    return dependency_marker(dependency[0]);
+  }
+};
+
+template <typename Type, std::size_t Size>
+struct dependency_marker_value<std::array<Type, Size>> {
+  static_assert(Size > 0);
+  static int get(const std::array<Type, Size> &dependency) {
+    return dependency_marker(dependency[0]);
   }
 };
 
@@ -249,10 +285,7 @@ template <typename... Types>
 struct dependency_marker_value<std::variant<Types...>> {
   static int get(const std::variant<Types...> &dependency) {
     return std::visit(
-        [](const auto &alternative) {
-          using alternative_type = std::decay_t<decltype(alternative)>;
-          return dependency_marker_value<alternative_type>::get(alternative);
-        },
+        [](const auto &alternative) { return dependency_marker(alternative); },
         dependency);
   }
 };
@@ -284,21 +317,39 @@ struct dependency_invoke_explicit {
   }
 };
 
-template <typename Type, typename Request> struct composition_resolve {
+template <typename FactoryType> struct composition_uses_factory {
+  static void before() {
+    dependency_composition_factory_calls<FactoryType> = 0;
+  }
+
+  static void after() {
+    ASSERT_GT(dependency_composition_factory_calls<FactoryType>, 0u);
+  }
+};
+
+template <> struct composition_uses_factory<void> {
+  static void before() {}
+  static void after() {}
+};
+
+template <typename Type, typename Request, typename FactoryType>
+struct composition_resolve : composition_uses_factory<FactoryType> {
   template <typename Container> static void check(Container &container) {
     decltype(auto) dependency = container.template resolve<Request>();
     static_assert(
         std::is_same_v<
             std::remove_cv_t<std::remove_reference_t<decltype(dependency)>>,
             std::remove_cv_t<std::remove_reference_t<Type>>>);
-    (void)dependency;
+    ASSERT_EQ(dependency_marker(dependency), 3);
   }
 };
 
-template <typename Type, typename Request> struct composition_invoke {
+template <typename Type, typename Request, typename FactoryType>
+struct composition_invoke : composition_uses_factory<FactoryType> {
   template <typename Container> static void check(Container &container) {
-    auto invoked = container.invoke([](Request) { return true; });
-    ASSERT_TRUE(invoked);
+    auto invoked = container.invoke(
+        [](Request dependency) { return dependency_marker(dependency); });
+    ASSERT_EQ(invoked, 3);
   }
 };
 

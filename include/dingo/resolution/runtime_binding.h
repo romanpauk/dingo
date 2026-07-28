@@ -296,11 +296,12 @@ namespace detail {
 template <typename Storage> using registered_type_t = typename Storage::type;
 
 template <typename Type, typename Storage>
-using runtime_binding_conversion_types_t =
-    rebind_leaf_t<typename Storage::conversions::conversion_types, Type>;
+using runtime_binding_cache_types_t =
+    resolution_cache_types_t<typename binding_resolutions<Type, Storage>::type,
+                             Storage>;
 
 template <typename Types>
-static constexpr bool runtime_binding_has_conversion_cache_v =
+static constexpr bool has_runtime_binding_cache_v =
     type_list_size_v<Types> != 0;
 
 template <typename Storage, typename = void>
@@ -324,9 +325,9 @@ class runtime_binding
           Container, runtime_context<typename Container::allocator_type>>,
       private detail::binding_conversion_cache_base<
           Storage::conversions::is_stable &&
-              detail::runtime_binding_has_conversion_cache_v<
-                  detail::runtime_binding_conversion_types_t<Type, Storage>>,
-          detail::runtime_binding_conversion_types_t<Type, Storage>> {
+              detail::has_runtime_binding_cache_v<
+                  detail::runtime_binding_cache_types_t<Type, Storage>>,
+          detail::runtime_binding_cache_types_t<Type, Storage>> {
 public:
   using storage_type = Storage;
   using runtime_context_type =
@@ -338,32 +339,14 @@ public:
   using rtti_type = typename Container::rtti_type;
   using type_index = typename rtti_type::type_index;
   using request_type = instance_request<rtti_type>;
-  using conversion_types =
-      detail::runtime_binding_conversion_types_t<Type, Storage>;
-  using exact_value_types =
-      std::conditional_t<type_traits<Type>::enabled && !std::is_pointer_v<Type>,
-                         type_list<Type>, type_list<>>;
-  using exact_lvalue_reference_types =
-      std::conditional_t<Storage::conversions::is_stable &&
-                             type_traits<Type>::enabled &&
-                             !std::is_pointer_v<Type>,
-                         type_list<Type &>, type_list<>>;
-  using exact_pointer_types =
-      std::conditional_t<Storage::conversions::is_stable &&
-                             type_traits<Type>::enabled &&
-                             !std::is_pointer_v<Type>,
-                         type_list<Type *>, type_list<>>;
-  using value_capability_types =
-      type_list_cat_t<exact_value_types,
-                      typename Storage::conversions::value_types>;
-  using lvalue_reference_capability_types =
-      type_list_cat_t<exact_lvalue_reference_types,
-                      typename Storage::conversions::lvalue_reference_types>;
-  using pointer_capability_types =
-      type_list_cat_t<exact_pointer_types,
-                      typename Storage::conversions::pointer_types>;
+  using cache_types = detail::runtime_binding_cache_types_t<Type, Storage>;
+  using resolutions = detail::binding_resolutions<Type, Storage>;
+  using value_resolutions = typename resolutions::value_resolutions;
+  using lvalue_reference_resolutions =
+      typename resolutions::lvalue_reference_resolutions;
+  using pointer_resolutions = typename resolutions::pointer_resolutions;
   static constexpr bool has_conversion_cache =
-      detail::runtime_binding_has_conversion_cache_v<conversion_types>;
+      detail::has_runtime_binding_cache_v<cache_types>;
   static constexpr bool uses_cached_conversions =
       Storage::conversions::is_stable && has_conversion_cache;
   using materialization_traits =
@@ -371,7 +354,7 @@ public:
                                      typename Storage::type>;
   using conversion_cache_base =
       detail::binding_conversion_cache_base<uses_cached_conversions,
-                                            conversion_types>;
+                                            cache_types>;
 
 private:
   template <typename T, typename Context, typename... Args>
@@ -398,8 +381,8 @@ private:
     }
 
     template <typename T, typename Context, typename Source>
-    decltype(auto) resolve_conversion(Context &context, Source &&source) {
-      return binding.template resolve_conversion<T>(
+    decltype(auto) retain_conversion(Context &context, Source &&source) {
+      return binding.template retain_conversion<T>(
           scope, context, std::forward<Source>(source));
     }
   };
@@ -420,8 +403,8 @@ private:
 #pragma warning(disable : 4702)
 #endif
   template <typename Context, typename Fn>
-  decltype(auto) materialize_resolution_source(construction_scope scope,
-                                               Context &context, Fn &&fn) {
+  decltype(auto) with_source(construction_scope scope, Context &context,
+                             Fn &&fn) {
     if constexpr (materialization_traits::can_retain_source) {
       if (materialization_traits::retains_source(get_storage())) {
         const bool reset_storage = should_reset_storage_on_failure();
@@ -432,7 +415,7 @@ private:
         auto materialize = [&]() -> decltype(auto) {
           return with_resolution_container<true>(
               context, [&](auto &container) -> decltype(auto) {
-                return detail::materialize_runtime_binding_resolution_source(
+                return detail::with_runtime_binding_source(
                     persistent_scope, context, get_storage(), container,
                     std::forward<Fn>(fn));
               });
@@ -454,7 +437,7 @@ private:
     }
     return with_resolution_container(
         context, [&](auto &container) -> decltype(auto) {
-          return detail::materialize_runtime_binding_resolution_source(
+          return detail::with_runtime_binding_source(
               scope, context, get_storage(), container, std::forward<Fn>(fn));
         });
   }
@@ -508,30 +491,33 @@ private:
 
 public:
   template <typename T, typename Context, typename Source>
-  decltype(auto) resolve_conversion(construction_scope scope, Context &context,
-                                    Source &&source) {
+  decltype(auto) retain_conversion(construction_scope scope, Context &context,
+                                   Source &&source) {
     binding_activation activation{*this, scope};
-    return detail::resolve_binding_conversion<T>(scope, get_storage(),
-                                                 activation, context,
-                                                 std::forward<Source>(source));
+    return detail::retain_binding_conversion<T>(scope, get_storage(),
+                                                activation, context,
+                                                std::forward<Source>(source));
   }
 
-  template <typename ConversionTypes>
+  template <typename Resolutions>
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-  void *convert(construction_scope scope, runtime_context_type &context,
-                const request_type &request, detail::cache::sink cache) {
-    void *ptr = ::dingo::resolve_binding_capability_address<rtti_type>(
-        scope, *this, context, ConversionTypes{}, request.lookup_type,
-        request.requested_type, registered_type());
+  resolved_address
+  resolve_request(construction_scope scope, runtime_context_type &context,
+                  const request_type &request, detail::cache::sink cache) {
+    auto result = ::dingo::resolve_request_address(
+        scope, *this, context, Resolutions{}, request.requested_type,
+        registered_type());
     // Request caching is intentionally stricter than conversion caching and
     // is published with transaction rollback tracking by the registry.
     if constexpr (Storage::conversions::is_stable) {
-      cache(ptr);
+      if (result.access == resolved_address::access_kind::borrow) {
+        cache(result.address);
+      }
     }
-    return ptr;
+    return result;
   }
 #ifdef _MSC_VER
 #pragma warning(pop)
@@ -545,59 +531,59 @@ public:
 
   auto &get_container() { return state().container(); }
 
-  void *get_value(construction_scope scope, runtime_context_type &context,
-                  const request_type &request,
-                  detail::cache::sink cache) override {
-    return convert<value_capability_types>(scope, context, request, cache);
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+  resolved_address get_value(construction_scope scope,
+                             runtime_context_type &context,
+                             const request_type &request,
+                             detail::cache::sink cache) override {
+    return resolve_request<value_resolutions>(scope, context, request, cache);
   }
 
   void *get_lvalue_reference(construction_scope scope,
                              runtime_context_type &context,
                              const request_type &request,
                              detail::cache::sink cache) override {
-    return convert<lvalue_reference_capability_types>(scope, context, request,
-                                                      cache);
+    return resolve_request<lvalue_reference_resolutions>(scope, context,
+                                                         request, cache)
+        .address;
   }
 
   void *get_rvalue_reference(construction_scope scope,
                              runtime_context_type &context,
                              const request_type &request,
                              detail::cache::sink cache) override {
-    return convert<typename Storage::conversions::rvalue_reference_types>(
-        scope, context, request, cache);
+    return resolve_request<typename resolutions::rvalue_reference_resolutions>(
+               scope, context, request, cache)
+        .address;
   }
 
   void *get_pointer(construction_scope scope, runtime_context_type &context,
                     const request_type &request,
                     detail::cache::sink cache) override {
-    return convert<pointer_capability_types>(scope, context, request, cache);
+    return resolve_request<pointer_resolutions>(scope, context, request, cache)
+        .address;
   }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-  template <typename T, typename Context>
-  void *resolve_address(construction_scope scope, Context &context,
-                        type_descriptor requested_type,
-                        type_descriptor registered_type) {
-    if constexpr (is_exact_lookup_v<T>) {
-      if (!detail::matches_exact_lookup<resolved_type_t<T, Type>>(
-              requested_type)) {
-        throw detail::make_type_not_convertible_exception(
-            requested_type, registered_type, context);
-      }
-    }
-
-    using Target = std::remove_reference_t<resolved_type_t<T, Type>>;
+  template <typename Resolution, typename Context>
+  resolved_address resolve_address(construction_scope scope, Context &context,
+                                   type_descriptor requested_type,
+                                   type_descriptor registered_type) {
     binding_activation activation{*this, scope};
-    return materialize_resolution_source(
-        scope, context, [&](auto &&source) -> void * {
-          return detail::resolve_binding_address_from_source<Target>(
-              scope, activation, context,
-              std::forward<decltype(source)>(source), requested_type,
-              registered_type);
-        });
+    return with_source(scope, context, [&](auto &&source) -> resolved_address {
+      return detail::resolve_address_from_source<Resolution, Storage>(
+          scope, activation, context, std::forward<decltype(source)>(source),
+          requested_type, registered_type);
+    });
   }
 #ifdef _MSC_VER
 #pragma warning(pop)
@@ -605,20 +591,18 @@ public:
 
   template <typename Context>
   decltype(auto) resolve(construction_scope scope, Context &context) {
-    return materialize_resolution_source(
-        scope, context, [](auto &&source) -> decltype(auto) {
-          return std::forward<decltype(source)>(source).get();
-        });
+    return with_source(scope, context, [](auto &&source) -> decltype(auto) {
+      return std::forward<decltype(source)>(source).get();
+    });
   }
 
   template <typename T, typename Context>
   decltype(auto) resolve(construction_scope scope, Context &context) {
     binding_activation activation{*this, scope};
-    return materialize_resolution_source(
-        scope, context, [&](auto &&source) -> decltype(auto) {
-          return detail::resolve_binding_value<T>(
-              activation, context, std::forward<decltype(source)>(source));
-        });
+    return with_source(scope, context, [&](auto &&source) -> decltype(auto) {
+      return detail::resolve_binding_value<T>(
+          activation, context, std::forward<decltype(source)>(source));
+    });
   }
 };
 

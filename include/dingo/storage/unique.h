@@ -64,11 +64,10 @@ struct storage_traits<
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
-  using value_types = type_list<U>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<U &>;
   using rvalue_reference_types = type_list<U &&>;
   using pointer_types = type_list<>;
-  using conversion_types = type_list<>;
 };
 
 template <typename Type, typename U>
@@ -77,23 +76,21 @@ struct resolution_traits<
     std::enable_if_t<!type_traits<Type>::enabled &&
                      !std::is_reference_v<Type> && !std::is_array_v<Type> &&
                      !is_alternative_type_v<Type>>> {
-  using value_types = type_list<std::optional<U>>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types = type_list<std::optional<U> &&>;
   using pointer_types = type_list<>;
-  using conversion_types = type_list<std::optional<U>>;
 };
 
 template <typename Type, typename U> struct storage_traits<unique, Type *, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
-  using value_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types =
       type_list<std::unique_ptr<U> &&, std::shared_ptr<U> &&>;
   using pointer_types = type_list<U *>;
-  using conversion_types = type_list<std::unique_ptr<U>, std::shared_ptr<U>>;
 };
 
 template <typename T, typename U> struct storage_traits<unique, T[], U> {
@@ -105,14 +102,12 @@ template <typename T, typename U> struct storage_traits<unique, T[], U> {
   using rebound_shared_handle =
       detail::wrapper_rebind_leaf_t<std::shared_ptr<T[]>, U>;
 
-  using value_types = type_list<rebound_unique_handle, rebound_shared_handle>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types =
       type_list<rebound_unique_handle &&, rebound_shared_handle &&>;
   using pointer_types =
       type_list<typename detail::wrapper_rebind_leaf<T, U>::type *>;
-  using conversion_types =
-      type_list<rebound_unique_handle, rebound_shared_handle>;
 };
 
 template <typename T, size_t N, typename U>
@@ -128,14 +123,12 @@ struct storage_traits<unique, T[N], U> {
   using rebound_exact_type =
       typename detail::wrapper_rebind_leaf<T[N], U>::type;
 
-  using value_types = type_list<rebound_unique_handle, rebound_shared_handle>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types =
       type_list<rebound_unique_handle &&, rebound_shared_handle &&>;
   using pointer_types =
       type_list<rebound_row_type *, exact_lookup<rebound_exact_type> *>;
-  using conversion_types =
-      type_list<rebound_unique_handle, rebound_shared_handle>;
 };
 
 template <typename Array, typename Deleter, typename U>
@@ -150,11 +143,10 @@ struct storage_traits<unique, std::unique_ptr<Array, Deleter>, U,
   using shared_handle =
       detail::wrapper_rebind_leaf_t<std::shared_ptr<Array>, U>;
 
-  using value_types = type_list<rebound_handle, shared_handle>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types = type_list<rebound_handle &&, shared_handle &&>;
   using pointer_types = type_list<>;
-  using conversion_types = type_list<rebound_handle, shared_handle>;
 };
 
 template <typename T, typename Deleter, typename U>
@@ -167,13 +159,11 @@ struct storage_traits<unique, std::unique_ptr<T, Deleter>, U,
       detail::wrapper_rebind_leaf_t<std::unique_ptr<T, Deleter>, U>;
   using inner_handle = detail::wrapper_rebind_leaf_t<T, U>;
 
-  using value_types = type_list<rebound_handle, std::shared_ptr<inner_handle>>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types =
       type_list<rebound_handle &&, std::shared_ptr<inner_handle> &&>;
   using pointer_types = type_list<>;
-  using conversion_types =
-      type_list<rebound_handle, std::shared_ptr<inner_handle>>;
 };
 
 template <typename Array, typename U>
@@ -186,11 +176,10 @@ struct storage_traits<unique, std::shared_ptr<Array>, U,
   using rebound_handle =
       detail::wrapper_rebind_leaf_t<std::shared_ptr<Array>, U>;
 
-  using value_types = type_list<rebound_handle>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types = type_list<rebound_handle &&>;
   using pointer_types = type_list<>;
-  using conversion_types = type_list<rebound_handle>;
 };
 
 template <typename T, typename U>
@@ -201,11 +190,10 @@ struct storage_traits<unique, std::shared_ptr<T>, U,
 
   using rebound_handle = detail::wrapper_rebind_leaf_t<std::shared_ptr<T>, U>;
 
-  using value_types = type_list<rebound_handle>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types = type_list<rebound_handle &&>;
   using pointer_types = type_list<>;
-  using conversion_types = type_list<rebound_handle>;
 };
 
 template <typename T, typename U>
@@ -213,11 +201,10 @@ struct storage_traits<unique, std::optional<T>, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
-  using value_types = type_list<std::optional<T>>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types = type_list<std::optional<T> &&>;
   using pointer_types = type_list<>;
-  using conversion_types = type_list<std::optional<T>>;
 };
 
 template <typename Type, typename U>
@@ -229,11 +216,10 @@ struct storage_traits<
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
-  using value_types = type_list<U>;
+  using value_types = type_list<>;
   using lvalue_reference_types = type_list<>;
   using rvalue_reference_types = type_list<U &&>;
   using pointer_types = type_list<>;
-  using conversion_types = type_list<>;
 };
 
 namespace detail {
@@ -250,6 +236,7 @@ public:
   using conversions = Conversions;
   using type = Type;
   using stored_type = StoredType;
+  using resolved_type = Type;
   using tag_type = unique;
 
   template <typename Context, typename Container>
@@ -269,6 +256,7 @@ public:
   using conversions = Conversions;
   using type = Type[N];
   using stored_type = StoredType;
+  using resolved_type = Type *;
   using tag_type = unique;
 
   template <typename Context, typename Container>

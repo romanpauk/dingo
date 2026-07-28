@@ -116,16 +116,16 @@ private:
   Source *value_;
 };
 
-template <typename SourceCapability> struct materialized_source_traits;
+template <typename MaterializedSource> struct materialized_source_traits;
 
 template <typename Source>
 struct materialized_source_traits<rvalue_source<Source>> {
   using value_type = Source;
   static constexpr bool reference_like = false;
 
-  template <typename Capability>
-  static decltype(auto) value(Capability &&source) {
-    return std::forward<Capability>(source).get();
+  template <typename ActualSource>
+  static decltype(auto) value(ActualSource &&source) {
+    return std::forward<ActualSource>(source).get();
   }
 
   static Source &reference(rvalue_source<Source> &source) {
@@ -150,9 +150,9 @@ struct materialized_source_traits<lvalue_source<Source>> {
   using value_type = Source;
   static constexpr bool reference_like = true;
 
-  template <typename Capability>
-  static decltype(auto) value(Capability &&source) {
-    return std::forward<Capability>(source).get();
+  template <typename ActualSource>
+  static decltype(auto) value(ActualSource &&source) {
+    return std::forward<ActualSource>(source).get();
   }
 
   static Source &reference(lvalue_source<Source> &source) {
@@ -177,9 +177,9 @@ struct materialized_source_traits<pointer_source<Source>> {
   using value_type = Source;
   static constexpr bool reference_like = true;
 
-  template <typename Capability>
-  static decltype(auto) value(Capability &&source) {
-    return std::forward<Capability>(source).get();
+  template <typename ActualSource>
+  static decltype(auto) value(ActualSource &&source) {
+    return std::forward<ActualSource>(source).get();
   }
 
   static Source &reference(pointer_source<Source> &source) {

@@ -1373,7 +1373,7 @@ private:
     using bindings_type = typename binding_model::bindings_type;
     using instance_container_type =
         registration_container_type<registration, bindings_type, Parent>;
-    (void)arg;
+    (void)std::addressof(arg);
     using interface_types = typename binding_model::interface_types;
     static constexpr bool storage_tag_is_complete =
         binding_model::storage_tag_is_complete;

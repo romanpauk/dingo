@@ -7,8 +7,130 @@
 
 #include "type_registration_common.h"
 
+#include "support/containers.h"
+#include "support/custom_wrappers.h"
+#include "support/resolution_test_types.h"
+
+#include <variant>
+
+namespace runtime_registration_test {
+template <typename T> class observer_pointer {
+public:
+  explicit observer_pointer(T *pointer) : pointer_(pointer) {}
+
+  T *get() const { return pointer_; }
+
+private:
+  T *pointer_;
+};
+} // namespace runtime_registration_test
+
+namespace dingo {
+template <typename T>
+struct type_traits<runtime_registration_test::observer_pointer<T>> {
+  static constexpr bool enabled = true;
+  static constexpr bool is_pointer_like = true;
+  static constexpr bool is_value_borrowable = false;
+  static constexpr bool is_owning_handle = false;
+
+  using value_type = T;
+
+  template <typename U>
+  using rebind_t = runtime_registration_test::observer_pointer<U>;
+  template <typename> static constexpr bool is_handle_rebindable = false;
+
+  template <typename Target>
+  static constexpr bool is_rebindable =
+      std::is_same_v<std::remove_cv_t<Target>, rebind_t<T>>;
+};
+} // namespace dingo
+
 namespace {
 bool runtime_proxy_service_should_throw = false;
+} // namespace
+
+template <typename Container>
+class resolution_access_test : public ::testing::Test {};
+
+TYPED_TEST_SUITE(resolution_access_test, container_types);
+
+TYPED_TEST(resolution_access_test,
+           borrowed_raw_pointers_respect_wrapper_ownership) {
+  int value = 7;
+  TypeParam owning_container;
+  owning_container.template register_type<scope<external>, storage<int *>,
+                                          interfaces<std::shared_ptr<int>>>(
+      &value);
+
+  EXPECT_THROW((void)owning_container.template resolve<std::shared_ptr<int>>(),
+               type_not_convertible_exception);
+  EXPECT_THROW(
+      (void)owning_container.template resolve<std::shared_ptr<int> &>(),
+      type_not_convertible_exception);
+
+  TypeParam nested_owning_container;
+  nested_owning_container
+      .template register_type<scope<external>, storage<int *>,
+                              interfaces<std::optional<std::shared_ptr<int>>>>(
+          &value);
+
+  EXPECT_THROW((void)nested_owning_container
+                   .template resolve<std::optional<std::shared_ptr<int>>>(),
+               type_not_convertible_exception);
+
+  TypeParam observer_container;
+  observer_container.template register_type<
+      scope<external>, storage<int *>,
+      interfaces<runtime_registration_test::observer_pointer<int>>>(&value);
+
+  auto observer =
+      observer_container
+          .template resolve<runtime_registration_test::observer_pointer<int>>();
+  EXPECT_EQ(observer.get(), &value);
+
+  TypeParam nested_observer_container;
+  nested_observer_container.template register_type<
+      scope<external>, storage<int *>,
+      interfaces<
+          std::optional<runtime_registration_test::observer_pointer<int>>>>(
+      &value);
+
+  auto nested_observer = nested_observer_container.template resolve<
+      std::optional<runtime_registration_test::observer_pointer<int>>>();
+  ASSERT_TRUE(nested_observer.has_value());
+  EXPECT_EQ(nested_observer->get(), &value);
+
+  test_optional<int *> empty_source;
+  TypeParam empty_container;
+  empty_container.template register_type<
+      scope<external>, storage<test_optional<int *> &>,
+      interfaces<
+          test_optional<runtime_registration_test::observer_pointer<int>>>>(
+      empty_source);
+
+  auto empty_result = empty_container.template resolve<
+      test_optional<runtime_registration_test::observer_pointer<int>>>();
+  EXPECT_FALSE(empty_result.has_value());
+}
+
+TYPED_TEST(resolution_access_test,
+           borrowed_wrapper_conversions_cannot_acquire_ownership_implicitly) {
+  auto value = std::make_unique<int>(7);
+  test_optional<int *> source(value.get());
+  TypeParam container;
+  container
+      .template register_type<scope<external>, storage<test_optional<int *> &>,
+                              interfaces<test_optional<std::shared_ptr<int>>>>(
+          source);
+
+  try {
+    auto result =
+        container.template resolve<test_optional<std::shared_ptr<int>>>();
+    EXPECT_EQ(result.get()->get(), value.get());
+    value.release();
+    ADD_FAILURE() << "borrowed conversion unexpectedly acquired ownership";
+  } catch (const type_not_convertible_exception &) {
+  }
 }
 
 TEST(type_registration_test,

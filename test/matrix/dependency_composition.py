@@ -893,7 +893,7 @@ def _make_case(
     interfaces = f"dingo::interfaces<{registration_type}>"
     factory = (
         "dingo::factory<dingo::function<&make_dependency_composition<"
-        f"{registration_type}>>>"
+        f"{registration_type}, true>>>"
     )
     container_mode = _container_mode(row.container)
     static_registration = RegistrationSpec(
@@ -907,7 +907,10 @@ def _make_case(
         runtime_registration = RegistrationSpec(
             storage=f"dingo::storage<{registration_type} &>",
             interfaces=interfaces,
-            runtime_setup=(f"{registration_type} external_value{{}};",),
+            runtime_setup=(
+                f"auto external_value = make_dependency_composition<"
+                f"{registration_type}>();",
+            ),
             runtime_argument="external_value",
             mixed_placement=MixedRegistrationPlacement.RUNTIME,
             include_in_static=False,
@@ -955,7 +958,9 @@ def _make_case(
         static_bindings=registration.static_bindings,
         setup_lines=registration.setup_lines,
         policy=(
-            f"{row.operation.policy}<{row.type_name}, {row.request_type}>"
+            f"{row.operation.policy}<"
+            f"{row.type_name}, {row.request_type}, "
+            f"{registration_type if row.scope.name != 'external' else 'void'}>"
         ),
         system_headers=row.container.system_headers,
         headers=tuple(
