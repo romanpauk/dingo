@@ -29,14 +29,14 @@ void run_constructor_detection_{{ row.name }}() {
 
 {% endfor %}
 {% for row in conversion_rows %}
-{% if row.category.guard %}
-#if {{ row.category.guard }}
+{% if row.category.limitation_guard %}
+#if !({{ row.category.limitation_guard }})
 {% endif %}
 void run_constructor_argument_conversion_{{ row.name }}() {
   assert_constructor_argument_conversion<
       {{ row.storage.type_name }}, {{ row.category.type_name }}>();
 }
-{% if row.category.guard %}
+{% if row.category.limitation_guard %}
 #endif
 {% endif %}
 

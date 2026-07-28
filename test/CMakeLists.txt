@@ -16,38 +16,15 @@ set(DINGO_MATRIX_TEST_CMAKE
     "${PROJECT_BINARY_DIR}/generated/matrix-tests.cmake")
 set(DINGO_MATRIX_GENERATOR
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/generate.py")
+set(DINGO_MATRIX_COMPILER_ARCHITECTURE "${CMAKE_GENERATOR_PLATFORM}")
+if(NOT DINGO_MATRIX_COMPILER_ARCHITECTURE)
+    set(DINGO_MATRIX_COMPILER_ARCHITECTURE "${CMAKE_SYSTEM_PROCESSOR}")
+endif()
 if(MSVC)
     set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT 12)
-    if(MSVC_VERSION LESS 1950)
-        # VS2022 crashes in CloseTypeServerPDB while instantiating these
-        # otherwise-supported projected cases on x64 and ARM64.
-        set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_DISABLED_ARGS
-            --dependency-composition-disable-case
-            invoke:runtime_container_unique_value_array_unique_pointer_copy_only
-            --dependency-composition-disable-case
-            resolve:runtime_container_unique_value_array_unique_pointer_copy_only)
-    else()
-        # VS2026 crashes while instantiating this otherwise-supported
-        # projected case on x64 and ARM64.
-        set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_DISABLED_ARGS
-            --dependency-composition-disable-case
-            invoke:runtime_container_unique_value_array_shared_pointer_copy_only
-            --dependency-composition-disable-case
-            resolve:runtime_container_unique_value_array_shared_pointer_copy_only)
 
-        if(CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
-            # The ARM64 compiler additionally crashes on this projected case.
-            list(APPEND DINGO_MATRIX_DEPENDENCY_COMPOSITION_DISABLED_ARGS
-                --dependency-composition-disable-case
-                invoke:runtime_container_unique_value_array_unique_pointer_copy_only
-                --dependency-composition-disable-case
-                resolve:runtime_container_unique_value_array_unique_pointer_copy_only)
-        endif()
-    endif()
-
-    # To retry the projected cases after a toolset update, comment out the
-    # relevant DISABLED_ARGS entries above. To identify any future crashing
-    # row, uncomment these lines after its failing executable is known.
+    # To identify any future crashing row, uncomment these lines after its
+    # failing executable is known.
     # list(APPEND DINGO_MATRIX_DEPENDENCY_COMPOSITION_DIAGNOSTIC_ARGS
     #     --dependency-composition-isolate-executable invoke:4
     #     --dependency-composition-isolate-executable resolve:4)
@@ -117,9 +94,11 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/constructor_detection.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/dependency_contract.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/dependency_composition.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/exclusions.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/family.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/invoke.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/plugins.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/matrix/report.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/scenarios.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/shared_cyclical.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/matrix/schema.py"
@@ -144,9 +123,11 @@ set(DINGO_MATRIX_GENERATOR_COMMAND
         --out ${DINGO_MATRIX_TEST_DIR}
         --cmake ${DINGO_MATRIX_TEST_CMAKE}
         --profile ${DINGO_MATRIX_PROFILE}
+        --compiler-id=${CMAKE_CXX_COMPILER_ID}
+        --compiler-version=${CMAKE_CXX_COMPILER_VERSION}
+        --compiler-architecture=${DINGO_MATRIX_COMPILER_ARCHITECTURE}
         --dependency-composition-case-limit
             ${DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT}
-        ${DINGO_MATRIX_DEPENDENCY_COMPOSITION_DISABLED_ARGS}
         ${DINGO_MATRIX_DEPENDENCY_COMPOSITION_DIAGNOSTIC_ARGS})
 
 execute_process(

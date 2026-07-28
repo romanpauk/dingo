@@ -41,17 +41,20 @@ from schema import (
     ScopeSpec,
     StoredType,
 )
-from constructor_detection import generate_constructor_detection_executables
+from constructor_detection import (
+    generate_constructor_argument_conversion_rows,
+    generate_constructor_detection_executables,
+    generate_constructor_detection_rows,
+)
 from dependency_composition import (
-    DEPENDENCY_COMPOSITION_COVERAGE_REPORT,
     DEPENDENCY_COMPOSITION_PROFILES,
     build_dependency_composition_coverage,
     disable_dependency_composition_projected_cases,
     generate_dependency_composition_executables,
     generate_dependency_composition_rows,
     project_dependency_composition_rows,
-    render_dependency_composition_coverage,
 )
+from exclusions import Compiler, compiler_exclusions, exclusion_cases
 from family import (
     SourceShard,
     render_case_family_executables,
@@ -66,8 +69,12 @@ from plugins import (
     render_registration_plan,
     select_case_lines,
 )
+from report import MATRIX_REPORT, render_matrix_report
 from scenarios import generate_scenario_executables
-from shared_cyclical import generate_shared_cyclical_executables
+from shared_cyclical import (
+    generate_shared_cyclical_executables,
+    generate_shared_cyclical_rows,
+)
 
 
 class RejectionReason(StrEnum):
@@ -761,9 +768,7 @@ def generate(
     dependency_composition_isolated_executables: frozenset[
         tuple[str, int]
     ] = frozenset(),
-    dependency_composition_disabled_projected_cases: frozenset[
-        tuple[str, str]
-    ] = frozenset(),
+    compiler: Compiler = Compiler(),
 ) -> None:
     script_dir = Path(__file__).resolve().parent
     env = Environment(
@@ -775,6 +780,8 @@ def generate(
 
     out_dir.mkdir(parents=True, exist_ok=True)
     claimed_sources: set[Path] = set()
+    matrix_exclusions = compiler_exclusions(compiler)
+    disabled_composition_cases = exclusion_cases(matrix_exclusions)
     family_specs = (
         (
             generate_registration_executables,
@@ -813,7 +820,7 @@ def generate(
                     dependency_composition_isolated_executables
                 ),
                 "disabled_projected_cases": (
-                    dependency_composition_disabled_projected_cases
+                    disabled_composition_cases
                 ),
             },
         ),
@@ -840,19 +847,33 @@ def generate(
         out_dir,
         {source for executable in executables for source in executable.sources},
     )
-    coverage_report = out_dir / DEPENDENCY_COMPOSITION_COVERAGE_REPORT
+    coverage_report = out_dir / MATRIX_REPORT
     composition_rows = generate_dependency_composition_rows()
+    selected_composition_rows = project_dependency_composition_rows(
+        composition_rows, profile
+    )
     projected_composition_rows = disable_dependency_composition_projected_cases(
-        project_dependency_composition_rows(composition_rows, profile),
-        dependency_composition_disabled_projected_cases,
+        selected_composition_rows,
+        disabled_composition_cases,
         composition_rows,
     )
+    projected_composition_cases = frozenset(
+        (row.operation.name, row.name) for row in projected_composition_rows
+    )
+    omitted_composition_cases = frozenset(
+        (row.operation.name, row.name) for row in selected_composition_rows
+    ) - projected_composition_cases
     write_text_if_changed(
         coverage_report,
-        render_dependency_composition_coverage(
+        render_matrix_report(
             build_dependency_composition_coverage(composition_rows),
+            generate_constructor_detection_rows(),
+            generate_constructor_argument_conversion_rows(),
+            generate_shared_cyclical_rows(),
             profile=profile,
-            compiled_rows=len(projected_composition_rows),
+            compiled_composition_rows=len(projected_composition_rows),
+            compiler=compiler,
+            omitted_composition_cases=omitted_composition_cases,
         ),
     )
     remove_stale_reports(out_dir, {coverage_report})
@@ -902,11 +923,19 @@ def main() -> None:
         help="compile every case in the selected executable separately",
     )
     parser.add_argument(
-        "--dependency-composition-disable-case",
-        action="append",
-        default=[],
-        metavar="OPERATION:ROW",
-        help="omit a selected compiler-crashing projected case",
+        "--compiler-id",
+        default="",
+        help="CMake compiler identifier",
+    )
+    parser.add_argument(
+        "--compiler-version",
+        default="",
+        help="compiler version",
+    )
+    parser.add_argument(
+        "--compiler-architecture",
+        default="",
+        help="target compiler architecture",
     )
     args = parser.parse_args()
     if args.dependency_composition_case_limit < 0:
@@ -934,23 +963,21 @@ def main() -> None:
             )
         isolated_executables.add((fields[0], executable))
 
-    disabled_projected_cases: set[tuple[str, str]] = set()
-    for value in args.dependency_composition_disable_case:
-        fields = value.split(":", 1)
-        if len(fields) != 2 or not all(fields):
-            parser.error(
-                "--dependency-composition-disable-case must be "
-                "OPERATION:ROW"
-            )
-        disabled_projected_cases.add((fields[0], fields[1]))
-
+    try:
+        compiler = Compiler.parse(
+            args.compiler_id,
+            args.compiler_version,
+            args.compiler_architecture,
+        )
+    except ValueError as error:
+        parser.error(str(error))
     generate(
         args.out,
         args.cmake,
         args.profile,
         args.dependency_composition_case_limit or None,
         frozenset(isolated_executables),
-        frozenset(disabled_projected_cases),
+        compiler,
     )
 
 

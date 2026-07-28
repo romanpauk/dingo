@@ -71,7 +71,6 @@ from constructor_detection import (
 )
 from dependency_contract import validate_dependency_contract
 from dependency_composition import (
-    DEPENDENCY_COMPOSITION_COVERAGE_REPORT,
     DEPENDENCY_COMPOSITION_CONTAINERS,
     DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION,
     DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
@@ -86,6 +85,12 @@ from dependency_composition import (
     generate_dependency_composition_rows,
     project_dependency_composition_rows,
     render_dependency_composition_coverage,
+)
+from exclusions import (
+    MATRIX_EXCLUSIONS,
+    Compiler,
+    compiler_exclusions,
+    exclusion_cases,
 )
 from family import (
     SourceShard,
@@ -111,6 +116,11 @@ from plugins import (
     build_registration_plan_from_recipe,
     register_type,
     render_registration_plan,
+)
+from report import (
+    COVERAGE_LIMITS,
+    MATRIX_REPORT,
+    render_matrix_report,
 )
 from scenarios import ScenarioRow, generate_scenario_rows
 from shared_cyclical import SharedCyclicalRow, generate_shared_cyclical_rows
@@ -196,6 +206,15 @@ def test_shared_cyclical_limitations_are_explicit(
         row.supported == (row.unsupported_reason is None)
         for row in shared_cyclical_rows
     )
+    assert all(
+        row.supported == (row.unsupported_disposition is None)
+        for row in shared_cyclical_rows
+    )
+    assert {
+        row.unsupported_disposition
+        for row in shared_cyclical_rows
+        if not row.supported
+    } == {LimitationDisposition.INTENTIONAL_CONSTRAINT}
     assert Counter(
         (row.storage.name, row.supported) for row in shared_cyclical_rows
     ) == {
@@ -357,6 +376,14 @@ def test_constructor_detection_limitations_are_explicit() -> None:
         | composition_limitations
     )
     assert all(row.unsupported_reason for row in rows if not row.supported)
+    assert Counter(
+        row.limitation.disposition
+        for row in rows
+        if row.limitation is not None
+    ) == {
+        LimitationDisposition.KNOWN_GAP: 868,
+        LimitationDisposition.COMPILER_LIMITATION: 170,
+    }
     shape_limited_compositions = {
         composition.name
         for composition in DEPENDENCY_COMPOSITIONS
@@ -980,6 +1007,7 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
     } == {
         LimitationDisposition.KNOWN_GAP: 0,
         LimitationDisposition.INTENTIONAL_CONSTRAINT: 6090,
+        LimitationDisposition.COMPILER_LIMITATION: 0,
     }
 
     report = render_dependency_composition_coverage(coverage)
@@ -987,6 +1015,86 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
     assert "| `variant` | 6786 | 0 | 4254 |" in report
     assert "## Functionality Gaps" not in report
     assert "## Intentional Constraints" in report
+
+
+def test_matrix_report_includes_every_limitation_family(
+    composition_rows: tuple[DependencyCompositionRow, ...],
+    shared_cyclical_rows: tuple[SharedCyclicalRow, ...],
+) -> None:
+    compiler = Compiler.parse("MSVC", "19.49.7", "x64")
+    enabled_exclusions = compiler_exclusions(compiler)
+    omitted_composition_cases = exclusion_cases(enabled_exclusions)
+    report = render_matrix_report(
+        build_dependency_composition_coverage(composition_rows),
+        generate_constructor_detection_rows(),
+        generate_constructor_argument_conversion_rows(),
+        shared_cyclical_rows,
+        profile="full",
+        compiled_composition_rows=838,
+        compiler=compiler,
+        omitted_composition_cases=omitted_composition_cases,
+    )
+
+    assert "# Matrix Coverage" in report
+    assert "| Constructor detection | 868 | 0 | 170 |" in report
+    assert "| Constructor argument conversion | 0 | 0 | 2 |" in report
+    assert "| Shared cyclical | 0 | 655 | 0 |" in report
+    assert "| Omitted compiler cases | 0 | 0 | 2 |" in report
+    assert "| Coverage limits | 6 | 0 | 2 |" in report
+    assert (
+        "| `msvc-before-19.50-array-unique-pointer-copy-only` | "
+        "MSVC < 19.50 | yes | 2 | 2 |"
+    ) in report
+    assert "Toolchain: `MSVC 19.49.7 (x64)`." in report
+    assert "MSVC C++17 cannot instantiate value constructor arguments" in report
+    assert all(exclusion.name in report for exclusion in MATRIX_EXCLUSIONS)
+    assert all(limit.reason in report for limit in COVERAGE_LIMITS)
+    assert all(line == line.rstrip() for line in report.splitlines())
+
+
+def test_matrix_exclusions_are_named_and_valid() -> None:
+    names = frozenset(exclusion.name for exclusion in MATRIX_EXCLUSIONS)
+    assert len(names) == len(MATRIX_EXCLUSIONS)
+    assert len(exclusion_cases(names)) == 4
+    with pytest.raises(ValueError, match="unknown matrix exclusions.*missing"):
+        exclusion_cases(frozenset({"missing"}))
+
+
+@pytest.mark.parametrize(
+    ("compiler", "expected"),
+    (
+        (
+            Compiler.parse("MSVC", "19.49.9", "x64"),
+            frozenset(
+                {"msvc-before-19.50-array-unique-pointer-copy-only"}
+            ),
+        ),
+        (
+            Compiler.parse("MSVC", "19.50", "x64"),
+            frozenset({"msvc-19.50-array-shared-pointer-copy-only"}),
+        ),
+        (
+            Compiler.parse("MSVC", "19.50.1", "ARM64"),
+            frozenset(
+                {
+                    "msvc-19.50-array-shared-pointer-copy-only",
+                    "msvc-19.50-arm64-array-unique-pointer-copy-only",
+                }
+            ),
+        ),
+        (Compiler.parse("Clang", "21.1.0", "x86_64"), frozenset()),
+    ),
+)
+def test_matrix_exclusions_follow_the_compiler(
+    compiler: Compiler,
+    expected: frozenset[str],
+) -> None:
+    assert compiler_exclusions(compiler) == expected
+
+
+def test_compiler_rejects_an_invalid_version() -> None:
+    with pytest.raises(ValueError, match="invalid compiler version"):
+        Compiler.parse("MSVC", "19.next", "x64")
 
 
 def _composition_projection_structure(
@@ -1520,7 +1628,12 @@ def test_constructor_detection_rejects_invalid_limitation_mode() -> None:
     shape = replace(
         CONSTRUCTOR_SHAPES[0],
         constructor_detection_limitations=(
-            ConstructorDetectionLimitation(None, "missing", "not supported"),
+            ConstructorDetectionLimitation(
+                None,
+                "missing",
+                "not supported",
+                LimitationDisposition.KNOWN_GAP,
+            ),
         ),
     )
     with pytest.raises(ValueError, match="unknown limitation modes"):
@@ -1532,7 +1645,10 @@ def test_constructor_detection_rejects_invalid_limitation_backend() -> None:
         CONSTRUCTOR_SHAPES[0],
         constructor_detection_limitations=(
             ConstructorDetectionLimitation(
-                "missing", "signature", "not supported"
+                "missing",
+                "signature",
+                "not supported",
+                LimitationDisposition.KNOWN_GAP,
             ),
         ),
     )
@@ -1544,7 +1660,12 @@ def test_constructor_detection_requires_a_limitation_reason() -> None:
     shape = replace(
         CONSTRUCTOR_SHAPES[0],
         constructor_detection_limitations=(
-            ConstructorDetectionLimitation(None, "signature", ""),
+            ConstructorDetectionLimitation(
+                None,
+                "signature",
+                "",
+                LimitationDisposition.KNOWN_GAP,
+            ),
         ),
     )
     with pytest.raises(ValueError, match="without a reason"):
@@ -1556,7 +1677,11 @@ def test_constructor_detection_requires_a_nonempty_limitation_guard() -> None:
         CONSTRUCTOR_SHAPES[0],
         constructor_detection_limitations=(
             ConstructorDetectionLimitation(
-                None, "signature", "not supported", guard=""
+                None,
+                "signature",
+                "not supported",
+                LimitationDisposition.KNOWN_GAP,
+                guard="",
             ),
         ),
     )
@@ -1568,9 +1693,17 @@ def test_constructor_detection_rejects_overlapping_limitations() -> None:
     shape = replace(
         CONSTRUCTOR_SHAPES[0],
         constructor_detection_limitations=(
-            ConstructorDetectionLimitation(None, "signature", "all"),
             ConstructorDetectionLimitation(
-                "portable", "signature", "portable"
+                None,
+                "signature",
+                "all",
+                LimitationDisposition.KNOWN_GAP,
+            ),
+            ConstructorDetectionLimitation(
+                "portable",
+                "signature",
+                "portable",
+                LimitationDisposition.KNOWN_GAP,
             ),
         ),
     )
@@ -1605,6 +1738,15 @@ def test_constructor_argument_conversion_uses_independent_axes() -> None:
         "shared_arg_const_lvalue_reference",
         "shared_arg_rvalue_reference",
     }
+
+
+def test_constructor_argument_conversion_rejects_incomplete_limitation() -> None:
+    category = replace(
+        CONSTRUCTOR_ARGUMENT_CATEGORIES[0],
+        limitation_reason=None,
+    )
+    with pytest.raises(ValueError, match="incomplete limitation"):
+        generate_constructor_argument_conversion_rows(categories=(category,))
 
 
 def test_invoke_uses_independent_callable_and_provisioning_axes(
@@ -2281,17 +2423,17 @@ def test_invalid_registration_plan_is_an_error(
     (
         "dependency_composition_case_limit",
         "dependency_composition_isolated_executables",
-        "dependency_composition_disabled_projected_cases",
+        "compiler",
         "expected_implementation_sources",
         "expected_isolated_sources",
         "expected_compiled_rows",
     ),
     (
-        (None, frozenset(), frozenset(), 115, 0, 840),
+        (None, frozenset(), Compiler(), 115, 0, 840),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
-            frozenset(),
+            Compiler(),
             179,
             0,
             840,
@@ -2299,7 +2441,7 @@ def test_invalid_registration_plan_is_an_error(
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset({("invoke", 4), ("resolve", 4)}),
-            frozenset(),
+            Compiler(),
             371,
             210,
             840,
@@ -2307,17 +2449,10 @@ def test_invalid_registration_plan_is_an_error(
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
-            frozenset(
-                (operation, row_name)
-                for operation in ("invoke", "resolve")
-                for row_name in (
-                    "runtime_container_unique_value_"
-                    "variant_const_pointer_copy_only_optional_move_only",
-                )
-            ),
+            Compiler.parse("MSVC", "19.49", "x64"),
             179,
             0,
-            838,
+            840,
         ),
     ),
 )
@@ -2326,7 +2461,7 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
     composition_rows: tuple[DependencyCompositionRow, ...],
     dependency_composition_case_limit: int | None,
     dependency_composition_isolated_executables: frozenset[tuple[str, int]],
-    dependency_composition_disabled_projected_cases: frozenset[tuple[str, str]],
+    compiler: Compiler,
     expected_implementation_sources: int,
     expected_isolated_sources: int,
     expected_compiled_rows: int,
@@ -2346,9 +2481,7 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
         dependency_composition_isolated_executables=(
             dependency_composition_isolated_executables
         ),
-        dependency_composition_disabled_projected_cases=(
-            dependency_composition_disabled_projected_cases
-        ),
+        compiler=compiler,
     )
 
     assert not stale_source.exists()
@@ -2361,12 +2494,34 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
     runner_sources = tuple(out_dir.glob("matrix_runner_*.cpp"))
     assert len(implementation_sources) == expected_implementation_sources
     assert len(runner_sources) == 57
-    coverage_report = out_dir / DEPENDENCY_COMPOSITION_COVERAGE_REPORT
+    coverage_report = out_dir / MATRIX_REPORT
+    matrix_exclusions = compiler_exclusions(compiler)
+    selected_composition_rows = project_dependency_composition_rows(
+        composition_rows, "full"
+    )
+    projected_composition_rows = (
+        disable_dependency_composition_projected_cases(
+            selected_composition_rows,
+            exclusion_cases(matrix_exclusions),
+            composition_rows,
+        )
+    )
+    projected_composition_cases = frozenset(
+        (row.operation.name, row.name) for row in projected_composition_rows
+    )
+    omitted_composition_cases = frozenset(
+        (row.operation.name, row.name) for row in selected_composition_rows
+    ) - projected_composition_cases
     assert coverage_report.read_text(encoding="utf-8") == (
-        render_dependency_composition_coverage(
+        render_matrix_report(
             build_dependency_composition_coverage(composition_rows),
+            generate_constructor_detection_rows(),
+            generate_constructor_argument_conversion_rows(),
+            generate_shared_cyclical_rows(),
             profile="full",
-            compiled_rows=expected_compiled_rows,
+            compiled_composition_rows=expected_compiled_rows,
+            compiler=compiler,
+            omitted_composition_cases=omitted_composition_cases,
         )
     )
     dependency_runners = tuple(
@@ -2428,9 +2583,7 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
         dependency_composition_isolated_executables=(
             dependency_composition_isolated_executables
         ),
-        dependency_composition_disabled_projected_cases=(
-            dependency_composition_disabled_projected_cases
-        ),
+        compiler=compiler,
     )
 
     assert {path: path.stat().st_mtime_ns for path in timestamps} == timestamps

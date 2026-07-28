@@ -35,6 +35,7 @@ from schema import (
     ConstructorDetectionBackend,
     ConstructorDetectionMode,
     GeneratedExecutable,
+    LimitationDisposition,
 )
 
 
@@ -165,6 +166,14 @@ def generate_constructor_detection_rows(
                 f"constructor shape {constructor_shape.name} has a limitation "
                 "without a reason"
             )
+        if any(
+            not isinstance(limitation.disposition, LimitationDisposition)
+            for limitation in limitations
+        ):
+            raise ValueError(
+                f"constructor shape {constructor_shape.name} has a limitation "
+                "without a disposition"
+            )
         if any(limitation.guard == "" for limitation in limitations):
             raise ValueError(
                 f"constructor shape {constructor_shape.name} has a limitation "
@@ -219,6 +228,24 @@ def generate_constructor_argument_conversion_rows(
 
     known_storages = {storage.name for storage in storages}
     for category in categories:
+        limitation_fields = (
+            category.limitation_reason,
+            category.limitation_disposition,
+            category.limitation_guard,
+        )
+        if any(field is not None for field in limitation_fields) and (
+            not all(field is not None for field in limitation_fields)
+            or not category.limitation_reason
+            or not category.limitation_guard
+            or not isinstance(
+                category.limitation_disposition,
+                LimitationDisposition,
+            )
+        ):
+            raise ValueError(
+                f"constructor argument category {category.name} has an "
+                "incomplete limitation"
+            )
         missing_storages = sorted(category.supported_storages - known_storages)
         if missing_storages:
             raise ValueError(

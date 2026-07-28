@@ -199,6 +199,7 @@ _OPTIONAL_COPY_ONLY_COMPOSITE_SHAPE_LIMITATION = (
             "containing a copy-only composite through the opaque conversion "
             "probe"
         ),
+        disposition=LimitationDisposition.KNOWN_GAP,
     ),
 )
 
@@ -210,6 +211,7 @@ _OPTIONAL_POINTER_SHAPE_LIMITATION = (
             "constructor shape detection cannot identify an optional "
             "containing a pointer through the opaque conversion probe"
         ),
+        disposition=LimitationDisposition.KNOWN_GAP,
     ),
 )
 
