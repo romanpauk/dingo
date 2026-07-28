@@ -69,6 +69,58 @@ struct array_construction_context {
   int resolutions = 0;
 };
 
+using nested_request = std::optional<std::optional<int>>;
+
+struct nested_request_target {
+  explicit nested_request_target(nested_request dependency)
+      : value(**dependency) {}
+
+  int value;
+};
+
+struct nested_request_disabled_target {
+  explicit nested_request_disabled_target(nested_request) {}
+};
+
+template <> struct constructor_detection_traits<nested_request_target> {
+  static constexpr size_t max_arity = 1;
+};
+
+template <>
+struct constructor_detection_traits<nested_request_disabled_target> {
+  static constexpr size_t max_arity = 0;
+};
+
+struct nested_request_context {
+  template <typename T>
+  T resolve(construction_scope, nested_request_context &) {
+    static_assert(std::is_same_v<T, nested_request>);
+    ++resolutions;
+    return T{std::in_place, std::in_place, 7};
+  }
+
+  int resolutions = 0;
+};
+
+template <typename Detection> void verify_nested_request_construction() {
+  static_assert(Detection::arity == 1);
+  static_assert(Detection::kind == detail::constructor_kind::concrete);
+
+  nested_request_context context;
+  auto value = Detection::template construct<nested_request_target>(
+      ephemeral_scope, context, context);
+  EXPECT_EQ(value.value, 7);
+
+  alignas(nested_request_target)
+      std::byte storage[sizeof(nested_request_target)];
+  Detection::template construct<nested_request_target>(storage, ephemeral_scope,
+                                                       context, context);
+  auto *placed = reinterpret_cast<nested_request_target *>(storage);
+  EXPECT_EQ(placed->value, 7);
+  std::destroy_at(placed);
+  EXPECT_EQ(context.resolutions, 2);
+}
+
 TEST(constructor_detection_test, public_constructor_argument_metadata) {
   struct explicit_constructor {
     explicit_constructor(int, float) {}
@@ -117,6 +169,31 @@ TEST(constructor_detection_test, traits_limit_only_the_public_search) {
       detail::constructor_detection<target, detail::constructor_shape,
                                     detail::list_initialization, 3>::arity ==
       3);
+#endif
+}
+
+TEST(constructor_detection_test,
+     constructor_arity_limit_does_not_limit_nested_request_depth) {
+  verify_nested_request_construction<
+      constructor_detection<nested_request_target>>();
+
+#if !defined(_MSC_VER)
+  verify_nested_request_construction<detail::constructor_detection_msvc<
+      nested_request_target, detail::constructor_shape,
+      detail::list_initialization, 1>>();
+#endif
+}
+
+TEST(constructor_detection_test,
+     zero_constructor_arity_disables_nested_request_detection) {
+  static_assert(constructor_detection<nested_request_disabled_target>::kind ==
+                detail::constructor_kind::invalid);
+
+#if !defined(_MSC_VER)
+  static_assert(detail::constructor_detection_msvc<
+                    nested_request_disabled_target, detail::constructor_shape,
+                    detail::list_initialization, 0>::kind ==
+                detail::constructor_kind::invalid);
 #endif
 }
 

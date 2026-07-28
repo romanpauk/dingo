@@ -12,9 +12,7 @@ from __future__ import annotations
 
 from itertools import combinations
 
-from axes.dependency_forms import NON_GNU_WRAPPER_SHAPE_LIMITATION
 from schema import (
-    ConstructorDetectionLimitation,
     DependencyComposition,
     DependencyCompositionOperator,
     DependencyCompositionRequestStrategy,
@@ -190,70 +188,6 @@ _COMPOSITION_NAME_OVERRIDES = {
     "variant_move_only_copy_only": "variant_move_copy_only",
 }
 
-_OPTIONAL_COPY_ONLY_COMPOSITE_SHAPE_LIMITATION = (
-    ConstructorDetectionLimitation(
-        backend=None,
-        mode="shape",
-        reason=(
-            "constructor shape detection cannot identify an optional "
-            "containing a copy-only composite through the opaque conversion "
-            "probe"
-        ),
-        disposition=LimitationDisposition.KNOWN_GAP,
-    ),
-)
-
-_OPTIONAL_POINTER_SHAPE_LIMITATION = (
-    ConstructorDetectionLimitation(
-        backend=None,
-        mode="shape",
-        reason=(
-            "constructor shape detection cannot identify an optional "
-            "containing a pointer through the opaque conversion probe"
-        ),
-        disposition=LimitationDisposition.KNOWN_GAP,
-    ),
-)
-
-_COMPOSITION_LIMITATIONS = {
-    name: _OPTIONAL_COPY_ONLY_COMPOSITE_SHAPE_LIMITATION
-    for name in (
-        "optional_array_copy_only",
-        "optional_variant_regular_copy_only",
-    )
-}
-
-
-def _composition_limitations(
-    name: str,
-    operator: DependencyCompositionOperator,
-    operands: tuple[DependencyComposition, ...],
-) -> tuple[ConstructorDetectionLimitation, ...]:
-    limitations = _COMPOSITION_LIMITATIONS.get(name, ())
-    if (
-        operator.name == "optional"
-        and operands[0].operator is not None
-        and operands[0].operator.name in {"pointer", "const_pointer"}
-    ):
-        limitations += _OPTIONAL_POINTER_SHAPE_LIMITATION
-    non_gnu_ambiguous_wrapper = operator.name == "optional" or (
-        operator.name == "variant"
-        and any(
-            operand.operator is not None
-            and operand.operator.name == "optional"
-            for operand in operands
-        )
-    )
-    has_unconditional_shape_limitation = any(
-        limitation.mode == "shape"
-        and limitation.guard is None
-        and limitation.backend is None
-        for limitation in limitations
-    )
-    if non_gnu_ambiguous_wrapper and not has_unconditional_shape_limitation:
-        limitations += (NON_GNU_WRAPPER_SHAPE_LIMITATION,)
-    return limitations
-
 
 def _composition_name(
     operator: DependencyCompositionOperator,
@@ -306,11 +240,6 @@ def _build_dependency_compositions(
                         movable=_composition_property(
                             operator.movability,
                             tuple(operand.movable for operand in operands),
-                        ),
-                        constructor_detection_limitations=_composition_limitations(
-                            name,
-                            operator,
-                            operands,
                         ),
                     )
                 )
