@@ -19,6 +19,7 @@ from jinja2 import Template
 from axes.containers import CONTAINERS
 from axes.dependency_compositions import (
     DEPENDENCY_COMPOSITIONS,
+    DEPENDENCY_COMPOSITION_REQUEST_QUALIFICATIONS,
     DEPENDENCY_COMPOSITION_REQUEST_STRATEGIES,
     dependency_composition_depth,
     render_dependency_composition,
@@ -39,6 +40,7 @@ from plugins import (
 from schema import (
     ContainerSpec,
     DependencyComposition,
+    DependencyCompositionRequestQualification,
     DependencyCompositionRequestStrategy,
     DependencyCompositionResolutionLimitation,
     GeneratedExecutable,
@@ -74,6 +76,7 @@ class DependencyCompositionRow:
     container: ContainerSpec
     scope: ScopeSpec
     request_strategy: DependencyCompositionRequestStrategy
+    request_qualification: DependencyCompositionRequestQualification
     type_name: str
     request_type: str
     name: str
@@ -191,6 +194,12 @@ _MIXED_ANCHOR_TYPE = "dependency_composition_mixed_anchor"
 DEPENDENCY_COMPOSITION_PROFILES = frozenset({"full", "portable"})
 DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION = 4
 DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT = 12
+_REQUEST_QUALIFICATION_ORDER = {
+    qualification.name: index
+    for index, qualification in enumerate(
+        DEPENDENCY_COMPOSITION_REQUEST_QUALIFICATIONS
+    )
+}
 
 
 ProjectionObligation = tuple[str, ...]
@@ -283,11 +292,19 @@ def generate_dependency_composition_rows(
     request_strategies: tuple[
         DependencyCompositionRequestStrategy, ...
     ] = DEPENDENCY_COMPOSITION_REQUEST_STRATEGIES,
+    request_qualifications: tuple[
+        DependencyCompositionRequestQualification, ...
+    ] = DEPENDENCY_COMPOSITION_REQUEST_QUALIFICATIONS,
 ) -> tuple[DependencyCompositionRow, ...]:
     assert_unique_axis_members(
         "dependency composition",
         "request strategy",
         tuple(strategy.name for strategy in request_strategies),
+    )
+    assert_unique_axis_members(
+        "dependency composition",
+        "request qualification",
+        tuple(qualification.name for qualification in request_qualifications),
     )
     assert_unique_axis_members(
         "dependency composition",
@@ -317,6 +334,16 @@ def generate_dependency_composition_rows(
     request_strategies_by_name = {
         strategy.name: strategy for strategy in request_strategies
     }
+    if any(
+        not qualification.type_expression
+        or not qualification.supported_request_strategies
+        or not qualification.supported_request_strategies
+        <= request_strategies_by_name.keys()
+        for qualification in request_qualifications
+    ):
+        raise ValueError(
+            "dependency composition request qualification is invalid"
+        )
     scope_rules_by_name = {rule.scope: rule for rule in scope_rules}
     if scope_rules_by_name.keys() != {scope.name for scope in scopes}:
         raise ValueError(
@@ -375,84 +402,118 @@ def generate_dependency_composition_rows(
                     request_strategy = request_strategies_by_name[
                         request_strategy_name
                     ]
-                    for composition in compositions:
-                        unsupported_reason = None
-                        unsupported_disposition = None
+                    for request_qualification in request_qualifications:
                         if (
-                            scope_rule.requires_runtime_registration
-                            and container_mode == "static"
+                            request_strategy.name
+                            not in request_qualification.supported_request_strategies
                         ):
-                            unsupported_reason = (
-                                scope_rule.static_registration_reason
-                            )
-                            unsupported_disposition = (
-                                scope_rule.static_registration_disposition
-                            )
-                        elif (
-                            scope_rule.requires_movable
-                            and not composition.movable
-                        ):
-                            unsupported_reason = scope_rule.non_movable_reason
-                            unsupported_disposition = (
-                                scope_rule.non_movable_disposition
-                            )
-                        elif (
-                            composition.operator is not None
-                            and request_strategy.name
-                            not in composition.operator.supported_request_strategies
-                        ):
-                            unsupported_reason = (
-                                f"{composition.operator.name} compositions do "
-                                f"not support {request_strategy.name} requests"
-                            )
-                            unsupported_disposition = (
-                                composition.operator.unsupported_request_disposition
-                            )
-                        else:
-                            limitation = _operator_limitation(
-                                composition,
-                                request_strategy,
-                            )
-                            if limitation is not None:
-                                unsupported_reason = limitation.reason
-                                unsupported_disposition = (
-                                    limitation.disposition
+                            continue
+                        for composition in compositions:
+                            unsupported_reason = None
+                            unsupported_disposition = None
+                            if (
+                                scope_rule.requires_runtime_registration
+                                and container_mode == "static"
+                            ):
+                                unsupported_reason = (
+                                    scope_rule.static_registration_reason
                                 )
-                        if (unsupported_reason is None) != (
-                            unsupported_disposition is None
-                        ):
-                            raise ValueError(
-                                "dependency composition limitation has an "
-                                "incomplete disposition"
-                            )
-                        rows_list.append(
-                            DependencyCompositionRow(
-                                composition=composition,
-                                operation=operation,
-                                container=container,
-                                scope=scope,
-                                request_strategy=request_strategy,
-                                type_name=render_dependency_composition(
-                                    composition
-                                ),
-                                request_type=(
-                                    render_dependency_composition_request(
-                                        composition,
-                                        request_strategy,
+                                unsupported_disposition = (
+                                    scope_rule.static_registration_disposition
+                                )
+                            elif (
+                                scope_rule.requires_movable
+                                and not composition.movable
+                            ):
+                                unsupported_reason = (
+                                    scope_rule.non_movable_reason
+                                )
+                                unsupported_disposition = (
+                                    scope_rule.non_movable_disposition
+                                )
+                            elif (
+                                composition.operator is not None
+                                and request_strategy.name
+                                not in composition.operator.supported_request_strategies
+                            ):
+                                unsupported_reason = (
+                                    f"{composition.operator.name} compositions "
+                                    f"do not support {request_strategy.name} "
+                                    "requests"
+                                )
+                                unsupported_disposition = (
+                                    composition.operator.unsupported_request_disposition
+                                )
+                            elif (
+                                composition.operator is not None
+                                and composition.operator.supported_request_qualifications
+                                and request_qualification.name
+                                not in composition.operator.supported_request_qualifications
+                            ):
+                                unsupported_reason = (
+                                    "top-level cv-qualification on raw pointer "
+                                    "values is discarded by C++ function "
+                                    "boundaries"
+                                )
+                                unsupported_disposition = (
+                                    composition.operator
+                                    .unsupported_request_qualification_disposition
+                                )
+                            else:
+                                limitation = _operator_limitation(
+                                    composition,
+                                    request_strategy,
+                                )
+                                if limitation is not None:
+                                    unsupported_reason = limitation.reason
+                                    unsupported_disposition = (
+                                        limitation.disposition
                                     )
-                                ),
-                                name=(
-                                    f"{container.name}_{scope.name}_"
-                                    f"{request_strategy.name}_"
-                                    f"{composition.name}"
-                                ),
-                                supported=unsupported_reason is None,
-                                unsupported_reason=unsupported_reason,
-                                unsupported_disposition=(
-                                    unsupported_disposition
-                                ),
+                            if (unsupported_reason is None) != (
+                                unsupported_disposition is None
+                            ):
+                                raise ValueError(
+                                    "dependency composition limitation has an "
+                                    "incomplete disposition"
+                                )
+                            qualification_name = (
+                                ""
+                                if request_qualification.name == "unqualified"
+                                else f"_{request_qualification.name}"
                             )
-                        )
+                            rows_list.append(
+                                DependencyCompositionRow(
+                                    composition=composition,
+                                    operation=operation,
+                                    container=container,
+                                    scope=scope,
+                                    request_strategy=request_strategy,
+                                    request_qualification=(
+                                        request_qualification
+                                    ),
+                                    type_name=render_dependency_composition(
+                                        composition
+                                    ),
+                                    request_type=(
+                                        render_dependency_composition_request(
+                                            composition,
+                                            request_strategy,
+                                            request_qualification,
+                                        )
+                                    ),
+                                    name=(
+                                        f"{container.name}_{scope.name}_"
+                                        f"{request_strategy.name}"
+                                        f"{qualification_name}_"
+                                        f"{composition.name}"
+                                    ),
+                                    supported=unsupported_reason is None,
+                                    unsupported_reason=unsupported_reason,
+                                    unsupported_disposition=(
+                                        unsupported_disposition
+                                    ),
+                                )
+                            )
     rows = tuple(rows_list)
     for axis, declared, used in (
         (
@@ -469,6 +530,14 @@ def generate_dependency_composition_rows(
             "request strategy",
             {strategy.name for strategy in request_strategies},
             {row.request_strategy.name for row in rows},
+        ),
+        (
+            "request qualification",
+            {
+                qualification.name
+                for qualification in request_qualifications
+            },
+            {row.request_qualification.name for row in rows},
         ),
         (
             "container",
@@ -530,6 +599,13 @@ def _projection_obligations(
             row.scope.name,
             row.request_strategy.name,
         ),
+        (
+            "qualification_structure",
+            operation,
+            row.request_qualification.name,
+            row.composition.operator.name,
+            f"depth_{dependency_composition_depth(row.composition)}",
+        ),
     }
     if profile == "full":
         obligations.add(
@@ -562,6 +638,7 @@ def _projection_row_key(row: DependencyCompositionRow) -> tuple[str, ...]:
         row.container.name,
         row.scope.name,
         row.request_strategy.name,
+        f"{_REQUEST_QUALIFICATION_ORDER[row.request_qualification.name]:02d}",
     )
 
 
@@ -694,6 +771,7 @@ def build_dependency_composition_coverage(
             "container",
             "scope",
             "request strategy",
+            "request qualification",
             "copyability",
             "movability",
             "depth",
@@ -710,6 +788,7 @@ def build_dependency_composition_coverage(
             "container": row.container.name,
             "scope": row.scope.name,
             "request strategy": row.request_strategy.name,
+            "request qualification": row.request_qualification.name,
             "copyability": (
                 "copyable" if row.composition.copyable else "non_copyable"
             ),

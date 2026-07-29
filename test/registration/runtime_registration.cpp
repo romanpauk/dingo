@@ -52,7 +52,7 @@ bool runtime_proxy_service_should_throw = false;
 template <typename Container>
 class resolution_access_test : public ::testing::Test {};
 
-TYPED_TEST_SUITE(resolution_access_test, container_types);
+TYPED_TEST_SUITE(resolution_access_test, container_types, );
 
 TYPED_TEST(resolution_access_test,
            borrowed_raw_pointers_respect_wrapper_ownership) {
@@ -511,6 +511,32 @@ TEST(type_registration_test,
 
   EXPECT_EQ(events, (std::vector<int>{1, 2}));
   runtime_policy_detected_tracker::events = nullptr;
+}
+
+TEST(type_registration_test,
+     runtime_context_detection_construction_copies_copy_only_values) {
+  struct copy_only_value {
+    copy_only_value() : value(31) {}
+    copy_only_value(const copy_only_value &) = default;
+    copy_only_value(copy_only_value &&) = delete;
+
+    int value;
+  };
+
+  arena<> scratch(DINGO_CONTEXT_ARENA_BUFFER_SIZE);
+  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  runtime_transaction transaction(runtime, scratch);
+  dingo::container<> container;
+  runtime_context context(scratch, transaction);
+
+  auto value = context.construct<copy_only_value, detail::constructor_shape>(
+      ephemeral_scope, container);
+  auto &&reference =
+      context.construct<copy_only_value &&, detail::constructor_shape>(
+          ephemeral_scope, container);
+
+  EXPECT_EQ(value.value, 31);
+  EXPECT_EQ(reference.value, 31);
 }
 
 TEST(type_registration_test, runtime_context_explicit_scopes_are_independent) {

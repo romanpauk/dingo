@@ -56,6 +56,13 @@ public:
         scope, [&](void *ptr) { new (ptr) T(std::forward<Args>(args)...); });
   }
 
+// Resolution selects failure paths at runtime. For some instantiations MSVC
+// proves construction cannot return and reports the following delivery code as
+// unreachable even though the instantiated path is not selected.
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
   template <typename T, typename DetectionMode, typename Container>
   T construct(construction_scope scope, Container &container) {
     using temporary_type = normalized_type_t<T>;
@@ -67,10 +74,17 @@ public:
 
     if constexpr (std::is_lvalue_reference_v<T>) {
       return instance;
+    } else if constexpr (!std::is_rvalue_reference_v<T> &&
+                         std::is_copy_constructible_v<temporary_type> &&
+                         !std::is_move_constructible_v<temporary_type>) {
+      return static_cast<const temporary_type &>(instance);
     } else {
       return std::move(instance);
     }
   }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
   template <typename Fn> void on_rollback(Fn &&fn) {
     transaction_->on_rollback(std::forward<Fn>(fn));

@@ -147,8 +147,11 @@ template <typename T> T convert_resolved_binding(resolved_address result) {
   } else if constexpr (std::is_move_constructible_v<value_type>) {
     assert(result.access == resolved_address::access_kind::consume);
     return std::move(*static_cast<value_type *>(result.address));
-  } else {
+  } else if constexpr (is_copy_constructible_v<value_type>) {
     return *static_cast<value_type *>(result.address);
+  } else {
+    throw make_type_not_convertible_exception(describe_type<T>(),
+                                              describe_type<value_type>());
   }
 }
 

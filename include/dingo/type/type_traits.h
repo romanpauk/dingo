@@ -304,7 +304,13 @@ using array_like_exact_interface_type_t =
 
 template <typename Type, typename U, typename = void>
 struct wrapper_rebind_leaf {
-  using type = U;
+private:
+  using const_type =
+      std::conditional_t<std::is_const_v<Type>, std::add_const_t<U>, U>;
+
+public:
+  using type = std::conditional_t<std::is_volatile_v<Type>,
+                                  std::add_volatile_t<const_type>, const_type>;
 };
 
 template <typename Type, size_t N, typename U>

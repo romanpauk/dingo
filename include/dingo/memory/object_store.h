@@ -119,6 +119,13 @@ public:
     });
   }
 
+// A runtime-selected construction callback may be non-returning for a specific
+// template instantiation. MSVC diagnoses the bookkeeping below it as
+// unreachable even though that instantiation is not selected at runtime.
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
   template <typename T, typename ConstructFn>
   T &construct_at(Arena &arena, ConstructFn &&construct) {
     auto *instance =
@@ -134,6 +141,9 @@ public:
     }
     return *instance;
   }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
   void add_destructor(Arena &arena, void *instance,
                       void (*dtor)(void *) noexcept) {

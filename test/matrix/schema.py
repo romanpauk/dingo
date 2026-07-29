@@ -195,6 +195,13 @@ class DependencyCompositionRequestStrategy:
 
 
 @dataclass(frozen=True, slots=True)
+class DependencyCompositionRequestQualification:
+    name: str
+    type_expression: str
+    supported_request_strategies: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
 class DependencyCompositionOperator:
     name: str
     arity: int
@@ -203,7 +210,12 @@ class DependencyCompositionOperator:
     movability: str
     request_expression: str
     supported_request_strategies: frozenset[str]
+    supported_request_qualifications: frozenset[str] = frozenset()
+    recursive: bool = True
     unsupported_request_disposition: LimitationDisposition | None = None
+    unsupported_request_qualification_disposition: (
+        LimitationDisposition | None
+    ) = None
     resolution_limitations: tuple[
         DependencyCompositionResolutionLimitation, ...
     ] = ()

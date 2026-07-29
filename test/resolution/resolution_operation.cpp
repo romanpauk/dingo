@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
+#include <dingo/core/binding_resolution.h>
 #include <dingo/core/exceptions.h>
 #include <dingo/resolution/resolution_operation.h>
 #include <dingo/storage/shared.h>
@@ -51,6 +52,12 @@ struct alternative_b {
 
 struct unrelated_alternative {
   int value;
+};
+
+struct immovable {
+  immovable() = default;
+  immovable(const immovable &) = delete;
+  immovable(immovable &&) = delete;
 };
 
 using alternative_type = std::variant<alternative_a, alternative_b>;
@@ -123,6 +130,15 @@ TEST(resolution_operation_test,
           describe_type<unrelated_alternative *>(),
           describe_type<alternative_type *>())),
       type_not_convertible_exception);
+}
+
+TEST(resolution_operation_test,
+     resolved_immovable_value_is_rejected_without_copy_instantiation) {
+  immovable value;
+  resolved_address result{&value, resolved_address::access_kind::borrow};
+
+  EXPECT_THROW((void)detail::convert_resolved_binding<immovable>(result),
+               type_not_convertible_exception);
 }
 
 TEST(resolution_operation_test, rvalue_source_destroys_materialized_value) {

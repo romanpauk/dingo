@@ -362,6 +362,10 @@ argument storage with value, lvalue-reference, const-lvalue-reference,
 rvalue-reference, and pointer conversion categories. The pointer category only
 applies to unique storage, matching the supported constructor-probe shapes. Each
 conversion category references the same shared dependency-form catalog.
+The runtime lifetime scenarios additionally construct a shared object from a
+unique-scoped dependency through `const T&`. This proves that the transient
+reference remains valid for the constructor call without making direct
+unique-scope reference resolution legal.
 
 ## Filters
 
@@ -392,11 +396,24 @@ move-only, and copy-only leaves. Its operators mirror every non-identity
 dependency shape: pointer, const-pointer, shared-pointer, unique-pointer,
 optional, array, and variant. The model has an explicit maximum depth of two. It
 generates every unary application and every distinct canonical variant pair at
-each level, then renders the C++ dependency type once. Constructor detection,
+each level, then renders the C++ dependency type once. Representative
+`shared_ptr<const T>` and `unique_ptr<const T>` forms cover every leaf mobility
+class without recursively multiplying the catalog. Constructor detection,
 resolution, and invocation consume that same catalog. The latter two form the
 full product:
 
-`composition x operation x container x scope x compatible request_strategy`
+`composition x operation x container x scope x compatible request_strategy x request_qualification`
+
+Request qualification is independent of request strategy and covers
+unqualified, `const`, `volatile`, and `const volatile` outer composition
+types. Qualification uses `std::add_*_t` so pointer compositions qualify the
+pointer itself rather than changing the pointee. CV qualification applies to
+stable requests; by-value and rvalue wrapper results remain unqualified because
+top-level CV does not provide a separately usable value category.
+Focused registration regressions also store const external
+`shared_ptr<const T>` and `unique_ptr<const T>` handles. A const shared handle
+remains copyable, while a const unique handle publishes only stable const
+access and rejects consumption.
 
 The container axis reuses the core runtime, static, generic runtime/static, and
 mixed containers. The scope axis covers shared, unique, and external storage.
@@ -405,8 +422,9 @@ and rvalue requests. Static-only external cases remain in the model as an
 intentional constraint because external storage requires runtime registration.
 Mixed cells use a static anchor and register the composition at runtime, so they
 exercise both halves of the mixed container. The contract rejects missing
-product cells, so adding a leaf, operator, container, scope, or request strategy
-expands resolution and invocation without requiring hand-written wrapper cases.
+product cells, so adding a leaf, operator, container, scope, request strategy,
+or request qualification expands resolution and invocation without requiring
+hand-written wrapper cases.
 
 Every product case is classified. Supported cases may be selected as direct C++
 tests; functionality gaps remain visible with a reason, and intentional
@@ -414,7 +432,9 @@ constraints remain outside the support contract. Shared storage requires a
 movable composition. Raw and const pointer compositions intentionally expose
 only stable exact requests. Shared and unique pointer compositions support exact
 stable, value, and rvalue requests even when their operand is another wrapper,
-including pointer-to-const operands. Stable inverse compositions such as
+including pointer-to-const operands. Const-pointee shared and unique pointers
+cover those same request strategies and storage scopes. Stable inverse
+compositions such as
 `optional<shared_ptr<T>>` and `optional<unique_ptr<T>>`, and exact owning
 `variant<shared_ptr<T>, unique_ptr<T>>` requests are supported as well. Owning
 arrays of optionals are supported as well; array construction materializes each

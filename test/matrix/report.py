@@ -61,16 +61,9 @@ COVERAGE_LIMITS = (
         area="Dependency compositions",
         disposition=LimitationDisposition.KNOWN_GAP,
         reason=(
-            "Const and volatile qualification of composed wrapper requests is "
-            "not an axis."
-        ),
-    ),
-    CoverageLimit(
-        area="Dependency compositions",
-        disposition=LimitationDisposition.KNOWN_GAP,
-        reason=(
-            "Stored value, reference, pointer, and qualified source forms are "
-            "not crossed with recursive compositions."
+            "Stored value, reference, pointer, and qualified source forms, "
+            "including const-pointee smart pointers, are represented but not "
+            "crossed recursively."
         ),
     ),
     CoverageLimit(
