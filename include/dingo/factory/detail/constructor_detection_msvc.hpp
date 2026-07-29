@@ -68,8 +68,9 @@ template <typename T, typename DetectionMode,
           size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS>
 using constructor_detection_msvc_shape = constructor_detection_impl<
     constructor_probe_msvc,
-    constructor_arity_msvc<T, DetectionMode, IsConstructible, N>, T,
-    DetectionMode, IsConstructible, N>;
+    constructor_arity_msvc<T, DetectionMode, IsConstructible, N,
+                           DINGO_CONSTRUCTOR_REQUEST_DEPTH>,
+    T, DetectionMode, IsConstructible, N, DINGO_CONSTRUCTOR_REQUEST_DEPTH>;
 
 #if defined(_MSC_VER)
 template <typename T, typename Sequence>
