@@ -28,6 +28,9 @@ if(MSVC)
     # list(APPEND DINGO_MATRIX_DEPENDENCY_COMPOSITION_DIAGNOSTIC_ARGS
     #     --dependency-composition-isolate-executable invoke:4
     #     --dependency-composition-isolate-executable resolve:4)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "^(GNU|Clang|AppleClang)$")
+    # Bound peak compiler memory as the full composition matrix expands.
+    set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT 64)
 else()
     set(DINGO_MATRIX_DEPENDENCY_COMPOSITION_CASE_LIMIT 0)
 endif()

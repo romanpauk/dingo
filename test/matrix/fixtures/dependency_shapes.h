@@ -39,6 +39,14 @@ struct dependency_move_only {
   int marker() const { return 3; }
 };
 
+struct dependency_immovable {
+  dependency_immovable() = default;
+  dependency_immovable(const dependency_immovable &) = delete;
+  dependency_immovable(dependency_immovable &&) = delete;
+
+  int marker() const { return 3; }
+};
+
 struct dependency_composition_mixed_anchor {};
 
 template <typename Type>
@@ -73,6 +81,8 @@ struct dependency_composition_factory<std::shared_ptr<Type>, OwnPointer> {
     } else if constexpr (std::is_copy_constructible_v<Type>) {
       auto value = dependency_composition_factory<Type>::make();
       return std::make_shared<Type>(value);
+    } else if constexpr (std::is_constructible_v<Type, std::in_place_t>) {
+      return std::make_shared<Type>(std::in_place);
     } else {
       return std::make_shared<Type>();
     }
@@ -88,6 +98,8 @@ struct dependency_composition_factory<std::unique_ptr<Type>, OwnPointer> {
     } else if constexpr (std::is_copy_constructible_v<Type>) {
       auto value = dependency_composition_factory<Type>::make();
       return std::make_unique<Type>(value);
+    } else if constexpr (std::is_constructible_v<Type, std::in_place_t>) {
+      return std::make_unique<Type>(std::in_place);
     } else {
       return std::make_unique<Type>();
     }
@@ -103,6 +115,8 @@ struct dependency_composition_factory<std::optional<Type>, OwnPointer> {
     } else if constexpr (std::is_copy_constructible_v<Type>) {
       auto value = dependency_composition_factory<Type>::make();
       return std::optional<Type>(std::in_place, value);
+    } else if constexpr (std::is_constructible_v<Type, std::in_place_t>) {
+      return std::optional<Type>(std::in_place, std::in_place);
     } else {
       return std::optional<Type>(std::in_place);
     }
@@ -134,6 +148,9 @@ struct dependency_composition_factory<std::variant<First, Rest...>,
     } else if constexpr (std::is_copy_constructible_v<First>) {
       auto value = dependency_composition_factory<First>::make();
       return std::variant<First, Rest...>(std::in_place_type<First>, value);
+    } else if constexpr (std::is_constructible_v<First, std::in_place_t>) {
+      return std::variant<First, Rest...>(std::in_place_type<First>,
+                                          std::in_place);
     } else {
       return {};
     }

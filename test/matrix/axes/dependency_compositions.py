@@ -138,6 +138,10 @@ DEPENDENCY_COMPOSITION_LEAVES = (
         type_name="dependency_copy_only",
         copyable=True,
     ),
+    DependencyComposition(
+        name="immovable",
+        type_name="dependency_immovable",
+    ),
 )
 
 
@@ -484,11 +488,6 @@ def validate_dependency_compositions(
                 raise ValueError(
                     "dependency composition references unknown leaf: "
                     f"{composition.name}"
-                )
-            if not composition.copyable and not composition.movable:
-                raise ValueError(
-                    f"dependency composition leaf {composition.name} must be "
-                    "copyable or movable"
                 )
             used_leaves.add(composition.name)
             return
