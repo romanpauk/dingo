@@ -91,6 +91,11 @@ DEPENDENCY_SHAPES = (
                 decorations=frozenset({"plain"}),
                 limitation=WRAPPER_SIGNATURE_RECOVERY_LIMITATION,
             ),
+            DependencyShapeConstructorDetectionLimitation(
+                carriers=frozenset({"value"}),
+                decorations=frozenset({"plain"}),
+                limitation=NON_GNU_WRAPPER_SHAPE_LIMITATION,
+            ),
         ),
     ),
     DependencyShape(

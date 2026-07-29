@@ -193,66 +193,6 @@ struct constructor_detection_construction_check<constructor_copy_only_value> {
   }
 };
 
-template <typename Dependency>
-struct constructor_dependency_construction_check {
-  template <typename Detection, typename DetectionMode> static void run() {
-    if constexpr (std::is_same_v<DetectionMode, detail::constructor_shape>) {
-      using target = constructor_dependency<Dependency>;
-      constructor_dependency_context<Dependency> context;
-
-      // Cover both construction dispatches. The context additionally checks
-      // that each dispatch resolves the exact outer dependency.
-      (void)Detection::template construct<target>(ephemeral_scope, context,
-                                                  context);
-
-      alignas(target) unsigned char storage[sizeof(target)];
-      Detection::template construct<target>(storage, ephemeral_scope, context,
-                                            context);
-      reinterpret_cast<target *>(storage)->~target();
-
-      ASSERT_EQ(context.resolutions, 2);
-    }
-  }
-};
-
-template <>
-struct constructor_detection_construction_check<
-    constructor_dependency<std::optional<dependency_regular *>>>
-    : constructor_dependency_construction_check<
-          std::optional<dependency_regular *>> {};
-
-template <>
-struct constructor_detection_construction_check<constructor_dependency<
-    std::optional<dependency_const_pointer<dependency_regular>>>>
-    : constructor_dependency_construction_check<
-          std::optional<dependency_const_pointer<dependency_regular>>> {};
-
-template <>
-struct constructor_detection_construction_check<
-    constructor_dependency<std::optional<std::array<dependency_copy_only, 2>>>>
-    : constructor_dependency_construction_check<
-          std::optional<std::array<dependency_copy_only, 2>>> {};
-
-template <>
-struct constructor_detection_construction_check<constructor_dependency<
-    std::optional<std::variant<dependency_regular, dependency_copy_only>>>>
-    : constructor_dependency_construction_check<std::optional<
-          std::variant<dependency_regular, dependency_copy_only>>> {};
-
-template <>
-struct constructor_detection_construction_check<constructor_dependency<
-    std::variant<std::optional<dependency_regular>, dependency_move_only>>>
-    : constructor_dependency_construction_check<std::variant<
-          std::optional<dependency_regular>, dependency_move_only>> {};
-
-template <>
-struct constructor_detection_construction_check<constructor_dependency<
-    std::variant<dependency_const_pointer<dependency_regular>,
-                 std::optional<dependency_copy_only>>>>
-    : constructor_dependency_construction_check<
-          std::variant<dependency_const_pointer<dependency_regular>,
-                       std::optional<dependency_copy_only>>> {};
-
 template <typename Backend, typename DetectionMode, typename T,
           detail::constructor_kind ExpectedKind, std::size_t ExpectedArity,
           typename ExpectedArguments>

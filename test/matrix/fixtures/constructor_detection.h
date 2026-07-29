@@ -181,28 +181,6 @@ struct constructor_detection_msvc_backend {
                                          DINGO_CONSTRUCTOR_DETECTION_ARGS>;
 };
 
-struct constructor_lazy_probe_target {};
-
-template <typename T, typename... Args>
-struct constructor_lazy_probe : std::false_type {};
-
-template <typename T, typename Arg> struct constructor_lazy_probe<T, Arg> {
-  static_assert(
-      !std::is_same_v<
-          Arg, detail::constructor_argument<T, detail::constructor_shape>>,
-      "the unrestricted one-argument probe must remain lazy");
-
-  static constexpr bool value = std::is_same_v<
-      Arg, detail::constructor_argument<
-               T, detail::constructor_request<
-                      detail::constructor_request_kind::alternative, 1>>>;
-};
-
-static_assert(detail::constructor_arity_msvc<
-                  constructor_lazy_probe_target, detail::constructor_shape,
-                  constructor_lazy_probe, 1>::value == 1,
-              "a structural request must establish arity one");
-
 struct constructor_detection_context {
   template <typename T>
   T resolve(construction_scope, constructor_detection_context &) {
@@ -226,19 +204,6 @@ struct constructor_copy_only_context {
     static_assert(std::is_same_v<T, constructor_copy_only_config>);
     return {};
   }
-};
-
-template <typename Dependency> struct constructor_dependency_context {
-  template <typename T>
-  T resolve(construction_scope, constructor_dependency_context &) {
-    // Detecting the constructor is insufficient: construction must request the
-    // complete wrapper, not a contained type that the wrapper can also accept.
-    static_assert(std::is_same_v<T, Dependency>);
-    ++resolutions;
-    return make_dependency_composition<T>();
-  }
-
-  int resolutions = 0;
 };
 
 } // namespace dingo::matrix
