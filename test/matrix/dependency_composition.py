@@ -1076,6 +1076,34 @@ def generate_dependency_composition_executables(
     ] = defaultdict(list)
     for (operation, _, _), _, bucket, shard_rows in sorted(assigned_shards):
         rows_by_executable[(operation, bucket)].extend(shard_rows)
+    # Coarse operator/container shards can leave buckets two cases apart.
+    for operation in sorted(
+        {operation.name for operation in DEPENDENCY_COMPOSITION_OPERATIONS}
+    ):
+        operation_buckets = tuple(
+            (operation, bucket)
+            for bucket in range(
+                DEPENDENCY_COMPOSITION_EXECUTABLES_PER_OPERATION
+            )
+        )
+        while True:
+            largest = max(
+                operation_buckets,
+                key=lambda key: (len(rows_by_executable[key]), -key[1]),
+            )
+            smallest = min(
+                operation_buckets,
+                key=lambda key: (len(rows_by_executable[key]), key[1]),
+            )
+            if (
+                len(rows_by_executable[largest])
+                - len(rows_by_executable[smallest])
+                <= 1
+            ):
+                break
+            rows_by_executable[smallest].append(
+                rows_by_executable[largest].pop()
+            )
 
     def make_source_shard(
         executable: str,

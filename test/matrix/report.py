@@ -60,11 +60,6 @@ COVERAGE_LIMITS = (
     CoverageLimit(
         area="Dependency compositions",
         disposition=LimitationDisposition.KNOWN_GAP,
-        reason="Immovable leaf types are not represented.",
-    ),
-    CoverageLimit(
-        area="Dependency compositions",
-        disposition=LimitationDisposition.KNOWN_GAP,
         reason=(
             "Const and volatile qualification of composed wrapper requests is "
             "not an axis."
