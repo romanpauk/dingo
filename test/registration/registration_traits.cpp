@@ -770,6 +770,15 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   static_assert(std::is_same_v<rebind_leaf_t<const A *, I>, const I *>);
   static_assert(std::is_same_v<rebind_leaf_t<std::optional<const A *>, I>,
                                std::optional<const I *>>);
+  static_assert(std::is_same_v<rebind_leaf_t<std::shared_ptr<const A>, I>,
+                               std::shared_ptr<const I>>);
+  static_assert(std::is_same_v<rebind_leaf_t<std::unique_ptr<const A>, I>,
+                               std::unique_ptr<const I>>);
+  static_assert(std::is_same_v<rebind_leaf_t<std::shared_ptr<volatile A>, I>,
+                               std::shared_ptr<volatile I>>);
+  static_assert(
+      std::is_same_v<rebind_leaf_t<std::unique_ptr<const volatile A>, I>,
+                     std::unique_ptr<const volatile I>>);
   using nested_array_handle =
       std::shared_ptr<std::unique_ptr<A[], std::default_delete<A[]>>>;
   static_assert(
@@ -1413,6 +1422,98 @@ TEST(type_registration_test, const_reference_storage_preserves_const_access) {
             &std::get<int>(**doubly_nested_optional_value));
   EXPECT_EQ(doubly_nested_optional_container.resolve<const int *>(),
             &std::get<int>(**doubly_nested_optional_value));
+}
+
+TEST(type_registration_test,
+     const_external_smart_pointer_storage_preserves_const_access) {
+  struct service_interface {
+    virtual ~service_interface() = default;
+    virtual int get_value() const = 0;
+  };
+  struct service {
+    int value;
+  };
+  struct interface_service : service_interface {
+    explicit interface_service(int init_value) : value(init_value) {}
+
+    int get_value() const override { return value; }
+
+    int value;
+  };
+
+  const std::shared_ptr<const service> shared_value =
+      std::make_shared<const service>(service{23});
+  container<> shared_container;
+  shared_container.register_type<
+      scope<external>, storage<const std::shared_ptr<const service> &>>(
+      shared_value);
+
+  auto shared_copy = shared_container.resolve<std::shared_ptr<const service>>();
+  EXPECT_EQ(shared_copy, shared_value);
+  EXPECT_EQ(&shared_container.resolve<const std::shared_ptr<const service> &>(),
+            &shared_value);
+  EXPECT_EQ(&shared_container.resolve<const service &>(), shared_value.get());
+  EXPECT_EQ(shared_container.resolve<const service *>(), shared_value.get());
+  EXPECT_THROW((void)shared_container.resolve<service &>(),
+               type_not_convertible_exception);
+  EXPECT_THROW((void)shared_container.resolve<service *>(),
+               type_not_convertible_exception);
+
+  const std::shared_ptr<const interface_service> shared_interface_value =
+      std::make_shared<const interface_service>(31);
+  container<> shared_interface_container;
+  shared_interface_container
+      .register_type<scope<external>,
+                     storage<const std::shared_ptr<const interface_service> &>,
+                     interfaces<service_interface>>(shared_interface_value);
+
+  auto shared_interface_copy =
+      shared_interface_container
+          .resolve<std::shared_ptr<const service_interface>>();
+  EXPECT_EQ(shared_interface_copy.get(), shared_interface_value.get());
+  EXPECT_EQ(&shared_interface_container.resolve<const service_interface &>(),
+            shared_interface_value.get());
+  EXPECT_EQ(shared_interface_container.resolve<const service_interface *>(),
+            shared_interface_value.get());
+  EXPECT_THROW((void)shared_interface_container.resolve<service_interface &>(),
+               type_not_convertible_exception);
+  EXPECT_THROW((void)shared_interface_container.resolve<service_interface *>(),
+               type_not_convertible_exception);
+
+  const std::unique_ptr<const service> unique_value =
+      std::make_unique<const service>(service{29});
+  container<> unique_container;
+  unique_container.register_type<
+      scope<external>, storage<const std::unique_ptr<const service> &>>(
+      unique_value);
+
+  EXPECT_EQ(&unique_container.resolve<const std::unique_ptr<const service> &>(),
+            &unique_value);
+  EXPECT_EQ(&unique_container.resolve<const service &>(), unique_value.get());
+  EXPECT_EQ(unique_container.resolve<const service *>(), unique_value.get());
+  EXPECT_THROW((void)unique_container.resolve<service &>(),
+               type_not_convertible_exception);
+  EXPECT_THROW((void)unique_container.resolve<service *>(),
+               type_not_convertible_exception);
+  EXPECT_THROW((void)unique_container.resolve<std::unique_ptr<const service>>(),
+               type_not_convertible_exception);
+
+  const std::unique_ptr<const interface_service> unique_interface_value =
+      std::make_unique<const interface_service>(37);
+  container<> unique_interface_container;
+  unique_interface_container
+      .register_type<scope<external>,
+                     storage<const std::unique_ptr<const interface_service> &>,
+                     interfaces<service_interface>>(unique_interface_value);
+
+  EXPECT_EQ(&unique_interface_container.resolve<const service_interface &>(),
+            unique_interface_value.get());
+  EXPECT_EQ(unique_interface_container.resolve<const service_interface *>(),
+            unique_interface_value.get());
+  EXPECT_THROW((void)unique_interface_container.resolve<service_interface &>(),
+               type_not_convertible_exception);
+  EXPECT_THROW((void)unique_interface_container.resolve<service_interface *>(),
+               type_not_convertible_exception);
 }
 
 TEST(type_registration_test,

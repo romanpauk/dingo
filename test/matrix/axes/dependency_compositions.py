@@ -17,6 +17,7 @@ from schema import (
     ConstructorDetectionLimitation,
     DependencyComposition,
     DependencyCompositionOperator,
+    DependencyCompositionRequestQualification,
     DependencyCompositionRequestStrategy,
     LimitationDisposition,
 )
@@ -42,6 +43,32 @@ DEPENDENCY_COMPOSITION_REQUEST_STRATEGIES = (
 )
 
 
+DEPENDENCY_COMPOSITION_REQUEST_QUALIFICATIONS = (
+    DependencyCompositionRequestQualification(
+        name="unqualified",
+        type_expression="{0}",
+        supported_request_strategies=frozenset(
+            {"stable", "value", "rvalue"}
+        ),
+    ),
+    DependencyCompositionRequestQualification(
+        name="const",
+        type_expression="std::add_const_t<{0}>",
+        supported_request_strategies=frozenset({"stable"}),
+    ),
+    DependencyCompositionRequestQualification(
+        name="volatile",
+        type_expression="std::add_volatile_t<{0}>",
+        supported_request_strategies=frozenset({"stable"}),
+    ),
+    DependencyCompositionRequestQualification(
+        name="const_volatile",
+        type_expression="std::add_cv_t<{0}>",
+        supported_request_strategies=frozenset({"stable"}),
+    ),
+)
+
+
 _STABLE_REQUEST = frozenset({"stable"})
 _ALL_REQUEST_STRATEGIES = frozenset(
     strategy.name for strategy in DEPENDENCY_COMPOSITION_REQUEST_STRATEGIES
@@ -57,7 +84,11 @@ DEPENDENCY_COMPOSITION_OPERATORS = (
         movability="always",
         request_expression="{0}",
         supported_request_strategies=_STABLE_REQUEST,
+        supported_request_qualifications=frozenset({"unqualified"}),
         unsupported_request_disposition=(
+            LimitationDisposition.INTENTIONAL_CONSTRAINT
+        ),
+        unsupported_request_qualification_disposition=(
             LimitationDisposition.INTENTIONAL_CONSTRAINT
         ),
     ),
@@ -69,7 +100,11 @@ DEPENDENCY_COMPOSITION_OPERATORS = (
         movability="always",
         request_expression="{0}",
         supported_request_strategies=_STABLE_REQUEST,
+        supported_request_qualifications=frozenset({"unqualified"}),
         unsupported_request_disposition=(
+            LimitationDisposition.INTENTIONAL_CONSTRAINT
+        ),
+        unsupported_request_qualification_disposition=(
             LimitationDisposition.INTENTIONAL_CONSTRAINT
         ),
     ),
@@ -83,6 +118,16 @@ DEPENDENCY_COMPOSITION_OPERATORS = (
         supported_request_strategies=_ALL_REQUEST_STRATEGIES,
     ),
     DependencyCompositionOperator(
+        name="shared_const_pointer",
+        arity=1,
+        type_expression="std::shared_ptr<std::add_const_t<{0}>>",
+        copyability="always",
+        movability="always",
+        request_expression="{0} &",
+        supported_request_strategies=_ALL_REQUEST_STRATEGIES,
+        recursive=False,
+    ),
+    DependencyCompositionOperator(
         name="unique_pointer",
         arity=1,
         type_expression="std::unique_ptr<{0}>",
@@ -90,6 +135,16 @@ DEPENDENCY_COMPOSITION_OPERATORS = (
         movability="always",
         request_expression="{0} &",
         supported_request_strategies=_ALL_REQUEST_STRATEGIES,
+    ),
+    DependencyCompositionOperator(
+        name="unique_const_pointer",
+        arity=1,
+        type_expression="std::unique_ptr<std::add_const_t<{0}>>",
+        copyability="never",
+        movability="always",
+        request_expression="{0} &",
+        supported_request_strategies=_ALL_REQUEST_STRATEGIES,
+        recursive=False,
     ),
     DependencyCompositionOperator(
         name="optional",
@@ -274,13 +329,19 @@ def _build_dependency_compositions(
     leaves: tuple[DependencyComposition, ...],
     max_depth: int,
 ) -> tuple[DependencyComposition, ...]:
+    recursive_operators = tuple(
+        operator for operator in operators if operator.recursive
+    )
+    representative_operators = tuple(
+        operator for operator in operators if not operator.recursive
+    )
     levels = [leaves]
     all_nodes = list(leaves)
     result: list[DependencyComposition] = []
     for _ in range(max_depth):
         previous_level = levels[-1]
         level: list[DependencyComposition] = []
-        for operator in operators:
+        for operator in recursive_operators:
             operand_sets = (
                 ((operand,) for operand in previous_level)
                 if operator.arity == 1
@@ -321,6 +382,28 @@ def _build_dependency_compositions(
         levels.append(tuple(level))
         all_nodes.extend(level)
         result.extend(level)
+    result.extend(
+        DependencyComposition(
+            name=f"{operator.name}_{leaf.name}",
+            operator=operator,
+            operands=(leaf,),
+            copyable=_composition_property(
+                operator.copyability,
+                (leaf.copyable,),
+            ),
+            movable=_composition_property(
+                operator.movability,
+                (leaf.movable,),
+            ),
+            constructor_detection_limitations=_composition_limitations(
+                f"{operator.name}_{leaf.name}",
+                operator,
+                (leaf,),
+            ),
+        )
+        for operator in representative_operators
+        for leaf in leaves
+    )
     return tuple(result)
 
 
@@ -358,6 +441,7 @@ def render_dependency_composition(composition: DependencyComposition) -> str:
 def render_dependency_composition_request(
     composition: DependencyComposition,
     strategy: DependencyCompositionRequestStrategy | None = None,
+    qualification: DependencyCompositionRequestQualification | None = None,
 ) -> str:
     if composition.operator is None:
         raise ValueError(
@@ -368,9 +452,13 @@ def render_dependency_composition_request(
         if strategy is None or strategy.uses_operator_expression
         else strategy.type_expression
     )
-    return expression.format(
-        render_dependency_composition(composition)
+    type_name = render_dependency_composition(composition)
+    qualified_type = (
+        type_name
+        if qualification is None
+        else qualification.type_expression.format(type_name)
     )
+    return expression.format(qualified_type)
 
 
 def validate_dependency_compositions(
@@ -402,6 +490,22 @@ def validate_dependency_compositions(
         strategy.name: strategy
         for strategy in DEPENDENCY_COMPOSITION_REQUEST_STRATEGIES
     }
+    request_qualification_names = {
+        qualification.name
+        for qualification in DEPENDENCY_COMPOSITION_REQUEST_QUALIFICATIONS
+    }
+    if len(request_qualification_names) != len(
+        DEPENDENCY_COMPOSITION_REQUEST_QUALIFICATIONS
+    ) or any(
+        not qualification.type_expression
+        or not qualification.supported_request_strategies
+        or not qualification.supported_request_strategies
+        <= request_strategy_names
+        for qualification in DEPENDENCY_COMPOSITION_REQUEST_QUALIFICATIONS
+    ):
+        raise ValueError(
+            "dependency composition request qualifications are invalid"
+        )
     if len(request_strategy_names) != len(
         DEPENDENCY_COMPOSITION_REQUEST_STRATEGIES
     ):
@@ -412,10 +516,11 @@ def validate_dependency_compositions(
         if (
             operator.copyability not in property_rules
             or operator.movability not in property_rules
+            or (not operator.recursive and operator.arity != 1)
         ):
             raise ValueError(
                 f"dependency composition operator {operator.name} has an "
-                "unknown copy/move rule"
+                "invalid structural rule"
             )
         if (
             not operator.supported_request_strategies
@@ -441,6 +546,28 @@ def validate_dependency_compositions(
             raise ValueError(
                 f"dependency composition operator {operator.name} has an "
                 "incomplete unsupported request disposition"
+            )
+        has_unsupported_qualifications = (
+            bool(operator.supported_request_qualifications)
+            and operator.supported_request_qualifications
+            != request_qualification_names
+        )
+        if (
+            operator.supported_request_qualifications
+            and not operator.supported_request_qualifications
+            <= request_qualification_names
+        ) or has_unsupported_qualifications != (
+            operator.unsupported_request_qualification_disposition is not None
+        ) or (
+            operator.unsupported_request_qualification_disposition is not None
+            and not isinstance(
+                operator.unsupported_request_qualification_disposition,
+                LimitationDisposition,
+            )
+        ):
+            raise ValueError(
+                f"dependency composition operator {operator.name} has an "
+                "incomplete unsupported request qualification disposition"
             )
         limitation_keys = [
             (
@@ -521,10 +648,19 @@ def validate_dependency_compositions(
         render_dependency_composition(composition)
         render_dependency_composition_request(composition)
         for strategy_name in composition.operator.supported_request_strategies:
-            render_dependency_composition_request(
-                composition,
-                request_strategies_by_name[strategy_name],
-            )
+            for qualification in (
+                DEPENDENCY_COMPOSITION_REQUEST_QUALIFICATIONS
+            ):
+                if (
+                    strategy_name
+                    not in qualification.supported_request_strategies
+                ):
+                    continue
+                render_dependency_composition_request(
+                    composition,
+                    request_strategies_by_name[strategy_name],
+                    qualification,
+                )
 
     unused_operators = sorted(operators_by_name.keys() - used_operators)
     unused_leaves = sorted(leaves_by_name.keys() - used_leaves)

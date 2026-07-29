@@ -91,7 +91,7 @@ struct unique_reference_value {
 };
 
 struct shared_from_unique_reference {
-  explicit shared_from_unique_reference(unique_reference_value &unique)
+  explicit shared_from_unique_reference(const unique_reference_value &unique)
       : token(unique.token) {}
 
   std::weak_ptr<int> token;
@@ -112,7 +112,7 @@ struct unique_reference_exception_value {
 
 struct shared_unique_reference_exception_value {
   explicit shared_unique_reference_exception_value(
-      unique_reference_exception_value &) {
+      const unique_reference_exception_value &) {
     throw std::runtime_error("shared unique reference failure");
   }
 };

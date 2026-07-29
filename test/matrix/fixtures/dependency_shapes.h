@@ -75,10 +75,11 @@ struct dependency_composition_factory<Type *, OwnPointer> {
 template <typename Type, bool OwnPointer>
 struct dependency_composition_factory<std::shared_ptr<Type>, OwnPointer> {
   static std::shared_ptr<Type> make() {
-    if constexpr (std::is_move_constructible_v<Type>) {
+    using unqualified_type = std::remove_cv_t<Type>;
+    if constexpr (std::is_move_constructible_v<unqualified_type>) {
       auto value = dependency_composition_factory<Type>::make();
       return std::make_shared<Type>(std::move(value));
-    } else if constexpr (std::is_copy_constructible_v<Type>) {
+    } else if constexpr (std::is_copy_constructible_v<unqualified_type>) {
       auto value = dependency_composition_factory<Type>::make();
       return std::make_shared<Type>(value);
     } else if constexpr (std::is_constructible_v<Type, std::in_place_t>) {
@@ -92,10 +93,11 @@ struct dependency_composition_factory<std::shared_ptr<Type>, OwnPointer> {
 template <typename Type, bool OwnPointer>
 struct dependency_composition_factory<std::unique_ptr<Type>, OwnPointer> {
   static std::unique_ptr<Type> make() {
-    if constexpr (std::is_move_constructible_v<Type>) {
+    using unqualified_type = std::remove_cv_t<Type>;
+    if constexpr (std::is_move_constructible_v<unqualified_type>) {
       auto value = dependency_composition_factory<Type>::make();
       return std::make_unique<Type>(std::move(value));
-    } else if constexpr (std::is_copy_constructible_v<Type>) {
+    } else if constexpr (std::is_copy_constructible_v<unqualified_type>) {
       auto value = dependency_composition_factory<Type>::make();
       return std::make_unique<Type>(value);
     } else if constexpr (std::is_constructible_v<Type, std::in_place_t>) {

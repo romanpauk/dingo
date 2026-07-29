@@ -140,8 +140,18 @@ template <class T, class U> struct rebind_leaf_base<exact_lookup<T>, U, void> {
 template <class T, class U>
 struct rebind_leaf_base<
     T, U, std::enable_if_t<type_traits<T>::enabled && !std::is_pointer_v<T>>> {
-  using type = typename type_traits<T>::template rebind_t<
-      typename rebind_leaf_type<typename type_traits<T>::value_type, U>::type>;
+private:
+  using value_type = typename type_traits<T>::value_type;
+  using rebound =
+      typename rebind_leaf_type<std::remove_cv_t<value_type>, U>::type;
+  using const_rebound = std::conditional_t<std::is_const_v<value_type>,
+                                           std::add_const_t<rebound>, rebound>;
+  using qualified_rebound =
+      std::conditional_t<std::is_volatile_v<value_type>,
+                         std::add_volatile_t<const_rebound>, const_rebound>;
+
+public:
+  using type = typename type_traits<T>::template rebind_t<qualified_rebound>;
 };
 
 template <typename T, size_t N, class U>

@@ -127,11 +127,7 @@ private:
 
   template <typename T>
   static constexpr bool runtime_auto_constructible_v =
-      std::is_same_v<typename request_type<T>::value_type, std::decay_t<T>> &&
-      (!std::is_reference_v<T> ||
-       (std::is_lvalue_reference_v<T> &&
-        std::is_const_v<std::remove_reference_t<T>> &&
-        is_auto_constructible<std::decay_t<T>>::value));
+      detail::is_runtime_auto_constructible_dependency_v<T>;
 
   template <typename Request, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>

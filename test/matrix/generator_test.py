@@ -28,12 +28,14 @@ from axes.constructor_detection import (
 from axes.dependency_compositions import (
     DEPENDENCY_COMPOSITION_LEAVES,
     DEPENDENCY_COMPOSITION_OPERATORS,
+    DEPENDENCY_COMPOSITION_REQUEST_QUALIFICATIONS,
     DEPENDENCY_COMPOSITION_REQUEST_STRATEGIES,
     DEPENDENCY_COMPOSITIONS,
     MAX_DEPENDENCY_COMPOSITION_DEPTH,
     compose_dependency,
     dependency_composition_depth,
     render_dependency_composition,
+    render_dependency_composition_request,
     validate_dependency_compositions,
 )
 from axes.dependency_forms import (
@@ -381,7 +383,7 @@ def test_constructor_detection_limitations_are_explicit() -> None:
         for row in rows
         if row.limitation is not None
     ) == {
-        LimitationDisposition.KNOWN_GAP: 1562,
+        LimitationDisposition.KNOWN_GAP: 1578,
         LimitationDisposition.COMPILER_LIMITATION: 306,
     }
     shape_limited_compositions = {
@@ -448,13 +450,23 @@ def test_dependency_compositions_are_bounded_and_rendered_structurally() -> None
         "const_pointer",
         "optional",
         "pointer",
+        "shared_const_pointer",
         "shared_pointer",
+        "unique_const_pointer",
         "unique_pointer",
         "variant",
     }
     assert {
-        operator.name for operator in DEPENDENCY_COMPOSITION_OPERATORS
+        operator.name
+        for operator in DEPENDENCY_COMPOSITION_OPERATORS
+        if operator.name
+        not in {"shared_const_pointer", "unique_const_pointer"}
     } == {shape.name for shape in DEPENDENCY_SHAPES} - {"identity"}
+    assert {
+        operator.name
+        for operator in DEPENDENCY_COMPOSITION_OPERATORS
+        if not operator.recursive
+    } == {"shared_const_pointer", "unique_const_pointer"}
     assert {
         leaf.name: (leaf.copyable, leaf.movable)
         for leaf in DEPENDENCY_COMPOSITION_LEAVES
@@ -468,11 +480,11 @@ def test_dependency_compositions_are_bounded_and_rendered_structurally() -> None
         composition.name: render_dependency_composition(composition)
         for composition in DEPENDENCY_COMPOSITIONS
     }
-    assert len(rendered) == 765
+    assert len(rendered) == 773
     assert Counter(
         dependency_composition_depth(composition)
         for composition in DEPENDENCY_COMPOSITIONS
-    ) == {1: 30, 2: 735}
+    ) == {1: 38, 2: 735}
     limited = {
         composition.name: composition.constructor_detection_limitations
         for composition in DEPENDENCY_COMPOSITIONS
@@ -533,6 +545,8 @@ def test_dependency_compositions_are_bounded_and_rendered_structurally() -> None
             "optional_unique_pointer",
             "variant_move_copy_only",
             "variant_shared_unique_pointers",
+            "shared_const_pointer_regular",
+            "unique_const_pointer_regular",
         }
     } == {
         "nested_optional_shared_pointer": (
@@ -555,7 +569,39 @@ def test_dependency_compositions_are_bounded_and_rendered_structurally() -> None
             "std::variant<std::shared_ptr<dependency_regular>, "
             "std::unique_ptr<dependency_regular>>"
         ),
+        "shared_const_pointer_regular": (
+            "std::shared_ptr<std::add_const_t<dependency_regular>>"
+        ),
+        "unique_const_pointer_regular": (
+            "std::unique_ptr<std::add_const_t<dependency_regular>>"
+        ),
     }
+
+
+def test_dependency_composition_qualification_applies_to_outer_wrapper() -> None:
+    compositions = {
+        composition.name: composition
+        for composition in DEPENDENCY_COMPOSITIONS
+    }
+    strategies = {
+        strategy.name: strategy
+        for strategy in DEPENDENCY_COMPOSITION_REQUEST_STRATEGIES
+    }
+    qualifications = {
+        qualification.name: qualification
+        for qualification in DEPENDENCY_COMPOSITION_REQUEST_QUALIFICATIONS
+    }
+
+    assert render_dependency_composition_request(
+        compositions["pointer_regular"],
+        strategies["stable"],
+        qualifications["const"],
+    ) == "std::add_const_t<dependency_regular *>"
+    assert render_dependency_composition_request(
+        compositions["optional_regular"],
+        strategies["stable"],
+        qualifications["const_volatile"],
+    ) == "std::add_cv_t<std::optional<dependency_regular>> &"
 
 
 def test_constructor_detection_consumes_every_dependency_composition() -> None:
@@ -591,7 +637,9 @@ def test_dependency_composition_resolution_constraints_are_declarative(
     assert not limitation_positions["pointer"]
     assert not limitation_positions["const_pointer"]
     assert not limitation_positions["shared_pointer"]
+    assert not limitation_positions["shared_const_pointer"]
     assert not limitation_positions["unique_pointer"]
+    assert not limitation_positions["unique_const_pointer"]
     assert not limitation_positions["array"]
     assert not limitation_positions["optional"]
     assert not limitations["variant"]
@@ -606,6 +654,21 @@ def test_dependency_composition_resolution_constraints_are_declarative(
         is LimitationDisposition.INTENTIONAL_CONSTRAINT
         for operator in DEPENDENCY_COMPOSITION_OPERATORS
         if operator.supported_request_strategies != {"stable", "value", "rvalue"}
+    )
+    qualification_constraints = {
+        operator.name: operator.supported_request_qualifications
+        for operator in DEPENDENCY_COMPOSITION_OPERATORS
+        if operator.supported_request_qualifications
+    }
+    assert qualification_constraints == {
+        "pointer": frozenset({"unqualified"}),
+        "const_pointer": frozenset({"unqualified"}),
+    }
+    assert all(
+        operator.unsupported_request_qualification_disposition
+        is LimitationDisposition.INTENTIONAL_CONSTRAINT
+        for operator in DEPENDENCY_COMPOSITION_OPERATORS
+        if operator.supported_request_qualifications
     )
 
     scope_rules = {
@@ -699,6 +762,20 @@ def test_dependency_compositions_reject_unclassified_limitations() -> None:
             )
         )
 
+    with pytest.raises(
+        ValueError,
+        match="incomplete unsupported request qualification disposition",
+    ):
+        validate_dependency_compositions(
+            operators=(
+                replace(
+                    pointer,
+                    unsupported_request_qualification_disposition=None,
+                ),
+                *DEPENDENCY_COMPOSITION_OPERATORS[1:],
+            )
+        )
+
     shared_rule = DEPENDENCY_COMPOSITION_SCOPE_RULES[0]
     with pytest.raises(
         ValueError,
@@ -769,11 +846,18 @@ def test_resolution_and_invoke_consume_every_dependency_composition(
         * len(DEPENDENCY_COMPOSITION_OPERATIONS)
         * len(DEPENDENCY_COMPOSITION_CONTAINERS)
         * sum(
-            len(rule.request_strategies)
+            sum(
+                request_strategy
+                in qualification.supported_request_strategies
+                for request_strategy in rule.request_strategies
+                for qualification in (
+                    DEPENDENCY_COMPOSITION_REQUEST_QUALIFICATIONS
+                )
+            )
             for rule in DEPENDENCY_COMPOSITION_SCOPE_RULES
         )
     )
-    assert len(composition_rows) == 30600
+    assert len(composition_rows) == 77300
     assert len(
         {
             (
@@ -781,6 +865,7 @@ def test_resolution_and_invoke_consume_every_dependency_composition(
                 row.container.name,
                 row.scope.name,
                 row.request_strategy.name,
+                row.request_qualification.name,
                 row.composition.name,
             )
             for row in composition_rows
@@ -795,20 +880,30 @@ def test_resolution_and_invoke_consume_every_dependency_composition(
                 for request_strategy in scope_rules[
                     scope.name
                 ].request_strategies:
-                    projected = {
-                        row.composition.name: row.type_name
-                        for row in composition_rows
-                        if row.operation == operation
-                        and row.container == container
-                        and row.scope == scope
-                        and row.request_strategy.name == request_strategy
-                    }
-                    assert projected == {
-                        composition.name: render_dependency_composition(
-                            composition
-                        )
-                        for composition in DEPENDENCY_COMPOSITIONS
-                    }
+                    for request_qualification in (
+                        DEPENDENCY_COMPOSITION_REQUEST_QUALIFICATIONS
+                    ):
+                        if (
+                            request_strategy
+                            not in request_qualification.supported_request_strategies
+                        ):
+                            continue
+                        projected = {
+                            row.composition.name: row.type_name
+                            for row in composition_rows
+                            if row.operation == operation
+                            and row.container == container
+                            and row.scope == scope
+                            and row.request_strategy.name == request_strategy
+                            and row.request_qualification
+                            == request_qualification
+                        }
+                        assert projected == {
+                            composition.name: render_dependency_composition(
+                                composition
+                            )
+                            for composition in DEPENDENCY_COMPOSITIONS
+                        }
 
 
 def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
@@ -823,10 +918,10 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
     assert Counter(
         (row.operation.name, row.supported) for row in composition_rows
     ) == {
-        ("resolve", True): 8140,
-        ("resolve", False): 7160,
-        ("invoke", True): 8140,
-        ("invoke", False): 7160,
+        ("resolve", True): 20254,
+        ("resolve", False): 18396,
+        ("invoke", True): 20254,
+        ("invoke", False): 18396,
     }
     assert Counter(
         row.unsupported_reason
@@ -836,7 +931,7 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
         (
             "shared storage cannot materialize a composition that is not "
             "movable"
-        ): 3300,
+        ): 13200,
         "pointer compositions do not support rvalue requests": 340,
         "const_pointer compositions do not support rvalue requests": 340,
         (
@@ -848,7 +943,11 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
         (
             "external storage requires runtime registration and cannot be "
             "provided by a static-only container"
-        ): 3060,
+        ): 12368,
+        (
+            "top-level cv-qualification on raw pointer values is discarded "
+            "by C++ function boundaries"
+        ): 3264,
     }
 
     classifications = {
@@ -856,6 +955,7 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
             row.container.name,
             row.scope.name,
             row.request_strategy.name,
+            row.request_qualification.name,
             row.composition.name,
         ): (
             row.supported,
@@ -870,6 +970,7 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
             row.container.name,
             row.scope.name,
             row.request_strategy.name,
+            row.request_qualification.name,
             row.composition.name,
         ): (
             row.supported,
@@ -886,6 +987,7 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
                 row.container.name,
                 row.scope.name,
                 row.request_strategy.name,
+                row.request_qualification.name,
             )
             for row in composition_rows
             if row.operation.name == "resolve"
@@ -904,21 +1006,29 @@ def test_dependency_composition_limitations_are_explicit_and_operation_neutral(
         }
     }
     stable_cells = {
-        (container.name, "shared", "stable")
+        (container.name, "shared", "stable", qualification.name)
         for container in DEPENDENCY_COMPOSITION_CONTAINERS
+        for qualification in DEPENDENCY_COMPOSITION_REQUEST_QUALIFICATIONS
     }
     external_cells = {
-        (container, "external", "stable")
+        (container, "external", "stable", qualification.name)
         for container in {
             "container_mixed",
             "container_runtime",
             "runtime_container",
         }
+        for qualification in DEPENDENCY_COMPOSITION_REQUEST_QUALIFICATIONS
     }
     unique_cells = {
-        (container.name, "unique", request_strategy)
+        (
+            container.name,
+            "unique",
+            request_strategy,
+            qualification.name,
+        )
         for container in DEPENDENCY_COMPOSITION_CONTAINERS
         for request_strategy in {"value", "rvalue"}
+        for qualification in DEPENDENCY_COMPOSITION_REQUEST_QUALIFICATIONS[:1]
     }
     stable_cells |= external_cells
     all_cells = stable_cells | unique_cells
@@ -943,7 +1053,7 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
         coverage.overall.supported,
         coverage.overall.functionality_gaps,
         coverage.overall.intentional_constraints,
-    ) == (16280, 0, 14320)
+    ) == (40508, 0, 36792)
     assert {
         axis.name: {
             cell.name: (
@@ -956,54 +1066,62 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
         for axis in coverage.axes
     } == {
         "operation": {
-            "invoke": (8140, 0, 7160),
-            "resolve": (8140, 0, 7160),
+            "invoke": (20254, 0, 18396),
+            "resolve": (20254, 0, 18396),
         },
         "operator": {
-            "array": (894, 0, 466),
-            "const_pointer": (544, 0, 816),
-            "optional": (894, 0, 466),
-            "pointer": (544, 0, 816),
-            "shared_pointer": (1224, 0, 136),
-            "unique_pointer": (1224, 0, 136),
-            "variant": (10956, 0, 11484),
+            "array": (2196, 0, 1204),
+            "const_pointer": (544, 0, 2856),
+            "optional": (2196, 0, 1204),
+            "pointer": (544, 0, 2856),
+            "shared_const_pointer": (336, 0, 64),
+            "shared_pointer": (2856, 0, 544),
+            "unique_const_pointer": (336, 0, 64),
+            "unique_pointer": (2856, 0, 544),
+            "variant": (28644, 0, 27456),
         },
         "container": {
-            "container_mixed": (3868, 0, 2252),
-            "container_runtime": (3868, 0, 2252),
-            "container_static": (2338, 0, 3782),
-            "runtime_container": (3868, 0, 2252),
-            "static_container": (2338, 0, 3782),
+            "container_mixed": (10412, 0, 5048),
+            "container_runtime": (10412, 0, 5048),
+            "container_static": (4636, 0, 10824),
+            "runtime_container": (10412, 0, 5048),
+            "static_container": (4636, 0, 10824),
         },
         "scope": {
-            "external": (4590, 0, 3060),
-            "shared": (4350, 0, 3300),
-            "unique": (7340, 0, 7960),
+            "external": (17328, 0, 13592),
+            "shared": (15680, 0, 15240),
+            "unique": (7500, 0, 7960),
         },
         "request strategy": {
-            "rvalue": (3670, 0, 3980),
-            "stable": (8940, 0, 6360),
-            "value": (3670, 0, 3980),
+            "rvalue": (3750, 0, 3980),
+            "stable": (33008, 0, 28832),
+            "value": (3750, 0, 3980),
+        },
+        "request qualification": {
+            "const": (7980, 0, 7480),
+            "const_volatile": (7980, 0, 7480),
+            "unqualified": (16568, 0, 14352),
+            "volatile": (7980, 0, 7480),
         },
         "copyability": {
-            "copyable": (7616, 0, 4824),
-            "non_copyable": (8664, 0, 9496),
+            "copyable": (17396, 0, 14104),
+            "non_copyable": (23112, 0, 22688),
         },
         "movability": {
-            "movable": (14300, 0, 3100),
-            "non_movable": (1980, 0, 11220),
+            "movable": (32588, 0, 11712),
+            "non_movable": (7920, 0, 25080),
         },
         "depth": {
-            "1": (650, 0, 550),
-            "2": (15630, 0, 13770),
+            "1": (2108, 0, 1692),
+            "2": (38400, 0, 35100),
         },
     }
     for axis in coverage.axes:
-        assert sum(cell.count.supported for cell in axis.cells) == 16280
+        assert sum(cell.count.supported for cell in axis.cells) == 40508
         assert sum(cell.count.functionality_gaps for cell in axis.cells) == 0
         assert sum(
             cell.count.intentional_constraints for cell in axis.cells
-        ) == 14320
+        ) == 36792
     assert {
         disposition: sum(
             count
@@ -1014,13 +1132,13 @@ def test_dependency_composition_coverage_aggregates_every_shared_axis(
         for disposition in LimitationDisposition
     } == {
         LimitationDisposition.KNOWN_GAP: 0,
-        LimitationDisposition.INTENTIONAL_CONSTRAINT: 14320,
+        LimitationDisposition.INTENTIONAL_CONSTRAINT: 36792,
         LimitationDisposition.COMPILER_LIMITATION: 0,
     }
 
     report = render_dependency_composition_coverage(coverage)
-    assert "| 16280 | 0 | 14320 |" in report
-    assert "| `variant` | 10956 | 0 | 11484 |" in report
+    assert "| 40508 | 0 | 36792 |" in report
+    assert "| `variant` | 28644 | 0 | 27456 |" in report
     assert "## Functionality Gaps" not in report
     assert "## Intentional Constraints" in report
 
@@ -1038,17 +1156,17 @@ def test_matrix_report_includes_every_limitation_family(
         generate_constructor_argument_conversion_rows(),
         shared_cyclical_rows,
         profile="full",
-        compiled_composition_rows=1528,
+        compiled_composition_rows=1600,
         compiler=compiler,
         omitted_composition_cases=omitted_composition_cases,
     )
 
     assert "# Matrix Coverage" in report
-    assert "| Constructor detection | 1562 | 0 | 306 |" in report
+    assert "| Constructor detection | 1578 | 0 | 306 |" in report
     assert "| Constructor argument conversion | 0 | 0 | 2 |" in report
     assert "| Shared cyclical | 0 | 655 | 0 |" in report
     assert "| Omitted compiler cases | 0 | 0 | 2 |" in report
-    assert "| Coverage limits | 4 | 0 | 2 |" in report
+    assert "| Coverage limits | 3 | 0 | 2 |" in report
     assert (
         "| `msvc-before-19.50-array-unique-pointer-copy-only` | "
         "MSVC < 19.50 | yes | 2 | 2 |"
@@ -1135,6 +1253,18 @@ def _composition_projection_environment(
     )
 
 
+def _composition_projection_qualification_structure(
+    row: DependencyCompositionRow,
+) -> tuple[object, ...]:
+    assert row.composition.operator is not None
+    return (
+        row.operation.name,
+        row.request_qualification.name,
+        row.composition.operator.name,
+        dependency_composition_depth(row.composition),
+    )
+
+
 def _composition_projection_mobility_scope(
     row: DependencyCompositionRow,
 ) -> tuple[object, ...]:
@@ -1148,7 +1278,7 @@ def _composition_projection_mobility_scope(
 
 
 @pytest.mark.parametrize(
-    ("profile", "expected_count"), (("full", 1530), ("portable", 388))
+    ("profile", "expected_count"), (("full", 1602), ("portable", 458))
 )
 def test_dependency_composition_projection_covers_its_execution_contract(
     composition_rows: tuple[DependencyCompositionRow, ...],
@@ -1174,6 +1304,13 @@ def test_dependency_composition_projection_covers_its_execution_contract(
         _composition_projection_mobility_scope(row) for row in projected
     } == {
         _composition_projection_mobility_scope(row) for row in supported_rows
+    }
+    assert {
+        _composition_projection_qualification_structure(row)
+        for row in projected
+    } == {
+        _composition_projection_qualification_structure(row)
+        for row in supported_rows
     }
     if profile == "full":
         assert {
@@ -1310,7 +1447,7 @@ def test_dependency_composition_selected_executables_are_isolated_by_case(
             for source in executable.sources
             if not source.name.startswith("matrix_runner_")
         )
-        assert len(implementation_sources) == 191
+        assert len(implementation_sources) == 200
         assert executable.isolated_sources == implementation_sources
         assert all(
             source.read_text(encoding="utf-8").count("\nstruct ") == 1
@@ -1330,7 +1467,7 @@ def test_dependency_composition_selected_executables_are_isolated_by_case(
         assert len(runner_sources) == 1
         assert runner_sources[0].read_text(encoding="utf-8").count(
             "\nTEST("
-        ) == 191
+        ) == 200
     assert all(
         not executable.isolated_sources
         for executable in executables
@@ -1388,7 +1525,7 @@ def test_dependency_composition_disabled_projected_cases_are_omitted(
         for executable in executables
         for source in executable.sources
         if source.name.startswith("matrix_runner_")
-    ) == 1528
+    ) == 1600
 
 
 def test_dependency_composition_rejects_unmatched_disabled_projected_cases() -> None:
@@ -2446,31 +2583,31 @@ def test_invalid_registration_plan_is_an_error(
         "expected_compiled_rows",
     ),
     (
-        (None, frozenset(), Compiler(), 115, 0, 1530),
+        (None, frozenset(), Compiler(), 115, 0, 1602),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
             Compiler(),
-            235,
+            243,
             0,
-            1530,
+            1602,
         ),
-        (64, frozenset(), Compiler(), 131, 0, 1530),
+        (64, frozenset(), Compiler(), 139, 0, 1602),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset({("invoke", 4), ("resolve", 4)}),
             Compiler(),
-            585,
-            382,
-            1530,
+            609,
+            400,
+            1602,
         ),
         (
             DEPENDENCY_COMPOSITION_IMPLEMENTATION_CASE_LIMIT,
             frozenset(),
             Compiler.parse("MSVC", "19.49", "x64"),
-            235,
+            243,
             0,
-            1530,
+            1602,
         ),
     ),
 )
@@ -2587,8 +2724,15 @@ def test_generation_removes_stale_outputs_and_preserves_unchanged_files(
         elif dependency_composition_case_limit is None:
             expected_source_count = 2
         else:
+            projected_case_count = sum(
+                source.read_text(encoding="utf-8").count("\nTEST(")
+                for source in out_dir.glob(
+                    "matrix_runner_dependency_composition_"
+                    f"{operation}_4_*.cpp"
+                )
+            )
             expected_source_count = (
-                191 + dependency_composition_case_limit - 1
+                projected_case_count + dependency_composition_case_limit - 1
             ) // dependency_composition_case_limit + 1
         assert sources_block.count('.cpp"') == expected_source_count
     timestamps = {

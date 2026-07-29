@@ -226,13 +226,29 @@ template <typename Container, typename Request, typename LookupKey>
 inline constexpr bool has_key_value_lookup_definition_v =
     has_key_value_lookup_definition<Container, Request, LookupKey>::value;
 
+// Keep constructibility queries in the non-reference specialization. MSVC
+// otherwise evaluates its constructibility intrinsics for incomplete reference
+// targets while instantiating the dispatch trait.
+template <typename T,
+          bool IsNormalized = std::is_same_v<
+              typename request_type<T>::value_type, std::decay_t<T>>,
+          bool IsReference = std::is_reference_v<T>>
+struct is_runtime_auto_constructible_dependency : std::false_type {};
+
+template <typename T>
+struct is_runtime_auto_constructible_dependency<T, true, false>
+    : std::bool_constant<std::is_move_constructible_v<std::decay_t<T>> ||
+                         std::is_copy_constructible_v<std::decay_t<T>>> {};
+
+template <typename T>
+struct is_runtime_auto_constructible_dependency<T, true, true>
+    : std::bool_constant<std::is_lvalue_reference_v<T> &&
+                         std::is_const_v<std::remove_reference_t<T>> &&
+                         is_auto_constructible<std::decay_t<T>>::value> {};
+
 template <typename T>
 inline constexpr bool is_runtime_auto_constructible_dependency_v =
-    std::is_same_v<typename request_type<T>::value_type, std::decay_t<T>> &&
-    (!std::is_reference_v<T> ||
-     (std::is_lvalue_reference_v<T> &&
-      std::is_const_v<std::remove_reference_t<T>> &&
-      is_auto_constructible<std::decay_t<T>>::value));
+    is_runtime_auto_constructible_dependency<T>::value;
 
 template <typename T, typename = void>
 struct has_static_registry_type : std::false_type {};

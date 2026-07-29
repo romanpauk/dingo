@@ -295,6 +295,21 @@ template <typename Type> int dependency_marker(Type &&dependency) {
   return dependency_marker_value<dependency_type>::get(dependency);
 }
 
+template <typename Request, typename Dependency>
+int composition_dependency_marker(Dependency &&dependency) {
+  using request_type = std::remove_reference_t<Request>;
+  using value_type = std::remove_cv_t<request_type>;
+  if constexpr (std::is_volatile_v<request_type> &&
+                std::is_reference_v<Request> &&
+                !std::is_pointer_v<value_type>) {
+    using observable_type = std::remove_volatile_t<request_type>;
+    return dependency_marker(
+        const_cast<observable_type &>(dependency)); // NOLINT
+  } else {
+    return dependency_marker(std::forward<Dependency>(dependency));
+  }
+}
+
 template <typename Request, typename Value = Request> struct dependency_invoke {
   template <typename Container> static void check(Container &container) {
     auto invoked = container.invoke([](Request dependency) {
@@ -340,15 +355,16 @@ struct composition_resolve : composition_uses_factory<FactoryType> {
         std::is_same_v<
             std::remove_cv_t<std::remove_reference_t<decltype(dependency)>>,
             std::remove_cv_t<std::remove_reference_t<Type>>>);
-    ASSERT_EQ(dependency_marker(dependency), 3);
+    ASSERT_EQ(composition_dependency_marker<Request>(dependency), 3);
   }
 };
 
 template <typename Type, typename Request, typename FactoryType>
 struct composition_invoke : composition_uses_factory<FactoryType> {
   template <typename Container> static void check(Container &container) {
-    auto invoked = container.invoke(
-        [](Request dependency) { return dependency_marker(dependency); });
+    auto invoked = container.invoke([](Request dependency) {
+      return composition_dependency_marker<Request>(dependency);
+    });
     ASSERT_EQ(invoked, 3);
   }
 };
