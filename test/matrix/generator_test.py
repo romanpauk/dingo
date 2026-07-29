@@ -368,6 +368,7 @@ def test_constructor_detection_limitations_are_explicit() -> None:
             (backend.name, "shape", shape)
             for backend in CONSTRUCTOR_DETECTION_BACKENDS
             for shape in {
+                "dependency_optional",
                 "mixed_wrappers",
                 "nested_forwarding_wrapper",
             }
@@ -380,8 +381,8 @@ def test_constructor_detection_limitations_are_explicit() -> None:
         for row in rows
         if row.limitation is not None
     ) == {
-        LimitationDisposition.KNOWN_GAP: 852,
-        LimitationDisposition.COMPILER_LIMITATION: 4,
+        LimitationDisposition.KNOWN_GAP: 868,
+        LimitationDisposition.COMPILER_LIMITATION: 170,
     }
     shape_limited_compositions = {
         composition.name
@@ -396,6 +397,7 @@ def test_constructor_detection_limitations_are_explicit() -> None:
         for row in rows
         if row.mode.name == "shape" and not row.supported
     } == shape_limited_compositions | {
+        "dependency_optional",
         "mixed_wrappers",
         "nested_forwarding_wrapper",
         "unconstrained_forwarding_wrapper",
@@ -416,7 +418,15 @@ def test_dependency_shapes_own_constructor_detection_limitations() -> None:
         assert capability.limitation.backend is None
         assert capability.limitation.mode == "signature"
     assert len(limitations["variant"]) == 1
-    assert len(limitations["optional"]) == 1
+    assert len(limitations["optional"]) == 2
+    optional_shape_limitation = limitations["optional"][1]
+    assert optional_shape_limitation.carriers == frozenset({"value"})
+    assert optional_shape_limitation.decorations == frozenset({"plain"})
+    assert optional_shape_limitation.limitation.backend is None
+    assert optional_shape_limitation.limitation.mode == "shape"
+    assert optional_shape_limitation.limitation.guard == (
+        "defined(__clang__) || defined(_MSC_VER)"
+    )
 
     constructor_limitations = {
         next(iter(shape.dependency_forms)): shape.constructor_detection_limitations
@@ -464,7 +474,50 @@ def test_dependency_compositions_are_bounded_and_rendered_structurally() -> None
         for composition in DEPENDENCY_COMPOSITIONS
         if composition.constructor_detection_limitations
     }
-    assert limited == {}
+    optional_pointer_compositions = {
+        composition.name
+        for composition in DEPENDENCY_COMPOSITIONS
+        if composition.operator is not None
+        and composition.operator.name == "optional"
+        and composition.operands[0].operator is not None
+        and composition.operands[0].operator.name
+        in {"pointer", "const_pointer"}
+    }
+    assert len(optional_pointer_compositions) == 6
+    unconditional_shape_limitations = optional_pointer_compositions | {
+        "optional_array_copy_only",
+        "optional_variant_regular_copy_only",
+    }
+    non_gnu_ambiguous_compositions = {
+        composition.name
+        for composition in DEPENDENCY_COMPOSITIONS
+        if composition.operator is not None
+        and (
+            composition.operator.name == "optional"
+            or (
+                composition.operator.name == "variant"
+                and any(
+                    operand.operator is not None
+                    and operand.operator.name == "optional"
+                    for operand in composition.operands
+                )
+            )
+        )
+    }
+    assert len(non_gnu_ambiguous_compositions) == 90
+    assert set(limited) == non_gnu_ambiguous_compositions
+    for name, limitations in limited.items():
+        assert len(limitations) == 1
+        limitation = limitations[0]
+        assert limitation.mode == "shape"
+        if name in unconditional_shape_limitations:
+            assert limitation.backend is None
+            assert limitation.guard is None
+        else:
+            assert limitation.backend is None
+            assert limitation.guard == (
+                "defined(__clang__) || defined(_MSC_VER)"
+            )
     assert {
         name: rendered[name]
         for name in {
@@ -983,7 +1036,7 @@ def test_matrix_report_includes_every_limitation_family(
     )
 
     assert "# Matrix Coverage" in report
-    assert "| Constructor detection | 852 | 0 | 4 |" in report
+    assert "| Constructor detection | 868 | 0 | 170 |" in report
     assert "| Constructor argument conversion | 0 | 0 | 2 |" in report
     assert "| Shared cyclical | 0 | 655 | 0 |" in report
     assert "| Omitted compiler cases | 0 | 0 | 2 |" in report

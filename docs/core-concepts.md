@@ -429,9 +429,7 @@ Constructor deduction is intentionally useful, not magical. The main limits are:
 - reference-style wrapper values only participate in the reference-based
   deduction path when the wrapper opts in through
   `type_traits<T>::is_reference_resolvable`
-- constructor arity is bounded by `DINGO_CONSTRUCTOR_DETECTION_ARGS`
-- nested wrapper and alternative requests are bounded by
-  `DINGO_CONSTRUCTOR_REQUEST_DEPTH`
+- detection depth is bounded by `DINGO_CONSTRUCTOR_DETECTION_ARGS`
 
 That makes constructor deduction a good default for ordinary classes and
 aggregates, but not a substitute for an explicit factory when constructor choice

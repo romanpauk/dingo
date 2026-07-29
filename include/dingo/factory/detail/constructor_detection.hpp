@@ -28,74 +28,6 @@ struct constructor_shape {};
 // Additionally recovers the concrete argument types of the selected constructor.
 struct constructor_signature {};
 
-// Converting wrappers and alternatives can both accept an inner dependency.
-// Describe the requested outer type structurally so an ambiguous regular probe
-// can disable those competing inner conversions.
-enum class constructor_request_kind { value, wrapper, alternative };
-
-template <constructor_request_kind Kind, size_t Depth>
-struct constructor_request {};
-
-template <size_t... Values> struct constructor_request_max;
-
-template <> struct constructor_request_max<> : std::integral_constant<size_t, 0> {};
-
-template <size_t Head, size_t... Tail>
-struct constructor_request_max<Head, Tail...>
-    : std::integral_constant<
-          size_t,
-          (Head > constructor_request_max<Tail...>::value
-               ? Head
-               : constructor_request_max<Tail...>::value)> {};
-
-template <typename T> struct constructor_request_depth;
-
-template <typename List> struct alternative_request_depth;
-
-template <typename... Alternatives>
-struct alternative_request_depth<type_list<Alternatives...>>
-    : std::integral_constant<
-          size_t,
-          1 + constructor_request_max<
-                  constructor_request_depth<Alternatives>::value...>::value> {};
-
-template <typename T,
-          bool IsAlternative = is_alternative_type_v<T>,
-          bool IsWrapper = type_traits<T>::enabled>
-struct constructor_request_depth_impl : std::integral_constant<size_t, 0> {};
-
-template <typename T, bool IsWrapper>
-struct constructor_request_depth_impl<T, true, IsWrapper>
-    : alternative_request_depth<alternative_type_alternatives_t<T>> {};
-
-template <typename T>
-struct constructor_request_depth_impl<T, false, true>
-    : std::integral_constant<
-          size_t,
-          1 + constructor_request_depth<
-                  typename type_traits<T>::value_type>::value> {};
-
-template <typename T>
-struct constructor_request_depth
-    : constructor_request_depth_impl<
-          std::remove_cv_t<std::remove_reference_t<T>>> {};
-
-template <typename T>
-inline constexpr size_t constructor_request_depth_v =
-    constructor_request_depth<T>::value;
-
-template <typename T>
-inline constexpr constructor_request_kind constructor_request_kind_v = [] {
-  using type = std::remove_cv_t<std::remove_reference_t<T>>;
-  if constexpr (is_alternative_type_v<type>) {
-    return constructor_request_kind::alternative;
-  } else if constexpr (type_traits<type>::enabled) {
-    return constructor_request_kind::wrapper;
-  } else {
-    return constructor_request_kind::value;
-  }
-}();
-
 template <class DisabledType, typename DetectionMode>
 struct constructor_argument;
 template <class DisabledType, typename DetectionMode>
@@ -131,18 +63,6 @@ struct constructor_argument<DisabledType, constructor_shape> {
             typename = typename std::enable_if_t<
                 !std::is_same_v<DisabledType, std::decay_t<T>>>>
   operator detail::selected<T, Selector>() const;
-};
-
-template <class DisabledType, constructor_request_kind Kind, size_t Depth>
-struct constructor_argument<DisabledType, constructor_request<Kind, Depth>> {
-  template <
-      typename T,
-      typename = typename std::enable_if_t<
-          !std::is_same_v<DisabledType, std::decay_t<T>> &&
-          is_complete<std::decay_t<T>>::value &&
-          constructor_request_kind_v<std::decay_t<T>> == Kind &&
-          constructor_request_depth_v<std::decay_t<T>> == Depth>>
-  operator T();
 };
 
 template <class DisabledType>
@@ -208,33 +128,6 @@ public:
     using request_type = detail::selected<T, Selector>;
     return context_.template resolve<request_type>(
         detail::dependency_scope<request_type>(scope_), container_);
-  }
-
-private:
-  construction_scope scope_;
-  Context &context_;
-  Container &container_;
-};
-
-template <typename DisabledType, typename Context, typename Container,
-          constructor_request_kind Kind, size_t Depth>
-class constructor_argument_impl<DisabledType, Context, Container,
-                                constructor_request<Kind, Depth>> {
-public:
-  constructor_argument_impl(construction_scope scope, Context &context,
-                            Container &container)
-      : scope_(scope), context_(context), container_(container) {}
-
-  template <
-      typename T,
-      typename = typename std::enable_if_t<
-          !std::is_same_v<DisabledType, std::decay_t<T>> &&
-          is_complete<std::decay_t<T>>::value &&
-          constructor_request_kind_v<std::decay_t<T>> == Kind &&
-          constructor_request_depth_v<std::decay_t<T>> == Depth>>
-  operator T() {
-    return context_.template resolve<T>(detail::dependency_scope<T>(scope_),
-                                        container_);
   }
 
 private:
@@ -339,116 +232,6 @@ template <typename...> inline constexpr bool always_false_v = false;
 inline constexpr size_t invalid_arity = static_cast<size_t>(-1);
 
 template <typename T, size_t> using repeated_type = T;
-
-struct ambiguous_constructor_request {};
-
-template <typename T> struct is_constructor_request : std::false_type {};
-
-template <constructor_request_kind Kind, size_t Depth>
-struct is_constructor_request<constructor_request<Kind, Depth>>
-    : std::true_type {};
-
-template <typename T>
-inline constexpr bool is_constructor_request_v = is_constructor_request<T>::value;
-
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, template <typename...> typename IsConstructible,
-          size_t Depth>
-struct constructor_request_search;
-
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, template <typename...> typename IsConstructible,
-          size_t Depth, bool WrapperMatch, bool AlternativeMatch>
-struct constructor_request_match;
-
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, template <typename...> typename IsConstructible,
-          size_t Depth>
-struct constructor_request_match<ConstructorProbe, T, IsConstructible, Depth,
-                                 false, false>
-    : constructor_request_search<ConstructorProbe, T, IsConstructible,
-                                 Depth - 1> {};
-
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, template <typename...> typename IsConstructible,
-          size_t Depth>
-struct constructor_request_match<ConstructorProbe, T, IsConstructible, Depth,
-                                 true, false> {
-  using type = constructor_request<constructor_request_kind::wrapper, Depth>;
-};
-
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, template <typename...> typename IsConstructible,
-          size_t Depth>
-struct constructor_request_match<ConstructorProbe, T, IsConstructible, Depth,
-                                 false, true> {
-  using type = constructor_request<constructor_request_kind::alternative, Depth>;
-};
-
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, template <typename...> typename IsConstructible,
-          size_t Depth>
-struct constructor_request_match<ConstructorProbe, T, IsConstructible, Depth,
-                                 true, true> {
-  using type = ambiguous_constructor_request;
-};
-
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, template <typename...> typename IsConstructible,
-          size_t Depth>
-struct constructor_request_search
-    : constructor_request_match<
-          ConstructorProbe, T, IsConstructible, Depth,
-          ConstructorProbe<
-              T,
-              constructor_request<constructor_request_kind::wrapper, Depth>,
-              constructor_argument, IsConstructible, 1>::value,
-          ConstructorProbe<
-              T,
-              constructor_request<constructor_request_kind::alternative, Depth>,
-              constructor_argument, IsConstructible, 1>::value> {};
-
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, template <typename...> typename IsConstructible>
-struct constructor_request_search<ConstructorProbe, T, IsConstructible, 0> {
-  using type = void;
-};
-
-template <bool Search,
-          template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, template <typename...> typename IsConstructible,
-          size_t MaxDepth>
-struct constructor_request_detection {
-  using type = void;
-};
-
-template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename T, template <typename...> typename IsConstructible,
-          size_t MaxDepth>
-struct constructor_request_detection<true, ConstructorProbe, T,
-                                     IsConstructible, MaxDepth>
-    : constructor_request_search<ConstructorProbe, T, IsConstructible,
-                                 MaxDepth> {};
 
 template <typename T, typename DetectionMode, size_t Arity>
 struct constructor_methods {
@@ -588,46 +371,31 @@ template <template <typename, typename, template <class, class> class,
           typename ConstructorProbe,
           typename ArityDetection,
           typename T, typename DetectionMode,
-          template <typename...> typename IsConstructible, size_t MaxArity,
-          size_t RequestDepth>
+          template <typename...> typename IsConstructible, size_t N>
 struct constructor_detection_impl {
   // The detector owns policy: pick the highest matching arity once, then let
   // the runtime path instantiate only that winning constructor shape.
   // Search from high to low so the first match is the winning constructor
   // arity without materializing the full `[0, N]` probe set up front.
   static constexpr size_t detected_arity = ArityDetection::value;
-  // One-argument constructors may select a converting inner type during the
-  // probe even when the runtime adapter cannot reproduce that selection.
-  // Prefer a structural outer request when one exists so both stages agree.
-  using request = typename constructor_request_detection<
-      MaxArity >= 1 &&
-          (detected_arity == invalid_arity || detected_arity == 1),
-      ConstructorProbe, T, IsConstructible, RequestDepth>::type;
-  static constexpr bool has_request = is_constructor_request_v<request>;
-  static constexpr bool detected =
-      detected_arity != invalid_arity || has_request;
-  static constexpr size_t arity =
-      detected_arity != invalid_arity ? detected_arity : detected ? 1 : 0;
+  static constexpr bool detected = detected_arity != invalid_arity;
   static constexpr bool requires_explicit_factory = [] {
-    if constexpr (!detected || arity == 0) {
+    if constexpr (!detected || detected_arity == 0) {
       return false;
     } else {
       return ConstructorProbe<T, DetectionMode, opaque_constructor_argument,
-                              IsConstructible, arity>::value;
+                              IsConstructible, detected_arity>::value;
     }
   }();
   static constexpr constructor_kind kind = !detected ? constructor_kind::invalid
                                            : requires_explicit_factory
                                                ? constructor_kind::generic
                                                : constructor_kind::concrete;
+  static constexpr size_t arity = detected ? detected_arity : 0;
   using arguments = std::conditional_t<kind == constructor_kind::concrete &&
                                            arity == 0,
                                        type_list<>, void>;
-  // Construction uses the same request that made the probe succeed.
-  using construction_mode =
-      std::conditional_t<has_request, request, DetectionMode>;
-  using dispatch =
-      constructor_detection_dispatch<T, construction_mode, arity, kind>;
+  using dispatch = constructor_detection_dispatch<T, DetectionMode, arity, kind>;
 
 public:
   template <typename Type, typename Context, typename Container>
@@ -754,8 +522,7 @@ struct constructor_detection
     : constructor_detection_impl<
           constructor_probe,
           constructor_arity<T, DetectionMode, IsConstructible, N>,
-          T, DetectionMode, IsConstructible, N,
-          DINGO_CONSTRUCTOR_REQUEST_DEPTH> {};
+          T, DetectionMode, IsConstructible, N> {};
 
 template <typename T, template <typename...> typename IsConstructible, size_t N>
 struct constructor_detection<T, constructor_signature, IsConstructible, N>
