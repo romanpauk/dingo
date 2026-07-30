@@ -817,6 +817,7 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   using optional_pointer_resolution = resolution<std::optional<A> *, void>;
   using optional_pointer_requests =
       typename optional_pointer_resolution::request_types;
+  static_assert(type_list_size_v<optional_pointer_requests> == 16);
   static_assert(
       type_list_contains_v<std::optional<A> *, optional_pointer_requests>);
   static_assert(
@@ -837,6 +838,10 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
                                       const_optional_pointer_requests>);
   static_assert(!type_list_contains_v<volatile std::optional<A> *,
                                       const_optional_pointer_requests>);
+  using function_type = void();
+  using function_pointer_requests =
+      typename resolution<function_type *, void>::request_types;
+  static_assert(type_list_size_v<function_pointer_requests> == 4);
   using optional_reference_resolution = resolution<std::optional<A> &, void>;
   using optional_reference_requests =
       typename optional_reference_resolution::request_types;

@@ -56,8 +56,9 @@ private:
   using pointee_types = typename qualification_types<Type>::type;
 
 public:
-  using type = type_list_unique_t<
-      typename pointer_qualification_types<pointee_types>::type>;
+  // pointee_types is unique, and adding a pointer plus its cv-qualifiers is an
+  // injective transformation, so the concatenated result is already unique.
+  using type = typename pointer_qualification_types<pointee_types>::type;
 };
 
 template <typename Type>
