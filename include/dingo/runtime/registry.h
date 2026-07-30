@@ -666,6 +666,21 @@ protected:
     }
   }
 
+  DINGO_NOINLINE resolved_address resolve_selected_address(
+      runtime_selection selection, const instance_request<rtti_type> &request,
+      const void *cache_key) {
+    // Keep transaction setup independent of the requested C++ type so cached
+    // pointer and reference requests share one instantiation per registry.
+    return execute_transaction(
+        runtime(), [&](runtime_context_type &context) -> resolved_address {
+          auto &binding = *selection.binding;
+          cache_update update{binding.cache_slot(), std::addressof(context),
+                              cache_key};
+          return binding.resolve_request(ephemeral_scope, context, request,
+                                         update.sink());
+        });
+  }
+
   struct cache_result {
     bool hit = false;
     void *address = nullptr;

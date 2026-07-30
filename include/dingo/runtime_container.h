@@ -264,14 +264,13 @@ public:
 
 private:
   template <typename Request, typename R>
-  DINGO_NOINLINE R
+  DINGO_ALWAYS_INLINE R
   resolve_selected(typename registry_type::runtime_selection selection) {
     using interface_type = typename Request::interface_type;
-    return execute_transaction(
-        runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
-          return runtime_registry_.template resolve_binding<interface_type, R>(
-              selection, ephemeral_scope, context);
-        });
+    auto request = detail::make_binding_request<interface_type, rtti_type>();
+    auto result = runtime_registry_.resolve_selected_address(
+        selection, request.request, detail::cache::key<interface_type>());
+    return detail::convert_resolved_binding<interface_type>(result);
   }
 
   template <typename Request, bool MayAutoConstruct, typename R,
