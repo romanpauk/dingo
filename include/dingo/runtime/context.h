@@ -175,17 +175,24 @@ DINGO_NOINLINE decltype(auto) execute_transaction(Runtime &runtime, Fn &&fn) {
   inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
   runtime_transaction<allocator_type> transaction(runtime, scratch);
   context_type context(scratch, transaction);
-  detail::transaction_commit_guard commit(transaction);
-
-  try {
-    if constexpr (std::is_void_v<std::invoke_result_t<Fn, context_type &>>) {
-      std::forward<Fn>(fn)(context);
-    } else {
+  using result_type = std::invoke_result_t<Fn, context_type &>;
+  // Void and reference results cannot fail after the callback returns, so they
+  // avoid emitting a catch path for every transaction instantiation.
+  if constexpr (std::is_void_v<result_type>) {
+    std::forward<Fn>(fn)(context);
+    transaction.commit();
+  } else if constexpr (std::is_reference_v<result_type>) {
+    auto &&result = std::forward<Fn>(fn)(context);
+    transaction.commit();
+    return static_cast<result_type>(result);
+  } else {
+    detail::transaction_commit_guard commit(transaction);
+    try {
       return std::forward<Fn>(fn)(context);
+    } catch (...) {
+      commit.cancel();
+      throw;
     }
-  } catch (...) {
-    commit.cancel();
-    throw;
   }
 }
 
@@ -199,17 +206,23 @@ auto execute_transaction(Runtime &runtime, runtime_context<Allocator> &context,
   inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
   runtime_transaction<Allocator> transaction(runtime, scratch);
   auto scope = context.use_transaction(transaction);
-  detail::transaction_commit_guard commit(transaction);
-
-  try {
-    if constexpr (std::is_void_v<result_type>) {
-      std::forward<Fn>(fn)(context);
-    } else {
+  // Void and reference results cannot fail after the callback returns, so they
+  // avoid emitting a catch path for every transaction instantiation.
+  if constexpr (std::is_void_v<result_type>) {
+    std::forward<Fn>(fn)(context);
+    transaction.commit();
+  } else if constexpr (std::is_reference_v<result_type>) {
+    auto &&result = std::forward<Fn>(fn)(context);
+    transaction.commit();
+    return static_cast<result_type>(result);
+  } else {
+    detail::transaction_commit_guard commit(transaction);
+    try {
       return std::forward<Fn>(fn)(context);
+    } catch (...) {
+      commit.cancel();
+      throw;
     }
-  } catch (...) {
-    commit.cancel();
-    throw;
   }
 }
 

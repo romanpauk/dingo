@@ -6,6 +6,7 @@
 //
 
 #include <dingo/runtime/container_runtime.h>
+#include <dingo/runtime/context.h>
 #include <dingo/runtime/transaction.h>
 
 #include <gtest/gtest.h>
@@ -142,6 +143,87 @@ struct runtime_transaction_reentrant_tracked_action {
   int destroy_value;
   bool install_action;
 };
+
+struct potentially_throwing_move_result {
+  explicit potentially_throwing_move_result(int init_value)
+      : value(init_value) {}
+
+  potentially_throwing_move_result(potentially_throwing_move_result &&other)
+      : value(other.value) {}
+
+  int value;
+};
+
+struct execute_transaction_error {};
+
+TEST(execute_transaction_test, commits_void_result) {
+  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  bool rolled_back = false;
+
+  execute_transaction(runtime, [&](auto &context) {
+    context.on_rollback([&rolled_back]() noexcept { rolled_back = true; });
+  });
+
+  EXPECT_FALSE(rolled_back);
+}
+
+TEST(execute_transaction_test, commits_reference_result) {
+  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  bool rolled_back = false;
+  int value = 42;
+
+  auto &result = execute_transaction(runtime, [&](auto &context) -> int & {
+    context.on_rollback([&rolled_back]() noexcept { rolled_back = true; });
+    return value;
+  });
+
+  EXPECT_EQ(std::addressof(result), std::addressof(value));
+  EXPECT_FALSE(rolled_back);
+}
+
+TEST(execute_transaction_test, commits_nothrow_movable_result) {
+  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  bool rolled_back = false;
+
+  auto result = execute_transaction(runtime, [&](auto &context) {
+    context.on_rollback([&rolled_back]() noexcept { rolled_back = true; });
+    return std::make_unique<int>(42);
+  });
+
+  ASSERT_NE(result, nullptr);
+  EXPECT_EQ(*result, 42);
+  EXPECT_FALSE(rolled_back);
+}
+
+TEST(execute_transaction_test, commits_potentially_throwing_movable_result) {
+  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  bool rolled_back = false;
+
+  auto result = execute_transaction(runtime, [&](auto &context) {
+    context.on_rollback([&rolled_back]() noexcept { rolled_back = true; });
+    return potentially_throwing_move_result(42);
+  });
+
+  EXPECT_EQ(result.value, 42);
+  EXPECT_FALSE(rolled_back);
+}
+
+TEST(execute_transaction_test, rolls_back_when_callback_throws) {
+  container_runtime<std::allocator<char>> runtime(std::allocator<char>{});
+  bool rolled_back = false;
+
+  EXPECT_THROW(execute_transaction(runtime,
+                                   [&](auto &context) {
+                                     context.on_rollback(
+                                         [&rolled_back]() noexcept {
+                                           rolled_back = true;
+                                         });
+                                     throw execute_transaction_error{};
+                                   }),
+               execute_transaction_error);
+
+  EXPECT_TRUE(rolled_back);
+}
 
 TEST(runtime_transaction_test,
      runtime_transaction_rollback_allows_following_committed_allocation) {
