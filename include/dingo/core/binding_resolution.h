@@ -451,6 +451,44 @@ resolve_address_from_source(construction_scope scope, Resolver &resolver,
       scope, context, std::forward<decltype(instance)>(instance));
 }
 
+template <typename... Resolutions>
+std::size_t resolution_request_index(type_list<Resolutions...>,
+                                     type_descriptor requested_type) {
+  std::size_t index = 0;
+  std::size_t result = sizeof...(Resolutions);
+  (void)(((matches_resolution_request<typename Resolutions::target_type>(
+               requested_type)
+               ? (result = index, true)
+               : (++index, false)) ||
+          ...));
+  return result;
+}
+
+template <typename Storage, typename Resolver, typename Context,
+          typename MaterializedSource, typename... Resolutions>
+resolved_address resolve_request_address_from_source(
+    construction_scope scope, Resolver &resolver, Context &context,
+    MaterializedSource &&source, std::size_t resolution_index,
+    type_list<Resolutions...>, type_descriptor requested_type,
+    type_descriptor registered_type) {
+  resolved_address result{};
+  std::size_t index = 0;
+  // Short-circuiting guarantees that exactly one arm forwards the source.
+  const bool matched =
+      (((resolution_index == index++)
+            ? (result = resolve_address_from_source<Resolutions, Storage>(
+                   scope, resolver, context,
+                   std::forward<MaterializedSource>(
+                       source), // NOLINT(bugprone-use-after-move)
+                   requested_type, registered_type),
+               true)
+            : false) ||
+       ...);
+  (void)index;
+  assert(matched);
+  return result;
+}
+
 template <typename RTTI, typename Binding, typename Context>
 resolved_address
 dispatch_binding_request(construction_scope scope, Binding &binding,
@@ -469,31 +507,6 @@ T resolve_binding_request(construction_scope scope, Binding &binding,
   auto result =
       detail::dispatch_binding_request<RTTI>(scope, binding, context, request);
   return detail::convert_resolved_binding<T>(result);
-}
-
-template <typename Factory, typename Context, typename... Resolutions>
-resolved_address resolve_request_address(construction_scope scope,
-                                         Factory &factory, Context &context,
-                                         type_list<Resolutions...>,
-                                         type_descriptor requested_type,
-                                         type_descriptor registered_type) {
-  resolved_address result{};
-  (void)scope;
-  const bool matched =
-      ((detail::matches_resolution_request<typename Resolutions::target_type>(
-            requested_type)
-            ? (result = factory.template resolve_address<Resolutions>(
-                   scope, context, requested_type, registered_type),
-               true)
-            : false) ||
-       ...);
-
-  if (!matched) {
-    throw detail::make_type_not_convertible_exception(requested_type,
-                                                      registered_type, context);
-  }
-
-  return result;
 }
 
 template <typename Request>

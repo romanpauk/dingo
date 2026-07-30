@@ -506,17 +506,38 @@ public:
   resolved_address
   resolve_request_impl(construction_scope scope, runtime_context_type &context,
                        const request_type &request, detail::cache::sink cache) {
-    auto result = ::dingo::resolve_request_address(
-        scope, *this, context, Resolutions{}, request.requested_type,
-        registered_type());
-    // Request caching is intentionally stricter than conversion caching and
-    // is published with transaction rollback tracking by the registry.
-    if constexpr (Storage::conversions::is_stable) {
-      if (result.access == resolved_address::access_kind::borrow) {
-        cache(result.address);
+    if constexpr (type_list_size_v<Resolutions> == 0) {
+      (void)scope;
+      (void)cache;
+      throw detail::make_type_not_convertible_exception(
+          request.requested_type, registered_type(), context);
+    } else {
+      // Select before materializing to preserve failure semantics, then share
+      // source handling across every supported resolution.
+      const auto resolution_index = detail::resolution_request_index(
+          Resolutions{}, request.requested_type);
+      if (resolution_index == type_list_size_v<Resolutions>) {
+        throw detail::make_type_not_convertible_exception(
+            request.requested_type, registered_type(), context);
       }
+
+      binding_activation activation{*this, scope};
+      auto result =
+          with_source(scope, context, [&](auto &&source) -> resolved_address {
+            return detail::resolve_request_address_from_source<Storage>(
+                scope, activation, context,
+                std::forward<decltype(source)>(source), resolution_index,
+                Resolutions{}, request.requested_type, registered_type());
+          });
+      // Request caching is intentionally stricter than conversion caching and
+      // is published with transaction rollback tracking by the registry.
+      if constexpr (Storage::conversions::is_stable) {
+        if (result.access == resolved_address::access_kind::borrow) {
+          cache(result.address);
+        }
+      }
+      return result;
     }
-    return result;
   }
 #ifdef _MSC_VER
 #pragma warning(pop)
@@ -540,25 +561,6 @@ public:
                                    detail::cache::sink cache) override {
     return resolve_request_impl<request_resolutions>(scope, context, request,
                                                      cache);
-  }
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
-
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4702)
-#endif
-  template <typename Resolution, typename Context>
-  resolved_address resolve_address(construction_scope scope, Context &context,
-                                   type_descriptor requested_type,
-                                   type_descriptor registered_type) {
-    binding_activation activation{*this, scope};
-    return with_source(scope, context, [&](auto &&source) -> resolved_address {
-      return detail::resolve_address_from_source<Resolution, Storage>(
-          scope, activation, context, std::forward<decltype(source)>(source),
-          requested_type, registered_type);
-    });
   }
 #ifdef _MSC_VER
 #pragma warning(pop)
