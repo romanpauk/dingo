@@ -35,8 +35,10 @@ TEST(type_list_test, meta_utilities) {
   static_assert(type_list_size_v<nested_list> == 2);
   static_assert(std::is_same_v<type_list_head_t<nested_list>, type_list_a>);
   static_assert(std::is_same_v<to_type_list_t<nested_tuple>, nested_list>);
+  static_assert(!type_list_contains_v<type_list_a, type_list<>>);
   static_assert(type_list_contains_v<type_list_a, nested_list>);
   static_assert(!type_list_contains_v<type_list_c, nested_list>);
+  static_assert(std::is_same_v<type_list_unique_t<type_list<>>, type_list<>>);
   static_assert(
       std::is_same_v<
           type_list_unique_t<type_list<type_list_a, type_list_b, type_list_a,
