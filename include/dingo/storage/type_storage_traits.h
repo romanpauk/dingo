@@ -249,6 +249,30 @@ using storage_resolutions_t =
     typename storage_resolutions<Requests, Interface, Storage, Access,
                                  PublishValue>::type;
 
+// Avoid probing conversions for empty storage categories.
+template <bool Enabled, typename Target, typename ConversionTarget,
+          typename Source, typename Access>
+struct interface_resolution_if {
+  using type = type_list<>;
+};
+
+template <typename Target, typename ConversionTarget, typename Source,
+          typename Access>
+struct interface_resolution_if<true, Target, ConversionTarget, Source, Access> {
+  using type = std::conditional_t<
+      is_type_conversion_available_v<ConversionTarget, Source, Access>,
+      type_list<conversion_resolution<Target, Source, Access>>, type_list<>>;
+};
+
+template <bool Enabled, typename Source, typename Interface, typename Access>
+struct wrapper_resolution_if {
+  using type = type_list<>;
+};
+
+template <typename Source, typename Interface, typename Access>
+struct wrapper_resolution_if<true, Source, Interface, Access>
+    : wrapper_resolution_traits<Source, Interface, Access> {};
+
 template <typename Interface, typename Storage> struct interface_resolutions {
 private:
   using conversions = typename Storage::conversions;
@@ -260,45 +284,34 @@ private:
       type_traits<interface_type>::enabled &&
       !std::is_pointer_v<interface_type>;
 
-  template <typename Target, typename SourceType, typename Access>
-  using if_convertible = std::conditional_t<
-      interface_is_resolvable &&
-          is_type_conversion_available_v<Target, SourceType, Access>,
-      type_list<conversion_resolution<Target, SourceType, Access>>,
-      type_list<>>;
+  template <bool Enabled, typename Target, typename SourceType, typename Access>
+  using if_convertible =
+      typename interface_resolution_if<Enabled && interface_is_resolvable,
+                                       Target, Target, SourceType,
+                                       Access>::type;
 
-  using borrowed_interface_value = std::conditional_t<
-      type_list_size_v<typename conversions::value_types> != 0,
-      if_convertible<interface_type, typename source::borrowed_type, borrow>,
-      type_list<>>;
-  using consumed_interface_value = std::conditional_t<
+  using borrowed_interface_value =
+      if_convertible<type_list_size_v<typename conversions::value_types> != 0,
+                     interface_type, typename source::borrowed_type, borrow>;
+  using consumed_interface_value = if_convertible<
       type_list_size_v<typename conversions::rvalue_reference_types> != 0,
-      if_convertible<interface_type, typename source::consumed_type, consume>,
-      type_list<>>;
-  using consumed_interface_rvalue = std::conditional_t<
-      type_list_size_v<typename conversions::rvalue_reference_types> != 0,
-      std::conditional_t<
-          interface_is_resolvable &&
-              is_type_conversion_available_v<
-                  interface_type, typename source::consumed_type, consume>,
-          type_list<conversion_resolution<
-              interface_type &&, typename source::consumed_type, consume>>,
-          type_list<>>,
-      type_list<>>;
-  using borrowed_interface_reference = std::conditional_t<
+      interface_type, typename source::consumed_type, consume>;
+  using consumed_interface_rvalue = typename interface_resolution_if<
+      interface_is_resolvable &&
+          type_list_size_v<typename conversions::rvalue_reference_types> != 0,
+      interface_type &&, interface_type, typename source::consumed_type,
+      consume>::type;
+  using borrowed_interface_reference = if_convertible<
       type_list_size_v<typename conversions::lvalue_reference_types> != 0,
-      if_convertible<borrowed_interface_type &, typename source::borrowed_type,
-                     borrow>,
-      type_list<>>;
-  using borrowed_interface_pointer = std::conditional_t<
-      type_list_size_v<typename conversions::pointer_types> != 0,
-      if_convertible<borrowed_interface_type *, typename source::borrowed_type,
-                     borrow>,
-      type_list<>>;
+      borrowed_interface_type &, typename source::borrowed_type, borrow>;
+  using borrowed_interface_pointer =
+      if_convertible<type_list_size_v<typename conversions::pointer_types> != 0,
+                     borrowed_interface_type *, typename source::borrowed_type,
+                     borrow>;
 
 public:
-  using value_resolutions = type_list_unique_t<
-      type_list_cat_t<borrowed_interface_value, consumed_interface_value>>;
+  using value_resolutions =
+      type_list_cat_t<borrowed_interface_value, consumed_interface_value>;
   using lvalue_reference_resolutions = borrowed_interface_reference;
   using rvalue_reference_resolutions = consumed_interface_rvalue;
   using pointer_resolutions = borrowed_interface_pointer;
@@ -309,20 +322,16 @@ private:
   using conversions = typename Storage::conversions;
   using source = storage_source_traits<Storage>;
 
-  using borrowed_composition = std::conditional_t<
+  using borrowed_composition = typename wrapper_resolution_if<
       type_list_size_v<typename conversions::value_types> != 0,
-      typename wrapper_resolution_traits<typename source::borrowed_type,
-                                         Interface, borrow>::type,
-      type_list<>>;
-  using consumed_composition = std::conditional_t<
+      typename source::borrowed_type, Interface, borrow>::type;
+  using consumed_composition = typename wrapper_resolution_if<
       type_list_size_v<typename conversions::rvalue_reference_types> != 0,
-      typename wrapper_resolution_traits<typename source::consumed_type,
-                                         Interface, consume>::type,
-      type_list<>>;
+      typename source::consumed_type, Interface, consume>::type;
 
 public:
-  using value_resolutions = type_list_unique_t<
-      type_list_cat_t<borrowed_composition, consumed_composition>>;
+  using value_resolutions =
+      type_list_cat_t<borrowed_composition, consumed_composition>;
 };
 
 template <typename Interface, typename Storage> struct binding_resolutions {

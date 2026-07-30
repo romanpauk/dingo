@@ -278,7 +278,14 @@ public:
 template <typename From, typename To>
 using copy_cv_t = typename copy_cv<From, To>::type;
 
-template <typename Target, typename Source, typename Access = consume>
+// Keep direct conversions separate from recursive candidates.
+template <typename Target, typename Source, typename Access>
+struct direct_type_conversion_path;
+
+template <typename Target, typename Source, typename Access = consume,
+          typename Direct = direct_type_conversion_path<Target, Source, Access>,
+          bool UseFallback =
+              Direct::uses_default_conversion && !Direct::available>
 struct type_conversion_path;
 
 template <typename Alternative, typename Source>
@@ -671,13 +678,17 @@ using conversion_for_access_t = std::conditional_t<
     Conversion, unavailable_type_conversion>;
 
 template <typename Target, typename Source, typename Access>
-struct type_conversion_path {
+struct direct_type_conversion_path {
 private:
   using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
   using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
   using conversion_traits = type_conversion_traits<Target, source_type>;
+
+public:
   static constexpr bool uses_default_conversion =
       is_default_type_conversion<conversion_traits>::value;
+
+private:
   static constexpr bool decomposes_target =
       !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
       (is_alternative_type_v<target_type> ||
@@ -762,6 +773,20 @@ private:
                          traits_type_conversion<Target, Source, required_access,
                                                 conversion_source>,
                          unavailable_type_conversion>;
+  using selected = typename select_type_conversion<
+      conversion_for_access_t<identity, Access>,
+      conversion_for_access_t<reference, Access>,
+      conversion_for_access_t<direct, Access>>::type;
+
+public:
+  static constexpr bool can_take_address = takes_address;
+  using type = selected;
+  static constexpr bool available = type::available;
+};
+
+template <typename Target, typename Source, typename Access, typename Direct>
+struct type_conversion_path<Target, Source, Access, Direct, true> {
+private:
   using target_alternative =
       typename target_alternative_type_conversion_candidate<Target, Source,
                                                             Access>::type;
@@ -769,9 +794,9 @@ private:
       typename target_wrapper_type_conversion_candidate<Target, Source,
                                                         Access>::type;
   using array = typename array_type_conversion_candidate<Target, Source>::type;
-  using address =
-      std::conditional_t<takes_address, address_type_conversion<Target, Source>,
-                         unavailable_type_conversion>;
+  using address = std::conditional_t<Direct::can_take_address,
+                                     address_type_conversion<Target, Source>,
+                                     unavailable_type_conversion>;
   using pointer_access =
       typename pointer_access_type_conversion_candidate<Target, Source>::type;
   using dereference =
@@ -783,10 +808,7 @@ private:
       typename source_alternative_type_conversion<Target, Source, Access>::type;
   using retained =
       typename retained_type_conversion_candidate<Target, Source, Access>::type;
-  using inferred = typename select_type_conversion<
-      conversion_for_access_t<identity, Access>,
-      conversion_for_access_t<reference, Access>,
-      conversion_for_access_t<direct, Access>,
+  using selected = typename select_type_conversion<
       conversion_for_access_t<target_alternative, Access>,
       conversion_for_access_t<alternative, Access>,
       conversion_for_access_t<target_wrapper, Access>,
@@ -798,10 +820,12 @@ private:
       conversion_for_access_t<retained, Access>>::type;
 
 public:
-  using type = std::conditional_t<uses_default_conversion, inferred,
-                                  conversion_for_access_t<direct, Access>>;
+  using type = selected;
   static constexpr bool available = type::available;
 };
+
+template <typename Target, typename Source, typename Access, typename Direct>
+struct type_conversion_path<Target, Source, Access, Direct, false> : Direct {};
 
 template <typename Target, typename Source, typename Access = consume>
 using type_conversion_path_t =
