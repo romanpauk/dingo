@@ -144,6 +144,32 @@ private:
 
 namespace detail {
 
+// execute_transaction is specialized for each callback type. Keep frame
+// setup and teardown in Runtime-only functions so those specializations share
+// the generated code.
+template <typename Runtime> class transaction_frame {
+public:
+  using allocator_type = typename Runtime::allocator_type;
+  using context_type = runtime_context<allocator_type>;
+  using transaction_type = runtime_transaction<allocator_type>;
+
+  DINGO_NOINLINE explicit transaction_frame(Runtime &runtime)
+      : transaction_(runtime, scratch_), context_(scratch_, transaction_) {}
+
+  DINGO_NOINLINE ~transaction_frame() noexcept {}
+
+  transaction_frame(const transaction_frame &) = delete;
+  transaction_frame &operator=(const transaction_frame &) = delete;
+
+  context_type &context() noexcept { return context_; }
+  void commit() noexcept { transaction_.commit(); }
+
+private:
+  inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch_;
+  transaction_type transaction_;
+  context_type context_;
+};
+
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
@@ -170,23 +196,21 @@ private:
 
 template <typename Runtime, typename Fn>
 DINGO_NOINLINE decltype(auto) execute_transaction(Runtime &runtime, Fn &&fn) {
-  using allocator_type = typename Runtime::allocator_type;
-  using context_type = runtime_context<allocator_type>;
-  inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
-  runtime_transaction<allocator_type> transaction(runtime, scratch);
-  context_type context(scratch, transaction);
+  detail::transaction_frame<Runtime> frame(runtime);
+  auto &context = frame.context();
+  using context_type = std::remove_reference_t<decltype(context)>;
   using result_type = std::invoke_result_t<Fn, context_type &>;
   // Void and reference results cannot fail after the callback returns, so they
   // avoid emitting a catch path for every transaction instantiation.
   if constexpr (std::is_void_v<result_type>) {
     std::forward<Fn>(fn)(context);
-    transaction.commit();
+    frame.commit();
   } else if constexpr (std::is_reference_v<result_type>) {
     auto &&result = std::forward<Fn>(fn)(context);
-    transaction.commit();
+    frame.commit();
     return static_cast<result_type>(result);
   } else {
-    detail::transaction_commit_guard commit(transaction);
+    detail::transaction_commit_guard commit(frame);
     try {
       return std::forward<Fn>(fn)(context);
     } catch (...) {
