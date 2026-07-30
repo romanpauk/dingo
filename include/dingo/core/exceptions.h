@@ -72,121 +72,153 @@ struct arena_allocation_exception : exception {
 namespace detail {
 template <typename T> struct lookup_key;
 
-inline void append_text_part(std::string &message, type_descriptor descriptor) {
-  append_type_name(message, descriptor);
-}
-
-template <typename Text>
-void append_text_part(std::string &message, Text &&text) {
-  message += std::forward<Text>(text);
-}
-
-inline void append_text(std::string &) {}
-
-template <typename First, typename... Rest>
-void append_text(std::string &message, First &&first, Rest &&...rest) {
-  append_text_part(message, std::forward<First>(first));
-  append_text(message, std::forward<Rest>(rest)...);
-}
+// Keep message formatting independent of request types so error paths do not
+// multiply the same string-building code across every resolution instantiation.
+struct resolution_path {
+  bool present = false;
+  std::string text;
+};
 
 template <typename Context>
-void append_type_path_text(std::string &message, const Context &context) {
-  if (context.has_type_path()) {
-    std::string resolution_path;
-    context.append_type_path(resolution_path);
-    message += " (required by ";
-    message += resolution_path;
+resolution_path get_resolution_path(const Context &context) {
+  resolution_path path;
+  path.present = context.has_type_path();
+  if (path.present) {
+    context.append_type_path(path.text);
+  }
+  return path;
+}
+
+inline void append_resolution_path(std::string &message,
+                                   const resolution_path &path) {
+  if (!path.present) {
+    return;
+  }
+
+  message += " (required by ";
+  message += path.text;
+  message += ")";
+}
+
+DINGO_NOINLINE inline type_not_found_exception
+make_type_not_found_exception(type_descriptor request_type,
+                              const type_descriptor *index_type,
+                              const resolution_path &path) {
+  std::string message = "type not found: ";
+  append_type_name(message, request_type);
+  if (index_type != nullptr) {
+    message += " (index type: ";
+    append_type_name(message, *index_type);
     message += ")";
   }
+  append_resolution_path(message, path);
+  return type_not_found_exception(std::move(message));
 }
 
 template <typename Request>
 type_not_found_exception make_type_not_found_exception() {
-  std::string message = "type not found: ";
-  append_type_name(message, describe_type<Request>());
-  return type_not_found_exception(std::move(message));
+  return make_type_not_found_exception(describe_type<Request>(), nullptr, {});
 }
 
 template <typename Request, typename Context>
 type_not_found_exception make_type_not_found_exception(const Context &context) {
-  std::string message = "type not found: ";
-  append_type_name(message, describe_type<Request>());
-  append_type_path_text(message, context);
-  return type_not_found_exception(std::move(message));
+  const auto path = get_resolution_path(context);
+  return make_type_not_found_exception(describe_type<Request>(), nullptr, path);
 }
 
 template <typename Request, typename IdType>
 type_not_found_exception make_type_not_found_exception() {
-  std::string message = "type not found: ";
-  append_text(message, describe_type<Request>(),
-              " (index type: ", describe_type<IdType>(), ")");
-  return type_not_found_exception(std::move(message));
+  const auto index_type = describe_type<IdType>();
+  return make_type_not_found_exception(describe_type<Request>(), &index_type,
+                                       {});
 }
 
 template <typename Request, typename IdType, typename Context>
 type_not_found_exception make_type_not_found_exception(const Context &context) {
-  std::string message = "type not found: ";
-  append_text(message, describe_type<Request>(),
-              " (index type: ", describe_type<IdType>(), ")");
-  append_type_path_text(message, context);
-  return type_not_found_exception(std::move(message));
+  const auto index_type = describe_type<IdType>();
+  const auto path = get_resolution_path(context);
+  return make_type_not_found_exception(describe_type<Request>(), &index_type,
+                                       path);
 }
 
-template <typename Selector>
-void append_lookup_key_text(std::string &message,
-                            const lookup_key<Selector> &) {
-  if constexpr (!std::is_same_v<Selector, key_type<none_t>>) {
-    append_text(message, " (index type: ", describe_type<Selector>(), ")");
+template <typename Request, typename Context, typename Selector>
+type_not_found_exception
+make_type_not_found_exception(const Context &context,
+                              const lookup_key<Selector> &) {
+  const auto path = get_resolution_path(context);
+  if constexpr (std::is_same_v<Selector, key_type<none_t>>) {
+    return make_type_not_found_exception(describe_type<Request>(), nullptr,
+                                         path);
+  } else {
+    const auto index_type = describe_type<Selector>();
+    return make_type_not_found_exception(describe_type<Request>(), &index_type,
+                                         path);
   }
 }
 
-template <typename Request, typename Context, typename LookupKey>
-type_not_found_exception make_type_not_found_exception(const Context &context,
-                                                       const LookupKey &key) {
-  std::string message = "type not found: ";
-  append_type_name(message, describe_type<Request>());
-  append_lookup_key_text(message, key);
-  append_type_path_text(message, context);
+DINGO_NOINLINE inline type_not_found_exception
+make_collection_type_not_found_exception(type_descriptor collection_type,
+                                         type_descriptor resolve_type) {
+  std::string message = "type not found for collection ";
+  append_type_name(message, collection_type);
+  message += " (element type: ";
+  append_type_name(message, resolve_type);
+  message += ")";
   return type_not_found_exception(std::move(message));
 }
 
 template <typename Collection, typename ResolveType>
 type_not_found_exception make_collection_type_not_found_exception() {
-  std::string message = "type not found for collection ";
-  append_text(message, describe_type<Collection>(),
-              " (element type: ", describe_type<ResolveType>(), ")");
-  return type_not_found_exception(std::move(message));
+  return make_collection_type_not_found_exception(describe_type<Collection>(),
+                                                  describe_type<ResolveType>());
 }
 
-template <typename Request>
-type_ambiguous_exception make_type_ambiguous_exception() {
+DINGO_NOINLINE inline type_ambiguous_exception
+make_type_ambiguous_exception(type_descriptor request_type,
+                              const type_descriptor *active_type) {
   std::string message = "type resolution is ambiguous: ";
-  append_type_name(message, describe_type<Request>());
-  return type_ambiguous_exception(std::move(message));
-}
-
-template <typename Request, typename Context>
-type_ambiguous_exception make_type_ambiguous_exception(const Context &context) {
-  std::string message = "type resolution is ambiguous: ";
-  append_type_name(message, describe_type<Request>());
-  if (auto *active_type = context.active_type()) {
+  append_type_name(message, request_type);
+  if (active_type != nullptr) {
     message += " (required by ";
     append_type_name(message, *active_type);
     message += ")";
   }
-
   return type_ambiguous_exception(std::move(message));
 }
 
-inline type_not_convertible_exception
+template <typename Request>
+type_ambiguous_exception make_type_ambiguous_exception() {
+  return make_type_ambiguous_exception(describe_type<Request>(), nullptr);
+}
+
+template <typename Request, typename Context>
+type_ambiguous_exception make_type_ambiguous_exception(const Context &context) {
+  return make_type_ambiguous_exception(describe_type<Request>(),
+                                       context.active_type());
+}
+
+DINGO_NOINLINE inline type_not_convertible_exception
 make_type_not_convertible_exception(type_descriptor target_type,
-                                    type_descriptor source_type) {
+                                    type_descriptor source_type,
+                                    const type_descriptor *active_type) {
   std::string message = "type is not convertible to ";
   append_type_name(message, target_type);
   message += " from ";
   append_type_name(message, source_type);
 
+  if (active_type != nullptr) {
+    message += " (required by ";
+    append_type_name(message, *active_type);
+    message += ")";
+  }
+
   return type_not_convertible_exception(std::move(message));
+}
+
+inline type_not_convertible_exception
+make_type_not_convertible_exception(type_descriptor target_type,
+                                    type_descriptor source_type) {
+  return make_type_not_convertible_exception(target_type, source_type, nullptr);
 }
 
 template <typename Context>
@@ -194,85 +226,93 @@ inline type_not_convertible_exception
 make_type_not_convertible_exception(type_descriptor target_type,
                                     type_descriptor source_type,
                                     const Context &context) {
-  std::string message = "type is not convertible to ";
-  append_type_name(message, target_type);
-  message += " from ";
-  append_type_name(message, source_type);
+  return make_type_not_convertible_exception(target_type, source_type,
+                                             context.active_type());
+}
 
-  if (auto *active_type = context.active_type()) {
-    message += " (required by ";
-    append_type_name(message, *active_type);
-    message += ")";
+DINGO_NOINLINE inline type_recursion_exception
+make_type_recursion_exception(type_descriptor type) {
+  std::string message = "recursive dependency detected while constructing: ";
+  append_type_name(message, type);
+  return type_recursion_exception(std::move(message));
+}
+
+DINGO_NOINLINE inline type_recursion_exception
+make_type_recursion_exception(type_descriptor type,
+                              const resolution_path &path) {
+  std::string message = "recursive dependency detected: ";
+  if (path.present) {
+    message += path.text;
+  } else {
+    append_type_name(message, type);
   }
 
-  return type_not_convertible_exception(std::move(message));
+  return type_recursion_exception(std::move(message));
 }
 
 template <typename Type>
 type_recursion_exception make_type_recursion_exception() {
-  std::string message = "recursive dependency detected while constructing: ";
-  append_type_name(message, describe_type<Type>());
-  return type_recursion_exception(std::move(message));
+  return make_type_recursion_exception(describe_type<Type>());
 }
 
 template <typename Type, typename Context>
 type_recursion_exception make_type_recursion_exception(const Context &context) {
-  std::string message = "recursive dependency detected: ";
-  if (context.has_type_path()) {
-    std::string resolution_path;
-    context.append_type_path(resolution_path);
-    message += resolution_path;
-  }
-  if (!context.has_type_path()) {
-    append_type_name(message, describe_type<Type>());
-  }
-
-  return type_recursion_exception(std::move(message));
+  const auto path = get_resolution_path(context);
+  return make_type_recursion_exception(describe_type<Type>(), path);
 }
 
-template <typename Selector>
-void append_lookup_already_registered_key_text(std::string &message,
-                                               const lookup_key<Selector> &) {
-  if constexpr (std::is_same_v<Selector, key_type<none_t>>) {
-    append_text(message, ", key type ", describe_type<none_t>());
-  } else {
-    append_text(message, ", key type ", describe_type<Selector>());
-  }
-}
-
-template <typename Interface, typename Storage, typename LookupKey>
-lookup_already_registered_exception
-make_lookup_already_registered_exception(const LookupKey &key) {
+DINGO_NOINLINE inline lookup_already_registered_exception
+make_lookup_already_registered_exception(type_descriptor interface_type,
+                                         type_descriptor storage_type,
+                                         type_descriptor key_type) {
   std::string message = "lookup already registered: interface ";
-  append_text(message, describe_type<Interface>(), ", storage ",
-              describe_type<Storage>());
-  append_lookup_already_registered_key_text(message, key);
+  append_type_name(message, interface_type);
+  message += ", storage ";
+  append_type_name(message, storage_type);
+  message += ", key type ";
+  append_type_name(message, key_type);
   return lookup_already_registered_exception(std::move(message));
 }
 
-template <typename Interface, typename Storage, typename LookupKey,
+template <typename Interface, typename Storage, typename Selector>
+lookup_already_registered_exception
+make_lookup_already_registered_exception(const lookup_key<Selector> &) {
+  if constexpr (std::is_same_v<Selector, dingo::key_type<none_t>>) {
+    return make_lookup_already_registered_exception(describe_type<Interface>(),
+                                                    describe_type<Storage>(),
+                                                    describe_type<none_t>());
+  } else {
+    return make_lookup_already_registered_exception(describe_type<Interface>(),
+                                                    describe_type<Storage>(),
+                                                    describe_type<Selector>());
+  }
+}
+
+template <typename Interface, typename Storage, typename Selector,
           typename BackendKey>
 lookup_already_registered_exception
-make_lookup_already_registered_exception(const LookupKey &key,
+make_lookup_already_registered_exception(const lookup_key<Selector> &key,
                                          const BackendKey &) {
-  std::string message = "lookup already registered: interface ";
-  append_text(message, describe_type<Interface>(), ", storage ",
-              describe_type<Storage>());
   if constexpr (std::is_same_v<std::decay_t<BackendKey>, none_t>) {
-    append_lookup_already_registered_key_text(message, key);
+    return make_lookup_already_registered_exception<Interface, Storage>(key);
   } else {
-    append_text(message, ", key type ",
-                describe_type<std::decay_t<BackendKey>>());
+    return make_lookup_already_registered_exception(
+        describe_type<Interface>(), describe_type<Storage>(),
+        describe_type<std::decay_t<BackendKey>>());
   }
-  return lookup_already_registered_exception(std::move(message));
+}
+
+DINGO_NOINLINE inline type_index_out_of_range_exception
+make_type_index_out_of_range_exception(type_descriptor key_type) {
+  std::string message = "type index out of range: key type ";
+  append_type_name(message, key_type);
+  return type_index_out_of_range_exception(std::move(message));
 }
 
 template <typename Key>
 type_index_out_of_range_exception
 make_type_index_out_of_range_exception(Key, size_t) {
-  std::string message = "type index out of range: key type ";
-  append_text(message, describe_type<Key>());
-  return type_index_out_of_range_exception(std::move(message));
+  return make_type_index_out_of_range_exception(describe_type<Key>());
 }
 
 } // namespace detail
