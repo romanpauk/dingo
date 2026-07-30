@@ -57,6 +57,12 @@ class container_with_static_bindings;
 struct runtime_data_owner_t {};
 inline constexpr runtime_data_owner_t runtime_data_owner{};
 
+struct cache_entry_rollback {
+  cache::entry *entry;
+
+  void operator()() const noexcept { *entry = {}; }
+};
+
 template <typename RootTraits, typename Tag>
 struct registration_container_traits {
 private:
@@ -1143,8 +1149,7 @@ protected:
     static void publish(void *state, void *address) {
       auto &update = *reinterpret_cast<cache_update *>(state);
       assert(update.entry != nullptr);
-      update.context->on_rollback(
-          [entry = update.entry]() noexcept { *entry = {}; });
+      update.context->on_rollback(detail::cache_entry_rollback{update.entry});
       *update.entry = {update.key, address};
     }
   };
