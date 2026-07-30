@@ -103,29 +103,16 @@ private:
   bool active_;
 };
 
-enum class binding_request_kind {
-  value,
-  lvalue_reference,
-  rvalue_reference,
-  pointer,
-};
-
 template <typename RTTI> struct binding_request {
   instance_request<RTTI> request;
   cache::sink cache;
-  binding_request_kind kind;
 };
 
 template <typename T, typename RTTI>
 constexpr binding_request<RTTI> make_binding_request(cache::sink cache = {}) {
-  return {
-      {RTTI::template get_type_index<request_lookup_type_t<T>>(),
-       describe_type<T>()},
-      cache,
-      std::is_pointer_v<T>            ? binding_request_kind::pointer
-      : std::is_lvalue_reference_v<T> ? binding_request_kind::lvalue_reference
-      : std::is_rvalue_reference_v<T> ? binding_request_kind::rvalue_reference
-                                      : binding_request_kind::value};
+  return {{RTTI::template get_type_index<request_lookup_type_t<T>>(),
+           describe_type<T>()},
+          cache};
 }
 
 template <typename T> T convert_resolved_binding(resolved_address result) {
@@ -183,10 +170,10 @@ decltype(auto) consume_resolved_binding(Instance &&instance, Fn &&fn) {
   }
 }
 
-template <typename... Requests>
-constexpr bool matches_resolution_request(type_descriptor requested_type,
-                                          type_list<Requests...>) {
-  return ((requested_type == describe_type<Requests>()) || ...);
+template <typename Target>
+constexpr bool matches_resolution_request(type_descriptor requested_type) {
+  return matches_qualification_conversion(describe_type<Target>(),
+                                          requested_type);
 }
 
 template <typename Target, typename Context, typename T>
@@ -469,24 +456,8 @@ resolved_address
 dispatch_binding_request(construction_scope scope, Binding &binding,
                          Context &context,
                          const binding_request<RTTI> &request) {
-  switch (request.kind) {
-  case binding_request_kind::pointer:
-    return {binding.get_pointer(scope, context, request.request, request.cache),
-            resolved_address::access_kind::borrow};
-  case binding_request_kind::lvalue_reference:
-    return {binding.get_lvalue_reference(scope, context, request.request,
-                                         request.cache),
-            resolved_address::access_kind::borrow};
-  case binding_request_kind::rvalue_reference:
-    return {binding.get_rvalue_reference(scope, context, request.request,
-                                         request.cache),
-            resolved_address::access_kind::consume};
-  case binding_request_kind::value:
-    return binding.get_value(scope, context, request.request, request.cache);
-  }
-
-  assert(false);
-  return {};
+  return binding.resolve_request(scope, context, request.request,
+                                 request.cache);
 }
 
 } // namespace detail
@@ -509,8 +480,8 @@ resolved_address resolve_request_address(construction_scope scope,
   resolved_address result{};
   (void)scope;
   const bool matched =
-      ((detail::matches_resolution_request(
-            requested_type, typename Resolutions::request_types{})
+      ((detail::matches_resolution_request<typename Resolutions::target_type>(
+            requested_type)
             ? (result = factory.template resolve_address<Resolutions>(
                    scope, context, requested_type, registered_type),
                true)

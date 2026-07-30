@@ -31,107 +31,51 @@ template <typename Operation, typename Storage>
 inline constexpr bool operation_requires_source_retention_v =
     Operation::template requires_source_retention<Storage>;
 
-template <typename Type> struct cv_types {
+template <typename Source, typename Target> struct same_qualification_shape {
 private:
-  using value_type = std::remove_cv_t<Type>;
+  using source = std::remove_cv_t<Source>;
+  using target = std::remove_cv_t<Target>;
+  static constexpr bool source_is_pointer = std::is_pointer_v<source>;
+  static constexpr bool target_is_pointer = std::is_pointer_v<target>;
 
 public:
-  using type = type_list_unique_t<
-      type_list<value_type, std::add_const_t<value_type>,
-                std::add_volatile_t<value_type>, std::add_cv_t<value_type>>>;
+  static constexpr bool value = [] {
+    if constexpr (source_is_pointer && target_is_pointer) {
+      return same_qualification_shape<std::remove_pointer_t<source>,
+                                      std::remove_pointer_t<target>>::value;
+    } else if constexpr (source_is_pointer || target_is_pointer) {
+      return false;
+    } else {
+      return std::is_same_v<source, target>;
+    }
+  }();
 };
 
-template <typename Type> struct qualification_types : cv_types<Type> {};
+template <typename Target, typename Request>
+inline constexpr bool is_resolution_request_v = [] {
+  constexpr bool same_reference_kind =
+      std::is_lvalue_reference_v<Target> ==
+          std::is_lvalue_reference_v<Request> &&
+      std::is_rvalue_reference_v<Target> == std::is_rvalue_reference_v<Request>;
+  using target_type = std::remove_reference_t<Target>;
+  using request_type = std::remove_reference_t<Request>;
 
-template <typename Types> struct pointer_qualification_types;
-
-template <typename... Types>
-struct pointer_qualification_types<type_list<Types...>> {
-  using type =
-      type_list_cat_t<typename cv_types<std::add_pointer_t<Types>>::type...>;
-};
-
-template <typename Type> struct qualification_types<Type *> {
-private:
-  using pointee_types = typename qualification_types<Type>::type;
-
-public:
-  // pointee_types is unique, and adding a pointer plus its cv-qualifiers is an
-  // injective transformation, so the concatenated result is already unique.
-  using type = typename pointer_qualification_types<pointee_types>::type;
-};
-
-template <typename Type>
-struct qualification_types<Type *const> : qualification_types<Type *> {};
-
-template <typename Type>
-struct qualification_types<Type *volatile> : qualification_types<Type *> {};
-
-template <typename Type>
-struct qualification_types<Type *const volatile> : qualification_types<Type *> {
-};
-
-template <typename Reference, typename Types> struct reference_types;
-
-template <typename Reference, typename... Types>
-struct reference_types<Reference, type_list<Types...>> {
-  using type =
-      std::conditional_t<std::is_lvalue_reference_v<Reference>,
-                         type_list<std::add_lvalue_reference_t<Types>...>,
-                         type_list<std::add_rvalue_reference_t<Types>...>>;
-};
-
-template <typename Source, typename Types> struct convertible_types;
-
-template <typename Source, typename... Types>
-struct convertible_types<Source, type_list<Types...>> {
-  using type =
-      type_list_cat_t<std::conditional_t<std::is_convertible_v<Source, Types>,
-                                         type_list<Types>, type_list<>>...>;
-};
-
-template <typename Target, typename = void> struct request_types {
-  using type = type_list<Target>;
-};
-
-template <typename Target>
-struct request_types<Target, std::enable_if_t<!std::is_reference_v<Target> &&
-                                              !std::is_pointer_v<Target>>> {
-private:
-  using value_type = std::remove_cv_t<Target>;
-
-public:
-  using type =
-      type_list<value_type, std::add_const_t<value_type>,
-                std::add_volatile_t<value_type>, std::add_cv_t<value_type>>;
-};
-
-template <typename Target>
-struct request_types<Target, std::enable_if_t<std::is_reference_v<Target>>> {
-private:
-  using value_type = std::remove_reference_t<Target>;
-  using candidates = typename reference_types<
-      Target, typename qualification_types<value_type>::type>::type;
-
-public:
-  using type = typename convertible_types<Target, candidates>::type;
-};
-
-template <typename Target>
-struct request_types<Target, std::enable_if_t<std::is_pointer_v<Target>>> {
-private:
-  using candidates = typename qualification_types<Target>::type;
-
-public:
-  using type = typename convertible_types<Target, candidates>::type;
-};
+  if constexpr (!same_reference_kind ||
+                !same_qualification_shape<target_type, request_type>::value) {
+    return false;
+  } else if constexpr (!std::is_reference_v<Target> &&
+                       !std::is_pointer_v<Target>) {
+    return true;
+  } else {
+    return std::is_convertible_v<Target, Request>;
+  }
+}();
 } // namespace detail
 
 template <typename Target, typename Operation> struct resolution {
   using target_type = Target;
   using result_type = std::remove_reference_t<Target>;
   using operation = Operation;
-  using request_types = typename detail::request_types<Target>::type;
 };
 
 namespace detail {

@@ -341,10 +341,9 @@ public:
   using request_type = instance_request<rtti_type>;
   using cache_types = detail::runtime_binding_cache_types_t<Type, Storage>;
   using resolutions = detail::binding_resolutions<Type, Storage>;
-  using value_resolutions = typename resolutions::value_resolutions;
-  using lvalue_reference_resolutions =
-      typename resolutions::lvalue_reference_resolutions;
-  using pointer_resolutions = typename resolutions::pointer_resolutions;
+  // The request descriptor retains value/reference/pointer qualification, so
+  // one virtual entry can select from the complete resolution set.
+  using request_resolutions = typename resolutions::type;
   static constexpr bool has_conversion_cache =
       detail::has_runtime_binding_cache_v<cache_types>;
   static constexpr bool uses_cached_conversions =
@@ -505,8 +504,8 @@ public:
 #pragma warning(disable : 4702)
 #endif
   resolved_address
-  resolve_request(construction_scope scope, runtime_context_type &context,
-                  const request_type &request, detail::cache::sink cache) {
+  resolve_request_impl(construction_scope scope, runtime_context_type &context,
+                       const request_type &request, detail::cache::sink cache) {
     auto result = ::dingo::resolve_request_address(
         scope, *this, context, Resolutions{}, request.requested_type,
         registered_type());
@@ -535,36 +534,12 @@ public:
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-  resolved_address get_value(construction_scope scope,
-                             runtime_context_type &context,
-                             const request_type &request,
-                             detail::cache::sink cache) override {
-    return resolve_request<value_resolutions>(scope, context, request, cache);
-  }
-
-  void *get_lvalue_reference(construction_scope scope,
-                             runtime_context_type &context,
-                             const request_type &request,
-                             detail::cache::sink cache) override {
-    return resolve_request<lvalue_reference_resolutions>(scope, context,
-                                                         request, cache)
-        .address;
-  }
-
-  void *get_rvalue_reference(construction_scope scope,
-                             runtime_context_type &context,
-                             const request_type &request,
-                             detail::cache::sink cache) override {
-    return resolve_request<typename resolutions::rvalue_reference_resolutions>(
-               scope, context, request, cache)
-        .address;
-  }
-
-  void *get_pointer(construction_scope scope, runtime_context_type &context,
-                    const request_type &request,
-                    detail::cache::sink cache) override {
-    return resolve_request<pointer_resolutions>(scope, context, request, cache)
-        .address;
+  resolved_address resolve_request(construction_scope scope,
+                                   runtime_context_type &context,
+                                   const request_type &request,
+                                   detail::cache::sink cache) override {
+    return resolve_request_impl<request_resolutions>(scope, context, request,
+                                                     cache);
   }
 #ifdef _MSC_VER
 #pragma warning(pop)

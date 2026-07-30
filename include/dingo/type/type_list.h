@@ -28,10 +28,42 @@ struct type_list_cat_impl<type_list<Accumulated...>> {
   using type = type_list<Accumulated...>;
 };
 
-template <typename... Accumulated, typename... Head, typename... Tail>
-struct type_list_cat_impl<type_list<Accumulated...>, type_list<Head...>,
-                          Tail...>
-    : type_list_cat_impl<type_list<Accumulated..., Head...>, Tail...> {};
+template <typename... Accumulated, typename... Head>
+struct type_list_cat_impl<type_list<Accumulated...>, type_list<Head...>> {
+  using type = type_list<Accumulated..., Head...>;
+};
+
+template <typename... Accumulated, typename... Head1, typename... Head2>
+struct type_list_cat_impl<type_list<Accumulated...>, type_list<Head1...>,
+                          type_list<Head2...>> {
+  using type = type_list<Accumulated..., Head1..., Head2...>;
+};
+
+template <typename... Accumulated, typename... Head1, typename... Head2,
+          typename... Head3>
+struct type_list_cat_impl<type_list<Accumulated...>, type_list<Head1...>,
+                          type_list<Head2...>, type_list<Head3...>> {
+  using type = type_list<Accumulated..., Head1..., Head2..., Head3...>;
+};
+
+template <typename... Accumulated, typename... Head1, typename... Head2,
+          typename... Head3, typename... Head4>
+struct type_list_cat_impl<type_list<Accumulated...>, type_list<Head1...>,
+                          type_list<Head2...>, type_list<Head3...>,
+                          type_list<Head4...>> {
+  using type =
+      type_list<Accumulated..., Head1..., Head2..., Head3..., Head4...>;
+};
+
+template <typename... Accumulated, typename... Head1, typename... Head2,
+          typename... Head3, typename... Head4, typename... Head5,
+          typename... Tail>
+struct type_list_cat_impl<type_list<Accumulated...>, type_list<Head1...>,
+                          type_list<Head2...>, type_list<Head3...>,
+                          type_list<Head4...>, type_list<Head5...>, Tail...>
+    : type_list_cat_impl<
+          type_list<Accumulated..., Head1..., Head2..., Head3..., Head4...>,
+          type_list<Head5...>, Tail...> {};
 } // namespace detail
 
 template <typename... Lists> struct type_list_cat {
