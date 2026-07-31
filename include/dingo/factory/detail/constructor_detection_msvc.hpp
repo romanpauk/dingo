@@ -72,29 +72,6 @@ using constructor_detection_msvc_shape = constructor_detection_impl<
     DetectionMode, IsConstructible, N>;
 
 #if defined(_MSC_VER)
-template <typename T, typename Sequence>
-struct constructor_array_arguments;
-
-template <typename T, size_t... Is>
-struct constructor_array_arguments<T, std::index_sequence<Is...>> {
-  using type = type_list<repeated_type<T, Is>...>;
-};
-
-// MSVC 2022 in C++17 mode sees std::array as its single internal native-array
-// member. Publish the standard container's element signature instead.
-template <typename T, size_t N, typename DetectionMode>
-struct constructor_array_detection
-    : constructor_detection_dispatch<std::array<T, N>, DetectionMode, N,
-                                     constructor_kind::concrete> {
-  static constexpr constructor_kind kind = constructor_kind::concrete;
-  static constexpr size_t arity = N;
-  using arguments = std::conditional_t<
-      std::is_same_v<DetectionMode, constructor_signature>,
-      typename constructor_array_arguments<T,
-                                           std::make_index_sequence<N>>::type,
-      std::conditional_t<N == 0, type_list<>, void>>;
-};
-
 template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible,
           size_t N = DINGO_CONSTRUCTOR_DETECTION_ARGS>

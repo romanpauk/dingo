@@ -411,6 +411,29 @@ public:
   }
 };
 
+template <typename T, typename Sequence> struct constructor_array_arguments;
+
+template <typename T, size_t... Is>
+struct constructor_array_arguments<T, std::index_sequence<Is...>> {
+  using type = type_list<repeated_type<T, Is>...>;
+};
+
+// std::array has a fixed element signature, so it does not need the generic
+// high-to-low constructor search. Publishing that signature directly also
+// avoids treating the native-array member as a one-argument constructor.
+template <typename T, size_t N, typename DetectionMode>
+struct constructor_array_detection
+    : constructor_detection_dispatch<std::array<T, N>, DetectionMode, N,
+                                     constructor_kind::concrete> {
+  static constexpr constructor_kind kind = constructor_kind::concrete;
+  static constexpr size_t arity = N;
+  using arguments = std::conditional_t<
+      std::is_same_v<DetectionMode, constructor_signature>,
+      typename constructor_array_arguments<T,
+                                           std::make_index_sequence<N>>::type,
+      std::conditional_t<N == 0, type_list<>, void>>;
+};
+
 template <typename T, typename Arguments> struct constructor_from_arguments;
 
 template <typename T, typename... Args>
@@ -529,6 +552,18 @@ struct constructor_detection<T, constructor_signature, IsConstructible, N>
     : constructor_detection_signature_impl<constructor_detection,
                                            constructor_signature_recovery, T,
                                            IsConstructible, N> {};
+
+template <typename T, size_t Size,
+          template <typename...> typename IsConstructible, size_t N>
+struct constructor_detection<std::array<T, Size>, constructor_shape,
+                             IsConstructible, N>
+    : constructor_array_detection<T, Size, constructor_shape> {};
+
+template <typename T, size_t Size,
+          template <typename...> typename IsConstructible, size_t N>
+struct constructor_detection<std::array<T, Size>, constructor_signature,
+                             IsConstructible, N>
+    : constructor_array_detection<T, Size, constructor_signature> {};
 #endif
 
 } // namespace detail
