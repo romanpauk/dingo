@@ -776,6 +776,8 @@ public:
 template <typename Target, typename Source, typename Access>
 struct direct_type_conversion_path {
 private:
+  // Identity and reference-preserving conversions are handled by the basic
+  // path before this fallback is instantiated.
   using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
   using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
   using conversion_traits = type_conversion_traits<Target, source_type>;
@@ -831,34 +833,10 @@ private:
                     has_valid_custom_access,
                 "type_conversion_traits specialization must declare "
                 "required_access<Source> as borrow or consume");
-  static constexpr bool preserves_identity =
-      uses_default_conversion && !std::is_reference_v<Target> &&
-      !std::is_pointer_v<Target> &&
-      !std::is_volatile_v<std::remove_reference_t<Source>> &&
-      std::is_same_v<std::remove_cv_t<Target>, source_type> &&
-      ((std::is_lvalue_reference_v<Source> &&
-        is_copy_constructible_v<Target>) ||
-       (std::is_rvalue_reference_v<Source> &&
-        std::is_constructible_v<Target, Source>));
   static constexpr bool takes_address =
       std::is_pointer_v<Target> && std::is_lvalue_reference_v<Source> &&
       std::is_convertible_v<std::add_pointer_t<std::remove_reference_t<Source>>,
                             Target>;
-  static constexpr bool preserves_reference =
-      !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
-      uses_default_conversion && std::is_lvalue_reference_v<Source> &&
-      !std::is_volatile_v<std::remove_reference_t<Source>> &&
-      is_copy_constructible_v<Target> &&
-      std::is_convertible_v<std::add_pointer_t<std::remove_reference_t<Source>>,
-                            std::add_pointer_t<Target>>;
-
-  using identity = std::conditional_t<preserves_identity,
-                                      identity_type_conversion<Target, Source>,
-                                      unavailable_type_conversion>;
-  using reference =
-      std::conditional_t<preserves_reference,
-                         reference_type_conversion<Target, Source>,
-                         unavailable_type_conversion>;
   using direct =
       std::conditional_t<has_traits_conversion &&
                              (!uses_default_conversion ||
@@ -866,14 +844,10 @@ private:
                          traits_type_conversion<Target, Source, required_access,
                                                 conversion_source>,
                          unavailable_type_conversion>;
-  using selected = typename select_type_conversion<
-      conversion_for_access_t<identity, Access>,
-      conversion_for_access_t<reference, Access>,
-      conversion_for_access_t<direct, Access>>::type;
 
 public:
   static constexpr bool can_take_address = takes_address;
-  using type = selected;
+  using type = conversion_for_access_t<direct, Access>;
   static constexpr bool available = type::available;
 };
 
