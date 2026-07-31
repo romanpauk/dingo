@@ -283,6 +283,42 @@ template <typename Target, typename Source, typename Access>
 struct direct_type_conversion_path;
 
 template <typename Target, typename Source, typename Access>
+inline constexpr std::size_t basic_conversion_index_v =
+    is_default_type_conversion<type_conversion_traits<
+        Target, std::remove_cv_t<std::remove_reference_t<Source>>>>::value &&
+            !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
+            !std::is_volatile_v<std::remove_reference_t<Source>> &&
+            std::is_same_v<std::remove_cv_t<Target>,
+                           std::remove_cv_t<std::remove_reference_t<Source>>> &&
+            std::is_lvalue_reference_v<Source> &&
+            access_satisfies<Access, borrow>::value
+        ? 1
+    : is_default_type_conversion<type_conversion_traits<
+          Target, std::remove_cv_t<std::remove_reference_t<Source>>>>::value &&
+            !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
+            !std::is_volatile_v<std::remove_reference_t<Source>> &&
+            std::is_same_v<std::remove_cv_t<Target>,
+                           std::remove_cv_t<std::remove_reference_t<Source>>> &&
+            std::is_rvalue_reference_v<Source> &&
+            access_satisfies<Access, consume>::value
+        ? 2
+    : is_default_type_conversion<type_conversion_traits<
+          Target, std::remove_cv_t<std::remove_reference_t<Source>>>>::value &&
+            !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
+            !std::is_volatile_v<std::remove_reference_t<Source>> &&
+            std::is_lvalue_reference_v<Source> &&
+            access_satisfies<Access, borrow>::value
+        ? 3
+    : is_default_type_conversion<type_conversion_traits<
+          Target, std::remove_cv_t<std::remove_reference_t<Source>>>>::value &&
+            std::is_lvalue_reference_v<Target> &&
+            std::is_lvalue_reference_v<Source> &&
+            access_satisfies<Access, borrow>::value
+        ? 4
+        : 0;
+
+template <typename Target, typename Source, typename Access,
+          std::size_t Index = basic_conversion_index_v<Target, Source, Access>>
 struct basic_type_conversion_path;
 
 template <typename Target, typename Source, typename Access,
@@ -725,51 +761,50 @@ struct select_conversion_candidate<Candidate, Next, false> {
   using type = typename Next::type;
 };
 
-// Keep the common default cases out of the recursive conversion search. These
-// conditions mirror the leading candidates in direct_type_conversion_path.
-template <typename Target, typename Source, typename Access>
+// Keep the common default cases out of the recursive conversion search. The
+// index is selected using cheap shape checks before these specializations
+// instantiate the required conversion traits.
+template <typename Target, typename Source, typename Access, std::size_t Index>
 struct basic_type_conversion_path {
-private:
-  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
-  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
-  using conversion_traits = type_conversion_traits<Target, source_type>;
-  static constexpr bool uses_default_conversion =
-      is_default_type_conversion<conversion_traits>::value;
-  static constexpr bool can_borrow = access_satisfies<Access, borrow>::value;
-  static constexpr bool can_consume = access_satisfies<Access, consume>::value;
-  static constexpr bool preserves_identity =
-      uses_default_conversion && !std::is_reference_v<Target> &&
-      !std::is_pointer_v<Target> &&
-      !std::is_volatile_v<std::remove_reference_t<Source>> &&
-      std::is_same_v<std::remove_cv_t<Target>, source_type> &&
-      ((std::is_lvalue_reference_v<Source> && can_borrow &&
-        is_copy_constructible_v<Target>) ||
-       (std::is_rvalue_reference_v<Source> && can_consume &&
-        std::is_constructible_v<Target, Source>));
-  static constexpr bool preserves_reference =
-      uses_default_conversion && can_borrow && !std::is_reference_v<Target> &&
-      !std::is_pointer_v<Target> && std::is_lvalue_reference_v<Source> &&
-      !std::is_volatile_v<std::remove_reference_t<Source>> &&
+  using type = unavailable_type_conversion;
+  static constexpr bool available = false;
+};
+
+template <typename Target, typename Source, typename Access>
+struct basic_type_conversion_path<Target, Source, Access, 1> {
+  using type = std::conditional_t<is_copy_constructible_v<Target>,
+                                  identity_type_conversion<Target, Source>,
+                                  unavailable_type_conversion>;
+  static constexpr bool available = type::available;
+};
+
+template <typename Target, typename Source, typename Access>
+struct basic_type_conversion_path<Target, Source, Access, 2> {
+  using type = std::conditional_t<std::is_constructible_v<Target, Source>,
+                                  identity_type_conversion<Target, Source>,
+                                  unavailable_type_conversion>;
+  static constexpr bool available = type::available;
+};
+
+template <typename Target, typename Source, typename Access>
+struct basic_type_conversion_path<Target, Source, Access, 3> {
+  using type = std::conditional_t<
       is_copy_constructible_v<Target> &&
-      std::is_convertible_v<std::add_pointer_t<std::remove_reference_t<Source>>,
-                            std::add_pointer_t<Target>>;
-  static constexpr bool converts_reference =
-      uses_default_conversion && can_borrow &&
-      std::is_lvalue_reference_v<Target> &&
-      std::is_lvalue_reference_v<Source> &&
+          std::is_convertible_v<
+              std::add_pointer_t<std::remove_reference_t<Source>>,
+              std::add_pointer_t<Target>>,
+      reference_type_conversion<Target, Source>, unavailable_type_conversion>;
+  static constexpr bool available = type::available;
+};
+
+template <typename Target, typename Source, typename Access>
+struct basic_type_conversion_path<Target, Source, Access, 4> {
+  using type = std::conditional_t<
       std::is_convertible_v<
           std::add_pointer_t<std::remove_reference_t<Source>>,
-          std::add_pointer_t<std::remove_reference_t<Target>>>;
-
-public:
-  using type = std::conditional_t<
-      preserves_identity, identity_type_conversion<Target, Source>,
-      std::conditional_t<
-          preserves_reference, reference_type_conversion<Target, Source>,
-          std::conditional_t<
-              converts_reference,
-              traits_type_conversion<Target, Source, borrow, Source>,
-              unavailable_type_conversion>>>;
+          std::add_pointer_t<std::remove_reference_t<Target>>>,
+      traits_type_conversion<Target, Source, borrow, Source>,
+      unavailable_type_conversion>;
   static constexpr bool available = type::available;
 };
 
