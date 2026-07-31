@@ -1368,9 +1368,10 @@ public:
 private:
   template <typename... TypeArgs, typename Parent, typename Arg,
             typename... KeyValueArgs>
+  // Registration is cold; keep its type-specific setup out of callers.
   // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
-  auto prepare_binding(Parent *parent, Arg &&arg,
-                       KeyValueArgs &&...key_values) {
+  DINGO_NOINLINE auto prepare_binding(Parent *parent, Arg &&arg,
+                                      KeyValueArgs &&...key_values) {
     static_assert(!detail::has_explicit_void_interface_v<TypeArgs...>,
                   "interfaces<void> is not a valid registration target");
     using registration =
@@ -1721,9 +1722,10 @@ private:
   template <bool SharedOwner, typename TypeInterface, typename TypeStorage,
             typename Owner, typename Parent, typename LookupKey,
             typename KeyValueTuple, typename... Args>
-  container_proxy<Owner> commit_binding(Parent *parent, LookupKey lookup_key,
-                                        KeyValueTuple &&key_values,
-                                        Args &&...args) {
+  // Avoid duplicating transaction and lookup publication into prepare_binding.
+  DINGO_NOINLINE container_proxy<Owner>
+  commit_binding(Parent *parent, LookupKey lookup_key,
+                 KeyValueTuple &&key_values, Args &&...args) {
     detail::runtime_transaction_frame<runtime_type> frame{runtime()};
     auto &transaction = frame.transaction();
     auto &state = ensure_runtime_bindings(transaction, parent);
