@@ -1121,24 +1121,6 @@ protected:
     return route::has_explicit_collection_lookup;
   }
 
-  template <typename Request, typename LookupKey>
-  struct selected_runtime_binding {
-    registry_type &registry;
-    LookupKey &key;
-    construction_scope scope;
-
-    decltype(auto) select() {
-      return registry.template source_select<typename Request::lookup_type>(
-          key);
-    }
-
-    template <typename ResolveRequest, typename Selection>
-    decltype(auto) resolve(runtime_context_type &context, Selection selection) {
-      return registry.template source_resolve<Request>(scope, selection,
-                                                       context, key);
-    }
-  };
-
   struct cache_update {
     detail::cache::entry *entry;
     runtime_context_type *context;
@@ -1151,22 +1133,6 @@ protected:
       assert(update.entry != nullptr);
       update.context->on_rollback(detail::cache_entry_rollback{update.entry});
       *update.entry = {update.key, address};
-    }
-  };
-
-  template <typename Request, bool MayAutoConstruct, typename LookupKey>
-  struct missing_runtime_binding {
-    registry_type &registry;
-    LookupKey &key;
-    construction_scope scope;
-
-    template <typename ResolveRequest>
-    typename request_type<ResolveRequest>::interface_type
-    resolve(runtime_context_type &context) {
-      using result_type = typename request_type<ResolveRequest>::interface_type;
-      return registry.template source_missing<Request, MayAutoConstruct,
-                                              LookupKey, result_type>(
-          scope, context, key);
     }
   };
 
@@ -1818,13 +1784,18 @@ private:
     static_assert(!std::is_const_v<Type>);
 
     using lookup_key_type = LookupKey;
-    selected_runtime_binding<Request, lookup_key_type> selected{*this, key,
-                                                                scope};
-    missing_runtime_binding<Request, MayAutoConstruct, lookup_key_type> missing{
-        *this, key, scope};
-    auto sources = detail::make_selected_binding_sources(selected, missing);
-    return detail::resolve_from_binding_sources<typename Request::lookup_type,
-                                                R>(context, sources);
+    auto selection =
+        source_select<typename Request::lookup_type, lookup_key_type>(key);
+    if (selection.ambiguous()) {
+      throw detail::make_type_ambiguous_exception<
+          typename Request::lookup_type>(context);
+    }
+    if (selection.found()) {
+      return source_resolve<Request>(scope, selection, context, key);
+    }
+    using missing_result = typename request_type<R>::interface_type;
+    return source_missing<Request, MayAutoConstruct, lookup_key_type,
+                          missing_result>(scope, context, key);
   }
 
   template <typename Request>
