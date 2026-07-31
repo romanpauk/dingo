@@ -422,7 +422,7 @@ private:
                     std::forward<Fn>(fn));
               });
         };
-        using result_type = std::invoke_result_t<decltype(materialize) &>;
+        using result_type = decltype(materialize());
         if constexpr (std::is_void_v<result_type>) {
           materialize();
           add_retained_source_runtime_reset_destructor(context);

@@ -198,8 +198,7 @@ template <typename Runtime, typename Fn>
 DINGO_NOINLINE decltype(auto) execute_transaction(Runtime &runtime, Fn &&fn) {
   detail::transaction_frame<Runtime> frame(runtime);
   auto &context = frame.context();
-  using context_type = std::remove_reference_t<decltype(context)>;
-  using result_type = std::invoke_result_t<Fn, context_type &>;
+  using result_type = decltype(std::forward<Fn>(fn)(context));
   // Void and reference results cannot fail after the callback returns, so they
   // avoid emitting a catch path for every transaction instantiation.
   if constexpr (std::is_void_v<result_type>) {
@@ -222,9 +221,8 @@ DINGO_NOINLINE decltype(auto) execute_transaction(Runtime &runtime, Fn &&fn) {
 
 template <typename Runtime, typename Allocator, typename Fn>
 auto execute_transaction(Runtime &runtime, runtime_context<Allocator> &context,
-                         Fn &&fn)
-    -> std::invoke_result_t<Fn, runtime_context<Allocator> &> {
-  using result_type = std::invoke_result_t<Fn, runtime_context<Allocator> &>;
+                         Fn &&fn) -> decltype(std::forward<Fn>(fn)(context)) {
+  using result_type = decltype(std::forward<Fn>(fn)(context));
   assert(!context.owns(runtime));
 
   inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
