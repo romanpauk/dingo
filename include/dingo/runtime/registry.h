@@ -314,7 +314,8 @@ class runtime_registry : public allocator_base<Allocator> {
   using runtime_context_type = runtime_context<Allocator>;
   using runtime_transaction_type = runtime_transaction<Allocator>;
   using runtime_binding_interface_type =
-      runtime_binding_interface<container_type, runtime_context_type>;
+      runtime_binding_interface<typename ContainerTraits::rtti_type,
+                                runtime_context_type>;
   using runtime_selection =
       detail::runtime_binding_selection<runtime_binding_interface_type>;
   template <typename Registration>

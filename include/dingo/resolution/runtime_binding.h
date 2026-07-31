@@ -322,7 +322,8 @@ struct runtime_storage_can_reset<
 template <typename Container, typename Type, typename Storage, typename State>
 class runtime_binding
     : public runtime_binding_interface<
-          Container, runtime_context<typename Container::allocator_type>>,
+          typename Container::rtti_type,
+          runtime_context<typename Container::allocator_type>>,
       private detail::binding_conversion_cache_base<
           Storage::conversions::is_stable &&
               detail::has_runtime_binding_cache_v<
@@ -339,6 +340,8 @@ public:
   using rtti_type = typename Container::rtti_type;
   using type_index = typename rtti_type::type_index;
   using request_type = instance_request<rtti_type>;
+  using interface_base =
+      runtime_binding_interface<rtti_type, runtime_context_type>;
   using cache_types = detail::runtime_binding_cache_types_t<Type, Storage>;
   using resolutions = detail::binding_resolutions<Type, Storage>;
   // The request descriptor retains value/reference/pointer qualification, so
@@ -500,7 +503,9 @@ public:
 
 public:
   template <typename... Args>
-  runtime_binding(Args &&...args) : state_(std::forward<Args>(args)...) {
+  runtime_binding(Args &&...args)
+      : interface_base(&runtime_binding::dispatch_request),
+        state_(std::forward<Args>(args)...) {
     this->cache_slot(state().cache_slot());
   }
 
@@ -510,10 +515,13 @@ public:
 #pragma warning(push)
 #pragma warning(disable : 4702)
 #endif
-  resolved_address resolve_request(construction_scope scope,
-                                   runtime_context_type &context,
-                                   const request_type &request,
-                                   detail::cache::sink cache) override {
+private:
+  static resolved_address dispatch_request(interface_base &erased,
+                                           construction_scope scope,
+                                           runtime_context_type &context,
+                                           const request_type &request,
+                                           detail::cache::sink cache) {
+    auto &binding = static_cast<runtime_binding &>(erased);
     if constexpr (type_list_size_v<request_resolutions> == 0) {
       (void)scope;
       (void)cache;
@@ -529,9 +537,9 @@ public:
             request.requested_type, registered_type(), context);
       }
 
-      binding_activation activation{*this, scope};
-      auto result =
-          with_source(scope, context, [&](auto &&source) -> resolved_address {
+      binding_activation activation{binding, scope};
+      auto result = binding.with_source(
+          scope, context, [&](auto &&source) -> resolved_address {
             return detail::resolve_request_address_from_source<Storage>(
                 scope, activation, context,
                 std::forward<decltype(source)>(source), resolution_index,
@@ -552,6 +560,7 @@ public:
 #pragma warning(pop)
 #endif
 
+public:
   template <typename Context>
   decltype(auto) resolve(construction_scope scope, Context &context) {
     return with_source(scope, context, [](auto &&source) -> decltype(auto) {
