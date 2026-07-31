@@ -99,7 +99,7 @@ template <typename T> constexpr std::string_view wrapped_type_name() {
 #endif
 }
 
-template <typename T> constexpr std::string_view wrapped_type_name_prefix() {
+constexpr std::string_view wrapped_type_name_prefix() {
 #if defined(__clang__)
   return "[T = ";
 #elif defined(__GNUC__)
@@ -111,7 +111,7 @@ template <typename T> constexpr std::string_view wrapped_type_name_prefix() {
 #endif
 }
 
-template <typename T> constexpr std::string_view wrapped_type_name_suffix() {
+constexpr std::string_view wrapped_type_name_suffix() {
 #if defined(__clang__)
   return "]";
 #elif defined(__GNUC__)
@@ -123,22 +123,32 @@ template <typename T> constexpr std::string_view wrapped_type_name_suffix() {
 #endif
 }
 
+// Compiler type-name signatures have fixed text around T. Locate that text
+// once instead of repeating two constexpr linear searches for every type.
+constexpr auto wrapped_type_name_sample = wrapped_type_name<void>();
+constexpr auto wrapped_type_name_prefix_pos =
+    type_name_find(wrapped_type_name_sample, wrapped_type_name_prefix());
+
+static_assert(wrapped_type_name_prefix_pos != type_name_not_found,
+              "failed to parse compiler type name prefix");
+
+constexpr auto wrapped_type_name_start =
+    wrapped_type_name_prefix_pos + wrapped_type_name_prefix().size();
+constexpr auto wrapped_type_name_suffix_pos =
+    type_name_find(wrapped_type_name_sample, wrapped_type_name_suffix(),
+                   wrapped_type_name_start);
+
+static_assert(wrapped_type_name_suffix_pos != type_name_not_found,
+              "failed to parse compiler type name suffix");
+
+constexpr auto wrapped_type_name_trailer_size =
+    wrapped_type_name_sample.size() - wrapped_type_name_suffix_pos;
+
 template <typename T> constexpr std::string_view raw_type_name() {
   constexpr auto wrapped = wrapped_type_name<T>();
-  constexpr auto prefix = wrapped_type_name_prefix<T>();
-  constexpr auto suffix = wrapped_type_name_suffix<T>();
-  constexpr auto prefix_pos = type_name_find(wrapped, prefix);
-
-  static_assert(prefix_pos != type_name_not_found,
-                "failed to parse compiler type name prefix");
-
-  constexpr auto start = prefix_pos + prefix.size();
-  constexpr auto end = type_name_find(wrapped, suffix, start);
-
-  static_assert(end != type_name_not_found,
-                "failed to parse compiler type name suffix");
-
-  return std::string_view(wrapped.data() + start, end - start);
+  constexpr auto end = wrapped.size() - wrapped_type_name_trailer_size;
+  return std::string_view(wrapped.data() + wrapped_type_name_start,
+                          end - wrapped_type_name_start);
 }
 
 constexpr type_cv_flags operator|(type_cv_flags lhs, type_cv_flags rhs) {
