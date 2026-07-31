@@ -493,10 +493,9 @@ protected:
     return shared_runtime_data().find_scope(scope);
   }
 
-  template <typename Parent>
   runtime_bindings_state &
   ensure_runtime_bindings(runtime_transaction_type &transaction,
-                          Parent *registration_parent) {
+                          void *registration_parent) {
     if constexpr (OwnsRuntimeData) {
       return *runtime_bindings();
     } else {
@@ -1473,8 +1472,8 @@ private:
             validate_supplied_runtime_registration_keys<interface_types,
                                                         KeyValueArgs...>();
           }
-          inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
-          runtime_transaction_type transaction(runtime(), scratch);
+          detail::runtime_transaction_frame<runtime_type> frame{runtime()};
+          auto &transaction = frame.transaction();
           auto &state = ensure_runtime_bindings(transaction, parent);
           runtime_binding_state_type *data = nullptr;
           if constexpr (!is_none_v<std::decay_t<Arg>>) {
@@ -1494,7 +1493,8 @@ private:
                                             runtime_binding_state_type *,
                                             registration_key>;
           auto &binding_owner =
-              *transaction.template construct_persistent<owner_type>(data);
+              *transaction.template construct_persistent_erased<owner_type>(
+                  data);
           auto *binding_result = std::addressof(binding_owner);
           shared_lookup_value_factory<owner_type> value_factory{
               std::addressof(binding_owner)};
@@ -1505,7 +1505,7 @@ private:
                 state, value_factory, transaction, registration_key{},
                 key_values...);
           });
-          transaction.commit();
+          frame.commit();
           return container_proxy<owner_type>(binding_result);
         } else {
           return invalid_registration_return<instance_container_type>();
@@ -1757,11 +1757,12 @@ private:
   container_proxy<Owner> commit_binding(Parent *parent, LookupKey lookup_key,
                                         KeyValueTuple &&key_values,
                                         Args &&...args) {
-    inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
-    runtime_transaction_type transaction(runtime(), scratch);
+    detail::runtime_transaction_frame<runtime_type> frame{runtime()};
+    auto &transaction = frame.transaction();
     auto &state = ensure_runtime_bindings(transaction, parent);
-    auto &binding_owner = *transaction.template construct_persistent<Owner>(
-        this, std::forward<Args>(args)...);
+    auto &binding_owner =
+        *transaction.template construct_persistent_erased<Owner>(
+            this, std::forward<Args>(args)...);
     auto *binding_result = std::addressof(binding_owner);
     using route = lookup_index_route<TypeInterface, LookupKey>;
     constexpr bool uses_singular_base_lookup =
@@ -1799,7 +1800,7 @@ private:
           },
           std::forward<KeyValueTuple>(key_values));
     }
-    transaction.commit();
+    frame.commit();
     return container_proxy<Owner>(binding_result);
   }
 

@@ -151,10 +151,11 @@ template <typename Runtime> class transaction_frame {
 public:
   using allocator_type = typename Runtime::allocator_type;
   using context_type = runtime_context<allocator_type>;
-  using transaction_type = runtime_transaction<allocator_type>;
 
   DINGO_NOINLINE explicit transaction_frame(Runtime &runtime)
-      : transaction_(runtime, scratch_), context_(scratch_, transaction_) {}
+      : transaction_frame_(runtime),
+        context_(transaction_frame_.scratch(),
+                 transaction_frame_.transaction()) {}
 
   DINGO_NOINLINE ~transaction_frame() noexcept {}
 
@@ -162,11 +163,10 @@ public:
   transaction_frame &operator=(const transaction_frame &) = delete;
 
   context_type &context() noexcept { return context_; }
-  void commit() noexcept { transaction_.commit(); }
+  void commit() noexcept { transaction_frame_.commit(); }
 
 private:
-  inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch_;
-  transaction_type transaction_;
+  runtime_transaction_frame<Runtime> transaction_frame_;
   context_type context_;
 };
 

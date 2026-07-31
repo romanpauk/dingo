@@ -136,6 +136,24 @@ public:
     return instance;
   }
 
+  // Registration is cold; route its common allocation and cleanup through one
+  // body instead of emitting that machinery for every binding type.
+  template <typename T, typename... Args>
+  T *construct_persistent_erased(Args &&...args) {
+    auto construct = [&](void *instance) {
+      new (instance) T(std::forward<Args>(args)...);
+    };
+    constexpr auto destroy = std::is_trivially_destructible_v<T>
+                                 ? nullptr
+                                 : &runtime_transaction::destructor<T>;
+    return static_cast<T *>(construct_persistent_erased(
+        sizeof(T), alignof(T), std::addressof(construct),
+        [](void *context, void *instance) {
+          (*static_cast<decltype(construct) *>(context))(instance);
+        },
+        destroy));
+  }
+
   template <typename T, typename ConstructFn>
   T *construct_persistent_with(ConstructFn &&construct_fn) {
     auto *instance =
@@ -198,6 +216,21 @@ public:
   }
 
 private:
+  using persistent_constructor = void (*)(void *, void *);
+  using persistent_destructor = void (*)(void *) noexcept;
+
+  DINGO_NOINLINE void *
+  construct_persistent_erased(std::size_t size, std::size_t alignment,
+                              void *context, persistent_constructor construct,
+                              persistent_destructor destroy) {
+    auto *instance = allocate_persistent(size, alignment);
+    construct(context, instance);
+    if (destroy != nullptr) {
+      add_persistent_destructor(instance, destroy);
+    }
+    return instance;
+  }
+
   void *allocate_persistent(std::size_t size, std::size_t alignment) {
     return runtime_->allocate(size, alignment);
   }
@@ -273,6 +306,35 @@ private:
   runtime_type *runtime_;
   typename runtime_type::checkpoint checkpoint_;
 };
+
+namespace detail {
+
+// Transaction users vary by callback and binding type. Keep the arena and
+// transaction lifetime in an Allocator-only frame so those users share it.
+template <typename Runtime> class runtime_transaction_frame {
+public:
+  using allocator_type = typename Runtime::allocator_type;
+  using transaction_type = runtime_transaction<allocator_type>;
+
+  DINGO_NOINLINE explicit runtime_transaction_frame(Runtime &runtime)
+      : transaction_(runtime, scratch_) {}
+
+  DINGO_NOINLINE ~runtime_transaction_frame() noexcept {}
+
+  runtime_transaction_frame(const runtime_transaction_frame &) = delete;
+  runtime_transaction_frame &
+  operator=(const runtime_transaction_frame &) = delete;
+
+  arena<> &scratch() noexcept { return scratch_; }
+  transaction_type &transaction() noexcept { return transaction_; }
+  void commit() noexcept { transaction_.commit(); }
+
+private:
+  inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch_;
+  transaction_type transaction_;
+};
+
+} // namespace detail
 
 #ifdef _MSC_VER
 #pragma warning(pop)
