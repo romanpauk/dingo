@@ -857,6 +857,55 @@ struct conversion_fallback_candidate<8, Target, Source, Access, Direct> {
       typename retained_type_conversion_candidate<Target, Source, Access>::type;
 };
 
+template <typename Target, typename Source, typename Direct>
+inline constexpr std::size_t first_conversion_fallback_v = [] {
+  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
+  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
+  using target_array = std::conditional_t<std::is_pointer_v<Target>,
+                                          std::remove_pointer_t<Target>,
+                                          std::remove_reference_t<Target>>;
+
+  // These are necessary conditions only. The selected candidate still
+  // performs its complete validity check before it can win.
+  if constexpr (!std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
+                is_alternative_type_v<target_type>) {
+    return 0;
+  } else if constexpr (is_alternative_type_v<source_type> &&
+                       !std::is_volatile_v<std::remove_reference_t<Source>>) {
+    return 1;
+  } else if constexpr (!std::is_reference_v<Target> &&
+                       !std::is_pointer_v<Target> &&
+                       is_value_wrapper_type_v<target_type>) {
+    return 2;
+  } else if constexpr (std::is_pointer_v<std::remove_reference_t<Source>> &&
+                       ((std::is_lvalue_reference_v<Target> &&
+                         std::is_array_v<std::remove_reference_t<Target>>) ||
+                        (std::is_pointer_v<Target> &&
+                         std::is_array_v<target_array>))) {
+    return 3;
+  } else if constexpr (Direct::can_take_address) {
+    return 4;
+  } else if constexpr (std::is_pointer_v<Target> &&
+                       std::is_lvalue_reference_v<Source>) {
+    return 5;
+  } else if constexpr (std::is_pointer_v<std::remove_reference_t<Source>> &&
+                       !std::is_void_v<std::remove_pointer_t<
+                           std::remove_reference_t<Source>>> &&
+                       !std::is_pointer_v<Target>) {
+    return 6;
+  } else if constexpr (type_traits<source_type>::is_value_borrowable) {
+    return 7;
+  } else if constexpr ((std::is_lvalue_reference_v<Target> ||
+                        std::is_pointer_v<Target>) &&
+                       type_traits<
+                           retained_conversion_type_t<Target>>::enabled &&
+                       !std::is_array_v<retained_conversion_type_t<Target>>) {
+    return 8;
+  } else {
+    return 9;
+  }
+}();
+
 // Keep later recursive candidates incomplete until every earlier conversion
 // has failed; merely naming all candidates instantiates all of their paths.
 template <std::size_t Index, typename Target, typename Source, typename Access,
@@ -883,8 +932,9 @@ struct select_conversion_fallback<9, Target, Source, Access, Direct> {
 template <typename Target, typename Source, typename Access, typename Direct>
 struct type_conversion_path<Target, Source, Access, Direct, true> {
 public:
-  using type = typename select_conversion_fallback<0, Target, Source, Access,
-                                                   Direct>::type;
+  using type = typename select_conversion_fallback<
+      first_conversion_fallback_v<Target, Source, Direct>, Target, Source,
+      Access, Direct>::type;
   static constexpr bool available = type::available;
 };
 
