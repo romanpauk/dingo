@@ -142,36 +142,46 @@ public:
                           alternative_type_alternatives_t<value_type>>::type>>;
 };
 
-template <typename Expected, typename Candidate, typename = void>
-struct registration_arg_matches : std::false_type {};
-
 template <typename T> struct is_registration_key_arg : std::false_type {};
 
 template <typename T, auto... Values>
 struct is_registration_key_arg<::dingo::key_type<T, Values...>>
     : std::bool_constant<!std::is_void_v<T>> {};
 
-template <typename Expected, typename Candidate>
-struct registration_arg_matches<
-    Expected, Candidate,
-    std::enable_if_t<!is_registration_key_arg<Candidate>::value,
-                     std::void_t<typename Candidate::template rebind_t<void>>>>
-    : std::bool_constant<
-          std::is_same_v<Expected,
-                         typename Candidate::template rebind_t<void>> &&
-          !std::is_same_v<Candidate, Expected>> {};
+// Classify each argument once instead of probing every supported wrapper while
+// parsing it. The rebound tag also keeps user-defined registration wrappers.
+template <typename Candidate,
+          bool IsKey = is_registration_key_arg<Candidate>::value,
+          typename = void>
+struct registration_arg_tag {
+  using type = void;
+};
 
 template <typename Candidate>
-struct registration_arg_matches<
-    ::dingo::key_type<::dingo::none_t>, Candidate,
-    std::enable_if_t<is_registration_key_arg<Candidate>::value>>
-    : std::true_type {};
+struct registration_arg_tag<
+    Candidate, false,
+    std::void_t<typename Candidate::template rebind_t<void>>> {
+private:
+  using rebound = typename Candidate::template rebind_t<void>;
+  static constexpr bool supported =
+      (std::is_same_v<rebound, ::dingo::scope<void>> ||
+       std::is_same_v<rebound, ::dingo::storage<void>> ||
+       std::is_same_v<rebound, ::dingo::factory<void>> ||
+       std::is_same_v<rebound, ::dingo::interfaces<void>> ||
+       std::is_same_v<rebound, ::dingo::key_type<::dingo::none_t>> ||
+       std::is_same_v<rebound, ::dingo::conversions<void>> ||
+       std::is_same_v<rebound, ::dingo::dependencies<void>> ||
+       std::is_same_v<rebound, ::dingo::bindings<void>>) &&
+      !std::is_same_v<Candidate, rebound>;
 
-template <typename Current, typename Expected, typename Candidate>
-using registration_arg_t = std::conditional_t<
-    !std::is_same_v<Current, Expected>, Current,
-    std::conditional_t<registration_arg_matches<Expected, Candidate>::value,
-                       Candidate, Current>>;
+public:
+  using type = std::conditional_t<supported, rebound, void>;
+};
+
+template <typename Candidate>
+struct registration_arg_tag<Candidate, true, void> {
+  using type = ::dingo::key_type<::dingo::none_t>;
+};
 
 template <typename ScopeType, typename StorageType, typename FactoryType,
           typename InterfaceType, typename KeyType, typename ConversionsType,
@@ -185,6 +195,130 @@ struct registration_args {
   using conversions_type = ConversionsType;
   using dependencies_type = DependenciesType;
   using bindings_type = BindingsType;
+};
+
+template <typename ParsedArgs, typename Arg,
+          typename Tag = typename registration_arg_tag<Arg>::type>
+struct set_registration_arg {
+  using type = ParsedArgs;
+};
+
+template <typename ScopeType, typename StorageType, typename FactoryType,
+          typename InterfaceType, typename KeyType, typename ConversionsType,
+          typename DependenciesType, typename BindingsType, typename Arg>
+struct set_registration_arg<
+    registration_args<ScopeType, StorageType, FactoryType, InterfaceType,
+                      KeyType, ConversionsType, DependenciesType, BindingsType>,
+    Arg, ::dingo::scope<void>> {
+  using type = registration_args<
+      std::conditional_t<std::is_same_v<ScopeType, ::dingo::scope<void>>, Arg,
+                         ScopeType>,
+      StorageType, FactoryType, InterfaceType, KeyType, ConversionsType,
+      DependenciesType, BindingsType>;
+};
+
+template <typename ScopeType, typename StorageType, typename FactoryType,
+          typename InterfaceType, typename KeyType, typename ConversionsType,
+          typename DependenciesType, typename BindingsType, typename Arg>
+struct set_registration_arg<
+    registration_args<ScopeType, StorageType, FactoryType, InterfaceType,
+                      KeyType, ConversionsType, DependenciesType, BindingsType>,
+    Arg, ::dingo::storage<void>> {
+  using type = registration_args<
+      ScopeType,
+      std::conditional_t<std::is_same_v<StorageType, ::dingo::storage<void>>,
+                         Arg, StorageType>,
+      FactoryType, InterfaceType, KeyType, ConversionsType, DependenciesType,
+      BindingsType>;
+};
+
+template <typename ScopeType, typename StorageType, typename FactoryType,
+          typename InterfaceType, typename KeyType, typename ConversionsType,
+          typename DependenciesType, typename BindingsType, typename Arg>
+struct set_registration_arg<
+    registration_args<ScopeType, StorageType, FactoryType, InterfaceType,
+                      KeyType, ConversionsType, DependenciesType, BindingsType>,
+    Arg, ::dingo::factory<void>> {
+  using type = registration_args<
+      ScopeType, StorageType,
+      std::conditional_t<std::is_same_v<FactoryType, ::dingo::factory<void>>,
+                         Arg, FactoryType>,
+      InterfaceType, KeyType, ConversionsType, DependenciesType, BindingsType>;
+};
+
+template <typename ScopeType, typename StorageType, typename FactoryType,
+          typename InterfaceType, typename KeyType, typename ConversionsType,
+          typename DependenciesType, typename BindingsType, typename Arg>
+struct set_registration_arg<
+    registration_args<ScopeType, StorageType, FactoryType, InterfaceType,
+                      KeyType, ConversionsType, DependenciesType, BindingsType>,
+    Arg, ::dingo::interfaces<void>> {
+  using type = registration_args<
+      ScopeType, StorageType, FactoryType,
+      std::conditional_t<
+          std::is_same_v<InterfaceType, ::dingo::interfaces<void>>, Arg,
+          InterfaceType>,
+      KeyType, ConversionsType, DependenciesType, BindingsType>;
+};
+
+template <typename ScopeType, typename StorageType, typename FactoryType,
+          typename InterfaceType, typename KeyType, typename ConversionsType,
+          typename DependenciesType, typename BindingsType, typename Arg>
+struct set_registration_arg<
+    registration_args<ScopeType, StorageType, FactoryType, InterfaceType,
+                      KeyType, ConversionsType, DependenciesType, BindingsType>,
+    Arg, ::dingo::key_type<::dingo::none_t>> {
+  using type = registration_args<
+      ScopeType, StorageType, FactoryType, InterfaceType,
+      std::conditional_t<
+          std::is_same_v<KeyType, ::dingo::key_type<::dingo::none_t>>, Arg,
+          KeyType>,
+      ConversionsType, DependenciesType, BindingsType>;
+};
+
+template <typename ScopeType, typename StorageType, typename FactoryType,
+          typename InterfaceType, typename KeyType, typename ConversionsType,
+          typename DependenciesType, typename BindingsType, typename Arg>
+struct set_registration_arg<
+    registration_args<ScopeType, StorageType, FactoryType, InterfaceType,
+                      KeyType, ConversionsType, DependenciesType, BindingsType>,
+    Arg, ::dingo::conversions<void>> {
+  using type = registration_args<
+      ScopeType, StorageType, FactoryType, InterfaceType, KeyType,
+      std::conditional_t<
+          std::is_same_v<ConversionsType, ::dingo::conversions<void>>, Arg,
+          ConversionsType>,
+      DependenciesType, BindingsType>;
+};
+
+template <typename ScopeType, typename StorageType, typename FactoryType,
+          typename InterfaceType, typename KeyType, typename ConversionsType,
+          typename DependenciesType, typename BindingsType, typename Arg>
+struct set_registration_arg<
+    registration_args<ScopeType, StorageType, FactoryType, InterfaceType,
+                      KeyType, ConversionsType, DependenciesType, BindingsType>,
+    Arg, ::dingo::dependencies<void>> {
+  using type = registration_args<
+      ScopeType, StorageType, FactoryType, InterfaceType, KeyType,
+      ConversionsType,
+      std::conditional_t<
+          std::is_same_v<DependenciesType, ::dingo::dependencies<void>>, Arg,
+          DependenciesType>,
+      BindingsType>;
+};
+
+template <typename ScopeType, typename StorageType, typename FactoryType,
+          typename InterfaceType, typename KeyType, typename ConversionsType,
+          typename DependenciesType, typename BindingsType, typename Arg>
+struct set_registration_arg<
+    registration_args<ScopeType, StorageType, FactoryType, InterfaceType,
+                      KeyType, ConversionsType, DependenciesType, BindingsType>,
+    Arg, ::dingo::bindings<void>> {
+  using type = registration_args<
+      ScopeType, StorageType, FactoryType, InterfaceType, KeyType,
+      ConversionsType, DependenciesType,
+      std::conditional_t<std::is_same_v<BindingsType, ::dingo::bindings<void>>,
+                         Arg, BindingsType>>;
 };
 
 template <typename ParsedArgs, typename... Args> struct parse_registration_args;
@@ -202,15 +336,11 @@ struct parse_registration_args<
                       KeyType, ConversionsType, DependenciesType, BindingsType>,
     Head, Tail...> {
 private:
-  using parsed_head = registration_args<
-      registration_arg_t<ScopeType, ::dingo::scope<void>, Head>,
-      registration_arg_t<StorageType, ::dingo::storage<void>, Head>,
-      registration_arg_t<FactoryType, ::dingo::factory<void>, Head>,
-      registration_arg_t<InterfaceType, ::dingo::interfaces<void>, Head>,
-      registration_arg_t<KeyType, ::dingo::key_type<::dingo::none_t>, Head>,
-      registration_arg_t<ConversionsType, ::dingo::conversions<void>, Head>,
-      registration_arg_t<DependenciesType, ::dingo::dependencies<void>, Head>,
-      registration_arg_t<BindingsType, ::dingo::bindings<void>, Head>>;
+  using parsed_head = typename set_registration_arg<
+      registration_args<ScopeType, StorageType, FactoryType, InterfaceType,
+                        KeyType, ConversionsType, DependenciesType,
+                        BindingsType>,
+      Head>::type;
 
 public:
   using type = typename parse_registration_args<parsed_head, Tail...>::type;
@@ -227,14 +357,7 @@ using parse_registration_args_t = typename parse_registration_args<
 
 template <typename T>
 inline constexpr bool is_supported_registration_arg_v =
-    registration_arg_matches<::dingo::scope<void>, T>::value ||
-    registration_arg_matches<::dingo::storage<void>, T>::value ||
-    registration_arg_matches<::dingo::factory<void>, T>::value ||
-    registration_arg_matches<::dingo::interfaces<void>, T>::value ||
-    registration_arg_matches<::dingo::key_type<::dingo::none_t>, T>::value ||
-    registration_arg_matches<::dingo::conversions<void>, T>::value ||
-    registration_arg_matches<::dingo::dependencies<void>, T>::value ||
-    registration_arg_matches<::dingo::bindings<void>, T>::value;
+    !std::is_void_v<typename registration_arg_tag<T>::type>;
 
 template <typename T, typename...> struct get_type;
 template <typename T> struct get_type<T, type_list<>> {
