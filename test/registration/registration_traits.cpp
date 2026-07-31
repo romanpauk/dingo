@@ -74,6 +74,11 @@ using safe_converted_variant =
     std::variant<std::shared_ptr<long>, safe_observer_pointer>;
 } // namespace conversion_compatibility_test
 
+namespace binding_resolution_shape_test {
+struct ordinary_value {};
+struct custom_value {};
+} // namespace binding_resolution_shape_test
+
 namespace dingo {
 template <>
 struct type_conversion_traits<conversion_compatibility_test::target,
@@ -242,7 +247,33 @@ struct type_conversion_traits<
     return conversion_compatibility_test::safe_observer_pointer(pointer);
   }
 };
+
+template <>
+struct type_conversion_traits<
+    binding_resolution_shape_test::custom_value *,
+    test_shared<binding_resolution_shape_test::custom_value>> {
+  template <typename> using required_access = borrow;
+
+  static binding_resolution_shape_test::custom_value *
+  convert(test_shared<binding_resolution_shape_test::custom_value> &source) {
+    return source.get();
+  }
+};
 } // namespace dingo
+
+namespace binding_resolution_shape_test {
+template <typename T> struct pointer_storage {
+  using type = test_shared<T>;
+  using resolved_type = test_shared<T> &;
+
+  struct conversions {
+    using value_types = type_list<>;
+    using lvalue_reference_types = type_list<>;
+    using rvalue_reference_types = type_list<>;
+    using pointer_types = type_list<T *>;
+  };
+};
+} // namespace binding_resolution_shape_test
 
 namespace {
 template <typename Resolutions> struct resolution_targets;
@@ -272,6 +303,35 @@ template <typename Type> struct fresh_value_storage {
   };
 };
 } // namespace
+
+TEST(type_registration_test,
+     normalized_binding_resolutions_fall_back_for_custom_leaf_conversion) {
+  using namespace binding_resolution_shape_test;
+  using ordinary_storage = pointer_storage<ordinary_value>;
+  using custom_storage = pointer_storage<custom_value>;
+
+  static_assert(
+      detail::can_normalize_binding_resolutions<ordinary_value,
+                                                ordinary_storage>::value);
+  static_assert(
+      !detail::can_normalize_binding_resolutions<custom_value,
+                                                 custom_storage>::value);
+
+  using custom_conversion =
+      detail::type_conversion_path_t<custom_value *,
+                                     test_shared<custom_value> &, borrow>;
+  static_assert(
+      std::is_same_v<custom_conversion,
+                     detail::traits_type_conversion<
+                         custom_value *, test_shared<custom_value> &>>);
+
+  using resolutions = detail::binding_resolutions<custom_value, custom_storage>;
+  using expected_resolution =
+      detail::conversion_resolution<custom_value *, test_shared<custom_value> &,
+                                    borrow>;
+  static_assert(std::is_same_v<typename resolutions::pointer_resolutions,
+                               type_list<expected_resolution>>);
+}
 
 TEST(type_registration_test,
      runtime_local_bindings_declare_the_registration_container) {

@@ -334,7 +334,8 @@ public:
       type_list_cat_t<borrowed_composition, consumed_composition>;
 };
 
-template <typename Interface, typename Storage> struct binding_resolutions {
+template <typename Interface, typename Storage>
+struct exact_binding_resolutions {
 private:
   using conversions = typename Storage::conversions;
   using stored_values = storage_resolutions_t<typename conversions::value_types,
@@ -366,6 +367,252 @@ public:
       type_list_cat_t<value_resolutions, lvalue_reference_resolutions,
                       rvalue_reference_resolutions, pointer_resolutions>>;
 };
+
+template <typename Types, typename Leaf> struct rebind_resolution_types;
+
+template <typename Leaf, typename... Types>
+struct rebind_resolution_types<type_list<Types...>, Leaf> {
+  using type = type_list<rebind_leaf_t<Types, Leaf>...>;
+};
+
+template <typename Types, typename Leaf>
+using rebind_resolution_types_t =
+    typename rebind_resolution_types<Types, Leaf>::type;
+
+// The normalized members, rather than the original Storage specialization,
+// form the type identity so equivalent user-defined wrappers share this work.
+template <typename Type, typename ResolvedType, typename ValueTypes,
+          typename LvalueReferenceTypes, typename RvalueReferenceTypes,
+          typename PointerTypes>
+struct binding_resolution_shape_storage {
+  struct conversions {
+    using value_types = ValueTypes;
+    using lvalue_reference_types = LvalueReferenceTypes;
+    using rvalue_reference_types = RvalueReferenceTypes;
+    using pointer_types = PointerTypes;
+  };
+
+  using type = Type;
+  using resolved_type = ResolvedType;
+};
+
+template <typename Storage>
+using binding_resolution_shape_storage_t = binding_resolution_shape_storage<
+    rebind_leaf_t<typename Storage::type, runtime_type>,
+    rebind_leaf_t<typename Storage::resolved_type, runtime_type>,
+    rebind_resolution_types_t<typename Storage::conversions::value_types,
+                              runtime_type>,
+    rebind_resolution_types_t<
+        typename Storage::conversions::lvalue_reference_types, runtime_type>,
+    rebind_resolution_types_t<
+        typename Storage::conversions::rvalue_reference_types, runtime_type>,
+    rebind_resolution_types_t<typename Storage::conversions::pointer_types,
+                              runtime_type>>;
+
+template <typename Recipe, typename Target, typename Source>
+struct materialize_resolution_recipe {
+  static constexpr bool supported = false;
+  static constexpr bool matches = false;
+  using type = unavailable_type_conversion;
+};
+
+// Rebuild the shared recipe for the actual leaf and cheaply confirm that no
+// leaf-specific conversion customization would select a different route.
+template <typename ShapeTarget, typename ShapeSource, typename Target,
+          typename Source>
+struct materialize_resolution_recipe<
+    identity_type_conversion<ShapeTarget, ShapeSource>, Target, Source> {
+  using type = identity_type_conversion<Target, Source>;
+
+  static constexpr bool supported = true;
+  static constexpr bool matches = std::is_same_v<
+      typename basic_type_conversion_path<Target, Source, borrow>::type, type>;
+};
+
+template <typename ShapeTarget, typename ShapeSource, typename RequiredAccess,
+          typename Argument, typename Target, typename Source>
+struct materialize_resolution_recipe<
+    traits_type_conversion<ShapeTarget, ShapeSource, RequiredAccess, Argument>,
+    Target, Source> {
+  using type = traits_type_conversion<Target, Source, RequiredAccess, Source>;
+
+  static constexpr bool supported = std::is_same_v<Argument, ShapeSource>;
+  static constexpr bool matches =
+      supported &&
+      std::is_same_v<
+          typename basic_type_conversion_path<Target, Source, borrow>::type,
+          type>;
+};
+
+template <typename ShapeTarget, typename ShapeSource, typename Target,
+          typename Source>
+struct materialize_resolution_recipe<
+    address_type_conversion<ShapeTarget, ShapeSource>, Target, Source> {
+private:
+  using direct = direct_type_conversion_path<Target, Source, borrow>;
+
+public:
+  using type = address_type_conversion<Target, Source>;
+
+  static constexpr bool supported = true;
+  static constexpr bool matches = direct::uses_default_conversion &&
+                                  !direct::available &&
+                                  direct::can_take_address;
+};
+
+template <typename ShapeTarget, typename ShapeSource, typename Target,
+          typename Source>
+struct materialize_resolution_recipe<
+    pointer_access_type_conversion<ShapeTarget, ShapeSource>, Target, Source> {
+private:
+  using direct = direct_type_conversion_path<Target, Source, borrow>;
+
+public:
+  using type = pointer_access_type_conversion<Target, Source>;
+
+  static constexpr bool supported = true;
+  static constexpr bool matches =
+      direct::uses_default_conversion && !direct::available &&
+      std::is_same_v<typename pointer_access_type_conversion_candidate<
+                         Target, Source>::type,
+                     type>;
+};
+
+template <typename ShapeTarget, typename ShapeSource, typename Next,
+          typename Target, typename Source>
+struct materialize_resolution_recipe<
+    borrowed_type_conversion<ShapeTarget, ShapeSource, Next>, Target, Source> {
+private:
+  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
+  using borrowed_source =
+      decltype(type_traits<source_type>::borrow(std::declval<Source>()));
+  using next = materialize_resolution_recipe<Next, Target, borrowed_source>;
+  using direct = direct_type_conversion_path<Target, Source, borrow>;
+
+public:
+  static constexpr bool supported = next::supported;
+  static constexpr bool matches =
+      direct::uses_default_conversion && !direct::available && next::matches;
+  using type = borrowed_type_conversion<Target, Source, typename next::type>;
+};
+
+template <typename ShapeResolution, typename Interface>
+struct materialize_binding_resolution;
+
+template <typename ShapeTarget, typename ShapeConversionTarget,
+          typename ShapeSource, typename Recipe, typename Interface>
+struct materialize_binding_resolution<
+    resolution<ShapeTarget,
+               type_resolution<ShapeConversionTarget, ShapeSource, Recipe>>,
+    Interface> {
+  using target = rebind_leaf_t<ShapeTarget, Interface>;
+  using conversion_target = rebind_leaf_t<ShapeConversionTarget, Interface>;
+  using source = rebind_leaf_t<ShapeSource, Interface>;
+  using conversion =
+      materialize_resolution_recipe<Recipe, conversion_target, source>;
+
+  static constexpr bool supported = conversion::supported;
+  static constexpr bool matches = conversion::matches;
+  using type = resolution<target, type_resolution<conversion_target, source,
+                                                  typename conversion::type>>;
+};
+
+template <typename Resolutions, typename Interface>
+struct materialize_binding_resolution_list;
+
+template <typename Interface, typename... Resolutions>
+struct materialize_binding_resolution_list<type_list<Resolutions...>,
+                                           Interface> {
+  static constexpr bool supported =
+      (materialize_binding_resolution<Resolutions, Interface>::supported &&
+       ...);
+  static constexpr bool matches =
+      (materialize_binding_resolution<Resolutions, Interface>::matches && ...);
+  using type =
+      type_list_unique_t<type_list<typename materialize_binding_resolution<
+          Resolutions, Interface>::type...>>;
+};
+
+template <typename Interface, typename Storage>
+struct normalized_binding_resolutions {
+private:
+  using shape_storage = binding_resolution_shape_storage_t<Storage>;
+  using shape = exact_binding_resolutions<runtime_type, shape_storage>;
+
+  using values =
+      materialize_binding_resolution_list<typename shape::value_resolutions,
+                                          Interface>;
+  using lvalue_references = materialize_binding_resolution_list<
+      typename shape::lvalue_reference_resolutions, Interface>;
+  using rvalue_references = materialize_binding_resolution_list<
+      typename shape::rvalue_reference_resolutions, Interface>;
+  using pointers =
+      materialize_binding_resolution_list<typename shape::pointer_resolutions,
+                                          Interface>;
+
+public:
+  static constexpr bool supported =
+      values::supported && lvalue_references::supported &&
+      rvalue_references::supported && pointers::supported;
+  static constexpr bool matches =
+      values::matches && lvalue_references::matches &&
+      rvalue_references::matches && pointers::matches;
+  using value_resolutions = typename values::type;
+  using lvalue_reference_resolutions = typename lvalue_references::type;
+  using rvalue_reference_resolutions = typename rvalue_references::type;
+  using pointer_resolutions = typename pointers::type;
+  using type = type_list_unique_t<
+      type_list_cat_t<value_resolutions, lvalue_reference_resolutions,
+                      rvalue_reference_resolutions, pointer_resolutions>>;
+};
+
+template <typename Interface, typename Storage, typename = void>
+struct binding_resolution_shape_eligible : std::false_type {};
+
+// Reject unsupported shapes before normalized_binding_resolutions is named;
+// otherwise uncommon storage forms pay for both the normalized and exact path.
+template <typename Interface, typename Storage>
+struct binding_resolution_shape_eligible<
+    Interface, Storage,
+    std::void_t<typename Storage::type, typename Storage::resolved_type,
+                typename Storage::conversions,
+                typename type_traits<std::remove_cv_t<std::remove_reference_t<
+                    typename Storage::resolved_type>>>::value_type>>
+    : std::bool_constant<
+          std::is_lvalue_reference_v<typename Storage::resolved_type> &&
+          type_traits<std::remove_cv_t<std::remove_reference_t<
+              typename Storage::resolved_type>>>::is_pointer_like &&
+          type_traits<std::remove_cv_t<std::remove_reference_t<
+              typename Storage::resolved_type>>>::is_value_borrowable &&
+          std::is_same_v<
+              typename type_traits<std::remove_cv_t<std::remove_reference_t<
+                  typename Storage::resolved_type>>>::value_type,
+              Interface> &&
+          !type_traits<Interface>::enabled && !std::is_array_v<Interface> &&
+          std::is_same_v<Interface, std::remove_cv_t<Interface>> &&
+          is_copy_constructible_v<Interface> &&
+          type_list_size_v<
+              typename Storage::conversions::rvalue_reference_types> == 0> {};
+
+template <typename Interface, typename Storage,
+          bool Eligible =
+              binding_resolution_shape_eligible<Interface, Storage>::value>
+struct can_normalize_binding_resolutions : std::false_type {};
+
+template <typename Interface, typename Storage>
+struct can_normalize_binding_resolutions<Interface, Storage, true>
+    : std::bool_constant<
+          normalized_binding_resolutions<Interface, Storage>::supported &&
+          normalized_binding_resolutions<Interface, Storage>::matches> {};
+
+template <typename Interface, typename Storage,
+          bool Normalize =
+              can_normalize_binding_resolutions<Interface, Storage>::value>
+struct binding_resolutions : exact_binding_resolutions<Interface, Storage> {};
+
+template <typename Interface, typename Storage>
+struct binding_resolutions<Interface, Storage, true>
+    : normalized_binding_resolutions<Interface, Storage> {};
 
 } // namespace detail
 
