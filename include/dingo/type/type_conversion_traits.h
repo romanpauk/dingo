@@ -282,10 +282,18 @@ using copy_cv_t = typename copy_cv<From, To>::type;
 template <typename Target, typename Source, typename Access>
 struct direct_type_conversion_path;
 
-template <typename Target, typename Source, typename Access = consume,
+template <typename Target, typename Source, typename Access>
+struct basic_type_conversion_path;
+
+template <typename Target, typename Source, typename Access,
           typename Direct = direct_type_conversion_path<Target, Source, Access>,
           bool UseFallback =
               Direct::uses_default_conversion && !Direct::available>
+struct type_conversion_path_impl;
+
+template <typename Target, typename Source, typename Access = consume,
+          typename Basic = basic_type_conversion_path<Target, Source, Access>,
+          bool UseBasic = Basic::available>
 struct type_conversion_path;
 
 template <typename Alternative, typename Source>
@@ -691,6 +699,54 @@ struct select_conversion_candidate<Candidate, Next, false> {
   using type = typename Next::type;
 };
 
+// Keep the common default cases out of the recursive conversion search. These
+// conditions mirror the leading candidates in direct_type_conversion_path.
+template <typename Target, typename Source, typename Access>
+struct basic_type_conversion_path {
+private:
+  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
+  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
+  using conversion_traits = type_conversion_traits<Target, source_type>;
+  static constexpr bool uses_default_conversion =
+      is_default_type_conversion<conversion_traits>::value;
+  static constexpr bool can_borrow = access_satisfies<Access, borrow>::value;
+  static constexpr bool can_consume = access_satisfies<Access, consume>::value;
+  static constexpr bool preserves_identity =
+      uses_default_conversion && !std::is_reference_v<Target> &&
+      !std::is_pointer_v<Target> &&
+      !std::is_volatile_v<std::remove_reference_t<Source>> &&
+      std::is_same_v<std::remove_cv_t<Target>, source_type> &&
+      ((std::is_lvalue_reference_v<Source> && can_borrow &&
+        is_copy_constructible_v<Target>) ||
+       (std::is_rvalue_reference_v<Source> && can_consume &&
+        std::is_constructible_v<Target, Source>));
+  static constexpr bool preserves_reference =
+      uses_default_conversion && can_borrow && !std::is_reference_v<Target> &&
+      !std::is_pointer_v<Target> && std::is_lvalue_reference_v<Source> &&
+      !std::is_volatile_v<std::remove_reference_t<Source>> &&
+      is_copy_constructible_v<Target> &&
+      std::is_convertible_v<std::add_pointer_t<std::remove_reference_t<Source>>,
+                            std::add_pointer_t<Target>>;
+  static constexpr bool converts_reference =
+      uses_default_conversion && can_borrow &&
+      std::is_lvalue_reference_v<Target> &&
+      std::is_lvalue_reference_v<Source> &&
+      std::is_convertible_v<
+          std::add_pointer_t<std::remove_reference_t<Source>>,
+          std::add_pointer_t<std::remove_reference_t<Target>>>;
+
+public:
+  using type = std::conditional_t<
+      preserves_identity, identity_type_conversion<Target, Source>,
+      std::conditional_t<
+          preserves_reference, reference_type_conversion<Target, Source>,
+          std::conditional_t<
+              converts_reference,
+              traits_type_conversion<Target, Source, borrow, Source>,
+              unavailable_type_conversion>>>;
+  static constexpr bool available = type::available;
+};
+
 template <typename Target, typename Source, typename Access>
 struct direct_type_conversion_path {
 private:
@@ -930,7 +986,7 @@ struct select_conversion_fallback<9, Target, Source, Access, Direct> {
 };
 
 template <typename Target, typename Source, typename Access, typename Direct>
-struct type_conversion_path<Target, Source, Access, Direct, true> {
+struct type_conversion_path_impl<Target, Source, Access, Direct, true> {
 public:
   using type = typename select_conversion_fallback<
       first_conversion_fallback_v<Target, Source, Direct>, Target, Source,
@@ -939,7 +995,15 @@ public:
 };
 
 template <typename Target, typename Source, typename Access, typename Direct>
-struct type_conversion_path<Target, Source, Access, Direct, false> : Direct {};
+struct type_conversion_path_impl<Target, Source, Access, Direct, false>
+    : Direct {};
+
+template <typename Target, typename Source, typename Access, typename Basic>
+struct type_conversion_path<Target, Source, Access, Basic, true> : Basic {};
+
+template <typename Target, typename Source, typename Access, typename Basic>
+struct type_conversion_path<Target, Source, Access, Basic, false>
+    : type_conversion_path_impl<Target, Source, Access> {};
 
 template <typename Target, typename Source, typename Access = consume>
 using type_conversion_path_t =
