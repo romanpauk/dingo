@@ -166,23 +166,25 @@ public:
   }
 
   template <typename Fn> void on_rollback(Fn &&fn) {
-    static_assert(std::is_nothrow_invocable_v<std::decay_t<Fn> &>);
-    static_assert(std::is_nothrow_destructible_v<std::decay_t<Fn>>);
+    using action_type = std::decay_t<Fn>;
+    static_assert(noexcept(std::declval<action_type &>()()));
+    static_assert(std::is_nothrow_destructible_v<action_type>);
     auto &actions = shared_actions();
     add_action(actions, actions.rollback_tail, std::forward<Fn>(fn));
   }
 
   template <typename Fn> void on_commit(Fn &&fn) {
-    static_assert(std::is_nothrow_invocable_v<std::decay_t<Fn> &>);
-    static_assert(std::is_nothrow_destructible_v<std::decay_t<Fn>>);
+    using action_type = std::decay_t<Fn>;
+    static_assert(noexcept(std::declval<action_type &>()()));
+    static_assert(std::is_nothrow_destructible_v<action_type>);
     auto &actions = shared_actions();
     add_action(actions, actions.commit_tail, std::forward<Fn>(fn));
   }
 
   template <typename Fn> void on_finish(Fn &&fn) {
-    static_assert(std::is_nothrow_invocable_v<std::decay_t<Fn> &>);
-    static_assert(std::is_nothrow_destructible_v<std::decay_t<Fn>>);
     using action_type = std::decay_t<Fn>;
+    static_assert(noexcept(std::declval<action_type &>()()));
+    static_assert(std::is_nothrow_destructible_v<action_type>);
     auto &actions = shared_actions();
     auto &callback =
         actions.template construct<action_type>(std::forward<Fn>(fn));
