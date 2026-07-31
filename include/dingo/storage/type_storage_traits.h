@@ -412,12 +412,11 @@ using binding_resolution_shape_storage_t = binding_resolution_shape_storage<
 template <typename Recipe, typename Target, typename Source>
 struct materialize_resolution_recipe {
   static constexpr bool supported = false;
-  static constexpr bool matches = false;
   using type = unavailable_type_conversion;
 };
 
-// Rebuild the shared recipe for the actual leaf and cheaply confirm that no
-// leaf-specific conversion customization would select a different route.
+// Rebuild the structural recipe with the actual leaf while keeping route
+// selection shared by every binding with the same storage shape.
 template <typename ShapeTarget, typename ShapeSource, typename Target,
           typename Source>
 struct materialize_resolution_recipe<
@@ -425,8 +424,6 @@ struct materialize_resolution_recipe<
   using type = identity_type_conversion<Target, Source>;
 
   static constexpr bool supported = true;
-  static constexpr bool matches = std::is_same_v<
-      typename basic_type_conversion_path<Target, Source, borrow>::type, type>;
 };
 
 template <typename ShapeTarget, typename ShapeSource, typename RequiredAccess,
@@ -437,45 +434,24 @@ struct materialize_resolution_recipe<
   using type = traits_type_conversion<Target, Source, RequiredAccess, Source>;
 
   static constexpr bool supported = std::is_same_v<Argument, ShapeSource>;
-  static constexpr bool matches =
-      supported &&
-      std::is_same_v<
-          typename basic_type_conversion_path<Target, Source, borrow>::type,
-          type>;
 };
 
 template <typename ShapeTarget, typename ShapeSource, typename Target,
           typename Source>
 struct materialize_resolution_recipe<
     address_type_conversion<ShapeTarget, ShapeSource>, Target, Source> {
-private:
-  using direct = direct_type_conversion_path<Target, Source, borrow>;
-
-public:
   using type = address_type_conversion<Target, Source>;
 
   static constexpr bool supported = true;
-  static constexpr bool matches = direct::uses_default_conversion &&
-                                  !direct::available &&
-                                  direct::can_take_address;
 };
 
 template <typename ShapeTarget, typename ShapeSource, typename Target,
           typename Source>
 struct materialize_resolution_recipe<
     pointer_access_type_conversion<ShapeTarget, ShapeSource>, Target, Source> {
-private:
-  using direct = direct_type_conversion_path<Target, Source, borrow>;
-
-public:
   using type = pointer_access_type_conversion<Target, Source>;
 
   static constexpr bool supported = true;
-  static constexpr bool matches =
-      direct::uses_default_conversion && !direct::available &&
-      std::is_same_v<typename pointer_access_type_conversion_candidate<
-                         Target, Source>::type,
-                     type>;
 };
 
 template <typename ShapeTarget, typename ShapeSource, typename Next,
@@ -487,12 +463,9 @@ private:
   using borrowed_source =
       decltype(type_traits<source_type>::borrow(std::declval<Source>()));
   using next = materialize_resolution_recipe<Next, Target, borrowed_source>;
-  using direct = direct_type_conversion_path<Target, Source, borrow>;
 
 public:
   static constexpr bool supported = next::supported;
-  static constexpr bool matches =
-      direct::uses_default_conversion && !direct::available && next::matches;
   using type = borrowed_type_conversion<Target, Source, typename next::type>;
 };
 
@@ -512,7 +485,6 @@ struct materialize_binding_resolution<
       materialize_resolution_recipe<Recipe, conversion_target, source>;
 
   static constexpr bool supported = conversion::supported;
-  static constexpr bool matches = conversion::matches;
   using type = resolution<target, type_resolution<conversion_target, source,
                                                   typename conversion::type>>;
 };
@@ -526,8 +498,6 @@ struct materialize_binding_resolution_list<type_list<Resolutions...>,
   static constexpr bool supported =
       (materialize_binding_resolution<Resolutions, Interface>::supported &&
        ...);
-  static constexpr bool matches =
-      (materialize_binding_resolution<Resolutions, Interface>::matches && ...);
   using type =
       type_list_unique_t<type_list<typename materialize_binding_resolution<
           Resolutions, Interface>::type...>>;
@@ -554,9 +524,6 @@ public:
   static constexpr bool supported =
       values::supported && lvalue_references::supported &&
       rvalue_references::supported && pointers::supported;
-  static constexpr bool matches =
-      values::matches && lvalue_references::matches &&
-      rvalue_references::matches && pointers::matches;
   using value_resolutions = typename values::type;
   using lvalue_reference_resolutions = typename lvalue_references::type;
   using rvalue_reference_resolutions = typename rvalue_references::type;
@@ -602,8 +569,7 @@ struct can_normalize_binding_resolutions : std::false_type {};
 template <typename Interface, typename Storage>
 struct can_normalize_binding_resolutions<Interface, Storage, true>
     : std::bool_constant<
-          normalized_binding_resolutions<Interface, Storage>::supported &&
-          normalized_binding_resolutions<Interface, Storage>::matches> {};
+          normalized_binding_resolutions<Interface, Storage>::supported> {};
 
 template <typename Interface, typename Storage,
           bool Normalize =
