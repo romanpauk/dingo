@@ -1027,6 +1027,20 @@ using conversion_resolution = resolution<
     Target, type_resolution<conversion_target_t<Target>, Source,
                             type_conversion_path_t<conversion_target_t<Target>,
                                                    Source, Access>>>;
+
+// A conditional expression still names the conversion probe for unchanged
+// wrappers, so keep it behind a specialization that is never instantiated.
+template <bool Rebound, typename Target, typename Source, typename Access>
+struct wrapper_resolution_impl {
+  using type = type_list<>;
+};
+
+template <typename Target, typename Source, typename Access>
+struct wrapper_resolution_impl<true, Target, Source, Access> {
+  using type = std::conditional_t<
+      is_type_conversion_available_v<Target, Source, Access>,
+      type_list<conversion_resolution<Target, Source, Access>>, type_list<>>;
+};
 } // namespace detail
 
 template <typename Source, typename Interface, typename Access, typename = void>
@@ -1048,10 +1062,8 @@ private:
   using target_type = detail::wrapper_rebind_leaf_t<source_type, Interface>;
 
 public:
-  using type = std::conditional_t<
-      !std::is_same_v<target_type, source_type> &&
-          detail::is_type_conversion_available_v<target_type, Source, Access>,
-      type_list<detail::conversion_resolution<target_type, Source, Access>>,
-      type_list<>>;
+  using type = typename detail::wrapper_resolution_impl<
+      !std::is_same_v<target_type, source_type>, target_type, Source,
+      Access>::type;
 };
 } // namespace dingo
