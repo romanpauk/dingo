@@ -313,6 +313,32 @@ inline constexpr bool is_value_wrapper_type_v = [] {
          has_value_type_v<type>;
 }();
 
+template <typename Target>
+inline constexpr bool is_structural_conversion_target_v = [] {
+  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
+  return !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
+         (is_alternative_type_v<target_type> ||
+          is_value_wrapper_type_v<target_type>);
+}();
+
+// Default conversions into wrappers and alternatives are recovered by the
+// structural candidates below. Once the basic identity/reference cases have
+// failed, no direct conversion can win for these targets.
+struct default_structural_conversion_path {
+  static constexpr bool uses_default_conversion = true;
+  static constexpr bool can_take_address = false;
+  static constexpr bool available = false;
+  using type = unavailable_type_conversion;
+};
+
+template <typename Target, typename Source, typename Access>
+using conversion_direct_path_t = std::conditional_t<
+    is_structural_conversion_target_v<Target> &&
+        is_default_type_conversion<type_conversion_traits<
+            Target, std::remove_cv_t<std::remove_reference_t<Source>>>>::value,
+    default_structural_conversion_path,
+    direct_type_conversion_path<Target, Source, Access>>;
+
 template <typename Type, typename = void>
 struct borrows_value_wrapper : std::false_type {};
 
@@ -759,10 +785,6 @@ public:
       is_default_type_conversion<conversion_traits>::value;
 
 private:
-  static constexpr bool decomposes_target =
-      !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
-      (is_alternative_type_v<target_type> ||
-       is_value_wrapper_type_v<target_type>);
   static constexpr bool borrows_existing_object =
       std::is_lvalue_reference_v<Target> &&
       std::is_lvalue_reference_v<Source> &&
@@ -839,7 +861,8 @@ private:
                          unavailable_type_conversion>;
   using direct =
       std::conditional_t<has_traits_conversion &&
-                             (!uses_default_conversion || !decomposes_target),
+                             (!uses_default_conversion ||
+                              !is_structural_conversion_target_v<Target>),
                          traits_type_conversion<Target, Source, required_access,
                                                 conversion_source>,
                          unavailable_type_conversion>;
@@ -1003,7 +1026,9 @@ struct type_conversion_path<Target, Source, Access, Basic, true> : Basic {};
 
 template <typename Target, typename Source, typename Access, typename Basic>
 struct type_conversion_path<Target, Source, Access, Basic, false>
-    : type_conversion_path_impl<Target, Source, Access> {};
+    : type_conversion_path_impl<
+          Target, Source, Access,
+          conversion_direct_path_t<Target, Source, Access>> {};
 
 template <typename Target, typename Source, typename Access = consume>
 using type_conversion_path_t =
