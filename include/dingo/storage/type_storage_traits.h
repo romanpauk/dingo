@@ -578,15 +578,38 @@ struct materialize_binding_resolution<
 template <typename Resolutions, typename Interface>
 struct materialize_binding_resolution_list;
 
-template <typename Interface, typename... Resolutions>
-struct materialize_binding_resolution_list<type_list<Resolutions...>,
-                                           Interface> {
+template <typename Interface>
+struct materialize_binding_resolution_list<type_list<>, Interface> {
+  static constexpr bool supported = true;
+  using type = type_list<>;
+};
+
+template <typename Interface, typename Resolution>
+struct materialize_binding_resolution_list<type_list<Resolution>, Interface> {
+private:
+  using materialized = materialize_binding_resolution<Resolution, Interface>;
+
+public:
+  static constexpr bool supported = materialized::supported;
+  using type = type_list<typename materialized::type>;
+};
+
+template <typename Interface, typename First, typename Second,
+          typename... Resolutions>
+struct materialize_binding_resolution_list<
+    type_list<First, Second, Resolutions...>, Interface> {
   static constexpr bool supported =
+      materialize_binding_resolution<First, Interface>::supported &&
+      materialize_binding_resolution<Second, Interface>::supported &&
       (materialize_binding_resolution<Resolutions, Interface>::supported &&
        ...);
-  using type =
-      type_list_unique_t<type_list<typename materialize_binding_resolution<
-          Resolutions, Interface>::type...>>;
+  // User-defined wrapper rebinding need not be injective, so distinct shape
+  // resolutions may still collapse after materialization.
+  using type = type_list_unique_t<type_list<
+      typename materialize_binding_resolution<First, Interface>::type,
+      typename materialize_binding_resolution<Second, Interface>::type,
+      typename materialize_binding_resolution<Resolutions,
+                                              Interface>::type...>>;
 };
 
 template <typename Interface, typename Storage>
@@ -614,9 +637,11 @@ public:
   using lvalue_reference_resolutions = typename lvalue_references::type;
   using rvalue_reference_resolutions = typename rvalue_references::type;
   using pointer_resolutions = typename pointers::type;
-  using type = type_list_unique_t<
+  // Materialization preserves the disjoint value, reference, and pointer
+  // target forms, so the category concatenation cannot introduce duplicates.
+  using type =
       type_list_cat_t<value_resolutions, lvalue_reference_resolutions,
-                      rvalue_reference_resolutions, pointer_resolutions>>;
+                      rvalue_reference_resolutions, pointer_resolutions>;
 };
 
 template <typename Interface, typename Storage, typename = void>
