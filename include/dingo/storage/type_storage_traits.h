@@ -382,19 +382,37 @@ template <typename Left, typename Right>
 using merge_unique_resolution_lists_t =
     typename merge_unique_resolution_lists<Left, Right>::type;
 
+// Factory and storage implementation details do not affect resolution. Keep
+// them out of the template identity so equivalent registrations share probes.
+template <typename Type, typename ResolvedType, typename Conversions>
+struct resolution_storage {
+  using type = Type;
+  using resolved_type = ResolvedType;
+  using conversions = Conversions;
+};
+
+template <typename Storage>
+using resolution_storage_t =
+    resolution_storage<typename Storage::type, storage_source_type_t<Storage>,
+                       typename Storage::conversions>;
+
 template <typename Interface, typename Storage>
 struct exact_binding_resolutions {
 private:
-  using conversions = typename Storage::conversions;
+  using canonical_storage = resolution_storage_t<Storage>;
+  using conversions = typename canonical_storage::conversions;
   using interface_values =
-      typename interface_resolutions<Interface, Storage>::value_resolutions;
+      typename interface_resolutions<Interface,
+                                     canonical_storage>::value_resolutions;
   using wrapper_values =
-      typename wrapper_resolutions<Interface, Storage>::value_resolutions;
-  using stored_values = storage_resolutions_t<typename conversions::value_types,
-                                              Interface, Storage, borrow>;
+      typename wrapper_resolutions<Interface,
+                                   canonical_storage>::value_resolutions;
+  using stored_values =
+      storage_resolutions_t<typename conversions::value_types, Interface,
+                            canonical_storage, borrow>;
   using consumed_values =
       storage_resolutions_t<typename conversions::rvalue_reference_types,
-                            Interface, Storage, consume, true>;
+                            Interface, canonical_storage, consume, true>;
   using converted_values =
       merge_unique_resolution_lists_t<interface_values, wrapper_values>;
   using published_values =
@@ -404,19 +422,20 @@ public:
   using value_resolutions =
       merge_unique_resolution_lists_t<converted_values, published_values>;
   using lvalue_reference_resolutions = merge_unique_resolution_lists_t<
-      typename interface_resolutions<Interface,
-                                     Storage>::lvalue_reference_resolutions,
+      typename interface_resolutions<
+          Interface, canonical_storage>::lvalue_reference_resolutions,
       storage_resolutions_t<typename conversions::lvalue_reference_types,
-                            Interface, Storage, borrow>>;
+                            Interface, canonical_storage, borrow>>;
   using rvalue_reference_resolutions = merge_unique_resolution_lists_t<
-      typename interface_resolutions<Interface,
-                                     Storage>::rvalue_reference_resolutions,
+      typename interface_resolutions<
+          Interface, canonical_storage>::rvalue_reference_resolutions,
       storage_resolutions_t<typename conversions::rvalue_reference_types,
-                            Interface, Storage, consume>>;
+                            Interface, canonical_storage, consume>>;
   using pointer_resolutions = merge_unique_resolution_lists_t<
-      typename interface_resolutions<Interface, Storage>::pointer_resolutions,
+      typename interface_resolutions<Interface,
+                                     canonical_storage>::pointer_resolutions,
       storage_resolutions_t<typename conversions::pointer_types, Interface,
-                            Storage, borrow>>;
+                            canonical_storage, borrow>>;
   // Each category has already removed its own duplicates, and its target
   // forms are disjoint (value, lvalue, rvalue, and pointer respectively).
   using type =
