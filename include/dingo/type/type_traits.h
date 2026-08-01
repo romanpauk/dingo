@@ -324,6 +324,11 @@ struct wrapper_rebind_leaf<Type[], U, void> {
 };
 
 template <typename Type, typename U>
+struct wrapper_rebind_leaf<exact_lookup<Type>, U, void> {
+  using type = U;
+};
+
+template <typename Type, typename U>
 struct wrapper_rebind_leaf<
     Type, U,
     std::enable_if_t<type_traits<Type>::enabled && !std::is_pointer_v<Type>>> {

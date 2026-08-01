@@ -1403,6 +1403,10 @@ TEST(type_registration_test, const_reference_storage_preserves_const_access) {
             &std::get<int>(*nested_optional_value));
 
   using doubly_nested_optional_type = std::optional<nested_optional_type>;
+  static_assert(
+      std::is_same_v<detail::wrapper_rebind_leaf_t<
+                         exact_lookup<doubly_nested_optional_type>, int>,
+                     int>);
   const doubly_nested_optional_type doubly_nested_optional_value{
       std::in_place, std::in_place, std::in_place_type<int>, 19};
   container<> doubly_nested_optional_container;
