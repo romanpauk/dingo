@@ -367,6 +367,10 @@ template <typename Target, typename Source, typename Conversion>
 struct type_resolution {
 private:
   using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
+  // Only retained conversions need the concrete resolver and context. Keep
+  // stateless conversion execution on a canonical context so it can be shared.
+  static constexpr bool requires_conversion_context =
+      type_list_size_v<typename conversion_cache_types<Conversion>::type> != 0;
 
   template <typename Storage>
   using stored_type =
@@ -397,19 +401,41 @@ public:
       throw make_type_not_convertible_exception(requested_type,
                                                 registered_type);
     } else if constexpr (std::is_lvalue_reference_v<Source>) {
-      return type_conversion<Conversion>::apply(
-          resolver, context, materialized_reference(source), requested_type,
-          registered_type);
+      if constexpr (requires_conversion_context) {
+        return type_conversion<Conversion>::apply(
+            resolver, context, materialized_reference(source), requested_type,
+            registered_type);
+      } else {
+        empty_conversion_context state;
+        return type_conversion<Conversion>::apply(
+            state, state, materialized_reference(source), requested_type,
+            registered_type);
+      }
     } else if constexpr (std::is_rvalue_reference_v<Source>) {
-      return type_conversion<Conversion>::apply(
-          resolver, context,
-          static_cast<Source>(materialized_reference(source)), requested_type,
-          registered_type);
+      if constexpr (requires_conversion_context) {
+        return type_conversion<Conversion>::apply(
+            resolver, context,
+            static_cast<Source>(materialized_reference(source)), requested_type,
+            registered_type);
+      } else {
+        empty_conversion_context state;
+        return type_conversion<Conversion>::apply(
+            state, state, static_cast<Source>(materialized_reference(source)),
+            requested_type, registered_type);
+      }
     } else {
-      return type_conversion<Conversion>::apply(
-          resolver, context,
-          materialized_value(std::forward<MaterializedSource>(source)),
-          requested_type, registered_type);
+      if constexpr (requires_conversion_context) {
+        return type_conversion<Conversion>::apply(
+            resolver, context,
+            materialized_value(std::forward<MaterializedSource>(source)),
+            requested_type, registered_type);
+      } else {
+        empty_conversion_context state;
+        return type_conversion<Conversion>::apply(
+            state, state,
+            materialized_value(std::forward<MaterializedSource>(source)),
+            requested_type, registered_type);
+      }
     }
   }
 };
