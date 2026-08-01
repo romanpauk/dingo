@@ -279,7 +279,10 @@ template <typename From, typename To>
 using copy_cv_t = typename copy_cv<From, To>::type;
 
 // Keep direct conversions separate from recursive candidates.
-template <typename Target, typename Source, typename Access>
+template <
+    typename Target, typename Source, typename Access,
+    bool UsesDefault = is_default_type_conversion<type_conversion_traits<
+        Target, std::remove_cv_t<std::remove_reference_t<Source>>>>::value>
 struct direct_type_conversion_path;
 
 template <typename Target, typename Source, typename Access>
@@ -800,8 +803,10 @@ struct basic_type_conversion_path<Target, Source, Access, 4> {
   static constexpr bool available = type::available;
 };
 
+// Default conversions dominate this path. Keep their specialization from
+// forming custom access detection that only user-provided traits require.
 template <typename Target, typename Source, typename Access>
-struct direct_type_conversion_path {
+struct direct_type_conversion_path<Target, Source, Access, true> {
 private:
   // Identity and reference-preserving conversions are handled by the basic
   // path before this fallback is instantiated.
@@ -810,8 +815,7 @@ private:
   using conversion_traits = type_conversion_traits<Target, source_type>;
 
 public:
-  static constexpr bool uses_default_conversion =
-      is_default_type_conversion<conversion_traits>::value;
+  static constexpr bool uses_default_conversion = true;
 
 private:
   static constexpr bool borrows_existing_object =
@@ -826,8 +830,7 @@ private:
   using const_source = std::add_lvalue_reference_t<
       std::add_const_t<std::remove_reference_t<Source>>>;
   static constexpr bool has_const_conversion = [] {
-    if constexpr (uses_default_conversion &&
-                  std::is_lvalue_reference_v<Source>) {
+    if constexpr (std::is_lvalue_reference_v<Source>) {
       return has_compatible_conversion<Target, conversion_traits,
                                        const_source>::value;
     } else {
@@ -839,38 +842,57 @@ private:
           (std::is_lvalue_reference_v<Source> && !borrows_existing_object &&
            !has_const_conversion),
       consume, borrow>;
-  using custom_required_access =
-      typename custom_conversion_access<conversion_traits, Source>::type;
-  using required_access =
-      std::conditional_t<uses_default_conversion, default_required_access,
-                         custom_required_access>;
   using conversion_source =
-      std::conditional_t<uses_default_conversion &&
-                             std::is_same_v<default_required_access, borrow> &&
+      std::conditional_t<std::is_same_v<default_required_access, borrow> &&
                              std::is_lvalue_reference_v<Source> &&
                              !borrows_existing_object,
                          const_source, Source>;
   static constexpr bool has_traits_conversion =
       has_compatible_conversion<Target, conversion_traits,
                                 conversion_source>::value;
-  static constexpr bool has_valid_custom_access =
-      std::is_same_v<custom_required_access, borrow> ||
-      std::is_same_v<custom_required_access, consume>;
-  static_assert(uses_default_conversion || !has_traits_conversion ||
-                    has_valid_custom_access,
+  static constexpr bool takes_address =
+      std::is_pointer_v<Target> && std::is_lvalue_reference_v<Source> &&
+      std::is_convertible_v<std::add_pointer_t<std::remove_reference_t<Source>>,
+                            Target>;
+  using direct = std::conditional_t<
+      has_traits_conversion && !is_structural_conversion_target_v<Target>,
+      traits_type_conversion<Target, Source, default_required_access,
+                             conversion_source>,
+      unavailable_type_conversion>;
+
+public:
+  static constexpr bool can_take_address = takes_address;
+  using type = conversion_for_access_t<direct, Access>;
+  static constexpr bool available = type::available;
+};
+
+template <typename Target, typename Source, typename Access>
+struct direct_type_conversion_path<Target, Source, Access, false> {
+private:
+  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
+  using conversion_traits = type_conversion_traits<Target, source_type>;
+
+public:
+  static constexpr bool uses_default_conversion = false;
+
+private:
+  using required_access =
+      typename custom_conversion_access<conversion_traits, Source>::type;
+  static constexpr bool has_traits_conversion =
+      has_compatible_conversion<Target, conversion_traits, Source>::value;
+  static_assert(!has_traits_conversion ||
+                    std::is_same_v<required_access, borrow> ||
+                    std::is_same_v<required_access, consume>,
                 "type_conversion_traits specialization must declare "
                 "required_access<Source> as borrow or consume");
   static constexpr bool takes_address =
       std::is_pointer_v<Target> && std::is_lvalue_reference_v<Source> &&
       std::is_convertible_v<std::add_pointer_t<std::remove_reference_t<Source>>,
                             Target>;
-  using direct =
-      std::conditional_t<has_traits_conversion &&
-                             (!uses_default_conversion ||
-                              !is_structural_conversion_target_v<Target>),
-                         traits_type_conversion<Target, Source, required_access,
-                                                conversion_source>,
-                         unavailable_type_conversion>;
+  using direct = std::conditional_t<
+      has_traits_conversion,
+      traits_type_conversion<Target, Source, required_access, Source>,
+      unavailable_type_conversion>;
 
 public:
   static constexpr bool can_take_address = takes_address;
