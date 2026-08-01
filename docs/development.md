@@ -122,8 +122,43 @@ For template compile-cost investigations, use
 compile, reads Clang's time-trace JSON, and writes synthetic `perf.data` that
 can be inspected with normal `perf` commands.
 
-This is useful when a registration or resolution change affects compile time and
-the expensive template instantiations need to be identified directly.
+Run compile-time measurements with one compiler job and a 24 GiB virtual-memory
+limit. On Linux, apply the limit in a subshell so it does not affect the current
+shell:
+
+```bash
+(
+  ulimit -v 25165824
+  cmake --build build -j1
+)
+```
+
+For a focused investigation, take the direct Clang command for a representative
+translation unit from `compile_commands.json`, add time-trace instrumentation,
+and analyze the resulting JSON with `time-trace`. Keep the compiler, flags,
+translation unit, memory limit, and job count identical between the baseline and
+candidate.
+
+Measure several alternating baseline and candidate runs and compare their
+medians. Record at least:
+
+- total frontend time
+- class and function instantiation counts
+- invocation counts and exclusive time for the affected template families
+- the slowest individual events, while checking for scheduler outliers
+
+Use representative inputs for unrelated registrations, equivalent wrapper or
+storage shapes with different leaf types, and structural wrapper or alternative
+conversions. A local improvement in one translation unit is not enough if it
+moves work into another common path.
+
+Do not use template event count as the sole result. Additional classifiers and
+helper specializations can reduce the event count while increasing frontend
+time. Validate runtime behavior and generated code separately from compilation
+speed.
+
+The architectural rules and review checklist are documented in
+[Compile-Time Design](architecture/compile-time-design.md).
 
 ## Container Images
 
