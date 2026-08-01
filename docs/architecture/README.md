@@ -18,6 +18,8 @@ Read these pages in order for the full picture:
   wrapper, storage exposure policy, or conversion.
 - [Conversion Model](conversion-model.md): how Dingo chooses value, reference,
   pointer, and wrapper conversions at resolution time.
+- [Compile-Time Design](compile-time-design.md): how template work is made lazy,
+  normalized, and shared across concrete registrations.
 
 The public API is centered on three container entry points:
 
