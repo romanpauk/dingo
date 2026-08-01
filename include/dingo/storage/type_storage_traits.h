@@ -241,7 +241,7 @@ private:
 public:
   using type = std::conditional_t<
       is_type_conversion_available_v<
-          conversion_target_t<typename candidate::type::target_type>,
+          conversion_target_t<typename candidate::target_type>,
           typename candidate::conversion_source_type, Access>,
       type_list<typename candidate::type>, type_list<>>;
 };
@@ -259,7 +259,7 @@ private:
   template <typename Request>
   using selected = std::conditional_t<
       is_type_conversion_available_v<
-          conversion_target_t<typename candidate<Request>::type::target_type>,
+          conversion_target_t<typename candidate<Request>::target_type>,
           typename candidate<Request>::conversion_source_type, Access>,
       type_list<typename candidate<Request>::type>, type_list<>>;
 
