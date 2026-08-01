@@ -56,13 +56,14 @@ decltype(auto) resolve_constructor_dependency(construction_scope scope,
 
 } // namespace detail
 
-template <typename T> struct constructor<T> : constructor_detection<T> {};
-
 template <typename T, typename... Args> struct constructor<T(Args...)> {
   using arguments = type_list<Args...>;
   static constexpr size_t arity = sizeof...(Args);
   static constexpr bool valid = detail::is_list_initializable_v<T, Args...> ||
                                 detail::is_direct_initializable_v<T, Args...>;
+  static constexpr detail::constructor_kind kind =
+      valid ? detail::constructor_kind::concrete
+            : detail::constructor_kind::invalid;
 
   template <typename Type, typename Context, typename Container>
   static auto construct(construction_scope scope, Context &ctx,
@@ -81,5 +82,12 @@ template <typename T, typename... Args> struct constructor<T(Args...)> {
         detail::resolve_constructor_dependency<Args>(scope, ctx, container)...);
   }
 };
+
+// Scalar object types have no injectable constructor parameters. Avoid the
+// generic high-to-low arity search for their default factory.
+template <typename T>
+struct constructor<T>
+    : std::conditional_t<std::is_scalar_v<T>, constructor<T()>,
+                         constructor_detection<T>> {};
 
 } // namespace dingo
