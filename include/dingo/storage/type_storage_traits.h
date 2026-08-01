@@ -215,8 +215,19 @@ public:
       std::conditional_t<std::is_same_v<Access, borrow>,
                          typename source::borrowed_type,
                          typename source::consumed_type>;
-  using type =
-      conversion_resolution<target_type, conversion_source_type, Access>;
+};
+
+template <bool Available, typename Candidate, typename Access>
+struct materialize_storage_resolution {
+  using type = type_list<>;
+};
+
+template <typename Candidate, typename Access>
+struct materialize_storage_resolution<true, Candidate, Access> {
+  // Keep rejected candidates from forming a conversion recipe.
+  using type = type_list<conversion_resolution<
+      typename Candidate::target_type,
+      typename Candidate::conversion_source_type, Access>>;
 };
 
 template <typename Requests, typename Interface, typename Storage,
@@ -239,11 +250,11 @@ private:
       storage_resolution<Request, Interface, Storage, Access, PublishValue>;
 
 public:
-  using type = std::conditional_t<
+  using type = typename materialize_storage_resolution<
       is_type_conversion_available_v<
           conversion_target_t<typename candidate::target_type>,
           typename candidate::conversion_source_type, Access>,
-      type_list<typename candidate::type>, type_list<>>;
+      candidate, Access>::type;
 };
 
 template <typename Interface, typename Storage, typename Access,
@@ -257,11 +268,11 @@ private:
       storage_resolution<Request, Interface, Storage, Access, PublishValue>;
 
   template <typename Request>
-  using selected = std::conditional_t<
+  using selected = typename materialize_storage_resolution<
       is_type_conversion_available_v<
           conversion_target_t<typename candidate<Request>::target_type>,
           typename candidate<Request>::conversion_source_type, Access>,
-      type_list<typename candidate<Request>::type>, type_list<>>;
+      candidate<Request>, Access>::type;
 
 public:
   using type =
