@@ -40,6 +40,48 @@ struct size_multi_implementation : size_interface, size_second_interface {};
 
 struct size_dependency {};
 
+struct size_first_tag {};
+struct size_second_tag {};
+
+struct size_first_registration {
+  using interface_type = size_first_tag;
+};
+
+struct size_second_registration {
+  using interface_type = size_second_tag;
+};
+
+template <typename Tag = none_t>
+struct size_tagged_container_traits : dynamic_container_traits {
+  template <typename ReboundTag>
+  using rebind_t = size_tagged_container_traits<ReboundTag>;
+
+  using tag_type = Tag;
+};
+
+using size_untagged_traits_selector =
+    detail::registration_container_traits_selector<dynamic_container_traits>;
+using size_tagged_traits_selector =
+    detail::registration_container_traits_selector<
+        size_tagged_container_traits<>>;
+using size_untagged_traits_first =
+    size_untagged_traits_selector::type<size_first_registration>;
+using size_untagged_traits_second =
+    size_untagged_traits_selector::type<size_second_registration>;
+using size_tagged_traits_first =
+    size_tagged_traits_selector::type<size_first_registration>;
+using size_tagged_traits_second =
+    size_tagged_traits_selector::type<size_second_registration>;
+
+static_assert(
+    std::is_same_v<size_untagged_traits_first, size_untagged_traits_second>);
+static_assert(
+    !std::is_same_v<size_tagged_traits_first, size_tagged_traits_second>);
+static_assert(
+    std::is_same_v<
+        typename size_tagged_traits_first::tag_type,
+        type_list<none_t, typename size_first_registration::interface_type>>);
+
 size_dependency make_size_dependency() { return {}; }
 
 using size_registry_type = typename container<>::registry_type;

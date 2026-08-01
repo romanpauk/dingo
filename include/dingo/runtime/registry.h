@@ -86,6 +86,22 @@ public:
   using lookup_definition_type = container_lookup_definition_type_t<RootTraits>;
 };
 
+// Untagged traits do not encode a registration in their type. Select this
+// branch once per root traits type so every registration shares the root type.
+template <typename RootTraits,
+          bool IsTagged = is_tagged_container_v<RootTraits>>
+struct registration_container_traits_selector {
+  template <typename> using type = RootTraits;
+};
+
+template <typename RootTraits>
+struct registration_container_traits_selector<RootTraits, true> {
+  template <typename Registration>
+  using type = registration_container_traits<
+      RootTraits, type_list<typename RootTraits::tag_type,
+                            typename Registration::interface_type>>;
+};
+
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
           typename ResolveRoot, bool OwnsRuntimeData,
           bool MergeParentCollections = false>
@@ -318,11 +334,12 @@ class runtime_registry : public allocator_base<Allocator> {
                                 runtime_context_type>;
   using runtime_selection =
       detail::runtime_binding_selection<runtime_binding_interface_type>;
+  using registration_container_traits_selector_type =
+      detail::registration_container_traits_selector<ContainerTraits>;
   template <typename Registration>
   using registration_container_traits_type =
-      detail::registration_container_traits<
-          ContainerTraits, type_list<typename ContainerTraits::tag_type,
-                                     typename Registration::interface_type>>;
+      typename registration_container_traits_selector_type::template type<
+          Registration>;
   template <typename Registration, typename Parent>
   using registration_runtime_config = detail::static_container_runtime_config<
       registration_container_traits_type<Registration>, Allocator, Parent,
