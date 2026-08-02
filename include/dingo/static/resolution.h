@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <dingo/core/binding_selection.h>
 #include <dingo/core/factory_traits.h>
 #include <dingo/static/graph.h>
 #include <dingo/type/dependency_traits.h>

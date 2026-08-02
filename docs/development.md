@@ -54,18 +54,31 @@ cmake --build build -t check
 
 ## C++ Static Analysis
 
-Development builds also provide a clang-tidy target:
+Development builds also provide clang-tidy and Include What You Use (IWYU)
+targets:
 
 ```bash
 cmake --build build -t check-tidy
+cmake --build build -t check-headers
+cmake --build build -t check-iwyu
 ```
 
 On non-Windows builds, `check` depends on `check-tidy`; Windows skips clang-tidy
-and still runs formatting and Markdown verification. `check-tidy` runs
-clang-tidy 21 against the example translation units, which gives the analyzer a
-concrete compile database for this header-only library without pulling tests or
-benchmarks into the lint gate. Configure non-Windows lint builds with
-`DINGO_EXAMPLES_ENABLED=ON` so those translation units exist.
+and IWYU, and still runs header self-compilation, formatting, and Markdown
+verification. `check-tidy` runs clang-tidy 21 against the example translation
+units, which gives the analyzer a concrete compile database for this header-only
+library without pulling tests or benchmarks into the lint gate. Configure
+non-Windows lint builds with `DINGO_EXAMPLES_ENABLED=ON` so those translation
+units exist.
+
+`check-headers` compiles one generated translation unit per standalone public
+`.h` header, so every entry-point header must compile without relying on include
+order. The `.hpp` files under `factory/detail` are composition fragments that
+are intentionally included inside an existing namespace and are not standalone
+entry points. `check-iwyu` repeats those isolated compilations with IWYU and
+reports direct-include recommendations while still failing compilation errors.
+IWYU is provided by the pinned `clang-tool-chain` package in `uv.lock`; its
+downloaded toolchain is kept inside the build directory.
 
 ## Python Tooling
 

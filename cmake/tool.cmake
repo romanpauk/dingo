@@ -3,7 +3,7 @@ function(find_tool out_executable out_version_output out_error)
         TOOL
         ""
         "NAME"
-        ""
+        "ENVIRONMENT"
         ${ARGN}
     )
 
@@ -47,7 +47,9 @@ function(find_tool out_executable out_version_output out_error)
 
     if(TOOL_EXECUTABLE)
         execute_process(
-            COMMAND ${TOOL_EXECUTABLE} --version
+            COMMAND ${CMAKE_COMMAND} -E env
+                ${TOOL_ENVIRONMENT}
+                ${TOOL_EXECUTABLE} --version
             OUTPUT_VARIABLE TOOL_VERSION_OUTPUT
             ERROR_VARIABLE TOOL_VERSION_OUTPUT
             OUTPUT_STRIP_TRAILING_WHITESPACE

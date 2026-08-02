@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/core/auto_constructible.h>
+#include <dingo/core/binding_collection.h>
 #include <dingo/core/binding_model.h>
 #include <dingo/core/binding_resolution_policy.h>
 #include <dingo/core/binding_selection.h>
@@ -49,6 +50,8 @@
 
 namespace dingo {
 namespace detail {
+
+template <typename Derived> class runtime_registration_api;
 
 template <typename StaticRegistry, typename ParentContainer,
           typename RuntimeConfig>

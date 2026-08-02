@@ -11,6 +11,9 @@
 
 #include <dingo/rtti/rtti.h>
 
+#include <cstddef>
+#include <functional>
+
 namespace dingo {
 
 template <> class rtti<static_provider> {

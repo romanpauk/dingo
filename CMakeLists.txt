@@ -1,7 +1,7 @@
 option(DINGO_INSTALL "Generate the install target." ${PROJECT_IS_TOP_LEVEL})
 option(DINGO_DEVELOPMENT_MODE "Include additional targets for development" OFF)
 option(DINGO_CCACHE "Use ccache" OFF)
-option(DINGO_CLANG_TOOLS_ENABLED "Enable clang-format and clang-tidy targets" ON)
+option(DINGO_CLANG_TOOLS_ENABLED "Enable Clang-based development targets" ON)
 
 if (DINGO_DEVELOPMENT_MODE)
     cmake_minimum_required(VERSION 3.25)
@@ -197,6 +197,11 @@ if(DINGO_DEVELOPMENT_MODE)
         )
     endif()
 
+    include(cmake/header-checks.cmake)
+    if(DINGO_CLANG_TOOLS_ENABLED AND NOT WIN32)
+        include(cmake/iwyu.cmake)
+    endif()
+
     if(DINGO_TESTING_ENABLED)
         FetchContent_Declare(googletest
             GIT_REPOSITORY https://github.com/google/googletest.git
@@ -240,13 +245,13 @@ if(DINGO_DEVELOPMENT_MODE)
         add_subdirectory(examples)
     endif()
 
-    set(DINGO_CHECK_TARGETS md-verify)
+    set(DINGO_CHECK_TARGETS md-verify check-headers)
 
     if(DINGO_CLANG_TOOLS_ENABLED)
         include(cmake/clang-tidy.cmake)
         list(APPEND DINGO_CHECK_TARGETS check-format)
         if(NOT WIN32)
-            list(APPEND DINGO_CHECK_TARGETS check-tidy)
+            list(APPEND DINGO_CHECK_TARGETS check-tidy check-iwyu)
         endif()
     endif()
 
