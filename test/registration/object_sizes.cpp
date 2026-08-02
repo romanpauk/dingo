@@ -81,6 +81,9 @@ using size_binding_state =
                                     typename size_model::bindings_type>;
 using size_binding = size_probe_registry::binding<size_interface, size_storage,
                                                   size_binding_state, none_t>;
+using size_keyed_binding =
+    size_probe_registry::binding<size_interface, size_storage,
+                                 size_binding_state, key_type<size_dependency>>;
 using size_single_owner =
     size_probe_registry::owner<type_list<size_interface>, size_storage,
                                size_binding_state, none_t>;
@@ -259,6 +262,8 @@ TEST(object_sizes_test, runtime_container_and_lookup_sizes) {
   static_assert(sizeof(size_probe_registry::runtime_lookup_binding_view) ==
                 sizeof(void *));
   static_assert(std::is_empty_v<size_probe_registry::runtime_binding_value>);
+  static_assert(std::is_same_v<size_binding, size_keyed_binding>);
+  static_assert(std::is_same_v<size_single_owner, size_binding>);
   static_assert(sizeof(size_probe_registry::runtime_lookup_value) >=
                 sizeof(size_probe_registry::runtime_lookup_binding_view));
   static_assert(sizeof(size_instance_container) <= sizeof(void *) * 2);
