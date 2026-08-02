@@ -699,7 +699,7 @@ protected:
 
     explicit container_proxy(Source *source) : source_(source) {}
 
-    container_type &get() const { return source_->container(); }
+    container_type &get() const { return source_->get_container(); }
     container_type *operator->() const { return std::addressof(get()); }
     operator container_type &() const { return get(); }
 
@@ -726,8 +726,8 @@ protected:
     explicit runtime_binding_member(Args &&...args)
         : Binding(std::forward<Args>(args)...) {}
 
-    typename Binding::container_type &container() {
-      return this->get_container();
+    typename Binding::container_type &get_container() {
+      return Binding::get_container();
     }
   };
 
@@ -752,11 +752,11 @@ protected:
       return view_impl<Interface, 0, Bindings...>();
     }
 
-    container_type &container() {
+    container_type &get_container() {
       return static_cast<
                  typename registry_type::template runtime_binding_member<
                      0, type_list_head_t<type_list<Bindings...>>> &>(*this)
-          .container();
+          .get_container();
     }
 
   private:
@@ -1349,10 +1349,12 @@ private:
 public:
   template <typename TypeInterface, typename TypeStorage, typename BindingState,
             typename LookupKey>
-  using runtime_registration_binding_t = detail::keyed_binding_identity<
-      LookupKey, runtime_binding<container_type,
-                                 typename annotated_traits<TypeInterface>::type,
-                                 TypeStorage, BindingState>>;
+  // Lookup keys select an index route; they do not change binding behavior.
+  // Excluding them from the binding identity shares this specialization.
+  using runtime_registration_binding_t =
+      runtime_binding<container_type,
+                      typename annotated_traits<TypeInterface>::type,
+                      TypeStorage, BindingState>;
 
   template <typename InterfaceList, typename TypeStorage, typename BindingState,
             typename LookupKey>
@@ -1364,6 +1366,14 @@ public:
                                      BindingState, LookupKey> {
     using type = runtime_binding_value_impl<runtime_registration_binding_t<
         TypeInterfaces, TypeStorage, BindingState, LookupKey>...>;
+  };
+
+  template <typename TypeInterface, typename TypeStorage, typename BindingState,
+            typename LookupKey>
+  struct runtime_binding_value_owner<type_list<TypeInterface>, TypeStorage,
+                                     BindingState, LookupKey> {
+    using type = runtime_registration_binding_t<TypeInterface, TypeStorage,
+                                                BindingState, LookupKey>;
   };
 
   template <typename InterfaceList, typename TypeStorage, typename BindingState,
@@ -1420,9 +1430,9 @@ private:
         using interface_type = type_list_head_t<interface_types>;
 
         using owner_type =
-            runtime_binding_value_impl<runtime_registration_binding_t<
-                interface_type, storage_type, runtime_binding_state_type,
-                registration_key>>;
+            runtime_binding_value_owner_t<interface_types, storage_type,
+                                          runtime_binding_state_type,
+                                          registration_key>;
         static constexpr bool shared_owner =
             sizeof...(KeyValueArgs) > 0 &&
             type_list_size_v<
@@ -1619,15 +1629,18 @@ private:
     }
   }
 
-  template <typename Owner> struct unique_lookup_value_factory {
-    static constexpr bool shared_owner = false;
-    Owner *owner;
-
-    template <typename TypeInterface> runtime_lookup_value make() {
-      auto view = owner->template view<TypeInterface>();
-      return runtime_lookup_value(view);
+  bool commit_singular_base_lookup(runtime_bindings_state &state,
+                                   runtime_transaction_type &transaction,
+                                   detail::base_lookup_key<rtti_type> key,
+                                   runtime_lookup_value value) {
+    auto &index = state.lookup_indexes.template get<base_lookup_entry>();
+    auto [handle, inserted] = index.try_emplace(key, std::move(value));
+    if (inserted) {
+      record_lookup_rollback<base_lookup_entry>(transaction, state, handle,
+                                                key);
     }
-  };
+    return inserted;
+  }
 
   template <typename Owner> struct shared_lookup_value_factory {
     static constexpr bool shared_owner = true;
@@ -1635,6 +1648,19 @@ private:
 
     template <typename TypeInterface> runtime_lookup_value make() {
       return runtime_lookup_value(owner->template view<TypeInterface>());
+    }
+  };
+
+  template <bool SharedOwner, typename Binding>
+  struct direct_lookup_value_factory {
+    static constexpr bool shared_owner = SharedOwner;
+    Binding *binding;
+
+    template <typename TypeInterface> runtime_lookup_value make() {
+      static_assert(
+          std::is_same_v<typename Binding::interface_type,
+                         typename annotated_traits<TypeInterface>::type>);
+      return runtime_lookup_value(runtime_lookup_binding_view{binding});
     }
   };
 
@@ -1720,18 +1746,33 @@ private:
     auto &binding_owner = *transaction.template construct_persistent<Owner>(
         this, std::forward<Args>(args)...);
     auto *binding_result = std::addressof(binding_owner);
-    if constexpr (SharedOwner) {
-      shared_lookup_value_factory<Owner> value_factory{
-          std::addressof(binding_owner)};
-      std::apply(
-          [&](auto &&...key_value_args) {
-            commit_registration<TypeInterface, TypeStorage>(
-                state, value_factory, transaction, lookup_key,
-                std::forward<decltype(key_value_args)>(key_value_args)...);
-          },
-          std::forward<KeyValueTuple>(key_values));
+    using route = lookup_index_route<TypeInterface, LookupKey>;
+    constexpr bool uses_singular_base_lookup =
+        std::is_same_v<typename route::entry, base_lookup_entry> &&
+        std::is_same_v<
+            typename lookup_entry_cardinality<base_lookup_entry>::type,
+            ::dingo::one>;
+    // Most registrations publish one interface through the base lookup. Keep
+    // that path direct so each registered type does not instantiate the
+    // runtime-key factory and recursive lookup machinery.
+    if constexpr (!SharedOwner &&
+                  std::tuple_size_v<std::remove_reference_t<KeyValueTuple>> ==
+                      0 &&
+                  uses_singular_base_lookup) {
+      check_interface_requirements<
+          TypeStorage, typename annotated_traits<TypeInterface>::type,
+          typename TypeStorage::type>();
+      auto key_arg = route::key(lookup_key);
+      if (!commit_singular_base_lookup(
+              state, transaction, key_arg,
+              runtime_lookup_value(runtime_lookup_binding_view{
+                  static_cast<runtime_binding_interface_type *>(
+                      binding_result)}))) {
+        throw detail::make_lookup_already_registered_exception<
+            TypeInterface, typename TypeStorage::type>(lookup_key, key_arg);
+      }
     } else {
-      unique_lookup_value_factory<Owner> value_factory{
+      direct_lookup_value_factory<SharedOwner, Owner> value_factory{
           std::addressof(binding_owner)};
       std::apply(
           [&](auto &&...key_value_args) {
