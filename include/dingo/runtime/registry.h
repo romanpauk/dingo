@@ -1538,35 +1538,34 @@ private:
     }
   }
 
-  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
-            typename LookupEntry, typename ValueFactory, typename KeyArg>
-  auto insert_lookup(runtime_bindings_state &state, ValueFactory &value_factory,
+  template <typename TypeInterface, typename RegisteredType, typename LookupKey,
+            typename LookupEntry, typename KeyArg>
+  auto insert_lookup(runtime_bindings_state &state, runtime_lookup_value value,
                      const LookupKey &lookup_key, const KeyArg &key_arg) {
     auto &index = state.lookup_indexes.template get<LookupEntry>();
 
     if constexpr (std::is_same_v<
                       typename lookup_entry_cardinality<LookupEntry>::type,
                       ::dingo::one>) {
-      auto [handle, inserted] = index.try_emplace(
-          key_arg, value_factory.template make<TypeInterface>());
+      auto [handle, inserted] = index.try_emplace(key_arg, std::move(value));
       if (!inserted) {
-        throw detail::make_lookup_already_registered_exception<
-            TypeInterface, typename TypeStorage::type>(lookup_key, key_arg);
+        throw detail::make_lookup_already_registered_exception<TypeInterface,
+                                                               RegisteredType>(
+            lookup_key, key_arg);
       }
       return handle;
     } else {
-      return index.emplace(key_arg,
-                           value_factory.template make<TypeInterface>());
+      return index.emplace(key_arg, std::move(value));
     }
   }
 
-  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
+  template <typename TypeInterface, typename RegisteredType, typename LookupKey,
             typename ValueFactory, typename KeyResolver>
   void commit_lookup(runtime_bindings_state &, ValueFactory &,
                      runtime_transaction_type &, KeyResolver &&,
                      const LookupKey &, type_list<>) {}
 
-  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
+  template <typename TypeInterface, typename RegisteredType, typename LookupKey,
             typename Head, typename... Tail, typename ValueFactory,
             typename KeyResolver>
   void commit_lookup(runtime_bindings_state &state, ValueFactory &value_factory,
@@ -1577,10 +1576,12 @@ private:
                   "unique runtime binding owner can only be inserted into one "
                   "lookup");
     decltype(auto) key_arg = key_resolver(type_list_iterator<Head>{});
-    auto handle = insert_lookup<TypeInterface, TypeStorage, LookupKey, Head>(
-        state, value_factory, lookup_key, key_arg);
+    // Keep owner-specific factories out of the index insertion specialization.
+    auto handle = insert_lookup<TypeInterface, RegisteredType, LookupKey, Head>(
+        state, value_factory.template make<TypeInterface>(), lookup_key,
+        key_arg);
     record_lookup_rollback<Head>(transaction, state, handle, key_arg);
-    commit_lookup<TypeInterface, TypeStorage, LookupKey>(
+    commit_lookup<TypeInterface, RegisteredType, LookupKey>(
         state, value_factory, transaction,
         std::forward<KeyResolver>(key_resolver), lookup_key,
         type_list<Tail...>{});
@@ -1666,7 +1667,7 @@ private:
     }
   };
 
-  template <typename TypeInterface, typename TypeStorage, typename LookupKey,
+  template <typename TypeInterface, typename RegisteredType, typename LookupKey,
             typename Cardinality, typename ValueFactory>
   void commit_static_lookup(runtime_bindings_state &state,
                             ValueFactory &value_factory,
@@ -1685,7 +1686,7 @@ private:
       static_assert(!std::is_void_v<routed_lookup_entry>);
       static_assert(lookup_entry_indexed_v<routed_lookup_entry>);
       auto key_resolver = [&](auto) { return route::key(lookup_key); };
-      commit_lookup<TypeInterface, TypeStorage, LookupKey>(
+      commit_lookup<TypeInterface, RegisteredType, LookupKey>(
           state, value_factory, transaction, key_resolver, lookup_key,
           type_list<routed_lookup_entry>{});
     } else {
@@ -1721,16 +1722,16 @@ private:
           using entry_type = typename decltype(element)::type;
           return qualified_registration_key_value<entry_type>(key_value_tuple);
         };
-        commit_lookup<TypeInterface, TypeStorage, LookupKey>(
+        commit_lookup<TypeInterface, typename TypeStorage::type, LookupKey>(
             state, value_factory, transaction, key_resolver, lookup_key,
             lookup_entries{});
       } else {
-        commit_static_lookup<TypeInterface, TypeStorage, LookupKey,
-                             lookup_cardinality_type>(state, value_factory,
-                                                      transaction, lookup_key);
+        commit_static_lookup<TypeInterface, typename TypeStorage::type,
+                             LookupKey, lookup_cardinality_type>(
+            state, value_factory, transaction, lookup_key);
       }
     } else {
-      commit_static_lookup<TypeInterface, TypeStorage, LookupKey,
+      commit_static_lookup<TypeInterface, typename TypeStorage::type, LookupKey,
                            lookup_cardinality_type>(state, value_factory,
                                                     transaction, lookup_key);
     }
