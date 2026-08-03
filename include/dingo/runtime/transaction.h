@@ -127,22 +127,22 @@ public:
 
   template <typename T, typename... Args>
   T *construct_persistent(Args &&...args) {
-    return construct_persistent_with<T>(
-        [&](void *ptr) { new (ptr) T(std::forward<Args>(args)...); });
+    auto *instance =
+        static_cast<T *>(allocate_persistent(sizeof(T), alignof(T)));
+    new (instance) T(std::forward<Args>(args)...);
+    if constexpr (!std::is_trivially_destructible_v<T>) {
+      add_persistent_destructor(instance, &destructor<T>);
+    }
+    return instance;
   }
 
   template <typename T, typename ConstructFn>
   T *construct_persistent_with(ConstructFn &&construct_fn) {
     auto *instance =
-        reinterpret_cast<T *>(runtime_->allocate(sizeof(T), alignof(T)));
+        static_cast<T *>(allocate_persistent(sizeof(T), alignof(T)));
     std::forward<ConstructFn>(construct_fn)(instance);
     if constexpr (!std::is_trivially_destructible_v<T>) {
-      try {
-        runtime_->add_destructor(instance, &destructor<T>);
-      } catch (...) {
-        instance->~T();
-        throw;
-      }
+      add_persistent_destructor(instance, &destructor<T>);
     }
     return instance;
   }
@@ -198,6 +198,20 @@ public:
   }
 
 private:
+  void *allocate_persistent(std::size_t size, std::size_t alignment) {
+    return runtime_->allocate(size, alignment);
+  }
+
+  void add_persistent_destructor(void *instance,
+                                 void (*dtor)(void *) noexcept) {
+    try {
+      runtime_->add_destructor(instance, dtor);
+    } catch (...) {
+      dtor(instance);
+      throw;
+    }
+  }
+
   template <typename Fn>
   static void add_action(action_state &actions, action_link *&tail, Fn &&fn) {
     using action_type = std::decay_t<Fn>;
