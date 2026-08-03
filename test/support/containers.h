@@ -13,31 +13,19 @@
 
 #include <memory>
 
-template <typename Tag = void>
 struct static_container_with_dynamic_rtti_traits {
-  template <typename TagT>
-  using rebind_t = static_container_with_dynamic_rtti_traits<TagT>;
-
-  using tag_type = Tag;
   using rtti_type = dingo::rtti<dingo::typeid_provider>;
   using allocator_type = std::allocator<char>;
   using lookup_definition_type = std::tuple<>;
 };
 
-template <typename Tag = void> struct static_container_variant_traits {
-  template <typename TagT>
-  using rebind_t = static_container_variant_traits<TagT>;
-  using tag_type = Tag;
+struct static_container_variant_traits {
   using rtti_type = dingo::rtti<dingo::static_provider>;
   using allocator_type = std::allocator<char>;
   using lookup_definition_type = std::tuple<>;
 };
 
 struct dynamic_container_with_static_rtti_traits {
-  template <typename>
-  using rebind_t = dynamic_container_with_static_rtti_traits;
-
-  using tag_type = void;
   using rtti_type = dingo::rtti<dingo::static_provider>;
   using allocator_type = std::allocator<char>;
   using lookup_definition_type = std::tuple<>;
@@ -50,10 +38,10 @@ using container_types =
     ::testing::Types<dingo::container<dingo::dynamic_container_traits>>;
 #else
 using container_types = ::testing::Types<
-    dingo::container<dingo::static_container_traits<>>,
+    dingo::container<dingo::static_container_traits>,
     dingo::container<dingo::dynamic_container_traits>,
-    dingo::container<static_container_with_dynamic_rtti_traits<>>,
-    dingo::container<static_container_variant_traits<>>,
+    dingo::container<static_container_with_dynamic_rtti_traits>,
+    dingo::container<static_container_variant_traits>,
     dingo::container<dynamic_container_with_static_rtti_traits>,
     dingo::container<dynamic_container_variant_traits>>;
 #endif

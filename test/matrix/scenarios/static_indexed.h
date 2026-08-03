@@ -39,12 +39,12 @@ template <auto Key> struct static_indexed_consumer {
   static_indexed_processor &processor;
 };
 
-struct static_indexed_one_traits : dingo::static_container_traits<> {
+struct static_indexed_one_traits : dingo::static_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::associative<std::size_t, static_indexed_processor>>;
 };
 
-struct static_indexed_many_traits : dingo::static_container_traits<> {
+struct static_indexed_many_traits : dingo::static_container_traits {
   using lookup_definition_type = dingo::lookups<
       dingo::associative<std::size_t, static_indexed_processor, dingo::many>>;
 };

@@ -18,9 +18,6 @@
 namespace dingo::matrix {
 
 struct custom_rtti_container_traits {
-  template <typename> using rebind_t = custom_rtti_container_traits;
-
-  using tag_type = void;
   using rtti_type = dingo::rtti<dingo::static_provider>;
   using allocator_type = std::allocator<char>;
   using lookup_definition_type = std::tuple<>;

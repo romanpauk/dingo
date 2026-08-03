@@ -56,12 +56,6 @@ public:
   using rebind_t =
       runtime_container<ContainerTraitsT, AllocatorT, ParentContainerT>;
 
-  template <typename Tag>
-  using child_container_type = runtime_container<
-      typename container_traits_type::template rebind_t<
-          type_list<typename container_traits_type::tag_type, Tag>>,
-      Allocator, container_type>;
-
   runtime_container() : runtime_registry_(detail::runtime_data_owner, this) {}
 
   explicit runtime_container(const allocator_type &alloc)

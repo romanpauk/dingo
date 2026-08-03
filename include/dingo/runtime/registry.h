@@ -60,29 +60,6 @@ class container_with_static_bindings;
 struct runtime_data_owner_t {};
 inline constexpr runtime_data_owner_t runtime_data_owner{};
 
-template <typename RootTraits, typename Tag>
-struct registration_container_traits {
-private:
-  using rebound_traits = typename RootTraits::template rebind_t<Tag>;
-  static constexpr bool rebinds_tag =
-      !std::is_same_v<typename rebound_traits::tag_type,
-                      typename RootTraits::tag_type>;
-
-public:
-  template <typename ReboundTag>
-  using rebind_t =
-      std::conditional_t<rebinds_tag,
-                         registration_container_traits<RootTraits, ReboundTag>,
-                         registration_container_traits<RootTraits, Tag>>;
-
-  using tag_type =
-      std::conditional_t<rebinds_tag, typename rebound_traits::tag_type,
-                         typename RootTraits::tag_type>;
-  using rtti_type = typename RootTraits::rtti_type;
-  using allocator_type = typename RootTraits::allocator_type;
-  using lookup_definition_type = container_lookup_definition_type_t<RootTraits>;
-};
-
 template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
           typename ResolveRoot, bool OwnsRuntimeData,
           bool MergeParentCollections = false>
@@ -314,25 +291,18 @@ class runtime_registry : public allocator_base<Allocator> {
       runtime_binding_interface<container_type, runtime_context_type>;
   using runtime_selection =
       detail::runtime_binding_selection<runtime_binding_interface_type>;
-  template <typename Registration>
-  using registration_container_traits_type =
-      detail::registration_container_traits<
-          ContainerTraits, type_list<typename ContainerTraits::tag_type,
-                                     typename Registration::interface_type>>;
-  template <typename Registration, typename Parent>
+  template <typename Parent>
   using registration_runtime_config = detail::static_container_runtime_config<
-      registration_container_traits_type<Registration>, Allocator, Parent,
-      resolve_root_type, false, true>;
-  template <typename Registration, typename Parent>
+      ContainerTraits, Allocator, Parent, resolve_root_type, false, true>;
+  template <typename Parent>
   using runtime_registration_container_type =
-      runtime_registry<registration_container_traits_type<Registration>,
-                       Allocator, Parent, resolve_root_type, false>;
-  template <typename Registration, typename Bindings, typename Parent>
+      runtime_registry<ContainerTraits, Allocator, Parent, resolve_root_type,
+                       false>;
+  template <typename Bindings, typename Parent>
   using registration_container_type = std::conditional_t<
-      std::is_void_v<Bindings>,
-      runtime_registration_container_type<Registration, Parent>,
+      std::is_void_v<Bindings>, runtime_registration_container_type<Parent>,
       detail::container_with_static_bindings<
-          Bindings, Parent, registration_runtime_config<Registration, Parent>>>;
+          Bindings, Parent, registration_runtime_config<Parent>>>;
   using parent_registry_type =
       std::conditional_t<std::is_same_v<void, ParentRegistry>, registry_type,
                          ParentRegistry>;
@@ -409,7 +379,6 @@ public:
         runtime_data_(get_allocator()) {
     static_assert(OwnsRuntimeData);
     validate_lookup_definitions();
-    validate_parent_registry();
   }
 
   template <bool Enabled = OwnsRuntimeData, std::enable_if_t<!Enabled, int> = 0>
@@ -418,23 +387,10 @@ public:
       : allocator_base<allocator_type>(alloc), parent_(parent),
         runtime_data_() {
     validate_lookup_definitions();
-    validate_parent_registry();
   }
 
 private:
   registry_type &binding_store() { return *this; }
-
-  static constexpr void validate_parent_registry() {
-    if constexpr (!std::is_same_v<void, ParentRegistry>) {
-      static_assert(
-          !detail::is_tagged_container_v<container_traits_type> ||
-              !std::is_same_v<typename container_traits_type::tag_type,
-                              typename parent_registry_type::
-                                  container_traits_type::tag_type>,
-          "static typemap based containers require parent and child "
-          "container tags to be different");
-    }
-  }
 
   static constexpr void validate_lookup_definitions() {
     using entries_type = normalized_lookup_entries;
@@ -1401,7 +1357,7 @@ private:
     using binding_model = detail::binding_model<registration>;
     using bindings_type = typename binding_model::bindings_type;
     using instance_container_type =
-        registration_container_type<registration, bindings_type, Parent>;
+        registration_container_type<bindings_type, Parent>;
     (void)std::addressof(arg);
     using interface_types = typename binding_model::interface_types;
     static constexpr bool storage_tag_is_complete =

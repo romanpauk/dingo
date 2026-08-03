@@ -7,10 +7,8 @@
 
 #pragma once
 
-#include <dingo/core/none.h>
 #include <dingo/detail/container_traits.h>
 #include <dingo/rtti/typeid_provider.h>
-#include <dingo/type/type_list.h>
 
 #include <memory>
 #include <tuple>
@@ -19,9 +17,6 @@
 namespace dingo {
 
 struct dynamic_container_traits {
-  template <typename> using rebind_t = dynamic_container_traits;
-
-  using tag_type = none_t;
   using rtti_type = rtti<typeid_provider>;
   using allocator_type = std::allocator<char>;
   using lookup_definition_type = std::tuple<>;
@@ -34,20 +29,12 @@ struct is_runtime_container_traits : std::false_type {};
 
 template <typename T>
 struct is_runtime_container_traits<
-    T, std::void_t<typename T::tag_type, typename T::rtti_type,
-                   typename T::allocator_type,
-                   container_lookup_definition_type_t<T>,
-                   typename T::template rebind_t<void>>> : std::true_type {};
+    T, std::void_t<typename T::rtti_type, typename T::allocator_type,
+                   container_lookup_definition_type_t<T>>> : std::true_type {};
 
 template <typename T>
 inline constexpr bool is_runtime_container_traits_v =
     is_runtime_container_traits<T>::value;
-
-template <typename Traits>
-static constexpr bool is_tagged_container_v =
-    !std::is_same_v<typename Traits::template rebind_t<
-                        type_list<typename Traits::tag_type, void>>,
-                    Traits>;
 
 } // namespace detail
 } // namespace dingo

@@ -70,7 +70,7 @@ int main() {
 
   ////
   // Define traits type with a single lookup using size_t as a key
-  struct container_traits : static_container_traits<void> {
+  struct container_traits : static_container_traits {
     using lookup_definition_type = lookups<associative<size_t, IProcessor>>;
   };
   // Runtime lookup storage is dynamic even when this

@@ -82,7 +82,7 @@ struct static_container_dependency_diagnostics_base<
     : static_container_no_dependency_diagnostics {};
 
 template <typename StaticRegistry, typename ParentContainer = void,
-          typename ContainerTraits = ::dingo::static_container_traits<>>
+          typename ContainerTraits = ::dingo::static_container_traits>
 class static_container_impl;
 
 template <typename ParentContainer, typename ContainerTraits,

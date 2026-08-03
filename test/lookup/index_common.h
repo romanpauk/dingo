@@ -35,18 +35,12 @@ struct test_ordered_base_backend {
 };
 
 template <typename Backend> struct base_one_test_traits {
-  template <typename> using rebind_t = base_one_test_traits<Backend>;
-
-  using tag_type = none_t;
   using rtti_type = rtti<typeid_provider>;
   using allocator_type = std::allocator<char>;
   using lookup_definition_type = lookups<base<one, Backend>>;
 };
 
 template <typename Backend> struct base_many_test_traits {
-  template <typename> using rebind_t = base_many_test_traits<Backend>;
-
-  using tag_type = none_t;
   using rtti_type = rtti<typeid_provider>;
   using allocator_type = std::allocator<char>;
   using lookup_definition_type = lookups<base<many, Backend>>;

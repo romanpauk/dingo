@@ -300,11 +300,9 @@ BENCHMARK_TEMPLATE(basic_shared_resolve3, std::string)->UseRealTime();
 BENCHMARK_TEMPLATE(basic_shared_resolve4, int)->UseRealTime();
 BENCHMARK_TEMPLATE(basic_shared_resolve4, std::string)->UseRealTime();
 
-template <bool Cache, typename Tag = void>
+template <bool Cache>
 struct container_traits : dingo::dynamic_container_traits {
   static constexpr bool cache_enabled = Cache;
-  template <typename TagT> using rebind_t = container_traits<Cache, TagT>;
-  using tag_type = Tag;
 };
 
 BENCHMARK_TEMPLATE(container_unique_resolve,

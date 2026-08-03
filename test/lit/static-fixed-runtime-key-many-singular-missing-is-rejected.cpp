@@ -15,7 +15,7 @@ using source = dingo::bindings<
     dingo::bind<dingo::scope<dingo::shared>, dingo::storage<processor_impl>,
                 dingo::interfaces<processor>, dingo::key_type<std::size_t, 1>>>;
 
-struct traits : dingo::static_container_traits<> {
+struct traits : dingo::static_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::associative<std::size_t, processor, dingo::many>>;
 };
