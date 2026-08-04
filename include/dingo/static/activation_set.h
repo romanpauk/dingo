@@ -326,7 +326,7 @@ private:
 
 public:
   using type = std::conditional_t<
-      type_list_contains_v<unwrapped_request, typename Head::request_types>,
+      is_resolution_request_v<typename Head::target_type, unwrapped_request>,
       Head,
       typename matching_binding_resolution<Request, type_list<Tail...>>::type>;
 };

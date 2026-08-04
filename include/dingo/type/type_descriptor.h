@@ -53,6 +53,19 @@ inline void append_type_name(std::string &name, type_descriptor descriptor);
 
 namespace detail {
 
+constexpr bool same_type_shape(type_descriptor lhs, type_descriptor rhs) {
+  if (lhs.reference != rhs.reference ||
+      (lhs.pointee == nullptr) != (rhs.pointee == nullptr)) {
+    return false;
+  }
+
+  if (lhs.pointee == nullptr) {
+    return lhs.raw_name == rhs.raw_name;
+  }
+
+  return same_type_shape(lhs.pointee(), rhs.pointee());
+}
+
 constexpr size_t type_name_not_found = static_cast<size_t>(-1);
 
 constexpr size_t type_name_find(std::string_view haystack,
@@ -146,6 +159,56 @@ constexpr type_cv_flags operator|(type_cv_flags lhs, type_cv_flags rhs) {
 constexpr bool has_cv_flag(type_cv_flags flags, type_cv_flags flag) {
   return (static_cast<std::uint8_t>(flags) & static_cast<std::uint8_t>(flag)) !=
          0;
+}
+
+constexpr bool contains_cv_flags(type_cv_flags flags, type_cv_flags required) {
+  return (static_cast<std::uint8_t>(flags) &
+          static_cast<std::uint8_t>(required)) ==
+         static_cast<std::uint8_t>(required);
+}
+
+constexpr bool is_qualification_conversion(type_descriptor source,
+                                           type_descriptor target, size_t depth,
+                                           bool intermediate_const) {
+  // Top-level pointer qualifiers do not affect a pointer value conversion.
+  const bool compare_cv = depth != 0 ||
+                          source.reference != type_reference_kind::none ||
+                          source.pointee == nullptr;
+  if (compare_cv && !contains_cv_flags(target.cv, source.cv)) {
+    return false;
+  }
+
+  // Adding qualifiers below the first pointee requires every intervening
+  // pointer to be const, as in T** -> const T* const*.
+  if (compare_cv && source.cv != target.cv && depth > 1 &&
+      !intermediate_const) {
+    return false;
+  }
+
+  if (source.pointee == nullptr) {
+    return true;
+  }
+
+  const bool next_intermediate_const =
+      intermediate_const &&
+      (depth == 0 || has_cv_flag(target.cv, type_cv_flags::is_const));
+  return is_qualification_conversion(source.pointee(), target.pointee(),
+                                     depth + 1, next_intermediate_const);
+}
+
+constexpr bool matches_qualification_conversion(type_descriptor source,
+                                                type_descriptor target) {
+  if (!same_type_shape(source, target)) {
+    return false;
+  }
+
+  // Plain value requests intentionally accept every top-level cv variant.
+  if (source.reference == type_reference_kind::none &&
+      source.pointee == nullptr) {
+    return true;
+  }
+
+  return is_qualification_conversion(source, target, 0, true);
 }
 
 template <typename T> constexpr type_cv_flags make_type_cv_flags() {

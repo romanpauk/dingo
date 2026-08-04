@@ -810,78 +810,66 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
       std::is_same_v<lookup_type_t<exact_optional_unique_rvalue>,
                      std::unique_ptr<std::optional<runtime_type>> &&>);
 
-  using value_resolution = resolution<A, void>;
-  static_assert(
-      std::is_same_v<typename value_resolution::request_types,
-                     type_list<A, const A, volatile A, const volatile A>>);
+  static_assert(detail::is_resolution_request_v<A, A>);
+  static_assert(detail::is_resolution_request_v<A, const A>);
+  static_assert(detail::is_resolution_request_v<A, volatile A>);
+  static_assert(detail::is_resolution_request_v<A, const volatile A>);
   using optional_pointer_resolution = resolution<std::optional<A> *, void>;
-  using optional_pointer_requests =
-      typename optional_pointer_resolution::request_types;
-  static_assert(type_list_size_v<optional_pointer_requests> == 16);
   static_assert(
-      type_list_contains_v<std::optional<A> *, optional_pointer_requests>);
+      detail::is_resolution_request_v<std::optional<A> *, std::optional<A> *>);
+  static_assert(detail::is_resolution_request_v<std::optional<A> *,
+                                                std::optional<A> *const>);
+  static_assert(detail::is_resolution_request_v<std::optional<A> *,
+                                                volatile std::optional<A> *>);
   static_assert(
-      type_list_contains_v<std::optional<A> *const, optional_pointer_requests>);
-  static_assert(type_list_contains_v<volatile std::optional<A> *,
-                                     optional_pointer_requests>);
-  static_assert(type_list_contains_v<const volatile std::optional<A> *,
-                                     optional_pointer_requests>);
-  using const_optional_pointer_resolution =
-      resolution<const std::optional<A> *, void>;
-  using const_optional_pointer_requests =
-      typename const_optional_pointer_resolution::request_types;
-  static_assert(type_list_contains_v<const std::optional<A> *,
-                                     const_optional_pointer_requests>);
-  static_assert(type_list_contains_v<const volatile std::optional<A> *,
-                                     const_optional_pointer_requests>);
-  static_assert(!type_list_contains_v<std::optional<A> *,
-                                      const_optional_pointer_requests>);
-  static_assert(!type_list_contains_v<volatile std::optional<A> *,
-                                      const_optional_pointer_requests>);
+      detail::is_resolution_request_v<std::optional<A> *,
+                                      const volatile std::optional<A> *>);
+  static_assert(detail::is_resolution_request_v<const std::optional<A> *,
+                                                const std::optional<A> *>);
+  static_assert(
+      detail::is_resolution_request_v<const std::optional<A> *,
+                                      const volatile std::optional<A> *>);
+  static_assert(!detail::is_resolution_request_v<const std::optional<A> *,
+                                                 std::optional<A> *>);
+  static_assert(!detail::is_resolution_request_v<const std::optional<A> *,
+                                                 volatile std::optional<A> *>);
   using function_type = void();
-  using function_pointer_requests =
-      typename resolution<function_type *, void>::request_types;
-  static_assert(type_list_size_v<function_pointer_requests> == 4);
-  using optional_reference_resolution = resolution<std::optional<A> &, void>;
-  using optional_reference_requests =
-      typename optional_reference_resolution::request_types;
   static_assert(
-      type_list_contains_v<std::optional<A> &, optional_reference_requests>);
-  static_assert(type_list_contains_v<const std::optional<A> &,
-                                     optional_reference_requests>);
-  static_assert(type_list_contains_v<volatile std::optional<A> &,
-                                     optional_reference_requests>);
-  static_assert(type_list_contains_v<const volatile std::optional<A> &,
-                                     optional_reference_requests>);
-  using volatile_reference_resolution =
-      resolution<volatile std::optional<A> &, void>;
-  using volatile_reference_requests =
-      typename volatile_reference_resolution::request_types;
-  static_assert(type_list_contains_v<volatile std::optional<A> &,
-                                     volatile_reference_requests>);
-  static_assert(type_list_contains_v<const volatile std::optional<A> &,
-                                     volatile_reference_requests>);
+      detail::is_resolution_request_v<function_type *, function_type *const>);
   static_assert(
-      !type_list_contains_v<std::optional<A> &, volatile_reference_requests>);
-  static_assert(!type_list_contains_v<const std::optional<A> &,
-                                      volatile_reference_requests>);
-  using optional_rvalue_resolution = resolution<std::optional<A> &&, void>;
-  using optional_rvalue_requests =
-      typename optional_rvalue_resolution::request_types;
+      detail::is_resolution_request_v<std::optional<A> &, std::optional<A> &>);
+  static_assert(detail::is_resolution_request_v<std::optional<A> &,
+                                                const std::optional<A> &>);
+  static_assert(detail::is_resolution_request_v<std::optional<A> &,
+                                                volatile std::optional<A> &>);
   static_assert(
-      type_list_contains_v<std::optional<A> &&, optional_rvalue_requests>);
-  static_assert(type_list_contains_v<const std::optional<A> &&,
-                                     optional_rvalue_requests>);
-  static_assert(type_list_contains_v<volatile std::optional<A> &&,
-                                     optional_rvalue_requests>);
-  static_assert(type_list_contains_v<const volatile std::optional<A> &&,
-                                     optional_rvalue_requests>);
-  using nested_pointer_resolution = resolution<A **, void>;
-  using nested_pointer_requests =
-      typename nested_pointer_resolution::request_types;
+      detail::is_resolution_request_v<std::optional<A> &,
+                                      const volatile std::optional<A> &>);
+  static_assert(detail::is_resolution_request_v<volatile std::optional<A> &,
+                                                volatile std::optional<A> &>);
   static_assert(
-      type_list_contains_v<const A *const *, nested_pointer_requests>);
-  static_assert(!type_list_contains_v<const A **, nested_pointer_requests>);
+      detail::is_resolution_request_v<volatile std::optional<A> &,
+                                      const volatile std::optional<A> &>);
+  static_assert(!detail::is_resolution_request_v<volatile std::optional<A> &,
+                                                 std::optional<A> &>);
+  static_assert(!detail::is_resolution_request_v<volatile std::optional<A> &,
+                                                 const std::optional<A> &>);
+  static_assert(detail::is_resolution_request_v<std::optional<A> &&,
+                                                std::optional<A> &&>);
+  static_assert(detail::is_resolution_request_v<std::optional<A> &&,
+                                                const std::optional<A> &&>);
+  static_assert(detail::is_resolution_request_v<std::optional<A> &&,
+                                                volatile std::optional<A> &&>);
+  static_assert(
+      detail::is_resolution_request_v<std::optional<A> &&,
+                                      const volatile std::optional<A> &&>);
+  static_assert(detail::is_resolution_request_v<A **, const A *const *>);
+  static_assert(!detail::is_resolution_request_v<A **, const A **>);
+
+  EXPECT_TRUE(detail::matches_qualification_conversion(
+      describe_type<A **>(), describe_type<const A *const *>()));
+  EXPECT_FALSE(detail::matches_qualification_conversion(
+      describe_type<A **>(), describe_type<const A **>()));
   using optional_pointer_routes = type_list<optional_pointer_resolution>;
   static_assert(
       std::is_same_v<typename detail::matching_binding_resolution<
