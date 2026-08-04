@@ -53,6 +53,10 @@ TEST(type_name_test, value_type_name) {
             expected_type_name_value());
 }
 
+TEST(type_name_test, array_type_name_keeps_closing_bracket) {
+  ASSERT_NE(raw_type_name<int[3]>().find("[3]"), std::string_view::npos);
+}
+
 TEST(type_name_test, const_reference_type_name) {
 #ifdef _MSC_VER
   constexpr std::string_view expected =
