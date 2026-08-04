@@ -17,10 +17,7 @@
 
 namespace dingo {
 
-template <typename Tag = void> struct static_container_traits {
-  template <typename TagT> using rebind_t = static_container_traits<TagT>;
-
-  using tag_type = Tag;
+struct static_container_traits {
   using rtti_type = rtti<static_provider>;
   using allocator_type = std::allocator<char>;
   using lookup_definition_type = std::tuple<>;
@@ -58,7 +55,7 @@ inline constexpr bool is_static_container_traits_v =
     is_static_container_traits<T>::value;
 
 template <typename T, typename = void> struct static_container_traits {
-  using type = ::dingo::static_container_traits<>;
+  using type = ::dingo::static_container_traits;
 };
 
 template <typename T>

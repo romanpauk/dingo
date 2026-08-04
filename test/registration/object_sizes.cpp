@@ -44,6 +44,26 @@ size_dependency make_size_dependency() { return {}; }
 
 using size_registry_type = typename container<>::registry_type;
 
+using size_service_proxy =
+    decltype(std::declval<container<> &>()
+                 .register_type<scope<unique>, storage<size_service>>());
+using size_dependency_proxy =
+    decltype(std::declval<container<> &>()
+                 .register_type<scope<unique>, storage<size_dependency>>());
+using size_static_container = container<static_container_traits>;
+using size_static_service_proxy =
+    decltype(std::declval<size_static_container &>()
+                 .register_type<scope<unique>, storage<size_service>>());
+using size_static_dependency_proxy =
+    decltype(std::declval<size_static_container &>()
+                 .register_type<scope<unique>, storage<size_dependency>>());
+
+static_assert(std::is_same_v<typename size_service_proxy::container_type,
+                             typename size_dependency_proxy::container_type>);
+static_assert(
+    std::is_same_v<typename size_static_service_proxy::container_type,
+                   typename size_static_dependency_proxy::container_type>);
+
 struct size_probe_registry : size_registry_type {
   using base_type = size_registry_type;
 

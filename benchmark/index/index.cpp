@@ -98,7 +98,7 @@ static void index_ptr_shared(benchmark::State &state) {
   state.SetBytesProcessed(state.iterations());
 }
 
-struct static_container_traits : dingo::static_container_traits<void> {
+struct static_container_traits : dingo::static_container_traits {
   using lookup_definition_type =
       dingo::lookups<dingo::associative<size_t, IProcessor>>;
 };

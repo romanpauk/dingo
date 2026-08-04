@@ -40,7 +40,7 @@ int main() {
                   dingo::interfaces<IProcessor>,
                   dingo::key_type<std::size_t, 1>>>;
 
-  struct container_traits : dingo::static_container_traits<> {
+  struct container_traits : dingo::static_container_traits {
     using lookup_definition_type =
         dingo::lookups<dingo::associative<std::size_t, IProcessor>>;
   };
