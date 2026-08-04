@@ -69,21 +69,9 @@ public:
   detail::cache::entry *cache_slot() noexcept { return cache_slot_; }
 
   virtual resolved_address
-  get_value(construction_scope, Context &,
-            const instance_request<typename Container::rtti_type> &request,
-            detail::cache::sink) = 0;
-  virtual void *get_lvalue_reference(
-      construction_scope, Context &,
-      const instance_request<typename Container::rtti_type> &request,
-      detail::cache::sink) = 0;
-  virtual void *get_rvalue_reference(
-      construction_scope, Context &,
-      const instance_request<typename Container::rtti_type> &request,
-      detail::cache::sink) = 0;
-  virtual void *
-  get_pointer(construction_scope, Context &,
-              const instance_request<typename Container::rtti_type> &request,
-              detail::cache::sink) = 0;
+  resolve_request(construction_scope, Context &,
+                  const instance_request<typename Container::rtti_type> &,
+                  detail::cache::sink) = 0;
 
 protected:
   void cache_slot(detail::cache::entry *slot) noexcept { cache_slot_ = slot; }
