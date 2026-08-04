@@ -183,10 +183,10 @@ decltype(auto) consume_resolved_binding(Instance &&instance, Fn &&fn) {
   }
 }
 
-template <typename... Requests>
-constexpr bool matches_resolution_request(type_descriptor requested_type,
-                                          type_list<Requests...>) {
-  return ((requested_type == describe_type<Requests>()) || ...);
+template <typename Target>
+constexpr bool matches_resolution_request(type_descriptor requested_type) {
+  return matches_qualification_conversion(describe_type<Target>(),
+                                          requested_type);
 }
 
 template <typename Target, typename Context, typename T>
@@ -509,8 +509,8 @@ resolved_address resolve_request_address(construction_scope scope,
   resolved_address result{};
   (void)scope;
   const bool matched =
-      ((detail::matches_resolution_request(
-            requested_type, typename Resolutions::request_types{})
+      ((detail::matches_resolution_request<typename Resolutions::target_type>(
+            requested_type)
             ? (result = factory.template resolve_address<Resolutions>(
                    scope, context, requested_type, registered_type),
                true)
