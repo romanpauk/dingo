@@ -23,6 +23,12 @@
 
 namespace dingo {
 
+static_assert(constructor<int>::arity == 0);
+static_assert(constructor<const int>::arity ==
+              constructor_detection<const int>::arity);
+static_assert(constructor<volatile int>::arity ==
+              constructor_detection<volatile int>::arity);
+
 #if !defined(_MSC_VER)
 struct unresolved_argument_category {};
 #endif

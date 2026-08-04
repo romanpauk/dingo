@@ -224,9 +224,33 @@ template <typename Requests, typename Interface, typename Storage,
 struct storage_resolutions;
 
 template <typename Interface, typename Storage, typename Access,
-          bool PublishValue, typename... Requests>
-struct storage_resolutions<type_list<Requests...>, Interface, Storage, Access,
+          bool PublishValue>
+struct storage_resolutions<type_list<>, Interface, Storage, Access,
                            PublishValue> {
+  using type = type_list<>;
+};
+
+template <typename Interface, typename Storage, typename Access,
+          bool PublishValue, typename Request>
+struct storage_resolutions<type_list<Request>, Interface, Storage, Access,
+                           PublishValue> {
+private:
+  using candidate =
+      storage_resolution<Request, Interface, Storage, Access, PublishValue>;
+
+public:
+  using type = std::conditional_t<
+      is_type_conversion_available_v<
+          conversion_target_t<typename candidate::type::target_type>,
+          typename candidate::conversion_source_type, Access>,
+      type_list<typename candidate::type>, type_list<>>;
+};
+
+template <typename Interface, typename Storage, typename Access,
+          bool PublishValue, typename First, typename Second,
+          typename... Requests>
+struct storage_resolutions<type_list<First, Second, Requests...>, Interface,
+                           Storage, Access, PublishValue> {
 private:
   template <typename Request>
   using candidate =
@@ -240,7 +264,9 @@ private:
       type_list<typename candidate<Request>::type>, type_list<>>;
 
 public:
-  using type = type_list_unique_t<type_list_cat_t<selected<Requests>...>>;
+  using type =
+      type_list_unique_t<type_list_cat_t<selected<First>, selected<Second>,
+                                         selected<Requests>...>>;
 };
 
 template <typename Requests, typename Interface, typename Storage,
@@ -337,34 +363,41 @@ public:
 template <typename Interface, typename Storage> struct binding_resolutions {
 private:
   using conversions = typename Storage::conversions;
+  using interface_values =
+      typename interface_resolutions<Interface, Storage>::value_resolutions;
+  using wrapper_values =
+      typename wrapper_resolutions<Interface, Storage>::value_resolutions;
   using stored_values = storage_resolutions_t<typename conversions::value_types,
                                               Interface, Storage, borrow>;
   using consumed_values =
       storage_resolutions_t<typename conversions::rvalue_reference_types,
                             Interface, Storage, consume, true>;
+  using converted_values = type_list_merge_t<interface_values, wrapper_values>;
+  using published_values = type_list_merge_t<stored_values, consumed_values>;
 
 public:
-  using value_resolutions = type_list_unique_t<type_list_cat_t<
-      typename interface_resolutions<Interface, Storage>::value_resolutions,
-      typename wrapper_resolutions<Interface, Storage>::value_resolutions,
-      stored_values, consumed_values>>;
-  using lvalue_reference_resolutions = type_list_unique_t<type_list_cat_t<
+  using value_resolutions =
+      type_list_merge_t<converted_values, published_values>;
+  using lvalue_reference_resolutions = type_list_merge_t<
       typename interface_resolutions<Interface,
                                      Storage>::lvalue_reference_resolutions,
       storage_resolutions_t<typename conversions::lvalue_reference_types,
-                            Interface, Storage, borrow>>>;
-  using rvalue_reference_resolutions = type_list_unique_t<type_list_cat_t<
+                            Interface, Storage, borrow>>;
+  using rvalue_reference_resolutions = type_list_merge_t<
       typename interface_resolutions<Interface,
                                      Storage>::rvalue_reference_resolutions,
       storage_resolutions_t<typename conversions::rvalue_reference_types,
-                            Interface, Storage, consume>>>;
-  using pointer_resolutions = type_list_unique_t<type_list_cat_t<
+                            Interface, Storage, consume>>;
+  using pointer_resolutions = type_list_merge_t<
       typename interface_resolutions<Interface, Storage>::pointer_resolutions,
       storage_resolutions_t<typename conversions::pointer_types, Interface,
-                            Storage, borrow>>>;
-  using type = type_list_unique_t<
+                            Storage, borrow>>;
+  // Target forms are disjoint across the value, reference, and pointer
+  // categories, so concatenating their already-unique lists cannot duplicate
+  // a resolution.
+  using type =
       type_list_cat_t<value_resolutions, lvalue_reference_resolutions,
-                      rvalue_reference_resolutions, pointer_resolutions>>;
+                      rvalue_reference_resolutions, pointer_resolutions>;
 };
 
 } // namespace detail
