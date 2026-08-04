@@ -103,29 +103,16 @@ private:
   bool active_;
 };
 
-enum class binding_request_kind {
-  value,
-  lvalue_reference,
-  rvalue_reference,
-  pointer,
-};
-
 template <typename RTTI> struct binding_request {
   instance_request<RTTI> request;
   cache::sink cache;
-  binding_request_kind kind;
 };
 
 template <typename T, typename RTTI>
 constexpr binding_request<RTTI> make_binding_request(cache::sink cache = {}) {
-  return {
-      {RTTI::template get_type_index<request_lookup_type_t<T>>(),
-       describe_type<T>()},
-      cache,
-      std::is_pointer_v<T>            ? binding_request_kind::pointer
-      : std::is_lvalue_reference_v<T> ? binding_request_kind::lvalue_reference
-      : std::is_rvalue_reference_v<T> ? binding_request_kind::rvalue_reference
-                                      : binding_request_kind::value};
+  return {{RTTI::template get_type_index<request_lookup_type_t<T>>(),
+           describe_type<T>()},
+          cache};
 }
 
 template <typename T> T convert_resolved_binding(resolved_address result) {
@@ -469,24 +456,8 @@ resolved_address
 dispatch_binding_request(construction_scope scope, Binding &binding,
                          Context &context,
                          const binding_request<RTTI> &request) {
-  switch (request.kind) {
-  case binding_request_kind::pointer:
-    return {binding.get_pointer(scope, context, request.request, request.cache),
-            resolved_address::access_kind::borrow};
-  case binding_request_kind::lvalue_reference:
-    return {binding.get_lvalue_reference(scope, context, request.request,
-                                         request.cache),
-            resolved_address::access_kind::borrow};
-  case binding_request_kind::rvalue_reference:
-    return {binding.get_rvalue_reference(scope, context, request.request,
-                                         request.cache),
-            resolved_address::access_kind::consume};
-  case binding_request_kind::value:
-    return binding.get_value(scope, context, request.request, request.cache);
-  }
-
-  assert(false);
-  return {};
+  return binding.resolve_request(scope, context, request.request,
+                                 request.cache);
 }
 
 } // namespace detail
@@ -498,31 +469,6 @@ T resolve_binding_request(construction_scope scope, Binding &binding,
   auto result =
       detail::dispatch_binding_request<RTTI>(scope, binding, context, request);
   return detail::convert_resolved_binding<T>(result);
-}
-
-template <typename Factory, typename Context, typename... Resolutions>
-resolved_address resolve_request_address(construction_scope scope,
-                                         Factory &factory, Context &context,
-                                         type_list<Resolutions...>,
-                                         type_descriptor requested_type,
-                                         type_descriptor registered_type) {
-  resolved_address result{};
-  (void)scope;
-  const bool matched =
-      ((detail::matches_resolution_request<typename Resolutions::target_type>(
-            requested_type)
-            ? (result = factory.template resolve_address<Resolutions>(
-                   scope, context, requested_type, registered_type),
-               true)
-            : false) ||
-       ...);
-
-  if (!matched) {
-    throw detail::make_type_not_convertible_exception(requested_type,
-                                                      registered_type, context);
-  }
-
-  return result;
 }
 
 template <typename Request>
