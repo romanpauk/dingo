@@ -32,6 +32,13 @@ nested_optional make_nested_optional() {
   return nested_optional{std::in_place, std::in_place, std::in_place_type<int>,
                          17};
 }
+
+struct unkeyed_binding_uniqueness_probe {
+  using key_type = detail::lookup_key<dingo::key_type<none_t>>;
+};
+
+static_assert(detail::key_value_bindings_are_unique<
+              type_list<unkeyed_binding_uniqueness_probe>, type_list<>>::value);
 } // namespace
 
 TEST(static_bindings_source_test,
