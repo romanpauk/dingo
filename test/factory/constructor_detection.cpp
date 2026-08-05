@@ -29,6 +29,26 @@ static_assert(constructor<const int>::arity ==
 static_assert(constructor<volatile int>::arity ==
               constructor_detection<volatile int>::arity);
 
+namespace {
+
+struct empty_aggregate {};
+struct empty_aggregate_base {};
+struct empty_derived_aggregate : empty_aggregate_base {};
+struct annotated_empty_aggregate {
+  using dingo_constructor_type = constructor<annotated_empty_aggregate(int)>;
+};
+struct incomplete_aggregate;
+
+static_assert(detail::is_zero_argument_aggregate_v<empty_aggregate>);
+static_assert(!detail::is_zero_argument_aggregate_v<empty_derived_aggregate>);
+static_assert(!detail::is_zero_argument_aggregate_v<annotated_empty_aggregate>);
+static_assert(!detail::is_zero_argument_aggregate_v<incomplete_aggregate>);
+static_assert(constructor<empty_aggregate>::arity == 0);
+static_assert(constructor<empty_derived_aggregate>::arity == 1);
+static_assert(constructor<annotated_empty_aggregate>::arity == 1);
+
+} // namespace
+
 #if !defined(_MSC_VER)
 struct unresolved_argument_category {};
 #endif
