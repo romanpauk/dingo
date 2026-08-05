@@ -101,23 +101,11 @@ struct binding_matches
 template <typename Interface, typename LookupKey, typename InterfaceBindings>
 struct bindings;
 
-template <typename Interface, typename LookupKey>
-struct bindings<Interface, LookupKey, type_list<>> {
-  using type = type_list<>;
-};
-
-template <typename Interface, typename LookupKey, typename Head,
-          typename... Tail>
-struct bindings<Interface, LookupKey, type_list<Head, Tail...>> {
-private:
-  using tail_type =
-      typename bindings<Interface, LookupKey, type_list<Tail...>>::type;
-
-public:
-  using type =
-      std::conditional_t<binding_matches<Interface, LookupKey, Head>::value,
-                         type_list_cat_t<type_list<Head>, tail_type>,
-                         tail_type>;
+template <typename Interface, typename LookupKey, typename... InterfaceBindings>
+struct bindings<Interface, LookupKey, type_list<InterfaceBindings...>> {
+  using type = type_list_cat_t<std::conditional_t<
+      binding_matches<Interface, LookupKey, InterfaceBindings>::value,
+      type_list<InterfaceBindings>, type_list<>>...>;
 };
 
 template <typename Interface, typename LookupKey, typename InterfaceBindings>
@@ -127,18 +115,13 @@ using bindings_t =
 template <typename Interface, typename LookupKey, typename InterfaceBindings>
 struct binding_count;
 
-template <typename Interface, typename LookupKey>
-struct binding_count<Interface, LookupKey, type_list<>>
-    : std::integral_constant<size_t, 0> {};
-
-template <typename Interface, typename LookupKey, typename Head,
-          typename... Tail>
-struct binding_count<Interface, LookupKey, type_list<Head, Tail...>>
-    : std::integral_constant<
-          size_t,
-          (binding_matches<Interface, LookupKey, Head>::value ? 1 : 0) +
-              binding_count<Interface, LookupKey, type_list<Tail...>>::value> {
-};
+template <typename Interface, typename LookupKey, typename... InterfaceBindings>
+struct binding_count<Interface, LookupKey, type_list<InterfaceBindings...>>
+    : std::integral_constant<size_t, (size_t{0} + ... +
+                                      (binding_matches<Interface, LookupKey,
+                                                       InterfaceBindings>::value
+                                           ? size_t{1}
+                                           : size_t{0}))> {};
 
 template <typename Interface, typename LookupKey, typename InterfaceBindings>
 inline constexpr size_t binding_count_v =
