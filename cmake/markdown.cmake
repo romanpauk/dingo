@@ -5,29 +5,24 @@ list(APPEND MARKDOWN_FILES ${DOC_MARKDOWN_FILES})
 list(APPEND MARKDOWN_FILES ${CONTAINER_MARKDOWN_FILES})
 list(SORT MARKDOWN_FILES)
 
-find_program(UV_EXECUTABLE "uv")
+include("${CMAKE_CURRENT_LIST_DIR}/uv.cmake")
+uv_get_run_command(UV_RUN_COMMAND
+    PROJECT_DIRECTORY "${PROJECT_SOURCE_DIR}"
+)
 
-if (NOT UV_EXECUTABLE)
-    message(FATAL_ERROR "uv is required to process .md documentation")
-endif()
-
-set(MD_TOOL_COMMAND
-    ${UV_EXECUTABLE}
-    run
-    --locked
-    --project
-    ${PROJECT_SOURCE_DIR}
+set(MARKDOWN_TOOL_COMMAND
+    ${UV_RUN_COMMAND}
     ${PROJECT_SOURCE_DIR}/tools/md.py
 )
 
-add_custom_target(md-update
+add_custom_target(markdown-format
     COMMENT "Formatting .md files"
-    COMMAND ${MD_TOOL_COMMAND} --mode=update ${MARKDOWN_FILES}
+    COMMAND ${MARKDOWN_TOOL_COMMAND} --mode=update ${MARKDOWN_FILES}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
 )
 
-add_custom_target(md-verify
+add_custom_target(markdown-format-check
     COMMENT "Verifying .md files are up-to-date"
-    COMMAND ${MD_TOOL_COMMAND} --mode=verify ${MARKDOWN_FILES}
+    COMMAND ${MARKDOWN_TOOL_COMMAND} --mode=verify ${MARKDOWN_FILES}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
 )
