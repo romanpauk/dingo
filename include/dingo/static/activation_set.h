@@ -366,6 +366,36 @@ public:
       typename matching_binding_resolution<Request, type_list<Tail...>>::type>;
 };
 
+// Resolution target shapes are disjoint, so static lookup only needs to form
+// the category that can match the request.
+template <typename Request, typename Interface, typename Storage,
+          typename RequestType =
+              std::remove_cv_t<unwrapped_static_request_t<Request>>>
+struct request_binding_resolutions {
+  using type = typename binding_value_resolutions<Interface, Storage>::type;
+};
+
+template <typename Request, typename Interface, typename Storage,
+          typename RequestType>
+struct request_binding_resolutions<Request, Interface, Storage, RequestType &> {
+  using type =
+      typename binding_lvalue_reference_resolutions<Interface, Storage>::type;
+};
+
+template <typename Request, typename Interface, typename Storage,
+          typename RequestType>
+struct request_binding_resolutions<Request, Interface, Storage,
+                                   RequestType &&> {
+  using type =
+      typename binding_rvalue_reference_resolutions<Interface, Storage>::type;
+};
+
+template <typename Request, typename Interface, typename Storage,
+          typename RequestType>
+struct request_binding_resolutions<Request, Interface, Storage, RequestType *> {
+  using type = typename binding_pointer_resolutions<Interface, Storage>::type;
+};
+
 template <typename Request, typename InterfaceBinding>
 struct binding_supports_request {
 private:
@@ -374,7 +404,8 @@ private:
   using raw_interface_type = typename annotated_traits<interface_type>::type;
   using storage_type = typename binding_model_type::storage_type;
   using resolutions =
-      typename binding_resolutions<raw_interface_type, storage_type>::type;
+      typename request_binding_resolutions<Request, raw_interface_type,
+                                           storage_type>::type;
 
 public:
   using type = typename matching_binding_resolution<Request, resolutions>::type;

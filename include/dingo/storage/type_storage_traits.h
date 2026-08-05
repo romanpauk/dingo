@@ -360,7 +360,8 @@ public:
       type_list_cat_t<borrowed_composition, consumed_composition>;
 };
 
-template <typename Interface, typename Storage> struct binding_resolutions {
+template <typename Interface, typename Storage>
+struct binding_value_resolutions {
 private:
   using conversions = typename Storage::conversions;
   using interface_values =
@@ -376,22 +377,56 @@ private:
   using published_values = type_list_merge_t<stored_values, consumed_values>;
 
 public:
-  using value_resolutions =
-      type_list_merge_t<converted_values, published_values>;
-  using lvalue_reference_resolutions = type_list_merge_t<
+  using type = type_list_merge_t<converted_values, published_values>;
+};
+
+template <typename Interface, typename Storage>
+struct binding_lvalue_reference_resolutions {
+private:
+  using conversions = typename Storage::conversions;
+
+public:
+  using type = type_list_merge_t<
       typename interface_resolutions<Interface,
                                      Storage>::lvalue_reference_resolutions,
       storage_resolutions_t<typename conversions::lvalue_reference_types,
                             Interface, Storage, borrow>>;
-  using rvalue_reference_resolutions = type_list_merge_t<
+};
+
+template <typename Interface, typename Storage>
+struct binding_rvalue_reference_resolutions {
+private:
+  using conversions = typename Storage::conversions;
+
+public:
+  using type = type_list_merge_t<
       typename interface_resolutions<Interface,
                                      Storage>::rvalue_reference_resolutions,
       storage_resolutions_t<typename conversions::rvalue_reference_types,
                             Interface, Storage, consume>>;
-  using pointer_resolutions = type_list_merge_t<
+};
+
+template <typename Interface, typename Storage>
+struct binding_pointer_resolutions {
+private:
+  using conversions = typename Storage::conversions;
+
+public:
+  using type = type_list_merge_t<
       typename interface_resolutions<Interface, Storage>::pointer_resolutions,
       storage_resolutions_t<typename conversions::pointer_types, Interface,
                             Storage, borrow>>;
+};
+
+template <typename Interface, typename Storage> struct binding_resolutions {
+  using value_resolutions =
+      typename binding_value_resolutions<Interface, Storage>::type;
+  using lvalue_reference_resolutions =
+      typename binding_lvalue_reference_resolutions<Interface, Storage>::type;
+  using rvalue_reference_resolutions =
+      typename binding_rvalue_reference_resolutions<Interface, Storage>::type;
+  using pointer_resolutions =
+      typename binding_pointer_resolutions<Interface, Storage>::type;
   // Target forms are disjoint across the value, reference, and pointer
   // categories, so concatenating their already-unique lists cannot duplicate
   // a resolution.
