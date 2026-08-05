@@ -118,8 +118,8 @@ private:
                         typename collection_traits<Collection>::resolve_type>;
 
   template <typename Request, typename Key>
-  using selection_t = static_binding_t<
-      typename static_bindings_type::template bindings<Request, Key>>;
+  using selection_t =
+      typename static_bindings_type::template selection<Request, Key>;
 
   template <typename Request, typename Key>
   static constexpr binding_status resolve_status_v =
@@ -334,9 +334,8 @@ public:
     using lookup_request = request_type<T, true>;
     using request = request_type<T, RemoveRvalueReferences>;
     if constexpr (!collection_traits<R>::is_collection) {
-      using selection =
-          static_binding_t<typename static_bindings_type::template bindings<
-              typename lookup_request::lookup_type, LookupKey>>;
+      using selection = typename static_bindings_type::template selection<
+          typename lookup_request::lookup_type, LookupKey>;
       if constexpr (selection::status == binding_status::found) {
         using binding = typename selection::binding_type;
         using binding_model_type = typename binding::binding_model_type;
@@ -405,13 +404,12 @@ private:
     using request_value_type = typename Request::value_type;
     using interface_type = typename Request::interface_type;
     if constexpr (std::is_same_v<Factory, constructor<request_value_type>>) {
-      using selection =
-          static_binding_t<typename static_bindings_type::template bindings<
-              binding_dependency_interface_t<interface_type>,
-              binding_dependency_key_t<interface_type>>>;
+      using selection = typename static_bindings_type::template selection<
+          binding_dependency_interface_t<interface_type>,
+          binding_dependency_key_t<interface_type>>;
       using normalized_selection =
-          static_binding_t<typename static_bindings_type::template bindings<
-              request_value_type, detail::no_lookup_key_t>>;
+          typename static_bindings_type::template selection<
+              request_value_type, detail::no_lookup_key_t>;
       constexpr bool has_exact_binding =
           selection::status != binding_status::not_found;
       constexpr bool has_normalized_binding =

@@ -122,8 +122,8 @@ private:
   using parent_container_type = ParentContainer;
 
   template <typename T, typename Key>
-  using static_selection_t = detail::static_binding_t<
-      typename static_bindings_type::template bindings<T, Key>>;
+  using static_selection_t =
+      typename static_bindings_type::template selection<T, Key>;
 
   template <typename T>
   static constexpr bool runtime_auto_constructible_v =

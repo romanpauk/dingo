@@ -299,6 +299,37 @@ TEST(static_bindings_source_test,
 }
 
 TEST(static_bindings_source_test,
+     indexed_no_key_selection_preserves_binding_cardinality) {
+  struct duplicated_service {};
+  struct unique_service {};
+  struct missing_service {};
+
+  using duplicated_binding =
+      dingo::bind<scope<shared>, storage<duplicated_service>>;
+  using unique_binding = dingo::bind<scope<shared>, storage<unique_service>>;
+  using source =
+      dingo::bindings<duplicated_binding, duplicated_binding, unique_binding>;
+  using registry_type = typename source::type;
+  using duplicate_selection =
+      typename registry_type::template selection<duplicated_service,
+                                                 detail::no_lookup_key_t>;
+  using unique_selection =
+      typename registry_type::template selection<unique_service,
+                                                 detail::no_lookup_key_t>;
+  using missing_selection =
+      typename registry_type::template selection<missing_service,
+                                                 detail::no_lookup_key_t>;
+
+  static_assert(duplicate_selection::status ==
+                detail::binding_status::ambiguous);
+  static_assert(unique_selection::status == detail::binding_status::found);
+  static_assert(std::is_same_v<typename unique_selection::binding_type,
+                               typename registry_type::template binding<
+                                   unique_service, detail::no_lookup_key_t>>);
+  static_assert(missing_selection::status == detail::binding_status::not_found);
+}
+
+TEST(static_bindings_source_test,
      keyed_dependencies_resolve_against_matching_keyed_bindings) {
   struct first_key : std::integral_constant<int, 0> {};
   struct second_key : std::integral_constant<int, 1> {};
