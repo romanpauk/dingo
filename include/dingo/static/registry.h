@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/core/binding_model.h>
+#include <dingo/core/binding_selection.h>
 #include <dingo/core/dependency.h>
 #include <dingo/core/factory_traits.h>
 #include <dingo/lookup/lookup.h>
@@ -18,6 +19,7 @@
 #include <dingo/type/type_list.h>
 
 #include <type_traits>
+#include <utility>
 
 namespace dingo {
 
@@ -127,28 +129,70 @@ template <typename Interface, typename LookupKey, typename InterfaceBindings>
 inline constexpr size_t binding_count_v =
     binding_count<Interface, LookupKey, InterfaceBindings>::value;
 
-template <typename Bindings,
-          bool HasSingleBinding = (type_list_size_v<Bindings> == 1)>
-struct single_binding;
+template <typename Interface, typename LookupKey> struct binding_lookup_tag {};
 
-template <typename Bindings> struct single_binding<Bindings, false> {
-  using type = void;
+template <size_t Index, typename InterfaceBinding>
+struct binding_lookup_index_entry {
+  static type_list_iterator<InterfaceBinding>
+      select(binding_lookup_tag<typename InterfaceBinding::interface_type,
+                                typename InterfaceBinding::key_type>);
 };
 
-template <typename Head, typename... Tail>
-struct single_binding<type_list<Head, Tail...>, true> {
-  using type = Head;
+template <typename InterfaceBindings, typename Indexes>
+struct binding_lookup_index_impl;
+
+template <typename... InterfaceBindings, size_t... Indexes>
+struct binding_lookup_index_impl<type_list<InterfaceBindings...>,
+                                 std::index_sequence<Indexes...>>
+    : binding_lookup_index_entry<Indexes, InterfaceBindings>... {
+  using binding_lookup_index_entry<Indexes, InterfaceBindings>::select...;
+};
+
+template <typename InterfaceBindings>
+using binding_lookup_index = binding_lookup_index_impl<
+    InterfaceBindings,
+    std::make_index_sequence<type_list_size_v<InterfaceBindings>>>;
+
+template <typename Interface, typename LookupKey, typename InterfaceBindings,
+          size_t Count =
+              binding_count_v<Interface, LookupKey, InterfaceBindings>>
+struct indexed_binding_selection {
+  using type = ambiguous_binding_choice_t;
 };
 
 template <typename Interface, typename LookupKey, typename InterfaceBindings>
-struct binding_lookup {
-  using type = typename single_binding<
-      bindings_t<Interface, LookupKey, InterfaceBindings>>::type;
+struct indexed_binding_selection<Interface, LookupKey, InterfaceBindings, 0> {
+  using type = missing_binding_choice_t;
 };
 
 template <typename Interface, typename LookupKey, typename InterfaceBindings>
-using binding_t =
-    typename binding_lookup<Interface, LookupKey, InterfaceBindings>::type;
+struct indexed_binding_selection<Interface, LookupKey, InterfaceBindings, 1> {
+private:
+  using selected = decltype(binding_lookup_index<InterfaceBindings>::select(
+      binding_lookup_tag<Interface, LookupKey>{}));
+
+public:
+  using type = found_binding_choice_t<typename selected::type>;
+};
+
+template <typename Interface, typename LookupKey, typename InterfaceBindings,
+          bool UseIndex = is_no_lookup_key_v<LookupKey>>
+struct binding_selection {
+  using type =
+      static_binding_t<bindings_t<Interface, LookupKey, InterfaceBindings>>;
+};
+
+template <typename Interface, typename LookupKey, typename InterfaceBindings>
+struct binding_selection<Interface, LookupKey, InterfaceBindings, true>
+    : indexed_binding_selection<Interface, LookupKey, InterfaceBindings> {};
+
+template <typename Interface, typename LookupKey, typename InterfaceBindings>
+using binding_selection_t =
+    typename binding_selection<Interface, LookupKey, InterfaceBindings>::type;
+
+template <typename Interface, typename LookupKey, typename InterfaceBindings>
+using binding_t = typename binding_selection_t<Interface, LookupKey,
+                                               InterfaceBindings>::binding_type;
 
 struct key_value_lookup_not_required {};
 
@@ -651,6 +695,16 @@ private:
                          binding_lookup_key_t<Interface, LookupKey>,
                          interface_bindings>;
 
+  template <typename Interface, typename LookupKey>
+  using exact_selection_t = detail::binding_selection_t<
+      detail::binding_exact_dependency_interface_t<Interface>,
+      binding_lookup_key_t<Interface, LookupKey>, interface_bindings>;
+
+  template <typename Interface, typename LookupKey>
+  using normalized_selection_t = detail::binding_selection_t<
+      detail::binding_dependency_interface_t<Interface>,
+      binding_lookup_key_t<Interface, LookupKey>, interface_bindings>;
+
   template <typename Interface, typename LookupKey,
             bool SameLookup = std::is_same_v<
                 detail::binding_exact_dependency_interface_t<Interface>,
@@ -667,13 +721,43 @@ private:
     using type = exact_bindings_t<Interface, LookupKey>;
   };
 
+  template <typename Interface, typename LookupKey, typename ExactSelection,
+            bool HasExact =
+                ExactSelection::status != detail::binding_status::not_found>
+  struct selected_binding {
+    using type = ExactSelection;
+  };
+
+  template <typename Interface, typename LookupKey, typename ExactSelection>
+  struct selected_binding<Interface, LookupKey, ExactSelection, false> {
+    using type = normalized_selection_t<Interface, LookupKey>;
+  };
+
+  template <typename Interface, typename LookupKey, bool SameLookup>
+  struct selected_binding_for_request;
+
+  template <typename Interface, typename LookupKey>
+  struct selected_binding_for_request<Interface, LookupKey, false>
+      : selected_binding<Interface, LookupKey,
+                         exact_selection_t<Interface, LookupKey>> {};
+
+  template <typename Interface, typename LookupKey>
+  struct selected_binding_for_request<Interface, LookupKey, true> {
+    using type = exact_selection_t<Interface, LookupKey>;
+  };
+
 public:
   template <typename Interface, typename LookupKey>
   using bindings = typename selected_bindings<Interface, LookupKey>::type;
 
   template <typename Interface, typename LookupKey>
-  using binding =
-      typename detail::single_binding<bindings<Interface, LookupKey>>::type;
+  using selection = typename selected_binding_for_request<
+      Interface, LookupKey,
+      std::is_same_v<detail::binding_exact_dependency_interface_t<Interface>,
+                     detail::binding_dependency_interface_t<Interface>>>::type;
+
+  template <typename Interface, typename LookupKey>
+  using binding = typename selection<Interface, LookupKey>::binding_type;
 
   template <typename Interface>
   using model =

@@ -35,8 +35,8 @@ class binding_resolution<Host, static_bindings<Registrations...>>
   using runtime_context_type = runtime_context<typename Host::allocator_type>;
 
   template <typename T, typename LookupKey>
-  using binding_t = static_binding_t<
-      typename static_registry_type::template bindings<T, LookupKey>>;
+  using binding_t =
+      typename static_registry_type::template selection<T, LookupKey>;
 
   template <typename Request, typename LookupKey, typename Result>
   struct local_binding_source {

@@ -654,8 +654,8 @@ public:
       }
       return results;
     } else {
-      using selection = detail::static_binding_t<
-          typename LocalRegistry::template bindings<R, LookupKey>>;
+      using selection =
+          typename LocalRegistry::template selection<R, LookupKey>;
       if constexpr (selection::status == detail::binding_status::found) {
         using binding = typename selection::binding_type;
         auto &local_scope =
@@ -818,8 +818,8 @@ class static_registry<static_bindings<Registrations...>, State> {
                                        Registrations...>;
 
   template <typename Request, typename LookupKey>
-  using selection_t = static_binding_t<
-      typename bindings_type::template bindings<Request, LookupKey>>;
+  using selection_t =
+      typename bindings_type::template selection<Request, LookupKey>;
 
   template <typename Request, typename LookupKey,
             bool Selected = selection_t<Request, LookupKey>::status ==
