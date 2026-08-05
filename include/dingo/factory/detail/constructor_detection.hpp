@@ -35,11 +35,11 @@ struct opaque_constructor_argument;
 
 template <class DisabledType>
 struct constructor_argument<DisabledType, constructor_shape> {
-  // Value and rvalue probes imply materialization, so they must not
-  // participate for forward declarations. Otherwise constructor deduction
-  // would pull incomplete dependencies into class-trait inspection.
+  // Non-scalar wrappers may use constrained converting constructors that
+  // require an xvalue source while checking nested dependency conversions.
   template <typename T, typename = typename std::enable_if_t<
                             !std::is_same_v<DisabledType, std::decay_t<T>> &&
+                            !std::is_scalar_v<T> &&
                             is_complete<std::decay_t<T>>::value>>
   operator T &&() const;
 
@@ -57,6 +57,8 @@ struct constructor_argument<DisabledType, constructor_shape> {
   template <typename T, typename = typename std::enable_if_t<
                             !std::is_same_v<DisabledType, std::decay_t<T>> &&
                             is_complete<std::decay_t<T>>::value>>
+  // A prvalue covers both value and rvalue-reference parameters, so one
+  // conversion is sufficient for each constructor shape probe.
   operator T();
 
   template <typename T, typename Selector,
