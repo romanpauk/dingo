@@ -54,6 +54,27 @@ decltype(auto) resolve_constructor_dependency(construction_scope scope,
   }
 }
 
+template <typename T, bool Candidate = !has_constructor_typedef_v<T> &&
+                                       std::is_empty_v<T> &&
+                                       std::is_aggregate_v<T>>
+struct zero_argument_aggregate_impl : std::false_type {};
+
+template <typename T>
+struct zero_argument_aggregate_impl<T, true>
+    : std::bool_constant<is_list_initializable_v<T> &&
+                         !is_list_initializable_v<
+                             T, constructor_argument<T, constructor_shape>>> {};
+
+template <typename T, bool Complete = is_complete<T>::value>
+struct is_zero_argument_aggregate : std::false_type {};
+
+template <typename T>
+struct is_zero_argument_aggregate<T, true> : zero_argument_aggregate_impl<T> {};
+
+template <typename T>
+inline constexpr bool is_zero_argument_aggregate_v =
+    is_zero_argument_aggregate<T>::value;
+
 } // namespace detail
 
 template <typename T, typename... Args> struct constructor<T(Args...)> {
@@ -83,12 +104,13 @@ template <typename T, typename... Args> struct constructor<T(Args...)> {
   }
 };
 
-// Unqualified scalar object types cannot declare injectable constructor
-// parameters. Keep cv-qualified scalars on the detection path so the shortcut
-// does not form deprecated function types such as volatile int().
+// Unqualified scalar types and empty aggregates without an initializable
+// element cannot declare injectable constructor parameters. Keep cv-qualified
+// types on the detection path so the shortcut does not form deprecated function
+// types such as volatile int().
 namespace detail {
 template <typename T>
-struct scalar_constructor
+struct zero_argument_constructor
     : std::conditional_t<std::is_same_v<T, std::remove_cv_t<T>>,
                          ::dingo::constructor<std::remove_cv_t<T>()>,
                          ::dingo::constructor_detection<T>> {};
@@ -96,7 +118,8 @@ struct scalar_constructor
 
 template <typename T>
 struct constructor<T>
-    : std::conditional_t<std::is_scalar_v<T>, detail::scalar_constructor<T>,
-                         constructor_detection<T>> {};
+    : std::conditional_t<
+          std::is_scalar_v<T> || detail::is_zero_argument_aggregate_v<T>,
+          detail::zero_argument_constructor<T>, constructor_detection<T>> {};
 
 } // namespace dingo
