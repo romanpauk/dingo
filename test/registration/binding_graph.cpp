@@ -264,25 +264,50 @@ TEST(static_execution_traits_test,
 }
 
 TEST(static_execution_traits_test,
-     direct_stable_bindings_skip_conversion_cache_discovery) {
+     default_stable_leaf_bindings_skip_conversion_cache_discovery) {
   struct payload {};
   struct service_interface {
     virtual ~service_interface() = default;
   };
   struct service : service_interface {};
+  struct custom_conversions
+      : detail::conversions<shared, std::shared_ptr<payload>, runtime_type> {};
 
   using direct_registration = dingo::bind<scope<shared>, storage<payload>>;
   using direct_model = detail::binding_model<direct_registration>;
+  using wrapped_registration =
+      dingo::bind<scope<shared>, storage<std::shared_ptr<payload>>>;
+  using wrapped_model = detail::binding_model<wrapped_registration>;
   using converted_registration =
       dingo::bind<scope<shared>, storage<std::shared_ptr<service>>,
                   interfaces<service_interface>>;
   using converted_model = detail::binding_model<converted_registration>;
+  using custom_registration =
+      dingo::bind<scope<shared>, storage<std::shared_ptr<payload>>,
+                  conversions<custom_conversions>>;
+  using custom_model = detail::binding_model<custom_registration>;
+  using unstable_registration = dingo::bind<scope<unique>, storage<payload>>;
+  using unstable_model = detail::binding_model<unstable_registration>;
 
   static_assert(detail::binding_has_cacheless_conversion_shape_v<direct_model>);
   static_assert(
       std::is_same_v<detail::binding_cache_types_t<direct_model>, type_list<>>);
+  static_assert(detail::binding_uses_default_conversions_v<wrapped_model>);
+  static_assert(
+      detail::binding_has_cacheless_default_leaf_v<payload, wrapped_model>);
+  static_assert(std::is_same_v<detail::binding_cache_types_t<wrapped_model>,
+                               type_list<>>);
   static_assert(
       !detail::binding_has_cacheless_conversion_shape_v<converted_model>);
+  static_assert(detail::binding_has_cacheless_default_leaf_v<service_interface,
+                                                             converted_model>);
+  static_assert(std::is_same_v<detail::binding_cache_types_t<converted_model>,
+                               type_list<>>);
+  static_assert(!detail::binding_uses_default_conversions_v<custom_model>);
+  static_assert(
+      !detail::binding_has_cacheless_default_leaf_v<payload, custom_model>);
+  static_assert(
+      !detail::binding_has_cacheless_default_leaf_v<payload, unstable_model>);
 }
 
 TEST(

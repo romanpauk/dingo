@@ -113,16 +113,33 @@ inline constexpr bool binding_has_cacheless_conversion_shape_v = [] {
                         type_list<runtime_type *>>;
 }();
 
+template <typename BindingModel>
+inline constexpr bool binding_uses_default_conversions_v = std::is_same_v<
+    typename BindingModel::conversions_type,
+    detail::conversions<typename BindingModel::storage_tag,
+                        typename BindingModel::registered_storage_type,
+                        runtime_type>>;
+
+template <typename Request, typename BindingModel>
+inline constexpr bool binding_has_cacheless_default_leaf_v =
+    binding_uses_default_conversions_v<BindingModel> &&
+    BindingModel::conversions_type::is_stable &&
+    std::is_same_v<std::remove_cv_t<Request>,
+                   std::remove_cv_t<typename BindingModel::stored_leaf_type>>;
+
 template <typename BindingModel, typename... Interfaces>
 struct binding_cache_types<BindingModel, type_list<Interfaces...>>
-    // Exact stored interfaces with this conversion shape cannot retain an
+    // Exact stored requests and stable default leaf requests cannot retain an
     // adapted value, so enumerating every resolution route cannot add a slot.
     : binding_cache_types_impl<
           BindingModel,
-          binding_has_cacheless_conversion_shape_v<BindingModel> &&
-              (stored_request_identity_v<
-                   typename annotated_traits<Interfaces>::type,
-                   typename BindingModel::storage_type> &&
+          (binding_has_cacheless_conversion_shape_v<BindingModel> &&
+           (stored_request_identity_v<
+                typename annotated_traits<Interfaces>::type,
+                typename BindingModel::storage_type> &&
+            ...)) ||
+              (binding_has_cacheless_default_leaf_v<
+                   typename annotated_traits<Interfaces>::type, BindingModel> &&
                ...),
           Interfaces...> {};
 
