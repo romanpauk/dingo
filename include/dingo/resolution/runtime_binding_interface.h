@@ -61,22 +61,33 @@ struct resolved_address {
   } access;
 };
 
-template <typename Container, typename Context>
-class runtime_binding_interface {
+template <typename RTTI, typename Context> class runtime_binding_interface {
 public:
-  virtual ~runtime_binding_interface() = default;
+  using request_type = instance_request<RTTI>;
+  using resolve_function = resolved_address (*)(runtime_binding_interface &,
+                                                construction_scope, Context &,
+                                                const request_type &,
+                                                detail::cache::sink);
 
   detail::cache::entry *cache_slot() noexcept { return cache_slot_; }
 
-  virtual resolved_address
-  resolve_request(construction_scope, Context &,
-                  const instance_request<typename Container::rtti_type> &,
-                  detail::cache::sink) = 0;
+  resolved_address resolve_request(construction_scope scope, Context &context,
+                                   const request_type &request,
+                                   detail::cache::sink cache) {
+    return resolve_(*this, scope, context, request, cache);
+  }
 
 protected:
+  // Runtime lookup is non-owning; transaction storage destroys concrete
+  // bindings, so dispatch does not need a distinct virtual base per container.
+  explicit runtime_binding_interface(resolve_function resolve)
+      : resolve_(resolve) {}
+  ~runtime_binding_interface() = default;
+
   void cache_slot(detail::cache::entry *slot) noexcept { cache_slot_ = slot; }
 
 private:
+  resolve_function resolve_;
   detail::cache::entry *cache_slot_ = nullptr;
 };
 } // namespace dingo

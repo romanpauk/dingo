@@ -44,6 +44,18 @@ TEST(type_list_test, meta_utilities) {
           type_list_unique_t<type_list<type_list_a, type_list_b, type_list_a,
                                        type_list_c, type_list_b>>,
           type_list<type_list_a, type_list_b, type_list_c>>);
+  static_assert(
+      std::is_same_v<type_list_merge_t<type_list<type_list_a, type_list_b>,
+                                       type_list<type_list_b, type_list_c>>,
+                     type_list<type_list_a, type_list_b, type_list_c>>);
+  static_assert(
+      std::is_same_v<
+          type_list_merge_t<type_list<>, type_list<type_list_a, type_list_a>>,
+          type_list<type_list_a, type_list_a>>);
+  static_assert(
+      std::is_same_v<
+          type_list_merge_t<type_list<type_list_a, type_list_a>, type_list<>>,
+          type_list<type_list_a, type_list_a>>);
 }
 
 TEST(type_list_test, for_each_visits_types_in_order) {

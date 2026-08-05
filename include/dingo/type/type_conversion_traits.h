@@ -282,10 +282,18 @@ using copy_cv_t = typename copy_cv<From, To>::type;
 template <typename Target, typename Source, typename Access>
 struct direct_type_conversion_path;
 
-template <typename Target, typename Source, typename Access = consume,
+template <typename Target, typename Source, typename Access>
+struct basic_type_conversion_path;
+
+template <typename Target, typename Source, typename Access,
           typename Direct = direct_type_conversion_path<Target, Source, Access>,
           bool UseFallback =
               Direct::uses_default_conversion && !Direct::available>
+struct type_conversion_path_impl;
+
+template <typename Target, typename Source, typename Access = consume,
+          typename Basic = basic_type_conversion_path<Target, Source, Access>,
+          bool UseBasic = Basic::available>
 struct type_conversion_path;
 
 template <typename Alternative, typename Source>
@@ -304,6 +312,32 @@ inline constexpr bool is_value_wrapper_type_v = [] {
   return type_traits<type>::enabled && !type_traits<type>::is_pointer_like &&
          has_value_type_v<type>;
 }();
+
+template <typename Target>
+inline constexpr bool is_structural_conversion_target_v = [] {
+  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
+  return !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
+         (is_alternative_type_v<target_type> ||
+          is_value_wrapper_type_v<target_type>);
+}();
+
+// Default conversions into wrappers and alternatives are recovered by the
+// structural candidates below. Once the basic identity/reference cases have
+// failed, no direct conversion can win for these targets.
+struct default_structural_conversion_path {
+  static constexpr bool uses_default_conversion = true;
+  static constexpr bool can_take_address = false;
+  static constexpr bool available = false;
+  using type = unavailable_type_conversion;
+};
+
+template <typename Target, typename Source, typename Access>
+using conversion_direct_path_t = std::conditional_t<
+    is_structural_conversion_target_v<Target> &&
+        is_default_type_conversion<type_conversion_traits<
+            Target, std::remove_cv_t<std::remove_reference_t<Source>>>>::value,
+    default_structural_conversion_path,
+    direct_type_conversion_path<Target, Source, Access>>;
 
 template <typename Type, typename = void>
 struct borrows_value_wrapper : std::false_type {};
@@ -677,9 +711,72 @@ using conversion_for_access_t = std::conditional_t<
         access_satisfies<Access, typename Conversion::required_access>::value,
     Conversion, unavailable_type_conversion>;
 
+template <typename Candidate, typename Next,
+          bool Available = Candidate::available>
+struct select_conversion_candidate;
+
+template <typename Candidate, typename Next>
+struct select_conversion_candidate<Candidate, Next, true> {
+  using type = Candidate;
+};
+
+template <typename Candidate, typename Next>
+struct select_conversion_candidate<Candidate, Next, false> {
+  using type = typename Next::type;
+};
+
+// Keep common default conversions out of the general recursive search.
+template <typename Target, typename Source, typename Access>
+struct basic_type_conversion_path {
+private:
+  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
+  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
+  using conversion_traits = type_conversion_traits<Target, source_type>;
+  static constexpr bool uses_default_conversion =
+      is_default_type_conversion<conversion_traits>::value;
+  static constexpr bool can_borrow = access_satisfies<Access, borrow>::value;
+  static constexpr bool can_consume = access_satisfies<Access, consume>::value;
+  static constexpr bool preserves_identity =
+      uses_default_conversion && !std::is_reference_v<Target> &&
+      !std::is_pointer_v<Target> &&
+      !std::is_volatile_v<std::remove_reference_t<Source>> &&
+      std::is_same_v<std::remove_cv_t<Target>, source_type> &&
+      ((std::is_lvalue_reference_v<Source> && can_borrow &&
+        is_copy_constructible_v<Target>) ||
+       (std::is_rvalue_reference_v<Source> && can_consume &&
+        std::is_constructible_v<Target, Source>));
+  static constexpr bool preserves_reference =
+      uses_default_conversion && can_borrow && !std::is_reference_v<Target> &&
+      !std::is_pointer_v<Target> && std::is_lvalue_reference_v<Source> &&
+      !std::is_volatile_v<std::remove_reference_t<Source>> &&
+      is_copy_constructible_v<Target> &&
+      std::is_convertible_v<std::add_pointer_t<std::remove_reference_t<Source>>,
+                            std::add_pointer_t<Target>>;
+  static constexpr bool converts_reference =
+      uses_default_conversion && can_borrow &&
+      std::is_lvalue_reference_v<Target> &&
+      std::is_lvalue_reference_v<Source> &&
+      std::is_convertible_v<
+          std::add_pointer_t<std::remove_reference_t<Source>>,
+          std::add_pointer_t<std::remove_reference_t<Target>>>;
+
+public:
+  using type = std::conditional_t<
+      preserves_identity, identity_type_conversion<Target, Source>,
+      std::conditional_t<
+          preserves_reference, reference_type_conversion<Target, Source>,
+          std::conditional_t<
+              converts_reference,
+              traits_type_conversion<Target, Source, borrow, Source>,
+              unavailable_type_conversion>>>;
+  static constexpr bool available = type::available;
+};
+
 template <typename Target, typename Source, typename Access>
 struct direct_type_conversion_path {
 private:
+  // Identity and reference-preserving conversions are handled by the basic
+  // path before this fallback is instantiated.
   using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
   using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
   using conversion_traits = type_conversion_traits<Target, source_type>;
@@ -689,10 +786,6 @@ public:
       is_default_type_conversion<conversion_traits>::value;
 
 private:
-  static constexpr bool decomposes_target =
-      !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
-      (is_alternative_type_v<target_type> ||
-       is_value_wrapper_type_v<target_type>);
   static constexpr bool borrows_existing_object =
       std::is_lvalue_reference_v<Target> &&
       std::is_lvalue_reference_v<Source> &&
@@ -739,93 +832,176 @@ private:
                     has_valid_custom_access,
                 "type_conversion_traits specialization must declare "
                 "required_access<Source> as borrow or consume");
-  static constexpr bool preserves_identity =
-      uses_default_conversion && !std::is_reference_v<Target> &&
-      !std::is_pointer_v<Target> &&
-      !std::is_volatile_v<std::remove_reference_t<Source>> &&
-      std::is_same_v<std::remove_cv_t<Target>, source_type> &&
-      ((std::is_lvalue_reference_v<Source> &&
-        is_copy_constructible_v<Target>) ||
-       (std::is_rvalue_reference_v<Source> &&
-        std::is_constructible_v<Target, Source>));
   static constexpr bool takes_address =
       std::is_pointer_v<Target> && std::is_lvalue_reference_v<Source> &&
       std::is_convertible_v<std::add_pointer_t<std::remove_reference_t<Source>>,
                             Target>;
-  static constexpr bool preserves_reference =
-      !std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
-      uses_default_conversion && std::is_lvalue_reference_v<Source> &&
-      !std::is_volatile_v<std::remove_reference_t<Source>> &&
-      is_copy_constructible_v<Target> &&
-      std::is_convertible_v<std::add_pointer_t<std::remove_reference_t<Source>>,
-                            std::add_pointer_t<Target>>;
-
-  using identity = std::conditional_t<preserves_identity,
-                                      identity_type_conversion<Target, Source>,
-                                      unavailable_type_conversion>;
-  using reference =
-      std::conditional_t<preserves_reference,
-                         reference_type_conversion<Target, Source>,
-                         unavailable_type_conversion>;
   using direct =
       std::conditional_t<has_traits_conversion &&
-                             (!uses_default_conversion || !decomposes_target),
+                             (!uses_default_conversion ||
+                              !is_structural_conversion_target_v<Target>),
                          traits_type_conversion<Target, Source, required_access,
                                                 conversion_source>,
                          unavailable_type_conversion>;
-  using selected = typename select_type_conversion<
-      conversion_for_access_t<identity, Access>,
-      conversion_for_access_t<reference, Access>,
-      conversion_for_access_t<direct, Access>>::type;
 
 public:
   static constexpr bool can_take_address = takes_address;
-  using type = selected;
+  using type = conversion_for_access_t<direct, Access>;
   static constexpr bool available = type::available;
 };
 
+template <std::size_t Index, typename Target, typename Source, typename Access,
+          typename Direct>
+struct conversion_fallback_candidate;
+
 template <typename Target, typename Source, typename Access, typename Direct>
-struct type_conversion_path<Target, Source, Access, Direct, true> {
-private:
-  using target_alternative =
+struct conversion_fallback_candidate<0, Target, Source, Access, Direct> {
+  using type =
       typename target_alternative_type_conversion_candidate<Target, Source,
                                                             Access>::type;
-  using target_wrapper =
-      typename target_wrapper_type_conversion_candidate<Target, Source,
-                                                        Access>::type;
-  using array = typename array_type_conversion_candidate<Target, Source>::type;
-  using address = std::conditional_t<Direct::can_take_address,
-                                     address_type_conversion<Target, Source>,
-                                     unavailable_type_conversion>;
-  using pointer_access =
-      typename pointer_access_type_conversion_candidate<Target, Source>::type;
-  using dereference =
-      typename dereference_type_conversion_candidate<Target, Source,
-                                                     Access>::type;
-  using borrowed =
-      typename borrowed_type_conversion_candidate<Target, Source, Access>::type;
-  using alternative =
+};
+
+template <typename Target, typename Source, typename Access, typename Direct>
+struct conversion_fallback_candidate<1, Target, Source, Access, Direct> {
+  using type =
       typename source_alternative_type_conversion<Target, Source, Access>::type;
-  using retained =
+};
+
+template <typename Target, typename Source, typename Access, typename Direct>
+struct conversion_fallback_candidate<2, Target, Source, Access, Direct> {
+  using type = typename target_wrapper_type_conversion_candidate<Target, Source,
+                                                                 Access>::type;
+};
+
+template <typename Target, typename Source, typename Access, typename Direct>
+struct conversion_fallback_candidate<3, Target, Source, Access, Direct> {
+  using type = typename array_type_conversion_candidate<Target, Source>::type;
+};
+
+template <typename Target, typename Source, typename Access, typename Direct>
+struct conversion_fallback_candidate<4, Target, Source, Access, Direct> {
+  using type = std::conditional_t<Direct::can_take_address,
+                                  address_type_conversion<Target, Source>,
+                                  unavailable_type_conversion>;
+};
+
+template <typename Target, typename Source, typename Access, typename Direct>
+struct conversion_fallback_candidate<5, Target, Source, Access, Direct> {
+  using type =
+      typename pointer_access_type_conversion_candidate<Target, Source>::type;
+};
+
+template <typename Target, typename Source, typename Access, typename Direct>
+struct conversion_fallback_candidate<6, Target, Source, Access, Direct> {
+  using type = typename dereference_type_conversion_candidate<Target, Source,
+                                                              Access>::type;
+};
+
+template <typename Target, typename Source, typename Access, typename Direct>
+struct conversion_fallback_candidate<7, Target, Source, Access, Direct> {
+  using type =
+      typename borrowed_type_conversion_candidate<Target, Source, Access>::type;
+};
+
+template <typename Target, typename Source, typename Access, typename Direct>
+struct conversion_fallback_candidate<8, Target, Source, Access, Direct> {
+  using type =
       typename retained_type_conversion_candidate<Target, Source, Access>::type;
-  using selected = typename select_type_conversion<
-      conversion_for_access_t<target_alternative, Access>,
-      conversion_for_access_t<alternative, Access>,
-      conversion_for_access_t<target_wrapper, Access>,
-      conversion_for_access_t<array, Access>,
-      conversion_for_access_t<address, Access>,
-      conversion_for_access_t<pointer_access, Access>,
-      conversion_for_access_t<dereference, Access>,
-      conversion_for_access_t<borrowed, Access>,
-      conversion_for_access_t<retained, Access>>::type;
+};
+
+template <typename Target, typename Source, typename Direct>
+inline constexpr std::size_t first_conversion_fallback_v = [] {
+  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
+  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
+  using target_array = std::conditional_t<std::is_pointer_v<Target>,
+                                          std::remove_pointer_t<Target>,
+                                          std::remove_reference_t<Target>>;
+
+  // These are necessary conditions only. The selected candidate still
+  // performs its complete validity check before it can win.
+  if constexpr (!std::is_reference_v<Target> && !std::is_pointer_v<Target> &&
+                is_alternative_type_v<target_type>) {
+    return 0;
+  } else if constexpr (is_alternative_type_v<source_type> &&
+                       !std::is_volatile_v<std::remove_reference_t<Source>>) {
+    return 1;
+  } else if constexpr (!std::is_reference_v<Target> &&
+                       !std::is_pointer_v<Target> &&
+                       is_value_wrapper_type_v<target_type>) {
+    return 2;
+  } else if constexpr (std::is_pointer_v<std::remove_reference_t<Source>> &&
+                       ((std::is_lvalue_reference_v<Target> &&
+                         std::is_array_v<std::remove_reference_t<Target>>) ||
+                        (std::is_pointer_v<Target> &&
+                         std::is_array_v<target_array>))) {
+    return 3;
+  } else if constexpr (Direct::can_take_address) {
+    return 4;
+  } else if constexpr (std::is_pointer_v<Target> &&
+                       std::is_lvalue_reference_v<Source>) {
+    return 5;
+  } else if constexpr (std::is_pointer_v<std::remove_reference_t<Source>> &&
+                       !std::is_void_v<std::remove_pointer_t<
+                           std::remove_reference_t<Source>>> &&
+                       !std::is_pointer_v<Target>) {
+    return 6;
+  } else if constexpr (type_traits<source_type>::is_value_borrowable) {
+    return 7;
+  } else if constexpr ((std::is_lvalue_reference_v<Target> ||
+                        std::is_pointer_v<Target>) &&
+                       type_traits<
+                           retained_conversion_type_t<Target>>::enabled &&
+                       !std::is_array_v<retained_conversion_type_t<Target>>) {
+    return 8;
+  } else {
+    return 9;
+  }
+}();
+
+// Keep later recursive candidates incomplete until every earlier conversion
+// has failed; merely naming all candidates instantiates all of their paths.
+template <std::size_t Index, typename Target, typename Source, typename Access,
+          typename Direct>
+struct select_conversion_fallback {
+private:
+  using candidate =
+      typename conversion_fallback_candidate<Index, Target, Source, Access,
+                                             Direct>::type;
+  using accessible_candidate = conversion_for_access_t<candidate, Access>;
 
 public:
-  using type = selected;
+  using type = typename select_conversion_candidate<
+      accessible_candidate,
+      select_conversion_fallback<Index + 1, Target, Source, Access,
+                                 Direct>>::type;
+};
+
+template <typename Target, typename Source, typename Access, typename Direct>
+struct select_conversion_fallback<9, Target, Source, Access, Direct> {
+  using type = unavailable_type_conversion;
+};
+
+template <typename Target, typename Source, typename Access, typename Direct>
+struct type_conversion_path_impl<Target, Source, Access, Direct, true> {
+public:
+  using type = typename select_conversion_fallback<
+      first_conversion_fallback_v<Target, Source, Direct>, Target, Source,
+      Access, Direct>::type;
   static constexpr bool available = type::available;
 };
 
 template <typename Target, typename Source, typename Access, typename Direct>
-struct type_conversion_path<Target, Source, Access, Direct, false> : Direct {};
+struct type_conversion_path_impl<Target, Source, Access, Direct, false>
+    : Direct {};
+
+template <typename Target, typename Source, typename Access, typename Basic>
+struct type_conversion_path<Target, Source, Access, Basic, true> : Basic {};
+
+template <typename Target, typename Source, typename Access, typename Basic>
+struct type_conversion_path<Target, Source, Access, Basic, false>
+    : type_conversion_path_impl<
+          Target, Source, Access,
+          conversion_direct_path_t<Target, Source, Access>> {};
 
 template <typename Target, typename Source, typename Access = consume>
 using type_conversion_path_t =
@@ -850,6 +1026,20 @@ using conversion_resolution = resolution<
     Target, type_resolution<conversion_target_t<Target>, Source,
                             type_conversion_path_t<conversion_target_t<Target>,
                                                    Source, Access>>>;
+
+// A conditional expression still names the conversion probe for unchanged
+// wrappers, so keep it behind a specialization that is never instantiated.
+template <bool Rebound, typename Target, typename Source, typename Access>
+struct wrapper_resolution_impl {
+  using type = type_list<>;
+};
+
+template <typename Target, typename Source, typename Access>
+struct wrapper_resolution_impl<true, Target, Source, Access> {
+  using type = std::conditional_t<
+      is_type_conversion_available_v<Target, Source, Access>,
+      type_list<conversion_resolution<Target, Source, Access>>, type_list<>>;
+};
 } // namespace detail
 
 template <typename Source, typename Interface, typename Access, typename = void>
@@ -871,10 +1061,8 @@ private:
   using target_type = detail::wrapper_rebind_leaf_t<source_type, Interface>;
 
 public:
-  using type = std::conditional_t<
-      !std::is_same_v<target_type, source_type> &&
-          detail::is_type_conversion_available_v<target_type, Source, Access>,
-      type_list<detail::conversion_resolution<target_type, Source, Access>>,
-      type_list<>>;
+  using type = typename detail::wrapper_resolution_impl<
+      !std::is_same_v<target_type, source_type>, target_type, Source,
+      Access>::type;
 };
 } // namespace dingo

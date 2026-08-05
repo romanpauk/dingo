@@ -94,6 +94,27 @@ template <typename List>
 using type_list_unique_t =
     typename detail::type_list_unique_impl<type_list<>, List>::type;
 
+template <typename Left, typename Right> struct type_list_merge {
+  using type = type_list_unique_t<type_list_cat_t<Left, Right>>;
+};
+
+template <typename... Types>
+struct type_list_merge<type_list<>, type_list<Types...>> {
+  using type = type_list<Types...>;
+};
+
+template <typename... Types>
+struct type_list_merge<type_list<Types...>, type_list<>> {
+  using type = type_list<Types...>;
+};
+
+template <> struct type_list_merge<type_list<>, type_list<>> {
+  using type = type_list<>;
+};
+
+template <typename Left, typename Right>
+using type_list_merge_t = typename type_list_merge<Left, Right>::type;
+
 template <typename T> struct to_type_list {
   using type = T;
 };

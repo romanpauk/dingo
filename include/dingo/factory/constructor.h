@@ -56,13 +56,14 @@ decltype(auto) resolve_constructor_dependency(construction_scope scope,
 
 } // namespace detail
 
-template <typename T> struct constructor<T> : constructor_detection<T> {};
-
 template <typename T, typename... Args> struct constructor<T(Args...)> {
   using arguments = type_list<Args...>;
   static constexpr size_t arity = sizeof...(Args);
   static constexpr bool valid = detail::is_list_initializable_v<T, Args...> ||
                                 detail::is_direct_initializable_v<T, Args...>;
+  static constexpr detail::constructor_kind kind =
+      valid ? detail::constructor_kind::concrete
+            : detail::constructor_kind::invalid;
 
   template <typename Type, typename Context, typename Container>
   static auto construct(construction_scope scope, Context &ctx,
@@ -81,5 +82,21 @@ template <typename T, typename... Args> struct constructor<T(Args...)> {
         detail::resolve_constructor_dependency<Args>(scope, ctx, container)...);
   }
 };
+
+// Unqualified scalar object types cannot declare injectable constructor
+// parameters. Keep cv-qualified scalars on the detection path so the shortcut
+// does not form deprecated function types such as volatile int().
+namespace detail {
+template <typename T>
+struct scalar_constructor
+    : std::conditional_t<std::is_same_v<T, std::remove_cv_t<T>>,
+                         ::dingo::constructor<std::remove_cv_t<T>()>,
+                         ::dingo::constructor_detection<T>> {};
+} // namespace detail
+
+template <typename T>
+struct constructor<T>
+    : std::conditional_t<std::is_scalar_v<T>, detail::scalar_constructor<T>,
+                         constructor_detection<T>> {};
 
 } // namespace dingo

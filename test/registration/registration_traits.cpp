@@ -60,6 +60,9 @@ struct safe_observer_pointer {
 
   long *pointer;
 };
+struct customized_value {
+  int value;
+};
 struct consuming_owner {
   explicit consuming_owner(int *);
 };
@@ -94,6 +97,17 @@ struct type_conversion_traits<conversion_compatibility_test::declared_target,
   static conversion_compatibility_test::declared_target
   convert(conversion_compatibility_test::declared_source &&) {
     return {};
+  }
+};
+
+template <>
+struct type_conversion_traits<conversion_compatibility_test::customized_value,
+                              conversion_compatibility_test::customized_value> {
+  template <typename> using required_access = borrow;
+
+  static conversion_compatibility_test::customized_value
+  convert(const conversion_compatibility_test::customized_value &source) {
+    return {source.value + 1};
   }
 };
 
@@ -552,6 +566,22 @@ TEST(type_registration_test, inferred_borrowed_conversion_uses_const_source) {
   EXPECT_TRUE(result.used_const_source);
   EXPECT_EQ(result.value, 17);
   EXPECT_NE(value.value, nullptr);
+}
+
+TEST(type_registration_test, same_type_custom_conversion_is_preserved) {
+  using value_type = conversion_compatibility_test::customized_value;
+  using conversion =
+      detail::type_conversion_path_t<value_type, value_type &, borrow>;
+  struct conversion_context {};
+
+  value_type value{17};
+  conversion_context resolver;
+  conversion_context context;
+  auto result = detail::type_conversion<conversion>::apply(
+      resolver, context, value, describe_type<value_type>(),
+      describe_type<value_type>());
+
+  EXPECT_EQ(result.value, 18);
 }
 
 TEST(type_registration_test,

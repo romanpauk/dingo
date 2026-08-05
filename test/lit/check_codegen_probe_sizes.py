@@ -24,6 +24,8 @@ PROBE_LIMITS = {
     "probe_static_resolution_shared_config": {
         "default": 0x90,
         "clang_arm64": 0xd0,
+        "gcc14": 0xB0,
+        "gcc14_arm64": 0xD0,
     },
     "probe_static_resolution_mixed_container_shared_config": {
         "default": 0x430,
@@ -357,6 +359,8 @@ def expected_max_for_environment() -> dict[str, int]:
         columns.append("gcc16")
     if is_gcc and is_arm64:
         columns.append("gcc_arm64")
+        if compiler_major == "14" or "g++-14" in compiler_id:
+            columns.append("gcc14_arm64")
 
     expected_max: dict[str, int] = {}
     for symbol, limits in PROBE_LIMITS.items():

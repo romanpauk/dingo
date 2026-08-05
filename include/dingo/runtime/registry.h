@@ -288,7 +288,8 @@ class runtime_registry : public allocator_base<Allocator> {
   using runtime_context_type = runtime_context<Allocator>;
   using runtime_transaction_type = runtime_transaction<Allocator>;
   using runtime_binding_interface_type =
-      runtime_binding_interface<container_type, runtime_context_type>;
+      runtime_binding_interface<typename ContainerTraits::rtti_type,
+                                runtime_context_type>;
   using runtime_selection =
       detail::runtime_binding_selection<runtime_binding_interface_type>;
   template <typename Parent>
@@ -1341,9 +1342,10 @@ public:
 private:
   template <typename... TypeArgs, typename Parent, typename Arg,
             typename... KeyValueArgs>
+  // Registration is cold; keep its type-specific setup out of callers.
   // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
-  auto prepare_binding(Parent *parent, Arg &&arg,
-                       KeyValueArgs &&...key_values) {
+  DINGO_NOINLINE auto prepare_binding(Parent *parent, Arg &&arg,
+                                      KeyValueArgs &&...key_values) {
     static_assert(!detail::has_explicit_void_interface_v<TypeArgs...>,
                   "interfaces<void> is not a valid registration target");
     using registration =
@@ -1693,9 +1695,9 @@ private:
   template <bool SharedOwner, typename TypeInterface, typename TypeStorage,
             typename Owner, typename Parent, typename LookupKey,
             typename KeyValueTuple, typename... Args>
-  container_proxy<Owner> commit_binding(Parent *parent, LookupKey lookup_key,
-                                        KeyValueTuple &&key_values,
-                                        Args &&...args) {
+  DINGO_NOINLINE container_proxy<Owner>
+  commit_binding(Parent *parent, LookupKey lookup_key,
+                 KeyValueTuple &&key_values, Args &&...args) {
     inline_arena<DINGO_CONTEXT_ARENA_BUFFER_SIZE> scratch;
     runtime_transaction_type transaction(runtime(), scratch);
     auto &state = ensure_runtime_bindings(transaction, parent);
