@@ -310,6 +310,113 @@ TEST(static_execution_traits_test,
       !detail::binding_has_cacheless_default_leaf_v<payload, unstable_model>);
 }
 
+TEST(static_execution_traits_test,
+     default_stable_leaf_requests_skip_resolution_discovery) {
+  struct payload {};
+  struct service_interface {
+    virtual ~service_interface() = default;
+  };
+  struct service : service_interface {};
+  struct custom_conversions
+      : detail::conversions<shared, std::shared_ptr<payload>, runtime_type> {};
+
+  using wrapped_registration =
+      dingo::bind<scope<shared>, storage<std::shared_ptr<payload>>>;
+  using wrapped_model = detail::binding_model<wrapped_registration>;
+  using wrapped_binding = detail::binding<payload, wrapped_model>;
+  using wrapped_resolutions = typename detail::request_binding_resolutions<
+      payload &, payload, typename wrapped_model::storage_type>::type;
+  using wrapped_match =
+      typename detail::matching_binding_resolution<payload &,
+                                                   wrapped_resolutions>::type;
+  using const_wrapped_resolutions =
+      typename detail::request_binding_resolutions<
+          const payload &, payload, typename wrapped_model::storage_type>::type;
+  using const_wrapped_match = typename detail::matching_binding_resolution<
+      const payload &, const_wrapped_resolutions>::type;
+  using const_pointer_wrapped_resolutions =
+      typename detail::request_binding_resolutions<
+          const payload *, payload, typename wrapped_model::storage_type>::type;
+  using const_pointer_wrapped_match =
+      typename detail::matching_binding_resolution<
+          const payload *, const_pointer_wrapped_resolutions>::type;
+
+  using converted_registration =
+      dingo::bind<scope<shared>, storage<std::shared_ptr<service>>,
+                  interfaces<service_interface>>;
+  using converted_model = detail::binding_model<converted_registration>;
+  using converted_binding = detail::binding<service_interface, converted_model>;
+  using converted_resolutions = typename detail::request_binding_resolutions<
+      service_interface *, service_interface,
+      typename converted_model::storage_type>::type;
+  using converted_match =
+      typename detail::matching_binding_resolution<service_interface *,
+                                                   converted_resolutions>::type;
+
+  using custom_registration =
+      dingo::bind<scope<shared>, storage<std::shared_ptr<payload>>,
+                  conversions<custom_conversions>>;
+  using custom_model = detail::binding_model<custom_registration>;
+  using unstable_registration = dingo::bind<scope<unique>, storage<payload>>;
+  using unstable_model = detail::binding_model<unstable_registration>;
+  using array_registration = dingo::bind<scope<shared>, storage<payload[2]>>;
+  using array_model = detail::binding_model<array_registration>;
+  using array_binding = detail::binding<payload, array_model>;
+  using array_pointer_resolutions =
+      typename detail::request_binding_resolutions<
+          payload *, payload, typename array_model::storage_type>::type;
+  using array_pointer_match = typename detail::matching_binding_resolution<
+      payload *, array_pointer_resolutions>::type;
+
+  static_assert(
+      detail::binding_has_direct_default_leaf_resolution_v<payload &,
+                                                           wrapped_model>);
+  static_assert(
+      detail::binding_has_direct_default_leaf_resolution_v<const payload &,
+                                                           wrapped_model>);
+  static_assert(
+      detail::binding_has_direct_default_leaf_resolution_v<payload *,
+                                                           wrapped_model>);
+  static_assert(
+      detail::binding_has_direct_default_leaf_resolution_v<service_interface *,
+                                                           converted_model>);
+  static_assert(
+      !detail::binding_has_direct_default_leaf_resolution_v<payload,
+                                                            wrapped_model>);
+  static_assert(
+      !detail::binding_has_direct_default_leaf_resolution_v<payload &&,
+                                                            wrapped_model>);
+  static_assert(std::is_same_v<typename detail::binding_supports_request<
+                                   payload &, wrapped_binding>::type,
+                               wrapped_match>);
+  static_assert(std::is_same_v<typename detail::binding_supports_request<
+                                   const payload &, wrapped_binding>::type,
+                               const_wrapped_match>);
+  static_assert(std::is_same_v<typename detail::binding_supports_request<
+                                   const payload *, wrapped_binding>::type,
+                               const_pointer_wrapped_match>);
+  static_assert(
+      std::is_same_v<typename detail::binding_supports_request<
+                         service_interface *, converted_binding>::type,
+                     converted_match>);
+  static_assert(
+      !detail::binding_has_direct_default_leaf_resolution_v<payload &,
+                                                            custom_model>);
+  static_assert(
+      !detail::binding_has_direct_default_leaf_resolution_v<payload &,
+                                                            unstable_model>);
+  static_assert(
+      !detail::binding_has_direct_default_leaf_resolution_v<payload &,
+                                                            array_model>);
+  static_assert(
+      detail::binding_has_direct_default_leaf_resolution_v<payload *,
+                                                           array_model>);
+  static_assert(!detail::binding_supports_request_v<payload &, array_binding>);
+  static_assert(std::is_same_v<typename detail::binding_supports_request<
+                                   payload *, array_binding>::type,
+                               array_pointer_match>);
+}
+
 TEST(
     static_execution_traits_test,
     retained_frame_depth_counts_retaining_bindings_across_non_retaining_edges) {
