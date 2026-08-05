@@ -29,6 +29,13 @@ static_assert(constructor<const int>::arity ==
 static_assert(constructor<volatile int>::arity ==
               constructor_detection<volatile int>::arity);
 
+struct limited_array_element {};
+
+template <>
+struct constructor_detection_traits<std::array<limited_array_element, 2>> {
+  static constexpr size_t max_arity = 1;
+};
+
 namespace {
 
 struct empty_aggregate {};
@@ -46,6 +53,8 @@ static_assert(!detail::is_zero_argument_aggregate_v<incomplete_aggregate>);
 static_assert(constructor<empty_aggregate>::arity == 0);
 static_assert(constructor<empty_derived_aggregate>::arity == 1);
 static_assert(constructor<annotated_empty_aggregate>::arity == 1);
+static_assert(
+    constructor_detection<std::array<limited_array_element, 2>>::arity == 1);
 
 } // namespace
 
