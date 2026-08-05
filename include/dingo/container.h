@@ -1045,5 +1045,3 @@ public:
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
-
-#include <dingo/static_container.h>
