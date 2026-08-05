@@ -236,16 +236,11 @@ struct key_value_binding_is_declared
 template <typename InterfaceBindings, typename Entries>
 struct key_value_bindings_are_declared;
 
-template <typename Entries>
-struct key_value_bindings_are_declared<type_list<>, Entries> : std::true_type {
-};
-
-template <typename Head, typename... Tail, typename Entries>
-struct key_value_bindings_are_declared<type_list<Head, Tail...>, Entries>
-    : std::bool_constant<
-          key_value_binding_is_declared<Head, Entries>::value &&
-          key_value_bindings_are_declared<type_list<Tail...>, Entries>::value> {
-};
+template <typename... InterfaceBindings, typename Entries>
+struct key_value_bindings_are_declared<type_list<InterfaceBindings...>, Entries>
+    : std::bool_constant<(
+          key_value_binding_is_declared<InterfaceBindings, Entries>::value &&
+          ...)> {};
 
 template <typename InterfaceBinding, typename Other>
 struct key_value_duplicate_storage
@@ -261,43 +256,56 @@ struct key_value_duplicate_storage
 template <typename InterfaceBinding, typename InterfaceBindings>
 struct key_value_duplicate_storage_count;
 
-template <typename InterfaceBinding>
-struct key_value_duplicate_storage_count<InterfaceBinding, type_list<>>
-    : std::integral_constant<size_t, 0> {};
-
-template <typename InterfaceBinding, typename Head, typename... Tail>
+template <typename InterfaceBinding, typename... InterfaceBindings>
 struct key_value_duplicate_storage_count<InterfaceBinding,
-                                         type_list<Head, Tail...>>
+                                         type_list<InterfaceBindings...>>
     : std::integral_constant<
-          size_t,
-          (key_value_duplicate_storage<InterfaceBinding, Head>::value ? 1 : 0) +
-              key_value_duplicate_storage_count<InterfaceBinding,
-                                                type_list<Tail...>>::value> {};
+          size_t, (size_t{0} + ... +
+                   (key_value_duplicate_storage<InterfaceBinding,
+                                                InterfaceBindings>::value
+                        ? size_t{1}
+                        : size_t{0}))> {};
 
 template <typename InterfaceBindings, typename Entries>
 struct key_value_bindings_are_unique;
 
-template <typename Entries>
-struct key_value_bindings_are_unique<type_list<>, Entries> : std::true_type {};
+template <typename InterfaceBinding, typename InterfaceBindings,
+          typename Entries,
+          typename Cardinality =
+              key_value_lookup_cardinality_t<InterfaceBinding, Entries>>
+struct key_value_binding_is_unique : std::false_type {};
 
-template <typename Head, typename... Tail, typename Entries>
-struct key_value_bindings_are_unique<type_list<Head, Tail...>, Entries> {
-private:
-  using cardinality = key_value_lookup_cardinality_t<Head, Entries>;
-  static constexpr bool head_unique =
-      std::is_same_v<cardinality, key_value_lookup_not_required> ||
-      (std::is_same_v<cardinality, one> &&
-       binding_count_v<typename Head::interface_type, typename Head::key_type,
-                       type_list<Head, Tail...>> == 1) ||
-      (std::is_same_v<cardinality, many> &&
-       key_value_duplicate_storage_count<Head,
-                                         type_list<Head, Tail...>>::value == 1);
+template <typename InterfaceBinding, typename InterfaceBindings,
+          typename Entries>
+struct key_value_binding_is_unique<InterfaceBinding, InterfaceBindings, Entries,
+                                   key_value_lookup_not_required>
+    : std::true_type {};
 
-public:
-  static constexpr bool value =
-      head_unique &&
-      key_value_bindings_are_unique<type_list<Tail...>, Entries>::value;
+template <typename InterfaceBinding, typename... InterfaceBindings,
+          typename Entries>
+struct key_value_binding_is_unique<
+    InterfaceBinding, type_list<InterfaceBindings...>, Entries, one>
+    : std::bool_constant<
+          binding_count_v<typename InterfaceBinding::interface_type,
+                          typename InterfaceBinding::key_type,
+                          type_list<InterfaceBindings...>> == 1> {};
+
+template <typename InterfaceBinding, typename... InterfaceBindings,
+          typename Entries>
+struct key_value_binding_is_unique<
+    InterfaceBinding, type_list<InterfaceBindings...>, Entries, many>
+    : std::bool_constant<
+          key_value_duplicate_storage_count<
+              InterfaceBinding, type_list<InterfaceBindings...>>::value == 1> {
 };
+
+template <typename... InterfaceBindings, typename Entries>
+struct key_value_bindings_are_unique<type_list<InterfaceBindings...>, Entries>
+    : std::bool_constant<(
+          key_value_binding_is_unique<InterfaceBindings,
+                                      type_list<InterfaceBindings...>,
+                                      Entries>::value &&
+          ...)> {};
 
 template <typename DependencyList, typename InterfaceBindings>
 struct dependencies_registered;
