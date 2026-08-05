@@ -72,11 +72,11 @@ inline constexpr bool stored_request_identity_v = [] {
          std::is_same_v<Request, const stored_type *>;
 }();
 
-template <typename BindingModel, typename Interfaces>
-struct binding_cache_types;
+template <typename BindingModel, bool StoredInterfaces, typename... Interfaces>
+struct binding_cache_types_impl;
 
 template <typename BindingModel, typename... Interfaces>
-struct binding_cache_types<BindingModel, type_list<Interfaces...>> {
+struct binding_cache_types_impl<BindingModel, false, Interfaces...> {
 private:
   using storage_type = typename BindingModel::storage_type;
 
@@ -90,6 +90,41 @@ public:
   using type =
       type_list_unique_t<type_list_cat_t<interface_cache_types<Interfaces>...>>;
 };
+
+template <typename BindingModel, typename... Interfaces>
+struct binding_cache_types_impl<BindingModel, true, Interfaces...> {
+  using type = type_list<>;
+};
+
+template <typename BindingModel, typename Interfaces>
+struct binding_cache_types;
+
+template <typename BindingModel>
+inline constexpr bool binding_has_cacheless_conversion_shape_v = [] {
+  using conversions = typename BindingModel::conversions_type;
+  return conversions::is_stable &&
+         std::is_same_v<typename conversions::value_types,
+                        type_list<runtime_type>> &&
+         std::is_same_v<typename conversions::lvalue_reference_types,
+                        type_list<runtime_type &>> &&
+         std::is_same_v<typename conversions::rvalue_reference_types,
+                        type_list<>> &&
+         std::is_same_v<typename conversions::pointer_types,
+                        type_list<runtime_type *>>;
+}();
+
+template <typename BindingModel, typename... Interfaces>
+struct binding_cache_types<BindingModel, type_list<Interfaces...>>
+    // Exact stored interfaces with this conversion shape cannot retain an
+    // adapted value, so enumerating every resolution route cannot add a slot.
+    : binding_cache_types_impl<
+          BindingModel,
+          binding_has_cacheless_conversion_shape_v<BindingModel> &&
+              (stored_request_identity_v<
+                   typename annotated_traits<Interfaces>::type,
+                   typename BindingModel::storage_type> &&
+               ...),
+          Interfaces...> {};
 
 template <typename BindingModel>
 using binding_cache_types_t =

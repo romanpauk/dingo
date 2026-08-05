@@ -344,13 +344,29 @@ struct temporary_storage_traits<type_list<Types...>> {
       std::max({alignof(Types)..., std::size_t{0}});
 };
 
+template <typename InterfaceBinding,
+          bool Stable = InterfaceBinding::binding_model_type::storage_type::
+              conversions::is_stable>
+struct binding_temporary_types {
+  using storage_type =
+      typename InterfaceBinding::binding_model_type::storage_type;
+  using type = resolution_temporary_types_t<
+      typename binding_resolutions<
+          typename annotated_traits<
+              typename InterfaceBinding::interface_type>::type,
+          storage_type>::type,
+      storage_type>;
+};
+
 template <typename InterfaceBinding>
-using binding_temporary_types_t = resolution_temporary_types_t<
-    typename binding_resolutions<
-        typename annotated_traits<
-            typename InterfaceBinding::interface_type>::type,
-        typename InterfaceBinding::binding_model_type::storage_type>::type,
-    typename InterfaceBinding::binding_model_type::storage_type>;
+struct binding_temporary_types<InterfaceBinding, true> {
+  // Stable resolution operations never allocate temporary conversion values.
+  using type = type_list<>;
+};
+
+template <typename InterfaceBinding>
+using binding_temporary_types_t =
+    typename binding_temporary_types<InterfaceBinding>::type;
 
 template <typename InterfaceBinding>
 using binding_temporary_storage_traits =
