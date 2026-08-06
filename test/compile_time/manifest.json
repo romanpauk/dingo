@@ -1,0 +1,170 @@
+{
+  "fixtures": [
+    {
+      "budget": false,
+      "name": "structural_guards",
+      "source": "structural_guards.cpp"
+    },
+    {
+      "header_metrics": true,
+      "name": "header_minimal",
+      "source": "header_minimal.cpp"
+    },
+    {
+      "header_metrics": true,
+      "name": "header_runtime",
+      "source": "header_runtime.cpp"
+    },
+    {
+      "header_metrics": true,
+      "name": "header_static",
+      "source": "header_static.cpp"
+    },
+    {
+      "header_metrics": true,
+      "name": "header_umbrella",
+      "source": "header_umbrella.cpp"
+    },
+    {
+      "families": {
+        "conversion": [
+          "type_conversion",
+          "storage_resolution"
+        ]
+      },
+      "name": "conversion_shapes",
+      "source": "conversion_shapes.cpp"
+    },
+    {
+      "defines": [
+        "DINGO_COMPILE_TIME_WIDTH=10"
+      ],
+      "families": {
+        "runtime_binding": [
+          "runtime_binding",
+          "commit_binding",
+          "runtime_registration"
+        ]
+      },
+      "name": "runtime_registration_10",
+      "source": "runtime_registration.cpp"
+    },
+    {
+      "defines": [
+        "DINGO_COMPILE_TIME_WIDTH=50"
+      ],
+      "families": {
+        "runtime_binding": [
+          "runtime_binding",
+          "commit_binding",
+          "runtime_registration"
+        ]
+      },
+      "name": "runtime_registration_50",
+      "source": "runtime_registration.cpp"
+    },
+    {
+      "defines": [
+        "DINGO_COMPILE_TIME_WIDTH=10"
+      ],
+      "families": {
+        "runtime_binding": [
+          "runtime_binding",
+          "commit_binding",
+          "runtime_registration"
+        ]
+      },
+      "name": "runtime_multi_interface",
+      "source": "runtime_multi_interface.cpp"
+    },
+    {
+      "defines": [
+        "DINGO_COMPILE_TIME_WIDTH=20"
+      ],
+      "families": {
+        "runtime_binding": [
+          "runtime_binding",
+          "commit_binding",
+          "runtime_registration"
+        ]
+      },
+      "name": "runtime_mixed_keyed",
+      "source": "runtime_mixed_keyed.cpp"
+    },
+    {
+      "families": {
+        "constructor": [
+          "constructor_probe",
+          "constructor_detection",
+          "constructor_arity"
+        ]
+      },
+      "name": "constructor_shapes",
+      "source": "constructor_shapes.cpp"
+    },
+    {
+      "defines": [
+        "DINGO_COMPILE_TIME_WIDTH=10"
+      ],
+      "families": {
+        "static_resolution": [
+          "binding_selection",
+          "binding_resolutions",
+          "binding_cache_types",
+          "graph_analysis"
+        ]
+      },
+      "name": "static_width_10",
+      "source": "static_width.cpp"
+    },
+    {
+      "defines": [
+        "DINGO_COMPILE_TIME_WIDTH=50"
+      ],
+      "families": {
+        "static_resolution": [
+          "binding_selection",
+          "binding_resolutions",
+          "binding_cache_types",
+          "graph_analysis"
+        ]
+      },
+      "name": "static_width_50",
+      "source": "static_width.cpp"
+    },
+    {
+      "defines": [
+        "DINGO_COMPILE_TIME_WIDTH=16"
+      ],
+      "families": {
+        "static_resolution": [
+          "binding_selection",
+          "binding_resolutions",
+          "binding_cache_types",
+          "graph_analysis"
+        ]
+      },
+      "name": "static_depth_16",
+      "source": "static_depth.cpp"
+    },
+    {
+      "defines": [
+        "DINGO_COMPILE_TIME_WIDTH=50"
+      ],
+      "families": {
+        "fixed_key": [
+          "key_value_bindings_are_unique",
+          "key_value_binding"
+        ],
+        "static_resolution": [
+          "binding_selection",
+          "binding_resolutions",
+          "graph_analysis"
+        ]
+      },
+      "name": "static_fixed_keys_50",
+      "source": "static_fixed_keys.cpp"
+    }
+  ],
+  "standard": 17
+}

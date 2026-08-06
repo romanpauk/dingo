@@ -1,0 +1,16 @@
+FROM fedora:44
+
+RUN dnf install -y --setopt=install_weak_deps=False \
+        clang-22.1.8-4.fc44 \
+        cmake \
+        gcc-c++-16.1.1-2.fc44 \
+        git \
+        glibc-devel-2.43-7.fc44 \
+        libstdc++-devel-16.1.1-2.fc44 \
+        make \
+        ninja-build \
+        python3 \
+        time \
+    && dnf clean all
+
+WORKDIR /workspace
