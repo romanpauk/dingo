@@ -1,0 +1,383 @@
+{
+  "compiler": {
+    "family": "clang",
+    "major": 22,
+    "target": "x86_64-redhat-linux-gnu",
+    "version": "clang version 22.1.8 (Fedora 22.1.8-4.fc44)"
+  },
+  "fixtures": {
+    "constructor_shapes": {
+      "digest": "cceb2e9205726c2ef991c7575dccf1e4a897fdbbbf1b140ccedf30600894ba72",
+      "metrics": {
+        "family.constructor": {
+          "limit": 82,
+          "reference": 82
+        },
+        "instantiate_class": {
+          "limit": 196,
+          "reference": 196
+        },
+        "instantiate_function": {
+          "limit": 129,
+          "reference": 129
+        },
+        "max_rss_kb": {
+          "limit": 125601,
+          "reference": 119620
+        },
+        "parse_class": {
+          "limit": 1433,
+          "reference": 1433
+        }
+      }
+    },
+    "conversion_shapes": {
+      "digest": "ca28847ff7de5569fb926bf253ef11741a25a8113410c1d54f319de3a291fe9f",
+      "metrics": {
+        "family.conversion": {
+          "limit": 159,
+          "reference": 159
+        },
+        "instantiate_class": {
+          "limit": 214,
+          "reference": 214
+        },
+        "instantiate_function": {
+          "limit": 110,
+          "reference": 110
+        },
+        "max_rss_kb": {
+          "limit": 130889,
+          "reference": 124656
+        },
+        "parse_class": {
+          "limit": 1481,
+          "reference": 1481
+        }
+      }
+    },
+    "header_minimal": {
+      "digest": "f498bef95084b2f5212be2f9a774ba5ed3d9afbc046b4e7537a0ce19f65ecd38",
+      "metrics": {
+        "instantiate_class": {
+          "limit": 0,
+          "reference": 0
+        },
+        "instantiate_function": {
+          "limit": 0,
+          "reference": 0
+        },
+        "max_rss_kb": {
+          "limit": 79910,
+          "reference": 76104
+        },
+        "parse_class": {
+          "limit": 0,
+          "reference": 0
+        },
+        "preprocessed_tokens": {
+          "limit": 9,
+          "reference": 9
+        },
+        "transitive_headers": {
+          "limit": 1,
+          "reference": 1
+        }
+      }
+    },
+    "header_runtime": {
+      "digest": "4238b4b08835282ba9eee83a5117160b341868b4e505cf0541ea07ed9cfe17f2",
+      "metrics": {
+        "instantiate_class": {
+          "limit": 294,
+          "reference": 294
+        },
+        "instantiate_function": {
+          "limit": 132,
+          "reference": 132
+        },
+        "max_rss_kb": {
+          "limit": 153305,
+          "reference": 146004
+        },
+        "parse_class": {
+          "limit": 2013,
+          "reference": 2013
+        },
+        "preprocessed_tokens": {
+          "limit": 432084,
+          "reference": 432084
+        },
+        "transitive_headers": {
+          "limit": 327,
+          "reference": 327
+        }
+      }
+    },
+    "header_static": {
+      "digest": "9569a40f9654b77b6448459e3037234a471769391d1a371b3879e007981e3ff3",
+      "metrics": {
+        "instantiate_class": {
+          "limit": 273,
+          "reference": 273
+        },
+        "instantiate_function": {
+          "limit": 128,
+          "reference": 128
+        },
+        "max_rss_kb": {
+          "limit": 149982,
+          "reference": 142840
+        },
+        "parse_class": {
+          "limit": 2318,
+          "reference": 2318
+        },
+        "preprocessed_tokens": {
+          "limit": 469192,
+          "reference": 469192
+        },
+        "transitive_headers": {
+          "limit": 339,
+          "reference": 339
+        }
+      }
+    },
+    "header_umbrella": {
+      "digest": "12643d4b5070322003628c14c65c786a30f0a9e762d704a858631c88dfe2f5a7",
+      "metrics": {
+        "instantiate_class": {
+          "limit": 297,
+          "reference": 297
+        },
+        "instantiate_function": {
+          "limit": 132,
+          "reference": 132
+        },
+        "max_rss_kb": {
+          "limit": 157173,
+          "reference": 149688
+        },
+        "parse_class": {
+          "limit": 2305,
+          "reference": 2305
+        },
+        "preprocessed_tokens": {
+          "limit": 462807,
+          "reference": 462807
+        },
+        "transitive_headers": {
+          "limit": 337,
+          "reference": 337
+        }
+      }
+    },
+    "runtime_mixed_keyed": {
+      "digest": "36cb1caa3e6e73ea40823bf15cbd7b020dc57fa4b3045b5e53002cd10f024c3a",
+      "metrics": {
+        "family.runtime_binding": {
+          "limit": 1827,
+          "reference": 1827
+        },
+        "instantiate_class": {
+          "limit": 1828,
+          "reference": 1828
+        },
+        "instantiate_function": {
+          "limit": 133,
+          "reference": 133
+        },
+        "max_rss_kb": {
+          "limit": 445205,
+          "reference": 424004
+        },
+        "parse_class": {
+          "limit": 2346,
+          "reference": 2346
+        }
+      }
+    },
+    "runtime_multi_interface": {
+      "digest": "c70ca481c3c4514c6aae6368ca5e0540c41736d442734fcbd1ba74dcf9ccdf0d",
+      "metrics": {
+        "family.runtime_binding": {
+          "limit": 2598,
+          "reference": 2598
+        },
+        "instantiate_class": {
+          "limit": 1778,
+          "reference": 1778
+        },
+        "instantiate_function": {
+          "limit": 134,
+          "reference": 134
+        },
+        "max_rss_kb": {
+          "limit": 511254,
+          "reference": 486908
+        },
+        "parse_class": {
+          "limit": 2329,
+          "reference": 2329
+        }
+      }
+    },
+    "runtime_registration_10": {
+      "digest": "1ce81f5ea379b80dea7f94140bd8321eb7562b3c4adcfa00a5f7ad6315c9a7d0",
+      "metrics": {
+        "family.runtime_binding": {
+          "limit": 1338,
+          "reference": 1338
+        },
+        "instantiate_class": {
+          "limit": 1110,
+          "reference": 1110
+        },
+        "instantiate_function": {
+          "limit": 134,
+          "reference": 134
+        },
+        "max_rss_kb": {
+          "limit": 301888,
+          "reference": 287512
+        },
+        "parse_class": {
+          "limit": 2327,
+          "reference": 2327
+        }
+      }
+    },
+    "runtime_registration_50": {
+      "digest": "9adfc1f264bb75a54feca4917cb953c715fae8434f04333cb86c7d6f47c92d63",
+      "metrics": {
+        "family.runtime_binding": {
+          "limit": 5378,
+          "reference": 5378
+        },
+        "instantiate_class": {
+          "limit": 3750,
+          "reference": 3750
+        },
+        "instantiate_function": {
+          "limit": 134,
+          "reference": 134
+        },
+        "max_rss_kb": {
+          "limit": 801113,
+          "reference": 762964
+        },
+        "parse_class": {
+          "limit": 2327,
+          "reference": 2327
+        }
+      }
+    },
+    "static_depth_16": {
+      "digest": "33a93aacbfdc44a33479a43e2ca953cdd1d6c934f3757b7b15b337814b456644",
+      "metrics": {
+        "family.static_resolution": {
+          "limit": 71,
+          "reference": 71
+        },
+        "instantiate_class": {
+          "limit": 1074,
+          "reference": 1074
+        },
+        "instantiate_function": {
+          "limit": 150,
+          "reference": 150
+        },
+        "max_rss_kb": {
+          "limit": 312619,
+          "reference": 297732
+        },
+        "parse_class": {
+          "limit": 2329,
+          "reference": 2329
+        }
+      }
+    },
+    "static_fixed_keys_50": {
+      "digest": "423550092320d21e8e0a253c5f0b9aede26f8e5c857bb1d3bb7ebb010d296b53",
+      "metrics": {
+        "family.fixed_key": {
+          "limit": 51,
+          "reference": 51
+        },
+        "family.static_resolution": {
+          "limit": 0,
+          "reference": 0
+        },
+        "instantiate_class": {
+          "limit": 276,
+          "reference": 276
+        },
+        "instantiate_function": {
+          "limit": 1779,
+          "reference": 1779
+        },
+        "max_rss_kb": {
+          "limit": 400290,
+          "reference": 381228
+        },
+        "parse_class": {
+          "limit": 2342,
+          "reference": 2342
+        }
+      }
+    },
+    "static_width_10": {
+      "digest": "364558917a7579a725c953a861c87fe9b10026367989c73aeb565e9d663a0746",
+      "metrics": {
+        "family.static_resolution": {
+          "limit": 29,
+          "reference": 29
+        },
+        "instantiate_class": {
+          "limit": 384,
+          "reference": 384
+        },
+        "instantiate_function": {
+          "limit": 144,
+          "reference": 144
+        },
+        "max_rss_kb": {
+          "limit": 191663,
+          "reference": 182536
+        },
+        "parse_class": {
+          "limit": 2328,
+          "reference": 2328
+        }
+      }
+    },
+    "static_width_50": {
+      "digest": "2173c149cc696ed26306563c5051b48b0db63aacd68329db0fe9a8ca07a9d839",
+      "metrics": {
+        "family.static_resolution": {
+          "limit": 109,
+          "reference": 109
+        },
+        "instantiate_class": {
+          "limit": 384,
+          "reference": 384
+        },
+        "instantiate_function": {
+          "limit": 184,
+          "reference": 184
+        },
+        "max_rss_kb": {
+          "limit": 329247,
+          "reference": 313568
+        },
+        "parse_class": {
+          "limit": 2328,
+          "reference": 2328
+        }
+      }
+    }
+  },
+  "manifest_digest": "73a5073ee8645c1bdff9c73945d2ea5b48198a0f33835b7dbbdc52a4bf98bd24",
+  "reference_commit": "29cfb53441f4225807497716281e9b4dfbb93330",
+  "schema": 2
+}

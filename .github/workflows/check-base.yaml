@@ -8,6 +8,67 @@ on:
         default: ''
 
 jobs:
+  compile-time:
+    name: fedora-44 / clang-22 / compile-time
+    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout workflow repo
+        uses: actions/checkout@v7.0.0
+
+      - name: Initialize source dir
+        shell: bash
+        run: |
+          echo "SOURCE_DIR=." >> "$GITHUB_ENV"
+
+      - name: Download release source
+        if: ${{ inputs.source_artifact_name != '' }}
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: ${{ inputs.source_artifact_name }}
+          path: release-artifacts
+
+      - name: Extract release source
+        if: ${{ inputs.source_artifact_name != '' }}
+        shell: bash
+        run: |
+          mkdir -p release-src
+          tar -xzf release-artifacts/release-source.tar.gz -C release-src
+          echo "SOURCE_DIR=release-src" >> "$GITHUB_ENV"
+
+      - name: Build pinned compile-time image
+        shell: bash
+        run: |
+          docker build \
+            -f docker/compile-time/Containerfile \
+            -t dingo-compile-time:clang-22 \
+            docker/compile-time
+
+      - name: Check compile-time budgets
+        shell: bash
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            dingo-compile-time:clang-22 \
+            bash -lc 'cmake -S "/workspace/${{ env.SOURCE_DIR }}" \
+              -B /workspace/build-compile-time \
+              -DDINGO_COMPILE_TIME_CHECK_ENABLED=ON \
+              -DDINGO_COMPILE_TIME_COMPILER=/usr/bin/clang++ \
+              -DCMAKE_CXX_COMPILER=clang++ \
+              -DCMAKE_CXX_STANDARD=17 && \
+              cmake --build /workspace/build-compile-time \
+                --target check-compile-time'
+
+      - name: Upload compile-time metrics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: compile-time-metrics
+          if-no-files-found: warn
+          path: build-compile-time/compile-time/observed.json
+
   check:
     name: ${{ matrix.os }} / check
     timeout-minutes: 20

@@ -2,6 +2,9 @@ option(DINGO_INSTALL "Generate the install target." ${PROJECT_IS_TOP_LEVEL})
 option(DINGO_DEVELOPMENT_MODE "Include additional targets for development" OFF)
 option(DINGO_CCACHE "Use ccache" OFF)
 option(DINGO_CLANG_TOOLS_ENABLED "Enable Clang-based development targets" ON)
+option(DINGO_COMPILE_TIME_CHECK_ENABLED
+    "Enable the deterministic compile-time regression target"
+    ${DINGO_DEVELOPMENT_MODE})
 
 if (DINGO_DEVELOPMENT_MODE)
     cmake_minimum_required(VERSION 3.25)
@@ -21,6 +24,10 @@ target_include_directories(dingo INTERFACE
     "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
+
+if(DINGO_COMPILE_TIME_CHECK_ENABLED)
+    include(cmake/compile-time.cmake)
+endif()
 
 if(NOT CMAKE_SKIP_INSTALL_RULES AND DINGO_INSTALL)
     include(GNUInstallDirs)
