@@ -4,9 +4,6 @@ function(add_example source)
     set(target dingo_example_${name})
 
     add_executable(${target} ${source})
-    set_property(GLOBAL APPEND PROPERTY DINGO_EXAMPLE_TARGETS ${target})
-    set_property(GLOBAL APPEND PROPERTY DINGO_EXAMPLE_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}/${source}")
     target_link_libraries(${target} dingo)
     add_test(NAME ${target} COMMAND $<TARGET_FILE:${target}>)
 

@@ -22,80 +22,27 @@ options, including:
 - `DINGO_EXAMPLES_ENABLED`
 - `DINGO_LIT_TESTS_ENABLED`
 
-## C++ Formatting
+## Quality Targets
 
-C++ sources are formatted with `clang-format` using the repository
-`.clang-format` file. The required formatter is pinned as `clang-format` 21 in
-the locked `uv` development environment.
+Run a quality target with `cmake --build build -t <target>`.
 
-Configure CMake with the pinned executable if the system formatter is missing or
-has a different major version:
+- `format`: runs `sources-format` and `markdown-format`.
+- `sources-format`: updates C++ files under `benchmark`, `examples`, `include`,
+  and `test`.
+- `sources-format-check`: verifies the same C++ files.
+- `markdown-format`: updates Markdown files under the repository root, `docs`,
+  and `docker`.
+- `markdown-format-check`: verifies the same Markdown files.
+- `format-check`: runs `sources-format-check` and `markdown-format-check`.
+- `includes-compile`: compiles one generated translation unit per standalone
+  public header.
+- `includes-tidy`: runs clang-tidy on those generated translation units on
+  non-Windows builds.
+- `includes-check`: checks includes on those generated translation units on
+  non-Windows builds.
+- `check`: runs all verification targets available on the platform.
 
-```bash
-cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON \
-  -DDINGO_CLANG_FORMAT_EXE="$(uv run --locked python -c 'import shutil; print(shutil.which("clang-format"))')"
-```
-
-Development builds provide targets for updating and checking formatting:
-
-```bash
-cmake --build build -t format
-cmake --build build -t check-format
-```
-
-The older explicit target names remain available as aliases:
-`clang-format-update` and `clang-format-verify`.
-
-The aggregate `check` target runs the repository checks used by CI:
-
-```bash
-cmake --build build -t check
-```
-
-## C++ Static Analysis
-
-Development builds also provide clang-tidy and Include What You Use (IWYU)
-targets:
-
-```bash
-cmake --build build -t check-tidy
-cmake --build build -t check-headers
-cmake --build build -t check-iwyu
-```
-
-On non-Windows builds, `check` depends on `check-tidy`; Windows skips clang-tidy
-and IWYU, and still runs header self-compilation, formatting, and Markdown
-verification. `check-tidy` runs clang-tidy 21 against the example translation
-units, which gives the analyzer a concrete compile database for this header-only
-library without pulling tests or benchmarks into the lint gate. Configure
-non-Windows lint builds with `DINGO_EXAMPLES_ENABLED=ON` so those translation
-units exist.
-
-`check-headers` compiles one generated translation unit per standalone public
-`.h` header, so every entry-point header must compile without relying on include
-order. The `.hpp` files under `factory/detail` are composition fragments that
-are intentionally included inside an existing namespace and are not standalone
-entry points. `check-iwyu` repeats those isolated compilations with IWYU and
-reports direct-include recommendations while still failing compilation errors.
-IWYU is provided by the pinned `clang-tool-chain` package in `uv.lock`; its
-downloaded toolchain is kept inside the build directory.
-
-## Python Tooling
-
-Python helper tooling for development is declared in `pyproject.toml` and locked
-in `uv.lock`. `uv` is the required entry point for repo-owned Python tooling.
-
-For the Markdown CMake targets (`md-update` / `md-verify`), `uv sync` is not
-required first: CMake invokes `uv run --locked ...` directly.
-
-Preparing the environment ahead of time is still optional:
-
-```bash
-uv sync
-cmake --build build -t md-verify
-```
-
-CI uses the same locked `uv` environment.
+The development tools are provided by the locked `uv` environment.
 
 ## Generated Matrix Tests
 

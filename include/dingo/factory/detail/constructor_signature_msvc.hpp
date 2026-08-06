@@ -270,15 +270,15 @@ struct constructor_signature_recovery_msvc {
 
 template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible>
-struct constructor_signature_recovery_msvc<
-    T, DetectionMode, IsConstructible, 0, constructor_kind::concrete> {
+struct constructor_signature_recovery_msvc<T, DetectionMode, IsConstructible, 0,
+                                           constructor_kind::concrete> {
   using type = type_list<>;
 };
 
 template <typename T, typename DetectionMode,
           template <typename...> typename IsConstructible, size_t Arity>
-struct constructor_signature_recovery_msvc<
-    T, DetectionMode, IsConstructible, Arity, constructor_kind::concrete>
+struct constructor_signature_recovery_msvc<T, DetectionMode, IsConstructible,
+                                           Arity, constructor_kind::concrete>
     : constructor_signature_recovery_msvc_impl<
           T, DetectionMode, IsConstructible, Arity,
           std::make_index_sequence<Arity>> {};

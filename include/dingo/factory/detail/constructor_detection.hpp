@@ -25,7 +25,8 @@ namespace detail {
 // Reports constructor kind and arity without retaining concrete argument types.
 struct constructor_shape {};
 
-// Additionally recovers the concrete argument types of the selected constructor.
+// Additionally recovers the concrete argument types of the selected
+// constructor.
 struct constructor_signature {};
 
 template <class DisabledType, typename DetectionMode>
@@ -37,10 +38,10 @@ template <class DisabledType>
 struct constructor_argument<DisabledType, constructor_shape> {
   // Non-scalar wrappers may use constrained converting constructors that
   // require an xvalue source while checking nested dependency conversions.
-  template <typename T, typename = typename std::enable_if_t<
-                            !std::is_same_v<DisabledType, std::decay_t<T>> &&
-                            !std::is_scalar_v<T> &&
-                            is_complete<std::decay_t<T>>::value>>
+  template <typename T,
+            typename = typename std::enable_if_t<
+                !std::is_same_v<DisabledType, std::decay_t<T>> &&
+                !std::is_scalar_v<T> && is_complete<std::decay_t<T>>::value>>
   operator T &&() const;
 
   // Lvalue-reference probes stay available for incomplete types. They model
@@ -149,9 +150,7 @@ struct array_list_initialization : std::false_type {};
 
 template <typename T, size_t N, typename... Args>
 struct array_list_initialization<
-    T, N,
-    std::void_t<decltype(std::array<T, N>{
-        {std::declval<Args>()...}})>,
+    T, N, std::void_t<decltype(std::array<T, N>{{std::declval<Args>()...}})>,
     Args...> : std::true_type {};
 
 #if defined(_MSC_VER)
@@ -246,8 +245,9 @@ private:
     // path still receives `Arity` copies of the same constructor argument
     // adapter without first materializing a type_list of placeholders.
     return detail::construction_dispatch<Type, T>::construct(
-        ((void)Is, constructor_argument_impl<T, Context, Container, DetectionMode>(
-                       scope, ctx, container))...);
+        ((void)Is,
+         constructor_argument_impl<T, Context, Container, DetectionMode>(
+             scope, ctx, container))...);
   }
 
   template <typename Type, typename Context, typename Container, size_t... Is>
@@ -255,8 +255,9 @@ private:
                              Container &container, std::index_sequence<Is...>) {
     (void)scope;
     detail::construction_dispatch<Type, T>::construct(
-        ptr, ((void)Is, constructor_argument_impl<T, Context, Container, DetectionMode>(
-                            scope, ctx, container))...);
+        ptr, ((void)Is,
+              constructor_argument_impl<T, Context, Container, DetectionMode>(
+                  scope, ctx, container))...);
   }
 
 public:
@@ -284,17 +285,17 @@ private:
     // std::array publishes its complete construction signature. Resolve its
     // elements as T before aggregate initialization instead of asking the
     // aggregate to select conversions from constructor-shape arguments.
-    return ::dingo::constructor<
-        std::array<T, N>(repeated_type<T, Is>...)>::template construct<Type>(
-        scope, ctx, container);
+    return ::dingo::constructor<std::array<T, N>(
+        repeated_type<T, Is>...)>::template construct<Type>(scope, ctx,
+                                                            container);
   }
 
   template <typename Type, typename Context, typename Container, size_t... Is>
   static void construct_impl(void *ptr, construction_scope scope, Context &ctx,
                              Container &container, std::index_sequence<Is...>) {
-    ::dingo::constructor<
-        std::array<T, N>(repeated_type<T, Is>...)>::template construct<Type>(
-        ptr, scope, ctx, container);
+    ::dingo::constructor<std::array<T, N>(
+        repeated_type<T, Is>...)>::template construct<Type>(ptr, scope, ctx,
+                                                            container);
   }
 
 public:
@@ -313,7 +314,8 @@ public:
   }
 };
 
-template <typename T, typename DetectionMode, size_t Arity, constructor_kind Kind>
+template <typename T, typename DetectionMode, size_t Arity,
+          constructor_kind Kind>
 struct constructor_detection_dispatch;
 
 template <typename T, typename DetectionMode, size_t Arity>
@@ -322,8 +324,9 @@ struct constructor_detection_dispatch<T, DetectionMode, Arity,
   template <typename Type, typename Context, typename Container>
   static auto construct(construction_scope scope, Context &ctx,
                         Container &container) {
-    return constructor_methods<T, DetectionMode, Arity>::template construct<Type>(
-        scope, ctx, container);
+    return constructor_methods<T, DetectionMode,
+                               Arity>::template construct<Type>(scope, ctx,
+                                                                container);
   }
 
   template <typename Type, typename Context, typename Container>
@@ -369,10 +372,9 @@ struct constructor_detection_dispatch<T, DetectionMode, Arity,
 };
 
 template <template <typename, typename, template <class, class> class,
-                    template <typename...> typename, size_t>
-          typename ConstructorProbe,
-          typename ArityDetection,
-          typename T, typename DetectionMode,
+                    template <typename...> typename,
+                    size_t> typename ConstructorProbe,
+          typename ArityDetection, typename T, typename DetectionMode,
           template <typename...> typename IsConstructible, size_t N>
 struct constructor_detection_impl {
   // The detector owns policy: pick the highest matching arity once, then let
@@ -394,10 +396,11 @@ struct constructor_detection_impl {
                                                ? constructor_kind::generic
                                                : constructor_kind::concrete;
   static constexpr size_t arity = detected ? detected_arity : 0;
-  using arguments = std::conditional_t<kind == constructor_kind::concrete &&
-                                           arity == 0,
-                                       type_list<>, void>;
-  using dispatch = constructor_detection_dispatch<T, DetectionMode, arity, kind>;
+  using arguments =
+      std::conditional_t<kind == constructor_kind::concrete && arity == 0,
+                         type_list<>, void>;
+  using dispatch =
+      constructor_detection_dispatch<T, DetectionMode, arity, kind>;
 
 public:
   template <typename Type, typename Context, typename Container>
@@ -428,11 +431,11 @@ struct constructor_array_detection
                                      constructor_kind::concrete> {
   static constexpr constructor_kind kind = constructor_kind::concrete;
   static constexpr size_t arity = N;
-  using arguments = std::conditional_t<
-      std::is_same_v<DetectionMode, constructor_signature>,
-      typename constructor_array_arguments<T,
-                                           std::make_index_sequence<N>>::type,
-      std::conditional_t<N == 0, type_list<>, void>>;
+  using arguments =
+      std::conditional_t<std::is_same_v<DetectionMode, constructor_signature>,
+                         typename constructor_array_arguments<
+                             T, std::make_index_sequence<N>>::type,
+                         std::conditional_t<N == 0, type_list<>, void>>;
 };
 
 template <typename T, typename Arguments> struct constructor_from_arguments;
@@ -456,25 +459,22 @@ struct constructor_from_arguments<T, type_list<Args...>> {
   }
 };
 
-template <
-    template <typename, typename, template <typename...> typename, size_t>
-    typename Detection,
-    template <typename, typename, template <typename...> typename, size_t,
-              constructor_kind>
-    typename Arguments,
-    typename T, template <typename...> typename IsConstructible, size_t N>
+template <template <typename, typename, template <typename...> typename,
+                    size_t> typename Detection,
+          template <typename, typename, template <typename...> typename, size_t,
+                    constructor_kind> typename Arguments,
+          typename T, template <typename...> typename IsConstructible, size_t N>
 struct constructor_detection_signature_impl
     : Detection<T, constructor_shape, IsConstructible, N> {
 private:
   // Shape detection remains the source of truth for arity and constructor kind.
   // Signature detection only recovers arguments for its winning concrete arity.
-  using base_type =
-      Detection<T, constructor_shape, IsConstructible, N>;
+  using base_type = Detection<T, constructor_shape, IsConstructible, N>;
 
 public:
-  using arguments = typename Arguments<
-      T, constructor_signature, IsConstructible, base_type::arity,
-      base_type::kind>::type;
+  using arguments =
+      typename Arguments<T, constructor_signature, IsConstructible,
+                         base_type::arity, base_type::kind>::type;
   static_assert(base_type::kind != constructor_kind::concrete ||
                     !std::is_void_v<arguments>,
                 "constructor-signature detection must cover every constructor "
@@ -516,8 +516,8 @@ template <typename T, typename DetectionMode,
 constexpr bool constructor_probe_value(std::index_sequence<Is...>) {
   // Non-MSVC compilers handle the lighter repeated-type placeholder probe
   // well, which avoids an extra wrapper class per arity check.
-  return IsConstructible<T,
-                         repeated_type<ConstructorArg<T, DetectionMode>, Is>...>::value;
+  return IsConstructible<
+      T, repeated_type<ConstructorArg<T, DetectionMode>, Is>...>::value;
 }
 
 template <typename T, typename DetectionMode,
@@ -545,8 +545,8 @@ template <typename T, typename DetectionMode,
 struct constructor_detection
     : constructor_detection_impl<
           constructor_probe,
-          constructor_arity<T, DetectionMode, IsConstructible, N>,
-          T, DetectionMode, IsConstructible, N> {};
+          constructor_arity<T, DetectionMode, IsConstructible, N>, T,
+          DetectionMode, IsConstructible, N> {};
 
 template <typename T, template <typename...> typename IsConstructible, size_t N>
 struct constructor_detection<T, constructor_signature, IsConstructible, N>

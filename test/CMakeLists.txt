@@ -1,5 +1,7 @@
-find_package(Python3 COMPONENTS Interpreter REQUIRED)
-find_program(UV_EXECUTABLE NAMES uv REQUIRED)
+include("${PROJECT_SOURCE_DIR}/cmake/uv.cmake")
+uv_get_run_command(DINGO_UV_RUN_COMMAND
+    PROJECT_DIRECTORY "${PROJECT_SOURCE_DIR}"
+)
 
 set(DINGO_MATRIX_PROFILE "full" CACHE STRING
     "Generated matrix execution profile (full or portable)")
@@ -119,9 +121,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${DINGO_MATRIX_GENERATOR}")
 
 set(DINGO_MATRIX_GENERATOR_COMMAND
-    ${CMAKE_COMMAND} -E env
-        UV_CACHE_DIR=${CMAKE_CURRENT_BINARY_DIR}/.uv-cache
-        ${UV_EXECUTABLE} run --locked python
+    ${DINGO_UV_RUN_COMMAND} python
         ${DINGO_MATRIX_GENERATOR}
         --out ${DINGO_MATRIX_TEST_DIR}
         --cmake ${DINGO_MATRIX_TEST_CMAKE}
@@ -145,9 +145,7 @@ endif()
 include(${DINGO_MATRIX_TEST_CMAKE})
 
 add_test(NAME dingo_matrix_generator_test
-    COMMAND ${CMAKE_COMMAND} -E env
-        UV_CACHE_DIR=${CMAKE_CURRENT_BINARY_DIR}/.uv-cache
-        ${UV_EXECUTABLE} run --locked pytest -q
+    COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q
         ${CMAKE_CURRENT_SOURCE_DIR}/matrix/generator_test.py)
 set_tests_properties(dingo_matrix_generator_test PROPERTIES
     LABELS "unit;generator"
@@ -284,32 +282,14 @@ endif()
 
 option(DINGO_LIT_TESTS_ENABLED "Enable lit-based tests for static assertions and diagnostics." ON)
 if(DINGO_LIT_TESTS_ENABLED)
-    find_program(LIT_EXECUTABLE NAMES lit)
     set(DINGO_LIT_EXEC_ROOT "${PROJECT_BINARY_DIR}/test/lit")
 
-    if(UV_EXECUTABLE)
-        add_test(NAME dingo_lit_tests
-            COMMAND ${CMAKE_COMMAND} -E env
-                CXX=${CMAKE_CXX_COMPILER}
-                DINGO_CXX_STD=${CMAKE_CXX_STANDARD}
-                UV_CACHE_DIR=${PROJECT_BINARY_DIR}/.uv-cache
-                ${UV_EXECUTABLE} run --locked lit -sv
-                    -D DINGO_LIT_EXEC_ROOT=${DINGO_LIT_EXEC_ROOT}
-                    ${CMAKE_CURRENT_SOURCE_DIR}/lit)
-    elseif(LIT_EXECUTABLE)
-        add_test(NAME dingo_lit_tests
-            COMMAND ${CMAKE_COMMAND} -E env
-                CXX=${CMAKE_CXX_COMPILER}
-                DINGO_CXX_STD=${CMAKE_CXX_STANDARD}
-                ${LIT_EXECUTABLE} -sv
-                    -D DINGO_LIT_EXEC_ROOT=${DINGO_LIT_EXEC_ROOT}
-                    ${CMAKE_CURRENT_SOURCE_DIR}/lit)
-    else()
-        message(WARNING "Skipping lit tests: neither lit nor uv was found. "
-                        "Enable by installing lit (or uv) and setting "
-                        "DINGO_LIT_TESTS_ENABLED=ON.")
-    endif()
-    if(TEST dingo_lit_tests)
-        set_tests_properties(dingo_lit_tests PROPERTIES LABELS "compile-only")
-    endif()
+    add_test(NAME dingo_lit_tests
+        COMMAND ${CMAKE_COMMAND} -E env
+            CXX=${CMAKE_CXX_COMPILER}
+            DINGO_CXX_STD=${CMAKE_CXX_STANDARD}
+            ${DINGO_UV_RUN_COMMAND} lit -sv
+                -D DINGO_LIT_EXEC_ROOT=${DINGO_LIT_EXEC_ROOT}
+                ${CMAKE_CURRENT_SOURCE_DIR}/lit)
+    set_tests_properties(dingo_lit_tests PROPERTIES LABELS "compile-only")
 endif()

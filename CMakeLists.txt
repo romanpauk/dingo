@@ -47,13 +47,10 @@ endif()
 if(DINGO_DEVELOPMENT_MODE)
     enable_testing()
     include(FetchContent)
-    if(DINGO_CLANG_TOOLS_ENABLED)
-        include(cmake/clang-format.cmake)
-    endif()
     if(WIN32)
         include(cmake/group-sources.cmake)
     endif()
-    include(cmake/md.cmake)
+    include(cmake/markdown.cmake)
     include(cmake/sanitizers.cmake)
 
     set(CMAKE_CXX_STANDARD 17 CACHE STRING "c++ standard")
@@ -197,10 +194,7 @@ if(DINGO_DEVELOPMENT_MODE)
         )
     endif()
 
-    include(cmake/header-checks.cmake)
-    if(DINGO_CLANG_TOOLS_ENABLED AND NOT WIN32)
-        include(cmake/iwyu.cmake)
-    endif()
+    include(cmake/includes.cmake)
 
     if(DINGO_TESTING_ENABLED)
         FetchContent_Declare(googletest
@@ -245,15 +239,10 @@ if(DINGO_DEVELOPMENT_MODE)
         add_subdirectory(examples)
     endif()
 
-    set(DINGO_CHECK_TARGETS md-verify check-headers)
-
-    if(DINGO_CLANG_TOOLS_ENABLED)
-        include(cmake/clang-tidy.cmake)
-        list(APPEND DINGO_CHECK_TARGETS check-format)
-        if(NOT WIN32)
-            list(APPEND DINGO_CHECK_TARGETS check-tidy check-iwyu)
-        endif()
-    endif()
+    set(DINGO_CHECK_TARGETS includes-compile)
+    include(cmake/quality.cmake)
+    configure_quality_targets(DINGO_QUALITY_CHECK_TARGETS)
+    list(APPEND DINGO_CHECK_TARGETS ${DINGO_QUALITY_CHECK_TARGETS})
 
     add_custom_target(check
         DEPENDS ${DINGO_CHECK_TARGETS}

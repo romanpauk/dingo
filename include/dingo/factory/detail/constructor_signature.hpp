@@ -54,7 +54,8 @@ template <class DisabledType, typename Probe, size_t I>
 struct constructor_signature_argument {
   // This declaration makes the later hidden-friend definition visible to ADL.
   // `Probe` and `I` make the placeholder, and therefore its friend, unique.
-  friend auto constructor_signature_argument_type(constructor_signature_argument);
+  friend auto
+      constructor_signature_argument_type(constructor_signature_argument);
 
   template <typename T, typename = typename std::enable_if_t<
                             !std::is_same_v<DisabledType, std::decay_t<T>> &&
@@ -82,9 +83,10 @@ struct constructor_signature_argument {
   template <typename T, typename Selector,
             typename = typename std::enable_if_t<
                 !std::is_same_v<DisabledType, std::decay_t<T>>>>
-  operator detail::selected<T, Selector>() const noexcept(
-      constructor_signature_argument_definition<detail::selected<T, Selector>,
-                                                constructor_signature_argument>::value);
+  operator detail::selected<T, Selector>() const
+      noexcept(constructor_signature_argument_definition<
+               detail::selected<T, Selector>,
+               constructor_signature_argument>::value);
 };
 #endif
 
@@ -167,8 +169,8 @@ struct constructor_signature_recovery<T, DetectionMode, IsConstructible, Arity,
 private:
   // These compilers instantiate only the winning conversion's noexcept
   // expression, so all argument categories can share one friend key.
-  using probe = constructor_signature_probe_id<T, DetectionMode,
-                                               IsConstructible, Arity>;
+  using probe =
+      constructor_signature_probe_id<T, DetectionMode, IsConstructible, Arity>;
   static constexpr bool resolved =
       constructor_signature_probe<T, probe, IsConstructible,
                                   std::make_index_sequence<Arity>>::value;
