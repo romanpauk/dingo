@@ -9,7 +9,6 @@
 
 #include <dingo/core/binding_selection.h>
 #include <dingo/core/factory_traits.h>
-#include <dingo/static/graph.h>
 #include <dingo/type/dependency_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/type_list.h>
@@ -18,22 +17,6 @@
 
 namespace dingo {
 namespace detail {
-
-template <typename StaticRegistry, bool DependenciesResolved>
-struct static_container_graph_type;
-
-template <typename StaticRegistry>
-struct static_container_graph_type<StaticRegistry, true> {
-  using type = static_graph<StaticRegistry>;
-};
-
-template <typename StaticRegistry>
-struct static_container_graph_type<StaticRegistry, false> {
-  struct type {
-    static constexpr bool resolvable = true;
-    static constexpr bool acyclic = true;
-  };
-};
 
 struct factory_probe_context {
   template <typename T, typename Container>

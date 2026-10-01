@@ -99,11 +99,7 @@ public:
 
 private:
   static constexpr bool has_parent_v = !std::is_void_v<ParentContainer>;
-  using graph_type_ = std::conditional_t<
-      has_parent_v, graph_analysis<static_bindings_type, true>,
-      typename static_container_graph_type<
-          static_bindings_type,
-          static_bindings_type::dependencies_are_resolved>::type>;
+  using graph_type_ = graph_analysis<static_bindings_type, has_parent_v>;
   using parent_container_type = ParentContainer;
   using state_type = static_storage_state<Registrations...>;
   using context_type = static_context<context_static_bindings_type>;
