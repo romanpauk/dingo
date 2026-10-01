@@ -110,14 +110,14 @@ template <typename Type, typename U>
 struct conversions<shared_cyclical, Type, U>
     : type_storage_traits<shared_cyclical, Type, U> {};
 
-template <typename Context, typename Fn, typename = void>
+template <typename Context, typename = void>
 struct has_on_rollback : std::false_type {};
 
-template <typename Context, typename Fn>
+template <typename Context>
 struct has_on_rollback<
-    Context, Fn,
-    std::void_t<decltype(std::declval<Context &>().on_rollback(
-        std::declval<Fn>()))>> : std::true_type {};
+    Context, std::void_t<decltype(std::declval<Context &>().on_rollback(
+                 std::declval<void (*)(void *, void *) noexcept>(),
+                 std::declval<void *>()))>> : std::true_type {};
 
 // Disallow virtual bases as interfaces as in cyclical storage, we can't
 // properly calculate the cast when the object is not constructed
@@ -289,12 +289,6 @@ class storage<shared_cyclical, Type, StoredType, Factory, Conversions> {
   storage_instance<shared_cyclical, Type, StoredType, Factory> instance_;
   std::vector<std::unique_ptr<conversion_entry>> conversions_;
 
-  struct rollback_action {
-    void operator()() noexcept { storage_->reset(); }
-
-    storage *storage_;
-  };
-
   class local_rollback_guard {
   public:
     explicit local_rollback_guard(storage *storage) : storage_(storage) {}
@@ -333,8 +327,12 @@ public:
       // address. Rebound shared_ptr interface handles therefore belong
       // to the storage too and must roll back with the instance if the
       // first resolve throws.
-      if constexpr (has_on_rollback<Context, rollback_action>::value) {
-        context.on_rollback(rollback_action{this});
+      if constexpr (has_on_rollback<Context>::value) {
+        context.on_rollback(
+            +[](void *self, void *) noexcept {
+              static_cast<storage *>(self)->reset();
+            },
+            this);
         instance_.resolve(context);
         instance_.construct(scope, context, container);
       } else {

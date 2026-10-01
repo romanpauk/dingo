@@ -603,7 +603,11 @@ TEST(type_registration_test,
       runtime_context context(scratch, transaction);
       (void)context.construct<runtime_arena_tracker>(ephemeral_scope, &events,
                                                      1);
-      context.on_rollback([&events]() noexcept { events.push_back(2); });
+      context.on_rollback(
+          +[](void *list, void *) noexcept {
+            static_cast<std::vector<int> *>(list)->push_back(2);
+          },
+          &events);
     }
 
     EXPECT_EQ(events, (std::vector<int>{1}));

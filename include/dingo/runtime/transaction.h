@@ -51,6 +51,23 @@ template <typename Allocator> class runtime_transaction {
     Fn callback;
   };
 
+  struct rollback_node final : action_link {
+    rollback_node(action_link *previous_node,
+                  void (*fn)(void *, void *) noexcept, void *first_arg,
+                  void *second_arg) noexcept
+        : action_link(previous_node, &invoke_node), callback(fn),
+          first(first_arg), second(second_arg) {}
+
+    static void invoke_node(action_link *base) noexcept {
+      auto *node = static_cast<rollback_node *>(base);
+      node->callback(node->first, node->second);
+    }
+
+    void (*callback)(void *, void *) noexcept;
+    void *first;
+    void *second;
+  };
+
   using action_store = detail::object_store<arena<>>;
 
   struct action_checkpoint {
@@ -145,6 +162,14 @@ public:
       add_persistent_destructor(instance, &destructor<T>);
     }
     return instance;
+  }
+
+  void on_rollback(void (*fn)(void *, void *) noexcept, void *first,
+                   void *second = nullptr) {
+    auto &actions = shared_actions();
+    auto &created = actions.template construct<rollback_node>(
+        actions.rollback_tail, fn, first, second);
+    actions.rollback_tail = std::addressof(created);
   }
 
   template <typename Fn> void on_rollback(Fn &&fn) {

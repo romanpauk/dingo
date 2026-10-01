@@ -76,8 +76,9 @@ struct cache_owner {
 };
 
 struct tracked_cache_context : cache_owner {
-  template <typename Fn> void on_rollback(Fn &&fn) {
-    rollback_actions.emplace_back(std::forward<Fn>(fn));
+  void on_rollback(void (*fn)(void *, void *) noexcept, void *first,
+                   void *second = nullptr) {
+    rollback_actions.emplace_back([fn, first, second] { fn(first, second); });
   }
 
   void rollback() {
