@@ -73,9 +73,8 @@ struct constructor_traits<std::array<T, N>> {
 };
 
 template <typename T> struct constructor_traits<T &> {
-  template <typename... Args> static T &construct(Args &&...) {
-    static_assert(true, "references cannot be constructed");
-  }
+  // References cannot be constructed.
+  template <typename... Args> static T &construct(Args &&...) = delete;
 };
 
 template <typename T>
