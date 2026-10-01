@@ -201,7 +201,10 @@ decltype(auto) with_binding_source(construction_scope scope, Context &context,
   using materialization_traits =
       storage_materialization_traits<typename Storage::tag_type,
                                      typename Storage::type>;
+  using leaf_type = leaf_type_t<typename Storage::type>;
 
+  [[maybe_unused]] auto guard =
+      materialization_traits::template make_guard<leaf_type>(context, storage);
   auto source = materialization_traits::materialize_source(scope, context,
                                                            storage, owner);
   return std::forward<Fn>(fn)(std::move(source));

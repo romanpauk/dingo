@@ -110,6 +110,16 @@ participating slot can be published before its dependencies finish resolving.
 cycles: ordinary static cycles are rejected, while all-`shared_cyclical` static
 cycles can resolve through the static binding path.
 
+In static bindings, cycles through declared dependencies (`dependencies<...>`,
+an explicit `constructor<T(Args...)>` or a function factory) are visible to
+compile-time validation and are rejected at compile time. Cycles through
+auto-detected constructors are not: detected constructors do not expose their
+dependencies, so they are detected at runtime and reported with
+`type_recursion_exception`. This applies to `static_container`,
+`container<bindings<...>>` and runtime containers alike. A binding skips the
+runtime check only when its factory provably has no dependencies, such as a
+detected zero-argument constructor.
+
 Mixed runtime/static recursion that only becomes visible during actual runtime
 resolution is rejected at runtime through the normal recursion exception path.
 
