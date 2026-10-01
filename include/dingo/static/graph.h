@@ -1287,6 +1287,14 @@ public:
       std::conditional_t<acyclic, typename traversal::order, void>;
 };
 
+// Names only the selected arm's ::value so the precise bound model is not
+// instantiated for graphs that are not eligible for it.
+template <bool Eligible, typename Bound, typename Total>
+struct select_bound : Total {};
+
+template <typename Bound, typename Total>
+struct select_bound<true, Bound, Total> : Bound {};
+
 template <typename StaticRegistry, bool RuntimeDependencies = false>
 struct basic_static_execution_traits {
 private:
@@ -1300,27 +1308,24 @@ public:
   static constexpr bool static_context_eligible =
       static_bindings_dependency_bounds_known<
           typename StaticRegistry::interface_bindings>::value;
-  static constexpr std::size_t max_retained_frame_depth =
-      static_context_eligible
-          ? static_graph_retained_frame_depth_bound<
-                StaticRegistry, RuntimeDependencies, resolvable,
-                contains_cycle>::value
-          : static_graph_total_retained_frame_depth<
-                typename StaticRegistry::interface_bindings>::value;
-  static constexpr std::size_t max_destructible_slots =
-      static_context_eligible
-          ? static_graph_destructible_slots_bound<
-                StaticRegistry, RuntimeDependencies, resolvable,
-                contains_cycle>::value
-          : static_graph_total_destructible_slots<
-                typename StaticRegistry::interface_bindings>::value;
-  static constexpr std::size_t max_temporary_slots =
-      static_context_eligible
-          ? static_graph_temporary_slots_bound<StaticRegistry,
-                                               RuntimeDependencies, resolvable,
-                                               contains_cycle>::value
-          : static_graph_total_temporary_slots<
-                typename StaticRegistry::interface_bindings>::value;
+  static constexpr std::size_t max_retained_frame_depth = select_bound<
+      static_context_eligible,
+      static_graph_retained_frame_depth_bound<
+          StaticRegistry, RuntimeDependencies, resolvable, contains_cycle>,
+      static_graph_total_retained_frame_depth<
+          typename StaticRegistry::interface_bindings>>::value;
+  static constexpr std::size_t max_destructible_slots = select_bound<
+      static_context_eligible,
+      static_graph_destructible_slots_bound<StaticRegistry, RuntimeDependencies,
+                                            resolvable, contains_cycle>,
+      static_graph_total_destructible_slots<
+          typename StaticRegistry::interface_bindings>>::value;
+  static constexpr std::size_t max_temporary_slots = select_bound<
+      static_context_eligible,
+      static_graph_temporary_slots_bound<StaticRegistry, RuntimeDependencies,
+                                         resolvable, contains_cycle>,
+      static_graph_total_temporary_slots<
+          typename StaticRegistry::interface_bindings>>::value;
   static constexpr std::size_t max_temporary_size =
       static_graph_max_temporary_size<StaticRegistry, resolvable>::value;
   static constexpr std::size_t max_temporary_align =
