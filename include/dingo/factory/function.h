@@ -21,7 +21,7 @@ template <typename T, T fn> struct function_decl {
   }
 
   template <typename Type, typename Context, typename Container>
-  static void construct(void *ptr, construction_scope scope, Context &ctx,
+  static auto construct(void *ptr, construction_scope scope, Context &ctx,
                         Container &container) {
     detail::callable_invoke<
         detail::callable_signature_t<T>>::template construct<Type>(ptr, fn,

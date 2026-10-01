@@ -61,7 +61,7 @@ struct storage_instance_base : Factory {
 #pragma warning(disable : 4702)
 #endif
   template <typename Context, typename Container>
-  void construct(construction_scope scope, Context &context,
+  auto construct(construction_scope scope, Context &context,
                  Container &container) {
     assert(!initialized_);
     Factory::template construct<Type *>(&instance_, scope, context, container);
@@ -135,7 +135,7 @@ public:
       : Factory(std::forward<Args>(args)...) {}
 
   template <typename Context, typename Container>
-  void construct(construction_scope scope, Context &context,
+  auto construct(construction_scope scope, Context &context,
                  Container &container) {
     assert(empty());
     new (&instance_) StoredType(detail::convert_type<StoredType, consume>(
@@ -184,7 +184,7 @@ public:
   ~storage_instance() { reset(); }
 
   template <typename Context, typename Container>
-  void construct(construction_scope scope, Context &context,
+  auto construct(construction_scope scope, Context &context,
                  Container &container) {
     assert(empty());
     Factory::template construct<Type[N]>(&instance_, scope, context, container);
@@ -222,7 +222,7 @@ public:
   ~storage_instance() { reset(); }
 
   template <typename Context, typename Container>
-  void construct(construction_scope scope, Context &context,
+  auto construct(construction_scope scope, Context &context,
                  Container &container) {
     assert(empty());
     instance_ = Factory::template construct<Type *>(scope, context, container);

@@ -400,6 +400,45 @@ See:
 - [include/dingo/runtime_container.h](../include/dingo/runtime_container.h)
 - [include/dingo/static_container.h](../include/dingo/static_container.h)
 
+## Template Depth Of Compile-Time Bindings
+
+A compile-time container resolves a binding with code generated for that
+binding, and that code resolves the binding's dependencies with code generated
+for them in turn. The compiler instantiates the generated functions nested
+inside each other, so a chain of dependencies, where each type depends on one
+other type that depends on one other type, nests one set of function
+instantiations per link. The depth of the nesting is bounded by
+`-ftemplate-depth` (1024 by default in Clang, 900 in GCC). The depth follows the
+longest dependency chain, not the number of bindings: bindings that do not
+depend on each other, or that all depend on the same type, do not nest.
+
+Measured with Clang, the `-ftemplate-depth` that a chain needs is
+`links * per link + 15`:
+
+| Binding in the chain | Levels per link | Longest chain at the default depth |
+| ----------------------------------------- | --------------- |
+---------------------------------- | | shared, constructor detected | 7 | 144 |
+| shared, `factory<constructor<T(...)>>` | 6 | 168 | | shared,
+`factory<function<...>>` | 6 | 168 | | unique, constructor detected | 8 | 126 |
+
+A chain of 100 links with detected constructors therefore needs about
+`-ftemplate-depth=720`, and each additional 100 links need 700 more. GCC counts
+about 17 levels per link and reaches 52 links at its default depth. When a
+longer chain does not compile, raise `-ftemplate-depth`, or register the chain
+through `container<>` or `runtime_container`: runtime registration resolves
+through type-erased bindings and its depth does not depend on the length of the
+chain.
+
+The levels per link are the function templates of one resolution that Clang
+instantiates one inside the other: the storage, the factory, the constructor
+argument, the context, and the container lookup. Functions that are declared
+with a deduced return type (`auto`, `decltype(auto)`) are instantiated at the
+point of the call and are not nested, which is why the placement `construct`
+overloads of the storages and factories return `auto`. Keep an explicit return
+type on a function that is part of a dependency cycle, such as the constructor
+argument conversion, as a function with a deduced return type cannot be used
+while its own return type is being deduced.
+
 ## Container Nesting
 
 Containers can form a parent-child hierarchy. Resolution walks from the child

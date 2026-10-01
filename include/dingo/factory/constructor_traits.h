@@ -23,12 +23,16 @@
 
 namespace dingo {
 
+// The overloads that construct in place are declared with a deduced `auto`
+// return type, which is `void`. A deduced return type is instantiated at the
+// call, so the construction of a dependency does not add template depth levels
+// to the dependency chain it is part of (see docs/advanced-topics.md).
 template <typename T, typename = void> struct constructor_traits {
   template <typename... Args> static T construct(Args &&...args) {
     return T{std::forward<Args>(args)...};
   }
 
-  template <typename... Args> static void construct(void *ptr, Args &&...args) {
+  template <typename... Args> static auto construct(void *ptr, Args &&...args) {
     new (ptr) T{std::forward<Args>(args)...};
   }
 };
@@ -38,7 +42,7 @@ template <typename T> struct constructor_traits<T *> {
     return new T{std::forward<Args>(args)...};
   }
 
-  template <typename... Args> static void construct(void *ptr, Args &&...args) {
+  template <typename... Args> static auto construct(void *ptr, Args &&...args) {
     new (ptr) T{std::forward<Args>(args)...};
   }
 };
@@ -48,7 +52,7 @@ template <typename T, size_t N> struct constructor_traits<T[N]> {
     return detail::make_bounded_array<T, N>(std::forward<Args>(args)...);
   }
 
-  template <typename... Args> static void construct(void *ptr, Args &&...args) {
+  template <typename... Args> static auto construct(void *ptr, Args &&...args) {
     detail::construct_bounded_array<T, N>(ptr, std::forward<Args>(args)...);
   }
 };
@@ -60,7 +64,7 @@ struct constructor_traits<std::array<T, N>> {
     return {{std::forward<Args>(args)...}};
   }
 
-  template <typename... Args> static void construct(void *ptr, Args &&...args) {
+  template <typename... Args> static auto construct(void *ptr, Args &&...args) {
 #if defined(_MSC_VER)
     // MSVC rejects direct placement-new aggregate initialization for nested
     // arrays of move-only elements. Constructing from the returned prvalue uses
@@ -89,7 +93,7 @@ struct constructor_traits<
     return ptr;
   }
 
-  template <typename... Args> static void construct(void *ptr, Args &&...args) {
+  template <typename... Args> static auto construct(void *ptr, Args &&...args) {
     new (ptr) T(type_traits<T>::make(std::forward<Args>(args)...));
   }
 };
@@ -111,7 +115,7 @@ struct construction_dispatch {
     return constructor_traits<Type>::construct(std::forward<Args>(args)...);
   }
 
-  template <typename... Args> static void construct(void *ptr, Args &&...args) {
+  template <typename... Args> static auto construct(void *ptr, Args &&...args) {
     constructor_traits<Type>::construct(ptr, std::forward<Args>(args)...);
   }
 };
@@ -133,7 +137,7 @@ struct construction_dispatch<Type, Selected,
     }
   }
 
-  template <typename... Args> static void construct(void *ptr, Args &&...args) {
+  template <typename... Args> static auto construct(void *ptr, Args &&...args) {
     new (ptr) type(convert_type<type>(
         constructor_traits<Selected>::construct(std::forward<Args>(args)...),
         Conversion{}));

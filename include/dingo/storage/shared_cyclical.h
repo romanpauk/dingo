@@ -157,7 +157,7 @@ public:
   Type *get() { return std::launder(reinterpret_cast<Type *>(&instance_)); }
 
   template <typename Context, typename Container>
-  void construct(construction_scope scope, Context &context,
+  auto construct(construction_scope scope, Context &context,
                  Container &container) {
     assert(resolved_);
     Factory::template construct<Type *>(&instance_, scope, context, container);
@@ -196,7 +196,7 @@ public:
   Type *get() { return std::launder(reinterpret_cast<Type *>(&instance_)); }
 
   template <typename Context, typename Container>
-  void construct(construction_scope scope, Context &context,
+  auto construct(construction_scope scope, Context &context,
                  Container &container) {
     assert(resolved_);
     Factory::template construct<Type *>(&instance_, scope, context, container);
@@ -259,7 +259,7 @@ public:
   std::shared_ptr<StoredType> &get() { return instance_; }
 
   template <typename Context, typename Container>
-  void construct(construction_scope scope, Context &context,
+  auto construct(construction_scope scope, Context &context,
                  Container &container) {
     assert(instance_);
     Factory::template construct<Type *>(instance_.get(), scope, context,

@@ -512,8 +512,10 @@ struct static_binding_resolver {
     }
   }
 
+  // The address is deduced: a deduced return type is instantiated at the call
+  // and does not add a level to the template depth of a dependency chain.
   template <typename Request, typename Resolution, typename Context>
-  void *resolve_request_address(Context &context) {
+  decltype(auto) resolve_request_address(Context &context) {
     using target_type =
         std::remove_reference_t<typename Resolution::target_type>;
     using operation = typename Resolution::operation;
