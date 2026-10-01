@@ -8,13 +8,49 @@
 #pragma once
 
 #include <dingo/core/context_base.h>
+#include <dingo/core/factory_traits.h>
+#include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
 
-namespace dingo::detail {
+namespace dingo {
 
-template <typename T,
-          bool DefaultConstructible = std::is_default_constructible_v<T>>
-struct recursion_guard {
+template <typename StaticRegistry, bool RuntimeDependencies>
+class basic_static_context;
+
+namespace detail {
+
+struct no_dependency_context;
+
+// Constructors are the only factories that provably cannot recurse when they
+// have no dependencies; a callable or function can call back into a container.
+template <typename Factory> inline constexpr bool is_constructor_v = false;
+
+template <typename... Ts>
+inline constexpr bool is_constructor_v<constructor<Ts...>> = true;
+
+// Static containers reject cycles through declared dependencies at compile
+// time, so a runtime guard is needed there only when the factory's dependencies
+// are unknown (auto-detected constructors). A context that cannot resolve
+// dependencies is only used with factories that have none.
+template <typename Context>
+inline constexpr bool checks_declared_cycles_v = false;
+
+template <typename StaticRegistry>
+inline constexpr bool
+    checks_declared_cycles_v<basic_static_context<StaticRegistry, false>> =
+        true;
+
+template <>
+inline constexpr bool checks_declared_cycles_v<no_dependency_context> = true;
+
+template <typename Factory, typename Context>
+inline constexpr bool recursion_guard_enabled_v =
+    checks_declared_cycles_v<Context>
+        ? std::is_void_v<typename factory_traits<Factory>::dependencies>
+        : !(is_constructor_v<Factory> &&
+            factory_without_dependencies_v<Factory>);
+
+template <typename T> struct recursion_guard {
   template <typename Context>
   explicit recursion_guard(Context &context, const void *binding)
       : frame_guard_(context.template track_type<T>()), binding_(binding),
@@ -51,19 +87,8 @@ private:
   static thread_local recursion_guard *head_;
 };
 
-template <typename T, bool DefaultConstructible>
-thread_local recursion_guard<T, DefaultConstructible>
-    *recursion_guard<T, DefaultConstructible>::head_ = nullptr;
-
-template <typename T> struct recursion_guard<T, true> {
-  template <typename Context>
-  explicit recursion_guard(Context &, const void *) {}
-
-  recursion_guard(const recursion_guard &) = delete;
-  recursion_guard &operator=(const recursion_guard &) = delete;
-  recursion_guard(recursion_guard &&) = delete;
-  recursion_guard &operator=(recursion_guard &&) = delete;
-};
+template <typename T>
+thread_local recursion_guard<T> *recursion_guard<T>::head_ = nullptr;
 
 template <typename T> class recursion_guard_wrapper {
 public:
@@ -99,4 +124,5 @@ private:
   bool active_ = false;
 };
 
-} // namespace dingo::detail
+} // namespace detail
+} // namespace dingo

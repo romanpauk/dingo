@@ -57,10 +57,6 @@ struct no_dependency_context {
   template <typename T, typename Container> T resolve(Container &) = delete;
 };
 
-template <typename Factory>
-inline constexpr bool factory_without_dependencies_v =
-    std::is_same_v<typename factory_traits<Factory>::dependencies, type_list<>>;
-
 template <typename Request, typename StorageType>
 inline constexpr bool stored_request_identity_v = [] {
   using stored_type = std::remove_cv_t<
