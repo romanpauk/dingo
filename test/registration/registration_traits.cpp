@@ -1097,6 +1097,41 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
                          typename external_resolutions::object_resolutions>,
                      type_list<move_only *>>);
 
+  // A raw pointer and a unique_ptr publish a copy of the leaf in shared and
+  // external storage alike, a move-only leaf publishes none.
+  using shared_pointer_model =
+      detail::binding_model<type_registration<scope<shared>, storage<A *>>>;
+  using shared_pointer_resolutions =
+      detail::binding_resolutions<A,
+                                  typename shared_pointer_model::storage_type>;
+  static_assert(std::is_same_v<resolution_targets_t<typename accepted_values<
+                                   shared_pointer_resolutions>::type>,
+                               type_list<A>>);
+  using shared_move_only_pointer_model = detail::binding_model<
+      type_registration<scope<shared>, storage<move_only *>>>;
+  using shared_move_only_pointer_resolutions = detail::binding_resolutions<
+      move_only, typename shared_move_only_pointer_model::storage_type>;
+  static_assert(
+      std::is_same_v<
+          typename accepted_values<shared_move_only_pointer_resolutions>::type,
+          type_list<>>);
+  using external_unique_model = detail::binding_model<
+      type_registration<scope<external>, storage<std::unique_ptr<A>>>>;
+  using external_unique_resolutions =
+      detail::binding_resolutions<A,
+                                  typename external_unique_model::storage_type>;
+  static_assert(std::is_same_v<resolution_targets_t<typename accepted_values<
+                                   external_unique_resolutions>::type>,
+                               type_list<A>>);
+  using external_move_only_unique_model = detail::binding_model<
+      type_registration<scope<external>, storage<std::unique_ptr<move_only>>>>;
+  using external_move_only_unique_resolutions = detail::binding_resolutions<
+      move_only, typename external_move_only_unique_model::storage_type>;
+  static_assert(
+      std::is_same_v<
+          typename accepted_values<external_move_only_unique_resolutions>::type,
+          type_list<>>);
+
   using shared_move_only_model = detail::binding_model<
       type_registration<scope<shared>, storage<move_only>>>;
   using shared_resolutions = detail::binding_resolutions<

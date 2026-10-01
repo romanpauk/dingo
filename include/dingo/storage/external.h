@@ -33,25 +33,9 @@ template <> struct storage_scope_policy<external> {
 };
 
 namespace detail {
-// Cells where external publishes a different set of values than the generic
-// rule, which takes the lists of shared storage.
-
-// A raw pointer is also copied out.
-template <typename Type, typename U>
-struct storage_cell<external, storage_form::pointer, Type *, U>
-    : storage_cell_rule<external, Type *, U> {
-  using value_types = type_list<U>;
-};
-
-// A unique_ptr is not copied out as its leaf.
-template <typename Type, typename U>
-struct storage_cell<external, storage_form::unique_handle, Type, U>
-    : storage_cell_rule<external, Type, U> {
-  using value_types = type_list<>;
-};
-
-// A shared_ptr is copied out as its copyable layers only, without the leaf
-// published first.
+// The one cell where external publishes a different set of values than the
+// generic rule: a shared_ptr is copied out as its copyable layers only,
+// without the leaf published first.
 template <typename Type, typename U>
 struct storage_cell<external, storage_form::shared_handle, Type, U>
     : storage_cell_rule<external, Type, U> {

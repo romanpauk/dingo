@@ -67,6 +67,8 @@ as consumed resolutions. Unique storage therefore declares consumed results only
 once, while shared and external values become borrowed resolutions. Raw pointer
 storage publishes concrete resolutions for its stored pointee shape and, when
 the pointee is a convertible wrapper, separate interface-rebound conversions.
+Shared and external storage alike copy out the leaf of a raw pointer and of a
+`unique_ptr`; a pointee that is not copy constructible publishes no copy.
 Wrapper composition applies only when the registered interface is a leaf type;
 an interface that is already a wrapper is published as that exact shape rather
 than being nested inside the stored wrapper again. Storage stability remains a

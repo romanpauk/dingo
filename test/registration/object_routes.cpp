@@ -637,6 +637,58 @@ TEST(object_routes_test, a_const_object_serves_const_references_and_copies) {
                type_not_convertible_exception);
 }
 
+TEST(object_routes_test, external_unique_handle_serves_a_copy_of_its_object) {
+  auto handle = std::make_unique<copy_counted>();
+  auto *object = handle.get();
+  container<> container;
+  container
+      .register_type<scope<external>, storage<std::unique_ptr<copy_counted>>>(
+          std::move(handle));
+
+  EXPECT_EQ(&container.resolve<copy_counted &>(), object);
+  EXPECT_EQ(container.resolve<copy_counted *>(), object);
+  const auto copy = container.resolve<copy_counted>();
+  EXPECT_EQ(copy.copies, 1);
+  EXPECT_NE(&copy, object);
+}
+
+TEST(object_routes_test, external_unique_handle_serves_no_copy_of_move_only) {
+  auto handle = std::make_unique<move_only_object>();
+  auto *object = handle.get();
+  container<> container;
+  container.register_type<scope<external>,
+                          storage<std::unique_ptr<move_only_object>>>(
+      std::move(handle));
+
+  EXPECT_EQ(&container.resolve<move_only_object &>(), object);
+  EXPECT_THROW(container.resolve<move_only_object>(),
+               type_not_convertible_exception);
+}
+
+TEST(object_routes_test, shared_pointer_serves_a_copy_of_its_pointee) {
+  // Shared storage owns the object its factory returns.
+  container<> container;
+  container.register_type<scope<shared>, storage<copy_counted *>>(
+      callable([]() { return new copy_counted; }));
+
+  auto &object = container.resolve<copy_counted &>();
+  EXPECT_EQ(container.resolve<copy_counted *>(), &object);
+  const auto copy = container.resolve<copy_counted>();
+  EXPECT_EQ(copy.copies, 1);
+  EXPECT_NE(&copy, &object);
+}
+
+TEST(object_routes_test, shared_pointer_serves_no_copy_of_move_only_pointee) {
+  container<> container;
+  container.register_type<scope<shared>, storage<move_only_object *>>(
+      callable([]() { return new move_only_object; }));
+
+  auto &object = container.resolve<move_only_object &>();
+  EXPECT_EQ(container.resolve<move_only_object *>(), &object);
+  EXPECT_THROW(container.resolve<move_only_object>(),
+               type_not_convertible_exception);
+}
+
 TEST(object_routes_test, a_custom_copy_conversion_keeps_its_value_route) {
   container<> container;
   container.register_type<scope<shared>, storage<custom_copy>>();
