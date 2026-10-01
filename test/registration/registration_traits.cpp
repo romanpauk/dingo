@@ -516,6 +516,34 @@ TEST(type_registration_test, conversion_availability_uses_source_access) {
           detail::type_conversion_path_t<nested_mixed_variant, int *, borrow>,
           detail::converted_construction<detail::wrapper_type_conversion<
               nested_mixed_variant, int *, mixed_variant_conversion, false>>>);
+  // Taking the address of a compatible lvalue is selected directly, also when
+  // the source is itself an alternative type. A pointer that merely converts
+  // to the target keeps its direct conversion, and a variant lvalue still
+  // resolves a base pointer target through its alternatives.
+  using address_variant = std::variant<int, long>;
+  static_assert(
+      std::is_same_v<detail::type_conversion_path_t<int *, int &, borrow>,
+                     detail::address_type_conversion<int *, int &>>);
+  static_assert(
+      std::is_same_v<detail::type_conversion_path_t<const address_variant *,
+                                                    address_variant &, borrow>,
+                     detail::address_type_conversion<const address_variant *,
+                                                     address_variant &>>);
+  static_assert(
+      std::is_same_v<detail::type_conversion_path_t<address_variant *,
+                                                    address_variant &, consume>,
+                     detail::address_type_conversion<address_variant *,
+                                                     address_variant &>>);
+  static_assert(
+      !std::is_same_v<detail::type_conversion_path_t<void *, int *&, borrow>,
+                      detail::address_type_conversion<void *, int *&>>);
+  static_assert(
+      detail::is_type_conversion_available_v<void *, address_variant &,
+                                             borrow>);
+  static_assert(
+      !std::is_same_v<
+          detail::type_conversion_path_t<void *, address_variant &, borrow>,
+          detail::address_type_conversion<void *, address_variant &>>);
   static_assert(
       detail::is_type_conversion_available_v<int (*)[2][3], int (*)[3]>);
   static_assert(
