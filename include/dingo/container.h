@@ -422,33 +422,6 @@ public:
       Parent *parent, allocator_type alloc = allocator_type())
       : runtime_registry_(parent, alloc), parent_(parent) {}
 
-  container_with_static_bindings(const self_type &other)
-      : runtime_registry_(other.runtime_registry_),
-        static_registry_(other.static_registry_), parent_(other.parent_) {}
-
-  container_with_static_bindings(self_type &&other) noexcept
-      : runtime_registry_(std::move(other.runtime_registry_)),
-        static_registry_(std::move(other.static_registry_)),
-        parent_(other.parent_) {}
-
-  self_type &operator=(const self_type &other) {
-    if (this != &other) {
-      runtime_registry_ = other.runtime_registry_;
-      static_registry_ = other.static_registry_;
-      parent_ = other.parent_;
-    }
-    return *this;
-  }
-
-  self_type &operator=(self_type &&other) noexcept {
-    if (this != &other) {
-      runtime_registry_ = std::move(other.runtime_registry_);
-      static_registry_ = std::move(other.static_registry_);
-      parent_ = other.parent_;
-    }
-    return *this;
-  }
-
   self_type &container() { return *this; }
 
   const self_type &container() const { return *this; }

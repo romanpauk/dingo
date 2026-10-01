@@ -230,18 +230,6 @@ template <typename T>
 inline constexpr bool is_runtime_auto_constructible_dependency_v =
     is_runtime_auto_constructible_dependency<T>::value;
 
-template <typename T, typename = void>
-struct has_static_registry_type : std::false_type {};
-
-template <typename T>
-struct has_static_registry_type<T,
-                                std::void_t<typename T::static_registry_type>>
-    : std::true_type {};
-
-template <typename T>
-inline constexpr bool has_static_registry_type_v =
-    has_static_registry_type<T>::value;
-
 template <typename Container, typename Request, typename LookupKey>
 constexpr bool has_lookup() {
   static_assert(is_lookup_key_v<LookupKey>,
@@ -261,7 +249,7 @@ template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
 class runtime_registry : public allocator_base<Allocator> {
   template <typename> friend class runtime_context;
   template <typename> friend class detail::runtime_registration_api;
-  template <typename, typename, typename, typename, typename>
+  template <typename, typename, typename, typename>
   friend class runtime_binding_state;
   template <typename, typename, typename>
   friend class detail::container_with_static_bindings;
@@ -270,18 +258,10 @@ class runtime_registry : public allocator_base<Allocator> {
             typename ParentRegistryT, typename ResolveRootT,
             bool OwnsRuntimeDataT>
   friend class runtime_registry;
-  template <typename ContainerTraitsT, typename AllocatorT,
-            typename ParentRegistryT, typename ResolveRootT,
-            bool OwnsRuntimeDataT>
-  using rebind_t =
-      runtime_registry<ContainerTraitsT, AllocatorT, ParentRegistryT,
-                       ResolveRootT, OwnsRuntimeDataT>;
   using registry_type =
       runtime_registry<ContainerTraits, Allocator, ParentRegistry, ResolveRoot,
                        OwnsRuntimeData>;
-  using resolve_root_type =
-      std::conditional_t<std::is_same_v<void, ResolveRoot>, registry_type,
-                         ResolveRoot>;
+  using resolve_root_type = ResolveRoot;
   using container_type = resolve_root_type;
   using runtime_type = container_runtime<Allocator>;
   using runtime_context_type = runtime_context<Allocator>;
@@ -303,9 +283,6 @@ class runtime_registry : public allocator_base<Allocator> {
       std::is_void_v<Bindings>, runtime_registration_container_type<Parent>,
       detail::container_with_static_bindings<
           Bindings, Parent, registration_runtime_config<Parent>>>;
-  using parent_registry_type =
-      std::conditional_t<std::is_same_v<void, ParentRegistry>, registry_type,
-                         ParentRegistry>;
 
 public:
   using container_traits_type = ContainerTraits;
@@ -333,11 +310,6 @@ protected:
   using lookup_entry_cardinality =
       detail::lookup_entry_cardinality<LookupEntry>;
 
-  template <typename LookupEntry>
-  static constexpr bool lookup_entry_indexed_v =
-      detail::contains_lookup_definition<LookupEntry,
-                                         lookup_index_entries>::value;
-
   using runtime_lookup_binding_view =
       detail::runtime_lookup_binding_view<runtime_binding_interface_type>;
   using runtime_lookup_value =
@@ -360,19 +332,6 @@ private:
   }
 
 public:
-  runtime_registry()
-      : allocator_base<allocator_type>(allocator_type()),
-        runtime_data_(get_allocator()) {
-    static_assert(OwnsRuntimeData);
-    validate_lookup_definitions();
-  }
-
-  runtime_registry(const allocator_type &alloc)
-      : allocator_base<allocator_type>(alloc), runtime_data_(get_allocator()) {
-    static_assert(OwnsRuntimeData);
-    validate_lookup_definitions();
-  }
-
   runtime_registry(detail::runtime_data_owner_t, parent_container_type *parent,
                    const allocator_type &alloc = allocator_type())
       : allocator_base<allocator_type>(alloc), parent_(parent),
@@ -492,8 +451,7 @@ protected:
   parent_container_type *parent() { return parent_; }
 
   resolve_root_type *resolve_root() {
-    if constexpr (std::is_same_v<void, ResolveRoot> ||
-                  std::is_same_v<resolve_root_type, registry_type>) {
+    if constexpr (std::is_same_v<resolve_root_type, registry_type>) {
       return this;
     } else if constexpr (std::is_base_of_v<registry_type, resolve_root_type>) {
       return static_cast<resolve_root_type *>(this);
@@ -1638,7 +1596,6 @@ private:
                   std::is_same_v<Cardinality, ::dingo::one> ||
                   std::is_same_v<routed_cardinality, Cardinality>) {
       static_assert(!std::is_void_v<routed_lookup_entry>);
-      static_assert(lookup_entry_indexed_v<routed_lookup_entry>);
       auto key_resolver = [&](auto) { return route::key(lookup_key); };
       commit_lookup<TypeInterface, TypeStorage, LookupKey>(
           state, value_factory, transaction, key_resolver, lookup_key,

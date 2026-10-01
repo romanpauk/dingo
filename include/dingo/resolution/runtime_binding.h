@@ -22,20 +22,6 @@
 namespace dingo {
 // TODO: this is bit convoluted, ideally merge resolver with runtime binding
 namespace detail {
-template <typename Storage, typename = void>
-struct runtime_storage_can_retain_source : std::false_type {};
-
-template <typename Storage>
-struct runtime_storage_can_retain_source<
-    Storage, std::void_t<typename Storage::tag_type, typename Storage::type>>
-    : std::bool_constant<storage_materialization_traits<
-          typename Storage::tag_type,
-          typename Storage::type>::can_retain_source> {};
-
-template <typename Storage>
-inline constexpr bool runtime_storage_can_retain_source_v =
-    runtime_storage_can_retain_source<Storage>::value;
-
 template <typename Container, typename = void>
 struct runtime_resolution_requires_container : std::false_type {};
 
@@ -60,112 +46,9 @@ private:
 } // namespace detail
 
 template <typename Owner, typename InstanceContainer, typename Storage,
-          typename ResolutionContainer = InstanceContainer,
           typename RegistrationParent = typename Owner::parent_container_type>
 class runtime_binding_state : private detail::runtime_binding_base<
                                   detail::cache::is_stable_storage_v<Storage>> {
-public:
-  using owner_type = Owner;
-  using container_type = InstanceContainer;
-  using instance_container_type = InstanceContainer;
-  using resolution_container_type = ResolutionContainer;
-  using registration_parent_type = RegistrationParent;
-  using allocator_type = typename Owner::allocator_type;
-  using runtime_type = container_runtime<allocator_type>;
-  using runtime_context_type = runtime_context<allocator_type>;
-  using parent_container_type = registration_parent_type;
-
-  template <typename... Args>
-  explicit runtime_binding_state(owner_type *owner, Args &&...args)
-      : owner_(owner), storage_(std::forward<Args>(args)...) {}
-
-  runtime_type &runtime() { return owner().runtime(); }
-  parent_container_type *parent() {
-    if constexpr (std::is_same_v<registration_parent_type,
-                                 typename owner_type::parent_container_type>) {
-      return owner().parent();
-    } else {
-      return owner()
-          .template runtime_registration_parent<registration_parent_type>();
-    }
-  }
-  allocator_type &get_allocator() { return owner().get_allocator(); }
-  Storage &storage() { return storage_; }
-  detail::cache::entry *cache_slot() noexcept {
-    return state_base::binding_cache_slot();
-  }
-  InstanceContainer &container() {
-    if (!instance_container_) {
-      instance_container_ = construct_container<InstanceContainer>();
-    }
-    return *instance_container_;
-  }
-
-  template <bool TrackRollback = true>
-  ResolutionContainer &resolution_container(runtime_context_type &context) {
-    if (!resolution_container_) {
-      assert(resolution_container_ == nullptr);
-      auto *created = construct_container<ResolutionContainer>(context);
-      if constexpr (TrackRollback) {
-        context.on_rollback(
-            [this]() noexcept { resolution_container_ = nullptr; });
-      }
-      resolution_container_ = created;
-    }
-    return *resolution_container_;
-  }
-
-  template <bool TrackRollback = true>
-  InstanceContainer &container(runtime_context_type &context) {
-    if (!instance_container_) {
-      assert(instance_container_ == nullptr);
-      auto *created = construct_container<InstanceContainer>(context);
-      if constexpr (TrackRollback) {
-        context.on_rollback(
-            [this]() noexcept { instance_container_ = nullptr; });
-      }
-      instance_container_ = created;
-    }
-    return *instance_container_;
-  }
-
-  template <bool TrackRollback = true, typename Fn>
-  decltype(auto) with_resolution_container(runtime_context_type &context,
-                                           Fn &&fn) {
-    return std::forward<Fn>(fn)(resolution_container<TrackRollback>(context));
-  }
-
-private:
-  using state_base =
-      detail::runtime_binding_base<detail::cache::is_stable_storage_v<Storage>>;
-
-  owner_type &owner() {
-    assert(owner_ != nullptr);
-    return *owner_;
-  }
-
-  template <typename T> T *construct_container(runtime_context_type &context) {
-    return std::addressof(context.template construct<T>(
-        persistent_scope, parent(), get_allocator()));
-  }
-
-  template <typename T> T *construct_container() {
-    return std::addressof(
-        runtime().template construct<T>(parent(), get_allocator()));
-  }
-
-  owner_type *owner_ = nullptr;
-  Storage storage_;
-  InstanceContainer *instance_container_ = nullptr;
-  ResolutionContainer *resolution_container_ = nullptr;
-};
-
-template <typename Owner, typename InstanceContainer, typename Storage,
-          typename RegistrationParent>
-class runtime_binding_state<Owner, InstanceContainer, Storage,
-                            InstanceContainer, RegistrationParent>
-    : private detail::runtime_binding_base<
-          detail::cache::is_stable_storage_v<Storage>> {
 public:
   using owner_type = Owner;
   using container_type = InstanceContainer;
@@ -267,7 +150,7 @@ template <typename Owner, typename InstanceContainer, typename Storage,
           typename Bindings,
           typename RegistrationParent = typename Owner::parent_container_type>
 using runtime_binding_state_t =
-    runtime_binding_state<Owner, InstanceContainer, Storage, InstanceContainer,
+    runtime_binding_state<Owner, InstanceContainer, Storage,
                           RegistrationParent>;
 
 } // namespace detail
@@ -591,22 +474,6 @@ public:
   }
 
   auto &get_container() { return state().container(); }
-
-  template <typename Context>
-  decltype(auto) resolve(construction_scope scope, Context &context) {
-    return with_source(scope, context, [](auto &&source) -> decltype(auto) {
-      return std::forward<decltype(source)>(source).get();
-    });
-  }
-
-  template <typename T, typename Context>
-  decltype(auto) resolve(construction_scope scope, Context &context) {
-    binding_activation activation{*this, scope};
-    return with_source(scope, context, [&](auto &&source) -> decltype(auto) {
-      return detail::resolve_binding_value<T>(
-          activation, context, std::forward<decltype(source)>(source));
-    });
-  }
 };
 
 } // namespace dingo

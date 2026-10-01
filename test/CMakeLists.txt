@@ -167,7 +167,6 @@ add_executable(dingo_unit_test
     lookup/lookup_index.cpp
     memory/arena_allocator.cpp
     memory/object_store.cpp
-    memory/tagged_ptr.cpp
     registration/binding_graph.cpp
     registration/object_sizes.cpp
     registration/registration_traits.cpp
