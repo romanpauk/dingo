@@ -30,7 +30,7 @@ struct no_materialization_scope {
 };
 } // namespace detail
 
-template <typename StorageTag, typename Type>
+template <typename StorageTag, typename Type, typename = void>
 struct storage_materialization_traits {
   static constexpr bool can_retain_source = false;
 

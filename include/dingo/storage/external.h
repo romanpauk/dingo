@@ -12,159 +12,53 @@
 #include <dingo/factory/constructor.h>
 #include <dingo/resolution/resolution_operation.h>
 #include <dingo/storage/storage.h>
+#include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
 
 namespace dingo {
 struct external {};
 
-template <typename Type> struct storage_materialization_traits<external, Type> {
-  static constexpr bool can_retain_source = false;
+template <> struct storage_scope_policy<external> {
+  static constexpr bool enabled = true;
+  static constexpr bool is_stable = true;
+  static constexpr bool consumes = false;
+  static constexpr materialization_guard guard = materialization_guard::none;
+  static constexpr bool retains_unresolved_source = false;
 
-  template <typename Leaf, typename Context, typename Storage>
-  static auto make_guard(Context &, const Storage &) {
-    return detail::no_materialization_scope();
-  }
-
-  template <typename Storage> static bool retains_source(const Storage &) {
-    return false;
-  }
-
-  template <typename Context, typename Storage, typename Container>
-  static auto materialize_source(construction_scope scope, Context &context,
-                                 Storage &storage, Container &container) {
-    return detail::make_resolved_source(
-        storage.resolve(scope, context, container));
+  static constexpr storage_exposure exposed(storage_form) {
+    return storage_exposure::value | storage_exposure::lvalue |
+           storage_exposure::pointer;
   }
 };
 
+namespace detail {
+// Cells where external publishes a different set of values than the generic
+// rule, which takes the lists of shared storage.
+
+// A raw pointer is also copied out.
 template <typename Type, typename U>
-struct storage_traits<
-    external, Type, U,
-    std::enable_if_t<!type_traits<Type>::enabled &&
-                     !std::is_reference_v<Type> && !std::is_array_v<Type>>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
+struct storage_cell<external, storage_form::pointer, Type *, U>
+    : storage_cell_rule<external, Type *, U> {
   using value_types = type_list<U>;
-  using lvalue_reference_types = type_list<U &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *>;
 };
 
+// A unique_ptr is not copied out as its leaf.
 template <typename Type, typename U>
-struct storage_traits<external, Type *, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using value_types = type_list<U>;
-  using lvalue_reference_types = type_list<U &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *>;
-};
-
-template <typename T, typename U> struct storage_traits<external, T[], U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
+struct storage_cell<external, storage_form::unique_handle, Type, U>
+    : storage_cell_rule<external, Type, U> {
   using value_types = type_list<>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types =
-      type_list<typename detail::wrapper_rebind_leaf<T, U>::type *>;
 };
 
-template <typename T, size_t N, typename U>
-struct storage_traits<external, T[N], U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using rebound_row_type = typename detail::wrapper_rebind_leaf<T, U>::type;
-  using rebound_exact_type =
-      typename detail::wrapper_rebind_leaf<T[N], U>::type;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<exact_lookup<rebound_exact_type> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types =
-      type_list<rebound_row_type *, exact_lookup<rebound_exact_type> *>;
+// A shared_ptr is copied out as its copyable layers only, without the leaf
+// published first.
+template <typename Type, typename U>
+struct storage_cell<external, storage_form::shared_handle, Type, U>
+    : storage_cell_rule<external, Type, U> {
+  using value_types = typename wrapper_storage_types<
+      wrapper_rebind_leaf_t<Type, U>>::copyable_value_types;
 };
-
-template <typename Array, typename Deleter, typename U>
-struct storage_traits<external, std::unique_ptr<Array, Deleter>, U,
-                      std::enable_if_t<std::is_array_v<Array> &&
-                                       (std::extent_v<Array, 0> == 0)>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using handle_type =
-      detail::wrapper_rebind_leaf_t<std::unique_ptr<Array, Deleter>, U>;
-  using pointer_types = typename detail::smart_array_pointer_types<
-      handle_type, std::remove_extent_t<Array>, U>::type;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<handle_type &>;
-  using rvalue_reference_types = type_list<>;
-};
-
-template <typename T, typename Deleter, typename U>
-struct storage_traits<external, std::unique_ptr<T, Deleter>, U,
-                      std::enable_if_t<!std::is_array_v<T>>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using handle_type =
-      detail::wrapper_rebind_leaf_t<std::unique_ptr<T, Deleter>, U>;
-  using types = detail::wrapper_storage_types<handle_type>;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = typename types::lvalue_reference_types;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = typename types::pointer_types;
-};
-
-template <typename Array, typename U>
-struct storage_traits<external, std::shared_ptr<Array>, U,
-                      std::enable_if_t<std::is_array_v<Array> &&
-                                       (std::extent_v<Array, 0> == 0)>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using handle_type = detail::wrapper_rebind_leaf_t<std::shared_ptr<Array>, U>;
-  using pointer_types = typename detail::smart_array_pointer_types<
-      handle_type, std::remove_extent_t<Array>, U>::type;
-
-  using value_types = type_list<handle_type>;
-  using lvalue_reference_types = type_list<handle_type &>;
-  using rvalue_reference_types = type_list<>;
-};
-
-template <typename T, typename U>
-struct storage_traits<external, std::shared_ptr<T>, U,
-                      std::enable_if_t<!std::is_array_v<T>>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using handle_type = detail::wrapper_rebind_leaf_t<std::shared_ptr<T>, U>;
-  using types = detail::wrapper_storage_types<handle_type>;
-
-  using value_types = typename types::copyable_value_types;
-  using lvalue_reference_types = typename types::lvalue_reference_types;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = typename types::pointer_types;
-};
-
-template <typename T, typename U>
-struct storage_traits<external, std::optional<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using value_types = type_list<U>;
-  using lvalue_reference_types =
-      type_list<U &, exact_lookup<std::optional<T>> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *, exact_lookup<std::optional<T>> *>;
-};
+} // namespace detail
 
 namespace detail {
 template <typename Type, typename U>

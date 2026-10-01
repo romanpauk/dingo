@@ -15,6 +15,7 @@
 #include <dingo/memory/object_lifetime.h>
 #include <dingo/resolution/resolution_operation.h>
 #include <dingo/storage/storage.h>
+#include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
 
@@ -23,162 +24,18 @@
 namespace dingo {
 struct shared {};
 
-template <typename Type> struct storage_materialization_traits<shared, Type> {
-  static constexpr bool can_retain_source = true;
+template <> struct storage_scope_policy<shared> {
+  static constexpr bool enabled = true;
+  static constexpr bool is_stable = true;
+  static constexpr bool consumes = false;
+  static constexpr materialization_guard guard =
+      materialization_guard::while_unresolved;
+  static constexpr bool retains_unresolved_source = true;
 
-  template <typename Leaf, typename Context, typename Storage>
-  static auto make_guard(Context &context, const Storage &storage) {
-    if constexpr (detail::recursion_guard_enabled_v<
-                      typename Storage::factory_type, Context>) {
-      return detail::recursion_guard_wrapper<Leaf>(context, &storage,
-                                                   !storage.is_resolved());
-    } else {
-      return detail::no_materialization_scope();
-    }
+  static constexpr storage_exposure exposed(storage_form) {
+    return storage_exposure::value | storage_exposure::lvalue |
+           storage_exposure::pointer;
   }
-
-  template <typename Storage>
-  static bool retains_source(const Storage &storage) {
-    // Only unresolved shared storage can retain source/dependency state.
-    // Once the instance is resolved, later materialization reads from stable
-    // storage and does not need new persistent source data.
-    return !storage.is_resolved();
-  }
-
-  template <typename Context, typename Storage, typename Container>
-  static auto materialize_source(construction_scope scope, Context &context,
-                                 Storage &storage, Container &container) {
-    return detail::make_resolved_source(
-        storage.resolve(scope, context, container));
-  }
-};
-
-template <typename Type, typename U>
-struct storage_traits<
-    shared, Type, U,
-    std::enable_if_t<!type_traits<Type>::enabled &&
-                     !std::is_reference_v<Type> && !std::is_array_v<Type>>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using value_types = type_list<U>;
-  using lvalue_reference_types = type_list<U &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *>;
-};
-
-template <typename Type, typename U> struct storage_traits<shared, Type *, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<U &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *>;
-};
-
-template <typename T, typename U> struct storage_traits<shared, T[], U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types =
-      type_list<typename detail::wrapper_rebind_leaf<T, U>::type *>;
-};
-
-template <typename T, size_t N, typename U>
-struct storage_traits<shared, T[N], U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using rebound_row_type = typename detail::wrapper_rebind_leaf<T, U>::type;
-  using rebound_exact_type =
-      typename detail::wrapper_rebind_leaf<T[N], U>::type;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<exact_lookup<rebound_exact_type> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types =
-      type_list<rebound_row_type *, exact_lookup<rebound_exact_type> *>;
-};
-
-template <typename Array, typename Deleter, typename U>
-struct storage_traits<shared, std::unique_ptr<Array, Deleter>, U,
-                      std::enable_if_t<std::is_array_v<Array> &&
-                                       (std::extent_v<Array, 0> == 0)>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using handle_type =
-      detail::wrapper_rebind_leaf_t<std::unique_ptr<Array, Deleter>, U>;
-  using pointer_types = typename detail::smart_array_pointer_types<
-      handle_type, std::remove_extent_t<Array>, U>::type;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<handle_type &>;
-  using rvalue_reference_types = type_list<>;
-};
-
-template <typename T, typename Deleter, typename U>
-struct storage_traits<shared, std::unique_ptr<T, Deleter>, U,
-                      std::enable_if_t<!std::is_array_v<T>>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using handle_type =
-      detail::wrapper_rebind_leaf_t<std::unique_ptr<T, Deleter>, U>;
-  using types = detail::wrapper_storage_types<handle_type>;
-
-  using value_types = type_list<U>;
-  using lvalue_reference_types = typename types::lvalue_reference_types;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = typename types::pointer_types;
-};
-
-template <typename Array, typename U>
-struct storage_traits<shared, std::shared_ptr<Array>, U,
-                      std::enable_if_t<std::is_array_v<Array> &&
-                                       (std::extent_v<Array, 0> == 0)>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using handle_type = detail::wrapper_rebind_leaf_t<std::shared_ptr<Array>, U>;
-  using pointer_types = typename detail::smart_array_pointer_types<
-      handle_type, std::remove_extent_t<Array>, U>::type;
-
-  using value_types = type_list<handle_type>;
-  using lvalue_reference_types = type_list<handle_type &>;
-  using rvalue_reference_types = type_list<>;
-};
-
-template <typename T, typename U>
-struct storage_traits<shared, std::shared_ptr<T>, U,
-                      std::enable_if_t<!std::is_array_v<T>>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using handle_type = detail::wrapper_rebind_leaf_t<std::shared_ptr<T>, U>;
-  using types = detail::wrapper_storage_types<handle_type>;
-
-  using value_types =
-      type_list_cat_t<type_list<U>, typename types::copyable_value_types>;
-  using lvalue_reference_types = typename types::lvalue_reference_types;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = typename types::pointer_types;
-};
-
-template <typename T, typename U>
-struct storage_traits<shared, std::optional<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using value_types = type_list<U>;
-  using lvalue_reference_types =
-      type_list<U &, exact_lookup<std::optional<T>> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *, exact_lookup<std::optional<T>> *>;
 };
 
 namespace detail {

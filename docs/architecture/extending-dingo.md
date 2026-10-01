@@ -60,6 +60,16 @@ This trait defines whether a registration can service requests such as:
 The same wrapper may have different exposure rules under `unique`, `shared`, or
 `external` storage.
 
+The built-in scopes do not specialize `storage_traits` per wrapper. Each scope
+is described once by a `storage_scope_policy` specialization (stability,
+consumed versus borrowed source, recursion guard, and the request lists it
+publishes for each `storage_form`), and
+[include/dingo/storage/storage_scope_policy.h](../../include/dingo/storage/storage_scope_policy.h)
+generates `storage_traits` and `storage_materialization_traits` from it. A
+(scope, form) cell that deviates from that rule specializes
+`detail::storage_cell`. A custom wrapper that the built-in forms do not classify
+still specializes `storage_traits` directly, as in the extension example below.
+
 Put a result shape in `value_types` when it is copied from borrowed storage;
 Dingo exposes it only when the resolved type is copy constructible. Put `T&&` in
 `rvalue_reference_types` when the storage produces `T` for consumption; Dingo

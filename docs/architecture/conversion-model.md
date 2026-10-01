@@ -24,8 +24,10 @@ The important source files are:
 
 ## Storage Exposure
 
-`storage_traits` and `resolution_traits` combine into `type_storage_traits`.
-That combined type lists the result forms a stored object may service:
+`storage_traits` and `resolution_traits` combine into `type_storage_traits`. The
+built-in `storage_traits` lists are generated from a per-scope
+`storage_scope_policy` and the shape of the stored type. That combined type
+lists the result forms a stored object may service:
 
 - `value_types`
 - `lvalue_reference_types`
