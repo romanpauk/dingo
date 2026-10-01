@@ -28,14 +28,18 @@ enum class type_reference_kind : std::uint8_t {
 };
 
 struct type_descriptor {
+  // Diagnostics only. Compilers may spell one type differently per
+  // translation unit, so identity is carried by `tag`, never by this text.
   std::string_view raw_name;
+  // Address of the per-type detail::type_tag<T>; null for pointer levels.
+  const char *tag = nullptr;
   type_cv_flags cv = type_cv_flags::none;
   type_reference_kind reference = type_reference_kind::none;
   type_descriptor (*pointee)() = nullptr;
 };
 
 constexpr bool operator==(type_descriptor lhs, type_descriptor rhs) {
-  if (lhs.raw_name != rhs.raw_name || lhs.cv != rhs.cv ||
+  if (lhs.tag != rhs.tag || lhs.cv != rhs.cv ||
       lhs.reference != rhs.reference) {
     return false;
   }
@@ -53,6 +57,11 @@ inline void append_type_name(std::string &name, type_descriptor descriptor);
 
 namespace detail {
 
+// One object per type, merged across translation units by vague linkage, so
+// its address identifies the type regardless of how a compiler spells it.
+// Deliberately not const: identical read-only data may be folded by linkers.
+template <typename T> inline char type_tag = 0;
+
 constexpr bool same_type_shape(type_descriptor lhs, type_descriptor rhs) {
   if (lhs.reference != rhs.reference ||
       (lhs.pointee == nullptr) != (rhs.pointee == nullptr)) {
@@ -60,7 +69,7 @@ constexpr bool same_type_shape(type_descriptor lhs, type_descriptor rhs) {
   }
 
   if (lhs.pointee == nullptr) {
-    return lhs.raw_name == rhs.raw_name;
+    return lhs.tag == rhs.tag;
   }
 
   return same_type_shape(lhs.pointee(), rhs.pointee());
@@ -238,11 +247,13 @@ template <typename T> constexpr type_reference_kind make_type_reference_kind() {
 template <typename T> constexpr type_descriptor make_type_descriptor() {
   if constexpr (std::is_pointer_v<T>) {
     return {{},
+            nullptr,
             make_type_cv_flags<T>(),
             type_reference_kind::none,
             &make_type_descriptor<std::remove_pointer_t<T>>};
   } else {
-    return {raw_type_name<std::remove_cv_t<T>>(), make_type_cv_flags<T>(),
+    return {raw_type_name<std::remove_cv_t<T>>(),
+            &type_tag<std::remove_cv_t<T>>, make_type_cv_flags<T>(),
             type_reference_kind::none, nullptr};
   }
 }
