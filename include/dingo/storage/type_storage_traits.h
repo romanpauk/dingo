@@ -96,9 +96,10 @@ struct storage_source_type<Storage,
 template <typename Storage>
 using storage_source_type_t = typename storage_source_type<Storage>::type;
 
+// The source helpers below read a storage_shape (defined further down).
 template <typename Storage> struct storage_borrow_source {
 private:
-  using source_type = storage_source_type_t<Storage>;
+  using source_type = typename Storage::resolved_type;
 
 public:
   using type = std::conditional_t<std::is_pointer_v<source_type>, source_type,
@@ -109,12 +110,12 @@ template <typename Storage>
 using storage_borrow_source_t = typename storage_borrow_source<Storage>::type;
 
 template <typename Storage>
-using storage_consume_source_t = storage_source_type_t<Storage> &&;
+using storage_consume_source_t = typename Storage::resolved_type &&;
 
 template <typename Storage> struct storage_source_traits {
 private:
   using stored_value_type = remove_cvref_t<typename Storage::type>;
-  using resolved_type = storage_source_type_t<Storage>;
+  using resolved_type = typename Storage::resolved_type;
   using resolved_leaf_type =
       std::conditional_t<std::is_pointer_v<resolved_type>,
                          std::remove_pointer_t<resolved_type>, resolved_type>;
@@ -138,6 +139,21 @@ public:
       !is_pointer ||
       std::is_convertible_v<stored_value_type, interface_type<Interface> *>;
 };
+
+// The part of a storage that resolution shapes are computed from. Factory and
+// the storage tag do not influence them, so keying resolution computation on
+// the shape lets bindings that differ only in those share instantiations.
+template <typename Type, typename Source, typename Conversions>
+struct storage_shape {
+  using type = Type;
+  using resolved_type = Source;
+  using conversions = Conversions;
+};
+
+template <typename Storage>
+using storage_shape_t =
+    storage_shape<typename Storage::type, storage_source_type_t<Storage>,
+                  typename Storage::conversions>;
 
 template <typename Target, typename Qualification> struct qualified_target {
   using type = Target;
@@ -418,15 +434,15 @@ public:
                             Storage, borrow>>;
 };
 
-template <typename Interface, typename Storage> struct binding_resolutions {
+template <typename Interface, typename Shape> struct shape_resolutions {
   using value_resolutions =
-      typename binding_value_resolutions<Interface, Storage>::type;
+      typename binding_value_resolutions<Interface, Shape>::type;
   using lvalue_reference_resolutions =
-      typename binding_lvalue_reference_resolutions<Interface, Storage>::type;
+      typename binding_lvalue_reference_resolutions<Interface, Shape>::type;
   using rvalue_reference_resolutions =
-      typename binding_rvalue_reference_resolutions<Interface, Storage>::type;
+      typename binding_rvalue_reference_resolutions<Interface, Shape>::type;
   using pointer_resolutions =
-      typename binding_pointer_resolutions<Interface, Storage>::type;
+      typename binding_pointer_resolutions<Interface, Shape>::type;
   // Target forms are disjoint across the value, reference, and pointer
   // categories, so concatenating their already-unique lists cannot duplicate
   // a resolution.
@@ -434,6 +450,10 @@ template <typename Interface, typename Storage> struct binding_resolutions {
       type_list_cat_t<value_resolutions, lvalue_reference_resolutions,
                       rvalue_reference_resolutions, pointer_resolutions>;
 };
+
+template <typename Interface, typename Storage>
+using binding_resolutions =
+    shape_resolutions<Interface, storage_shape_t<Storage>>;
 
 } // namespace detail
 

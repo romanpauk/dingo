@@ -183,7 +183,7 @@ template <typename Storage> using registered_type_t = typename Storage::type;
 template <typename Type, typename Storage>
 using runtime_binding_cache_types_t =
     resolution_cache_types_t<typename binding_resolutions<Type, Storage>::type,
-                             Storage>;
+                             storage_shape_t<Storage>>;
 
 template <typename Types>
 static constexpr bool has_runtime_binding_cache_v =

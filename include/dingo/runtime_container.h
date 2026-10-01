@@ -112,7 +112,11 @@ private:
   typename registry_type::runtime_selection
   select_collection_binding(runtime_context_type &context, LookupKey &key) {
     if constexpr (detail::is_no_lookup_key_v<LookupKey>) {
-      auto selection = runtime_registry_.template select_binding<T>(key);
+      auto selection =
+          runtime_registry_
+              .template select_binding<typename request_type<T>::value_type,
+                                       typename request_type<T>::exact_type>(
+                  key);
       if (selection.status == detail::binding_status::ambiguous) {
         throw detail::make_type_ambiguous_exception<T>(context);
       }
@@ -176,8 +180,8 @@ private:
             scope, context, key);
       }
     } else {
-      auto selection =
-          runtime_registry_.template select_binding<lookup_type>(key);
+      auto selection = runtime_registry_.template select_binding<
+          typename Request::value_type, typename Request::exact_type>(key);
       return resolve_request<Request, MayAutoConstruct, R>(
           selection, scope, context, origin, key);
     }
@@ -246,7 +250,8 @@ public:
   detail::binding_status binding_status(IdType &&id) {
     using request = request_type<T>;
     auto key = detail::make_lookup_key(std::forward<IdType>(id));
-    auto status = runtime_registry_.template binding_status<T>(key);
+    auto status = runtime_registry_.template binding_status<
+        typename request::value_type, typename request::exact_type>(key);
     if constexpr (can_resolve_from_parent<request, decltype(key)>()) {
       if (parent_ && status == detail::binding_status::not_found) {
         return parent_->template binding_status<T>(key);
@@ -273,9 +278,8 @@ private:
     using interface_type = typename Request::interface_type;
     if constexpr (detail::cache::supports_v<interface_type> &&
                   !collection_traits<R>::is_collection) {
-      auto selection =
-          runtime_registry_
-              .template select_binding<typename Request::lookup_type>(key);
+      auto selection = runtime_registry_.template select_binding<
+          typename Request::value_type, typename Request::exact_type>(key);
       auto result =
           runtime_registry_.template lookup_cache<interface_type>(selection);
       if (result.hit) {
@@ -457,7 +461,10 @@ private:
 
   template <typename Request, typename Key>
   detail::binding_status binding_status() {
-    return runtime_registry_.template binding_status<Request>(Key{});
+    return runtime_registry_
+        .template binding_status<typename request_type<Request>::value_type,
+                                 typename request_type<Request>::exact_type>(
+            Key{});
   }
 
   template <typename T, typename Key, typename Fn>

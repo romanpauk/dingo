@@ -336,14 +336,14 @@ protected:
     return results;
   }
 
-  template <typename Request, bool AllowMiss, typename LookupKey,
+  template <typename Value, typename Exact, bool AllowMiss, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   detail::binding_status binding_status(runtime_bindings_state *state,
                                         LookupKey key) {
     if (!state) {
       return detail::binding_status::not_found;
     }
-    auto selection = select_binding<Request, AllowMiss>(*state, key);
+    auto selection = select_binding<Value, Exact, AllowMiss>(*state, key);
     return selection.status;
   }
 
@@ -797,11 +797,11 @@ protected:
     }
   };
 
-  template <typename Request, bool AllowMiss, typename LookupKey>
+  template <typename Value, typename Exact, bool AllowMiss, typename LookupKey>
   runtime_selection source_select(runtime_bindings_state *state,
                                   LookupKey key) {
     static_assert(detail::is_lookup_key_v<LookupKey>);
-    return state ? select_binding<Request, AllowMiss>(*state, key)
+    return state ? select_binding<Value, Exact, AllowMiss>(*state, key)
                  : runtime_selection::miss();
   }
 
@@ -861,41 +861,39 @@ protected:
     return result;
   }
 
-  template <typename Request, bool AllowMiss, typename LookupKey>
+  // Selection depends on the request only through its normalized value, its
+  // exact type and the lookup key, so request spellings sharing them share one
+  // chain instantiation.
+  template <typename Value, typename Exact, bool AllowMiss, typename LookupKey>
   runtime_selection select_binding(runtime_bindings_state &state,
                                    LookupKey &key) {
     static_assert(detail::is_lookup_key_v<LookupKey>);
-    using request = request_type<Request>;
-    using lookup_type = typename request::value_type;
-    using exact_type = typename request::exact_type;
     if constexpr (!detail::is_static_lookup_key_definition_v<LookupKey>) {
-      using lookup_route = lookup_index_route<lookup_type, LookupKey>;
+      using lookup_route = lookup_index_route<Value, LookupKey>;
       if constexpr (!lookup_route::has_explicit_lookup &&
-                    !std::is_same_v<lookup_type, exact_type>) {
-        using exact_route = lookup_index_route<exact_type, LookupKey>;
+                    !std::is_same_v<Value, Exact>) {
+        using exact_route = lookup_index_route<Exact, LookupKey>;
         if constexpr (exact_route::has_explicit_lookup) {
-          return select_binding_at_interface<Request, AllowMiss, LookupKey,
-                                             exact_type>(state, key);
+          return select_binding_at_interface<AllowMiss, LookupKey, Exact>(state,
+                                                                          key);
         }
       }
-      return select_binding_at_interface<Request, AllowMiss, LookupKey,
-                                         lookup_type>(state, key);
+      return select_binding_at_interface<AllowMiss, LookupKey, Value>(state,
+                                                                      key);
     } else {
       auto selection =
-          select_binding_at_interface<Request, AllowMiss, LookupKey,
-                                      exact_type>(state, key);
-      if constexpr (!std::is_same_v<lookup_type, exact_type>) {
+          select_binding_at_interface<AllowMiss, LookupKey, Exact>(state, key);
+      if constexpr (!std::is_same_v<Value, Exact>) {
         if (!selection.found()) {
-          selection = select_binding_at_interface<Request, AllowMiss, LookupKey,
-                                                  lookup_type>(state, key);
+          selection = select_binding_at_interface<AllowMiss, LookupKey, Value>(
+              state, key);
         }
       }
       return selection;
     }
   }
 
-  template <typename Request, bool AllowMiss, typename LookupKey,
-            typename Interface>
+  template <bool AllowMiss, typename LookupKey, typename Interface>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
   runtime_selection select_binding_at_interface(runtime_bindings_state &state,
                                                 LookupKey &key) {
@@ -1470,10 +1468,11 @@ protected:
     }
   }
 
-  template <typename Request, typename LookupKey,
+  template <typename Value, typename Exact, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   runtime_selection select_binding(LookupKey key) {
-    return source_select<Request>(std::move(key));
+    return store_type::template source_select<Value, Exact, lookup_may_miss()>(
+        runtime_bindings(), std::move(key));
   }
 
   template <typename T, typename Fn, typename LookupKey,
@@ -1511,10 +1510,10 @@ protected:
         std::move(key));
   }
 
-  template <typename Request, typename LookupKey,
+  template <typename Value, typename Exact, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   detail::binding_status binding_status(LookupKey key) {
-    return store_type::template binding_status<Request, lookup_may_miss()>(
+    return store_type::template binding_status<Value, Exact, lookup_may_miss()>(
         runtime_bindings(), std::move(key));
   }
   template <typename Source> class container_proxy {
@@ -1539,8 +1538,8 @@ protected:
     construction_scope scope;
 
     decltype(auto) select() {
-      return registry.template source_select<typename Request::lookup_type>(
-          key);
+      return registry.template source_select<typename Request::value_type,
+                                             typename Request::exact_type>(key);
     }
 
     template <typename ResolveRequest, typename Selection>
@@ -1564,9 +1563,9 @@ protected:
     }
   };
 
-  template <typename Request, typename LookupKey>
+  template <typename Value, typename Exact, typename LookupKey>
   runtime_selection source_select(LookupKey key) {
-    return store_type::template source_select<Request, lookup_may_miss()>(
+    return store_type::template source_select<Value, Exact, lookup_may_miss()>(
         runtime_bindings(), std::move(key));
   }
 

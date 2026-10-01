@@ -352,7 +352,7 @@ struct binding_temporary_types {
           typename annotated_traits<
               typename InterfaceBinding::interface_type>::type,
           storage_type>::type,
-      storage_type>;
+      storage_shape_t<storage_type>>;
 };
 
 template <typename InterfaceBinding>
