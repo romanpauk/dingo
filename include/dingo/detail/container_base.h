@@ -7,11 +7,26 @@
 
 #pragma once
 
+#include <dingo/registration/type_registration.h>
 #include <dingo/runtime/container_traits.h>
-#include <dingo/runtime_container.h>
+#include <dingo/runtime/registry.h>
 #include <dingo/static/container_traits.h>
 
 #include <type_traits>
+
+namespace dingo {
+
+// The runtime-only facade: the resolve front-end with empty static bindings
+// and a runtime-only configuration.
+template <typename ContainerTraits = dynamic_container_traits,
+          typename Allocator = typename ContainerTraits::allocator_type,
+          typename ParentContainer = void>
+using runtime_container = detail::container_with_static_bindings<
+    static_bindings<>, ParentContainer,
+    detail::static_container_runtime_config<ContainerTraits, Allocator, void,
+                                            void, true>>;
+
+} // namespace dingo
 
 namespace dingo::detail {
 
