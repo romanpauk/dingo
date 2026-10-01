@@ -210,6 +210,46 @@ template <typename Variant, typename Alternative> struct array_variant_ref {
   }
 };
 
+// The leaf of a handle stored under a stable scope is copied out when it is
+// copy constructible and refused when it is not; the stored shape alone decides
+// whether the leaf is also reachable by reference or pointer.
+template <typename Type> struct leaf_access {
+  template <typename Container> static void check(Container &container) {
+    auto &reference = container.template resolve<Type &>();
+    ASSERT_TRUE(is_constructed_value(reference));
+    ASSERT_EQ(std::addressof(reference), container.template resolve<Type *>());
+    ASSERT_EQ(std::addressof(reference),
+              std::addressof(container.template resolve<const Type &>()));
+    auto copy = container.template resolve<Type>();
+    ASSERT_TRUE(is_constructed_value(copy));
+    ASSERT_NE(std::addressof(copy), std::addressof(reference));
+  }
+};
+
+template <typename Type> struct leaf_copy {
+  template <typename Container> static void check(Container &container) {
+    auto copy = container.template resolve<Type>();
+    ASSERT_TRUE(is_constructed_value(copy));
+  }
+};
+
+template <typename Type> struct leaf_access_move_only {
+  template <typename Container> static void check(Container &container) {
+    auto &reference = container.template resolve<Type &>();
+    ASSERT_TRUE(is_constructed_value(reference));
+    ASSERT_EQ(std::addressof(reference), container.template resolve<Type *>());
+    ASSERT_THROW(container.template resolve<Type>(),
+                 dingo::type_not_convertible_exception);
+  }
+};
+
+template <typename Type> struct leaf_refusal {
+  template <typename Container> static void check(Container &container) {
+    ASSERT_THROW(container.template resolve<Type>(),
+                 dingo::type_not_convertible_exception);
+  }
+};
+
 template <typename Request> struct annotated_value {
   template <typename Container> static void check(Container &container) {
     decltype(auto) instance = container.template resolve<Request>();

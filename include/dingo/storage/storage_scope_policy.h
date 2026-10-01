@@ -149,7 +149,7 @@ template <typename T> struct storage_form_traits<T *> {
   static constexpr storage_form form = storage_form::pointer;
 
   template <typename U> struct borrowed {
-    using value_types = type_list<>;
+    using value_types = type_list<U>;
     using lvalue_reference_types = type_list<U &>;
     using pointer_types = type_list<U *>;
   };
@@ -283,8 +283,8 @@ struct storage_form_traits<std::shared_ptr<T>,
         wrapper_storage_types<wrapper_rebind_leaf_t<std::shared_ptr<T>, U>>;
 
   public:
-    using value_types =
-        type_list_cat_t<type_list<U>, typename types::copyable_value_types>;
+    using value_types = type_list_unique_t<
+        type_list_cat_t<type_list<U>, typename types::copyable_value_types>>;
     using lvalue_reference_types = typename types::lvalue_reference_types;
     using pointer_types = typename types::pointer_types;
   };
