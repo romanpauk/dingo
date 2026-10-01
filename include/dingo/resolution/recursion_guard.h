@@ -14,7 +14,7 @@
 
 namespace dingo {
 
-template <typename StaticRegistry> class basic_static_context;
+template <typename StaticRegistry> class static_context;
 
 namespace detail {
 
@@ -35,8 +35,8 @@ template <typename Context>
 inline constexpr bool checks_declared_cycles_v = false;
 
 template <typename StaticRegistry>
-inline constexpr bool
-    checks_declared_cycles_v<basic_static_context<StaticRegistry>> = true;
+inline constexpr bool checks_declared_cycles_v<static_context<StaticRegistry>> =
+    true;
 
 template <>
 inline constexpr bool checks_declared_cycles_v<no_dependency_context> = true;

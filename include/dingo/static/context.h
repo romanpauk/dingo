@@ -18,7 +18,7 @@
 namespace dingo {
 
 template <typename StaticRegistry>
-class basic_static_context : public detail::context_path_state {
+class static_context : public detail::context_path_state {
   using execution_traits =
       detail::basic_static_execution_traits<StaticRegistry>;
   static constexpr std::size_t frame_capacity_ =
@@ -46,9 +46,9 @@ public:
                                    temporary_slot_capacity_,
                                    temporary_slot_size_, temporary_slot_align_>;
 
-  basic_static_context() { frames_[0] = &frame_; }
+  static_context() { frames_[0] = &frame_; }
 
-  ~basic_static_context() {
+  ~static_context() {
     while (frame_count_ != 0) {
       frames_[--frame_count_]->reset();
     }
@@ -153,8 +153,5 @@ private:
   std::size_t frame_count_ = 1;
   frame_type frame_;
 };
-
-template <typename StaticRegistry>
-using static_context = basic_static_context<StaticRegistry>;
 
 } // namespace dingo
