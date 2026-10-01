@@ -14,7 +14,11 @@
 #include <dingo/type/type_list.h>
 
 #include <algorithm>
+#include <array>
+#include <cstddef>
+#include <tuple>
 #include <type_traits>
+#include <utility>
 
 namespace dingo {
 
@@ -24,302 +28,61 @@ struct shared_cyclical;
 
 namespace detail {
 
+// A static binding graph is analysed as constexpr data. The bindings reachable
+// from a registry (its interface bindings followed by the local bindings its
+// registrations declare) are numbered once, every dependency becomes an index
+// into that numbering, and the topology and the execution bounds are computed
+// by plain constexpr functions over std::array tables. Only the per-binding
+// leaves that read types (dependency lists, temporary storage, costs) are
+// templates.
+
+inline constexpr std::size_t graph_npos = static_cast<std::size_t>(-1);
+
+// ---------------------------------------------------------------------------
+// Type-level introspection of a graph, used by static_graph.
+// ---------------------------------------------------------------------------
+
 template <typename Binding, typename DependencyBindings> struct graph_node {
   using binding_type = Binding;
   using dependency_bindings = DependencyBindings;
 };
 
-template <typename DependencyBindings>
-struct filter_resolved_dependency_bindings;
-
-template <> struct filter_resolved_dependency_bindings<void> {
-  using type = type_list<>;
-};
-
-template <> struct filter_resolved_dependency_bindings<type_list<>> {
-  using type = type_list<>;
-};
-
-template <typename Head, typename... Tail>
-struct filter_resolved_dependency_bindings<type_list<Head, Tail...>> {
-private:
-  using tail_type =
-      typename filter_resolved_dependency_bindings<type_list<Tail...>>::type;
-
-public:
-  using type = std::conditional_t<std::is_void_v<Head>, tail_type,
-                                  type_list_cat_t<type_list<Head>, tail_type>>;
-};
-
-template <typename DependencyBindings>
-using filter_resolved_dependency_bindings_t =
-    typename filter_resolved_dependency_bindings<DependencyBindings>::type;
-
-template <typename InterfaceBinding, typename StaticRegistry,
-          bool RuntimeDependencies = false>
+template <typename InterfaceBinding, typename StaticRegistry>
 struct static_graph_node {
-  using binding_model_type = typename InterfaceBinding::binding_model_type;
-  using type = graph_node<
-      InterfaceBinding,
-      resolved_dependency_bindings_t<
-          binding_model_type, typename StaticRegistry::interface_bindings>>;
+  using type = graph_node<InterfaceBinding,
+                          resolved_dependency_bindings_t<
+                              typename InterfaceBinding::binding_model_type,
+                              typename StaticRegistry::interface_bindings>>;
 };
 
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_node<void, StaticRegistry, RuntimeDependencies> {
+template <typename StaticRegistry>
+struct static_graph_node<void, StaticRegistry> {
   using type = void;
 };
 
 template <typename InterfaceBinding, typename StaticRegistry>
-struct static_graph_node<InterfaceBinding, StaticRegistry, true> {
-  using binding_model_type = typename InterfaceBinding::binding_model_type;
-  using type = graph_node<
-      InterfaceBinding,
-      filter_resolved_dependency_bindings_t<resolved_dependency_bindings_t<
-          binding_model_type, typename StaticRegistry::interface_bindings>>>;
-};
-
-template <typename InterfaceBinding, typename StaticRegistry,
-          bool RuntimeDependencies = false>
 using static_graph_node_t =
-    typename static_graph_node<InterfaceBinding, StaticRegistry,
-                               RuntimeDependencies>::type;
+    typename static_graph_node<InterfaceBinding, StaticRegistry>::type;
 
-template <typename Bindings, typename StaticRegistry,
-          typename Visiting = type_list<>>
-struct static_bindings_resolvable;
-
-template <typename Binding, typename StaticRegistry,
-          typename Visiting = type_list<>,
-          bool InVisiting = type_list_contains_v<Binding, Visiting>>
-struct static_binding_resolvable;
-
-template <typename Binding>
-struct static_binding_uses_cyclical_storage
-    : std::is_same<typename Binding::binding_model_type::storage_tag,
-                   shared_cyclical> {};
-
-template <typename Binding>
-inline constexpr bool static_binding_uses_cyclical_storage_v =
-    static_binding_uses_cyclical_storage<Binding>::value;
-
-template <typename Binding, typename Visiting> struct static_cycle_path;
-
-template <typename Binding> struct static_cycle_path<Binding, type_list<>> {
-  using type = type_list<>;
-};
-
-template <typename Binding, typename Head, typename... Tail>
-struct static_cycle_path<Binding, type_list<Head, Tail...>> {
-  using tail_path =
-      typename static_cycle_path<Binding, type_list<Tail...>>::type;
-  using type = std::conditional_t<std::is_same_v<Binding, Head>,
-                                  type_list<Head, Tail...>, tail_path>;
-};
-
-template <typename Binding, typename Visiting>
-using static_cycle_path_t = typename static_cycle_path<Binding, Visiting>::type;
-
-template <typename Bindings> struct static_bindings_use_cyclical_storage;
-
-template <>
-struct static_bindings_use_cyclical_storage<type_list<>> : std::true_type {};
-
-template <typename... Bindings>
-struct static_bindings_use_cyclical_storage<type_list<Bindings...>>
-    : std::bool_constant<(static_binding_uses_cyclical_storage_v<Bindings> &&
-                          ...)> {};
-
-template <typename Binding, typename Visiting>
-inline constexpr bool static_cycle_uses_cyclical_storage_v =
-    static_bindings_use_cyclical_storage<
-        static_cycle_path_t<Binding, Visiting>>::value;
-
-template <typename StaticRegistry, typename Visiting>
-struct static_binding_resolvable<void, StaticRegistry, Visiting, false>
-    : std::false_type {};
-
-template <typename Binding, typename StaticRegistry, typename Visiting>
-struct static_binding_resolvable<Binding, StaticRegistry, Visiting, true>
-    : std::bool_constant<
-          static_cycle_uses_cyclical_storage_v<Binding, Visiting>> {};
-
-template <typename Binding, typename StaticRegistry, typename Visiting>
-struct static_binding_resolvable<Binding, StaticRegistry, Visiting, false>
-    : static_bindings_resolvable<
-          typename static_graph_node_t<Binding, StaticRegistry,
-                                       false>::dependency_bindings,
-          StaticRegistry, type_list_cat_t<Visiting, type_list<Binding>>> {};
-
-template <typename StaticRegistry, typename Visiting>
-struct static_bindings_resolvable<type_list<>, StaticRegistry, Visiting>
-    : std::true_type {};
-
-template <typename StaticRegistry, typename Visiting>
-struct static_bindings_resolvable<void, StaticRegistry, Visiting>
-    : std::false_type {};
-
-template <typename... Bindings, typename StaticRegistry, typename Visiting>
-struct static_bindings_resolvable<type_list<Bindings...>, StaticRegistry,
-                                  Visiting>
-    : std::bool_constant<(static_binding_resolvable<Bindings, StaticRegistry,
-                                                    Visiting>::value &&
-                          ...)> {};
-
-template <typename Binding, typename StaticRegistry>
-inline constexpr bool static_binding_resolvable_v =
-    static_binding_resolvable<Binding, StaticRegistry>::value;
-
-template <typename Bindings, typename StaticRegistry>
-inline constexpr bool static_bindings_resolvable_v =
-    static_bindings_resolvable<Bindings, StaticRegistry>::value;
-
-template <typename InterfaceBindings, typename StaticRegistry,
-          bool RuntimeDependencies = false>
-struct static_graph_nodes;
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_nodes<type_list<>, StaticRegistry, RuntimeDependencies> {
-  using type = type_list<>;
-};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_nodes<void, StaticRegistry, RuntimeDependencies> {
+template <typename InterfaceBindings, typename StaticRegistry>
+struct static_graph_nodes {
   using type = void;
 };
 
-template <typename... InterfaceBindings, typename StaticRegistry,
-          bool RuntimeDependencies>
-struct static_graph_nodes<type_list<InterfaceBindings...>, StaticRegistry,
-                          RuntimeDependencies> {
-  using type = type_list<static_graph_node_t<InterfaceBindings, StaticRegistry,
-                                             RuntimeDependencies>...>;
-};
-
-template <typename InterfaceBindings, typename StaticRegistry,
-          bool RuntimeDependencies = false>
-using static_graph_nodes_t =
-    typename static_graph_nodes<InterfaceBindings, StaticRegistry,
-                                RuntimeDependencies>::type;
-
-template <typename DependencyBindings, typename StaticRegistry>
-struct dependency_graph_nodes;
-
-template <typename StaticRegistry>
-struct dependency_graph_nodes<void, StaticRegistry> {
-  using type = void;
-};
-
-template <typename StaticRegistry>
-struct dependency_graph_nodes<type_list<>, StaticRegistry> {
-  using type = type_list<>;
-};
-
-template <typename... DependencyBindings, typename StaticRegistry>
-struct dependency_graph_nodes<type_list<DependencyBindings...>,
-                              StaticRegistry> {
+template <typename... InterfaceBindings, typename StaticRegistry>
+struct static_graph_nodes<type_list<InterfaceBindings...>, StaticRegistry> {
   using type =
-      type_list<static_graph_node_t<DependencyBindings, StaticRegistry>...>;
+      type_list<static_graph_node_t<InterfaceBindings, StaticRegistry>...>;
 };
 
-template <typename DependencyBindings, typename StaticRegistry>
-using dependency_graph_nodes_t =
-    typename dependency_graph_nodes<DependencyBindings, StaticRegistry>::type;
+template <typename InterfaceBindings, typename StaticRegistry>
+using static_graph_nodes_t =
+    typename static_graph_nodes<InterfaceBindings, StaticRegistry>::type;
 
-template <typename StorageTag> struct static_retains_frame : std::false_type {};
-
-template <> struct static_retains_frame<shared> : std::true_type {};
-
-template <typename StorageTag>
-inline constexpr bool static_retains_frame_v =
-    static_retains_frame<StorageTag>::value;
-
-template <typename StorageTag>
-struct static_storage_rollback_cost : std::integral_constant<std::size_t, 0> {};
-
-template <>
-struct static_storage_rollback_cost<shared_cyclical>
-    : std::integral_constant<std::size_t, 1> {};
-
-template <typename StorageTag>
-inline constexpr std::size_t static_storage_rollback_cost_v =
-    static_storage_rollback_cost<StorageTag>::value;
-
-template <typename StorageTag>
-struct static_storage_temporary_slot_cost
-    : std::integral_constant<std::size_t, 0> {};
-
-template <>
-struct static_storage_temporary_slot_cost<unique>
-    : std::integral_constant<std::size_t, 1> {};
-
-template <>
-struct static_storage_temporary_slot_cost<shared_cyclical>
-    : std::integral_constant<std::size_t, 1> {};
-
-template <typename StorageTag>
-inline constexpr std::size_t static_storage_temporary_slot_cost_v =
-    static_storage_temporary_slot_cost<StorageTag>::value;
-
-template <typename StorageTag>
-struct static_storage_temporary_size : std::integral_constant<std::size_t, 0> {
-};
-
-template <>
-struct static_storage_temporary_size<shared_cyclical>
-    : std::integral_constant<std::size_t, sizeof(void *)> {};
-
-template <typename StorageTag>
-inline constexpr std::size_t static_storage_temporary_size_v =
-    static_storage_temporary_size<StorageTag>::value;
-
-template <typename StorageTag>
-struct static_storage_temporary_align : std::integral_constant<std::size_t, 0> {
-};
-
-template <>
-struct static_storage_temporary_align<shared_cyclical>
-    : std::integral_constant<std::size_t, alignof(void *)> {};
-
-template <typename StorageTag>
-inline constexpr std::size_t static_storage_temporary_align_v =
-    static_storage_temporary_align<StorageTag>::value;
-
-template <typename Request>
-using static_request_type_t = std::remove_cv_t<
-    std::remove_reference_t<typename annotated_traits<Request>::type>>;
-
-template <typename Request>
-inline constexpr bool static_request_uses_temporary_slot_v =
-    !std::is_reference_v<typename annotated_traits<Request>::type> &&
-    !std::is_pointer_v<typename annotated_traits<Request>::type>;
-
-template <typename Request>
-inline constexpr std::size_t static_request_temporary_slot_cost_v =
-    static_request_uses_temporary_slot_v<Request> ? 1 : 0;
-
-template <typename Request>
-inline constexpr std::size_t static_request_temporary_size_v =
-    static_request_uses_temporary_slot_v<Request>
-        ? sizeof(static_request_type_t<Request>)
-        : 0;
-
-template <typename Request>
-inline constexpr std::size_t static_request_temporary_align_v =
-    static_request_uses_temporary_slot_v<Request>
-        ? alignof(static_request_type_t<Request>)
-        : 0;
-
-template <typename Request>
-inline constexpr std::size_t static_request_destructible_cost_v =
-    !std::is_trivially_destructible_v<
-        std::remove_cv_t<std::remove_reference_t<Request>>>
-        ? 1
-        : 0;
-
-template <typename InterfaceBinding>
-inline constexpr bool static_binding_is_stable_v =
-    InterfaceBinding::binding_model_type::storage_type::conversions::is_stable;
+// ---------------------------------------------------------------------------
+// Temporary conversion storage of a binding. This leaf reads the resolution
+// operations of the binding and stays a template.
+// ---------------------------------------------------------------------------
 
 template <typename Types> struct temporary_storage_traits;
 
@@ -369,967 +132,889 @@ template <typename InterfaceBinding>
 using binding_temporary_storage_traits =
     temporary_storage_traits<binding_temporary_types_t<InterfaceBinding>>;
 
-template <typename InterfaceBinding>
-inline constexpr std::size_t static_binding_self_temporary_slot_cost_v =
-    std::max({binding_temporary_storage_traits<InterfaceBinding>::slots,
-              static_storage_temporary_slot_cost_v<
-                  typename InterfaceBinding::binding_model_type::storage_tag>,
-              std::size_t{0}});
+// ---------------------------------------------------------------------------
+// Numbering of the bindings of a graph.
+// ---------------------------------------------------------------------------
 
-template <typename InterfaceBinding>
-inline constexpr std::size_t static_binding_self_destructible_slot_cost_v =
-    std::max(
-        {binding_temporary_storage_traits<InterfaceBinding>::destructible_slots,
-         static_binding_self_temporary_slot_cost_v<InterfaceBinding> != 0 &&
-                 !std::is_trivially_destructible_v<
-                     typename InterfaceBinding::binding_model_type::
-                         storage_type::type>
-             ? std::size_t{1}
-             : std::size_t{0},
-         static_storage_rollback_cost_v<
-             typename InterfaceBinding::binding_model_type::storage_tag>,
-         std::size_t{0}});
+template <typename LocalBindings> struct graph_local_bindings {
+  using type = type_list<>;
+};
 
-template <typename Dependencies> struct static_dependency_destructible_cost;
+template <typename... LocalRegistrations>
+struct graph_local_bindings<static_bindings<LocalRegistrations...>> {
+  using type = static_registry_bindings_t<LocalRegistrations...>;
+};
 
-template <typename Dependencies> struct static_dependency_temporary_slot_cost;
+template <typename... Bindings>
+constexpr bool graph_any_local_bindings(type_list<Bindings...>) {
+  return (
+      !std::is_void_v<typename Bindings::binding_model_type::bindings_type> ||
+      ...);
+}
 
-template <typename Dependencies> struct static_dependency_temporary_size;
+// The graph nodes are the interface bindings of the registry followed by the
+// local bindings declared by its registrations, transitively. A local binding
+// is only a node when some registration declares it.
+template <typename Bindings,
+          bool HasLocalBindings = graph_any_local_bindings(Bindings{})>
+struct graph_universe {
+  using type = Bindings;
+};
 
-template <typename Dependencies> struct static_dependency_temporary_align;
+template <typename... Bindings>
+struct graph_universe<type_list<Bindings...>, true> {
+  using type = type_list_cat_t<
+      type_list<Bindings...>,
+      typename graph_universe<type_list_cat_t<typename graph_local_bindings<
+          typename Bindings::binding_model_type::bindings_type>::type...>>::
+          type>;
+};
 
-template <typename Requests, typename Bindings, typename StaticRegistry>
-struct static_dependency_retained_destructible_slots;
+// Returns the first position of Binding in Universe, or graph_npos for a
+// binding that is not a node (void stands for a dependency without a binding).
+template <typename Binding, typename... Universe>
+constexpr std::size_t graph_type_index() {
+  constexpr bool same[] = {std::is_same_v<Binding, Universe>..., false};
+  for (std::size_t i = 0; i < sizeof...(Universe); ++i) {
+    if (same[i]) {
+      return i;
+    }
+  }
+  return graph_npos;
+}
 
-template <typename Requests, typename Bindings, typename StaticRegistry>
-struct static_dependency_peak_destructible_slots;
+template <typename Binding, typename Universe> struct graph_type_index_in;
 
-template <typename Request, typename Binding, typename StaticRegistry>
-struct static_request_retained_destructible_slots;
+template <typename Binding, typename... Universe>
+struct graph_type_index_in<Binding, type_list<Universe...>>
+    : std::integral_constant<std::size_t,
+                             graph_type_index<Binding, Universe...>()> {};
 
-template <typename Request, typename Binding, typename StaticRegistry>
-struct static_request_peak_destructible_slots;
+// A dependency request that selects a unique binding of the host bindings by
+// interface alone is looked up in the host binding index. Missing and
+// ambiguous requests have no binding.
+template <typename Lookup, typename Tag, typename = void>
+struct graph_lookup_hit {
+  static constexpr std::size_t index = graph_npos;
+};
 
-template <typename Binding, typename StaticRegistry>
-struct static_binding_retained_destructible_slots;
+template <typename Lookup, typename Tag>
+struct graph_lookup_hit<Lookup, Tag,
+                        std::void_t<decltype(Lookup::select(Tag{}))>> {
+  static constexpr std::size_t index = decltype(Lookup::select(Tag{}))::index;
+};
 
-template <typename Binding, typename StaticRegistry>
-struct static_binding_peak_destructible_slots;
+// ---------------------------------------------------------------------------
+// Structure: flags and dependency edges of every node.
+// ---------------------------------------------------------------------------
 
-template <typename Requests, typename Bindings, typename StaticRegistry>
-struct static_dependency_retained_temporary_slots;
+// The edges of a node are a slice of the shared edge array. There is one edge
+// per declared dependency request, graph_npos when the request has no binding,
+// and one edge per matching binding for a collection request.
+struct graph_vertex {
+  // The binding uses shared_cyclical storage and may take part in a cycle.
+  bool cyclical;
+  // The binding model declares its dependency requests.
+  bool requests_known;
+  // The requests are declared or can be detected from the factory.
+  bool dependencies_known;
+  // The requests are declared and none is a collection, so every request owns
+  // exactly one edge and its execution bound can be computed precisely.
+  bool bounds_known;
+  std::size_t edge_begin;
+  std::size_t edge_count;
+};
 
-template <typename Requests, typename Bindings, typename StaticRegistry>
-struct static_dependency_peak_temporary_slots;
+template <std::size_t Vertices, std::size_t Edges> struct graph_structure {
+  std::array<graph_vertex, Vertices> vertices;
+  std::array<std::size_t, Edges> edges;
+};
 
-template <typename Request, typename Binding, typename StaticRegistry>
-struct static_request_retained_temporary_slots;
+// The requests of a binding are the declared dependencies, or the ones detected
+// from its factory when none are declared.
+template <typename Model,
+          bool Declared = !std::is_void_v<binding_dependencies_t<Model>>>
+struct graph_requests {
+  using type = binding_dependencies_t<Model>;
+};
 
-template <typename Request, typename Binding, typename StaticRegistry>
-struct static_request_peak_temporary_slots;
+template <typename Model> struct graph_requests<Model, false> {
+  using type =
+      typename factory_traits<typename Model::factory_type>::dependencies;
+};
 
-template <typename Binding, typename StaticRegistry>
-struct static_binding_retained_temporary_slots;
+template <typename Request> constexpr bool graph_request_is_collection() {
+  return collection_traits<
+      binding_dependency_interface_t<Request>>::is_collection;
+}
 
-template <typename Binding, typename StaticRegistry>
-struct static_binding_peak_temporary_slots;
+constexpr bool graph_requests_bounded(void *) { return false; }
 
-template <typename Request, typename StaticRegistry>
-struct static_request_retained_destructible_slots<Request, void, StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
+template <typename... Requests>
+constexpr bool graph_requests_bounded(type_list<Requests...> *) {
+  return (!graph_request_is_collection<Requests>() && ...);
+}
 
-template <typename Request, typename StaticRegistry>
-struct static_request_peak_destructible_slots<Request, void, StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry>
-struct static_binding_retained_destructible_slots<void, StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry>
-struct static_binding_peak_destructible_slots<void, StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename Request, typename StaticRegistry>
-struct static_request_retained_temporary_slots<Request, void, StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename Request, typename StaticRegistry>
-struct static_request_peak_temporary_slots<Request, void, StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry>
-struct static_binding_retained_temporary_slots<void, StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry>
-struct static_binding_peak_temporary_slots<void, StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <>
-struct static_dependency_destructible_cost<void>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <>
-struct static_dependency_destructible_cost<type_list<>>
-    : std::integral_constant<std::size_t, 0> {};
+constexpr std::size_t graph_slot_count(void *) { return 0; }
 
 template <typename... Dependencies>
-struct static_dependency_destructible_cost<type_list<Dependencies...>>
-    : std::integral_constant<std::size_t,
-                             (static_request_destructible_cost_v<Dependencies> +
-                              ... + std::size_t{0})> {};
+constexpr std::size_t graph_slot_count(type_list<Dependencies...> *) {
+  return sizeof...(Dependencies);
+}
 
-template <>
-struct static_dependency_temporary_slot_cost<void>
-    : std::integral_constant<std::size_t, 0> {};
+template <typename Host, typename Request>
+constexpr std::size_t graph_request_slots() {
+  if constexpr (graph_request_is_collection<Request>()) {
+    using dependency = binding_dependency_interface_t<Request>;
+    return binding_count_v<
+        normalized_type_t<typename collection_traits<dependency>::resolve_type>,
+        binding_dependency_key_t<Request>, Host>;
+  } else {
+    return 1;
+  }
+}
 
-template <>
-struct static_dependency_temporary_slot_cost<type_list<>>
-    : std::integral_constant<std::size_t, 0> {};
+template <typename Host> constexpr std::size_t graph_requests_slots(void *) {
+  return 0;
+}
 
-template <typename... Dependencies>
-struct static_dependency_temporary_slot_cost<type_list<Dependencies...>>
-    : std::integral_constant<
-          std::size_t, (static_request_temporary_slot_cost_v<Dependencies> +
-                        ... + std::size_t{0})> {};
+template <typename Host, typename... Requests>
+constexpr std::size_t graph_requests_slots(type_list<Requests...> *) {
+  return (std::size_t{0} + ... + graph_request_slots<Host, Requests>());
+}
 
-template <>
-struct static_dependency_temporary_size<void>
-    : std::integral_constant<std::size_t, 0> {};
+// Number of edges of a binding: one per matching binding of its requests,
+// resolved against the host bindings and the local bindings of its model.
+template <typename Host, typename Binding>
+constexpr std::size_t graph_node_slots() {
+  using model = typename Binding::binding_model_type;
+  if constexpr (std::is_void_v<typename model::bindings_type>) {
+    return graph_requests_slots<Host>(
+        static_cast<typename graph_requests<model>::type *>(nullptr));
+  } else {
+    return graph_slot_count(
+        static_cast<resolved_dependency_bindings_t<model, Host> *>(nullptr));
+  }
+}
 
-template <>
-struct static_dependency_temporary_size<type_list<>>
-    : std::integral_constant<std::size_t, 0> {};
+template <typename Universe, std::size_t Edges>
+constexpr void graph_write_bindings(void *, std::array<std::size_t, Edges> &,
+                                    std::size_t) {}
 
-template <typename... Dependencies>
-struct static_dependency_temporary_size<type_list<Dependencies...>>
-    : std::integral_constant<
-          std::size_t,
-          std::max({static_request_temporary_size_v<Dependencies>...,
-                    std::size_t{0}})> {};
+template <typename Universe, typename... Dependencies, std::size_t Edges>
+constexpr void graph_write_bindings(type_list<Dependencies...> *,
+                                    std::array<std::size_t, Edges> &edges,
+                                    std::size_t at) {
+  ((edges[at++] = graph_type_index_in<Dependencies, Universe>::value), ...);
+  (void)edges;
+  (void)at;
+}
 
-template <>
-struct static_dependency_temporary_align<void>
-    : std::integral_constant<std::size_t, 0> {};
+template <typename Host, typename Universe, typename Request, std::size_t Edges>
+constexpr void graph_write_request(std::array<std::size_t, Edges> &edges,
+                                   std::size_t at) {
+  using dependency = binding_dependency_interface_t<Request>;
+  using key = binding_dependency_key_t<Request>;
 
-template <>
-struct static_dependency_temporary_align<type_list<>>
-    : std::integral_constant<std::size_t, 0> {};
+  if constexpr (graph_request_is_collection<Request>()) {
+    graph_write_bindings<Universe>(
+        static_cast<bindings_t<normalized_type_t<typename collection_traits<
+                                   dependency>::resolve_type>,
+                               key, Host> *>(nullptr),
+        edges, at);
+  } else if constexpr (is_no_lookup_key_v<key>) {
+    edges[at] = graph_lookup_hit<binding_lookup_index<Host>,
+                                 binding_lookup_tag<dependency, key>>::index;
+  } else {
+    edges[at] =
+        graph_type_index_in<binding_t<dependency, key, Host>, Universe>::value;
+  }
+}
 
-template <typename... Dependencies>
-struct static_dependency_temporary_align<type_list<Dependencies...>>
-    : std::integral_constant<
-          std::size_t,
-          std::max({static_request_temporary_align_v<Dependencies>...,
-                    std::size_t{0}})> {};
+template <typename Host, typename Universe, std::size_t Edges>
+constexpr void graph_write_requests(void *, std::array<std::size_t, Edges> &,
+                                    std::size_t) {}
 
-template <typename InterfaceBinding>
-inline constexpr std::size_t static_binding_retained_frame_cost_v =
-    static_retains_frame_v<
-        typename InterfaceBinding::binding_model_type::storage_tag>
-        ? 1
-        : 0;
+template <typename Host, typename Universe, typename... Requests,
+          std::size_t Edges>
+constexpr void graph_write_requests(type_list<Requests...> *,
+                                    std::array<std::size_t, Edges> &edges,
+                                    std::size_t at) {
+  ((graph_write_request<Host, Universe, Requests>(edges, at),
+    at += graph_request_slots<Host, Requests>()),
+   ...);
+  (void)edges;
+  (void)at;
+}
 
-template <typename InterfaceBinding>
-inline constexpr std::size_t static_binding_destructible_slot_cost_v =
-    static_dependency_destructible_cost<
-        typename InterfaceBinding::binding_model_type::dependencies_type::
-            type>::value +
-    binding_temporary_storage_traits<InterfaceBinding>::destructible_slots +
-    (!std::is_trivially_destructible_v<
-         typename InterfaceBinding::binding_model_type::storage_type::type>
-         ? 1
-         : 0) +
-    static_storage_rollback_cost_v<
-        typename InterfaceBinding::binding_model_type::storage_tag>;
+template <typename Host, typename Universe, typename Binding,
+          std::size_t Vertices, std::size_t Edges>
+constexpr void graph_add_vertex(graph_structure<Vertices, Edges> &structure,
+                                std::size_t &edge, std::size_t vertex) {
+  using model = typename Binding::binding_model_type;
+  using requests = typename graph_requests<model>::type;
 
-template <typename InterfaceBinding>
-inline constexpr std::size_t static_binding_temporary_slot_cost_v =
-    static_dependency_temporary_slot_cost<
-        typename InterfaceBinding::binding_model_type::dependencies_type::
-            type>::value +
-    binding_temporary_storage_traits<InterfaceBinding>::slots +
-    static_storage_temporary_slot_cost_v<
-        typename InterfaceBinding::binding_model_type::storage_tag>;
+  constexpr std::size_t slots = graph_node_slots<Host, Binding>();
+  structure.vertices[vertex] =
+      graph_vertex{std::is_same_v<typename model::storage_tag, shared_cyclical>,
+                   !std::is_void_v<binding_dependencies_t<model>>,
+                   !std::is_void_v<requests>,
+                   graph_requests_bounded(
+                       static_cast<binding_dependencies_t<model> *>(nullptr)),
+                   edge,
+                   slots};
+  if constexpr (std::is_void_v<typename model::bindings_type>) {
+    graph_write_requests<Host, Universe>(static_cast<requests *>(nullptr),
+                                         structure.edges, edge);
+  } else {
+    graph_write_bindings<Universe>(
+        static_cast<resolved_dependency_bindings_t<model, Host> *>(nullptr),
+        structure.edges, edge);
+  }
+  edge += slots;
+}
 
-template <typename InterfaceBinding>
-inline constexpr std::size_t static_binding_max_temporary_size_v = std::max(
-    {static_dependency_temporary_size<
-         typename InterfaceBinding::binding_model_type::dependencies_type::
-             type>::value,
-     binding_temporary_storage_traits<InterfaceBinding>::size,
-     sizeof(typename InterfaceBinding::binding_model_type::storage_type::type),
-     static_storage_temporary_size_v<
-         typename InterfaceBinding::binding_model_type::storage_tag>,
-     std::size_t{0}});
+template <typename Host, typename... Bindings>
+constexpr auto graph_make_structure(type_list<Bindings...>) {
+  using universe = type_list<Bindings...>;
+  constexpr std::size_t edges =
+      (std::size_t{0} + ... + graph_node_slots<Host, Bindings>());
 
-template <typename InterfaceBinding>
-inline constexpr std::size_t static_binding_max_temporary_align_v = std::max(
-    {static_dependency_temporary_align<
-         typename InterfaceBinding::binding_model_type::dependencies_type::
-             type>::value,
-     binding_temporary_storage_traits<InterfaceBinding>::align,
-     alignof(typename InterfaceBinding::binding_model_type::storage_type::type),
-     static_storage_temporary_align_v<
-         typename InterfaceBinding::binding_model_type::storage_tag>,
-     std::size_t{0}});
+  graph_structure<sizeof...(Bindings), edges> structure{};
+  std::size_t vertex = 0;
+  std::size_t edge = 0;
+  (graph_add_vertex<Host, universe, Bindings>(structure, edge, vertex++), ...);
+  (void)vertex;
+  (void)edge;
+  return structure;
+}
+
+// ---------------------------------------------------------------------------
+// Topology: resolvability, cycles and topological order.
+// ---------------------------------------------------------------------------
+
+template <std::size_t Vertices> struct graph_topology {
+  // False when some cycle contains a binding that is not shared_cyclical.
+  bool resolvable;
+  // A legal (all shared_cyclical) cycle was reached before the traversal ended.
+  bool contains_cycle;
+  std::size_t order_size;
+  // Reachable nodes with dependencies before dependents.
+  std::array<std::size_t, Vertices> order;
+};
+
+constexpr unsigned char graph_unvisited = 0;
+constexpr unsigned char graph_visiting = 1;
+constexpr unsigned char graph_visited = 2;
+
+// A dependency on the node at the given stack position closes a cycle made of
+// the nodes visited since; it is legal only when all of them are
+// shared_cyclical.
+template <std::size_t Vertices, std::size_t Edges>
+constexpr bool
+graph_cycle_is_legal(const graph_structure<Vertices, Edges> &structure,
+                     const std::array<std::size_t, Vertices> &stack,
+                     std::size_t depth, std::size_t node) {
+  std::size_t first = depth - 1;
+  while (stack[first] != node) {
+    --first;
+  }
+  for (std::size_t i = first; i < depth; ++i) {
+    if (!structure.vertices[stack[i]].cyclical) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Depth-first traversal from the first `roots` nodes in order. An illegal cycle
+// ends the traversal.
+template <std::size_t Vertices, std::size_t Edges>
+constexpr graph_topology<Vertices>
+graph_sort(const graph_structure<Vertices, Edges> &structure,
+           std::size_t roots) {
+  graph_topology<Vertices> topology{true, false, 0, {}};
+  std::array<unsigned char, Vertices> state{};
+  std::array<std::size_t, Vertices> stack{};
+  std::array<std::size_t, Vertices> cursor{};
+
+  for (std::size_t root = 0; root < roots; ++root) {
+    if (state[root] != graph_unvisited) {
+      continue;
+    }
+
+    std::size_t depth = 1;
+    state[root] = graph_visiting;
+    stack[0] = root;
+    cursor[0] = structure.vertices[root].edge_begin;
+    while (depth != 0) {
+      const std::size_t node = stack[depth - 1];
+      const graph_vertex &vertex = structure.vertices[node];
+      if (cursor[depth - 1] == vertex.edge_begin + vertex.edge_count) {
+        state[node] = graph_visited;
+        topology.order[topology.order_size++] = node;
+        --depth;
+        continue;
+      }
+
+      const std::size_t next = structure.edges[cursor[depth - 1]++];
+      if (next == graph_npos || state[next] == graph_visited) {
+        continue;
+      }
+      if (state[next] == graph_visiting) {
+        if (!graph_cycle_is_legal(structure, stack, depth, next)) {
+          topology.resolvable = false;
+          return topology;
+        }
+        topology.contains_cycle = true;
+        continue;
+      }
+
+      state[next] = graph_visiting;
+      stack[depth] = next;
+      cursor[depth] = structure.vertices[next].edge_begin;
+      ++depth;
+    }
+  }
+  return topology;
+}
+
+// Nodes reachable from the dependencies of `from`, and `from` itself when it
+// is `included`.
+template <std::size_t Vertices, std::size_t Edges>
+constexpr std::array<bool, Vertices>
+graph_reachable(const graph_structure<Vertices, Edges> &structure,
+                std::size_t from, bool included) {
+  std::array<bool, Vertices> reachable{};
+  std::array<std::size_t, Vertices + 1> stack{};
+  std::size_t depth = 1;
+  reachable[from] = included;
+  stack[0] = from;
+  while (depth != 0) {
+    const graph_vertex &vertex = structure.vertices[stack[--depth]];
+    for (std::size_t i = 0; i < vertex.edge_count; ++i) {
+      const std::size_t next = structure.edges[vertex.edge_begin + i];
+      if (next != graph_npos && !reachable[next]) {
+        reachable[next] = true;
+        stack[depth++] = next;
+      }
+    }
+  }
+  return reachable;
+}
+
+template <std::size_t Vertices, std::size_t Edges>
+constexpr bool
+graph_dependencies_bound(const graph_structure<Vertices, Edges> &structure,
+                         const graph_vertex &vertex) {
+  for (std::size_t i = 0; i < vertex.edge_count; ++i) {
+    if (structure.edges[vertex.edge_begin + i] == graph_npos) {
+      return false;
+    }
+  }
+  return vertex.dependencies_known;
+}
+
+// True when every binding reachable from `start` has its dependencies bound
+// and no reachable cycle contains a binding that is not shared_cyclical.
+template <std::size_t Vertices, std::size_t Edges>
+constexpr bool
+graph_binding_resolvable(const graph_structure<Vertices, Edges> &structure,
+                         std::size_t start) {
+  if (start == graph_npos) {
+    return false;
+  }
+
+  const std::array<bool, Vertices> reachable =
+      graph_reachable(structure, start, true);
+  for (std::size_t node = 0; node < Vertices; ++node) {
+    if (!reachable[node]) {
+      continue;
+    }
+    // A binding lies on a cycle when it is reachable from its own dependencies.
+    if (!graph_dependencies_bound(structure, structure.vertices[node]) ||
+        (!structure.vertices[node].cyclical &&
+         graph_reachable(structure, node, false)[node])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Costs: what every binding adds to the static execution context.
+// ---------------------------------------------------------------------------
+
+// What one dependency request needs while its value is held by its dependent.
+struct graph_request_cost {
+  // The request is held by value, so it occupies a temporary slot.
+  bool temporary;
+  std::size_t destructible;
+  std::size_t size;
+  std::size_t align;
+};
+
+template <typename Request>
+constexpr graph_request_cost graph_request_cost_of() {
+  using type = typename annotated_traits<Request>::type;
+  constexpr bool by_value =
+      !std::is_reference_v<type> && !std::is_pointer_v<type>;
+
+  graph_request_cost cost{};
+  cost.temporary = by_value;
+  cost.destructible = std::is_trivially_destructible_v<
+                          std::remove_cv_t<std::remove_reference_t<Request>>>
+                          ? 0
+                          : 1;
+  if constexpr (by_value) {
+    cost.size = sizeof(std::remove_cv_t<std::remove_reference_t<type>>);
+    cost.align = alignof(std::remove_cv_t<std::remove_reference_t<type>>);
+  }
+  return cost;
+}
+
+struct graph_request_summary {
+  std::size_t destructible;
+  std::size_t temporary;
+  std::size_t size;
+  std::size_t align;
+};
+
+constexpr graph_request_summary graph_summarize_requests(void *) {
+  return graph_request_summary{};
+}
+
+template <typename... Requests>
+constexpr graph_request_summary
+graph_summarize_requests(type_list<Requests...> *) {
+  graph_request_summary summary{};
+  const graph_request_cost costs[] = {graph_request_cost_of<Requests>()...,
+                                      graph_request_cost{}};
+  for (std::size_t i = 0; i < sizeof...(Requests); ++i) {
+    summary.destructible += costs[i].destructible;
+    summary.temporary += costs[i].temporary ? 1 : 0;
+    summary.size = std::max(summary.size, costs[i].size);
+    summary.align = std::max(summary.align, costs[i].align);
+  }
+  return summary;
+}
+
+// The costs of a binding on its own, before its dependencies are added.
+struct graph_cost {
+  // Resolution operations of the binding never allocate conversion values.
+  bool stable;
+  // The binding retains a frame (shared storage).
+  std::size_t frame;
+  // Destructible and temporary slots including the by-value dependency
+  // requests of the binding, used when dependency paths are summed.
+  std::size_t destructible;
+  std::size_t temporary;
+  // Destructible and temporary slots of the binding itself, used when the
+  // slots held by dependency requests are accounted for separately.
+  std::size_t self_destructible;
+  std::size_t self_temporary;
+  std::size_t size;
+  std::size_t align;
+};
+
+template <typename Binding> constexpr graph_cost graph_binding_cost() {
+  using model = typename Binding::binding_model_type;
+  using tag = typename model::storage_tag;
+  using stored = typename model::storage_type::type;
+  using temporaries = binding_temporary_storage_traits<Binding>;
+
+  constexpr bool cyclical = std::is_same_v<tag, shared_cyclical>;
+  constexpr std::size_t rollback = cyclical ? 1 : 0;
+  constexpr std::size_t storage_slots =
+      (std::is_same_v<tag, unique> || cyclical) ? 1 : 0;
+  constexpr std::size_t stored_destructible =
+      std::is_trivially_destructible_v<stored> ? 0 : 1;
+  const graph_request_summary requests = graph_summarize_requests(
+      static_cast<typename model::dependencies_type::type *>(nullptr));
+
+  graph_cost cost{};
+  cost.stable = model::storage_type::conversions::is_stable;
+  cost.frame = std::is_same_v<tag, shared> ? 1 : 0;
+  cost.self_temporary = std::max(temporaries::slots, storage_slots);
+  cost.self_destructible =
+      std::max({temporaries::destructible_slots,
+                cost.self_temporary != 0 ? stored_destructible : std::size_t{0},
+                rollback});
+  cost.destructible = requests.destructible + temporaries::destructible_slots +
+                      stored_destructible + rollback;
+  cost.temporary = requests.temporary + temporaries::slots + storage_slots;
+  cost.size = std::max({requests.size, temporaries::size, sizeof(stored),
+                        cyclical ? sizeof(void *) : std::size_t{0}});
+  cost.align = std::max({requests.align, temporaries::align, alignof(stored),
+                         cyclical ? alignof(void *) : std::size_t{0}});
+  return cost;
+}
+
+// The request costs are laid out like the edges of the nodes that know their
+// bounds: the request at position k of a node owns the edge at position k.
+template <std::size_t Vertices, std::size_t Edges> struct graph_costs {
+  std::array<graph_cost, Vertices> nodes;
+  std::array<graph_request_cost, Edges> requests;
+};
+
+template <std::size_t Edges>
+constexpr void
+graph_write_request_costs(void *, std::array<graph_request_cost, Edges> &,
+                          std::size_t) {}
+
+template <typename... Requests, std::size_t Edges>
+constexpr void
+graph_write_request_costs(type_list<Requests...> *,
+                          std::array<graph_request_cost, Edges> &costs,
+                          std::size_t at) {
+  ((costs[at++] = graph_request_cost_of<Requests>()), ...);
+  (void)costs;
+  (void)at;
+}
+
+template <typename Binding, std::size_t Vertices, std::size_t Edges>
+constexpr void graph_add_cost(graph_costs<Vertices, Edges> &costs,
+                              const graph_structure<Vertices, Edges> &structure,
+                              std::size_t index) {
+  using requests = binding_dependencies_t<typename Binding::binding_model_type>;
+
+  costs.nodes[index] = graph_binding_cost<Binding>();
+  if (structure.vertices[index].bounds_known) {
+    graph_write_request_costs(static_cast<requests *>(nullptr), costs.requests,
+                              structure.vertices[index].edge_begin);
+  }
+}
+
+template <std::size_t Vertices, std::size_t Edges, typename... Bindings>
+constexpr graph_costs<Vertices, Edges>
+graph_make_costs(const graph_structure<Vertices, Edges> &structure,
+                 type_list<Bindings...>) {
+  graph_costs<Vertices, Edges> costs{};
+  std::size_t index = 0;
+  (graph_add_cost<Bindings>(costs, structure, index++), ...);
+  (void)index;
+  return costs;
+}
+
+// ---------------------------------------------------------------------------
+// Bounds: the execution context sizes of a graph.
+// ---------------------------------------------------------------------------
+
+struct graph_bounds {
+  std::size_t retained_frame_depth;
+  std::size_t destructible_slots;
+  std::size_t temporary_slots;
+  std::size_t temporary_size;
+  std::size_t temporary_align;
+};
+
+template <std::size_t Vertices, std::size_t Edges>
+constexpr bool
+graph_roots_bounded(const graph_structure<Vertices, Edges> &structure,
+                    std::size_t roots) {
+  for (std::size_t i = 0; i < roots; ++i) {
+    if (!structure.vertices[i].bounds_known) {
+      return false;
+    }
+  }
+  return true;
+}
+
+struct graph_slots {
+  std::size_t destructible;
+  std::size_t temporary;
+};
+
+// Largest value of the dependencies of a node.
+template <std::size_t Vertices, std::size_t Edges>
+constexpr std::size_t
+graph_deepest(const graph_structure<Vertices, Edges> &structure,
+              const graph_vertex &vertex,
+              const std::array<std::size_t, Vertices> &values) {
+  std::size_t deepest = 0;
+  for (std::size_t i = 0; i < vertex.edge_count; ++i) {
+    const std::size_t next = structure.edges[vertex.edge_begin + i];
+    if (next != graph_npos) {
+      deepest = std::max(deepest, values[next]);
+    }
+  }
+  return deepest;
+}
+
+template <std::size_t Vertices> struct graph_peaks {
+  std::array<std::size_t, Vertices> frame;
+  std::array<std::size_t, Vertices> retained_destructible;
+  std::array<std::size_t, Vertices> peak_destructible;
+  std::array<std::size_t, Vertices> retained_temporary;
+  std::array<std::size_t, Vertices> peak_temporary;
+};
+
+// The slots held after the request owning `slot` was resolved by `next`, and
+// the largest amount held while it is being resolved.
+template <std::size_t Vertices, std::size_t Edges>
+constexpr void graph_request_hold(const graph_costs<Vertices, Edges> &costs,
+                                  const graph_peaks<Vertices> &peaks,
+                                  std::size_t slot, std::size_t next,
+                                  graph_slots &retained, graph_slots &peak) {
+  retained = graph_slots{};
+  peak = graph_slots{};
+  if (next == graph_npos) {
+    return;
+  }
+
+  const graph_request_cost &request = costs.requests[slot];
+  const bool held = request.temporary && costs.nodes[next].stable;
+  retained.destructible = peaks.retained_destructible[next] +
+                          (held ? request.destructible : std::size_t{0});
+  retained.temporary = peaks.retained_temporary[next] + (held ? 1 : 0);
+  peak.destructible =
+      std::max(peaks.peak_destructible[next], retained.destructible);
+  peak.temporary = std::max(peaks.peak_temporary[next], retained.temporary);
+}
+
+// Peaks of a node whose requests are matched to its edges, which are visited
+// from the last request to the first while the slots held by the requests that
+// follow are accumulated.
+template <std::size_t Vertices, std::size_t Edges>
+constexpr void
+graph_request_peaks(const graph_structure<Vertices, Edges> &structure,
+                    const graph_costs<Vertices, Edges> &costs, std::size_t node,
+                    graph_peaks<Vertices> &peaks) {
+  const graph_vertex &vertex = structure.vertices[node];
+  graph_slots held{};
+  graph_slots peak_dependencies{};
+  for (std::size_t k = vertex.requests_known ? vertex.edge_count : 0;
+       k-- > 0;) {
+    const std::size_t slot = vertex.edge_begin + k;
+    graph_slots retained{};
+    graph_slots peak{};
+    graph_request_hold(costs, peaks, slot, structure.edges[slot], retained,
+                       peak);
+    peak_dependencies.destructible =
+        std::max(peak.destructible + held.destructible,
+                 retained.destructible + peak_dependencies.destructible);
+    peak_dependencies.temporary =
+        std::max(peak.temporary + held.temporary,
+                 retained.temporary + peak_dependencies.temporary);
+    held.destructible += retained.destructible;
+    held.temporary += retained.temporary;
+  }
+
+  const graph_cost &cost = costs.nodes[node];
+  peaks.retained_destructible[node] =
+      held.destructible + cost.self_destructible;
+  peaks.peak_destructible[node] = std::max(peak_dependencies.destructible,
+                                           peaks.retained_destructible[node]);
+  peaks.retained_temporary[node] = held.temporary + cost.self_temporary;
+  peaks.peak_temporary[node] =
+      std::max(peak_dependencies.temporary, peaks.retained_temporary[node]);
+}
+
+// Peaks of a node as the largest total along its dependency paths.
+template <std::size_t Vertices, std::size_t Edges>
+constexpr void
+graph_path_peaks(const graph_structure<Vertices, Edges> &structure,
+                 const graph_costs<Vertices, Edges> &costs, std::size_t node,
+                 graph_peaks<Vertices> &peaks) {
+  const graph_vertex &vertex = structure.vertices[node];
+  const graph_cost &cost = costs.nodes[node];
+  peaks.peak_destructible[node] =
+      cost.destructible +
+      graph_deepest(structure, vertex, peaks.peak_destructible);
+  peaks.peak_temporary[node] =
+      cost.temporary + graph_deepest(structure, vertex, peaks.peak_temporary);
+}
+
+template <std::size_t Vertices, std::size_t Edges>
+constexpr graph_bounds graph_totals(const graph_costs<Vertices, Edges> &costs,
+                                    std::size_t roots) {
+  graph_bounds totals{};
+  for (std::size_t i = 0; i < roots; ++i) {
+    totals.retained_frame_depth += costs.nodes[i].frame;
+    totals.destructible_slots += costs.nodes[i].destructible;
+    totals.temporary_slots += costs.nodes[i].temporary;
+    totals.temporary_size =
+        std::max(totals.temporary_size, costs.nodes[i].size);
+    totals.temporary_align =
+        std::max(totals.temporary_align, costs.nodes[i].align);
+  }
+  return totals;
+}
+
+template <std::size_t Vertices, std::size_t Edges>
+constexpr graph_bounds
+graph_path_bounds(const graph_structure<Vertices, Edges> &structure,
+                  const graph_costs<Vertices, Edges> &costs,
+                  const graph_topology<Vertices> &topology, std::size_t roots,
+                  bool runtime_dependencies) {
+  graph_peaks<Vertices> peaks{};
+  for (std::size_t position = 0; position < topology.order_size; ++position) {
+    const std::size_t node = topology.order[position];
+    peaks.frame[node] =
+        costs.nodes[node].frame +
+        graph_deepest(structure, structure.vertices[node], peaks.frame);
+    if (runtime_dependencies) {
+      graph_path_peaks(structure, costs, node, peaks);
+    } else {
+      graph_request_peaks(structure, costs, node, peaks);
+    }
+  }
+
+  graph_bounds bounds{};
+  for (std::size_t i = 0; i < roots; ++i) {
+    bounds.retained_frame_depth =
+        std::max(bounds.retained_frame_depth, peaks.frame[i]);
+    bounds.destructible_slots =
+        std::max(bounds.destructible_slots, peaks.peak_destructible[i]);
+    bounds.temporary_slots =
+        std::max(bounds.temporary_slots, peaks.peak_temporary[i]);
+  }
+  return bounds;
+}
+
+// Bounds of the first `roots` nodes.
+//
+// Without precise bounds (a root has a collection or unknown requests) or when
+// the graph contains a cycle, every binding of the roots is assumed to be
+// active at once and the bounds are plain totals. A graph that is not
+// resolvable has no slot bounds. Otherwise the bound is the largest amount
+// held along any resolution path: a node retains the slots of its dependencies
+// that were resolved before it completes, and its peak is the largest amount
+// held at any moment while its dependencies are resolved in order. When
+// `runtime_dependencies` is set the dependency requests are not matched to
+// edges and the path totals are summed instead.
+template <std::size_t Vertices, std::size_t Edges>
+constexpr graph_bounds
+graph_bound(const graph_structure<Vertices, Edges> &structure,
+            const graph_costs<Vertices, Edges> &costs,
+            const graph_topology<Vertices> &topology, std::size_t roots,
+            bool runtime_dependencies) {
+  graph_bounds bounds = graph_totals(costs, roots);
+  if (!topology.resolvable) {
+    bounds.temporary_size = 0;
+    bounds.temporary_align = 0;
+  }
+  if (!graph_roots_bounded(structure, roots)) {
+    return bounds;
+  }
+  if (!topology.resolvable) {
+    return graph_bounds{};
+  }
+  if (topology.contains_cycle) {
+    return bounds;
+  }
+
+  graph_bounds paths = graph_path_bounds(structure, costs, topology, roots,
+                                         runtime_dependencies);
+  paths.temporary_size = bounds.temporary_size;
+  paths.temporary_align = bounds.temporary_align;
+  return paths;
+}
+
+// ---------------------------------------------------------------------------
+// Graph of a static registry.
+// ---------------------------------------------------------------------------
+
+// Structure and topology of a registry. It does not read the costs, so
+// checking that a graph is resolvable never instantiates them.
+template <typename StaticRegistry> struct graph_model {
+  using host_bindings = typename StaticRegistry::interface_bindings;
+  using universe = typename graph_universe<host_bindings>::type;
+
+  static constexpr std::size_t root_count = type_list_size_v<host_bindings>;
+  static constexpr auto structure =
+      graph_make_structure<host_bindings>(universe{});
+  static constexpr auto topology = graph_sort(structure, root_count);
+  static constexpr bool bounds_known =
+      graph_roots_bounded(structure, root_count);
+};
+
+template <typename StaticRegistry> struct graph_cost_model {
+  static constexpr auto costs =
+      graph_make_costs(graph_model<StaticRegistry>::structure,
+                       typename graph_model<StaticRegistry>::universe{});
+};
+
+template <typename StaticRegistry,
+          bool Acyclic = graph_model<StaticRegistry>::topology.resolvable &&
+                         !graph_model<StaticRegistry>::topology.contains_cycle>
+struct graph_topological_bindings {
+  using type = void;
+};
+
+template <typename StaticRegistry, typename... Universe,
+          std::size_t... Position>
+auto graph_topological_list(type_list<Universe...>,
+                            std::index_sequence<Position...>)
+    -> type_list<std::tuple_element_t<
+        graph_model<StaticRegistry>::topology.order[Position],
+        std::tuple<Universe...>>...>;
 
 template <typename StaticRegistry>
-struct static_dependency_retained_destructible_slots<type_list<>, type_list<>,
-                                                     StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
+struct graph_topological_bindings<StaticRegistry, true> {
+  using type = decltype(graph_topological_list<StaticRegistry>(
+      typename graph_model<StaticRegistry>::universe{},
+      std::make_index_sequence<
+          graph_model<StaticRegistry>::topology.order_size>{}));
+};
+
+template <typename StaticRegistry>
+using graph_topological_bindings_t =
+    typename graph_topological_bindings<StaticRegistry>::type;
+
+template <typename Binding, typename StaticRegistry>
+inline constexpr bool static_binding_resolvable_v = graph_binding_resolvable(
+    graph_model<StaticRegistry>::structure,
+    graph_type_index_in<Binding,
+                        typename graph_model<StaticRegistry>::universe>::value);
+
+template <typename StaticRegistry>
+constexpr bool graph_bindings_resolvable(void *) {
+  return false;
+}
+
+template <typename StaticRegistry, typename... Bindings>
+constexpr bool graph_bindings_resolvable(type_list<Bindings...> *) {
+  return (static_binding_resolvable_v<Bindings, StaticRegistry> && ...);
+}
 
 template <typename Bindings, typename StaticRegistry>
-struct static_dependency_retained_destructible_slots<void, Bindings,
-                                                     StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename RequestHead, typename... RequestTail, typename BindingHead,
-          typename... BindingTail, typename StaticRegistry>
-struct static_dependency_retained_destructible_slots<
-    type_list<RequestHead, RequestTail...>,
-    type_list<BindingHead, BindingTail...>, StaticRegistry>
-    : std::integral_constant<
-          std::size_t,
-          static_request_retained_destructible_slots<RequestHead, BindingHead,
-                                                     StaticRegistry>::value +
-              static_dependency_retained_destructible_slots<
-                  type_list<RequestTail...>, type_list<BindingTail...>,
-                  StaticRegistry>::value> {};
-
-template <typename StaticRegistry>
-struct static_dependency_peak_destructible_slots<type_list<>, type_list<>,
-                                                 StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename Bindings, typename StaticRegistry>
-struct static_dependency_peak_destructible_slots<void, Bindings, StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename RequestHead, typename... RequestTail, typename BindingHead,
-          typename... BindingTail, typename StaticRegistry>
-struct static_dependency_peak_destructible_slots<
-    type_list<RequestHead, RequestTail...>,
-    type_list<BindingHead, BindingTail...>, StaticRegistry>
-    : std::integral_constant<
-          std::size_t,
-          std::max(static_request_peak_destructible_slots<
-                       RequestHead, BindingHead, StaticRegistry>::value +
-                       static_dependency_retained_destructible_slots<
-                           type_list<RequestTail...>, type_list<BindingTail...>,
-                           StaticRegistry>::value,
-                   static_request_retained_destructible_slots<
-                       RequestHead, BindingHead, StaticRegistry>::value +
-                       static_dependency_peak_destructible_slots<
-                           type_list<RequestTail...>, type_list<BindingTail...>,
-                           StaticRegistry>::value)> {};
-
-template <typename Request, typename Binding, typename StaticRegistry>
-struct static_request_retained_destructible_slots
-    : std::integral_constant<
-          std::size_t, static_binding_retained_destructible_slots<
-                           Binding, StaticRegistry>::value +
-                           (static_request_uses_temporary_slot_v<Request> &&
-                                    static_binding_is_stable_v<Binding>
-                                ? static_request_destructible_cost_v<Request>
-                                : std::size_t{0})> {};
-
-template <typename Request, typename Binding, typename StaticRegistry>
-struct static_request_peak_destructible_slots
-    : std::integral_constant<
-          std::size_t, std::max(static_binding_peak_destructible_slots<
-                                    Binding, StaticRegistry>::value,
-                                static_request_retained_destructible_slots<
-                                    Request, Binding, StaticRegistry>::value)> {
-};
-
-template <typename Binding, typename StaticRegistry>
-struct static_binding_retained_destructible_slots
-    : std::integral_constant<
-          std::size_t,
-          static_dependency_retained_destructible_slots<
-              typename Binding::binding_model_type::dependencies_type::type,
-              typename static_graph_node_t<Binding, StaticRegistry,
-                                           false>::dependency_bindings,
-              StaticRegistry>::value +
-              static_binding_self_destructible_slot_cost_v<Binding>> {};
-
-template <typename Binding, typename StaticRegistry>
-struct static_binding_peak_destructible_slots
-    : std::integral_constant<
-          std::size_t,
-          std::max(
-              static_dependency_peak_destructible_slots<
-                  typename Binding::binding_model_type::dependencies_type::type,
-                  typename static_graph_node_t<Binding, StaticRegistry,
-                                               false>::dependency_bindings,
-                  StaticRegistry>::value,
-              static_binding_retained_destructible_slots<
-                  Binding, StaticRegistry>::value)> {};
-
-template <typename StaticRegistry>
-struct static_dependency_retained_temporary_slots<type_list<>, type_list<>,
-                                                  StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename Bindings, typename StaticRegistry>
-struct static_dependency_retained_temporary_slots<void, Bindings,
-                                                  StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename RequestHead, typename... RequestTail, typename BindingHead,
-          typename... BindingTail, typename StaticRegistry>
-struct static_dependency_retained_temporary_slots<
-    type_list<RequestHead, RequestTail...>,
-    type_list<BindingHead, BindingTail...>, StaticRegistry>
-    : std::integral_constant<
-          std::size_t,
-          static_request_retained_temporary_slots<RequestHead, BindingHead,
-                                                  StaticRegistry>::value +
-              static_dependency_retained_temporary_slots<
-                  type_list<RequestTail...>, type_list<BindingTail...>,
-                  StaticRegistry>::value> {};
-
-template <typename StaticRegistry>
-struct static_dependency_peak_temporary_slots<type_list<>, type_list<>,
-                                              StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename Bindings, typename StaticRegistry>
-struct static_dependency_peak_temporary_slots<void, Bindings, StaticRegistry>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename RequestHead, typename... RequestTail, typename BindingHead,
-          typename... BindingTail, typename StaticRegistry>
-struct static_dependency_peak_temporary_slots<
-    type_list<RequestHead, RequestTail...>,
-    type_list<BindingHead, BindingTail...>, StaticRegistry>
-    : std::integral_constant<
-          std::size_t,
-          std::max(static_request_peak_temporary_slots<RequestHead, BindingHead,
-                                                       StaticRegistry>::value +
-                       static_dependency_retained_temporary_slots<
-                           type_list<RequestTail...>, type_list<BindingTail...>,
-                           StaticRegistry>::value,
-                   static_request_retained_temporary_slots<
-                       RequestHead, BindingHead, StaticRegistry>::value +
-                       static_dependency_peak_temporary_slots<
-                           type_list<RequestTail...>, type_list<BindingTail...>,
-                           StaticRegistry>::value)> {};
-
-template <typename Request, typename Binding, typename StaticRegistry>
-struct static_request_retained_temporary_slots
-    : std::integral_constant<
-          std::size_t, static_binding_retained_temporary_slots<
-                           Binding, StaticRegistry>::value +
-                           (static_request_uses_temporary_slot_v<Request> &&
-                                    static_binding_is_stable_v<Binding>
-                                ? std::size_t{1}
-                                : std::size_t{0})> {};
-
-template <typename Request, typename Binding, typename StaticRegistry>
-struct static_request_peak_temporary_slots
-    : std::integral_constant<
-          std::size_t, std::max(static_binding_peak_temporary_slots<
-                                    Binding, StaticRegistry>::value,
-                                static_request_retained_temporary_slots<
-                                    Request, Binding, StaticRegistry>::value)> {
-};
-
-template <typename Binding, typename StaticRegistry>
-struct static_binding_retained_temporary_slots
-    : std::integral_constant<
-          std::size_t,
-          static_dependency_retained_temporary_slots<
-              typename Binding::binding_model_type::dependencies_type::type,
-              typename static_graph_node_t<Binding, StaticRegistry,
-                                           false>::dependency_bindings,
-              StaticRegistry>::value +
-              static_binding_self_temporary_slot_cost_v<Binding>> {};
-
-template <typename Binding, typename StaticRegistry>
-struct static_binding_peak_temporary_slots
-    : std::integral_constant<
-          std::size_t,
-          std::max(
-              static_dependency_peak_temporary_slots<
-                  typename Binding::binding_model_type::dependencies_type::type,
-                  typename static_graph_node_t<Binding, StaticRegistry,
-                                               false>::dependency_bindings,
-                  StaticRegistry>::value,
-              static_binding_retained_temporary_slots<Binding,
-                                                      StaticRegistry>::value)> {
-};
-
-template <typename Bindings, typename StaticRegistry,
-          bool RuntimeDependencies = false>
-struct static_graph_max_retained_frame_depth_all;
-
-template <typename StaticRegistry, bool RuntimeDependencies, bool Acyclic>
-struct static_graph_max_retained_frame_depth;
-
-template <typename Binding, typename StaticRegistry,
-          bool RuntimeDependencies = false>
-struct static_binding_graph_retained_frame_depth;
-
-template <typename Bindings, typename StaticRegistry,
-          bool RuntimeDependencies = false>
-struct static_graph_max_destructible_slots_all;
-
-template <typename StaticRegistry, bool RuntimeDependencies, bool Acyclic>
-struct static_graph_max_destructible_slots;
-
-template <typename Binding, typename StaticRegistry,
-          bool RuntimeDependencies = false>
-struct static_binding_graph_destructible_slots;
-
-template <typename Bindings> struct static_graph_max_temporary_size_all;
-
-template <typename StaticRegistry, bool Acyclic>
-struct static_graph_max_temporary_size;
-
-template <typename Bindings> struct static_graph_max_temporary_align_all;
-
-template <typename StaticRegistry, bool Acyclic>
-struct static_graph_max_temporary_align;
-
-template <typename Bindings, typename StaticRegistry,
-          bool RuntimeDependencies = false>
-struct static_graph_max_temporary_slots_all;
-
-template <typename StaticRegistry, bool RuntimeDependencies, bool Acyclic>
-struct static_graph_max_temporary_slots;
-
-template <typename Binding, typename StaticRegistry,
-          bool RuntimeDependencies = false>
-struct static_binding_graph_temporary_slots;
-
-template <typename Bindings> struct static_graph_total_retained_frame_depth;
-
-template <typename Bindings> struct static_graph_total_destructible_slots;
-
-template <typename Bindings> struct static_graph_total_temporary_slots;
-
-template <typename DependencyList> struct static_dependency_bounds_known;
-
-template <typename Binding> struct static_binding_dependency_bounds_known;
-
-template <typename Bindings> struct static_bindings_dependency_bounds_known;
-
-template <typename StaticRegistry, bool RuntimeDependencies, bool Acyclic,
-          bool ContainsCycle>
-struct static_graph_retained_frame_depth_bound;
-
-template <typename StaticRegistry, bool RuntimeDependencies, bool Acyclic,
-          bool ContainsCycle>
-struct static_graph_destructible_slots_bound;
-
-template <typename StaticRegistry, bool RuntimeDependencies, bool Acyclic,
-          bool ContainsCycle>
-struct static_graph_temporary_slots_bound;
-
-template <>
-struct static_graph_total_retained_frame_depth<type_list<>>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename... Bindings>
-struct static_graph_total_retained_frame_depth<type_list<Bindings...>>
-    : std::integral_constant<std::size_t,
-                             (static_binding_retained_frame_cost_v<Bindings> +
-                              ... + std::size_t{0})> {};
-
-template <>
-struct static_graph_total_destructible_slots<type_list<>>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename... Bindings>
-struct static_graph_total_destructible_slots<type_list<Bindings...>>
-    : std::integral_constant<
-          std::size_t, (static_binding_destructible_slot_cost_v<Bindings> +
-                        ... + std::size_t{0})> {};
-
-template <>
-struct static_graph_total_temporary_slots<type_list<>>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename... Bindings>
-struct static_graph_total_temporary_slots<type_list<Bindings...>>
-    : std::integral_constant<std::size_t,
-                             (static_binding_temporary_slot_cost_v<Bindings> +
-                              ... + std::size_t{0})> {};
-
-template <> struct static_dependency_bounds_known<void> : std::false_type {};
-
-template <>
-struct static_dependency_bounds_known<type_list<>> : std::true_type {};
-
-template <typename Head, typename... Tail>
-struct static_dependency_bounds_known<type_list<Head, Tail...>>
-    : std::bool_constant<
-          !collection_traits<
-              binding_dependency_interface_t<Head>>::is_collection &&
-          static_dependency_bounds_known<type_list<Tail...>>::value> {};
-
-template <typename Binding>
-struct static_binding_dependency_bounds_known
-    : static_dependency_bounds_known<
-          typename Binding::binding_model_type::dependencies_type::type> {};
-
-template <>
-struct static_bindings_dependency_bounds_known<type_list<>> : std::true_type {};
-
-template <typename... Bindings>
-struct static_bindings_dependency_bounds_known<type_list<Bindings...>>
-    : std::bool_constant<(
-          static_binding_dependency_bounds_known<Bindings>::value && ...)> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_retained_frame_depth_all<type_list<>, StaticRegistry,
-                                                 RuntimeDependencies>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_retained_frame_depth_all<void, StaticRegistry,
-                                                 RuntimeDependencies>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename... Bindings, typename StaticRegistry,
-          bool RuntimeDependencies>
-struct static_graph_max_retained_frame_depth_all<
-    type_list<Bindings...>, StaticRegistry, RuntimeDependencies>
-    : std::integral_constant<
-          std::size_t, std::max({static_binding_graph_retained_frame_depth<
-                                     Bindings, StaticRegistry,
-                                     RuntimeDependencies>::value...,
-                                 std::size_t{0}})> {};
-
-template <typename Binding, typename StaticRegistry, bool RuntimeDependencies>
-struct static_binding_graph_retained_frame_depth
-    : std::integral_constant<
-          std::size_t, static_binding_retained_frame_cost_v<Binding> +
-                           static_graph_max_retained_frame_depth_all<
-                               typename static_graph_node_t<
-                                   Binding, StaticRegistry,
-                                   RuntimeDependencies>::dependency_bindings,
-                               StaticRegistry, RuntimeDependencies>::value> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_binding_graph_retained_frame_depth<void, StaticRegistry,
-                                                 RuntimeDependencies>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_destructible_slots_all<type_list<>, StaticRegistry,
-                                               RuntimeDependencies>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_destructible_slots_all<void, StaticRegistry,
-                                               RuntimeDependencies>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename... Bindings, typename StaticRegistry,
-          bool RuntimeDependencies>
-struct static_graph_max_destructible_slots_all<
-    type_list<Bindings...>, StaticRegistry, RuntimeDependencies>
-    : std::integral_constant<std::size_t,
-                             std::max({static_binding_graph_destructible_slots<
-                                           Bindings, StaticRegistry,
-                                           RuntimeDependencies>::value...,
-                                       std::size_t{0}})> {};
-
-template <typename Binding, typename StaticRegistry, bool RuntimeDependencies>
-struct static_binding_graph_destructible_slots
-    : std::integral_constant<
-          std::size_t, static_binding_destructible_slot_cost_v<Binding> +
-                           static_graph_max_destructible_slots_all<
-                               typename static_graph_node_t<
-                                   Binding, StaticRegistry,
-                                   RuntimeDependencies>::dependency_bindings,
-                               StaticRegistry, RuntimeDependencies>::value> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_binding_graph_destructible_slots<void, StaticRegistry,
-                                               RuntimeDependencies>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename Binding, typename StaticRegistry>
-struct static_binding_graph_destructible_slots<Binding, StaticRegistry, false>
-    : static_binding_peak_destructible_slots<Binding, StaticRegistry> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_retained_frame_depth<StaticRegistry,
-                                             RuntimeDependencies, false>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_retained_frame_depth<StaticRegistry,
-                                             RuntimeDependencies, true>
-    : static_graph_max_retained_frame_depth_all<
-          typename StaticRegistry::interface_bindings, StaticRegistry,
-          RuntimeDependencies> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_destructible_slots<StaticRegistry, RuntimeDependencies,
-                                           false>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_destructible_slots<StaticRegistry, RuntimeDependencies,
-                                           true>
-    : static_graph_max_destructible_slots_all<
-          typename StaticRegistry::interface_bindings, StaticRegistry,
-          RuntimeDependencies> {};
-
-template <>
-struct static_graph_max_temporary_size_all<type_list<>>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename... Bindings>
-struct static_graph_max_temporary_size_all<type_list<Bindings...>>
-    : std::integral_constant<
-          std::size_t,
-          std::max({static_binding_max_temporary_size_v<Bindings>...,
-                    std::size_t{0}})> {};
-
-template <typename StaticRegistry>
-struct static_graph_max_temporary_size<StaticRegistry, false>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry>
-struct static_graph_max_temporary_size<StaticRegistry, true>
-    : static_graph_max_temporary_size_all<
-          typename StaticRegistry::interface_bindings> {};
-
-template <>
-struct static_graph_max_temporary_align_all<type_list<>>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename... Bindings>
-struct static_graph_max_temporary_align_all<type_list<Bindings...>>
-    : std::integral_constant<
-          std::size_t,
-          std::max({static_binding_max_temporary_align_v<Bindings>...,
-                    std::size_t{0}})> {};
-
-template <typename StaticRegistry>
-struct static_graph_max_temporary_align<StaticRegistry, false>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry>
-struct static_graph_max_temporary_align<StaticRegistry, true>
-    : static_graph_max_temporary_align_all<
-          typename StaticRegistry::interface_bindings> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_temporary_slots_all<type_list<>, StaticRegistry,
-                                            RuntimeDependencies>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_temporary_slots_all<void, StaticRegistry,
-                                            RuntimeDependencies>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename... Bindings, typename StaticRegistry,
-          bool RuntimeDependencies>
-struct static_graph_max_temporary_slots_all<type_list<Bindings...>,
-                                            StaticRegistry, RuntimeDependencies>
-    : std::integral_constant<std::size_t,
-                             std::max({static_binding_graph_temporary_slots<
-                                           Bindings, StaticRegistry,
-                                           RuntimeDependencies>::value...,
-                                       std::size_t{0}})> {};
-
-template <typename Binding, typename StaticRegistry, bool RuntimeDependencies>
-struct static_binding_graph_temporary_slots
-    : std::integral_constant<
-          std::size_t, static_binding_temporary_slot_cost_v<Binding> +
-                           static_graph_max_temporary_slots_all<
-                               typename static_graph_node_t<
-                                   Binding, StaticRegistry,
-                                   RuntimeDependencies>::dependency_bindings,
-                               StaticRegistry, RuntimeDependencies>::value> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_binding_graph_temporary_slots<void, StaticRegistry,
-                                            RuntimeDependencies>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename Binding, typename StaticRegistry>
-struct static_binding_graph_temporary_slots<Binding, StaticRegistry, false>
-    : static_binding_peak_temporary_slots<Binding, StaticRegistry> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_temporary_slots<StaticRegistry, RuntimeDependencies,
-                                        false>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_max_temporary_slots<StaticRegistry, RuntimeDependencies,
-                                        true>
-    : static_graph_max_temporary_slots_all<
-          typename StaticRegistry::interface_bindings, StaticRegistry,
-          RuntimeDependencies> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies, bool ContainsCycle>
-struct static_graph_retained_frame_depth_bound<
-    StaticRegistry, RuntimeDependencies, false, ContainsCycle>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_retained_frame_depth_bound<StaticRegistry,
-                                               RuntimeDependencies, true, false>
-    : static_graph_max_retained_frame_depth<StaticRegistry, RuntimeDependencies,
-                                            true> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_retained_frame_depth_bound<StaticRegistry,
-                                               RuntimeDependencies, true, true>
-    : static_graph_total_retained_frame_depth<
-          typename StaticRegistry::interface_bindings> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies, bool ContainsCycle>
-struct static_graph_destructible_slots_bound<
-    StaticRegistry, RuntimeDependencies, false, ContainsCycle>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_destructible_slots_bound<StaticRegistry,
-                                             RuntimeDependencies, true, false>
-    : static_graph_max_destructible_slots<StaticRegistry, RuntimeDependencies,
-                                          true> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_destructible_slots_bound<StaticRegistry,
-                                             RuntimeDependencies, true, true>
-    : static_graph_total_destructible_slots<
-          typename StaticRegistry::interface_bindings> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies, bool ContainsCycle>
-struct static_graph_temporary_slots_bound<StaticRegistry, RuntimeDependencies,
-                                          false, ContainsCycle>
-    : std::integral_constant<std::size_t, 0> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_temporary_slots_bound<StaticRegistry, RuntimeDependencies,
-                                          true, false>
-    : static_graph_max_temporary_slots<StaticRegistry, RuntimeDependencies,
-                                       true> {};
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_graph_temporary_slots_bound<StaticRegistry, RuntimeDependencies,
-                                          true, true>
-    : static_graph_total_temporary_slots<
-          typename StaticRegistry::interface_bindings> {};
-
-template <bool Resolvable, typename Visited, typename Order,
-          bool ContainsCycle = false>
-struct graph_visit_result {
-  static constexpr bool resolvable = Resolvable;
-  static constexpr bool contains_cycle = ContainsCycle;
-  static constexpr bool acyclic = Resolvable && !ContainsCycle;
-  using visited = Visited;
-  using order = Order;
-};
-
-template <typename HeadResult, typename TailResult, bool Acyclic>
-struct graph_visit_merge;
-
-template <typename HeadResult, typename TailResult>
-struct graph_visit_merge<HeadResult, TailResult, true> {
-  using type = graph_visit_result<
-      true, typename TailResult::visited,
-      type_list_cat_t<typename HeadResult::order, typename TailResult::order>,
-      HeadResult::contains_cycle || TailResult::contains_cycle>;
-};
-
-template <typename HeadResult, typename TailResult>
-struct graph_visit_merge<HeadResult, TailResult, false> {
-  using type = graph_visit_result<false, typename TailResult::visited, void,
-                                  HeadResult::contains_cycle ||
-                                      TailResult::contains_cycle>;
-};
-
-template <typename RecurseResult, typename Binding, bool Acyclic>
-struct graph_visit_append;
-
-template <typename RecurseResult, typename Binding>
-struct graph_visit_append<RecurseResult, Binding, true> {
-  using type = graph_visit_result<
-      true,
-      type_list_cat_t<typename RecurseResult::visited, type_list<Binding>>,
-      type_list_cat_t<typename RecurseResult::order, type_list<Binding>>,
-      RecurseResult::contains_cycle>;
-};
-
-template <typename RecurseResult, typename Binding>
-struct graph_visit_append<RecurseResult, Binding, false> {
-  using type = graph_visit_result<false, typename RecurseResult::visited, void,
-                                  RecurseResult::contains_cycle>;
-};
-
-template <typename Bindings, typename StaticRegistry, typename Visiting,
-          typename Visited, bool RuntimeDependencies>
-struct graph_visit_all;
-
-template <typename Binding, typename StaticRegistry, typename Visiting,
-          typename Visited, bool RuntimeDependencies>
-struct graph_visit_one;
-
-template <typename StaticRegistry, typename Visiting, typename Visited,
-          bool RuntimeDependencies>
-struct graph_visit_all<type_list<>, StaticRegistry, Visiting, Visited,
-                       RuntimeDependencies> {
-  using type = graph_visit_result<true, Visited, type_list<>>;
-};
-
-template <typename StaticRegistry, typename Visiting, typename Visited,
-          bool RuntimeDependencies>
-struct graph_visit_all<void, StaticRegistry, Visiting, Visited,
-                       RuntimeDependencies> {
-  using type = graph_visit_result<true, Visited, type_list<>>;
-};
-
-template <typename Head, typename... Tail, typename StaticRegistry,
-          typename Visiting, typename Visited, bool RuntimeDependencies>
-struct graph_visit_all<type_list<Head, Tail...>, StaticRegistry, Visiting,
-                       Visited, RuntimeDependencies> {
-private:
-  using head_result =
-      typename graph_visit_one<Head, StaticRegistry, Visiting, Visited,
-                               RuntimeDependencies>::type;
-
-  using tail_result = std::conditional_t<
-      head_result::resolvable,
-      typename graph_visit_all<type_list<Tail...>, StaticRegistry, Visiting,
-                               typename head_result::visited,
-                               RuntimeDependencies>::type,
-      graph_visit_result<false, typename head_result::visited, void>>;
-
-public:
-  using type = typename graph_visit_merge<head_result, tail_result,
-                                          head_result::resolvable &&
-                                              tail_result::resolvable>::type;
-};
-
-template <typename Binding, typename StaticRegistry, typename Visiting,
-          typename Visited, bool RuntimeDependencies, bool InVisiting,
-          bool InVisited>
-struct graph_visit_one_impl;
-
-template <typename Binding, typename StaticRegistry, typename Visiting,
-          typename Visited, bool RuntimeDependencies>
-struct graph_visit_one_impl<Binding, StaticRegistry, Visiting, Visited,
-                            RuntimeDependencies, true, false> {
-  using type = std::conditional_t<
-      static_cycle_uses_cyclical_storage_v<Binding, Visiting>,
-      graph_visit_result<true, Visited, type_list<>, true>,
-      graph_visit_result<false, Visited, void>>;
-};
-
-template <typename Binding, typename StaticRegistry, typename Visiting,
-          typename Visited, bool RuntimeDependencies>
-struct graph_visit_one_impl<Binding, StaticRegistry, Visiting, Visited,
-                            RuntimeDependencies, false, true> {
-  using type = graph_visit_result<true, Visited, type_list<>>;
-};
-
-template <typename Binding, typename StaticRegistry, typename Visiting,
-          typename Visited, bool RuntimeDependencies>
-struct graph_visit_one_impl<Binding, StaticRegistry, Visiting, Visited,
-                            RuntimeDependencies, false, false> {
-private:
-  using node =
-      static_graph_node_t<Binding, StaticRegistry, RuntimeDependencies>;
-
-  using recurse_result =
-      typename graph_visit_all<typename node::dependency_bindings,
-                               StaticRegistry,
-                               type_list_cat_t<Visiting, type_list<Binding>>,
-                               Visited, RuntimeDependencies>::type;
-
-public:
-  using type = typename graph_visit_append<recurse_result, Binding,
-                                           recurse_result::resolvable>::type;
-};
-
-template <typename Binding, typename StaticRegistry, typename Visiting,
-          typename Visited, bool RuntimeDependencies>
-struct graph_visit_one {
-  using type = typename graph_visit_one_impl<
-      Binding, StaticRegistry, Visiting, Visited, RuntimeDependencies,
-      type_list_contains_v<Binding, Visiting>,
-      type_list_contains_v<Binding, Visited>>::type;
-};
-
-template <typename StaticRegistry, typename Visiting, typename Visited,
-          bool RuntimeDependencies>
-struct graph_visit_one<void, StaticRegistry, Visiting, Visited,
-                       RuntimeDependencies> {
-  using type = graph_visit_result<true, Visited, type_list<>>;
-};
-
+inline constexpr bool static_bindings_resolvable_v =
+    graph_bindings_resolvable<StaticRegistry>(static_cast<Bindings *>(nullptr));
+
+// The RuntimeDependencies parameter selects how dependency requests are
+// accounted for in the bounds; edges without a binding are never followed, so
+// the topology does not depend on it.
 template <typename StaticRegistry, bool RuntimeDependencies = false>
 struct basic_static_graph_topology_analysis {
-private:
-  using traversal =
-      typename graph_visit_all<typename StaticRegistry::interface_bindings,
-                               StaticRegistry, type_list<>, type_list<>,
-                               RuntimeDependencies>::type;
-
-public:
-  static constexpr bool resolvable = traversal::resolvable;
-  static constexpr bool contains_cycle = traversal::contains_cycle;
-  static constexpr bool acyclic = traversal::acyclic;
-  using topological_bindings =
-      std::conditional_t<acyclic, typename traversal::order, void>;
+  static constexpr bool resolvable =
+      graph_model<StaticRegistry>::topology.resolvable;
+  static constexpr bool contains_cycle =
+      graph_model<StaticRegistry>::topology.contains_cycle;
+  static constexpr bool acyclic = resolvable && !contains_cycle;
 };
-
-// Names only the selected arm's ::value so the precise bound model is not
-// instantiated for graphs that are not eligible for it.
-template <bool Eligible, typename Bound, typename Total>
-struct select_bound : Total {};
-
-template <typename Bound, typename Total>
-struct select_bound<true, Bound, Total> : Bound {};
 
 template <typename StaticRegistry, bool RuntimeDependencies = false>
 struct basic_static_execution_traits {
 private:
-  using topology =
-      basic_static_graph_topology_analysis<StaticRegistry, RuntimeDependencies>;
+  using model = graph_model<StaticRegistry>;
+
+  static constexpr graph_bounds bounds =
+      graph_bound(model::structure, graph_cost_model<StaticRegistry>::costs,
+                  model::topology, model::root_count, RuntimeDependencies);
 
 public:
-  static constexpr bool resolvable = topology::resolvable;
-  static constexpr bool contains_cycle = topology::contains_cycle;
-  static constexpr bool acyclic = topology::acyclic;
-  static constexpr bool static_context_eligible =
-      static_bindings_dependency_bounds_known<
-          typename StaticRegistry::interface_bindings>::value;
-  static constexpr std::size_t max_retained_frame_depth = select_bound<
-      static_context_eligible,
-      static_graph_retained_frame_depth_bound<
-          StaticRegistry, RuntimeDependencies, resolvable, contains_cycle>,
-      static_graph_total_retained_frame_depth<
-          typename StaticRegistry::interface_bindings>>::value;
-  static constexpr std::size_t max_destructible_slots = select_bound<
-      static_context_eligible,
-      static_graph_destructible_slots_bound<StaticRegistry, RuntimeDependencies,
-                                            resolvable, contains_cycle>,
-      static_graph_total_destructible_slots<
-          typename StaticRegistry::interface_bindings>>::value;
-  static constexpr std::size_t max_temporary_slots = select_bound<
-      static_context_eligible,
-      static_graph_temporary_slots_bound<StaticRegistry, RuntimeDependencies,
-                                         resolvable, contains_cycle>,
-      static_graph_total_temporary_slots<
-          typename StaticRegistry::interface_bindings>>::value;
-  static constexpr std::size_t max_temporary_size =
-      static_graph_max_temporary_size<StaticRegistry, resolvable>::value;
-  static constexpr std::size_t max_temporary_align =
-      static_graph_max_temporary_align<StaticRegistry, resolvable>::value;
+  static constexpr bool resolvable = model::topology.resolvable;
+  static constexpr bool contains_cycle = model::topology.contains_cycle;
+  static constexpr bool acyclic = resolvable && !contains_cycle;
+  static constexpr bool static_context_eligible = model::bounds_known;
+  static constexpr std::size_t max_retained_frame_depth =
+      bounds.retained_frame_depth;
+  static constexpr std::size_t max_destructible_slots =
+      bounds.destructible_slots;
+  static constexpr std::size_t max_temporary_slots = bounds.temporary_slots;
+  static constexpr std::size_t max_temporary_size = bounds.temporary_size;
+  static constexpr std::size_t max_temporary_align = bounds.temporary_align;
 };
 
 template <typename StaticRegistry, bool RuntimeDependencies = false>
@@ -1372,8 +1057,8 @@ struct static_graph<static_bindings<Registrations...>, void>
       detail::graph_analysis<static_registry_type>::contains_cycle;
   static constexpr bool acyclic =
       detail::graph_analysis<static_registry_type>::acyclic;
-  using topological_bindings = typename detail::graph_analysis<
-      static_registry_type>::topological_bindings;
+  using topological_bindings =
+      detail::graph_topological_bindings_t<static_registry_type>;
   using topological_nodes =
       detail::static_graph_nodes_t<topological_bindings, static_registry_type>;
 
@@ -1392,8 +1077,8 @@ struct static_graph<static_bindings<Registrations...>, void>
 
   template <typename Interface>
   using dependency_nodes =
-      detail::dependency_graph_nodes_t<dependency_bindings<Interface>,
-                                       static_registry_type>;
+      detail::static_graph_nodes_t<dependency_bindings<Interface>,
+                                   static_registry_type>;
 };
 
 } // namespace dingo
