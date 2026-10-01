@@ -32,7 +32,6 @@ class runtime_container
   using runtime_context_type = runtime_context<Allocator>;
 
   template <typename> friend class runtime_context;
-  template <typename, typename> friend class detail::binding_resolution;
   template <typename, typename, typename>
   friend class detail::container_with_static_bindings;
   template <typename, typename, typename, typename, bool>

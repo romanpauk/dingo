@@ -32,8 +32,10 @@
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
 #include <dingo/runtime_container.h>
+#include <dingo/static/activation_set.h>
 #include <dingo/static/container_traits.h>
-#include <dingo/static/local_resolution.h>
+#include <dingo/static/graph.h>
+#include <dingo/static/registry.h>
 #include <dingo/static/resolution.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/complete_type.h>
@@ -196,17 +198,6 @@ private:
       return !has_runtime_collection<T>(Key{});
     }
   }
-
-  template <typename Collection, typename Key>
-  static constexpr bool has_static_collection_v =
-      detail::static_collection_binding_count<static_bindings_type, Collection,
-                                              Key>() != 0 &&
-      detail::static_bindings_resolvable_v<
-          typename static_bindings_type::template bindings<
-              normalized_type_t<
-                  typename collection_traits<Collection>::resolve_type>,
-              Key>,
-          static_bindings_type>;
 
   template <typename Request, typename R = typename Request::result_type>
   DINGO_ALWAYS_INLINE R construct_static(construction_scope scope,

@@ -95,7 +95,6 @@ if(DINGO_DEVELOPMENT_MODE)
         core/auto_constructible.h
         core/binding_model.h
         core/binding_resolution.h
-        static/local_resolution.h
         core/binding_resolution_policy.h
         core/binding_selection.h
         core/dependency.h

@@ -22,8 +22,6 @@
 namespace dingo {
 // TODO: this is bit convoluted, ideally merge resolver with runtime binding
 namespace detail {
-template <typename Host, typename StaticRegistry> class binding_resolution;
-
 template <typename Storage, typename = void>
 struct runtime_storage_can_retain_source : std::false_type {};
 

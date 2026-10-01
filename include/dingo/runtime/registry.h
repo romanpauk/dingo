@@ -263,7 +263,6 @@ class runtime_registry : public allocator_base<Allocator> {
   template <typename> friend class detail::runtime_registration_api;
   template <typename, typename, typename, typename, typename>
   friend class runtime_binding_state;
-  template <typename, typename> friend class detail::binding_resolution;
   template <typename, typename, typename>
   friend class detail::container_with_static_bindings;
   template <typename, typename, typename> friend class runtime_container;

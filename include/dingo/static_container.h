@@ -104,8 +104,6 @@ private:
       typename static_container_graph_type<
           static_bindings_type,
           static_bindings_type::dependencies_are_resolved>::type>;
-  using self_type = static_container_impl<static_bindings_type, ParentContainer,
-                                          ContainerTraits>;
   using parent_container_type = ParentContainer;
   using state_type = static_storage_state<Registrations...>;
   using context_type = static_context<context_static_bindings_type>;
@@ -290,15 +288,8 @@ public:
       }
     }
     if constexpr (collection_traits<R>::is_collection) {
-      if constexpr (has_parent_v && collection_count_v<R, LookupKey> == 0) {
-        context_type context;
-        return resolve_request<request, R>(ephemeral_scope, context, *this,
-                                           key);
-      } else {
-        context_type context;
-        return resolve_request<request, R>(ephemeral_scope, context, *this,
-                                           key);
-      }
+      context_type context;
+      return resolve_request<request, R>(ephemeral_scope, context, *this, key);
     } else {
       if constexpr (has_parent_v && resolve_status_v<request, LookupKey> ==
                                         binding_status::not_found) {
