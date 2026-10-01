@@ -12,6 +12,7 @@
 #include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
 #include <dingo/storage/storage.h>
+#include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
 #include <dingo/type/type_descriptor.h>
@@ -25,32 +26,41 @@
 namespace dingo {
 struct shared_cyclical {};
 
-template <typename Type>
-struct storage_materialization_traits<shared_cyclical, Type> {
-  static constexpr bool can_retain_source = false;
+template <> struct storage_scope_policy<shared_cyclical> {
+  static constexpr bool enabled = true;
+  static constexpr bool is_stable = false;
+  static constexpr bool consumes = false;
+  static constexpr materialization_guard guard = materialization_guard::none;
+  static constexpr bool retains_unresolved_source = false;
 
-  template <typename Leaf, typename Context, typename Storage>
-  static auto make_guard(Context &, const Storage &) {
-    return detail::no_materialization_scope();
-  }
-
-  template <typename Storage> static bool retains_source(const Storage &) {
-    return false;
-  }
-
-  template <typename Context, typename Storage, typename Container>
-  static auto materialize_source(construction_scope scope, Context &context,
-                                 Storage &storage, Container &container) {
-    return detail::make_resolved_source(
-        storage.resolve(scope, context, container));
+  // Only plain objects, raw pointers and shared_ptr can be stored in a cycle.
+  static constexpr storage_exposure exposed(storage_form form) {
+    switch (form) {
+    case storage_form::plain:
+    case storage_form::alternative:
+    case storage_form::pointer:
+    case storage_form::array:
+    case storage_form::bounded_array:
+      return storage_exposure::lvalue | storage_exposure::pointer;
+    case storage_form::shared_handle:
+    case storage_form::shared_array_handle:
+      return storage_exposure::value | storage_exposure::lvalue |
+             storage_exposure::pointer;
+    case storage_form::unique_handle:
+    case storage_form::unique_array_handle:
+    case storage_form::optional:
+    case storage_form::unknown:
+      break;
+    }
+    return storage_exposure::none;
   }
 };
 
-template <typename Type, typename U>
-struct storage_traits<
-    shared_cyclical, Type, U,
-    std::enable_if_t<!type_traits<Type>::enabled && !std::is_pointer_v<Type> &&
-                     !std::is_reference_v<Type>>> {
+namespace detail {
+// Cells of shared_cyclical, which publishes the leaf U and a shared_ptr<U>
+// directly, whatever the registered shape: every cell deviates from the generic
+// rule, so the scope lists them itself.
+template <storage_form Form, typename U> struct shared_cyclical_cell {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
@@ -60,19 +70,8 @@ struct storage_traits<
   using pointer_types = type_list<U *>;
 };
 
-template <typename Type, typename U>
-struct storage_traits<shared_cyclical, Type *, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<U &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *>;
-};
-
-template <typename Type, typename U>
-struct storage_traits<shared_cyclical, std::shared_ptr<Type>, U> {
+template <typename U>
+struct shared_cyclical_cell<storage_form::shared_handle, U> {
   static constexpr bool enabled = true;
   static constexpr bool is_stable = false;
 
@@ -81,6 +80,15 @@ struct storage_traits<shared_cyclical, std::shared_ptr<Type>, U> {
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, std::shared_ptr<U> *>;
 };
+
+template <typename U>
+struct shared_cyclical_cell<storage_form::shared_array_handle, U>
+    : shared_cyclical_cell<storage_form::shared_handle, U> {};
+
+template <storage_form Form, typename Type, typename U>
+struct storage_cell<shared_cyclical, Form, Type, U>
+    : shared_cyclical_cell<Form, U> {};
+} // namespace detail
 
 template <typename Base, typename Derived> struct is_virtual_base {
 #if defined(__GNUG__)

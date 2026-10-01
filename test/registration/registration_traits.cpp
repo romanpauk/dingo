@@ -273,6 +273,74 @@ template <typename Target, typename Resolutions>
 inline constexpr bool has_resolution_target_v =
     type_list_contains_v<Target, resolution_targets_t<Resolutions>>;
 
+// The targets that accept the reference form of a request, and the targets that
+// accept the pointer form. An object route serves both with one resolution.
+
+// The targets that accept the value form of a request, as a binding publishes
+// them: the value routes and the object routes that serve the copy of their
+// object.
+template <typename Target> struct accepted_target {
+  using target_type = Target;
+};
+
+template <typename Resolutions> struct accepted_value_targets;
+
+template <typename... Resolutions>
+struct accepted_value_targets<type_list<Resolutions...>> {
+  template <typename Resolution>
+  using targets = std::conditional_t<
+      Resolution::serves_value,
+      type_list<accepted_target<detail::resolution_value_target_t<Resolution>>>,
+      std::conditional_t<
+          std::is_reference_v<typename Resolution::target_type> ||
+              std::is_pointer_v<typename Resolution::target_type>,
+          type_list<>,
+          type_list<accepted_target<typename Resolution::target_type>>>>;
+
+  using type = type_list_cat_t<targets<Resolutions>...>;
+};
+
+template <typename BindingResolutions>
+struct accepted_values
+    : accepted_value_targets<typename BindingResolutions::type> {};
+
+template <typename Resolutions> struct reference_resolution_targets;
+
+template <typename... Resolutions>
+struct reference_resolution_targets<type_list<Resolutions...>> {
+  template <typename Resolution>
+  using targets = std::conditional_t<
+      std::is_lvalue_reference_v<typename Resolution::target_type>,
+      type_list<typename Resolution::target_type>,
+      std::conditional_t<
+          Resolution::serves_reference,
+          type_list<detail::resolution_reference_target_t<Resolution>>,
+          type_list<>>>;
+
+  using type = type_list_cat_t<targets<Resolutions>...>;
+};
+
+template <typename Resolutions>
+using reference_resolution_targets_t =
+    typename reference_resolution_targets<Resolutions>::type;
+
+template <typename Resolutions> struct pointer_resolution_targets;
+
+template <typename... Resolutions>
+struct pointer_resolution_targets<type_list<Resolutions...>> {
+  template <typename Resolution>
+  using targets =
+      std::conditional_t<std::is_pointer_v<typename Resolution::target_type>,
+                         type_list<typename Resolution::target_type>,
+                         type_list<>>;
+
+  using type = type_list_cat_t<targets<Resolutions>...>;
+};
+
+template <typename Resolutions>
+using pointer_resolution_targets_t =
+    typename pointer_resolution_targets<Resolutions>::type;
+
 template <typename Type> struct fresh_value_storage {
   using type = Type;
 
@@ -686,7 +754,7 @@ TEST(type_registration_test,
 
   static_assert(
       has_resolution_target_v<move_target,
-                              typename resolutions::value_resolutions>);
+                              typename accepted_values<resolutions>::type>);
   static_assert(std::is_same_v<typename detail::binding_supports_request<
                                    move_target, binding>::type::target_type,
                                move_target>);
@@ -708,7 +776,7 @@ TEST(type_registration_test,
 
   static_assert(
       has_resolution_target_v<copy_target,
-                              typename resolutions::value_resolutions>);
+                              typename accepted_values<resolutions>::type>);
 }
 
 TEST(type_registration_test, consumed_binding_executes_custom_type_conversion) {
@@ -945,13 +1013,12 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   using plain_pointer_resolutions =
       detail::binding_resolutions<A,
                                   typename plain_pointer_model::storage_type>;
-  static_assert(
-      std::is_same_v<resolution_targets_t<
-                         typename plain_pointer_resolutions::value_resolutions>,
-                     type_list<A>>);
+  static_assert(std::is_same_v<resolution_targets_t<typename accepted_values<
+                                   plain_pointer_resolutions>::type>,
+                               type_list<A>>);
   static_assert(std::is_same_v<
-                resolution_targets_t<
-                    typename plain_pointer_resolutions::pointer_resolutions>,
+                pointer_resolution_targets_t<
+                    typename plain_pointer_resolutions::object_resolutions>,
                 type_list<A *>>);
 
   using optional_pointer = std::optional<A> *;
@@ -967,33 +1034,34 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
       type_registration<scope<external>, storage<optional_pointer>>>;
   using optional_pointer_resolutions = detail::binding_resolutions<
       A, typename optional_pointer_model::storage_type>;
+  static_assert(std::is_same_v<resolution_targets_t<typename accepted_values<
+                                   optional_pointer_resolutions>::type>,
+                               type_list<std::optional<A>>>);
   static_assert(std::is_same_v<
-                resolution_targets_t<
-                    typename optional_pointer_resolutions::value_resolutions>,
-                type_list<std::optional<A>>>);
-  static_assert(std::is_same_v<
-                resolution_targets_t<typename optional_pointer_resolutions::
-                                         lvalue_reference_resolutions>,
+                reference_resolution_targets_t<
+                    typename optional_pointer_resolutions::object_resolutions>,
                 type_list<std::optional<A> &>>);
   static_assert(std::is_same_v<
-                resolution_targets_t<
-                    typename optional_pointer_resolutions::pointer_resolutions>,
+                pointer_resolution_targets_t<
+                    typename optional_pointer_resolutions::object_resolutions>,
                 type_list<std::optional<A> *>>);
   using optional_interface_pointer_model =
       detail::binding_model<type_registration<
           scope<external>, storage<optional_pointer>, interfaces<I, J>>>;
   using optional_interface_resolutions = detail::binding_resolutions<
       I, typename optional_interface_pointer_model::storage_type>;
-  static_assert(has_resolution_target_v<
-                std::optional<A>,
-                typename optional_interface_resolutions::value_resolutions>);
-  static_assert(has_resolution_target_v<
-                std::optional<I>,
-                typename optional_interface_resolutions::value_resolutions>);
+  static_assert(
+      has_resolution_target_v<
+          std::optional<A>,
+          typename accepted_values<optional_interface_resolutions>::type>);
+  static_assert(
+      has_resolution_target_v<
+          std::optional<I>,
+          typename accepted_values<optional_interface_resolutions>::type>);
   static_assert(
       std::is_same_v<
-          resolution_targets_t<
-              typename optional_interface_resolutions::pointer_resolutions>,
+          pointer_resolution_targets_t<
+              typename optional_interface_resolutions::object_resolutions>,
           type_list<std::optional<A> *>>);
   using optional_interface_binding =
       detail::binding<I, optional_interface_pointer_model>;
@@ -1008,36 +1076,38 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
       I, typename const_pointer_interface_model::storage_type>;
   static_assert(
       std::is_same_v<
-          resolution_targets_t<typename const_pointer_interface_resolutions::
-                                   lvalue_reference_resolutions>,
+          reference_resolution_targets_t<
+              typename const_pointer_interface_resolutions::object_resolutions>,
           type_list<const I &>>);
   static_assert(
       std::is_same_v<
-          resolution_targets_t<typename const_pointer_interface_resolutions::
-                                   pointer_resolutions>,
+          pointer_resolution_targets_t<
+              typename const_pointer_interface_resolutions::object_resolutions>,
           type_list<const I *>>);
 
   using external_move_only_pointer_model = detail::binding_model<
       type_registration<scope<external>, storage<move_only *>>>;
   using external_resolutions = detail::binding_resolutions<
       move_only, typename external_move_only_pointer_model::storage_type>;
-  static_assert(std::is_same_v<typename external_resolutions::value_resolutions,
-                               type_list<>>);
   static_assert(
-      std::is_same_v<resolution_targets_t<
-                         typename external_resolutions::pointer_resolutions>,
+      std::is_same_v<typename accepted_values<external_resolutions>::type,
+                     type_list<>>);
+  static_assert(
+      std::is_same_v<pointer_resolution_targets_t<
+                         typename external_resolutions::object_resolutions>,
                      type_list<move_only *>>);
 
   using shared_move_only_model = detail::binding_model<
       type_registration<scope<shared>, storage<move_only>>>;
   using shared_resolutions = detail::binding_resolutions<
       move_only, typename shared_move_only_model::storage_type>;
-  static_assert(std::is_same_v<typename shared_resolutions::value_resolutions,
-                               type_list<>>);
-  static_assert(std::is_same_v<
-                resolution_targets_t<
-                    typename shared_resolutions::lvalue_reference_resolutions>,
-                type_list<move_only &>>);
+  static_assert(
+      std::is_same_v<typename accepted_values<shared_resolutions>::type,
+                     type_list<>>);
+  static_assert(
+      std::is_same_v<reference_resolution_targets_t<
+                         typename shared_resolutions::object_resolutions>,
+                     type_list<move_only &>>);
 
   using shared_cyclical_handle = std::shared_ptr<A>;
   using shared_cyclical_handle_model = detail::binding_model<
@@ -1049,7 +1119,7 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   static_assert(
       has_resolution_target_v<
           shared_cyclical_handle,
-          typename shared_cyclical_handle_resolutions::value_resolutions>);
+          typename accepted_values<shared_cyclical_handle_resolutions>::type>);
   static_assert(
       !has_resolution_target_v<shared_cyclical_handle &&,
                                typename shared_cyclical_handle_resolutions::
@@ -1060,9 +1130,9 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   using unique_resolutions = detail::binding_resolutions<
       move_only, typename unique_move_only_model::storage_type>;
   static_assert(
-      std::is_same_v<
-          resolution_targets_t<typename unique_resolutions::value_resolutions>,
-          type_list<move_only, std::optional<move_only>>>);
+      std::is_same_v<resolution_targets_t<
+                         typename accepted_values<unique_resolutions>::type>,
+                     type_list<move_only, std::optional<move_only>>>);
 
   using compatible_unique_handle_model =
       detail::binding_model<type_registration<
@@ -1070,9 +1140,9 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   using compatible_unique_handle_resolutions = detail::binding_resolutions<
       I, typename compatible_unique_handle_model::storage_type>;
   static_assert(
-      has_resolution_target_v<
-          std::unique_ptr<I>,
-          typename compatible_unique_handle_resolutions::value_resolutions>);
+      has_resolution_target_v<std::unique_ptr<I>,
+                              typename accepted_values<
+                                  compatible_unique_handle_resolutions>::type>);
 
   using incompatible_unique_handle_model =
       detail::binding_model<type_registration<
@@ -1080,22 +1150,22 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
           interfaces<I>>>;
   using incompatible_unique_handle_resolutions = detail::binding_resolutions<
       I, typename incompatible_unique_handle_model::storage_type>;
-  static_assert(
-      !has_resolution_target_v<
-          std::unique_ptr<I>,
-          typename incompatible_unique_handle_resolutions::value_resolutions>);
+  static_assert(!has_resolution_target_v<
+                std::unique_ptr<I>,
+                typename accepted_values<
+                    incompatible_unique_handle_resolutions>::type>);
 
   using fresh_resolutions =
       detail::binding_resolutions<move_only, fresh_value_storage<move_only>>;
   static_assert(
-      std::is_same_v<
-          resolution_targets_t<typename fresh_resolutions::value_resolutions>,
-          type_list<move_only>>);
+      std::is_same_v<resolution_targets_t<
+                         typename accepted_values<fresh_resolutions>::type>,
+                     type_list<move_only>>);
   using immovable_fresh_resolutions =
       detail::binding_resolutions<immovable, fresh_value_storage<immovable>>;
-  static_assert(
-      std::is_same_v<typename immovable_fresh_resolutions::value_resolutions,
-                     type_list<>>);
+  static_assert(std::is_same_v<
+                typename accepted_values<immovable_fresh_resolutions>::type,
+                type_list<>>);
 
   using shared_variant =
       std::variant<std::shared_ptr<move_only>, std::monostate>;
@@ -1106,7 +1176,7 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
                                   typename shared_variant_model::storage_type>;
   static_assert(has_resolution_target_v<
                 std::shared_ptr<move_only>,
-                typename shared_variant_resolutions::value_resolutions>);
+                typename accepted_values<shared_variant_resolutions>::type>);
 
   using shared_move_only_variant =
       std::variant<std::unique_ptr<move_only>, std::monostate>;
@@ -1117,7 +1187,7 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
       typename shared_move_only_variant_model::storage_type>;
   static_assert(
       std::is_same_v<
-          typename shared_move_only_variant_resolutions::value_resolutions,
+          typename accepted_values<shared_move_only_variant_resolutions>::type,
           type_list<>>);
 
   using unique_variant =
@@ -1129,7 +1199,7 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
                                   typename unique_variant_model::storage_type>;
   static_assert(has_resolution_target_v<
                 std::unique_ptr<move_only>,
-                typename unique_variant_resolutions::value_resolutions>);
+                typename accepted_values<unique_variant_resolutions>::type>);
   static_assert(
       has_resolution_target_v<
           std::unique_ptr<move_only> &&,
@@ -1140,11 +1210,12 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   using nested_resolutions = detail::binding_resolutions<
       move_only,
       typename external_nested_move_only_pointer_model::storage_type>;
-  static_assert(std::is_same_v<typename nested_resolutions::value_resolutions,
-                               type_list<>>);
   static_assert(
-      std::is_same_v<resolution_targets_t<
-                         typename nested_resolutions::pointer_resolutions>,
+      std::is_same_v<typename accepted_values<nested_resolutions>::type,
+                     type_list<>>);
+  static_assert(
+      std::is_same_v<pointer_resolution_targets_t<
+                         typename nested_resolutions::object_resolutions>,
                      type_list<std::optional<move_only> *>>);
 
   using external_nested_move_only_reference_model =
@@ -1153,9 +1224,9 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   using nested_reference_resolutions = detail::binding_resolutions<
       move_only,
       typename external_nested_move_only_reference_model::storage_type>;
-  static_assert(
-      std::is_same_v<typename nested_reference_resolutions::value_resolutions,
-                     type_list<>>);
+  static_assert(std::is_same_v<
+                typename accepted_values<nested_reference_resolutions>::type,
+                type_list<>>);
 
   using exact_optional_model = detail::binding_model<
       type_registration<scope<external>, storage<std::optional<copy_only> &>,
@@ -1173,19 +1244,18 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
       type_registration<scope<external>, storage<const_array_pointer>>>;
   using const_array_pointer_resolutions = detail::binding_resolutions<
       A, typename const_array_pointer_model::storage_type>;
+  static_assert(std::is_same_v<resolution_targets_t<typename accepted_values<
+                                   const_array_pointer_resolutions>::type>,
+                               type_list<std::array<A, 2>>>);
   static_assert(
       std::is_same_v<
-          resolution_targets_t<
-              typename const_array_pointer_resolutions::value_resolutions>,
-          type_list<std::array<A, 2>>>);
-  static_assert(std::is_same_v<
-                resolution_targets_t<typename const_array_pointer_resolutions::
-                                         lvalue_reference_resolutions>,
-                type_list<const std::array<A, 2> &>>);
+          reference_resolution_targets_t<
+              typename const_array_pointer_resolutions::object_resolutions>,
+          type_list<const std::array<A, 2> &>>);
   static_assert(
       std::is_same_v<
-          resolution_targets_t<
-              typename const_array_pointer_resolutions::pointer_resolutions>,
+          pointer_resolution_targets_t<
+              typename const_array_pointer_resolutions::object_resolutions>,
           type_list<const std::array<A, 2> *>>);
 
   using unique_optional_pointer_model = detail::binding_model<
@@ -1195,11 +1265,11 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
   static_assert(
       has_resolution_target_v<
           std::unique_ptr<std::optional<A>>,
-          typename unique_optional_pointer_resolutions::value_resolutions>);
+          typename accepted_values<unique_optional_pointer_resolutions>::type>);
   static_assert(
       has_resolution_target_v<
           std::shared_ptr<std::optional<A>>,
-          typename unique_optional_pointer_resolutions::value_resolutions>);
+          typename accepted_values<unique_optional_pointer_resolutions>::type>);
   static_assert(
       has_resolution_target_v<std::unique_ptr<std::optional<A>> &&,
                               typename unique_optional_pointer_resolutions::
@@ -1210,8 +1280,8 @@ TEST(type_registration_test, recursive_leaf_and_rebind_traits) {
                                   rvalue_reference_resolutions>);
   static_assert(
       std::is_same_v<
-          resolution_targets_t<typename unique_optional_pointer_resolutions::
-                                   pointer_resolutions>,
+          pointer_resolution_targets_t<
+              typename unique_optional_pointer_resolutions::object_resolutions>,
           type_list<std::optional<A> *>>);
 }
 
@@ -1389,16 +1459,16 @@ TEST(type_registration_test, const_reference_storage_preserves_const_access) {
   using resolutions =
       detail::binding_resolutions<int, typename model::storage_type>;
 
-  static_assert(std::is_same_v<
-                resolution_targets_t<typename resolutions::value_resolutions>,
-                type_list<int>>);
   static_assert(
-      std::is_same_v<resolution_targets_t<
-                         typename resolutions::lvalue_reference_resolutions>,
-                     type_list<const int &>>);
-  static_assert(std::is_same_v<
-                resolution_targets_t<typename resolutions::pointer_resolutions>,
-                type_list<const int *>>);
+      std::is_same_v<
+          resolution_targets_t<typename accepted_values<resolutions>::type>,
+          type_list<int>>);
+  static_assert(std::is_same_v<reference_resolution_targets_t<
+                                   typename resolutions::object_resolutions>,
+                               type_list<const int &>>);
+  static_assert(std::is_same_v<pointer_resolution_targets_t<
+                                   typename resolutions::object_resolutions>,
+                               type_list<const int *>>);
 
   const int value = 7;
   container<> value_container;
@@ -1414,7 +1484,7 @@ TEST(type_registration_test, const_reference_storage_preserves_const_access) {
   using optional_resolutions =
       detail::binding_resolutions<int, typename optional_model::storage_type>;
   static_assert(has_resolution_target_v<
-                int, typename optional_resolutions::value_resolutions>);
+                int, typename accepted_values<optional_resolutions>::type>);
 
   container<> optional_container;
   optional_container
@@ -1597,14 +1667,13 @@ TEST(type_registration_test,
   using resolutions =
       detail::binding_resolutions<int, typename model::storage_type>;
   static_assert(
-      std::is_same_v<typename resolutions::value_resolutions, type_list<>>);
-  static_assert(
-      std::is_same_v<resolution_targets_t<
-                         typename resolutions::lvalue_reference_resolutions>,
-                     type_list<int (&)[2][3]>>);
-  static_assert(std::is_same_v<
-                resolution_targets_t<typename resolutions::pointer_resolutions>,
-                type_list<int (*)[3], int (*)[2][3]>>);
+      std::is_same_v<typename accepted_values<resolutions>::type, type_list<>>);
+  static_assert(std::is_same_v<reference_resolution_targets_t<
+                                   typename resolutions::object_resolutions>,
+                               type_list<int (&)[2][3]>>);
+  static_assert(std::is_same_v<pointer_resolution_targets_t<
+                                   typename resolutions::object_resolutions>,
+                               type_list<int (*)[3], int (*)[2][3]>>);
 
   container<> container;
   container.register_type<scope<shared>, storage<int[2][3]>>();
