@@ -39,7 +39,11 @@ template <typename T> struct conversion_cache_entry {
       assert(value_ == nullptr);
       auto *created = std::addressof(context.template construct<T>(
           persistent_scope, std::forward<Args>(args)...));
-      context.on_rollback([this]() noexcept { value_ = nullptr; });
+      context.on_rollback(
+          +[](void *self, void *) noexcept {
+            static_cast<conversion_cache_entry *>(self)->value_ = nullptr;
+          },
+          this);
       value_ = created;
     }
     return *value_;

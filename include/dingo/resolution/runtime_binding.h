@@ -93,7 +93,11 @@ public:
       auto *created = construct_container<InstanceContainer>(context);
       if constexpr (TrackRollback) {
         context.on_rollback(
-            [this]() noexcept { instance_container_ = nullptr; });
+            +[](void *self, void *) noexcept {
+              static_cast<runtime_binding_state *>(self)->instance_container_ =
+                  nullptr;
+            },
+            this);
       }
       instance_container_ = created;
     }
@@ -179,7 +183,7 @@ template <typename Storage> using registered_type_t = typename Storage::type;
 template <typename Type, typename Storage>
 using runtime_binding_cache_types_t =
     resolution_cache_types_t<typename binding_resolutions<Type, Storage>::type,
-                             Storage>;
+                             storage_shape_t<Storage>>;
 
 template <typename Types>
 static constexpr bool has_runtime_binding_cache_v =
@@ -327,11 +331,20 @@ private:
                              Fn &&fn) {
     if constexpr (materialization_traits::can_retain_source) {
       if (materialization_traits::retains_source(get_storage())) {
-        const bool reset_storage = should_reset_storage_on_failure();
-        context.on_rollback([this, reset_storage]() noexcept {
-          reset_conversion_artifacts();
-          reset_storage_after_failure(reset_storage);
-        });
+        // The reset flag is selected by the callback, not carried by it.
+        context.on_rollback(
+            should_reset_storage_on_failure()
+                ? +[](void *self, void *) noexcept {
+                    auto *binding = static_cast<runtime_binding *>(self);
+                    binding->reset_conversion_artifacts();
+                    binding->reset_storage_after_failure(true);
+                  }
+                : +[](void *self, void *) noexcept {
+                    auto *binding = static_cast<runtime_binding *>(self);
+                    binding->reset_conversion_artifacts();
+                    binding->reset_storage_after_failure(false);
+                  },
+            this);
         auto materialize = [&]() -> decltype(auto) {
           return with_resolution_container<true>(
               context, [&](auto &container) -> decltype(auto) {

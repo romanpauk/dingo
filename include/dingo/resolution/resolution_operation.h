@@ -373,7 +373,6 @@ private:
       std::remove_cv_t<std::remove_reference_t<typename Storage::type>>;
 
 public:
-  template <typename Storage>
   using cache_types = typename conversion_cache_types<Conversion>::type;
 
   template <typename Storage>
@@ -384,7 +383,6 @@ public:
                              !std::is_same_v<target_type, stored_type<Storage>>,
                          type_list<target_type>, type_list<>>;
 
-  template <typename Storage>
   static constexpr bool requires_source_retention =
       !std::is_same_v<resolution_object_t<Target>, resolution_object_t<Source>>;
 

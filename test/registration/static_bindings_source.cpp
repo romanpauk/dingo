@@ -20,6 +20,7 @@
 #include <optional>
 #include <utility>
 #include <variant>
+#include <vector>
 
 using namespace dingo;
 
@@ -426,4 +427,52 @@ TEST(static_bindings_source_test,
   EXPECT_EQ(b_instance.dependency, &instance);
   EXPECT_EQ(&container.resolve<a &>(), &instance);
   EXPECT_EQ(&container.resolve<b_interface &>(), &b_view);
+}
+
+TEST(static_bindings_source_test,
+     static_container_resolves_collection_of_multiple_interface_bindings) {
+  struct interface {
+    virtual ~interface() = default;
+  };
+  struct first : interface {};
+  struct second : interface {};
+  struct consumer {
+    explicit consumer(std::vector<interface *> init_values)
+        : values(std::move(init_values)) {}
+    std::vector<interface *> values;
+  };
+
+  using source = dingo::bindings<
+      dingo::bind<scope<shared>, storage<first>, interfaces<interface>>,
+      dingo::bind<scope<shared>, storage<second>, interfaces<interface>>,
+      dingo::bind<scope<unique>, storage<consumer>,
+                  dependencies<std::vector<interface *>>>>;
+
+  dingo::static_container<source> container;
+
+  EXPECT_EQ(container.resolve<consumer>().values.size(), 2u);
+}
+
+TEST(static_bindings_source_test,
+     container_resolves_static_collection_of_multiple_interface_bindings) {
+  struct interface {
+    virtual ~interface() = default;
+  };
+  struct first : interface {};
+  struct second : interface {};
+  struct consumer {
+    explicit consumer(std::vector<interface *> init_values)
+        : values(std::move(init_values)) {}
+    std::vector<interface *> values;
+  };
+
+  using source = dingo::bindings<
+      dingo::bind<scope<shared>, storage<first>, interfaces<interface>>,
+      dingo::bind<scope<shared>, storage<second>, interfaces<interface>>,
+      dingo::bind<scope<unique>, storage<consumer>,
+                  dependencies<std::vector<interface *>>>>;
+
+  dingo::container<source> container;
+
+  EXPECT_EQ(container.resolve<consumer>().values.size(), 2u);
 }
