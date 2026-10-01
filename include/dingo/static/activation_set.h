@@ -16,7 +16,6 @@
 #include <dingo/core/key.h>
 #include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
-#include <dingo/rtti/static_provider.h>
 #include <dingo/static/graph.h>
 #include <dingo/type/type_descriptor.h>
 
@@ -33,8 +32,7 @@
 namespace dingo {
 namespace detail {
 
-template <bool RuntimeDependencies, typename... Registrations>
-class basic_static_activation_set;
+template <typename... Registrations> class basic_static_activation_set;
 
 template <typename Registration> struct binding_storage_slot {
   using binding_model = detail::binding_model<Registration>;
@@ -144,25 +142,25 @@ using binding_cache_types_t =
     typename binding_cache_types<BindingModel,
                                  typename BindingModel::interface_types>::type;
 
+// The cache types are only enumerated for stable conversions; naming them in
+// the primary template would instantiate them for every binding.
+template <typename BindingModel,
+          bool Stable = BindingModel::storage_type::conversions::is_stable>
+inline constexpr bool has_binding_conversion_cache_v = false;
+
 template <typename BindingModel>
-inline constexpr bool has_binding_conversion_cache_v =
-    BindingModel::storage_type::conversions::is_stable &&
+inline constexpr bool has_binding_conversion_cache_v<BindingModel, true> =
     type_list_size_v<binding_cache_types_t<BindingModel>> != 0;
 
-template <typename Frame, typename Registration> struct binding_frame_slot {
-  Frame frame;
-};
-
-template <bool RuntimeDependencies, typename Registration,
+template <typename Registration,
           typename BindingsType =
               typename detail::binding_model<Registration>::bindings_type>
 struct local_binding_scope_slot {};
 
-template <bool RuntimeDependencies, typename Registration,
-          typename... LocalRegistrations>
-struct local_binding_scope_slot<RuntimeDependencies, Registration,
+template <typename Registration, typename... LocalRegistrations>
+struct local_binding_scope_slot<Registration,
                                 static_bindings<LocalRegistrations...>> {
-  basic_static_activation_set<RuntimeDependencies, LocalRegistrations...> scope;
+  basic_static_activation_set<LocalRegistrations...> scope;
 };
 
 template <typename Registration, bool Enabled = has_binding_conversion_cache_v<
@@ -172,6 +170,11 @@ struct binding_conversion_cache_slot;
 template <typename Registration, bool Enabled> struct registration_cache_types {
   using binding_model = detail::binding_model<Registration>;
   using type = binding_cache_types_t<binding_model>;
+};
+
+template <typename Registration>
+struct registration_cache_types<Registration, false> {
+  using type = type_list<>;
 };
 
 template <typename Registration, bool Enabled>
@@ -188,73 +191,11 @@ struct binding_conversion_cache_slot
   using base_type::construct_conversion;
 };
 
-template <bool RuntimeDependencies, typename... Registrations>
-struct basic_static_activation_frame;
-
 template <typename... Registrations>
-struct basic_static_activation_frame<false, Registrations...> {
-  using type = detail::static_context_frame<
-      detail::basic_static_execution_traits<static_bindings<Registrations...>,
-                                            false>::max_destructible_slots,
-      detail::basic_static_execution_traits<static_bindings<Registrations...>,
-                                            false>::max_temporary_slots,
-      detail::basic_static_execution_traits<static_bindings<Registrations...>,
-                                            false>::max_temporary_size == 0
-          ? 1
-          : detail::basic_static_execution_traits<
-                static_bindings<Registrations...>, false>::max_temporary_size,
-      detail::basic_static_execution_traits<static_bindings<Registrations...>,
-                                            false>::max_temporary_align == 0
-          ? alignof(std::max_align_t)
-          : detail::basic_static_execution_traits<
-                static_bindings<Registrations...>, false>::max_temporary_align>;
-};
-
-template <typename... Registrations>
-struct basic_static_activation_frame<true, Registrations...> {
-  using type = detail::fixed_static_context_frame<
-      detail::basic_static_execution_traits<static_bindings<Registrations...>,
-                                            true>::max_destructible_slots,
-      detail::basic_static_execution_traits<static_bindings<Registrations...>,
-                                            true>::max_temporary_slots,
-      detail::basic_static_execution_traits<static_bindings<Registrations...>,
-                                            true>::max_temporary_size == 0
-          ? 1
-          : detail::basic_static_execution_traits<
-                static_bindings<Registrations...>, true>::max_temporary_size,
-      detail::basic_static_execution_traits<static_bindings<Registrations...>,
-                                            true>::max_temporary_align == 0
-          ? alignof(std::max_align_t)
-          : detail::basic_static_execution_traits<
-                static_bindings<Registrations...>, true>::max_temporary_align>;
-};
-
-template <bool RuntimeDependencies, typename... Registrations>
-using static_activation_frame_t =
-    typename basic_static_activation_frame<RuntimeDependencies,
-                                           Registrations...>::type;
-
-template <bool RuntimeDependencies, typename... Registrations>
-class static_activation_frame_storage
-    : private binding_frame_slot<
-          static_activation_frame_t<RuntimeDependencies, Registrations...>,
-          Registrations>... {
-  template <typename Registration>
-  using frame_holder = binding_frame_slot<
-      static_activation_frame_t<RuntimeDependencies, Registrations...>,
-      Registration>;
-
-public:
-  template <typename Registration> auto &get_frame() {
-    return static_cast<frame_holder<Registration> &>(*this).frame;
-  }
-};
-
-template <bool RuntimeDependencies, typename... Registrations>
 class static_binding_storage
     : private binding_conversion_cache_slot<Registrations>...,
       private binding_storage_slot<Registrations>...,
-      private local_binding_scope_slot<RuntimeDependencies, Registrations>... {
+      private local_binding_scope_slot<Registrations>... {
   template <typename Registration>
   using storage_slot = binding_storage_slot<Registration>;
 
@@ -262,8 +203,7 @@ class static_binding_storage
   using conversion_cache_slot = binding_conversion_cache_slot<Registration>;
 
   template <typename Registration>
-  using local_scope_slot =
-      local_binding_scope_slot<RuntimeDependencies, Registration>;
+  using local_scope_slot = local_binding_scope_slot<Registration>;
 
 public:
   template <typename Registration> auto &get_storage() {
@@ -512,7 +452,7 @@ struct static_binding_resolver {
 
   template <typename Request, typename Context>
   Request resolve(Context &context, cache::sink cache = {}) {
-    static_assert(State::runtime_dependencies ||
+    static_assert(is_runtime_context_v<Context> ||
                       binding_supports_request_v<Request, InterfaceBinding>,
                   "static resolution cannot satisfy a request the storage "
                   "does not publish");
@@ -542,7 +482,7 @@ struct static_binding_resolver {
 
   template <typename Request, typename Context, typename Fn>
   decltype(auto) consume(Context &context, Fn &&fn) {
-    static_assert(State::runtime_dependencies ||
+    static_assert(is_runtime_context_v<Context> ||
                       binding_supports_request_v<Request, InterfaceBinding>,
                   "static resolution cannot satisfy a request the storage "
                   "does not publish");
@@ -582,7 +522,7 @@ struct static_binding_resolver {
                       decltype(activation)>) {
       return detail::with_context_lvalue_source(
           scope, context, storage, activation, std::move(materialize));
-    } else if constexpr (State::runtime_dependencies) {
+    } else if constexpr (is_runtime_context_v<Context>) {
       return detail::with_runtime_binding_source(
           scope, context, storage, activation, std::move(materialize));
     } else if constexpr (detail::operation_requires_source_retention_v<
@@ -591,8 +531,7 @@ struct static_binding_resolver {
                              std::remove_cv_t<std::remove_reference_t<Context>>,
                              no_dependency_context>) {
       return detail::with_retained_binding_source(
-          scope, context, storage, activation, get_resolution_frame(context),
-          std::move(materialize));
+          scope, context, storage, activation, std::move(materialize));
     } else {
       return detail::with_binding_source(scope, context, storage, activation,
                                          std::move(materialize));
@@ -619,24 +558,16 @@ struct static_binding_resolver {
       };
       return detail::with_context_lvalue_source(
           scope, context, storage, activation, std::move(materialize));
-    } else if constexpr (State::runtime_dependencies) {
+    } else if constexpr (is_runtime_context_v<Context>) {
       return detail::consume_runtime_binding_resolution_request<Request,
                                                                 Resolution>(
           scope, context, storage, activation, activation,
           std::forward<Fn>(fn));
     } else {
       return detail::consume_binding_resolution_request<Request, Resolution>(
-          scope, context, storage, activation, get_resolution_frame(context),
-          activation, std::forward<Fn>(fn));
+          scope, context, storage, activation, activation,
+          std::forward<Fn>(fn));
     }
-  }
-
-  template <typename Context>
-  decltype(auto) get_resolution_frame(Context &context) {
-    static_cast<void>(context);
-    static_assert(!State::runtime_dependencies);
-    return state
-        .template get_frame<typename binding_model_type::registration_type>();
   }
 };
 
@@ -753,13 +684,8 @@ T construct_static_collection_default_impl(construction_scope scope,
   }
 }
 
-template <typename Derived, bool RuntimeDependencies, typename... Registrations>
-class basic_static_activation_set_base {
+template <typename Derived> class basic_static_activation_set_base {
 public:
-  static constexpr bool runtime_dependencies = RuntimeDependencies;
-
-  using rtti_type = rtti<static_provider>;
-
   template <typename T, typename BindingModel, typename Host, typename Context>
   decltype(auto) resolve_binding_type(construction_scope scope, Host &host,
                                       Context &context) {
@@ -849,49 +775,29 @@ private:
   Derived &derived() { return static_cast<Derived &>(*this); }
 };
 
-template <bool RuntimeDependencies, typename... Registrations>
+template <typename... Registrations>
 class basic_static_activation_set
     : public basic_static_activation_set_base<
-          basic_static_activation_set<RuntimeDependencies, Registrations...>,
-          RuntimeDependencies, Registrations...>,
-      private static_activation_frame_storage<RuntimeDependencies,
-                                              Registrations...>,
-      private static_binding_storage<RuntimeDependencies, Registrations...> {
+          basic_static_activation_set<Registrations...>>,
+      private static_binding_storage<Registrations...> {
 public:
-  using static_activation_frame_storage<RuntimeDependencies,
-                                        Registrations...>::get_frame;
   using static_binding_storage<
-      RuntimeDependencies, Registrations...>::get_conversion_cache_for_model;
-  using static_binding_storage<RuntimeDependencies,
-                               Registrations...>::get_local_scope_for_model;
-  using static_binding_storage<RuntimeDependencies,
-                               Registrations...>::get_storage;
-  using static_binding_storage<RuntimeDependencies,
-                               Registrations...>::get_storage_for_model;
+      Registrations...>::get_conversion_cache_for_model;
+  using static_binding_storage<Registrations...>::get_local_scope_for_model;
+  using static_binding_storage<Registrations...>::get_storage;
+  using static_binding_storage<Registrations...>::get_storage_for_model;
 };
 
 template <typename... Registrations>
-using static_binding_scope =
-    basic_static_activation_set<false, Registrations...>;
+using static_storage_state = static_binding_storage<Registrations...>;
 
-template <typename... Registrations>
-using static_storage_state = static_binding_storage<false, Registrations...>;
-
-template <bool RuntimeDependencies, typename StorageState,
-          typename... Registrations>
+template <typename StorageState>
 class basic_static_activation_set_view
     : public basic_static_activation_set_base<
-          basic_static_activation_set_view<RuntimeDependencies, StorageState,
-                                           Registrations...>,
-          RuntimeDependencies, Registrations...>,
-      private static_activation_frame_storage<RuntimeDependencies,
-                                              Registrations...> {
+          basic_static_activation_set_view<StorageState>> {
 public:
   explicit basic_static_activation_set_view(StorageState &state)
       : state_(&state) {}
-
-  using static_activation_frame_storage<RuntimeDependencies,
-                                        Registrations...>::get_frame;
 
   template <typename Registration> auto &get_storage() {
     return state_->template get_storage<Registration>();
@@ -918,10 +824,7 @@ class static_registry<static_bindings<Registrations...>, State> {
   using bindings_type = static_bindings<Registrations...>;
   using self_type = static_registry<bindings_type, State>;
 
-  template <typename Context>
-  using scope_type =
-      basic_static_activation_set_view<is_runtime_context_v<Context>, State,
-                                       Registrations...>;
+  using scope_type = basic_static_activation_set_view<State>;
 
   template <typename Request, typename LookupKey>
   using selection_t =
@@ -956,7 +859,7 @@ public:
   std::size_t append_collection(construction_scope construction, T &results,
                                 Host &host, Context &context, Fn &&fn) {
     static_assert(is_lookup_key_v<LookupKey>);
-    scope_type<Context> scope(state_);
+    scope_type scope(state_);
     return scope.template append_static_collection<T, LookupKey, bindings_type>(
         construction, results, host, context, std::forward<Fn>(fn));
   }
@@ -971,7 +874,7 @@ public:
   T construct_collection(construction_scope construction, Host &host,
                          Context &context) {
     static_assert(is_lookup_key_v<LookupKey>);
-    scope_type<Context> scope(state_);
+    scope_type scope(state_);
     return scope
         .template construct_static_collection<T, LookupKey, bindings_type>(
             construction, host, context);
@@ -982,7 +885,7 @@ public:
   T construct_collection(construction_scope construction, Host &host,
                          Context &context, Fn &&fn) {
     static_assert(is_lookup_key_v<LookupKey>);
-    scope_type<Context> scope(state_);
+    scope_type scope(state_);
     return scope
         .template construct_static_collection<T, LookupKey, bindings_type>(
             construction, host, context, std::forward<Fn>(fn));
@@ -993,7 +896,7 @@ public:
   decltype(auto) resolve_binding(construction_scope construction,
                                  Context &context, Host &host) {
     using binding = typename Selection::binding_type;
-    scope_type<Context> scope(state_);
+    scope_type scope(state_);
     auto resolver =
         scope.template make_binding_resolver<binding>(construction, host);
     return resolver.template resolve<ResolveRequest>(context);

@@ -17,54 +17,10 @@
 
 namespace dingo {
 
-template <typename StaticRegistry, bool RuntimeDependencies>
-class basic_static_context;
-
-namespace detail {
-
-template <typename StaticRegistry, bool RuntimeDependencies>
-struct static_context_frame_choice;
-
 template <typename StaticRegistry>
-struct static_context_frame_choice<StaticRegistry, false> {
-  using execution_traits =
-      detail::basic_static_execution_traits<StaticRegistry, false>;
-  using type =
-      detail::static_context_frame<execution_traits::max_destructible_slots,
-                                   execution_traits::max_temporary_slots,
-                                   execution_traits::max_temporary_size == 0
-                                       ? 1
-                                       : execution_traits::max_temporary_size,
-                                   execution_traits::max_temporary_align == 0
-                                       ? alignof(std::max_align_t)
-                                       : execution_traits::max_temporary_align>;
-};
-
-template <typename StaticRegistry>
-struct static_context_frame_choice<StaticRegistry, true> {
-  using execution_traits =
-      detail::basic_static_execution_traits<StaticRegistry, true>;
-  using type = detail::fixed_static_context_frame<
-      execution_traits::max_destructible_slots,
-      execution_traits::max_temporary_slots,
-      execution_traits::max_temporary_size == 0
-          ? 1
-          : execution_traits::max_temporary_size,
-      execution_traits::max_temporary_align == 0
-          ? alignof(std::max_align_t)
-          : execution_traits::max_temporary_align>;
-};
-
-template <typename StaticRegistry>
-using binding_context = basic_static_context<StaticRegistry, true>;
-
-} // namespace detail
-
-template <typename StaticRegistry, bool RuntimeDependencies = false>
 class basic_static_context : public detail::context_path_state {
   using execution_traits =
-      detail::basic_static_execution_traits<StaticRegistry,
-                                            RuntimeDependencies>;
+      detail::basic_static_execution_traits<StaticRegistry>;
   static constexpr std::size_t frame_capacity_ =
       execution_traits::max_retained_frame_depth + 1;
   static constexpr std::size_t destructible_capacity_ =
@@ -79,18 +35,17 @@ class basic_static_context : public detail::context_path_state {
       execution_traits::max_temporary_align == 0
           ? alignof(std::max_align_t)
           : execution_traits::max_temporary_align;
-  using frame_type =
-      typename detail::static_context_frame_choice<StaticRegistry,
-                                                   RuntimeDependencies>::type;
-  // Pure static contexts keep concrete frame pointers so optimized static
-  // resolution does not emit virtual reset/allocation code. Runtime-dependent
-  // static resolution needs the base pointer because nested local bindings can
-  // share activation frames across static context types.
-  using frame_pointer_type =
-      std::conditional_t<RuntimeDependencies,
-                         detail::static_context_frame_base *, frame_type *>;
 
 public:
+  // Retained resolutions construct a local frame of this type, sized for the
+  // whole context graph, so a registry resolving through a context whose
+  // bindings extend its own (a static parent under a child) pushes a frame of
+  // exactly the type the context stores.
+  using frame_type =
+      detail::static_context_frame<destructible_capacity_,
+                                   temporary_slot_capacity_,
+                                   temporary_slot_size_, temporary_slot_align_>;
+
   basic_static_context() { frames_[0] = &frame_; }
 
   ~basic_static_context() {
@@ -154,16 +109,6 @@ public:
   }
 
   void push_frame(frame_type *frame) {
-    assert(!contains_frame(frame));
-    assert(frame_count_ < frames_.size());
-    frames_[frame_count_++] = frame;
-  }
-
-  // Only runtime-dependent static contexts accept erased static frames.
-  template <bool Enabled = RuntimeDependencies,
-            std::enable_if_t<Enabled, int> = 0>
-  void push_frame(detail::static_context_frame_base *frame) {
-    assert(!contains_frame(frame));
     assert(frame_count_ < frames_.size());
     frames_[frame_count_++] = frame;
   }
@@ -171,15 +116,6 @@ public:
   void pop_frame() {
     assert(frame_count_ != 0);
     --frame_count_;
-  }
-
-  bool contains_frame(frame_pointer_type candidate) const {
-    for (std::size_t index = 0; index < frame_count_; ++index) {
-      if (frames_[index] == candidate) {
-        return true;
-      }
-    }
-    return false;
   }
 
 private:
@@ -194,16 +130,9 @@ private:
                   "static_context requires at least one compile-time "
                   "temporary slot for this resolution path");
 
-    if constexpr (RuntimeDependencies) {
-      auto *fixed =
-          active_frame().try_allocate_temporary(sizeof(T), alignof(T));
-      assert(fixed != nullptr);
-      return reinterpret_cast<T *>(fixed);
-    } else {
-      auto *fixed = active_frame().template try_allocate_temporary<T>();
-      assert(fixed != nullptr);
-      return fixed;
-    }
+    auto *fixed = active_frame().template try_allocate_temporary<T>();
+    assert(fixed != nullptr);
+    return fixed;
   }
 
   auto &active_frame() {
@@ -220,12 +149,12 @@ private:
     reinterpret_cast<T *>(ptr)->~T();
   }
 
-  std::array<frame_pointer_type, frame_capacity_> frames_{};
+  std::array<frame_type *, frame_capacity_> frames_{};
   std::size_t frame_count_ = 1;
   frame_type frame_;
 };
 
 template <typename StaticRegistry>
-using static_context = basic_static_context<StaticRegistry, false>;
+using static_context = basic_static_context<StaticRegistry>;
 
 } // namespace dingo

@@ -221,7 +221,7 @@ public:
   using static_registry_type =
       static_registry<static_bindings_type, state_type>;
   using container_traits_type = ContainerTraits;
-  using rtti_type = typename static_binding_scope<Registrations...>::rtti_type;
+  using rtti_type = typename ContainerTraits::rtti_type;
 
   static_assert(static_bindings_type::valid,
                 "static_container requires a valid compile-time bindings "
