@@ -212,28 +212,53 @@ inline constexpr bool uses_stored_leaf_v =
     storage_source_traits<Storage>::is_pointer &&
     !storage_source_traits<Storage>::template publishes_interface<Interface>;
 
+// The leaf a request is published for: the stored leaf when the interface is
+// not served by a pointer source, otherwise the interface itself.
+template <typename Interface, typename Storage>
+using storage_published_leaf_t = std::conditional_t<
+    uses_stored_leaf_v<Interface, Storage>,
+    typename storage_source_traits<Storage>::direct_leaf_type,
+    std::remove_cv_t<Interface>>;
+
+// A pointer source rebinds the leaf of the request, any other source resolves
+// the request type of the leaf. Only the branch of the source is formed.
+template <typename Request, typename Interface, typename Storage,
+          bool IsPointer = storage_source_traits<Storage>::is_pointer>
+struct storage_published_type {
+  using type = qualified_target_t<
+      request_target_t<Request, storage_published_leaf_t<Interface, Storage>>,
+      typename storage_source_traits<Storage>::qualification_type>;
+};
+
 template <typename Request, typename Interface, typename Storage>
-using storage_published_type_t = qualified_target_t<
-    std::conditional_t<
-        storage_source_traits<Storage>::is_pointer,
-        rebind_request_leaf_t<
-            Request, std::conditional_t<uses_stored_leaf_v<Interface, Storage>,
-                                        typename storage_source_traits<
-                                            Storage>::direct_leaf_type,
-                                        std::remove_cv_t<Interface>>>,
-        request_target_t<
-            Request, std::conditional_t<uses_stored_leaf_v<Interface, Storage>,
-                                        typename storage_source_traits<
-                                            Storage>::direct_leaf_type,
-                                        std::remove_cv_t<Interface>>>>,
-    typename storage_source_traits<Storage>::qualification_type>;
+struct storage_published_type<Request, Interface, Storage, true> {
+  using type = qualified_target_t<
+      rebind_request_leaf_t<Request,
+                            storage_published_leaf_t<Interface, Storage>>,
+      typename storage_source_traits<Storage>::qualification_type>;
+};
+
+template <typename Request, typename Interface, typename Storage>
+using storage_published_type_t =
+    typename storage_published_type<Request, Interface, Storage>::type;
 
 template <typename Request, typename Interface, typename Storage,
           bool PublishValue>
-using storage_resolution_target_t = std::conditional_t<
-    PublishValue,
-    remove_cvref_t<storage_published_type_t<Request, Interface, Storage>>,
-    storage_published_type_t<Request, Interface, Storage>>;
+struct storage_resolution_target {
+  using type = storage_published_type_t<Request, Interface, Storage>;
+};
+
+template <typename Request, typename Interface, typename Storage>
+struct storage_resolution_target<Request, Interface, Storage, true> {
+  using type =
+      remove_cvref_t<storage_published_type_t<Request, Interface, Storage>>;
+};
+
+template <typename Request, typename Interface, typename Storage,
+          bool PublishValue>
+using storage_resolution_target_t =
+    typename storage_resolution_target<Request, Interface, Storage,
+                                       PublishValue>::type;
 
 template <typename Storage, typename Access>
 using storage_resolution_source_t =
@@ -654,19 +679,17 @@ struct shared_object_resolutions<type_list<Pointers...>, Interface, Storage,
 private:
   using source = storage_resolution_source_t<Storage, borrow>;
 
-  template <typename Pointer>
-  using target =
-      storage_resolution_target_t<Pointer, Interface, Storage, false>;
-
-  template <typename Pointer>
-  using route = resolution<
-      target<Pointer>,
-      type_resolution<target<Pointer>, source,
-                      default_object_conversion_t<target<Pointer>, source>>,
-      true, ServesValue>;
+  // The target of a route is formed once and named by the route.
+  template <typename Target>
+  using route_of =
+      resolution<Target,
+                 type_resolution<Target, source,
+                                 default_object_conversion_t<Target, source>>,
+                 true, ServesValue>;
 
 public:
-  using type = type_list<route<Pointers>...>;
+  using type = type_list<route_of<
+      storage_resolution_target_t<Pointers, Interface, Storage, false>>...>;
 };
 
 // Whether a shared route already provides a route of a category for the same

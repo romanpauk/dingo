@@ -234,47 +234,42 @@ inline constexpr size_t invalid_arity = static_cast<size_t>(-1);
 
 template <typename T, size_t> using repeated_type = T;
 
-template <typename T, typename DetectionMode, size_t Arity>
-struct constructor_methods {
-private:
-  template <typename Type, typename Context, typename Container, size_t... Is>
-  static auto construct_impl(construction_scope scope, Context &ctx,
-                             Container &container, std::index_sequence<Is...>) {
+// The index sequence is a parameter of the class, so one function expands the
+// constructor arguments. A separate expansion helper would add a template
+// instantiation to every level of a nested construction.
+template <typename T, typename DetectionMode, typename Indexes>
+struct constructor_methods_impl;
+
+template <typename T, typename DetectionMode, size_t... Is>
+struct constructor_methods_impl<T, DetectionMode, std::index_sequence<Is...>> {
+  // `Is...` only drives the pack expansion; the runtime construction
+  // path still receives `Arity` copies of the same constructor argument
+  // adapter without first materializing a type_list of placeholders.
+  template <typename Type, typename Context, typename Container>
+  static auto construct(construction_scope scope, Context &ctx,
+                        Container &container) {
     (void)scope;
-    // `Is...` only drives the pack expansion; the runtime construction
-    // path still receives `Arity` copies of the same constructor argument
-    // adapter without first materializing a type_list of placeholders.
     return detail::construction_dispatch<Type, T>::construct(
         ((void)Is,
          constructor_argument_impl<T, Context, Container, DetectionMode>(
              scope, ctx, container))...);
   }
 
-  template <typename Type, typename Context, typename Container, size_t... Is>
-  static void construct_impl(void *ptr, construction_scope scope, Context &ctx,
-                             Container &container, std::index_sequence<Is...>) {
+  template <typename Type, typename Context, typename Container>
+  static auto construct(void *ptr, construction_scope scope, Context &ctx,
+                        Container &container) {
     (void)scope;
     detail::construction_dispatch<Type, T>::construct(
         ptr, ((void)Is,
               constructor_argument_impl<T, Context, Container, DetectionMode>(
                   scope, ctx, container))...);
   }
-
-public:
-  template <typename Type, typename Context, typename Container>
-  static auto construct(construction_scope scope, Context &ctx,
-                        Container &container) {
-    return construct_impl<Type>(scope, ctx, container,
-                                std::make_index_sequence<Arity>{});
-  }
-
-  template <typename Type, typename Context, typename Container>
-  static void construct(void *ptr, construction_scope scope, Context &ctx,
-                        Container &container) {
-    construct_impl<Type>(ptr, scope, ctx, container,
-                         std::make_index_sequence<Arity>{});
-  }
 };
+
+template <typename T, typename DetectionMode, size_t Arity>
+struct constructor_methods
+    : constructor_methods_impl<T, DetectionMode,
+                               std::make_index_sequence<Arity>> {};
 
 template <typename T, size_t N, typename DetectionMode>
 struct constructor_methods<std::array<T, N>, DetectionMode, N> {
@@ -307,7 +302,7 @@ public:
   }
 
   template <typename Type, typename Context, typename Container>
-  static void construct(void *ptr, construction_scope scope, Context &ctx,
+  static auto construct(void *ptr, construction_scope scope, Context &ctx,
                         Container &container) {
     construct_impl<Type>(ptr, scope, ctx, container,
                          std::make_index_sequence<N>{});
@@ -320,22 +315,8 @@ struct constructor_detection_dispatch;
 
 template <typename T, typename DetectionMode, size_t Arity>
 struct constructor_detection_dispatch<T, DetectionMode, Arity,
-                                      constructor_kind::concrete> {
-  template <typename Type, typename Context, typename Container>
-  static auto construct(construction_scope scope, Context &ctx,
-                        Container &container) {
-    return constructor_methods<T, DetectionMode,
-                               Arity>::template construct<Type>(scope, ctx,
-                                                                container);
-  }
-
-  template <typename Type, typename Context, typename Container>
-  static void construct(void *ptr, construction_scope scope, Context &ctx,
-                        Container &container) {
-    constructor_methods<T, DetectionMode, Arity>::template construct<Type>(
-        ptr, scope, ctx, container);
-  }
-};
+                                      constructor_kind::concrete>
+    : constructor_methods<T, DetectionMode, Arity> {};
 
 template <typename T, typename DetectionMode, size_t Arity>
 struct constructor_detection_dispatch<T, DetectionMode, Arity,
@@ -376,7 +357,7 @@ template <template <typename, typename, template <class, class> class,
                     size_t> typename ConstructorProbe,
           typename ArityDetection, typename T, typename DetectionMode,
           template <typename...> typename IsConstructible, size_t N>
-struct constructor_detection_impl {
+struct constructor_detection_policy {
   // The detector owns policy: pick the highest matching arity once, then let
   // the runtime path instantiate only that winning constructor shape.
   // Search from high to low so the first match is the winning constructor
@@ -401,20 +382,21 @@ struct constructor_detection_impl {
                          type_list<>, void>;
   using dispatch =
       constructor_detection_dispatch<T, DetectionMode, arity, kind>;
-
-public:
-  template <typename Type, typename Context, typename Container>
-  static auto construct(construction_scope scope, Context &ctx,
-                        Container &container) {
-    return dispatch::template construct<Type>(scope, ctx, container);
-  }
-
-  template <typename Type, typename Context, typename Container>
-  static void construct(void *ptr, construction_scope scope, Context &ctx,
-                        Container &container) {
-    dispatch::template construct<Type>(ptr, scope, ctx, container);
-  }
 };
+
+// The detection constructs through the dispatch of its policy by inheriting it,
+// so construction does not pass through a forwarding function of its own.
+template <template <typename, typename, template <class, class> class,
+                    template <typename...> typename,
+                    size_t> typename ConstructorProbe,
+          typename ArityDetection, typename T, typename DetectionMode,
+          template <typename...> typename IsConstructible, size_t N>
+struct constructor_detection_impl
+    : constructor_detection_policy<ConstructorProbe, ArityDetection, T,
+                                   DetectionMode, IsConstructible, N>,
+      constructor_detection_policy<ConstructorProbe, ArityDetection, T,
+                                   DetectionMode, IsConstructible,
+                                   N>::dispatch {};
 
 template <typename T, typename Sequence> struct constructor_array_arguments;
 
@@ -452,7 +434,7 @@ struct constructor_from_arguments<T, type_list<Args...>> {
   }
 
   template <typename Type, typename Context, typename Container>
-  static void construct(void *ptr, construction_scope scope, Context &ctx,
+  static auto construct(void *ptr, construction_scope scope, Context &ctx,
                         Container &container) {
     ::dingo::constructor<T(Args...)>::template construct<Type>(ptr, scope, ctx,
                                                                container);
@@ -492,7 +474,7 @@ public:
   }
 
   template <typename Type, typename Context, typename Container>
-  static void construct(void *ptr, construction_scope scope, Context &ctx,
+  static auto construct(void *ptr, construction_scope scope, Context &ctx,
                         Container &container) {
     if constexpr (base_type::kind == constructor_kind::concrete) {
       constructor_from_arguments<T, arguments>::template construct<Type>(
