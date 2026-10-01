@@ -29,25 +29,6 @@ enum class binding_result {
   ambiguous,
 };
 
-struct binding_source_selection {
-  binding_result result;
-
-  constexpr bool found() const {
-    return result == binding_result::primary ||
-           result == binding_result::secondary;
-  }
-
-  constexpr bool ambiguous() const {
-    return result == binding_result::ambiguous;
-  }
-
-  constexpr bool primary() const { return result == binding_result::primary; }
-
-  constexpr bool secondary() const {
-    return result == binding_result::secondary;
-  }
-};
-
 constexpr binding_result resolve_binding(binding_status primary,
                                          binding_status secondary,
                                          binding_resolution_policy policy) {
@@ -125,45 +106,6 @@ ResolveRequest resolve_from_binding_sources(Context &context,
   return sources.template resolve<ResolveRequest>(context, selection);
 }
 
-template <typename PrimarySource, typename SecondarySource,
-          typename MissingSource>
-struct two_binding_sources {
-  PrimarySource &primary;
-  SecondarySource &secondary;
-  MissingSource &missing;
-  binding_resolution_policy policy;
-
-  binding_source_selection select() {
-    return {resolve_binding(primary.status(), secondary.status(), policy)};
-  }
-
-  template <typename Request, typename Context>
-  decltype(auto) resolve(Context &context, binding_source_selection selection) {
-    if constexpr (PrimarySource::can_resolve) {
-      if (selection.primary()) {
-        return primary.template resolve<Request>(context);
-      }
-    }
-
-    if constexpr (SecondarySource::can_resolve) {
-      if (selection.secondary()) {
-        return secondary.template resolve<Request>(context);
-      }
-    }
-
-    return missing.template resolve<Request>(context);
-  }
-};
-
-template <typename PrimarySource, typename SecondarySource,
-          typename MissingSource>
-two_binding_sources<PrimarySource, SecondarySource, MissingSource>
-make_two_binding_sources(PrimarySource &primary, SecondarySource &secondary,
-                         MissingSource &missing,
-                         binding_resolution_policy policy) {
-  return {primary, secondary, missing, policy};
-}
-
 template <typename SelectedSource, typename MissingSource>
 struct selected_binding_sources {
   SelectedSource &selected;
@@ -186,14 +128,6 @@ make_selected_binding_sources(SelectedSource &selected,
                               MissingSource &missing) {
   return {selected, missing};
 }
-
-template <typename LookupRequest> struct missing_binding_source {
-  template <typename ResolveRequest, typename Context>
-  ResolveRequest resolve(Context &context) {
-    (void)context;
-    throw make_type_not_found_exception<LookupRequest>();
-  }
-};
 
 } // namespace dingo::detail
 
