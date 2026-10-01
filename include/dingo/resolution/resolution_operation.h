@@ -373,6 +373,7 @@ private:
       std::remove_cv_t<std::remove_reference_t<typename Storage::type>>;
 
 public:
+  using source_type = Source;
   using cache_types = typename conversion_cache_types<Conversion>::type;
 
   template <typename Storage>
