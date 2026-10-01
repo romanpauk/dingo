@@ -10,6 +10,7 @@
 #include <dingo/core/binding_selection.h>
 #include <dingo/core/context_base.h>
 #include <dingo/core/exceptions.h>
+#include <dingo/registration/annotated.h>
 #include <dingo/registration/collection_traits.h>
 #include <dingo/resolution/conversion_cache.h>
 #include <dingo/resolution/resolution_operation.h>
@@ -159,21 +160,48 @@ decltype(auto) forward_resolved_binding(Instance &&instance, Fn &&fn) {
   }
 }
 
+// The request a static request resolves: the annotation of an annotated or
+// selected request does not take part in the resolution.
+template <typename Request>
+using unwrapped_static_request_t = typename annotated_traits<std::conditional_t<
+    is_selected_v<Request>, selected_type_t<Request>, Request>>::type;
+
 template <typename T, typename Instance, typename Fn>
 decltype(auto) consume_resolved_binding(Instance &&instance, Fn &&fn) {
-  if constexpr (std::is_lvalue_reference_v<T> || std::is_pointer_v<T> ||
-                (!std::is_rvalue_reference_v<T> &&
-                 !std::is_constructible_v<T, Instance &&>)) {
+  if constexpr (std::is_lvalue_reference_v<unwrapped_static_request_t<T>> &&
+                std::is_pointer_v<std::remove_reference_t<Instance>>) {
+    // An object route presents an address; the request takes a reference.
+    return consume_resolved_binding<T>(*instance, std::forward<Fn>(fn));
+  } else if constexpr (std::is_lvalue_reference_v<T> || std::is_pointer_v<T> ||
+                       (!std::is_rvalue_reference_v<T> &&
+                        !std::is_constructible_v<T, Instance &&>)) {
     return std::forward<Fn>(fn)(instance);
   } else {
     return std::forward<Fn>(fn)(std::forward<Instance>(instance));
   }
 }
 
-template <typename Target>
+template <typename Resolution>
 constexpr bool matches_resolution_request(type_descriptor requested_type) {
-  return matches_qualification_conversion(describe_type<Target>(),
-                                          requested_type);
+  if (matches_qualification_conversion(
+          describe_type<typename Resolution::target_type>(), requested_type)) {
+    return true;
+  }
+  // An object route serves the reference form and the copy of its object as
+  // well.
+  if constexpr (Resolution::serves_reference) {
+    if (matches_qualification_conversion(
+            describe_type<resolution_reference_target_t<Resolution>>(),
+            requested_type)) {
+      return true;
+    }
+  }
+  if constexpr (Resolution::serves_value) {
+    return matches_qualification_conversion(
+        describe_type<resolution_value_target_t<Resolution>>(), requested_type);
+  } else {
+    return false;
+  }
 }
 
 template <typename Target, typename Context, typename T>

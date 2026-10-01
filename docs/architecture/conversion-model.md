@@ -42,6 +42,21 @@ resolution records:
 - the concrete target used for request matching
 - an operation containing the source type and selected conversion
 
+A route to an object that already exists in the stored source presents the same
+object whatever the request category is. When a storage lists both the reference
+and the pointer request of an object, and the conversion is the default
+conversion of the source (the object of an lvalue source, or the pointee of a
+pointer source), the binding publishes one route to the object address instead
+of one route per category. That route also serves the copy of the object when
+the value request is the identity copy of the stored object and the storage does
+not consume its source. The request site applies the category to the resolved
+address: a reference request binds to it, a pointer request takes it, and a
+value request copies from it. Objects reached through wrapper traits,
+alternatives, arrays, retained conversions and custom conversions keep a route
+per category because each selects its object by its own rule. Static requests
+resolve value requests from the separate value routes; the runtime list, which
+type-erased requests are matched against, publishes the shared route.
+
 Each descriptor exposes its concrete `request_types`. A mutable reference or
 pointer resolution also accepts its const-borrowed form; wrapper and leaf
 identity are otherwise preserved.

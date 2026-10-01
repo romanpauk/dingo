@@ -204,8 +204,7 @@ std::size_t resolution_request_index(type_list<Resolutions...>,
                                      type_descriptor requested_type) {
   std::size_t index = 0;
   std::size_t result = sizeof...(Resolutions);
-  (void)(((matches_resolution_request<typename Resolutions::target_type>(
-               requested_type)
+  (void)(((matches_resolution_request<Resolutions>(requested_type)
                ? (result = index, true)
                : (++index, false)) ||
           ...));

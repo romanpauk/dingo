@@ -169,6 +169,7 @@ add_executable(dingo_unit_test
     memory/arena_allocator.cpp
     memory/object_store.cpp
     registration/binding_graph.cpp
+    registration/object_routes.cpp
     registration/object_sizes.cpp
     registration/registration_traits.cpp
     registration/runtime_registration.cpp
