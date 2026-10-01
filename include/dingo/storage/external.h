@@ -33,18 +33,6 @@ template <> struct storage_scope_policy<external> {
 };
 
 namespace detail {
-// The one cell where external publishes a different set of values than the
-// generic rule: a shared_ptr is copied out as its copyable layers only,
-// without the leaf published first.
-template <typename Type, typename U>
-struct storage_cell<external, storage_form::shared_handle, Type, U>
-    : storage_cell_rule<external, Type, U> {
-  using value_types = typename wrapper_storage_types<
-      wrapper_rebind_leaf_t<Type, U>>::copyable_value_types;
-};
-} // namespace detail
-
-namespace detail {
 template <typename Type, typename U>
 struct conversions<external, Type, U> : type_storage_traits<external, Type, U> {
 };

@@ -164,7 +164,7 @@ def shared_cyclical_rows() -> tuple[SharedCyclicalRow, ...]:
 
 
 def test_matrix_cardinality_remains_bounded(rows: tuple[MatrixRow, ...]) -> None:
-    assert len(rows) == 1917
+    assert len(rows) == 2159
     assert len({(row.feature.name, row.name) for row in rows}) == len(rows)
 
 
@@ -2013,7 +2013,7 @@ def test_matrix_families_preserve_total_registration_behavior(
         + len(scenario_rows)
         + len(invoke_rows)
         + len(shared_cyclical_rows)
-        == 4887
+        == 5129
     )
 
 
@@ -2406,6 +2406,68 @@ def test_stored_type_coverage_uses_unique_ids(rows: tuple[MatrixRow, ...]) -> No
             {"value_type", "unique_value_type"},
             identity="id",
         )
+
+
+def test_wrapped_leaf_cells_cover_shared_and_external_scopes(
+    rows: tuple[MatrixRow, ...],
+) -> None:
+    # Shared and external storage publish the same leaf of a stored handle, so
+    # every wrapped-leaf shape is generated under both scopes and every
+    # registration mode the scope allows.
+    leaf_rows = [
+        row for row in rows if row.resolved_type.name.startswith("leaf_")
+    ]
+    shapes = {
+        (row.scope.name, row.stored_type.id, row.resolved_type.name)
+        for row in leaf_rows
+    }
+    assert Counter(scope for scope, _, _ in shapes) == {
+        "shared": 10,
+        "external": 8,
+    }
+    external_shapes = {
+        (stored_id.removeprefix("external_"), resolved_type)
+        for scope, stored_id, resolved_type in shapes
+        if scope == "external"
+    }
+    shared_shapes = {
+        (stored_id, resolved_type)
+        for scope, stored_id, resolved_type in shapes
+        if scope == "shared"
+    }
+    assert external_shapes <= shared_shapes
+    assert len(external_shapes) == 8
+    assert {
+        row.mode.name for row in leaf_rows if row.scope.name == "external"
+    } == {"runtime"}
+    assert {
+        row.mode.name for row in leaf_rows if row.scope.name == "shared"
+    } == {"runtime", "static", "mixed"}
+    # A static container rejects an unpublished request at compile time, so
+    # only the containers that throw at run time observe a refusal.
+    refusal_containers = {
+        row.container.name
+        for row in leaf_rows
+        if row.resolved_type.name in {"leaf_access_move_only", "leaf_refusal"}
+    }
+    assert "static_container" not in refusal_containers
+    assert "container_static" in refusal_containers
+    assert "static_container" in {
+        row.container.name
+        for row in leaf_rows
+        if row.resolved_type.name == "leaf_copy"
+    }
+    # Copyable leaves are copied out; move-only leaves are refused.
+    assert {
+        (row.stored_type.id, row.resolved_type.name)
+        for row in leaf_rows
+        if "move_only" in row.resolved_type.name
+        or row.resolved_type.name == "leaf_refusal"
+    } == {
+        (stored_id, resolved_type)
+        for _, stored_id, resolved_type in shapes
+        if "move_only" in stored_id
+    }
 
 
 def test_catalog_rejects_dangling_axis_references() -> None:

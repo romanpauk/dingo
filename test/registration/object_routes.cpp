@@ -735,4 +735,45 @@ TEST(object_routes_test, a_pointer_storage_serves_its_pointee) {
   EXPECT_EQ(container.resolve<copy_counted *>(), &object);
   EXPECT_EQ(container.resolve<copy_counted>().copies, 1);
 }
+
+TEST(object_routes_test, external_shared_handle_serves_a_copy_of_its_leaf) {
+  auto handle = std::make_shared<copy_counted>();
+  container<> container;
+  container
+      .register_type<scope<external>, storage<std::shared_ptr<copy_counted>>>(
+          handle);
+
+  EXPECT_EQ(&container.resolve<copy_counted &>(), handle.get());
+  EXPECT_EQ(container.resolve<copy_counted *>(), handle.get());
+  EXPECT_EQ(container.resolve<std::shared_ptr<copy_counted>>(), handle);
+  const auto copy = container.resolve<copy_counted>();
+  EXPECT_EQ(copy.copies, 1);
+  EXPECT_NE(&copy, handle.get());
+}
+
+TEST(object_routes_test, external_nested_shared_handle_serves_a_copy_of_leaf) {
+  auto handle = std::make_shared<std::optional<copy_counted>>(std::in_place);
+  container<> container;
+  container.register_type<
+      scope<external>, storage<std::shared_ptr<std::optional<copy_counted>>>>(
+      handle);
+
+  const auto copy = container.resolve<copy_counted>();
+  EXPECT_EQ(copy.copies, 1);
+  EXPECT_NE(&copy, &**handle);
+}
+
+TEST(object_routes_test,
+     external_nested_shared_handle_serves_no_copy_of_move_only_leaf) {
+  auto handle =
+      std::make_shared<std::optional<move_only_object>>(std::in_place);
+  container<> container;
+  container
+      .register_type<scope<external>,
+                     storage<std::shared_ptr<std::optional<move_only_object>>>>(
+          handle);
+
+  EXPECT_THROW(container.resolve<move_only_object>(),
+               type_not_convertible_exception);
+}
 } // namespace
