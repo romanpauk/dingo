@@ -349,6 +349,34 @@ RESOLVED_TYPES = (
         requires=frozenset({"stored_array_variant"}),
     ),
     ResolvedType(
+        name="leaf_access",
+        supported_exposed_types=frozenset({"nested_wrapper"}),
+        provides=frozenset({"resolved_nested_wrapper"}),
+        requires=frozenset({"stored_leaf_access"}),
+    ),
+    ResolvedType(
+        name="leaf_copy",
+        supported_exposed_types=frozenset({"nested_wrapper"}),
+        provides=frozenset({"resolved_nested_wrapper"}),
+        requires=frozenset({"stored_leaf_copy"}),
+    ),
+    ResolvedType(
+        name="leaf_access_move_only",
+        supported_exposed_types=frozenset({"nested_wrapper"}),
+        provides=frozenset({"resolved_nested_wrapper"}),
+        requires=frozenset(
+            {"stored_leaf_access_move_only", "runtime_refusal_container"}
+        ),
+    ),
+    ResolvedType(
+        name="leaf_refusal",
+        supported_exposed_types=frozenset({"nested_wrapper"}),
+        provides=frozenset({"resolved_nested_wrapper"}),
+        requires=frozenset(
+            {"stored_leaf_refusal", "runtime_refusal_container"}
+        ),
+    ),
+    ResolvedType(
         name="variant_value",
         supported_exposed_types=frozenset({"variant_concrete"}),
         provides=frozenset({"resolved_variant"}),
@@ -638,6 +666,22 @@ _RESOLUTION_POLICIES = {
         "array_variant_value_ref",
         "nested_wrappers",
     ): "resolution::array_variant_ref<array_variant_value_type, std::array<value_type, 2>>",
+    (
+        "leaf_access",
+        "nested_wrappers",
+    ): "resolution::leaf_access<value_type>",
+    (
+        "leaf_copy",
+        "nested_wrappers",
+    ): "resolution::leaf_copy<value_type>",
+    (
+        "leaf_access_move_only",
+        "nested_wrappers",
+    ): "resolution::leaf_access_move_only<move_only_leaf_type>",
+    (
+        "leaf_refusal",
+        "nested_wrappers",
+    ): "resolution::leaf_refusal<move_only_leaf_type>",
     (
         "variant_value",
         "variant",
