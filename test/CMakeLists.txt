@@ -158,6 +158,7 @@ add_executable(dingo_unit_test
     container/incomplete_resolve.cpp
     container/incomplete_resolve_fixture.cpp
     container/parent_container_resolution.cpp
+    container/recursion.cpp
     factory/constructor_detection.cpp
     lookup/associative_backends.cpp
     lookup/index_injection.cpp
@@ -186,6 +187,9 @@ add_executable(dingo_unit_test
     support/class.h
     support/containers.h
     support/test.h
+    type/type_identity.cpp
+    type/type_identity_fixture.cpp
+    type/type_identity_shared.h
     type/type_list.cpp
     type/type_name.cpp
     type/type_traits.cpp

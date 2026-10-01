@@ -105,4 +105,13 @@ struct factory_traits<detail::callable_factory<Signature, T>> {
   static constexpr bool is_compile_time_bindable = false;
 };
 
+namespace detail {
+// True only when the factory's dependency list is known to be empty. Detected
+// constructors report type_list<> for arity zero and void otherwise, so a
+// void list is treated as possibly having dependencies.
+template <typename Factory>
+inline constexpr bool factory_without_dependencies_v =
+    std::is_same_v<typename factory_traits<Factory>::dependencies, type_list<>>;
+} // namespace detail
+
 } // namespace dingo
