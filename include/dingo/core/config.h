@@ -39,6 +39,16 @@
 #endif
 #endif
 
+// MSVC applies the empty base optimization only to the first empty base class
+// unless the derived class opts in.
+#if !defined(DINGO_EMPTY_BASES)
+#if defined(_MSC_VER)
+#define DINGO_EMPTY_BASES __declspec(empty_bases)
+#else
+#define DINGO_EMPTY_BASES
+#endif
+#endif
+
 #if __cplusplus > 202002L || (defined(_MSVC_LANG) && _MSVC_LANG > 202002L)
 #define DINGO_CXX_STANDARD 23
 #elif (__cplusplus > 201703L && __cplusplus <= 202002L) ||                     \

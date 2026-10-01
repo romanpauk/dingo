@@ -80,7 +80,7 @@ private:
   using interface_cache_types = resolution_cache_types_t<
       typename binding_resolutions<typename annotated_traits<Interface>::type,
                                    storage_type>::type,
-      storage_type>;
+      storage_shape_t<storage_type>>;
 
 public:
   using type =
@@ -411,28 +411,32 @@ template <typename Request, typename Interface, typename Storage,
           typename RequestType =
               std::remove_cv_t<unwrapped_static_request_t<Request>>>
 struct request_binding_resolutions {
-  using type = typename binding_value_resolutions<Interface, Storage>::type;
+  using type =
+      typename binding_value_resolutions<Interface,
+                                         storage_shape_t<Storage>>::type;
 };
 
 template <typename Request, typename Interface, typename Storage,
           typename RequestType>
 struct request_binding_resolutions<Request, Interface, Storage, RequestType &> {
-  using type =
-      typename binding_lvalue_reference_resolutions<Interface, Storage>::type;
+  using type = typename binding_lvalue_reference_resolutions<
+      Interface, storage_shape_t<Storage>>::type;
 };
 
 template <typename Request, typename Interface, typename Storage,
           typename RequestType>
 struct request_binding_resolutions<Request, Interface, Storage,
                                    RequestType &&> {
-  using type =
-      typename binding_rvalue_reference_resolutions<Interface, Storage>::type;
+  using type = typename binding_rvalue_reference_resolutions<
+      Interface, storage_shape_t<Storage>>::type;
 };
 
 template <typename Request, typename Interface, typename Storage,
           typename RequestType>
 struct request_binding_resolutions<Request, Interface, Storage, RequestType *> {
-  using type = typename binding_pointer_resolutions<Interface, Storage>::type;
+  using type =
+      typename binding_pointer_resolutions<Interface,
+                                           storage_shape_t<Storage>>::type;
 };
 
 template <typename Request, typename Interface, typename BindingModel,
@@ -582,7 +586,7 @@ struct static_binding_resolver {
       return detail::with_runtime_binding_source(
           scope, context, storage, activation, std::move(materialize));
     } else if constexpr (detail::operation_requires_source_retention_v<
-                             operation, storage_type> &&
+                             operation> &&
                          !std::is_same_v<
                              std::remove_cv_t<std::remove_reference_t<Context>>,
                              no_dependency_context>) {

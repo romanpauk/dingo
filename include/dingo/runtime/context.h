@@ -86,8 +86,9 @@ public:
 #pragma warning(pop)
 #endif
 
-  template <typename Fn> void on_rollback(Fn &&fn) {
-    transaction_->on_rollback(std::forward<Fn>(fn));
+  void on_rollback(void (*fn)(void *, void *) noexcept, void *first,
+                   void *second = nullptr) {
+    transaction_->on_rollback(fn, first, second);
   }
 
   template <typename Runtime> bool owns(const Runtime &runtime) const noexcept {

@@ -20,6 +20,7 @@
 #include <optional>
 #include <utility>
 #include <variant>
+#include <vector>
 
 using namespace dingo;
 
@@ -426,4 +427,56 @@ TEST(static_bindings_source_test,
   EXPECT_EQ(b_instance.dependency, &instance);
   EXPECT_EQ(&container.resolve<a &>(), &instance);
   EXPECT_EQ(&container.resolve<b_interface &>(), &b_view);
+}
+
+TEST(static_bindings_source_test,
+     static_container_resolves_collection_of_multiple_interface_bindings) {
+  struct collection_interface {
+    virtual ~collection_interface() = default;
+  };
+  struct first : collection_interface {};
+  struct second : collection_interface {};
+  struct consumer {
+    explicit consumer(std::vector<collection_interface *> init_values)
+        : values(std::move(init_values)) {}
+    std::vector<collection_interface *> values;
+  };
+
+  using source = dingo::bindings<
+      dingo::bind<scope<shared>, storage<first>,
+                  interfaces<collection_interface>>,
+      dingo::bind<scope<shared>, storage<second>,
+                  interfaces<collection_interface>>,
+      dingo::bind<scope<unique>, storage<consumer>,
+                  dependencies<std::vector<collection_interface *>>>>;
+
+  dingo::static_container<source> container;
+
+  EXPECT_EQ(container.resolve<consumer>().values.size(), 2u);
+}
+
+TEST(static_bindings_source_test,
+     container_resolves_static_collection_of_multiple_interface_bindings) {
+  struct collection_interface {
+    virtual ~collection_interface() = default;
+  };
+  struct first : collection_interface {};
+  struct second : collection_interface {};
+  struct consumer {
+    explicit consumer(std::vector<collection_interface *> init_values)
+        : values(std::move(init_values)) {}
+    std::vector<collection_interface *> values;
+  };
+
+  using source = dingo::bindings<
+      dingo::bind<scope<shared>, storage<first>,
+                  interfaces<collection_interface>>,
+      dingo::bind<scope<shared>, storage<second>,
+                  interfaces<collection_interface>>,
+      dingo::bind<scope<unique>, storage<consumer>,
+                  dependencies<std::vector<collection_interface *>>>>;
+
+  dingo::container<source> container;
+
+  EXPECT_EQ(container.resolve<consumer>().values.size(), 2u);
 }
