@@ -875,9 +875,6 @@ using static_binding_scope =
     basic_static_activation_set<false, Registrations...>;
 
 template <typename... Registrations>
-using binding_scope = basic_static_activation_set<true, Registrations...>;
-
-template <typename... Registrations>
 using static_storage_state = static_binding_storage<false, Registrations...>;
 
 template <bool RuntimeDependencies, typename StorageState,
@@ -916,41 +913,6 @@ private:
   StorageState *state_;
 };
 
-template <typename... Registrations>
-class borrowed_binding_scope
-    : public basic_static_activation_set_base<
-          borrowed_binding_scope<Registrations...>, true, Registrations...>,
-      private static_binding_storage<true, Registrations...> {
-public:
-  borrowed_binding_scope() = default;
-
-  explicit borrowed_binding_scope(static_context_frame_base &frame)
-      : frame_(&frame) {}
-
-  template <typename Registration> static_context_frame_base &get_frame() {
-    assert(frame_ != nullptr);
-    return *frame_;
-  }
-
-  using static_binding_storage<
-      true, Registrations...>::get_conversion_cache_for_model;
-  using static_binding_storage<true,
-                               Registrations...>::get_local_scope_for_model;
-  using static_binding_storage<true, Registrations...>::get_storage;
-  using static_binding_storage<true, Registrations...>::get_storage_for_model;
-
-private:
-  static_context_frame_base *frame_;
-};
-
-template <typename StorageState, typename... Registrations>
-using static_binding_scope_view =
-    basic_static_activation_set_view<false, StorageState, Registrations...>;
-
-template <typename StorageState, typename... Registrations>
-using binding_scope_view =
-    basic_static_activation_set_view<true, StorageState, Registrations...>;
-
 template <typename State, typename... Registrations>
 class static_registry<static_bindings<Registrations...>, State> {
   using bindings_type = static_bindings<Registrations...>;
@@ -965,42 +927,13 @@ class static_registry<static_bindings<Registrations...>, State> {
   using selection_t =
       typename bindings_type::template selection<Request, LookupKey>;
 
-  template <typename Request, typename LookupKey,
-            bool Selected = selection_t<Request, LookupKey>::status ==
-                            binding_status::found>
-  struct binding_is_resolvable : std::false_type {};
-
-  template <typename Request, typename LookupKey>
-  struct binding_is_resolvable<Request, LookupKey, true>
-      : std::bool_constant<
-            static_binding_resolvable_v<
-                typename selection_t<Request, LookupKey>::binding_type,
-                bindings_type> &&
-            binding_supports_request_v<
-                typename request_type<Request>::interface_type,
-                typename selection_t<Request, LookupKey>::binding_type>> {};
-
 public:
   using static_bindings_type = bindings_type;
-  using registration_types = typename static_bindings_type::registration_types;
-  using binding_models = typename static_bindings_type::binding_models;
   using interface_bindings = typename static_bindings_type::interface_bindings;
   template <typename Request, typename LookupKey>
   using selection = selection_t<Request, LookupKey>;
 
   static_registry() = default;
-
-  template <typename Request, typename LookupKey>
-  static constexpr detail::binding_status binding_status() {
-    static_assert(is_lookup_key_v<LookupKey>);
-    return selection_t<Request, LookupKey>::status;
-  }
-
-  template <typename Request, typename LookupKey>
-  static constexpr bool is_binding_resolvable() {
-    static_assert(is_lookup_key_v<LookupKey>);
-    return binding_is_resolvable<Request, LookupKey>::value;
-  }
 
   template <typename Request, typename LookupKey, typename Host,
             typename Context, typename R = typename Request::result_type>

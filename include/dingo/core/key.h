@@ -126,11 +126,6 @@ struct is_value_selector<key_type<T, Value>> : std::true_type {
   static T make() { return fixed_key_value<T, Value>::make(); }
 };
 
-template <typename Identity, typename Binding>
-struct keyed_binding_identity : Binding {
-  using Binding::Binding;
-};
-
 template <typename T>
 struct is_runtime_registration_key_arg : std::false_type {};
 

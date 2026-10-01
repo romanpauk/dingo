@@ -41,7 +41,6 @@ class runtime_container_impl
   using runtime_context_type = runtime_context<Allocator>;
 
   template <typename> friend class ::dingo::runtime_context;
-  template <typename, typename> friend class binding_resolution;
   template <typename, typename, typename>
   friend class container_with_static_bindings;
   template <typename, typename, typename, typename, bool>
