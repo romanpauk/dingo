@@ -36,7 +36,7 @@ template <typename R, typename... Args> struct callable_invoke<R(Args...)> {
   }
 
   template <typename Type, typename Fn, typename Context, typename Container>
-  static void construct(void *ptr, Fn &&fn, construction_scope scope,
+  static auto construct(void *ptr, Fn &&fn, construction_scope scope,
                         Context &ctx, Container &container) {
     new (ptr) normalized_type_t<Type>(
         construct(std::forward<Fn>(fn), scope, ctx, container));
@@ -216,7 +216,7 @@ template <typename Signature, typename T> struct callable_factory {
   }
 
   template <typename Type, typename Context, typename Container>
-  void construct(void *ptr, construction_scope scope, Context &ctx,
+  auto construct(void *ptr, construction_scope scope, Context &ctx,
                  Container &container) {
     callable_invoke<Signature>::template construct<Type>(ptr, fn_, scope, ctx,
                                                          container);

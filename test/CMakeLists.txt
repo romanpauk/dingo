@@ -154,6 +154,7 @@ set_tests_properties(dingo_matrix_generator_test PROPERTIES
 add_executable(dingo_unit_test
     container/construct_dependency.cpp
     container/container_move.cpp
+    container/dependency_chain.cpp
     container/dingo.cpp
     container/incomplete_resolve.cpp
     container/incomplete_resolve_fixture.cpp
