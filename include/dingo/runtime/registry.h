@@ -210,8 +210,8 @@ inline constexpr bool has_key_value_lookup_definition_v =
 // otherwise evaluates its constructibility intrinsics for incomplete reference
 // targets while instantiating the dispatch trait.
 template <typename T,
-          bool IsNormalized = std::is_same_v<
-              typename request_type<T>::value_type, std::decay_t<T>>,
+          bool IsNormalized =
+              std::is_same_v<request_value_t<T>, std::decay_t<T>>,
           bool IsReference = std::is_reference_v<T>>
 struct is_runtime_auto_constructible_dependency : std::false_type {};
 
@@ -1058,9 +1058,8 @@ protected:
     construction_scope scope;
 
     template <typename ResolveRequest>
-    typename request_type<ResolveRequest>::interface_type
-    resolve(runtime_context_type &context) {
-      using result_type = typename request_type<ResolveRequest>::interface_type;
+    request_result_t<ResolveRequest> resolve(runtime_context_type &context) {
+      using result_type = request_result_t<ResolveRequest>;
       return registry.template source_missing<Request, MayAutoConstruct,
                                               LookupKey, result_type>(
           scope, context, key);

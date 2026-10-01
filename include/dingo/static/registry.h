@@ -621,16 +621,24 @@ private:
       detail::binding_dependency_interface_t<Interface>,
       binding_lookup_key_t<Interface, LookupKey>, interface_bindings>;
 
+  template <typename Interface, typename LookupKey, typename Exact,
+            bool HasExact = (type_list_size_v<Exact> != 0)>
+  struct select_bindings {
+    using type = Exact;
+  };
+
+  template <typename Interface, typename LookupKey, typename Exact>
+  struct select_bindings<Interface, LookupKey, Exact, false> {
+    using type = normalized_bindings_t<Interface, LookupKey>;
+  };
+
   template <typename Interface, typename LookupKey,
             bool SameLookup = std::is_same_v<
                 detail::binding_exact_dependency_interface_t<Interface>,
                 detail::binding_dependency_interface_t<Interface>>>
-  struct selected_bindings {
-    using exact = exact_bindings_t<Interface, LookupKey>;
-    using type =
-        std::conditional_t<type_list_size_v<exact> != 0, exact,
-                           normalized_bindings_t<Interface, LookupKey>>;
-  };
+  struct selected_bindings
+      : select_bindings<Interface, LookupKey,
+                        exact_bindings_t<Interface, LookupKey>> {};
 
   template <typename Interface, typename LookupKey>
   struct selected_bindings<Interface, LookupKey, true> {

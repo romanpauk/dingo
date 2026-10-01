@@ -416,7 +416,7 @@ consume_binding_resolution_request(construction_scope scope, Context &context,
         std::forward<Fn>(fn));
   };
   using operation = typename Resolution::operation;
-  if constexpr (operation_requires_source_retention_v<operation, Storage>) {
+  if constexpr (operation_requires_source_retention_v<operation>) {
     return with_retained_binding_source(scope, context, storage, owner, frame,
                                         std::move(consume));
   } else {
@@ -495,8 +495,7 @@ inline constexpr bool construct_normalized_request_v =
     !std::is_abstract_v<normalized_type_t<Request>>;
 
 template <typename Request,
-          typename ResolvedRequest =
-              typename request_type<Request, true>::result_type>
+          typename ResolvedRequest = request_result_t<Request, true>>
 inline constexpr bool construct_factory_request_v =
     !rvalue_request_requires_explicit_conversion_v<Request> &&
     std::is_object_v<normalized_type_t<Request>> &&
@@ -549,7 +548,7 @@ template <typename Request>
 }
 
 template <typename Request, typename ResolveExact, typename ResolveNormalized>
-typename request_type<Request, true>::result_type
+request_result_t<Request, true>
 construct_resolved_request(ResolveExact &&resolve_exact,
                            ResolveNormalized &&resolve_normalized) {
   try {

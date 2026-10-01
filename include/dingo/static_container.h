@@ -194,9 +194,7 @@ private:
                                        binding_status::not_found)) {
       return false;
     } else {
-      using selection =
-          static_binding_t<typename static_bindings_type::template bindings<
-              typename Request::lookup_type, LookupKey>>;
+      using selection = selection_t<typename Request::lookup_type, LookupKey>;
       return minimal_context_selection<Request, Result, selection>::value;
     }
   }();
@@ -208,9 +206,8 @@ private:
 
   template <typename Request, typename Context, typename Origin,
             typename LookupKey,
-            typename R = typename request_type<
-                typename Request::user_type,
-                Request::removes_rvalue_references>::result_type,
+            typename R = request_result_t<typename Request::user_type,
+                                          Request::removes_rvalue_references>,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve_parent(construction_scope scope, Context &context, Origin &origin,
                    LookupKey key) {
@@ -261,7 +258,7 @@ public:
   explicit static_container_impl(Parent *parent) : parent_(parent) {}
 
   template <typename T, typename Key = key_type<none_t>,
-            typename R = typename request_type<T, true>::result_type>
+            typename R = request_result_t<T, true>>
   R resolve() {
     using lookup_key_type =
         decltype(detail::make_lookup_key(type_selector<Key>{}));
@@ -270,7 +267,7 @@ public:
   }
 
   template <typename T, typename LookupKey,
-            typename R = typename request_type<T, true>::result_type,
+            typename R = request_result_t<T, true>,
             typename = typename resolve_request_check<request_type<T, false>, R,
                                                       LookupKey>::type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
@@ -305,8 +302,7 @@ public:
 
   template <typename T, bool RemoveRvalueReferences, typename Context,
             typename LookupKey,
-            typename R =
-                typename request_type<T, RemoveRvalueReferences>::result_type,
+            typename R = request_result_t<T, RemoveRvalueReferences>,
             typename = typename resolve_request_check<
                 request_type<T, RemoveRvalueReferences>, R, LookupKey>::type,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
@@ -317,8 +313,7 @@ public:
 
   template <typename T, bool RemoveRvalueReferences, typename Context,
             typename Origin, typename LookupKey,
-            typename R =
-                typename request_type<T, RemoveRvalueReferences>::result_type,
+            typename R = request_result_t<T, RemoveRvalueReferences>,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(construction_scope scope, Context &context, Origin &origin,
             LookupKey key) {
@@ -365,8 +360,7 @@ public:
     }
   }
 
-  template <typename T, typename IdType,
-            typename R = typename request_type<T, true>::result_type,
+  template <typename T, typename IdType, typename R = request_result_t<T, true>,
             std::enable_if_t<!detail::is_lookup_key_v<IdType>, int> = 0>
   R resolve(IdType &&id) {
     auto key = detail::make_lookup_key(std::forward<IdType>(id));
@@ -381,7 +375,7 @@ public:
   }
 
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-            typename R = typename request_type<T, true>::result_type>
+            typename R = request_result_t<T, true>>
   R construct(Factory factory = Factory()) {
     return construct_request<request_type<T>, Factory, R>(std::move(factory));
   }
@@ -557,8 +551,7 @@ public:
   }
 
   template <typename T, bool RemoveRvalueReferences, typename Context,
-            typename R =
-                typename request_type<T, RemoveRvalueReferences>::result_type,
+            typename R = request_result_t<T, RemoveRvalueReferences>,
             typename = typename resolve_request_check<
                 request_type<T, RemoveRvalueReferences>, R,
                 decltype(detail::no_lookup_key())>::type>

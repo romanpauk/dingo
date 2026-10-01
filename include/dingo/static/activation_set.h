@@ -582,7 +582,7 @@ struct static_binding_resolver {
       return detail::with_runtime_binding_source(
           scope, context, storage, activation, std::move(materialize));
     } else if constexpr (detail::operation_requires_source_retention_v<
-                             operation, storage_type> &&
+                             operation> &&
                          !std::is_same_v<
                              std::remove_cv_t<std::remove_reference_t<Context>>,
                              no_dependency_context>) {

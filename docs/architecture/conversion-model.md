@@ -75,9 +75,9 @@ performs a second conversion. Operations also publish any cache,
 source-retention, and static temporary-storage requirements created by their
 execution. The runtime and static backends derive those resources from the same
 resolution list instead of maintaining a parallel list of conversion types on
-the storage. A new operation must provide `cache_types<Storage>`,
-`temporary_types<Storage>`, and `requires_source_retention<Storage>` along with
-its `apply` function, even when those requirements are empty.
+the storage. A new operation must provide `cache_types`,
+`temporary_types<Storage>`, and `requires_source_retention` along with its
+`apply` function, even when those requirements are empty.
 
 Factory construction and storage rebinding use this operation model as well.
 When a factory selects an alternative to construct, Dingo plans the conversion

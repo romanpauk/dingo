@@ -290,13 +290,13 @@ private:
             return resolve_request<Request, MayAutoConstruct, R>(
                 selection, ephemeral_scope, context, *this, std::move(key));
           });
+    } else {
+      return execute_transaction(
+          runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
+            return resolve_request<Request, MayAutoConstruct, R>(
+                ephemeral_scope, context, *this, std::move(key));
+          });
     }
-
-    return execute_transaction(
-        runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
-          return resolve_request<Request, MayAutoConstruct, R>(
-              ephemeral_scope, context, *this, std::move(key));
-        });
   }
 
   template <typename Request, bool MayAutoConstruct, typename R,
@@ -314,7 +314,7 @@ private:
 
 public:
   template <typename T, typename IdType = none_t,
-            typename R = typename request_type<T, true>::result_type,
+            typename R = request_result_t<T, true>,
             std::enable_if_t<!detail::is_lookup_key_v<IdType>, int> = 0>
   R resolve(IdType &&id = IdType()) {
     using request = request_type<T>;
@@ -325,7 +325,7 @@ public:
   }
 
   template <typename T, typename LookupKey,
-            typename R = typename request_type<T, true>::result_type,
+            typename R = request_result_t<T, true>,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   R resolve(LookupKey key) {
     using request = request_type<T>;
@@ -382,7 +382,7 @@ public:
   }
 
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-            typename R = typename request_type<T, true>::result_type>
+            typename R = request_result_t<T, true>>
   R construct(Factory factory = Factory()) {
     return execute_transaction(
         runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {

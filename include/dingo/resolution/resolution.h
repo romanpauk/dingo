@@ -19,17 +19,16 @@ namespace detail {
 template <typename Target, typename Source, typename Conversion>
 struct type_resolution;
 
-template <typename Operation, typename Storage>
-using operation_cache_types_t =
-    typename Operation::template cache_types<Storage>;
+template <typename Operation>
+using operation_cache_types_t = typename Operation::cache_types;
 
 template <typename Operation, typename Storage>
 using operation_temporary_types_t =
     typename Operation::template temporary_types<Storage>;
 
-template <typename Operation, typename Storage>
+template <typename Operation>
 inline constexpr bool operation_requires_source_retention_v =
-    Operation::template requires_source_retention<Storage>;
+    Operation::requires_source_retention;
 
 template <typename Source, typename Target,
           bool SourcePointer = std::is_pointer_v<std::remove_cv_t<Source>>,
@@ -82,7 +81,7 @@ template <typename Resolutions, typename Storage> struct resolution_cache_types;
 template <typename Storage, typename... Resolutions>
 struct resolution_cache_types<type_list<Resolutions...>, Storage> {
   using type = type_list_unique_t<type_list_cat_t<
-      operation_cache_types_t<typename Resolutions::operation, Storage>...>>;
+      operation_cache_types_t<typename Resolutions::operation>...>>;
 };
 
 template <typename Resolutions, typename Storage>

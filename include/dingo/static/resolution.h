@@ -73,7 +73,7 @@ struct binding_factory<Selection, Request, true> {
 };
 
 template <typename Request, typename Selection, typename ResolveNormalized>
-typename request_type<Request, true>::result_type
+request_result_t<Request, true>
 construct_static_binding_value(ResolveNormalized &&resolve_normalized) {
   if constexpr (binding_factory<Selection, Request>::enabled) {
     return type_traits<std::decay_t<Request>>::make(

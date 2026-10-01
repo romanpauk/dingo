@@ -41,14 +41,30 @@ struct request_interface<selected<T, Selector> *> {
 };
 } // namespace detail
 
+namespace detail {
+template <typename Request, bool RemoveRvalueReferences>
+using request_lookup_t = std::conditional_t<
+    RemoveRvalueReferences,
+    std::conditional_t<std::is_rvalue_reference_v<Request>,
+                       std::remove_reference_t<Request>, Request>,
+    Request>;
+} // namespace detail
+
+// Lazy single-member views of request_type. Naming one of these does not
+// instantiate request_type, so default template arguments that only need the
+// result or the normalized value avoid forming the remaining members.
+template <typename Request, bool RemoveRvalueReferences = false>
+using request_result_t = typename detail::request_interface<
+    detail::request_lookup_t<Request, RemoveRvalueReferences>>::type;
+
+template <typename Request, bool RemoveRvalueReferences = false>
+using request_value_t = normalized_type_t<
+    detail::request_lookup_t<Request, RemoveRvalueReferences>>;
+
 template <typename Request, bool RemoveRvalueReferences = false>
 struct request_type {
   using user_type = Request;
-  using lookup_type = std::conditional_t<
-      RemoveRvalueReferences,
-      std::conditional_t<std::is_rvalue_reference_v<Request>,
-                         std::remove_reference_t<Request>, Request>,
-      Request>;
+  using lookup_type = detail::request_lookup_t<Request, RemoveRvalueReferences>;
   using interface_type = typename detail::request_interface<lookup_type>::type;
   using result_type = interface_type;
   using value_type = normalized_type_t<lookup_type>;

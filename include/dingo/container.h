@@ -141,9 +141,8 @@ private:
   template <typename Request, typename NormalizedRequest>
   bool has_runtime_no_key_binding() {
     auto key = detail::no_lookup_key();
-    static_assert(
-        std::is_same_v<typename request_type<Request>::value_type,
-                       typename request_type<NormalizedRequest>::value_type>);
+    static_assert(std::is_same_v<request_value_t<Request>,
+                                 request_value_t<NormalizedRequest>>);
     return has_runtime_binding<Request>(key);
   }
 
@@ -165,8 +164,8 @@ private:
   template <typename Request, typename Key>
   struct is_static_binding_available<Request, Key, true> {
     using binding = typename static_selection_t<Request, Key>::binding_type;
-    static constexpr bool value = detail::binding_supports_request_v<
-        typename request_type<Request>::interface_type, binding>;
+    static constexpr bool value =
+        detail::binding_supports_request_v<request_result_t<Request>, binding>;
   };
 
   template <typename Request, typename Key>
@@ -475,18 +474,18 @@ private:
             return resolve<Request, R>(selection, ephemeral_scope, context,
                                        *this, std::move(key));
           });
+    } else {
+      return execute_transaction(
+          runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
+            return resolve<Request, R>(ephemeral_scope, context, *this,
+                                       std::move(key));
+          });
     }
-
-    return execute_transaction(
-        runtime_registry_.runtime(), [&](runtime_context_type &context) -> R {
-          return resolve<Request, R>(ephemeral_scope, context, *this,
-                                     std::move(key));
-        });
   }
 
 public:
   template <typename T, typename IdType = none_t,
-            typename R = typename request_type<T, true>::result_type,
+            typename R = request_result_t<T, true>,
             std::enable_if_t<!detail::is_lookup_key_v<IdType>, int> = 0>
   DINGO_ALWAYS_INLINE R resolve(IdType &&id = IdType()) {
     using request = request_type<T>;
@@ -495,7 +494,7 @@ public:
   }
 
   template <typename T, typename LookupKey,
-            typename R = typename request_type<T, true>::result_type,
+            typename R = request_result_t<T, true>,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
   DINGO_ALWAYS_INLINE R resolve(LookupKey key) {
     using request = request_type<T>;
@@ -503,7 +502,7 @@ public:
   }
 
   template <typename T, typename Factory = constructor<normalized_type_t<T>>,
-            typename R = typename request_type<T, true>::result_type>
+            typename R = request_result_t<T, true>>
   // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
   DINGO_ALWAYS_INLINE R construct(Factory factory = Factory()) {
     using request = request_type<T>;
