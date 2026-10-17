@@ -30,8 +30,9 @@ struct recursion_b {
   recursion_b(recursion_a &) {}
 };
 
-using recursion_bindings = bindings<bind<scope<shared>, storage<recursion_a>>,
-                                    bind<scope<shared>, storage<recursion_b>>>;
+using recursion_bindings =
+    bindings<dingo::bind<scope<shared>, storage<recursion_a>>,
+             dingo::bind<scope<shared>, storage<recursion_b>>>;
 
 struct leaf {};
 
@@ -43,9 +44,9 @@ struct top {
   top(middle &) {}
 };
 
-using acyclic_bindings = bindings<bind<scope<shared>, storage<leaf>>,
-                                  bind<scope<shared>, storage<middle>>,
-                                  bind<scope<shared>, storage<top>>>;
+using acyclic_bindings = bindings<dingo::bind<scope<shared>, storage<leaf>>,
+                                  dingo::bind<scope<shared>, storage<middle>>,
+                                  dingo::bind<scope<shared>, storage<top>>>;
 
 } // namespace
 
