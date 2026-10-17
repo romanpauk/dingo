@@ -9,6 +9,7 @@
 
 #include <dingo/core/config.h>
 
+#include <dingo/core/factory_traits.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
 #include <dingo/memory/object_lifetime.h>
@@ -27,8 +28,13 @@ template <typename Type> struct storage_materialization_traits<shared, Type> {
 
   template <typename Leaf, typename Context, typename Storage>
   static auto make_guard(Context &context, const Storage &storage) {
-    return detail::recursion_guard_wrapper<Leaf>(context, &storage,
-                                                 !storage.is_resolved());
+    if constexpr (detail::recursion_guard_enabled_v<
+                      typename Storage::factory_type, Context>) {
+      return detail::recursion_guard_wrapper<Leaf>(context, &storage,
+                                                   !storage.is_resolved());
+    } else {
+      return detail::no_materialization_scope();
+    }
   }
 
   template <typename Storage>
@@ -391,6 +397,7 @@ public:
   storage(Args &&...args) : instance_(std::forward<Args>(args)...) {}
 
   using conversions = Conversions;
+  using factory_type = Factory;
   using type = Type;
   using stored_type = StoredType;
   using resolved_type =

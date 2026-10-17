@@ -9,6 +9,7 @@
 
 #include <dingo/core/config.h>
 
+#include <dingo/core/factory_traits.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/type_storage_traits.h>
@@ -22,7 +23,12 @@ template <typename Type> struct storage_materialization_traits<unique, Type> {
 
   template <typename Leaf, typename Context, typename Storage>
   static auto make_guard(Context &context, const Storage &storage) {
-    return detail::recursion_guard<Leaf>(context, &storage);
+    if constexpr (detail::recursion_guard_enabled_v<
+                      typename Storage::factory_type, Context>) {
+      return detail::recursion_guard<Leaf>(context, &storage);
+    } else {
+      return detail::no_materialization_scope();
+    }
   }
 
   template <typename Storage> static bool retains_source(const Storage &) {
@@ -234,6 +240,7 @@ public:
   storage(Args &&...args) : Factory(std::forward<Args>(args)...) {}
 
   using conversions = Conversions;
+  using factory_type = Factory;
   using type = Type;
   using stored_type = StoredType;
   using resolved_type = Type;
@@ -254,6 +261,7 @@ public:
   storage(Args &&...args) : Factory(std::forward<Args>(args)...) {}
 
   using conversions = Conversions;
+  using factory_type = Factory;
   using type = Type[N];
   using stored_type = StoredType;
   using resolved_type = Type *;
