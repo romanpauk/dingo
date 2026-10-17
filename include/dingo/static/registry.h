@@ -308,9 +308,6 @@ struct key_value_bindings_are_unique<type_list<InterfaceBindings...>, Entries>
           ...)> {};
 
 template <typename DependencyList, typename InterfaceBindings>
-struct dependencies_registered;
-
-template <typename DependencyList, typename InterfaceBindings>
 struct first_missing_declared_dependency;
 
 template <typename InterfaceBindings>
@@ -370,20 +367,6 @@ template <typename DependencyList, typename InterfaceBindings>
 using first_missing_declared_dependency_t =
     typename first_missing_declared_dependency<DependencyList,
                                                InterfaceBindings>::type;
-
-template <typename InterfaceBindings>
-struct dependencies_registered<void, InterfaceBindings> : std::false_type {};
-
-template <typename InterfaceBindings>
-struct dependencies_registered<type_list<>, InterfaceBindings>
-    : std::true_type {};
-
-template <typename Head, typename... Tail, typename InterfaceBindings>
-struct dependencies_registered<type_list<Head, Tail...>, InterfaceBindings>
-    : std::bool_constant<
-          declared_dependency_is_registered<Head, InterfaceBindings>::value &&
-          dependencies_registered<type_list<Tail...>,
-                                  InterfaceBindings>::value> {};
 
 template <typename InterfaceBindings>
 struct dependency_bindings<void, InterfaceBindings> {
@@ -512,12 +495,6 @@ using resolved_dependency_bindings_t = typename binding_dependency_resolution<
     BindingModel,
     effective_interface_bindings_t<BindingModel, InterfaceBindings>>::type;
 
-template <typename BindingModel, typename InterfaceBindings>
-inline constexpr dependency_resolution_status
-    binding_dependency_resolution_status_v = binding_dependency_resolution<
-        BindingModel, effective_interface_bindings_t<
-                          BindingModel, InterfaceBindings>>::status;
-
 template <typename BindingModel, typename MissingDependency,
           bool Valid = std::is_void_v<MissingDependency>>
 struct declared_dependency_diagnostic;
@@ -569,61 +546,6 @@ struct binding_declared_dependency_diagnostic<BindingModel, InterfaceBindings,
                             effective_interface_bindings_t<
                                 BindingModel, InterfaceBindings>>> {};
 
-template <typename BindingModel, typename InterfaceBindings,
-          bool HasKnownDependencies =
-              !std::is_same_v<binding_dependencies_t<BindingModel>, void>>
-struct binding_inferred_dependencies_resolved;
-
-template <typename BindingModel, typename InterfaceBindings>
-struct binding_inferred_dependencies_resolved<BindingModel, InterfaceBindings,
-                                              true> : std::true_type {};
-
-template <typename BindingModel, typename InterfaceBindings>
-struct binding_inferred_dependencies_resolved<BindingModel, InterfaceBindings,
-                                              false> : std::true_type {};
-
-template <typename BindingModel, typename InterfaceBindings,
-          bool DependenciesResolved = binding_inferred_dependencies_resolved<
-              BindingModel, InterfaceBindings>::value>
-struct binding_inferred_dependency_diagnostic;
-
-template <typename BindingModel, typename InterfaceBindings>
-struct binding_inferred_dependency_diagnostic<BindingModel, InterfaceBindings,
-                                              true> : std::true_type {};
-
-template <typename BindingModel, typename InterfaceBindings>
-struct binding_inferred_dependency_diagnostic<BindingModel, InterfaceBindings,
-                                              false> : std::true_type {};
-
-template <typename BindingModel, typename InterfaceBindings,
-          bool HasKnownDependencies =
-              !std::is_same_v<binding_dependencies_t<BindingModel>, void>>
-struct binding_inferred_dependencies_unambiguous;
-
-template <typename BindingModel, typename InterfaceBindings>
-struct binding_inferred_dependencies_unambiguous<BindingModel,
-                                                 InterfaceBindings, true>
-    : std::true_type {};
-
-template <typename BindingModel, typename InterfaceBindings>
-struct binding_inferred_dependencies_unambiguous<BindingModel,
-                                                 InterfaceBindings, false>
-    : std::true_type {};
-
-template <typename BindingModel, typename InterfaceBindings,
-          bool DependenciesUnambiguous =
-              binding_inferred_dependencies_unambiguous<
-                  BindingModel, InterfaceBindings>::value>
-struct binding_inferred_ambiguity_diagnostic;
-
-template <typename BindingModel, typename InterfaceBindings>
-struct binding_inferred_ambiguity_diagnostic<BindingModel, InterfaceBindings,
-                                             true> : std::true_type {};
-
-template <typename BindingModel, typename InterfaceBindings>
-struct binding_inferred_ambiguity_diagnostic<BindingModel, InterfaceBindings,
-                                             false> : std::true_type {};
-
 template <typename BindingModel>
 struct binding_factory_is_compile_time_bindable
     : std::bool_constant<factory_traits<
@@ -639,11 +561,7 @@ struct static_registry_dependency_diagnostics
     // and static/runtime paths can branch on them. Emit the detailed
     // diagnostics only when a static graph path instantiates this helper.
     : binding_declared_dependency_diagnostic<BindingModels,
-                                             InterfaceBindings>...,
-      binding_inferred_dependency_diagnostic<BindingModels,
-                                             InterfaceBindings>...,
-      binding_inferred_ambiguity_diagnostic<BindingModels,
-                                            InterfaceBindings>... {};
+                                             InterfaceBindings>... {};
 
 } // namespace detail
 
@@ -663,18 +581,8 @@ template <typename... Registrations> struct static_bindings {
       (detail::binding_declared_dependencies_resolved<
            detail::binding_model<Registrations>, interface_bindings>::value &&
        ...);
-  static constexpr bool inferred_dependencies_are_resolved =
-      (detail::binding_inferred_dependencies_resolved<
-           detail::binding_model<Registrations>, interface_bindings>::value &&
-       ...);
-  static constexpr bool inferred_dependencies_are_unambiguous =
-      (detail::binding_inferred_dependencies_unambiguous<
-           detail::binding_model<Registrations>, interface_bindings>::value &&
-       ...);
   static constexpr bool dependencies_are_resolved =
-      declared_dependencies_are_resolved &&
-      inferred_dependencies_are_resolved &&
-      inferred_dependencies_are_unambiguous;
+      declared_dependencies_are_resolved;
   static constexpr bool valid =
       registrations_valid && factories_are_compile_time_bindable;
 

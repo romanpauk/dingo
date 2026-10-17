@@ -25,11 +25,4 @@ template <std::size_t Len, std::size_t Alignment> struct aligned_storage {
 template <std::size_t Len, std::size_t Alignment>
 using aligned_storage_t = typename aligned_storage<Len, Alignment>::type;
 
-template <std::size_t MinLen, typename... Ts> struct aligned_union {
-  static constexpr std::size_t length = std::max({MinLen, sizeof(Ts)...});
-  static constexpr std::size_t alignment = std::max({alignof(Ts)...});
-
-  using type = typename aligned_storage<length, alignment>::type;
-};
-
 } // namespace dingo

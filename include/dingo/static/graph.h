@@ -59,8 +59,6 @@ template <typename InterfaceBinding, typename StaticRegistry,
           bool RuntimeDependencies = false>
 struct static_graph_node {
   using binding_model_type = typename InterfaceBinding::binding_model_type;
-  using resolved_dependency_bindings = resolved_dependency_bindings_t<
-      binding_model_type, typename StaticRegistry::interface_bindings>;
   using type = graph_node<
       InterfaceBinding,
       resolved_dependency_bindings_t<
@@ -75,11 +73,10 @@ struct static_graph_node<void, StaticRegistry, RuntimeDependencies> {
 template <typename InterfaceBinding, typename StaticRegistry>
 struct static_graph_node<InterfaceBinding, StaticRegistry, true> {
   using binding_model_type = typename InterfaceBinding::binding_model_type;
-  using resolved_dependency_bindings = resolved_dependency_bindings_t<
-      binding_model_type, typename StaticRegistry::interface_bindings>;
   using type = graph_node<
       InterfaceBinding,
-      filter_resolved_dependency_bindings_t<resolved_dependency_bindings>>;
+      filter_resolved_dependency_bindings_t<resolved_dependency_bindings_t<
+          binding_model_type, typename StaticRegistry::interface_bindings>>>;
 };
 
 template <typename InterfaceBinding, typename StaticRegistry,
