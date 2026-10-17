@@ -57,6 +57,10 @@ template <typename StaticRegistry, typename ParentContainer,
           typename RuntimeConfig>
 class container_with_static_bindings;
 
+template <typename ContainerTraits, typename Allocator,
+          typename ParentContainer>
+class runtime_container_impl;
+
 struct runtime_data_owner_t {};
 inline constexpr runtime_data_owner_t runtime_data_owner{};
 
@@ -266,7 +270,8 @@ class runtime_registry : public allocator_base<Allocator> {
   template <typename, typename> friend class detail::binding_resolution;
   template <typename, typename, typename>
   friend class detail::container_with_static_bindings;
-  template <typename, typename, typename> friend class runtime_container;
+  template <typename, typename, typename>
+  friend class detail::runtime_container_impl;
   template <typename ContainerTraitsT, typename AllocatorT,
             typename ParentRegistryT, typename ResolveRootT,
             bool OwnsRuntimeDataT>

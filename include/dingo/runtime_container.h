@@ -7,10 +7,16 @@
 
 #pragma once
 
+#include <dingo/detail/container_traits.h>
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/registration_api.h>
 #include <dingo/runtime/registry.h>
 #include <dingo/type/dependency_traits.h>
+
+#include <cassert>
+#include <memory>
+#include <type_traits>
+#include <utility>
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -18,25 +24,28 @@
 #endif
 
 namespace dingo {
+namespace detail {
 
-template <typename ContainerTraits = dynamic_container_traits,
-          typename Allocator = typename ContainerTraits::allocator_type,
-          typename ParentContainer = void>
-class runtime_container
-    : public detail::runtime_registration_api<
-          runtime_container<ContainerTraits, Allocator, ParentContainer>> {
+// Runtime container state lives at a stable heap address. Registered bindings,
+// registration containers and child containers point back at it, so the
+// public runtime_container can move by transferring ownership.
+template <typename ContainerTraits, typename Allocator,
+          typename ParentContainer>
+class runtime_container_impl
+    : public runtime_registration_api<
+          runtime_container_impl<ContainerTraits, Allocator, ParentContainer>> {
   using self_type =
-      runtime_container<ContainerTraits, Allocator, ParentContainer>;
+      runtime_container_impl<ContainerTraits, Allocator, ParentContainer>;
   using registry_base =
       runtime_registry<ContainerTraits, Allocator, void, self_type>;
   using runtime_context_type = runtime_context<Allocator>;
 
-  template <typename> friend class runtime_context;
-  template <typename, typename> friend class detail::binding_resolution;
+  template <typename> friend class ::dingo::runtime_context;
+  template <typename, typename> friend class binding_resolution;
   template <typename, typename, typename>
-  friend class detail::container_with_static_bindings;
+  friend class container_with_static_bindings;
   template <typename, typename, typename, typename, bool>
-  friend class runtime_registry;
+  friend class ::dingo::runtime_registry;
 
 public:
   using container_traits_type = ContainerTraits;
@@ -45,26 +54,22 @@ public:
   using registry_type = registry_base;
   using parent_container_type =
       std::conditional_t<std::is_same_v<void, ParentContainer>, container_type,
-                         ParentContainer>;
+                         container_implementation_t<ParentContainer>>;
   using rtti_type = typename registry_type::rtti_type;
   using lookup_definition_type = typename registry_type::lookup_definition_type;
   static constexpr bool has_parent_v =
       !std::is_same_v<void, parent_container_type>;
 
-  template <typename ContainerTraitsT, typename AllocatorT,
-            typename ParentContainerT>
-  using rebind_t =
-      runtime_container<ContainerTraitsT, AllocatorT, ParentContainerT>;
-
-  runtime_container() : runtime_registry_(detail::runtime_data_owner, this) {}
-
-  explicit runtime_container(const allocator_type &alloc)
+  explicit runtime_container_impl(const allocator_type &alloc)
       : runtime_registry_(detail::runtime_data_owner, this, alloc) {}
 
-  runtime_container(parent_container_type *parent,
-                    const allocator_type &alloc = allocator_type())
+  runtime_container_impl(parent_container_type *parent,
+                         const allocator_type &alloc)
       : runtime_registry_(detail::runtime_data_owner, this, alloc),
         parent_(parent) {}
+
+  runtime_container_impl(const runtime_container_impl &) = delete;
+  runtime_container_impl &operator=(const runtime_container_impl &) = delete;
 
 private:
   template <typename Request, typename Origin, typename LookupKey,
@@ -489,6 +494,148 @@ private:
 
   registry_type runtime_registry_;
   parent_container_type *parent_ = nullptr;
+};
+
+} // namespace detail
+
+template <typename ContainerTraits = dynamic_container_traits,
+          typename Allocator = typename ContainerTraits::allocator_type,
+          typename ParentContainer = void>
+class runtime_container {
+public:
+  using implementation_type =
+      detail::runtime_container_impl<ContainerTraits, Allocator,
+                                     ParentContainer>;
+
+private:
+  using implementation_allocator = typename std::allocator_traits<
+      Allocator>::template rebind_alloc<implementation_type>;
+  using implementation_allocator_traits =
+      std::allocator_traits<implementation_allocator>;
+
+  template <typename, typename> friend struct detail::container_implementation;
+
+public:
+  using container_traits_type = ContainerTraits;
+  using allocator_type = Allocator;
+  using registry_type = typename implementation_type::registry_type;
+  using parent_container_type =
+      std::conditional_t<std::is_same_v<void, ParentContainer>,
+                         runtime_container, ParentContainer>;
+  using rtti_type = typename implementation_type::rtti_type;
+  using lookup_definition_type =
+      typename implementation_type::lookup_definition_type;
+  static constexpr bool has_parent_v = implementation_type::has_parent_v;
+
+  template <typename ContainerTraitsT, typename AllocatorT,
+            typename ParentContainerT>
+  using rebind_t =
+      runtime_container<ContainerTraitsT, AllocatorT, ParentContainerT>;
+
+  runtime_container() : runtime_container(allocator_type()) {}
+
+  explicit runtime_container(const allocator_type &alloc)
+      : impl_(create(alloc, alloc)) {}
+
+  runtime_container(parent_container_type *parent,
+                    const allocator_type &alloc = allocator_type())
+      : impl_(create(alloc, detail::container_implementation_of(parent),
+                     alloc)) {}
+
+  // Moving transfers the container state, so registrations and resolved
+  // instances keep their addresses. The moved-from container can only be
+  // destroyed or assigned to.
+  runtime_container(runtime_container &&other) noexcept
+      : impl_(std::exchange(other.impl_, nullptr)) {}
+
+  runtime_container &operator=(runtime_container &&other) noexcept {
+    if (this != &other) {
+      destroy();
+      impl_ = std::exchange(other.impl_, nullptr);
+    }
+    return *this;
+  }
+
+  runtime_container(const runtime_container &) = delete;
+  runtime_container &operator=(const runtime_container &) = delete;
+
+  ~runtime_container() { destroy(); }
+
+  decltype(auto) get_allocator() { return implementation().get_allocator(); }
+
+  template <typename... TypeArgs, typename... Args>
+  auto register_type(Args &&...args) {
+    return implementation().template register_type<TypeArgs...>(
+        std::forward<Args>(args)...);
+  }
+
+  template <typename... TypeArgs, typename... Args>
+  auto register_type_collection(Args &&...args) {
+    return implementation().template register_type_collection<TypeArgs...>(
+        std::forward<Args>(args)...);
+  }
+
+  template <typename... TypeArgs, typename... Args>
+  detail::binding_status binding_status(Args &&...args) {
+    return implementation().template binding_status<TypeArgs...>(
+        std::forward<Args>(args)...);
+  }
+
+  template <typename... TypeArgs, typename... Args>
+  decltype(auto) resolve(Args &&...args) {
+    return implementation().template resolve<TypeArgs...>(
+        std::forward<Args>(args)...);
+  }
+
+  template <typename... TypeArgs, typename... Args>
+  decltype(auto) construct(Args &&...args) {
+    return implementation().template construct<TypeArgs...>(
+        std::forward<Args>(args)...);
+  }
+
+  template <typename... TypeArgs, typename... Args>
+  decltype(auto) construct_collection(Args &&...args) {
+    return implementation().template construct_collection<TypeArgs...>(
+        std::forward<Args>(args)...);
+  }
+
+  template <typename... TypeArgs, typename... Args>
+  decltype(auto) invoke(Args &&...args) {
+    return implementation().template invoke<TypeArgs...>(
+        std::forward<Args>(args)...);
+  }
+
+private:
+  implementation_type &implementation() {
+    assert(impl_ != nullptr);
+    return *impl_;
+  }
+
+  template <typename... Args>
+  static implementation_type *create(const allocator_type &alloc,
+                                     Args &&...args) {
+    implementation_allocator allocator(alloc);
+    auto *impl = implementation_allocator_traits::allocate(allocator, 1);
+    try {
+      implementation_allocator_traits::construct(allocator, impl,
+                                                 std::forward<Args>(args)...);
+    } catch (...) {
+      implementation_allocator_traits::deallocate(allocator, impl, 1);
+      throw;
+    }
+    return impl;
+  }
+
+  void destroy() noexcept {
+    if (impl_ != nullptr) {
+      implementation_allocator allocator(impl_->get_allocator());
+      implementation_allocator_traits::destroy(allocator, impl_);
+      implementation_allocator_traits::deallocate(allocator, impl_, 1);
+      impl_ = nullptr;
+    }
+  }
+
+  implementation_type *impl_;
 };
 
 } // namespace dingo

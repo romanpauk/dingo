@@ -8,6 +8,7 @@
 #pragma once
 
 #include <dingo/container.h>
+#include <dingo/detail/container_traits.h>
 #include <dingo/factory/invoke.h>
 #include <dingo/static/activation_set.h>
 #include <dingo/static/container_traits.h>
@@ -106,7 +107,7 @@ private:
           static_bindings_type::dependencies_are_resolved>::type>;
   using self_type = static_container_impl<static_bindings_type, ParentContainer,
                                           ContainerTraits>;
-  using parent_container_type = ParentContainer;
+  using parent_container_type = container_implementation_t<ParentContainer>;
   using state_type = static_storage_state<Registrations...>;
   using context_type = static_context<context_static_bindings_type>;
   using index_entries_ = detail::normalize_lookup_definitions_t<
@@ -258,9 +259,17 @@ public:
 
   static_container_impl() = default;
 
+  // Bindings keep their instances inline, and resolved instances reference
+  // each other by address, so the container cannot move.
+  static_container_impl(const static_container_impl &) = delete;
+  static_container_impl(static_container_impl &&) = delete;
+  static_container_impl &operator=(const static_container_impl &) = delete;
+  static_container_impl &operator=(static_container_impl &&) = delete;
+
   template <typename Parent = ParentContainer,
             std::enable_if_t<!std::is_void_v<Parent>, int> = 0>
-  explicit static_container_impl(Parent *parent) : parent_(parent) {}
+  explicit static_container_impl(Parent *parent)
+      : parent_(container_implementation_of(parent)) {}
 
   template <typename T, typename Key = key_type<none_t>,
             typename R = typename request_type<T, true>::result_type>

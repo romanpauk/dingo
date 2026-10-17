@@ -457,6 +457,20 @@ See:
 
 - [test/matrix/README.md](../test/matrix/README.md)
 
+## Moving Containers
+
+Runtime-only containers, `container<>` and `runtime_container`, are movable but
+not copyable. They keep their state in a single allocation made through the
+container allocator, and moving transfers it. Registrations, resolved instances,
+the registration containers returned by `register_type<...>()`, and child
+containers created with `child(&parent)` therefore stay valid when the container
+moves. This supports builder-style setup that registers types and then hands the
+container over. A moved-from container can only be destroyed or assigned to.
+
+Containers with compile-time bindings, `container<bindings<...>>` and
+`static_container<bindings<...>>`, store their instances inline and are neither
+movable nor copyable.
+
 ## Custom RTTI
 
 If standard RTTI is unavailable or undesirable, the container can be

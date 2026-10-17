@@ -119,7 +119,8 @@ private:
       detail::container_lookup_definition_type_t<
           typename runtime_base::container_traits_type>>;
   static constexpr bool has_parent_v = !std::is_void_v<ParentContainer>;
-  using parent_container_type = ParentContainer;
+  using parent_container_type =
+      detail::container_implementation_t<ParentContainer>;
 
   template <typename T, typename Key>
   using static_selection_t =
@@ -421,7 +422,7 @@ public:
   explicit container_with_static_bindings(
       Parent *parent, allocator_type alloc = allocator_type())
       : runtime_registry_(detail::runtime_data_owner, this, alloc),
-        parent_(parent) {}
+        parent_(detail::container_implementation_of(parent)) {}
 
   template <
       typename Parent = ParentContainer,
@@ -431,32 +432,12 @@ public:
       Parent *parent, allocator_type alloc = allocator_type())
       : runtime_registry_(parent, alloc), parent_(parent) {}
 
-  container_with_static_bindings(const self_type &other)
-      : runtime_registry_(other.runtime_registry_),
-        static_registry_(other.static_registry_), parent_(other.parent_) {}
-
-  container_with_static_bindings(self_type &&other) noexcept
-      : runtime_registry_(std::move(other.runtime_registry_)),
-        static_registry_(std::move(other.static_registry_)),
-        parent_(other.parent_) {}
-
-  self_type &operator=(const self_type &other) {
-    if (this != &other) {
-      runtime_registry_ = other.runtime_registry_;
-      static_registry_ = other.static_registry_;
-      parent_ = other.parent_;
-    }
-    return *this;
-  }
-
-  self_type &operator=(self_type &&other) noexcept {
-    if (this != &other) {
-      runtime_registry_ = std::move(other.runtime_registry_);
-      static_registry_ = std::move(other.static_registry_);
-      parent_ = other.parent_;
-    }
-    return *this;
-  }
+  // Compile-time bindings keep their instances inline, and resolved instances
+  // reference each other by address, so these containers cannot move.
+  container_with_static_bindings(const self_type &) = delete;
+  container_with_static_bindings(self_type &&) = delete;
+  self_type &operator=(const self_type &) = delete;
+  self_type &operator=(self_type &&) = delete;
 
   self_type &container() { return *this; }
 
