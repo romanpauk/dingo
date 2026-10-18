@@ -136,6 +136,12 @@ template <size_t Index, typename InterfaceBinding> struct binding_lookup_hit {
   static constexpr size_t index = Index;
 };
 
+// The result of a lookup that no binding answers. It carries the no-binding
+// index of the static graph.
+struct binding_lookup_miss {
+  static constexpr size_t index = static_cast<size_t>(-1);
+};
+
 template <size_t Index, typename InterfaceBinding>
 struct binding_lookup_index_entry {
   static binding_lookup_hit<Index, InterfaceBinding>
@@ -143,6 +149,9 @@ struct binding_lookup_index_entry {
                                 typename InterfaceBinding::key_type>);
 };
 
+// The overload set of the bindings answers a lookup by overload resolution: a
+// unique binding is the exact match, no binding falls through to the ellipsis,
+// and several bindings of the same interface and key are ambiguous.
 template <typename InterfaceBindings, typename Indexes>
 struct binding_lookup_index_impl;
 
@@ -151,6 +160,7 @@ struct binding_lookup_index_impl<type_list<InterfaceBindings...>,
                                  std::index_sequence<Indexes...>>
     : binding_lookup_index_entry<Indexes, InterfaceBindings>... {
   using binding_lookup_index_entry<Indexes, InterfaceBindings>::select...;
+  static binding_lookup_miss select(...);
 };
 
 template <typename InterfaceBindings>
@@ -158,27 +168,31 @@ using binding_lookup_index = binding_lookup_index_impl<
     InterfaceBindings,
     std::make_index_sequence<type_list_size_v<InterfaceBindings>>>;
 
+template <typename Hit> struct indexed_binding_choice {
+  using type = found_binding_choice_t<typename Hit::type>;
+};
+
+template <> struct indexed_binding_choice<binding_lookup_miss> {
+  using type = missing_binding_choice_t;
+};
+
+// The bindings of a lookup without a key are indexed by interface, so the
+// choice is read from the overload set instead of counting the matches of every
+// binding. An ambiguous lookup has no viable overload.
 template <typename Interface, typename LookupKey, typename InterfaceBindings,
-          size_t Count =
-              binding_count_v<Interface, LookupKey, InterfaceBindings>>
+          typename = void>
 struct indexed_binding_selection {
   using type = ambiguous_binding_choice_t;
 };
 
 template <typename Interface, typename LookupKey, typename InterfaceBindings>
-struct indexed_binding_selection<Interface, LookupKey, InterfaceBindings, 0> {
-  using type = missing_binding_choice_t;
-};
-
-template <typename Interface, typename LookupKey, typename InterfaceBindings>
-struct indexed_binding_selection<Interface, LookupKey, InterfaceBindings, 1> {
-private:
-  using selected = decltype(binding_lookup_index<InterfaceBindings>::select(
-      binding_lookup_tag<Interface, LookupKey>{}));
-
-public:
-  using type = found_binding_choice_t<typename selected::type>;
-};
+struct indexed_binding_selection<
+    Interface, LookupKey, InterfaceBindings,
+    std::void_t<decltype(binding_lookup_index<InterfaceBindings>::select(
+        binding_lookup_tag<Interface, std::decay_t<LookupKey>>{}))>>
+    : indexed_binding_choice<
+          decltype(binding_lookup_index<InterfaceBindings>::select(
+              binding_lookup_tag<Interface, std::decay_t<LookupKey>>{}))> {};
 
 template <typename Interface, typename LookupKey, typename InterfaceBindings,
           bool UseIndex = is_no_lookup_key_v<LookupKey>>

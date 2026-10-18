@@ -95,7 +95,7 @@ template <typename T, typename... Args> struct constructor<T(Args...)> {
   }
 
   template <typename Type, typename Context, typename Container>
-  static void construct(void *ptr, construction_scope scope, Context &ctx,
+  static auto construct(void *ptr, construction_scope scope, Context &ctx,
                         Container &container) {
     (void)scope;
     detail::construction_dispatch<Type, T>::construct(
