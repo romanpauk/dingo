@@ -89,18 +89,18 @@ struct binding_conversion_cache_base<false, ConversionTypes> {
 };
 
 template <typename Context> struct retained_frame_scope {
-  explicit retained_frame_scope(Context &context, bool active = true)
-      : context_(context), active_(active) {}
-
-  ~retained_frame_scope() {
-    if (active_) {
-      context_.pop_frame();
-    }
+  explicit retained_frame_scope(Context &context) : context_(context) {
+    context_.push_frame(&frame_);
   }
+
+  ~retained_frame_scope() { context_.pop_frame(); }
+
+  retained_frame_scope(const retained_frame_scope &) = delete;
+  retained_frame_scope &operator=(const retained_frame_scope &) = delete;
 
 private:
   Context &context_;
-  bool active_;
+  typename Context::frame_type frame_;
 };
 
 template <typename RTTI> struct binding_request {
@@ -268,12 +268,10 @@ decltype(auto) with_context_lvalue_source(construction_scope scope,
   return std::forward<Fn>(fn)(source);
 }
 
-template <typename Storage, typename Context, typename Owner, typename Frame,
-          typename Fn>
+template <typename Storage, typename Context, typename Owner, typename Fn>
 decltype(auto) with_retained_binding_source(construction_scope scope,
                                             Context &context, Storage &storage,
-                                            Owner &owner, Frame &frame,
-                                            Fn &&fn) {
+                                            Owner &owner, Fn &&fn) {
   using materialization_traits =
       storage_materialization_traits<typename Storage::tag_type,
                                      typename Storage::type>;
@@ -282,11 +280,7 @@ decltype(auto) with_retained_binding_source(construction_scope scope,
   [[maybe_unused]] auto guard =
       materialization_traits::template make_guard<leaf_type>(context, storage);
   if (materialization_traits::retains_source(storage)) {
-    const auto pushed = !context.contains_frame(&frame);
-    if (pushed) {
-      context.push_frame(&frame);
-    }
-    retained_frame_scope<Context> frame_scope(context, pushed);
+    retained_frame_scope<Context> frame_scope(context);
     auto source = materialization_traits::materialize_source(
         persistent_scope, context, storage, owner);
     return std::forward<Fn>(fn)(std::move(source));
@@ -404,11 +398,10 @@ decltype(auto) consume_runtime_binding_resolution_request(
 }
 
 template <typename Request, typename Resolution, typename Storage,
-          typename Resolver, typename Context, typename Owner, typename Frame,
-          typename Fn>
+          typename Resolver, typename Context, typename Owner, typename Fn>
 decltype(auto)
 consume_binding_resolution_request(construction_scope scope, Context &context,
-                                   Storage &storage, Owner &owner, Frame &frame,
+                                   Storage &storage, Owner &owner,
                                    Resolver &resolver, Fn &&fn) {
   auto consume = [&](auto &&source) -> decltype(auto) {
     return apply_consumed_resolution<Request, Resolution, Storage>(
@@ -417,7 +410,7 @@ consume_binding_resolution_request(construction_scope scope, Context &context,
   };
   using operation = typename Resolution::operation;
   if constexpr (operation_requires_source_retention_v<operation>) {
-    return with_retained_binding_source(scope, context, storage, owner, frame,
+    return with_retained_binding_source(scope, context, storage, owner,
                                         std::move(consume));
   } else {
     return with_binding_source(scope, context, storage, owner,

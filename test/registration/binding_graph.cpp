@@ -6,6 +6,7 @@
 //
 
 #include <dingo/static/activation_set.h>
+#include <dingo/static/context.h>
 #include <dingo/static/graph.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>
@@ -247,20 +248,15 @@ TEST(static_execution_traits_test,
   static_assert(std::is_same_v<larger_types, type_list<larger_payload>>);
 }
 
-TEST(static_execution_traits_test,
-     pure_static_frames_do_not_use_runtime_frame_base) {
+TEST(static_execution_traits_test, static_context_frames_are_not_polymorphic) {
   struct payload {
     ~payload() {}
   };
 
-  using registration = dingo::bind<scope<unique>, storage<payload>>;
-  using pure_frame = detail::static_activation_frame_t<false, registration>;
-  using partial_frame = detail::static_activation_frame_t<true, registration>;
+  using source = dingo::bindings<dingo::bind<scope<unique>, storage<payload>>>;
+  using frame = static_context<typename source::type>::frame_type;
 
-  static_assert(
-      !std::is_base_of_v<detail::static_context_frame_base, pure_frame>);
-  static_assert(
-      std::is_base_of_v<detail::static_context_frame_base, partial_frame>);
+  static_assert(!std::is_polymorphic_v<frame>);
 }
 
 TEST(static_execution_traits_test,
