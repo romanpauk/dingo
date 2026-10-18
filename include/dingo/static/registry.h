@@ -131,9 +131,14 @@ inline constexpr size_t binding_count_v =
 
 template <typename Interface, typename LookupKey> struct binding_lookup_tag {};
 
+template <size_t Index, typename InterfaceBinding> struct binding_lookup_hit {
+  using type = InterfaceBinding;
+  static constexpr size_t index = Index;
+};
+
 template <size_t Index, typename InterfaceBinding>
 struct binding_lookup_index_entry {
-  static type_list_iterator<InterfaceBinding>
+  static binding_lookup_hit<Index, InterfaceBinding>
       select(binding_lookup_tag<typename InterfaceBinding::interface_type,
                                 typename InterfaceBinding::key_type>);
 };
@@ -577,12 +582,6 @@ template <typename... Registrations> struct static_bindings {
       (detail::binding_factory_is_compile_time_bindable<
            detail::binding_model<Registrations>>::value &&
        ...);
-  static constexpr bool declared_dependencies_are_resolved =
-      (detail::binding_declared_dependencies_resolved<
-           detail::binding_model<Registrations>, interface_bindings>::value &&
-       ...);
-  static constexpr bool dependencies_are_resolved =
-      declared_dependencies_are_resolved;
   static constexpr bool valid =
       registrations_valid && factories_are_compile_time_bindable;
 
