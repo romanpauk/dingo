@@ -4,12 +4,17 @@ Container images for local development and CI.
 
 `Containerfile` is parameterized: each build installs exactly one selected
 toolchain plus common development tools. The recipe accepts `gcc-*`, `clang-*`,
-and `msvc` / `msvc-wine` values.
+and `msvc` / `msvc-wine` values. The `BASE_IMAGE` build argument selects the
+Ubuntu release and defaults to `ubuntu:25.04`; a toolchain that Ubuntu 25.04
+does not package is built on a newer release.
 
 Linux image-backed CI currently builds and exercises:
 
 - `dingo-toolchains:ubuntu-25.04-gcc-15`
 - `dingo-toolchains:ubuntu-25.04-clang-20`
+- `dingo-toolchains:ubuntu-26.10-gcc-16`, with `BASE_IMAGE=ubuntu:26.10`; C++23
+  with sanitizers and C++26 without them, as GCC 16 reports false
+  uninitialized-variable warnings for C++26 with sanitizers
 
 For MSVC, the commands below build and run a local example tag:
 
@@ -54,6 +59,17 @@ podman run --rm \
     -DDINGO_BENCHMARK_ENABLED=OFF && \
     cmake --build build-gcc15 --verbose -j"$(nproc)" && \
     ctest --test-dir build-gcc15 --output-on-failure'
+```
+
+For GCC 16, select the Ubuntu 26.10 base:
+
+```bash
+podman build \
+  -f docker/ubuntu25-toolchains/Containerfile \
+  --build-arg BASE_IMAGE=ubuntu:26.10 \
+  --build-arg TOOLCHAIN=gcc-16 \
+  -t dingo-toolchains:ubuntu-26.10-gcc-16 \
+  docker/ubuntu25-toolchains
 ```
 
 ## Clang image

@@ -94,6 +94,7 @@ Linux image examples:
 
 - `dingo-toolchains:ubuntu-25.04-gcc-15` for GCC 15 builds on Ubuntu 25.04
 - `dingo-toolchains:ubuntu-25.04-clang-20` for Clang 20 builds on Ubuntu 25.04
+- `dingo-toolchains:ubuntu-26.10-gcc-16` for GCC 16 builds on Ubuntu 26.10
 
 For an MSVC-style local workflow, build a local image from
 `docker/ubuntu25-toolchains/Containerfile` with `TOOLCHAIN=msvc-wine`.

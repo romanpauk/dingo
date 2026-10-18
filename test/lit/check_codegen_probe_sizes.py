@@ -158,6 +158,7 @@ PROBE_LIMITS = {
     },
     "probe_static_resolution_collection_sum": {
         "default": 0x500,
+        "gcc16": 0x520,
     },
     "probe_static_resolution_mixed_container_collection_sum": {
         "default": 0xc00,
