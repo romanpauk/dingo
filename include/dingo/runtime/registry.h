@@ -17,7 +17,6 @@
 #include <dingo/core/key.h>
 #include <dingo/core/none.h>
 #include <dingo/factory/callable.h>
-#include <dingo/factory/invoke.h>
 #include <dingo/lookup/lookup.h>
 #include <dingo/lookup/operations.h>
 #include <dingo/memory/allocator.h>
@@ -29,6 +28,7 @@
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
 #include <dingo/runtime/lookup_index.h>
+#include <dingo/runtime/registration_api.h>
 #include <dingo/runtime/transaction.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/type/dependency_traits.h>
@@ -57,10 +57,6 @@ template <typename Derived> class runtime_registration_api;
 template <typename StaticRegistry, typename ParentContainer,
           typename RuntimeConfig>
 class container_with_static_bindings;
-
-template <typename ContainerTraits, typename Allocator,
-          typename ParentContainer>
-class runtime_container_impl;
 
 struct runtime_data_owner_t {};
 inline constexpr runtime_data_owner_t runtime_data_owner{};
@@ -1206,6 +1202,9 @@ template <typename ContainerTraits, typename Allocator, typename ParentRegistry,
           typename ResolveRoot, bool OwnsRuntimeData = true>
 class DINGO_EMPTY_BASES runtime_registry
     : public allocator_base<Allocator>,
+      public detail::runtime_registration_api<
+          runtime_registry<ContainerTraits, Allocator, ParentRegistry,
+                           ResolveRoot, OwnsRuntimeData>>,
       protected detail::registry_store<ContainerTraits, Allocator> {
   template <typename> friend class runtime_context;
   template <typename> friend class detail::runtime_registration_api;
@@ -1213,8 +1212,6 @@ class DINGO_EMPTY_BASES runtime_registry
   friend class runtime_binding_state;
   template <typename, typename, typename>
   friend class detail::container_with_static_bindings;
-  template <typename, typename, typename>
-  friend class detail::runtime_container_impl;
   template <typename ContainerTraitsT, typename AllocatorT,
             typename ParentRegistryT, typename ResolveRootT,
             bool OwnsRuntimeDataT>
@@ -1308,6 +1305,8 @@ public:
 
 private:
   registry_type &binding_store() { return *this; }
+
+  registry_type &runtime_registration_parent() { return *this; }
 
 public:
   runtime_registry(const runtime_registry &) = delete;
@@ -1418,52 +1417,7 @@ protected:
     return const_cast<registry_type *>(this)->resolve_root();
   }
 
-public:
-  template <typename... TypeArgs> auto register_type() {
-    return prepare_binding<TypeArgs...>(this, none_t{});
-  }
-
-  template <typename... TypeArgs, typename Arg,
-            std::enable_if_t<!detail::is_runtime_registration_key_arg_v<Arg>,
-                             int> = 0>
-  auto register_type(Arg &&arg) {
-    return prepare_binding<TypeArgs...>(this, std::forward<Arg>(arg));
-  }
-
-  template <typename... TypeArgs, typename... KeyArgs,
-            std::enable_if_t<
-                (sizeof...(KeyArgs) > 0 &&
-                 detail::are_runtime_registration_key_args_v<KeyArgs...>),
-                int> = 0>
-  auto register_type(KeyArgs &&...keys) {
-    return prepare_binding<TypeArgs...>(this, none_t{},
-                                        std::forward<KeyArgs>(keys)...);
-  }
-
-  template <typename... TypeArgs, typename Arg, typename... KeyArgs,
-            std::enable_if_t<
-                (sizeof...(KeyArgs) > 0 &&
-                 !detail::is_runtime_registration_key_arg_v<Arg> &&
-                 detail::are_runtime_registration_key_args_v<KeyArgs...>),
-                int> = 0>
-  auto register_type(Arg &&arg, KeyArgs &&...keys) {
-    return prepare_binding<TypeArgs...>(this, std::forward<Arg>(arg),
-                                        std::forward<KeyArgs>(keys)...);
-  }
-
 protected:
-  template <typename Signature = void, typename Callable>
-  auto invoke(runtime_context_type &context, Callable &&callable) {
-    using callable_type = std::remove_cv_t<std::remove_reference_t<Callable>>;
-    using dispatch_signature =
-        detail::callable_dispatch_signature_t<Signature, callable_type>;
-
-    auto type_guard = context.template track_type<callable_type>();
-    return detail::callable_invoke<dispatch_signature>::construct(
-        std::forward<Callable>(callable), ephemeral_scope, context,
-        *resolve_root());
-  }
-
   // Lookup misses are answered by the parent chain instead of failing at
   // compile time when the registry is not the resolve root.
   static constexpr bool lookup_may_miss() {
@@ -1499,7 +1453,7 @@ protected:
   }
 
   template <typename T, typename Fn>
-  std::size_t append_collection(T &results, construction_scope scope,
+  std::size_t append_collection(construction_scope scope, T &results,
                                 runtime_context_type &context, Fn &&fn) {
     return store_type::append_runtime_collection(
         runtime_bindings(), results, scope, context, std::forward<Fn>(fn),
@@ -1508,7 +1462,7 @@ protected:
 
   template <typename T, typename Fn, typename LookupKey,
             std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t append_collection(T &results, construction_scope scope,
+  std::size_t append_collection(construction_scope scope, T &results,
                                 runtime_context_type &context, Fn &&fn,
                                 LookupKey key) {
     return store_type::append_runtime_collection(
