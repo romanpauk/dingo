@@ -711,87 +711,104 @@ using conversion_for_access_t = std::conditional_t<
         access_satisfies<Access, typename Conversion::required_access>::value,
     Conversion, unavailable_type_conversion>;
 
+enum class basic_conversion_kind { none, identity, reference, converted };
+
+// Taking the address of a compatible lvalue is what the fallback walk selects
+// once the direct conversion has failed. A source that is an alternative type
+// is probed per alternative first, so only the identity address, which no
+// alternative can provide, is shortened here.
+//
+// The predicates of basic_type_conversion_path are function templates rather
+// than lambdas in its member initializers: MSVC's pre-C++20 lambda processor
+// fails on those lambdas for some instantiations.
+template <typename Target, typename Source, bool UsesDefaultConversion>
+constexpr bool basic_conversion_takes_address() {
+  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
+  bool result = false;
+  if constexpr (UsesDefaultConversion && std::is_pointer_v<Target> &&
+                std::is_lvalue_reference_v<Source> &&
+                !std::is_pointer_v<source_type> &&
+                std::is_convertible_v<std::remove_reference_t<Source> *,
+                                      Target>) {
+    using const_source = std::add_lvalue_reference_t<
+        std::add_const_t<std::remove_reference_t<Source>>>;
+    if constexpr (!is_alternative_type_v<source_type> ||
+                  std::is_volatile_v<std::remove_reference_t<Source>> ||
+                  std::is_same_v<
+                      std::remove_cv_t<std::remove_pointer_t<Target>>,
+                      source_type>) {
+      // A direct conversion has priority over taking the address.
+      result = !std::is_constructible_v<Target, Source> &&
+               !std::is_constructible_v<Target, const_source>;
+    }
+  }
+  return result;
+}
+
+template <typename Target, typename Source, typename Access,
+          bool UsesDefaultConversion>
+constexpr basic_conversion_kind basic_conversion_selected() {
+  using kind = basic_conversion_kind;
+  using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
+  kind result = kind::none;
+  if constexpr (!UsesDefaultConversion || std::is_pointer_v<Target>) {
+    // Custom conversions are resolved by the direct path.
+  } else if constexpr (std::is_lvalue_reference_v<Target>) {
+    if constexpr (std::is_lvalue_reference_v<Source> &&
+                  access_satisfies<Access, borrow>::value &&
+                  std::is_convertible_v<
+                      std::add_pointer_t<std::remove_reference_t<Source>>,
+                      std::add_pointer_t<std::remove_reference_t<Target>>>) {
+      result = kind::converted;
+    }
+  } else if constexpr (!std::is_rvalue_reference_v<Target> &&
+                       !std::is_volatile_v<std::remove_reference_t<Source>>) {
+    if constexpr (std::is_lvalue_reference_v<Source>) {
+      if constexpr (access_satisfies<Access, borrow>::value &&
+                    std::is_same_v<std::remove_cv_t<Target>, source_type>) {
+        if constexpr (is_copy_constructible_v<Target>) {
+          result = kind::identity;
+        }
+      } else if constexpr (access_satisfies<Access, borrow>::value &&
+                           std::is_convertible_v<
+                               std::add_pointer_t<
+                                   std::remove_reference_t<Source>>,
+                               std::add_pointer_t<Target>>) {
+        if constexpr (is_copy_constructible_v<Target>) {
+          result = kind::reference;
+        }
+      }
+    } else if constexpr (std::is_rvalue_reference_v<Source> &&
+                         std::is_same_v<std::remove_cv_t<Target>,
+                                        source_type> &&
+                         access_satisfies<Access, consume>::value) {
+      if constexpr (std::is_constructible_v<Target, Source>) {
+        result = kind::identity;
+      }
+    }
+  }
+  return result;
+}
+
 // Keep common default conversions out of the general recursive search.
 // Predicates are evaluated behind if constexpr so a short-circuit also skips
 // the type trait probes of the later operands.
 template <typename Target, typename Source, typename Access>
 struct basic_type_conversion_path {
 private:
-  using target_type = std::remove_cv_t<std::remove_reference_t<Target>>;
   using source_type = std::remove_cv_t<std::remove_reference_t<Source>>;
   using conversion_traits = type_conversion_traits<Target, source_type>;
   static constexpr bool uses_default_conversion =
       is_default_type_conversion<conversion_traits>::value;
 
-  enum class kind { none, identity, reference, converted };
+  using kind = basic_conversion_kind;
 
-  // Taking the address of a compatible lvalue is what the fallback walk
-  // selects once the direct conversion has failed. A source that is an
-  // alternative type is probed per alternative first, so only the identity
-  // address, which no alternative can provide, is shortened here.
-  static constexpr bool takes_address = [] {
-    bool result = false;
-    if constexpr (uses_default_conversion && std::is_pointer_v<Target> &&
-                  std::is_lvalue_reference_v<Source> &&
-                  !std::is_pointer_v<source_type> &&
-                  std::is_convertible_v<std::remove_reference_t<Source> *,
-                                        Target>) {
-      using const_source = std::add_lvalue_reference_t<
-          std::add_const_t<std::remove_reference_t<Source>>>;
-      constexpr bool probes_alternatives =
-          is_alternative_type_v<source_type> &&
-          !std::is_volatile_v<std::remove_reference_t<Source>> &&
-          !std::is_same_v<std::remove_cv_t<std::remove_pointer_t<Target>>,
-                          source_type>;
-      if constexpr (!probes_alternatives) {
-        // A direct conversion has priority over taking the address.
-        result = !std::is_constructible_v<Target, Source> &&
-                 !std::is_constructible_v<Target, const_source>;
-      }
-    }
-    return result;
-  }();
+  static constexpr bool takes_address =
+      basic_conversion_takes_address<Target, Source, uses_default_conversion>();
 
-  static constexpr kind selected = [] {
-    kind result = kind::none;
-    if constexpr (!uses_default_conversion || std::is_pointer_v<Target>) {
-      // Custom conversions are resolved by the direct path.
-    } else if constexpr (std::is_lvalue_reference_v<Target>) {
-      if constexpr (std::is_lvalue_reference_v<Source> &&
-                    access_satisfies<Access, borrow>::value &&
-                    std::is_convertible_v<
-                        std::add_pointer_t<std::remove_reference_t<Source>>,
-                        std::add_pointer_t<std::remove_reference_t<Target>>>) {
-        result = kind::converted;
-      }
-    } else if constexpr (!std::is_rvalue_reference_v<Target> &&
-                         !std::is_volatile_v<std::remove_reference_t<Source>>) {
-      if constexpr (std::is_lvalue_reference_v<Source>) {
-        if constexpr (access_satisfies<Access, borrow>::value &&
-                      std::is_same_v<std::remove_cv_t<Target>, source_type>) {
-          if constexpr (is_copy_constructible_v<Target>) {
-            result = kind::identity;
-          }
-        } else if constexpr (access_satisfies<Access, borrow>::value &&
-                             std::is_convertible_v<
-                                 std::add_pointer_t<
-                                     std::remove_reference_t<Source>>,
-                                 std::add_pointer_t<Target>>) {
-          if constexpr (is_copy_constructible_v<Target>) {
-            result = kind::reference;
-          }
-        }
-      } else if constexpr (std::is_rvalue_reference_v<Source> &&
-                           std::is_same_v<std::remove_cv_t<Target>,
-                                          source_type> &&
-                           access_satisfies<Access, consume>::value) {
-        if constexpr (std::is_constructible_v<Target, Source>) {
-          result = kind::identity;
-        }
-      }
-    }
-    return result;
-  }();
+  static constexpr kind selected =
+      basic_conversion_selected<Target, Source, Access,
+                                uses_default_conversion>();
 
 public:
   using type = std::conditional_t<
