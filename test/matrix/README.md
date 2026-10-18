@@ -130,7 +130,10 @@ global support code.
 - `resolve_wrapper`: resolve an owning or sharing wrapper directly.
 - `custom_wrappers`: resolve through user-defined wrapper traits.
 - `nested_wrappers`: resolve nested smart-pointer, variant, and array wrapper
-  combinations.
+  combinations, and the leaf copied out of, or refused by, a handle stored
+  under `shared` or `external` (`unique_ptr`, raw pointer, and `shared_ptr` of
+  `optional`, `const`, custom or `unique_ptr` layers, with copyable and move-only
+  leaves).
 - `resolve_collection`: resolve all unkeyed bindings for an interface.
 - `resolve_keyed`: resolve one typed-key lookup binding.
 - `resolve_keyed_collection`: resolve all bindings for a key.

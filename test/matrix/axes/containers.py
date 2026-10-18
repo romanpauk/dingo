@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from schema import (
     ContainerSpec,
 )
@@ -138,4 +140,17 @@ CONTAINERS = (
         provides=frozenset({"custom_rtti_container"}),
         headers=("matrix/containers/custom_rtti.h",),
     ),
+)
+
+
+# A request the storage does not publish throws when it is resolved, except in a
+# static container, which rejects it at compile time.
+CONTAINERS = tuple(
+    container
+    if container.name == "static_container"
+    else replace(
+        container,
+        provides=container.provides | {"runtime_refusal_container"},
+    )
+    for container in CONTAINERS
 )
