@@ -901,13 +901,12 @@ records the decision when it is made.
 - Location of the new implementation. Decision: `include/dingo/core/`, its final
   location, so the switch deletes the current internals without moving the new
   ones. It is a layer-0 module until the primitive layer of M2.3 refines it.
-- The wrapper extension point. The current `dingo::type_traits` passes the
-  internal factory, context, and type descriptors of the current implementation
-  to `resolve_type`, does not tell a sharing handle from a sole-owner one, and
-  needs a `storage_traits` specialization per scope beside it. Proposal: a
-  smaller public extension point with the layer kind, the wrapper family, the
-  argument types, `rebind`, `element`, and `make`, which the standard wrappers
-  use as well, declared as a change of the public API. Decision: open.
+- The wrapper extension point. Decision: `dingo::wrapper_traits`, declared in
+  `dingo/type/type_traits.h`, which the standard wrappers specialize too. A
+  specialization declares the layer kind, the family, the element types,
+  `rebind`, `element`, and `make`. `dingo::type_traits`, the per-scope
+  `dingo::storage_traits`, and `dingo::is_interface_storage_rebindable_v` leave
+  the public API, declared as the behavior change `wrapper_extension_point`.
 - Development strategy. Proposal: in the same tree behind
   `DINGO_IMPLEMENTATION=next`, rather than on a long-lived branch. Decision:
   open.
@@ -1243,13 +1242,12 @@ the public include paths.
 The route extractor runs against the next implementation with
 `--implementation next`, and `conform.py --exact` compares its table with the
 reference implementation without behavior changes. For shared and external
-bindings in runtime and static containers, 10,324 cases, registration, service,
-copies, constructions, identity, and stability match the reference, except for
-2,538 cases of the two subjects not provided yet: external bindings in static
-containers and the kept sharing handle of an interface, which needs the
-conversion cache. Remaining: those two, the walk of the consuming, creating, and
-converting rules, the messages of the exceptions, and user wrappers, whose
-public extension point is an open decision.
+bindings in runtime and static containers, 15,652 cases including user wrappers,
+registration, service, copies, constructions, identity, and stability match the
+reference, except for the cases of the two subjects not provided yet: external
+bindings in static containers and the kept sharing handle of an interface, which
+needs the conversion cache. Remaining: those two, the walk of the consuming,
+creating, and converting rules, and the messages of the exceptions.
 
 ### M3: Routes And Storage
 
@@ -1520,3 +1518,10 @@ capability tags.
   derives shapes at most one layer larger than the stored shape, and ties are
   broken by the order of the rules in the spec, so a runtime binding publishes
   the same terms before a request as a static one selects from.
+
+- 2026-10-20: A wrapper becomes a layer through one public trait,
+  `dingo::wrapper_traits`, with the layer kind, the family, the element types,
+  `rebind`, `element`, and `make`. The standard wrappers use it as a user
+  wrapper does, and the storage traits and the interface rebinding trait leave
+  the public API. The public API check requires an entry a behavior change
+  declares with an `api:` pattern to be missing from the current implementation.

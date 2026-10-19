@@ -415,7 +415,12 @@ ENVIRONMENT = jinja2.Environment(
     keep_trailing_newline=True,
 )
 # The headers the prelude copies next to the programs.
-PRELUDE_HEADERS = ("probe_types.h", "probe_run.h", "user_wrapper_traits.h")
+PRELUDE_HEADERS = (
+    "probe_types.h",
+    "probe_run.h",
+    "user_wrapper_traits.h",
+    "user_wrapper_traits_next.h",
+)
 PROBED_HEADERS = (
     "dingo/container.h",
     "dingo/static_container.h",
@@ -539,7 +544,11 @@ class Extraction:
         prelude = ENVIRONMENT.get_template("prelude.h.j2").render(
             implementation=implementation,
             headers=provided_headers(implementation),
-            user_wrappers=implementation == "current",
+            user_wrapper_traits=(
+                "user_wrapper_traits.h"
+                if implementation == "current"
+                else "user_wrapper_traits_next.h"
+            ),
         )
         (self.work_dir / "prelude.h").write_text(prelude)
         for header in PRELUDE_HEADERS:
@@ -563,9 +572,7 @@ class Extraction:
             return list(pool.map(function, items))
 
     def run(self, domains, pattern=None):
-        groups = build_groups(
-            domains, pattern, user_wrappers=self.implementation == "current"
-        )
+        groups = build_groups(domains, pattern)
         for group in groups:
             self.path(group, ".cpp").write_text(
                 render(group, range(len(group.requests)), guarded=True)
@@ -723,8 +730,7 @@ def main():
         "--implementation",
         choices=("current", "next"),
         default="current",
-        help="next probes the next implementation through include/next, without "
-        "the user wrappers, whose traits target the current implementation",
+        help="next probes the next implementation through include/next",
     )
     parser.add_argument(
         "--work-dir",

@@ -8,7 +8,5 @@
 #include <cstdlib>
 
 #include "probe_types.h"
-{% if user_wrappers %}
-#include "user_wrapper_traits.h"
-{% endif %}
+#include "{{ user_wrapper_traits }}"
 #include "probe_run.h"

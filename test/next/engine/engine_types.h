@@ -59,24 +59,24 @@ template <typename Type> struct user_optional {
 
 } // namespace dingo::next_test
 
-namespace dingo::core {
+namespace dingo {
 
-template <typename Type> struct layer_traits<next_test::user_unique<Type>> {
+template <typename Type> struct wrapper_traits<next_test::user_unique<Type>> {
   static constexpr layer_kind kind = layer_kind::own;
   using family = next_test::user_family;
   using arguments = type_list<Type>;
 };
 
-template <typename Type> struct layer_traits<next_test::user_shared<Type>> {
+template <typename Type> struct wrapper_traits<next_test::user_shared<Type>> {
   static constexpr layer_kind kind = layer_kind::share;
   using family = next_test::user_family;
   using arguments = type_list<Type>;
 };
 
-template <typename Type> struct layer_traits<next_test::user_optional<Type>> {
+template <typename Type> struct wrapper_traits<next_test::user_optional<Type>> {
   static constexpr layer_kind kind = layer_kind::opt;
   using family = next_test::user_family;
   using arguments = type_list<Type>;
 };
 
-} // namespace dingo::core
+} // namespace dingo

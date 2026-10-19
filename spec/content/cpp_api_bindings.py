@@ -82,6 +82,26 @@ template <typename T, typename U> struct @STORAGE_TRAITS@<dingo::shared, @H@<T>,
 """
 
 
+WRAPPER_TRAITS = """\
+struct api_wrapper_traits_family {};
+template <typename T> struct {name}<@H@<T>> {
+  static constexpr dingo::layer_kind kind = dingo::layer_kind::share;
+  using family = api_wrapper_traits_family;
+  using arguments = dingo::type_list<T>;
+  template <typename U> using rebind = @H@<U>;
+  static T &element(const @H@<T> &wrapper) { return *wrapper.get(); }
+  template <typename... Args> static @H@<T> make(Args &&...args) {
+    return @H@<T>(std::make_shared<T>(std::forward<Args>(args)...));
+  }
+};
+"""
+
+
+def wrapper(text: str) -> str:
+    """Fills in the handle name of the wrapper_traits entry."""
+    return text.replace("@H@", "api_wrapper_traits_handle")
+
+
 def handle(api: str, text: str, traits: str = "dingo::type_traits", storage_traits: str = "dingo::storage_traits") -> str:
     """Fills in the handle name, derived from the entry, and the trait spellings."""
     return (
@@ -137,9 +157,7 @@ cpp_api_bindings: tuple[CppApiBinding, ...] = (
     path("include_annotated", "dingo/type/annotated.h"),
     path("include_lookup", LOOKUP),
     path("include_wrapper_traits", TYPE_TRAITS),
-    path("include_storage_traits", "dingo/storage/type_storage_traits.h"),
     path("include_conversion_traits", CONVERSION),
-    path("include_interface_storage_traits", "dingo/storage/interface_storage_traits.h"),
     path("include_collection_traits", "dingo/type/collection_traits.h"),
     path("include_auto_constructible", "dingo/type/auto_constructible.h"),
     path("include_rebind", "dingo/type/rebind_type.h"),
@@ -1023,48 +1041,22 @@ try {
     # Extension points
     name(
         "wrapper_traits",
-        "dingo::type_traits",
+        "dingo::wrapper_traits",
         TYPE_TRAITS,
         TYPES
-        + handle(
-            "wrapper_traits",
+        + wrapper(
             """\
-static_assert({name}<@H@<service>>::enabled);
-static_assert(dingo::is_interface_storage_rebindable_v<@H@<implementation>, interface>);
 dingo::container<> container;
 container.register_type<dingo::scope<dingo::shared>, dingo::storage<@H@<service>>>();
 service &borrowed = container.resolve<service &>();
-(void)borrowed;
-""",
-        ),
-        declarations=handle(
-            "wrapper_traits",
-            HANDLE_CLASS + HANDLE_TRAITS + HANDLE_STORAGE_TRAITS,
-            traits="{name}",
-        ),
-    ),
-    name(
-        "storage_traits",
-        "dingo::storage_traits",
-        "dingo/storage/type_storage_traits.h",
-        TYPES
-        + handle(
-            "storage_traits",
-            """\
-static_assert({name}<dingo::shared, @H@<service>, service>::is_stable);
-dingo::container<> container;
-container.register_type<dingo::scope<dingo::shared>, dingo::storage<@H@<service>>>();
 @H@<service> &handle = container.resolve<@H@<service> &>();
-service *pointer = container.resolve<service *>();
+@H@<service> copy = container.resolve<@H@<service>>();
+(void)borrowed;
 (void)handle;
-(void)pointer;
+(void)copy;
 """,
         ),
-        declarations=handle(
-            "storage_traits",
-            HANDLE_CLASS + HANDLE_TRAITS + HANDLE_STORAGE_TRAITS,
-            storage_traits="{name}",
-        ),
+        declarations=wrapper(HANDLE_CLASS + WRAPPER_TRAITS),
     ),
     name(
         "conversion_traits",
@@ -1104,23 +1096,6 @@ struct @TRAITS@<@H@<Target>, @H@<Source>,
 };
 """,
             traits="{name}",
-        ),
-    ),
-    name(
-        "interface_storage_traits",
-        "dingo::is_interface_storage_rebindable_v",
-        "dingo/storage/interface_storage_traits.h",
-        TYPES
-        + handle(
-            "interface_storage_traits",
-            """\
-static_assert({name}<@H@<implementation>, interface>);
-static_assert({name}<std::shared_ptr<implementation>, interface>);
-static_assert({name}<std::unique_ptr<implementation>, interface>);
-""",
-        ),
-        declarations=handle(
-            "interface_storage_traits", HANDLE_CLASS + HANDLE_TRAITS
         ),
     ),
     name(

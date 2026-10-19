@@ -248,6 +248,27 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         decision=DECISION,
     ),
     BehaviorChange(
+        id="wrapper_extension_point",
+        description=(
+            "A wrapper is made a layer of the shape algebra by one public trait, "
+            "dingo::wrapper_traits, which the standard wrappers specialize too."
+        ),
+        cases=("api:wrapper_traits",),
+        baseline=(
+            "dingo::type_traits passes internal types of the implementation to "
+            "resolve_type and does not tell a sharing from a sole-owner handle, "
+            "every scope needs a dingo::storage_traits specialization beside it, "
+            "and dingo::is_interface_storage_rebindable_v decides whether a stored "
+            "handle is rebound to an interface."
+        ),
+        now=(
+            "dingo::wrapper_traits declares the layer kind, the family, the "
+            "element types, rebind, element, and make. The storage traits and "
+            "the interface rebinding trait are not part of the public API."
+        ),
+        decision=DECISION,
+    ),
+    BehaviorChange(
         id="static_external_instances",
         description=(
             "A static or mixed container accepts an external binding, whose "

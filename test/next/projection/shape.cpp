@@ -37,7 +37,8 @@ static_assert(!shape_v<move_only>.nodes[0].copyable);
 using shared = std::shared_ptr<std::optional<leaf>>;
 static_assert(shape_v<shared>.size == 3);
 static_assert(shape_v<shared>.nodes[0].kind == kind(layer_kind::share));
-static_assert(shape_v<shared>.nodes[0].family == type_id_v<standard_family>);
+static_assert(shape_v<shared>.nodes[0].family ==
+              type_id_v<dingo::standard_family>);
 static_assert(shape_v<shared>.nodes[0].copyable);
 static_assert(shape_v<shared>.nodes[1].kind == kind(layer_kind::opt));
 static_assert(shape_v<shared>.nodes[2].type == type_id_v<leaf>);

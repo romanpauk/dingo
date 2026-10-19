@@ -50,20 +50,9 @@ public_api: tuple[PublicApiEntry, ...] = (
         "The wrapper traits that describe the semantics of a handle type.",
     ),
     entry(
-        "include_storage_traits",
-        INCLUDE,
-        "The storage traits that describe which result forms a storage and "
-        "scope combination exposes.",
-    ),
-    entry(
         "include_conversion_traits",
         INCLUDE,
         "The conversion traits that build a target handle from a source handle.",
-    ),
-    entry(
-        "include_interface_storage_traits",
-        INCLUDE,
-        "The rule that decides whether a stored handle is rebound to an interface.",
     ),
     entry(
         "include_collection_traits",
@@ -205,7 +194,7 @@ public_api: tuple[PublicApiEntry, ...] = (
     entry("type_index_out_of_range_exception", NAME, "A key is outside the range of an array lookup."),
     entry("virtual_pointer_exception", NAME, "A pointer cannot be adjusted through a virtual base."),
     # Names used by the extension points
-    entry("type_list", NAME, "A list of types, which storage traits use to name result forms."),
+    entry("type_list", NAME, "A list of types, which wrapper traits use to name element types."),
     entry("exact_lookup", NAME, "A marker for a result form that must match the wrapper exactly."),
     entry("access_borrow", NAME, "The access of a conversion that reads its source without consuming it."),
     entry("access_consume", NAME, "The access of a conversion that consumes its source."),
@@ -213,25 +202,15 @@ public_api: tuple[PublicApiEntry, ...] = (
     entry(
         "wrapper_traits",
         EXTENSION,
-        "Describes the semantics of a wrapper or handle type: ownership, "
-        "pointer-likeness, borrowing, rebinding, and reset.",
-    ),
-    entry(
-        "storage_traits",
-        EXTENSION,
-        "Describes the result forms a storage and scope combination exposes.",
+        "Makes a wrapper type a layer of the shape algebra: declares its layer "
+        "kind, its family, and its element types, and how to rebind it, reach "
+        "its element, and make it.",
     ),
     entry(
         "conversion_traits",
         EXTENSION,
         "Builds a target wrapper from a source wrapper and declares the access "
         "the conversion needs.",
-    ),
-    entry(
-        "interface_storage_traits",
-        EXTENSION,
-        "Tells whether a stored handle can be rebound from a concrete leaf to an "
-        "interface leaf.",
     ),
     entry(
         "collection_traits",

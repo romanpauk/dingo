@@ -21,6 +21,7 @@ written to --work-dir, so a failing unit can be compiled by hand.
 
 import argparse
 import concurrent.futures
+import fnmatch
 import os
 import shlex
 import subprocess
@@ -209,15 +210,43 @@ class Checker:
         return failures
 
 
+def changed_entries(loaded):
+    """{entry id: behavior change id} of the entries a behavior change declares
+    with an `api:<entry id>` case pattern.
+
+    The spec records the target public API. A changed entry is not provided by
+    the current implementation, so the check requires it to fail there.
+    """
+    changed = {}
+    for change in loaded.behavior_changes:
+        patterns = [p[len("api:") :] for p in change.cases if p.startswith("api:")]
+        for entry in loaded.public_api:
+            if any(fnmatch.fnmatchcase(entry.id, pattern) for pattern in patterns):
+                changed[entry.id] = change.id
+    return changed
+
+
 def check(loaded, command, work_dir, jobs):
     """Returns (number of entries checked, failures)."""
     includes, code, macros = collect_units(loaded)
+    changed = changed_entries(loaded)
     work_dir.mkdir(parents=True, exist_ok=True)
     checker = Checker(command, work_dir, jobs)
+    prelude = names_prelude(declaring_headers(loaded))
+    kept = lambda units: [unit for unit in units if unit.api not in changed]  # noqa: E731
     failures = []
-    failures += checker.check_includes(includes)
-    failures += checker.check_combined("names", names_prelude(declaring_headers(loaded)), code)
-    failures += checker.check_combined("macros", macros_prelude(), macros)
+    failures += checker.check_includes(kept(includes))
+    failures += checker.check_combined("names", prelude, kept(code))
+    failures += checker.check_combined("macros", macros_prelude(), kept(macros))
+    # A changed entry must not be provided yet, or its behavior change is stale.
+    changed_units = [unit for unit in (*includes, *code, *macros) if unit.api in changed]
+    still_provided = {
+        unit.api for unit in changed_units
+    } - {failure.api for failure in checker.compile_units("changed", prelude, changed_units)}
+    for api in sorted(still_provided):
+        failures.append(
+            Failure(api, "", None, f"stale behavior change {changed[api]}: the entry is provided")
+        )
     return len(includes) + len(code) + len(macros), failures
 
 

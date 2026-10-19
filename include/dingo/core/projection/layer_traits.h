@@ -30,12 +30,135 @@
 #include <utility>
 #include <variant>
 
+namespace dingo {
+
+// The public extension point that makes a wrapper type a layer of the shape
+// algebra. A specialization declares
+//
+//   kind       the layer_kind of the wrapper: own, share, opt, or alt
+//   family     a type naming the family of the wrapper; a route converts a
+//              wrapper only to another wrapper of its family, such as a
+//              sole-owner handle to a sharing handle
+//   arguments  the element types, as a type_list
+//   rebind     the wrapper of other element types
+//   element    the element of a wrapper object
+//   make       a wrapper object made from the arguments of its element
+//
+// The standard wrappers specialize it below, as a user wrapper does.
+template <typename Wrapper, typename = void> struct wrapper_traits {};
+
+using layer_kind = core::layer_kind;
+
+template <typename... Types> using type_list = core::type_list<Types...>;
+
+// The family of the standard wrappers.
+struct standard_family {};
+
+template <typename Type> struct wrapper_traits<std::unique_ptr<Type>> {
+  static constexpr layer_kind kind = layer_kind::own;
+  using family = standard_family;
+  using arguments = type_list<Type>;
+  template <typename Element> using rebind = std::unique_ptr<Element>;
+
+  static Type &element(const std::unique_ptr<Type> &value) { return *value; }
+
+  template <typename... Args>
+  static std::unique_ptr<Type> make(Args &&...args) {
+    return std::make_unique<Type>(std::forward<Args>(args)...);
+  }
+};
+
+// A handle of an array of runtime size: its element is the array.
+template <typename Type> struct wrapper_traits<std::unique_ptr<Type[]>> {
+  static constexpr layer_kind kind = layer_kind::own;
+  using family = standard_family;
+  using arguments = type_list<Type[]>;
+  template <typename Element> using rebind = std::unique_ptr<Element>;
+  using array_type = Type[];
+
+  static array_type &element(const std::unique_ptr<Type[]> &value) {
+    return *reinterpret_cast<array_type *>(value.get());
+  }
+};
+
+template <typename Type> struct wrapper_traits<std::shared_ptr<Type[]>> {
+  static constexpr layer_kind kind = layer_kind::share;
+  using family = standard_family;
+  using arguments = type_list<Type[]>;
+  template <typename Element> using rebind = std::shared_ptr<Element>;
+  using array_type = Type[];
+
+  static array_type &element(const std::shared_ptr<Type[]> &value) {
+    return *reinterpret_cast<array_type *>(value.get());
+  }
+};
+
+template <typename Type> struct wrapper_traits<std::shared_ptr<Type>> {
+  static constexpr layer_kind kind = layer_kind::share;
+  using family = standard_family;
+  using arguments = type_list<Type>;
+  template <typename Element> using rebind = std::shared_ptr<Element>;
+
+  static Type &element(const std::shared_ptr<Type> &value) { return *value; }
+
+  template <typename... Args>
+  static std::shared_ptr<Type> make(Args &&...args) {
+    return std::make_shared<Type>(std::forward<Args>(args)...);
+  }
+};
+
+template <typename Type> struct wrapper_traits<std::optional<Type>> {
+  static constexpr layer_kind kind = layer_kind::opt;
+  using family = standard_family;
+  using arguments = type_list<Type>;
+  template <typename Element> using rebind = std::optional<Element>;
+
+  static Type &element(std::optional<Type> &value) { return *value; }
+  static Type &&element(std::optional<Type> &&value) {
+    return std::move(*value);
+  }
+
+  template <typename... Args> static std::optional<Type> make(Args &&...args) {
+    return std::optional<Type>(std::in_place, std::forward<Args>(args)...);
+  }
+};
+
+template <typename... Types> struct wrapper_traits<std::variant<Types...>> {
+  static constexpr layer_kind kind = layer_kind::alt;
+  using family = standard_family;
+  using arguments = type_list<Types...>;
+  template <typename... Elements> using rebind = std::variant<Elements...>;
+
+  template <std::size_t Index>
+  static auto &element(std::variant<Types...> &value) {
+    return std::get<Index>(value);
+  }
+  template <std::size_t Index>
+  static auto &&element(std::variant<Types...> &&value) {
+    return std::get<Index>(std::move(value));
+  }
+
+  template <typename... Args>
+  static std::variant<Types...> make(Args &&...args) {
+    return std::variant<Types...>(std::in_place_index<0>,
+                                  std::forward<Args>(args)...);
+  }
+};
+
+} // namespace dingo
+
 namespace dingo::core {
 
 // A type that is not a layer is a leaf.
 template <typename Type, typename = void> struct layer_traits {
   static constexpr layer_kind kind = layer_kind::leaf;
 };
+
+// A wrapper is the layer its wrapper_traits declare.
+template <typename Type>
+struct layer_traits<Type,
+                    std::void_t<decltype(::dingo::wrapper_traits<Type>::kind)>>
+    : ::dingo::wrapper_traits<Type> {};
 
 template <typename Type> struct layer_traits<Type *> {
   static constexpr layer_kind kind = layer_kind::ptr;
@@ -68,100 +191,6 @@ template <typename Type> struct layer_traits<Type[]> {
   static constexpr layer_kind kind = layer_kind::array_unbounded;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = Element[];
-};
-
-// The family of the standard wrappers.
-struct standard_family {};
-
-template <typename Type> struct layer_traits<std::unique_ptr<Type>> {
-  static constexpr layer_kind kind = layer_kind::own;
-  using family = standard_family;
-  using arguments = type_list<Type>;
-  template <typename Element> using rebind = std::unique_ptr<Element>;
-
-  static Type &element(const std::unique_ptr<Type> &value) { return *value; }
-
-  template <typename... Args>
-  static std::unique_ptr<Type> make(Args &&...args) {
-    return std::make_unique<Type>(std::forward<Args>(args)...);
-  }
-};
-
-// A handle of an array of runtime size: its element is the array.
-template <typename Type> struct layer_traits<std::unique_ptr<Type[]>> {
-  static constexpr layer_kind kind = layer_kind::own;
-  using family = standard_family;
-  using arguments = type_list<Type[]>;
-  template <typename Element> using rebind = std::unique_ptr<Element>;
-  using array_type = Type[];
-
-  static array_type &element(const std::unique_ptr<Type[]> &value) {
-    return *reinterpret_cast<array_type *>(value.get());
-  }
-};
-
-template <typename Type> struct layer_traits<std::shared_ptr<Type[]>> {
-  static constexpr layer_kind kind = layer_kind::share;
-  using family = standard_family;
-  using arguments = type_list<Type[]>;
-  template <typename Element> using rebind = std::shared_ptr<Element>;
-  using array_type = Type[];
-
-  static array_type &element(const std::shared_ptr<Type[]> &value) {
-    return *reinterpret_cast<array_type *>(value.get());
-  }
-};
-
-template <typename Type> struct layer_traits<std::shared_ptr<Type>> {
-  static constexpr layer_kind kind = layer_kind::share;
-  using family = standard_family;
-  using arguments = type_list<Type>;
-  template <typename Element> using rebind = std::shared_ptr<Element>;
-
-  static Type &element(const std::shared_ptr<Type> &value) { return *value; }
-
-  template <typename... Args>
-  static std::shared_ptr<Type> make(Args &&...args) {
-    return std::make_shared<Type>(std::forward<Args>(args)...);
-  }
-};
-
-template <typename Type> struct layer_traits<std::optional<Type>> {
-  static constexpr layer_kind kind = layer_kind::opt;
-  using family = standard_family;
-  using arguments = type_list<Type>;
-  template <typename Element> using rebind = std::optional<Element>;
-
-  static Type &element(std::optional<Type> &value) { return *value; }
-  static Type &&element(std::optional<Type> &&value) {
-    return std::move(*value);
-  }
-
-  template <typename... Args> static std::optional<Type> make(Args &&...args) {
-    return std::optional<Type>(std::in_place, std::forward<Args>(args)...);
-  }
-};
-
-template <typename... Types> struct layer_traits<std::variant<Types...>> {
-  static constexpr layer_kind kind = layer_kind::alt;
-  using family = standard_family;
-  using arguments = type_list<Types...>;
-  template <typename... Elements> using rebind = std::variant<Elements...>;
-
-  template <std::size_t Index>
-  static auto &element(std::variant<Types...> &value) {
-    return std::get<Index>(value);
-  }
-  template <std::size_t Index>
-  static auto &&element(std::variant<Types...> &&value) {
-    return std::get<Index>(std::move(value));
-  }
-
-  template <typename... Args>
-  static std::variant<Types...> make(Args &&...args) {
-    return std::variant<Types...>(std::in_place_index<0>,
-                                  std::forward<Args>(args)...);
-  }
 };
 
 namespace detail {
