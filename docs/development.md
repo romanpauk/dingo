@@ -47,6 +47,21 @@ Run a quality target with `cmake --build build -t <target>`.
 
 The development tools are provided by the locked `uv` environment.
 
+## Spec Package
+
+[`spec/`](../spec) is the language-agnostic specification described in
+[Spec-Driven Design](architecture/spec-driven-design.md#specification). It is a
+typed Python package: `spec/schema.py` defines the sections, `spec/content/`
+holds one module of data per section, and `spec.load_spec()` returns the
+validated spec. `spec/validate.py` checks identifiers and cross-references
+between sections. Export the spec as canonical JSON from the repository root:
+
+```bash
+python3 -m spec.export --output build/spec.json
+```
+
+The spec tests run as `dingo_spec_test` in ctest.
+
 ## Generated Matrix Tests
 
 `dingo_matrix_test` is generated from the axis model in

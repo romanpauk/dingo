@@ -153,6 +153,14 @@ set_tests_properties(dingo_matrix_generator_test PROPERTIES
     LABELS "unit;generator"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/matrix)
 
+add_test(NAME dingo_spec_test
+    COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q -p no:cacheprovider
+        ${PROJECT_SOURCE_DIR}/spec/tests)
+set_tests_properties(dingo_spec_test PROPERTIES
+    LABELS "unit;generator"
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
+
 add_test(NAME dingo_differential_compare_test
     COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q -p no:cacheprovider
         ${CMAKE_CURRENT_SOURCE_DIR}/differential/compare_test.py)

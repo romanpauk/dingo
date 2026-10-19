@@ -881,13 +881,14 @@ records the decision when it is made.
 - Auto-construction on a miss in `static_container`. Decision: open.
 - Fixed keys in runtime registration. Decision: open.
 - Movability of static containers. Decision: open.
-- Spec location and format. Proposal: a typed Python package under `spec/`
-  exporting JSON. Decision: open.
+- Spec location and format. Decision: a typed Python package under `spec/`
+  exporting JSON, see M1.1.
 - Generated file naming. Proposal: the `.gen.h` suffix in the layer directory.
   Decision: open.
 - Generated tests in the repository. Proposal: generate them at build time and
   do not commit them. Decision: open.
-- Baseline commit. Proposal: `ced6760`, the current master. Decision: open.
+- Baseline commit. Decision: `ced6760`, recorded in
+  `test/differential/baseline-commit`, see M0.2.
 - Location of the new implementation. Proposal: `include/dingo/core/`, its final
   location, so the switch deletes the current internals without moving the new
   ones. Decision: open.
@@ -979,9 +980,15 @@ has not run on GitHub yet.
 
 #### M1.1: Spec Package And Schema
 
-Status: not started.
+Status: done.
 
 Create `spec/` with the typed schema and JSON export.
+
+The package is described in [Spec Package](../development.md#spec-package). The
+schema covers every section of the [specification](#specification). All sections
+are empty except the C++ language capabilities, which the later milestones build
+on. Public API entries are language-agnostic, and their C++ spellings live in
+the C++ projection as API bindings.
 
 #### M1.2: Generator Infrastructure
 
@@ -1273,3 +1280,6 @@ capability tags.
   assertion rather than a pass or fail per case, and runs as a separate
   workflow, because the build workflow is reused by the release workflow on a
   source tree without git history.
+- 2026-10-19: Public API entries name operations and extension points
+  language-agnostically. Their include paths, names, and macros are C++
+  projection data, so the semantic sections contain no C++ text.
