@@ -10,6 +10,15 @@
 
 #include <dingo/core/base/capabilities.gen.h>
 
+// spec: variant_points.named_type_id
+// Compares type identities by type name in constant evaluation, for a
+// compiler that rejects comparing the addresses of distinct objects in
+// a constant expression, as GCC does under its null and nonnull
+// sanitizers, a compiler defect. The library detects the defect, and
+// addresses still identify types at runtime.
+// Selected by detecting the defect unless DINGO_VARIANT_NAMED_TYPE_ID is
+// defined to 0 or 1.
+
 // spec: variant_points.pack_at_builtin
 // Selects the element of a type pack with the compiler builtin, without the
 // instantiations of the portable selection. Defaults to

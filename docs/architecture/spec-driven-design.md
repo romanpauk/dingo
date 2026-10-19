@@ -920,9 +920,11 @@ records the decision when it is made.
   `-fsanitize=nonnull-attribute`, or `-fsanitize=returns-nonnull-attribute`,
   which `-fsanitize=undefined` enables, so a static container does not compile
   there. Every address spelling fails, a variable template, a function, a member
-  array, or a member object. Proposal: a variant point whose portable tier
-  compares type names in constant evaluation and keeps addresses at runtime.
-  Decision: open.
+  array, or a member object. Decision: a GCC defect, handled by the compiler
+  variant `named_type_id`. The library detects the defect by whether the
+  comparison is a constant expression in a template argument, and then compares
+  type names in constant evaluation and addresses at runtime;
+  `DINGO_VARIANT_NAMED_TYPE_ID` overrides the detection.
 
 ## Risks
 
@@ -1572,3 +1574,7 @@ capability tags.
 
 - 2026-10-20: A static container takes the instance of every external binding as
   a constructor argument, in the order of the bindings.
+
+- 2026-10-20: The rejection of constant address comparisons under GCC's null and
+  nonnull sanitizers is a compiler defect. The compiler variant `named_type_id`
+  detects it and compares type identities by name in constant evaluation.

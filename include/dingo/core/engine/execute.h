@@ -257,9 +257,9 @@ decltype(auto) keep_step(Context &context, Value &value) {
   using target = typename layer_traits<remove_cvref_t<Value>>::template rebind<
       interface_t<Step, Binding>>;
   if constexpr (std::is_constructible_v<target, Value &>) {
-    return Step::reach(context,
-                       context.template get_or_emplace<target>(
-                           type_id_v<target>, [&] { return target(value); }));
+    return Step::reach(
+        context, context.template get_or_emplace<target>(
+                     type_address_v<target>, [&] { return target(value); }));
   } else {
     return unsupported_route{};
   }

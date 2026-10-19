@@ -19,6 +19,17 @@ variant_points: tuple[VariantPoint, ...] = (
         capability="type_pack_element",
     ),
     VariantPoint(
+        id="named_type_id",
+        kind=VariantKind.COMPILER_VARIANT,
+        justification=(
+            "Compares type identities by type name in constant evaluation, for a\n"
+            "compiler that rejects comparing the addresses of distinct objects in\n"
+            "a constant expression, as GCC does under its null and nonnull\n"
+            "sanitizers, a compiler defect. The library detects the defect, and\n"
+            "addresses still identify types at runtime."
+        ),
+    ),
+    VariantPoint(
         id="pack_at_indexing",
         kind=VariantKind.LANGUAGE_TIER,
         justification=(

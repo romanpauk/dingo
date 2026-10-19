@@ -49,7 +49,7 @@ public:
 
   runtime_entry(const binding_descriptor &descriptor, const terms &published,
                 std::uint8_t exposed, const completion_plan *plans,
-                const type_id *boundaries, const thunk *thunks,
+                const void *const *boundaries, const thunk *thunks,
                 const void *const *makers)
       : descriptor_(descriptor), published_(published), exposed_(exposed),
         plans_(plans), boundaries_(boundaries), thunks_(thunks),
@@ -69,7 +69,7 @@ public:
   // Whether the binding constructs a boundary object of type `Boundary` for
   // a term.
   template <typename Boundary> bool makes(std::size_t term) const {
-    return boundaries_[term] == type_id_v<Boundary>;
+    return boundaries_[term] == type_address_v<Boundary>;
   }
 
   // The boundary object of a term, whose type `makes` confirmed.
@@ -84,7 +84,7 @@ private:
   const terms &published_;
   std::uint8_t exposed_;
   const completion_plan *plans_;
-  const type_id *boundaries_;
+  const void *const *boundaries_;
   const thunk *thunks_;
   const void *const *makers_;
 };
@@ -136,9 +136,9 @@ private:
       walk_supported_v<Binding, Term> && !borrows<Term> &&
       !std::is_array_v<boundary_t<Binding, Term>>;
 
-  template <std::size_t Term> static constexpr type_id boundary_of() {
+  template <std::size_t Term> static constexpr const void *boundary_of() {
     if constexpr (constructs<Term>) {
-      return type_id_v<boundary_t<Binding, Term>>;
+      return type_address_v<boundary_t<Binding, Term>>;
     } else {
       return nullptr;
     }
@@ -164,8 +164,8 @@ private:
   }
 
   template <std::size_t... Terms>
-  static const type_id *boundaries(std::index_sequence<Terms...>) {
-    static constexpr type_id table[] = {boundary_of<Terms>()..., nullptr};
+  static const void *const *boundaries(std::index_sequence<Terms...>) {
+    static constexpr const void *table[] = {boundary_of<Terms>()..., nullptr};
     return table;
   }
 

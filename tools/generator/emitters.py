@@ -57,14 +57,26 @@ def capabilities(spec):
 
 
 def variants(spec):
-    """include/dingo/core/base/variants.gen.h from the language-tier variants.
+    """include/dingo/core/base/variants.gen.h from the language tiers and the
+    compiler variants.
 
-    Each variant point gets a DINGO_VARIANT_<ID> macro that defaults to the
-    capability selecting it and can be defined to override the selection.
+    Each variant point gets a DINGO_VARIANT_<ID> macro that can be defined to
+    override the selection. A language tier defaults it to the capability
+    selecting it; a compiler variant is selected by detecting the compiler
+    defect when the macro is not defined.
     """
     capability_ids = {capability.id for capability in spec.cpp.capabilities}
     fields = []
     for point in sorted(spec.variant_points, key=lambda p: p.id):
+        if point.kind.value == "compiler_variant":
+            fields.append(
+                {
+                    "id": point.id,
+                    "capability": None,
+                    "justification_lines": point.justification.strip().splitlines(),
+                }
+            )
+            continue
         if point.kind.value != "language_tier":
             continue
         if point.capability not in capability_ids:

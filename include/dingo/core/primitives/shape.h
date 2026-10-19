@@ -13,21 +13,70 @@
 // wrapper's family, so two wrappers of the same kind stay apart, while a
 // family of any_family stands for a layer a route creates.
 
+#include <dingo/core/base/mechanics.h>
+
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 
 namespace dingo::core {
 
-// The identity of a type as a constexpr value: the address of a per-type tag.
-// Identities compare for equality in constant expressions.
-using type_id = const void *;
+// The identity of a type at runtime: the address of its tag.
+template <typename Type>
+inline constexpr const void *type_address_v = &type_tag<Type>::value;
 
-template <typename Type> struct type_tag {
-  static constexpr char value = 0;
+// A type identity that compares by type name in constant evaluation and by
+// address at runtime, for a compiler that cannot compare the addresses of
+// distinct objects in a constant expression. A null identity has an empty
+// name.
+class named_type_id {
+public:
+  constexpr named_type_id(std::nullptr_t /*null*/ = nullptr) {}
+  constexpr named_type_id(const void *address, const char *name)
+      : address_(address), name_(name) {}
+
+  friend constexpr bool operator==(const named_type_id &left,
+                                   const named_type_id &right) {
+    if (constant_evaluated()) {
+      return same_name(left.name_, right.name_);
+    }
+    return left.address_ == right.address_;
+  }
+
+  friend constexpr bool operator!=(const named_type_id &left,
+                                   const named_type_id &right) {
+    return !(left == right);
+  }
+
+private:
+  static constexpr bool same_name(const char *left, const char *right) {
+    std::size_t index = 0;
+    while (left[index] != '\0' && left[index] == right[index]) {
+      ++index;
+    }
+    return left[index] == right[index];
+  }
+
+  const void *address_ = nullptr;
+  const char *name_ = "";
 };
 
+// The identity of a type as a constexpr value, which compares for equality in
+// constant expressions: the address of its tag, or a named identity.
+using type_id = std::conditional_t<named_type_ids, named_type_id, const void *>;
+
+namespace detail {
+template <typename Type, bool Named = named_type_ids> struct type_id_of {
+  static constexpr const void *value = type_address_v<Type>;
+};
+
+template <typename Type> struct type_id_of<Type, true> {
+  static constexpr named_type_id value{type_address_v<Type>, type_name<Type>()};
+};
+} // namespace detail
+
 template <typename Type>
-inline constexpr type_id type_id_v = &type_tag<Type>::value;
+inline constexpr type_id type_id_v = detail::type_id_of<Type>::value;
 
 // The family of a layer that a route creates, which a wrapper of any family
 // providing the layer kind serves.

@@ -17,6 +17,7 @@
 #include <dingo/core/base/variants.gen.h>
 
 #include <cstddef>
+#include <type_traits>
 #include <utility>
 
 namespace dingo::core {
@@ -90,5 +91,56 @@ struct type_list_at<Index, type_list<Types...>> {
 
 template <std::size_t Index, typename List>
 using type_list_at_t = typename type_list_at<Index, List>::type;
+
+// Whether the call is evaluated in a constant expression.
+constexpr bool constant_evaluated() {
+#if defined(__cpp_lib_is_constant_evaluated)
+  return std::is_constant_evaluated();
+#else
+  return __builtin_is_constant_evaluated();
+#endif
+}
+
+// The name of a type as the compiler spells it in a function signature,
+// usable in constant evaluation; distinct types of a translation unit have
+// distinct names.
+template <typename Type> constexpr const char *type_name() {
+#if defined(_MSC_VER) && !defined(__clang__)
+  return __FUNCSIG__;
+#else
+  return __PRETTY_FUNCTION__;
+#endif
+}
+
+// The tag whose address identifies a type.
+template <typename Type> struct type_tag {
+  static constexpr char value = 0;
+};
+
+namespace detail {
+struct address_probe_first {};
+struct address_probe_second {};
+
+template <bool> struct constant_bool {};
+
+template <typename First, typename Second, typename = void>
+struct compares_addresses : std::false_type {};
+
+template <typename First, typename Second>
+struct compares_addresses<First, Second,
+                          decltype(void(
+                              constant_bool<(&type_tag<First>::value !=
+                                             &type_tag<Second>::value)>{}))>
+    : std::true_type {};
+} // namespace detail
+
+// spec: variant_points.named_type_id
+#if defined(DINGO_VARIANT_NAMED_TYPE_ID)
+inline constexpr bool named_type_ids = DINGO_VARIANT_NAMED_TYPE_ID;
+#else
+inline constexpr bool named_type_ids =
+    !detail::compares_addresses<detail::address_probe_first,
+                                detail::address_probe_second>::value;
+#endif
 
 } // namespace dingo::core
