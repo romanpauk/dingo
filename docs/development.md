@@ -78,6 +78,43 @@ Run them through the normal lit test target:
 ctest --test-dir build --output-on-failure -R dingo_lit_tests
 ```
 
+## Contract Baseline
+
+[`test/contracts/probe.py`](../test/contracts/probe.py) measures the contract
+dimensions described in
+[Spec-Driven Design](architecture/spec-driven-design.md#contracts) on the
+current implementation:
+
+- `instantiations`: Dingo class and function template instantiations of
+  generated scaling programs with 1, 8, and 32 bindings in static, mixed, and
+  runtime containers, counted from Clang's `-ftime-trace` output; Clang only
+- `object_size`: `sizeof` of containers holding growing numbers of bindings
+- `codegen`: calls, indirect calls, and calls to Dingo functions made by each
+  probe function of
+  [`test/lit/codegen-static-probes.cpp`](../test/lit/codegen-static-probes.cpp),
+  and the number of out-of-line Dingo functions in its object file
+- `headers`: preprocessed lines that come from Dingo headers, per public header
+
+The values are deterministic for a toolchain. They are recorded in
+[`test/contracts/baseline.json`](../test/contracts/baseline.json), keyed by
+compiler family, major version, architecture, and C++ standard. The lit test
+`contract-baseline.t` runs `probe.py check`, which fails when a value exceeds
+its baseline and reports values that improved. A toolchain without a baseline
+prints its measured values and passes.
+
+Record the baseline for a toolchain after an intended change:
+
+```bash
+CXX=clang++ python3 test/contracts/probe.py update --work-dir build/contracts
+```
+
+List the most instantiated Dingo templates of one scaling program:
+
+```bash
+CXX=clang++ python3 test/contracts/probe.py report \
+    --work-dir build/contracts --scenario chain.static.32
+```
+
 ## Compile-Time Profiling
 
 For template compile-cost investigations, use

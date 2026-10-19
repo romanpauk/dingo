@@ -930,13 +930,32 @@ the [decision log](#decision-log) when the change makes or revises a decision.
 
 #### M0.1: Contract Baseline
 
-Status: not started.
+Status: done.
 
 Write synthetic scaling programs and a `-ftime-trace` instantiation counter, and
 record instantiation counts, container object sizes, inlining, and header costs
 for the current code, next to the existing code size probes.
 
 Done when the probes run as a lit test and the baseline values are committed.
+
+[`test/contracts/probe.py`](../../test/contracts/probe.py) records the baseline,
+as described in [Contract Baseline](../development.md#contract-baseline).
+Inlining is recorded as the calls each code size probe makes and the number of
+out-of-line Dingo functions. Header cost is recorded as preprocessed Dingo
+lines; compile time is not deterministic and is not recorded. Baselines exist
+for GCC 16 and Clang 22 on x86_64 with C++20. CI has no Clang 22 job, so
+instantiation counts are checked locally only until a CI Clang toolchain has a
+baseline.
+
+Observations from the baseline:
+
+- Bindings that are never resolved are not free. With 32 such bindings, a static
+  container instantiates 6450 Dingo class templates and a runtime container
+  9043, against 8880 and 9503 when every binding is resolved.
+- With 32 bindings, runtime containers instantiate 58 to 100 percent more Dingo
+  function templates than static containers for the same bindings.
+- A static container is 8 bytes per value binding, and a mixed container adds
+  112 bytes to it. A runtime container is 8 bytes.
 
 #### M0.2: Differential Harness
 
@@ -1238,3 +1257,7 @@ capability tags.
   new implementation is developed in the same tree behind a development option
   and replaces the current internals in one switch once it passes conformance,
   differential, and contract checks. The public API is recorded in the spec.
+- 2026-10-19: Contract baselines are keyed by compiler family, major version,
+  architecture, and C++ standard, and act as upper limits. Header cost is
+  measured as preprocessed Dingo lines rather than compile time, so it is
+  deterministic.
