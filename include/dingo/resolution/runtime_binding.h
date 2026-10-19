@@ -439,11 +439,11 @@ public:
                                            construction_scope scope,
                                            runtime_context_type &context,
                                            const request_type &request,
-                                           detail::cache::sink cache) {
+                                           const void *cache_key) {
     auto &binding = static_cast<runtime_binding &>(erased);
     if constexpr (type_list_size_v<request_resolutions> == 0) {
       (void)scope;
-      (void)cache;
+      (void)cache_key;
       throw detail::make_type_not_convertible_exception(
           request.requested_type, registered_type(), context);
     } else {
@@ -464,10 +464,11 @@ public:
                 registered_type());
           });
       // Request caching is intentionally stricter than conversion caching and
-      // is published with transaction rollback tracking by the registry.
+      // is published with transaction rollback tracking.
       if constexpr (Storage::conversions::is_stable) {
-        if (result.access == resolved_address::access_kind::borrow) {
-          cache(result.address);
+        if (cache_key != nullptr &&
+            result.access == resolved_address::access_kind::borrow) {
+          binding.publish_cache(context, cache_key, result.address);
         }
       }
       return result;

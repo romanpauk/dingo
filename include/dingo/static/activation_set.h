@@ -467,7 +467,7 @@ struct static_binding_resolver {
   }
 
   template <typename Request, typename Context>
-  Request resolve(Context &context, cache::sink cache = {}) {
+  Request resolve(Context &context) {
     static_assert(is_runtime_context_v<Context> ||
                       binding_supports_request_v<Request, InterfaceBinding>,
                   "static resolution cannot satisfy a request the storage "
@@ -488,9 +488,6 @@ struct static_binding_resolver {
       } else {
         throw detail::make_type_not_convertible_exception(
             describe_type<Request>(), registered_type(), context);
-      }
-      if constexpr (storage_type::conversions::is_stable) {
-        cache(ptr);
       }
       return detail::convert_resolved_binding<Request>(ptr);
     }

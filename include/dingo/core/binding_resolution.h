@@ -106,14 +106,15 @@ private:
 
 template <typename RTTI> struct binding_request {
   instance_request<RTTI> request;
-  cache::sink cache;
+  const void *cache_key;
 };
 
 template <typename T, typename RTTI>
-constexpr binding_request<RTTI> make_binding_request(cache::sink cache = {}) {
+constexpr binding_request<RTTI>
+make_binding_request(const void *cache_key = nullptr) {
   return {{RTTI::template get_type_index<request_lookup_type_t<T>>(),
            describe_type<T>()},
-          cache};
+          cache_key};
 }
 
 template <typename T> T convert_resolved_binding(resolved_address result) {
@@ -481,15 +482,15 @@ dispatch_binding_request(construction_scope scope, Binding &binding,
                          Context &context,
                          const binding_request<RTTI> &request) {
   return binding.resolve_request(scope, context, request.request,
-                                 request.cache);
+                                 request.cache_key);
 }
 
 } // namespace detail
 
 template <typename T, typename RTTI, typename Binding, typename Context>
 T resolve_binding_request(construction_scope scope, Binding &binding,
-                          Context &context, detail::cache::sink cache = {}) {
-  auto request = detail::make_binding_request<T, RTTI>(cache);
+                          Context &context, const void *cache_key = nullptr) {
+  auto request = detail::make_binding_request<T, RTTI>(cache_key);
   auto result =
       detail::dispatch_binding_request<RTTI>(scope, binding, context, request);
   return detail::convert_resolved_binding<T>(result);

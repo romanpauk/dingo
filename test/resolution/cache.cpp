@@ -112,10 +112,6 @@ struct unstable_storage {
 
 struct unmarked_storage {};
 
-void publish_address(void *state, void *address) {
-  *static_cast<void **>(state) = address;
-}
-
 TEST(cache_test, request_traits_and_keys_distinguish_cached_types) {
   static_assert(detail::cache::supports_v<int &>);
   static_assert(detail::cache::supports_v<const int &>);
@@ -126,17 +122,6 @@ TEST(cache_test, request_traits_and_keys_distinguish_cached_types) {
   EXPECT_EQ(detail::cache::key<int *>(), detail::cache::key<int *>());
   EXPECT_NE(detail::cache::key<int *>(), detail::cache::key<const int *>());
   EXPECT_NE(detail::cache::key<int &>(), detail::cache::key<const int &>());
-}
-
-TEST(cache_test, sink_publishes_address_when_connected) {
-  int value = 42;
-  void *published = nullptr;
-  detail::cache::sink sink{std::addressof(published), &publish_address};
-
-  sink(std::addressof(value));
-
-  EXPECT_EQ(published, std::addressof(value));
-  EXPECT_NO_THROW(detail::cache::sink{}(std::addressof(value)));
 }
 
 TEST(cache_test, state_stores_entries_only_when_enabled) {
