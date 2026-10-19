@@ -11,8 +11,8 @@
 // translation unit must be the first to spell the type its own way, because
 // GCC records whichever template-id first created the specialization.
 
+#include <dingo/base/type_descriptor.h>
 #include <dingo/container.h>
-#include <dingo/type/type_descriptor.h>
 
 namespace dingo {
 namespace type_identity_test {

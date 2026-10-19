@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/core/exceptions.h>
+#include <dingo/base/exceptions.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_traits.h>

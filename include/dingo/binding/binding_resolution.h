@@ -7,18 +7,18 @@
 
 #pragma once
 
-#include <dingo/core/binding_selection.h>
-#include <dingo/core/context_base.h>
-#include <dingo/core/exceptions.h>
-#include <dingo/registration/annotated.h>
-#include <dingo/registration/collection_traits.h>
+#include <dingo/base/exceptions.h>
+#include <dingo/base/type_descriptor.h>
+#include <dingo/binding/binding_selection.h>
+#include <dingo/binding/runtime_binding_interface.h>
+#include <dingo/context/context_base.h>
 #include <dingo/resolution/conversion_cache.h>
 #include <dingo/resolution/resolution_operation.h>
-#include <dingo/resolution/runtime_binding_interface.h>
 #include <dingo/storage/type_storage_traits.h>
+#include <dingo/type/annotated.h>
+#include <dingo/type/collection_traits.h>
 #include <dingo/type/dependency_traits.h>
 #include <dingo/type/normalized_type.h>
-#include <dingo/type/type_descriptor.h>
 #include <dingo/type/type_traits.h>
 
 #include <cassert>

@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/detail/container_traits.h>
+#include <dingo/lookup/container_lookup_definition.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/rtti/static_provider.h>
 

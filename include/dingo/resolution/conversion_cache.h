@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
-#include <dingo/core/construction_scope.h>
+#include <dingo/base/config.h>
+#include <dingo/base/construction_scope.h>
 
-#include <dingo/type/type_list.h>
+#include <dingo/base/type_list.h>
 
 #include <cassert>
 #include <memory>

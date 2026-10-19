@@ -7,16 +7,16 @@
 
 #pragma once
 
-#include <dingo/core/binding_model.h>
-#include <dingo/core/binding_selection.h>
-#include <dingo/core/dependency.h>
-#include <dingo/core/factory_traits.h>
+#include <dingo/base/type_list.h>
+#include <dingo/binding/binding_model.h>
+#include <dingo/binding/binding_selection.h>
+#include <dingo/factory/factory_traits.h>
 #include <dingo/lookup/lookup.h>
-#include <dingo/registration/annotated.h>
-#include <dingo/registration/collection_traits.h>
 #include <dingo/storage/type_storage_traits.h>
+#include <dingo/type/annotated.h>
+#include <dingo/type/collection_traits.h>
+#include <dingo/type/dependency.h>
 #include <dingo/type/normalized_type.h>
-#include <dingo/type/type_list.h>
 
 #include <type_traits>
 #include <utility>

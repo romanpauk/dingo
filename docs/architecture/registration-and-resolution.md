@@ -99,7 +99,7 @@ The sequence is:
 5. Call the matching runtime factory entry point or static resolution path for
    the requested form and convert the result back to `T`.
 
-[include/dingo/resolution/runtime_binding_interface.h](../../include/dingo/resolution/runtime_binding_interface.h)
+[include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
 defines the request object the container passes to the factory. The object
 stores:
 
@@ -114,8 +114,9 @@ The container then chooses the appropriate factory entry point:
 - `get_pointer(...)`
 
 The runtime and static paths share the same core selection and per-binding
-resolution vocabulary under [include/dingo/core/](../../include/dingo/core),
-even though their registration/storage backends differ.
+resolution vocabulary under
+[include/dingo/binding/](../../include/dingo/binding), even though their
+registration/storage backends differ.
 
 ### Atomic Container Changes
 
@@ -142,7 +143,7 @@ container cannot be rolled back.
 ## Factory Path
 
 The factory implementation in
-[include/dingo/resolution/runtime_binding.h](../../include/dingo/resolution/runtime_binding.h)
+[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
 owns:
 
 - a storage object
@@ -225,6 +226,6 @@ These files are useful while reading this flow:
 - [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
-- [include/dingo/resolution/runtime_binding.h](../../include/dingo/resolution/runtime_binding.h)
-- [include/dingo/resolution/runtime_binding_interface.h](../../include/dingo/resolution/runtime_binding_interface.h)
+- [include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
+- [include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
 - [include/dingo/factory/constructor_detection.h](../../include/dingo/factory/constructor_detection.h)

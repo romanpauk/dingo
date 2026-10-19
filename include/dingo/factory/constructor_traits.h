@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
+#include <dingo/base/config.h>
 #include <dingo/resolution/resolution_operation.h>
 #include <dingo/type/type_traits.h>
 

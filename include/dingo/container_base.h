@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include <dingo/core/binding_selection.h>
-#include <dingo/detail/container_traits.h>
+#include <dingo/binding/binding_selection.h>
+#include <dingo/lookup/container_lookup_definition.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/registry.h>

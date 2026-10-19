@@ -7,8 +7,8 @@
 
 #pragma once
 
+#include <dingo/base/type_descriptor.h>
 #include <dingo/resolution/resolving_frame_fwd.h>
-#include <dingo/type/type_descriptor.h>
 
 namespace dingo {
 namespace detail {

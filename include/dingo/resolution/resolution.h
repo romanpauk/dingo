@@ -7,14 +7,11 @@
 
 #pragma once
 
-#include <dingo/type/type_list.h>
+#include <dingo/base/type_list.h>
 
 #include <type_traits>
 
 namespace dingo {
-struct borrow {};
-struct consume {};
-
 namespace detail {
 template <typename Target, typename Source, typename Conversion>
 struct type_resolution;

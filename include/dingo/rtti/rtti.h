@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
+#include <dingo/base/config.h>
 
 namespace dingo {
 struct static_provider {};

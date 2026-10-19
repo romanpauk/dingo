@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include <dingo/core/binding_selection.h>
-#include <dingo/core/exceptions.h>
+#include <dingo/base/exceptions.h>
+#include <dingo/binding/binding_selection.h>
 
 #ifdef _MSC_VER
 #pragma warning(push)

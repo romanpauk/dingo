@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/core/config.h>
+#include <dingo/base/config.h>
 #include <dingo/memory/object_store.h>
 
 #include <gtest/gtest.h>

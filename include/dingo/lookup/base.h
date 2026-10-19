@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <dingo/core/key.h>
+#include <dingo/base/type_list.h>
 #include <dingo/lookup/ordered.h>
 #include <dingo/lookup/tags.h>
-#include <dingo/type/type_list.h>
+#include <dingo/type/key.h>
 
 #include <cstddef>
 #include <functional>

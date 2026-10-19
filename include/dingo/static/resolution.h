@@ -7,11 +7,11 @@
 
 #pragma once
 
-#include <dingo/core/binding_selection.h>
-#include <dingo/core/factory_traits.h>
+#include <dingo/base/type_list.h>
+#include <dingo/binding/binding_selection.h>
+#include <dingo/factory/factory_traits.h>
 #include <dingo/type/dependency_traits.h>
 #include <dingo/type/normalized_type.h>
-#include <dingo/type/type_list.h>
 
 #include <type_traits>
 

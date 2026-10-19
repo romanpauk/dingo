@@ -7,14 +7,15 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
+#include <dingo/base/config.h>
 
-#include <dingo/resolution/recursion_guard.h>
+#include <dingo/base/type_list.h>
+#include <dingo/context/recursion_guard.h>
+#include <dingo/resolution/conversion_resolution.h>
+#include <dingo/resolution/materialized_source.h>
 #include <dingo/resolution/resolution.h>
-#include <dingo/storage/materialized_source.h>
 #include <dingo/type/rebind_type.h>
 #include <dingo/type/type_conversion_traits.h>
-#include <dingo/type/type_list.h>
 #include <dingo/type/type_traits.h>
 
 #include <type_traits>

@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <dingo/core/none.h>
+#include <dingo/base/none.h>
+#include <dingo/base/type_list.h>
 #include <dingo/lookup/lookup.h>
 #include <dingo/lookup/storage.h>
-#include <dingo/type/type_list.h>
 
 #include <optional>
 #include <type_traits>

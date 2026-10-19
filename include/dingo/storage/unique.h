@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
+#include <dingo/base/config.h>
 
-#include <dingo/core/factory_traits.h>
 #include <dingo/factory/constructor.h>
+#include <dingo/factory/factory_traits.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>

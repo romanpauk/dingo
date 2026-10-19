@@ -1,6 +1,6 @@
 // RUN: %dingo_cxx -c %s
 
-#include <dingo/core/binding_selection.h>
+#include <dingo/binding/binding_selection.h>
 #include <dingo/static/registry.h>
 #include <dingo/storage/unique.h>
 

@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
+#include <dingo/base/config.h>
 
-#include <dingo/core/key.h>
-#include <dingo/registration/annotated.h>
+#include <dingo/type/annotated.h>
+#include <dingo/type/key.h>
 #include <dingo/type/type_traits.h>
 
 #include <type_traits>

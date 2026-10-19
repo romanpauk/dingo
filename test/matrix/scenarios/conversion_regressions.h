@@ -10,8 +10,8 @@
 #include "matrix/common/assertions.h"
 #include "support/resolution_test_types.h"
 
+#include <dingo/base/exceptions.h>
 #include <dingo/container.h>
-#include <dingo/core/exceptions.h>
 #include <dingo/factory/function.h>
 #include <dingo/runtime_container.h>
 #include <dingo/static_container.h>

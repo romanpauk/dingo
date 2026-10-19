@@ -7,12 +7,12 @@
 
 #pragma once
 
+#include <dingo/base/type_name.h>
 #include <dingo/container.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/runtime/lookup_index.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
-#include <dingo/type/type_name.h>
 
 #include <gtest/gtest.h>
 

@@ -9,7 +9,7 @@
 
 #include "matrix/scenarios/parent/common.h"
 
-#include <dingo/type/type_name.h>
+#include <dingo/base/type_name.h>
 
 #include <cstddef>
 #include <stdexcept>

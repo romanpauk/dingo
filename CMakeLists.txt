@@ -88,22 +88,22 @@ if(DINGO_DEVELOPMENT_MODE)
     )
 
     set(DINGO_SOURCE_FILES
-        core/config.h
+        base/config.h
         static/graph.h
         static/registry.h
         container.h
-        core/auto_constructible.h
-        core/binding_model.h
-        core/binding_resolution.h
-        core/binding_resolution_policy.h
-        core/binding_selection.h
-        core/dependency.h
-        core/factory_traits.h
-        core/key.h
-        core/none.h
+        type/auto_constructible.h
+        binding/binding_model.h
+        binding/binding_resolution.h
+        binding/binding_resolution_policy.h
+        binding/binding_selection.h
+        type/dependency.h
+        factory/factory_traits.h
+        type/key.h
+        base/none.h
         static/activation_set.h
         static/container_traits.h
-        core/exceptions.h
+        base/exceptions.h
         factory/callable.h
         factory/detail/constructor_arity.hpp
         factory/detail/constructor_arity_msvc.hpp
@@ -122,8 +122,9 @@ if(DINGO_DEVELOPMENT_MODE)
         memory/arena_allocator.h
         memory/object_store.h
         memory/object_lifetime.h
-        registration/annotated.h
-        registration/collection_traits.h
+        type/access.h
+        type/annotated.h
+        type/collection_traits.h
         registration/constructor.h
         registration/type_registration.h
         runtime_container.h
@@ -144,17 +145,18 @@ if(DINGO_DEVELOPMENT_MODE)
         lookup/unordered.h
         resolution/cache.h
         resolution/conversion_cache.h
-        resolution/runtime_binding_interface.h
-        resolution/runtime_binding.h
+        resolution/conversion_resolution.h
+        binding/runtime_binding_interface.h
+        runtime/runtime_binding.h
         storage/interface_storage_traits.h
-        core/context_base.h
+        context/context_base.h
         runtime/context.h
         static/context.h
         rtti/static_provider.h
         rtti/rtti.h
         rtti/typeid_provider.h
         storage/external.h
-        storage/materialized_source.h
+        resolution/materialized_source.h
         storage/shared_cyclical.h
         storage/shared.h
         storage/storage.h
@@ -164,9 +166,9 @@ if(DINGO_DEVELOPMENT_MODE)
         type/normalized_type.h
         type/rebind_type.h
         type/type_conversion_traits.h
-        type/type_descriptor.h
-        type/type_list.h
-        type/type_name.h
+        base/type_descriptor.h
+        base/type_list.h
+        base/type_name.h
         type/type_traits.h
         resolution/resolution_operation.h
     )

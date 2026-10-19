@@ -7,11 +7,11 @@
 
 #pragma once
 
-#include <dingo/core/exceptions.h>
-#include <dingo/core/key.h>
-#include <dingo/registration/collection_traits.h>
+#include <dingo/base/exceptions.h>
+#include <dingo/base/type_list.h>
+#include <dingo/type/collection_traits.h>
+#include <dingo/type/key.h>
 #include <dingo/type/normalized_type.h>
-#include <dingo/type/type_list.h>
 
 #include <cstddef>
 #include <type_traits>

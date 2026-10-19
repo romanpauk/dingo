@@ -7,9 +7,9 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
-#include <dingo/core/none.h>
-#include <dingo/type/type_descriptor.h>
+#include <dingo/base/config.h>
+#include <dingo/base/none.h>
+#include <dingo/base/type_descriptor.h>
 
 #include <cassert>
 #include <exception>

@@ -35,7 +35,8 @@ register_type / bindings -> type_registration -> storage/factory record
 resolve<T> -> lookup type -> factory traits -> resolver -> conversion -> T
 ```
 
-The shared kernel for that flow lives under `include/dingo/core/`.
+The shared binding and resolution kernel for that flow lives under
+`include/dingo/binding/`.
 
 Runtime and static implementation code sits under:
 
@@ -47,9 +48,9 @@ The main owners for the current architecture are:
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h)
 - [include/dingo/static_container.h](../../include/dingo/static_container.h)
-- [include/dingo/core/binding_model.h](../../include/dingo/core/binding_model.h)
-- [include/dingo/core/binding_resolution.h](../../include/dingo/core/binding_resolution.h)
-- [include/dingo/core/factory_traits.h](../../include/dingo/core/factory_traits.h)
+- [include/dingo/binding/binding_model.h](../../include/dingo/binding/binding_model.h)
+- [include/dingo/binding/binding_resolution.h](../../include/dingo/binding/binding_resolution.h)
+- [include/dingo/factory/factory_traits.h](../../include/dingo/factory/factory_traits.h)
 - [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)

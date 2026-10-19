@@ -8,8 +8,8 @@
 #pragma once
 
 #include <dingo/container.h>
-#include <dingo/detail/container_traits.h>
 #include <dingo/factory/invoke.h>
+#include <dingo/lookup/container_lookup_definition.h>
 #include <dingo/static/activation_set.h>
 #include <dingo/static/container_traits.h>
 #include <dingo/static/context.h>
