@@ -90,10 +90,12 @@ The route tools compare what the library does with the route rules of the spec,
 `spec/reference/routes.py`.
 
 - [`test/routes/extract.py`](../test/routes/extract.py) compiles and runs every
-  combination of container, leaf kind, scope, stored shape, and request against
-  the library and records the outcome, the constructions, copies, and moves, and
-  the identity of the result. The GCC table is committed under
-  `test/routes/observed/`; regenerating it takes about two minutes.
+  combination of container, leaf kind, declared interfaces, scope, stored shape,
+  and request against the library and records the outcome, the constructions,
+  copies, and moves, and the identity of the result. Stored shapes use the
+  standard wrappers and user wrappers defined through the wrapper-traits
+  extension point. The GCC table is committed under `test/routes/observed/`;
+  regenerating it takes about eight minutes with 32 jobs.
 - [`test/routes/conform.py`](../test/routes/conform.py) compares every case with
   the reference implementation. Every difference must be declared by a behavior
   change of the spec, `spec/content/behavior_changes.py`, and every declared

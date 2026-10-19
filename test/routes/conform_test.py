@@ -30,6 +30,11 @@ LEAF = leaf(conform.LEAVES["leaf"])
          layer("alt", LEAF, leaf(conform.LEAVES["other_leaf"]))),
         ("std::unique_ptr<std::optional<leaf>>*", RequestKind.VALUE,
          layer("ptr", layer("own", layer("opt", LEAF)))),
+        ("user_shared<leaf>&", RequestKind.LVALUE_REFERENCE,
+         layer("share", LEAF, family="user")),
+        ("std::shared_ptr<user_optional<leaf>>", RequestKind.VALUE,
+         layer("share", layer("opt", LEAF, family="user"))),
+        ("const iface*", RequestKind.VALUE, layer("ptr", leaf(conform.LEAVES["iface"]))),
     ],
 )
 def test_parse_request(spelling, kind, shape):

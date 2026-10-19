@@ -8,9 +8,10 @@ the outcome of every case with the reference implementation in
 spec/reference/routes.py, and compares them:
 
 - registration: whether the binding can be registered
-- served: whether the request is served; a compile error and
-  type_not_convertible_exception both mean it is not, and a crash or another
-  exception never matches
+- served: whether the request is served. type_not_found_exception means the
+  request does not name the binding, type_not_convertible_exception that it
+  names it but is not served, and a compile error matches either. A crash or
+  another exception never matches.
 - copies, constructions on the first and on a repeated request, the identity of
   the leaf of the result on both, and whether a repeated request yields the
   same leaf
@@ -55,15 +56,21 @@ LEAVES = {
     "leaf": Leaf("leaf"),
     "move_only_leaf": Leaf("move_only_leaf", copyable=False),
     "other_leaf": Leaf("other_leaf"),
+    "impl": Leaf("impl", bases=("iface", "other_iface")),
+    "iface": Leaf("iface", copyable=False, constructible=False),
+    "other_iface": Leaf("other_iface", copyable=False, constructible=False),
 }
 
-# The standard wrappers the extractor uses and the layer kinds they map to
-# through the wrapper-traits extension point.
+# The wrappers the extractor uses, with the layer kind and the wrapper family
+# they map to through the wrapper-traits extension point.
 WRAPPERS = {
-    "std::unique_ptr": "own",
-    "std::shared_ptr": "share",
-    "std::optional": "opt",
-    "std::variant": "alt",
+    "std::unique_ptr": ("own", "std"),
+    "std::shared_ptr": ("share", "std"),
+    "std::optional": ("opt", "std"),
+    "std::variant": ("alt", "std"),
+    "user_unique": ("own", "user"),
+    "user_shared": ("share", "user"),
+    "user_optional": ("opt", "user"),
 }
 
 
@@ -104,7 +111,8 @@ def parse_type(text):
                 if depth == 0:
                     break
         arguments = [parse_shape(arg) for arg in split_arguments(text[index + 1 : end])]
-        shape = Shape(layer=WRAPPERS[name], args=tuple(arguments))
+        kind, family = WRAPPERS[name]
+        shape = Shape(layer=kind, args=tuple(arguments), family=family)
         rest = text[end + 1 :]
     else:
         shape = Shape(leaf=LEAVES[name])
@@ -164,11 +172,27 @@ def observed_outcome(row):
         served = None
     elif resolve_text == "ok":
         served = True
-    elif resolve_text in ("compile_error", "throws:type_not_convertible_exception"):
+    elif resolve_text == "throws:type_not_convertible_exception":
         served = False
+    elif resolve_text == "throws:type_not_found_exception":
+        served = "not_found"
+    elif resolve_text == "compile_error":
+        served = "unserved"
     else:
         served = resolve_text  # a crash or an unexpected exception
     return registration, served
+
+
+def expected_served(outcome):
+    if outcome.served:
+        return True
+    return False if outcome.found else "not_found"
+
+
+def same_service(observed, expected):
+    if observed == "unserved":
+        return expected in (False, "not_found")
+    return observed == expected
 
 
 def expected_fields(outcome):
@@ -196,7 +220,10 @@ def compare(rows, model):
     for row in rows:
         stored = parse_shape(row["stored"])
         request = parse_request(row["request"])
-        outcome = resolve(model, row["scope"], stored, request)
+        interfaces = tuple(
+            LEAVES[name] for name in row.get("interfaces", "").split(",") if name
+        )
+        outcome = resolve(model, row["scope"], stored, request, interfaces)
         registered, served = observed_outcome(row)
         case = row["id"]
         if registered != outcome.registered:
@@ -204,16 +231,17 @@ def compare(rows, model):
             continue
         if not registered:
             continue
-        if served != outcome.served:
-            differences.append((case, "served", served, outcome.served))
+        expected = expected_served(outcome)
+        if not same_service(served, expected):
+            differences.append((case, "served", served, expected))
             continue
-        if not served:
+        if served is not True:
             continue
         want, have = expected_fields(outcome), observed_fields(row)
         for name in want:
             if want[name] != have[name]:
                 differences.append((case, name, have[name], want[name]))
-        key = (row["leaf"], row["scope"], row["stored"], row["request"])
+        key = tuple(case.split("/", 1)[1].split("/"))
         served_counts[key][row["domain"]] = (row["counts"]["move"], row["counts"]["destroy"])
     for key, by_domain in served_counts.items():
         for index, name in enumerate(("moves", "temporaries")):
@@ -228,7 +256,8 @@ def compare(rows, model):
 def pattern_of(difference):
     case, name, have, want = difference
     domain, leaf, scope, stored, request = case.split("/", 4)
-    return (scope, name, json.dumps(have), json.dumps(want))
+    kind = "interfaces" if "[" in leaf else "user" if "user_" in stored else "std"
+    return (f"{scope} {kind}", name, json.dumps(have), json.dumps(want))
 
 
 def main():

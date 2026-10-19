@@ -214,3 +214,79 @@ def test_cases(model, scope, stored, kind, shape, served, rules):
 def test_registration(model, scope, stored, registered):
     outcome = resolve(model, scope, stored, Request(RequestKind.VALUE, stored))
     assert outcome.registered is registered
+
+
+IMPL = Leaf("impl", bases=("iface", "other_iface"))
+IFACE = Leaf("iface", copyable=False, constructible=False)
+OTHER_IFACE = Leaf("other_iface", copyable=False, constructible=False)
+
+
+def test_a_binding_with_interfaces_is_found_only_by_them(model):
+    stored = layer("share", leaf(IMPL))
+    by_impl = resolve(model, "shared", stored, Request(RequestKind.LVALUE_REFERENCE, leaf(IMPL)), (IFACE,))
+    by_iface = resolve(model, "shared", stored, Request(RequestKind.LVALUE_REFERENCE, leaf(IFACE)), (IFACE,))
+    assert not by_impl.found and not by_impl.served
+    assert by_iface.served and by_iface.rules == ("borrow_shared", "upcast_reference")
+
+
+def test_an_undeclared_interface_is_not_found(model):
+    stored = leaf(IMPL)
+    request = Request(RequestKind.LVALUE_REFERENCE, leaf(OTHER_IFACE))
+    assert not resolve(model, "shared", stored, request, (IFACE,)).found
+
+
+@pytest.mark.parametrize(
+    "stored, request_shape, rules",
+    [
+        (layer("share", leaf(IMPL)), layer("share", leaf(IFACE)), ("copy", "upcast_copied_shared")),
+        (layer("ptr", leaf(IMPL)), layer("ptr", leaf(IFACE)), ("copy", "upcast_pointer")),
+    ],
+)
+def test_borrowed_interfaces_convert(model, stored, request_shape, rules):
+    outcome = resolve(model, "shared", stored, Request(RequestKind.VALUE, request_shape), (IFACE,))
+    assert outcome.served and outcome.rules == rules
+
+
+def test_a_shared_interface_handle_is_retained(model):
+    stored = layer("share", leaf(IMPL))
+    request = Request(RequestKind.LVALUE_REFERENCE, layer("share", leaf(IFACE)))
+    outcome = resolve(model, "shared", stored, request, (IFACE, OTHER_IFACE))
+    assert outcome.served and outcome.rules == ("retain_shared_upcast",)
+    assert outcome.stable
+
+
+def test_consumed_interfaces_convert(model):
+    stored = layer("own", leaf(IMPL))
+    request = Request(RequestKind.VALUE, layer("share", leaf(IFACE)))
+    outcome = resolve(model, "unique", stored, request, (IFACE,))
+    assert outcome.served
+
+
+@pytest.mark.parametrize(
+    "scope, stored, registered",
+    [
+        ("unique", leaf(IMPL), False),
+        ("shared", layer("array", leaf(IMPL), extent=2), False),
+        ("shared", layer("opt", leaf(IMPL)), True),
+        ("unique", layer("share", layer("share", leaf(IMPL))), False),
+        ("unique", layer("own", leaf(IMPL)), True),
+    ],
+)
+def test_interface_registration(model, scope, stored, registered):
+    outcome = resolve(model, scope, stored, Request(RequestKind.VALUE, stored), (IFACE,))
+    assert outcome.registered is registered
+
+
+def test_a_converted_handle_keeps_its_family(model):
+    stored = layer("own", leaf(COPYABLE), family="user")
+    user = Request(RequestKind.VALUE, layer("share", leaf(COPYABLE), family="user"))
+    std = Request(RequestKind.VALUE, layer("share", leaf(COPYABLE), family="std"))
+    assert resolve(model, "unique", stored, user).served
+    assert not resolve(model, "unique", stored, std).served
+
+
+def test_a_created_layer_may_be_of_any_family(model):
+    stored = leaf(COPYABLE)
+    for family in ("std", "user"):
+        request = Request(RequestKind.VALUE, layer("opt", leaf(COPYABLE), family=family))
+        assert resolve(model, "unique", stored, request).served

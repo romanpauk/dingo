@@ -1075,12 +1075,14 @@ Status: in progress.
 
 Specify the route rules with access, stability, cache, and retention.
 
-The spec records 18 route rules over terms of a shape and a value category:
-borrowing through layers, copying, taking addresses, and the consuming rules
-that take, wrap, and transfer ownership. They are described in
-[Route Conformance](../development.md#route-conformance). Remaining: resolution
-through declared interfaces, user wrappers and custom conversion traits, and
-retained conversions with their cache.
+The spec records 25 route rules over terms of a shape and a value category:
+borrowing through layers, copying, taking addresses, the consuming rules that
+take, wrap, and transfer ownership, and the upcasts that reach declared
+interfaces, including a kept sharing handle of an interface. Layers carry an
+opaque wrapper family: a converted handle keeps its family, and a layer a rule
+creates may be of any family. They are described in
+[Route Conformance](../development.md#route-conformance). Remaining: custom
+conversion traits, and the conversion cache beyond the kept interface handle.
 
 #### M1.7: Reference Implementation For Routes
 
@@ -1089,12 +1091,13 @@ Status: in progress.
 Implement route derivation in Python, producing the expected outcome, identity,
 and lifetime counts of a request, with spec-level property tests for the rules.
 
-`spec/reference/routes.py` computes registration, service, constructions,
-copies, identity, and stability for a scope, a stored shape, and a request, and
-is checked by property tests over every stored shape of up to two layers. The
-route conformance check compares it with 12,912 cases extracted from the
-baseline in the runtime, static, and mixed containers. Every difference is
-declared by one of 10 behavior changes:
+`spec/reference/routes.py` computes registration, lookup, service,
+constructions, copies, identity, and stability for a scope, a stored shape, the
+declared interfaces, and a request, and is checked by property tests over every
+stored shape of up to two layers. The route conformance check compares it with
+46,956 cases extracted from the baseline in the runtime, static, and mixed
+containers, covering standard and user wrappers and bindings with one and two
+interfaces. Every difference is declared by one of 15 behavior changes:
 
 - borrowing is compositional: every reachable object is borrowed and every
   copyable one copied, through any combination of layers
@@ -1113,11 +1116,20 @@ declared by one of 10 behavior changes:
 - shared_cyclical stores no pointers: the stored pointer was null
 - shared_cyclical exposes no arrays: the policy exposed them, but no array
   binding compiled
+- user wrappers are layers: shared_cyclical rejected user sharing handles,
+  because only the standard handles have storage cells
+- interface bindings compose with layers: interfaces of a leaf held in an
+  optional or an alternative are reached by borrowing
+- interface bindings serve an interface: a binding none of whose interfaces any
+  request can reach is rejected instead of accepted and never found
+- interface handles are retained: the mixed container returned a reference to a
+  converted interface handle that was already destroyed
+- interfaces do not rebind storage: a binding with one interface behaves as one
+  with several
 - static containers take external instances, following the Open Decisions
   proposal
 
-Remaining: the subjects of M1.6. The differential tests of the matrix read their
-behavior changes from the spec too, so every declared change lives in one place.
+Remaining: the subjects of M1.6.
 
 ### M2: New Implementation Foundations
 
@@ -1382,3 +1394,8 @@ capability tags.
   that abort or publish a null pointer, are fixed in the new implementation and
   declared as behavior changes. A borrowing scope never serves an rvalue
   reference, and the minimal move count of any container is the contract.
+- 2026-10-19: Interfaces and user wrappers follow the same rules as the leaf and
+  the standard wrappers. A user wrapper is a layer of the kind its traits
+  declare, in every scope. A binding with interfaces is found only by them and
+  reaches them by conversion, with one interface as with several. A binding
+  whose interfaces no request can reach is rejected.

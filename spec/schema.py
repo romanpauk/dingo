@@ -255,6 +255,7 @@ class Predicate(Enum):
     BORROWABLE = "borrowable"
     ARRAY = "array"
     ADDRESSABLE = "addressable"
+    LEAF = "leaf"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -266,9 +267,14 @@ class Requirement:
 
 
 class Via(Enum):
-    """The operation a route performs when it is not a structural rewrite."""
+    """The operation a route performs when it is not a structural rewrite.
+
+    UPCAST replaces the leaf `L` of the derived shape with each interface the
+    binding declares for it.
+    """
 
     CONVERT = "convert"
+    UPCAST = "upcast"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

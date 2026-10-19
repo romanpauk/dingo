@@ -17,6 +17,11 @@ through but is never itself referred to or pointed to.
 A rule with an `exposure` applies only when the scope exposes that request
 category for the stored form; serving an lvalue reference request needs the
 lvalue category. The rules are interpreted by spec/reference/routes.py.
+
+A binding that declares interfaces is found only by requests whose leaf is one
+of them; the upcast rules convert the stored leaf to each. A layer a rule
+rebuilds from a layer of the same kind keeps its wrapper family, and a layer a
+rule creates may be of any family whose wrapper provides that layer kind.
 """
 
 from spec.schema import (
@@ -28,6 +33,7 @@ from spec.schema import (
     Route,
     ShapePattern,
     ValueCategory,
+    Via,
 )
 
 LVALUE = ValueCategory.LVALUE
@@ -61,6 +67,22 @@ def consume(rule_id, from_shape, to_shape, description, exposure=RequestCategory
         to_shape=to_shape,
         access=Access.CONSUME,
         exposure=exposure,
+    )
+
+
+def leaf_variable(category):
+    return variable("L", category)
+
+
+def upcast(rule_id, description, from_shape, to_shape, access=Access.INHERIT, via=Via.UPCAST):
+    return Route(
+        id=rule_id,
+        description=description,
+        from_shape=from_shape,
+        to_shape=to_shape,
+        access=access,
+        requires=(Requirement(predicate=Predicate.LEAF, subject="L"),),
+        via=via,
     )
 
 
@@ -166,5 +188,55 @@ routes: tuple[Route, ...] = (
         access=Access.CONSUME,
         exposure=RequestCategory.POINTER,
         requires=(Requirement(predicate=Predicate.ARRAY, subject="A"),),
+    ),
+    # A declared interface is reached by converting the leaf.
+    upcast(
+        "upcast_reference",
+        "Refers to a borrowed leaf as one of its interfaces.",
+        leaf_variable(LVALUE),
+        leaf_variable(LVALUE),
+    ),
+    upcast(
+        "upcast_pointer",
+        "Converts a pointer to a leaf to a pointer to one of its interfaces.",
+        layer("ptr", leaf_variable(None), category=PRVALUE),
+        layer("ptr", leaf_variable(None), category=PRVALUE),
+    ),
+    upcast(
+        "upcast_consumed_pointer",
+        "Converts a consumed pointer to a leaf to one to one of its interfaces.",
+        layer("ptr", leaf_variable(None), category=RVALUE),
+        layer("ptr", leaf_variable(None), category=RVALUE),
+    ),
+    upcast(
+        "upcast_owned",
+        "Converts a consumed sole-owner handle of a leaf to one of an interface.",
+        layer("own", leaf_variable(None), category=RVALUE),
+        layer("own", leaf_variable(None), category=RVALUE),
+    ),
+    upcast(
+        "upcast_shared",
+        "Converts a consumed sharing handle of a leaf to one of an interface.",
+        layer("share", leaf_variable(None), category=RVALUE),
+        layer("share", leaf_variable(None), category=RVALUE),
+    ),
+    upcast(
+        "upcast_copied_shared",
+        "Converts a copied sharing handle of a leaf to one of an interface.",
+        layer("share", leaf_variable(None), category=PRVALUE),
+        layer("share", leaf_variable(None), category=PRVALUE),
+    ),
+    Route(
+        id="retain_shared_upcast",
+        description=(
+            "Keeps a sharing handle of an interface converted from a borrowed "
+            "sharing handle of the leaf, so it can be referred to."
+        ),
+        from_shape=layer("share", leaf_variable(None), category=LVALUE),
+        to_shape=layer("share", leaf_variable(None), category=LVALUE),
+        access=Access.BORROW,
+        requires=(Requirement(predicate=Predicate.LEAF, subject="L"),),
+        via=Via.UPCAST,
+        cache=layer("share", leaf_variable(None)),
     ),
 )
