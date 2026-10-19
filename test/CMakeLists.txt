@@ -181,9 +181,32 @@ set_tests_properties(dingo_differential_compare_test PROPERTIES
 
 # The tests of the next implementation of the spec-driven design, built against
 # the dingo_next target in every development build.
+# The engine cases are generated from the reference implementation of the spec.
+set(DINGO_NEXT_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/next")
+file(GLOB_RECURSE DINGO_NEXT_SPEC_SOURCES CONFIGURE_DEPENDS
+    "${PROJECT_SOURCE_DIR}/spec/*.py")
+add_custom_command(
+    OUTPUT "${DINGO_NEXT_GENERATED_DIR}/engine_cases.cpp"
+    COMMAND ${CMAKE_COMMAND} -E env PYTHONDONTWRITEBYTECODE=1
+        ${DINGO_UV_RUN_COMMAND} python
+        "${CMAKE_CURRENT_SOURCE_DIR}/next/engine_cases.py"
+        --output "${DINGO_NEXT_GENERATED_DIR}/engine_cases.cpp"
+    DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/next/engine_cases.py"
+        "${CMAKE_CURRENT_SOURCE_DIR}/next/templates/engine_cases.cpp.j2"
+        ${DINGO_NEXT_SPEC_SOURCES}
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    COMMENT "Generating the engine cases of the next implementation"
+    VERBATIM)
+
 add_executable(dingo_next_test
     next/base/mechanics.cpp
+    next/engine/engine_conformance.cpp
+    next/projection/shape.cpp
+    "${DINGO_NEXT_GENERATED_DIR}/engine_cases.cpp"
 )
+target_include_directories(dingo_next_test PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/next")
 target_link_libraries(dingo_next_test PRIVATE dingo::next gtest_main)
 add_test(NAME dingo_next_test COMMAND dingo_next_test)
 set_tests_properties(dingo_next_test PROPERTIES LABELS "unit;next")

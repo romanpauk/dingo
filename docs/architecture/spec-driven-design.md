@@ -1182,7 +1182,7 @@ other.
 
 #### M2.3: Primitive Layer
 
-Status: not started.
+Status: in progress.
 
 Add the decision-free primitives: lifetime slots, factory invocation and
 constructor detection, conversion primitives, index structures, the arena, and
@@ -1191,26 +1191,53 @@ the thunk shape. Add the layer rule to `layers-check`.
 Done when no primitive header refers to a scope, shape kind, rule, or
 diagnostic.
 
+`core/primitives/shape.h` describes the shape of a C++ type as a constexpr
+preorder array of nodes, comparable in constant expressions, without knowing the
+layer kinds of the spec. `core/projection/layer_traits.h`, a layer between the
+vocabulary and the engine, classifies C++ types into layer kinds: pointers,
+references, and arrays as language layers, and the standard wrappers through the
+same `layer_traits` a user wrapper specializes. Remaining: lifetime slots,
+factory invocation and constructor detection, conversion primitives, index
+structures, the arena, and the thunk shape.
+
 #### M2.4: Vocabulary And Descriptors
 
-Status: not started.
+Status: in progress.
 
 Generate the vocabulary enums, the public tag types, the descriptor structs, and
 `descriptor_v`.
+
+`core/vocabulary/vocabulary.gen.h` holds the layer kinds with their traits, the
+value and request categories, the storage forms, the scope descriptors with
+their exposure tables, and the route rules as constexpr data, generated from the
+spec. `shape_v<T>` is the descriptor of a type. Remaining: the public tag types.
 
 ### M3: Routes And Storage
 
 #### M3.1: Route Table
 
-Status: not started.
+Status: done.
 
 Generate the per-layer route table as `constexpr` data.
 
+The route rules are part of `vocabulary.gen.h`. A rule is a layer kind and value
+category it starts from and a layer kind and value category it derives, which
+every rule of the spec is; the generator rejects any other.
+
 #### M3.2: Request Matcher
 
-Status: not started.
+Status: done.
 
 Implement one descriptor-based request matcher, used by both backends.
+
+`core/engine/derive.h` registers a binding, finds and derives the terms it
+serves, and selects the term that serves a request, as constexpr functions over
+shapes. It is cross-tested against the reference implementation:
+`test/next/engine_cases.py` generates 35,616 cases into the build tree, over
+every scope, a copyable, a move-only, and an implementation leaf with one and
+two interfaces, stored shapes of up to two layers in the standard and a user
+wrapper family, and every request kind, and `dingo_next_test` requires the
+engine to compute the same registration, lookup, service, and rules.
 
 #### M3.3: Storage Construct
 
@@ -1260,6 +1287,9 @@ Status: not started.
 Generate `engine::select` from the selection rules for singular and collection
 requests, local bindings, parent fallback, and auto-construction, and cross-test
 it against the reference implementation.
+
+Following the route engine of M3.2, the selection engine is a generic
+interpreter of generated selection rule tables rather than generated code.
 
 #### M4.4: Static Backend
 
@@ -1367,62 +1397,87 @@ capability tags.
 - 2026-10-19: Use one decision engine over descriptors, evaluated at compile
   time or at runtime, instead of generating separate runtime and static
   implementations from the spec.
+
 - 2026-10-19: Keep one header tree with capability gates confined to a mechanics
   header, instead of a generated tree per C++ standard.
+
 - 2026-10-19: Treat compile-time cost as a spec-level contract enforced by
   instantiation counts, not by wall time.
+
 - 2026-10-19: Generate every construct that encodes a spec decision, including
   the engine and the backend glue. Hand-written code is limited to decision-free
   primitives and a thin facade, separated by a header layer. This revises the
   earlier plan to hand-write the engine.
+
 - 2026-10-19: Contracts on compile cost, object size, runtime cost, code size,
   inlining, and header cost are part of the spec and apply to generated and
   hand-written code alike.
+
 - 2026-10-19: Use the generator for unification: one construct per concept, with
   separate code only at declared variant points. Storages become one construct
   over scope descriptors, and lookups one filter with index structures as
   accelerations.
+
 - 2026-10-19: Commit generated library headers, track them in a manifest that
   drives stale file removal, and fail CI when regeneration changes the tree.
+
 - 2026-10-19: Treat compiler workarounds as named variants, tested on every
   compiler that accepts them.
+
 - 2026-10-19: Test the new implementation differentially against a pinned
   baseline of the current library. Behavior and contract changes must be
   declared in the spec.
+
 - 2026-10-19: Everything below the public API may be replaced completely. The
   new implementation is developed in the same tree behind a development option
   and replaces the current internals in one switch once it passes conformance,
   differential, and contract checks. The public API is recorded in the spec.
+
 - 2026-10-19: Contract baselines are keyed by compiler family, major version,
   architecture, and C++ standard, and act as upper limits. Header cost is
   measured as preprocessed Dingo lines rather than compile time, so it is
   deterministic.
+
 - 2026-10-19: The differential harness records an observation per matrix
   assertion rather than a pass or fail per case, and runs as a separate
   workflow, because the build workflow is reused by the release workflow on a
   source tree without git history.
+
 - 2026-10-19: Public API entries name operations and extension points
   language-agnostically. Their include paths, names, and macros are C++
   projection data, so the semantic sections contain no C++ text.
+
 - 2026-10-19: Development builds regenerate before compiling, controlled by
   `DINGO_GENERATE_ON_BUILD`. CI turns it off so that `check` verifies the
   committed tree, then regenerates and requires a clean tree. The clang-format
   configuration treats the generated-file marker as a comment pragma, so it is
   never reflowed.
+
 - 2026-10-19: The spec names no concrete wrapper types. Layer kinds are classes
   of handles defined by traits, and concrete wrappers, the standard ones
   included, map to them through the wrapper-traits extension point of the C++
   library, which users extend with their own handles.
+
 - 2026-10-19: The scope descriptors and route rules of the spec describe the
   target semantics, not the baseline. Defects of the baseline found by the route
   extraction, a reference to a destroyed object and two shared_cyclical shapes
   that abort or publish a null pointer, are fixed in the new implementation and
   declared as behavior changes. A borrowing scope never serves an rvalue
   reference, and the minimal move count of any container is the contract.
+
 - 2026-10-19: Interfaces and user wrappers follow the same rules as the leaf and
   the standard wrappers. A user wrapper is a layer of the kind its traits
   declare, in every scope. A binding with interfaces is found only by them and
   reaches them by conversion, with one interface as with several. A binding
   whose interfaces no request can reach is rejected.
+
 - 2026-10-19: No CI runs until the new implementation is complete. The new
   implementation is built and tested locally through the `dingo_next` target.
+
+- 2026-10-19: The engine is a generic constexpr interpreter of the generated
+  rule tables instead of code generated per rule. It makes no spec decision of
+  its own, it is cross-tested against the reference implementation, which
+  interprets the same rules independently, and it is far less code. A route
+  derives shapes at most one layer larger than the stored shape, and ties are
+  broken by the order of the rules in the spec, so a runtime binding publishes
+  the same terms before a request as a static one selects from.

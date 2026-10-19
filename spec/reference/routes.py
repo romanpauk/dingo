@@ -407,9 +407,18 @@ def finds(stored: Shape, request: Request, interfaces: tuple[Leaf, ...]) -> bool
     return requested == innermost_leaf(stored)
 
 
+def derivation_bound(stored: Shape) -> int:
+    """Routes derive shapes at most one layer larger than the stored shape.
+
+    The bound depends on the binding only, so a binding can publish every term
+    it serves before any request is known.
+    """
+    return stored.size() + 1
+
+
 def serve(model, scope_id, stored, request, interfaces) -> Derivation | None:
     exposed = set(exposed_categories(model, scope_id, storage_form(model, stored)))
-    bound = max(stored.size(), request.shape.size()) + 1
+    bound = derivation_bound(stored)
     candidates = [
         term
         for term in derive(model, scope_id, stored, interfaces, bound)
@@ -417,8 +426,13 @@ def serve(model, scope_id, stored, request, interfaces) -> Derivation | None:
     ]
     if not candidates:
         return None
-    # Prefer the derivation with the fewest rules, then without a copy.
-    return min(candidates, key=lambda t: (len(t.rules), t.copied is not None, t.rules))
+    # Prefer the derivation with the fewest rules, then without a copy, then the
+    # one whose rules come first in the spec.
+    order = {rule.id: index for index, rule in enumerate(model.spec.routes)}
+    return min(
+        candidates,
+        key=lambda t: (len(t.rules), t.copied is not None, [order[r] for r in t.rules]),
+    )
 
 
 def leaf_location(term: Derivation) -> str:

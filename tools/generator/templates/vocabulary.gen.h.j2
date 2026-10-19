@@ -1,0 +1,178 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+
+// The vocabulary of the spec as constexpr data: the layer kinds, storage forms,
+// scopes, and route rules the engine of the next implementation interprets.
+
+namespace dingo::core {
+
+// spec: layer_kinds
+enum class layer_kind : std::uint8_t {
+  leaf,
+{% for kind in layer_kinds %}
+  {{ kind.id }},
+{% endfor %}
+};
+
+inline constexpr std::size_t layer_kind_count = {{ layer_kinds | length + 1 }};
+
+struct layer_kind_info {
+  layer_kind kind;
+  bool owning;
+  bool sharing;
+  bool nullable;
+  bool borrowable;
+  bool variadic;
+  bool has_extent;
+};
+
+inline constexpr layer_kind_info layer_kinds[] = {
+    {layer_kind::leaf, false, false, false, false, false, false},
+{% for kind in layer_kinds %}
+    {layer_kind::{{ kind.id }}, {{ kind.owning | lower }}, {{ kind.sharing | lower }}, {{ kind.nullable | lower }}, {{ kind.borrowable | lower }}, {{ kind.variadic | lower }}, {{ kind.has_extent | lower }}},
+{% endfor %}
+};
+
+constexpr const layer_kind_info &info(layer_kind kind) {
+  return layer_kinds[static_cast<std::size_t>(kind)];
+}
+
+enum class value_category : std::uint8_t {
+{% for category in value_categories %}
+  {{ category }},
+{% endfor %}
+};
+
+// The request categories a scope exposes, as bits.
+enum class request_category : std::uint8_t {
+  none = 0,
+{% for category in request_categories %}
+  {{ category.name }} = {{ category.bit }},
+{% endfor %}
+};
+
+constexpr bool exposes(std::uint8_t categories, request_category category) {
+  return (categories & static_cast<std::uint8_t>(category)) != 0;
+}
+
+enum class access : std::uint8_t {
+{% for value in accesses %}
+  {{ value }},
+{% endfor %}
+};
+
+// spec: storage_forms
+enum class storage_form : std::uint8_t {
+{% for form in storage_forms %}
+  {{ form.id }},
+{% endfor %}
+};
+
+inline constexpr std::size_t storage_form_count = {{ storage_forms | length }};
+
+// A storage form matches the outer layer of a stored shape and, when `inner`
+// is not leaf, the layer directly under it.
+struct storage_form_info {
+  storage_form form;
+  layer_kind outer;
+  layer_kind inner;
+};
+
+inline constexpr storage_form_info storage_forms[] = {
+{% for form in storage_forms %}
+    {storage_form::{{ form.id }}, layer_kind::{{ form.outer }}, layer_kind::{{ form.inner }}},
+{% endfor %}
+};
+
+// spec: scopes
+enum class slot : std::uint8_t {
+{% for value in slots %}
+  {{ value }},
+{% endfor %}
+};
+
+enum class recursion_guard : std::uint8_t {
+{% for value in guards %}
+  {{ value }},
+{% endfor %}
+};
+
+enum class exposure_rule : std::uint8_t {
+{% for value in exposure_rules %}
+  {{ value }},
+{% endfor %}
+};
+
+enum class scope_id : std::uint8_t {
+{% for scope in scopes %}
+  {{ scope.id }},
+{% endfor %}
+};
+
+struct scope_info {
+  scope_id id;
+  slot storage_slot;
+  value_category materializes;
+  bool stable;
+  bool consumes;
+  recursion_guard guard;
+  bool retains_unresolved_source;
+  exposure_rule rule;
+  bool nested_layers;
+  bool needs_instance;
+  // The request categories exposed per storage form, indexed by storage_form.
+  std::uint8_t exposures[storage_form_count];
+};
+
+inline constexpr scope_info scopes[] = {
+{% for scope in scopes %}
+    {scope_id::{{ scope.id }}, slot::{{ scope.slot }}, value_category::{{ scope.materializes }}, {{ scope.stable | lower }}, {{ scope.consumes | lower }}, recursion_guard::{{ scope.guard }}, {{ scope.retains | lower }}, exposure_rule::{{ scope.exposure_rule }}, {{ scope.nested_layers | lower }}, {{ scope.needs_instance | lower }}, { {{ scope.exposures | join(", ") }} }},
+{% endfor %}
+};
+
+constexpr const scope_info &info(scope_id scope) {
+  return scopes[static_cast<std::size_t>(scope)];
+}
+
+// spec: routes
+enum class rule_id : std::uint8_t {
+{% for rule in routes %}
+  {{ rule.id }},
+{% endfor %}
+};
+
+inline constexpr std::size_t rule_count = {{ routes | length }};
+
+// Requirements of a rule on its pattern variable, as bits.
+enum class requirement : std::uint8_t {
+  none = 0,
+{% for value in requirements %}
+  {{ value.name }} = {{ value.bit }},
+{% endfor %}
+};
+
+// A route rule derives the term (to_layer(X), to_category) from the term
+// (from_layer(X), from_category), where a leaf layer stands for X itself.
+struct route_rule {
+  rule_id id;
+  layer_kind from_layer;
+  value_category from_category;
+  layer_kind to_layer;
+  value_category to_category;
+  access rule_access;
+  // A request category bit the scope must expose for the stored form, or 0.
+  std::uint8_t exposure;
+  std::uint8_t requires_;
+  bool upcast;
+};
+
+inline constexpr route_rule route_rules[] = {
+{% for rule in routes %}
+    // spec: routes.{{ rule.id }}
+    {rule_id::{{ rule.id }}, layer_kind::{{ rule.from_layer }}, value_category::{{ rule.from_category }}, layer_kind::{{ rule.to_layer }}, value_category::{{ rule.to_category }}, access::{{ rule.access }}, {{ rule.exposure }}, {{ rule.requires }}, {{ rule.upcast | lower }}},
+{% endfor %}
+};
+
+} // namespace dingo::core

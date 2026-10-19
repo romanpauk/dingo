@@ -31,6 +31,7 @@ CORE_LAYERS = [
     ("core/base",),
     ("core/primitives",),
     ("core/vocabulary",),
+    ("core/projection",),
     ("core/engine",),
     ("core/backend",),
     ("core/api",),

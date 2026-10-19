@@ -119,4 +119,122 @@ def next_overlay(spec):
     return files
 
 
-EMITTERS = (capabilities, variants, next_overlay)
+def pattern_layer(pattern, where):
+    """The layer kind of a rule or form pattern, or "leaf" for a variable.
+
+    Patterns are a variable or one layer kind applied to a variable; anything
+    else needs the generator to grow.
+    """
+    if pattern.form.value == "variable":
+        return "leaf"
+    if pattern.form.value != "layer" or len(pattern.args) != 1:
+        raise GeneratorError(f"{where}: pattern is not a layer of one argument")
+    return pattern.name
+
+
+def storage_form_fields(form):
+    where = f"storage_forms.{form.id}"
+    pattern = form.pattern
+    if pattern.form.value == "variable":
+        return {"id": form.id, "outer": "leaf", "inner": "leaf"}
+    outer = pattern_layer(pattern, where)
+    inner = pattern.args[0]
+    if inner.form.value == "variable":
+        return {"id": form.id, "outer": outer, "inner": "leaf"}
+    return {"id": form.id, "outer": outer, "inner": pattern_layer(inner, where)}
+
+
+REQUEST_CATEGORY_BITS = {"value": 1, "lvalue": 2, "rvalue": 4, "pointer": 8}
+REQUIREMENT_BITS = {"copyable": 1, "array": 2, "addressable": 4, "leaf": 8, "stable": 16, "borrowable": 32}
+
+
+def scope_fields(scope, form_ids):
+    exposed = {exposure.form: exposure for exposure in scope.exposures}
+    return {
+        "id": scope.id,
+        "slot": scope.slot.value,
+        "materializes": scope.materializes.value,
+        "stable": scope.stable,
+        "consumes": scope.source_access.value == "consume",
+        "guard": scope.guard.value,
+        "retains": scope.retains_unresolved_source,
+        "exposure_rule": scope.exposure_rule.value,
+        "nested_layers": scope.nested_layers,
+        "needs_instance": "instance" in scope.needs,
+        "exposures": [
+            sum(REQUEST_CATEGORY_BITS[c.value] for c in exposed[form].categories)
+            if form in exposed
+            else 0
+            for form in form_ids
+        ],
+    }
+
+
+def route_fields(rule):
+    where = f"routes.{rule.id}"
+    for pattern in (rule.from_shape, rule.to_shape):
+        if pattern.category is None:
+            raise GeneratorError(f"{where}: pattern has no value category")
+    return {
+        "id": rule.id,
+        "from_layer": pattern_layer(rule.from_shape, where),
+        "from_category": rule.from_shape.category.value,
+        "to_layer": pattern_layer(rule.to_shape, where),
+        "to_category": rule.to_shape.category.value,
+        "access": rule.access.value,
+        "exposure": REQUEST_CATEGORY_BITS[rule.exposure.value] if rule.exposure else 0,
+        "requires": sum(REQUIREMENT_BITS[r.predicate.value] for r in rule.requires),
+        "upcast": rule.via is not None and rule.via.value == "upcast",
+    }
+
+
+def vocabulary(spec):
+    """include/dingo/core/vocabulary/vocabulary.gen.h from the semantic sections."""
+    from spec.schema import (
+        Access,
+        ExposureRule,
+        RecursionGuard,
+        Slot,
+        ValueCategory,
+    )
+
+    layer_kinds = [
+        {
+            "id": kind.id,
+            "owning": "owning" in {t.value for t in kind.traits},
+            "sharing": "sharing" in {t.value for t in kind.traits},
+            "nullable": "nullable" in {t.value for t in kind.traits},
+            "borrowable": "borrowable" in {t.value for t in kind.traits},
+            "variadic": kind.variadic,
+            "has_extent": kind.has_extent,
+        }
+        for kind in sorted(spec.layer_kinds, key=lambda k: k.id)
+    ]
+    forms = sorted(spec.storage_forms, key=lambda f: f.id)
+    form_ids = [form.id for form in forms]
+    content = render(
+        "vocabulary.gen.h.j2",
+        layer_kinds=layer_kinds,
+        value_categories=[c.value for c in ValueCategory],
+        request_categories=[
+            {"name": name, "bit": bit} for name, bit in REQUEST_CATEGORY_BITS.items()
+        ],
+        accesses=[a.value for a in Access],
+        storage_forms=[storage_form_fields(form) for form in forms],
+        slots=[s.value for s in Slot],
+        guards=[g.value for g in RecursionGuard],
+        exposure_rules=[r.value for r in ExposureRule],
+        scopes=[scope_fields(scope, form_ids) for scope in sorted(spec.scopes, key=lambda s: s.id)],
+        requirements=[{"name": name, "bit": bit} for name, bit in REQUIREMENT_BITS.items()],
+        routes=[route_fields(rule) for rule in spec.routes],
+    )
+    return [
+        GeneratedFile(
+            path="include/dingo/core/vocabulary/vocabulary.gen.h",
+            content=content,
+            spec_ids=("layer_kinds", "routes", "scopes", "storage_forms"),
+        )
+    ]
+
+
+EMITTERS = (capabilities, variants, vocabulary, next_overlay)

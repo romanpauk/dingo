@@ -18,6 +18,9 @@ A rule with an `exposure` applies only when the scope exposes that request
 category for the stored form; serving an lvalue reference request needs the
 lvalue category. The rules are interpreted by spec/reference/routes.py.
 
+A derived shape is at most one layer larger than the stored shape, so a
+binding can publish every term it serves before any request is known.
+
 A binding that declares interfaces is found only by requests whose leaf is one
 of them; the upcast rules convert the stored leaf to each. A layer a rule
 rebuilds from a layer of the same kind keeps its wrapper family, and a layer a
