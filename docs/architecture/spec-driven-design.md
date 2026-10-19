@@ -883,15 +883,15 @@ records the decision when it is made.
 - Movability of static containers. Decision: open.
 - Spec location and format. Decision: a typed Python package under `spec/`
   exporting JSON, see M1.1.
-- Generated file naming. Proposal: the `.gen.h` suffix in the layer directory.
-  Decision: open.
+- Generated file naming. Decision: the `.gen.h` suffix in the layer directory,
+  see M1.2.
 - Generated tests in the repository. Proposal: generate them at build time and
   do not commit them. Decision: open.
 - Baseline commit. Decision: `ced6760`, recorded in
   `test/differential/baseline-commit`, see M0.2.
-- Location of the new implementation. Proposal: `include/dingo/core/`, its final
+- Location of the new implementation. Decision: `include/dingo/core/`, its final
   location, so the switch deletes the current internals without moving the new
-  ones. Decision: open.
+  ones. It is a layer-0 module until the primitive layer of M2.3 refines it.
 - Development strategy. Proposal: in the same tree behind
   `DINGO_IMPLEMENTATION=next`, rather than on a long-lived branch. Decision:
   open.
@@ -992,7 +992,7 @@ the C++ projection as API bindings.
 
 #### M1.2: Generator Infrastructure
 
-Status: not started.
+Status: done.
 
 Add the generator with Python data computation and logic-free Jinja templates,
 markers, the manifest, stale file removal, deterministic output, LF line
@@ -1001,6 +1001,13 @@ checks for a clean tree.
 
 Done when `check` runs `generate-check`, CI fails on uncommitted generated
 changes, and a first generated header is committed.
+
+The generator is described in
+[Generated Code](../development.md#generated-code). The first generated header
+is `include/dingo/core/capabilities.gen.h`, which defines a `DINGO_HAS_*` macro
+per language capability for the mechanics of M2.2. Build ordering after
+`generate` is verified with Ninja only. The clean-tree CI step has not run on
+GitHub yet.
 
 #### M1.3: Public API
 
@@ -1283,3 +1290,8 @@ capability tags.
 - 2026-10-19: Public API entries name operations and extension points
   language-agnostically. Their include paths, names, and macros are C++
   projection data, so the semantic sections contain no C++ text.
+- 2026-10-19: Development builds regenerate before compiling, controlled by
+  `DINGO_GENERATE_ON_BUILD`. CI turns it off so that `check` verifies the
+  committed tree, then regenerates and requires a clean tree. The clang-format
+  configuration treats the generated-file marker as a comment pragma, so it is
+  never reflowed.

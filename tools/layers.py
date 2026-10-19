@@ -11,7 +11,9 @@ import re
 import sys
 
 LAYERS = [
-    ("base",),
+    # core hosts the new implementation of the spec-driven design, see
+    # docs/architecture/spec-driven-design.md.
+    ("base", "core"),
     ("memory", "rtti", "type"),
     ("resolution", "lookup"),
     ("factory",),

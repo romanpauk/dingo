@@ -1,0 +1,2 @@
+*.gen.h text eol=lf
+spec/generated.manifest text eol=lf

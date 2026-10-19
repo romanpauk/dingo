@@ -1,0 +1,31 @@
+#pragma once
+{% for header in headers %}
+
+#if __has_include(<{{ header }}>)
+#include <{{ header }}> // IWYU pragma: keep
+#endif
+{% endfor %}
+{% for capability in capabilities %}
+
+// spec: {{ capability.spec_id }}
+{% for line in capability.description_lines %}
+// {{ line }}
+{% endfor %}
+{% if capability.builtin %}
+#if defined(__has_builtin)
+#if __has_builtin({{ capability.builtin }})
+#define {{ capability.macro }} 1
+#else
+#define {{ capability.macro }} 0
+#endif
+#else
+#define {{ capability.macro }} 0
+#endif
+{% else %}
+#if {{ capability.condition }}
+#define {{ capability.macro }} 1
+#else
+#define {{ capability.macro }} 0
+#endif
+{% endif %}
+{% endfor %}

@@ -43,6 +43,9 @@ Run a quality target with `cmake --build build -t <target>`.
   non-Windows builds.
 - `includes-check`: checks includes on those generated translation units on
   non-Windows builds.
+- `generate`: regenerates the generated files from the spec, see
+  [Generated Code](#generated-code).
+- `generate-check`: verifies that the generated files match the spec.
 - `check`: runs all verification targets available on the platform.
 
 The development tools are provided by the locked `uv` environment.
@@ -61,6 +64,30 @@ python3 -m spec.export --output build/spec.json
 ```
 
 The spec tests run as `dingo_spec_test` in ctest.
+
+## Generated Code
+
+[`tools/generator/generate.py`](../tools/generator/generate.py) generates files
+from the spec, as described in
+[Generated Code Lifecycle](architecture/spec-driven-design.md#generated-code-lifecycle).
+Generated files are committed. Each starts with a marker line naming the spec
+entries it comes from, and
+[`spec/generated.manifest`](../spec/generated.manifest) lists every generated
+file with its content hash.
+
+- `generate` writes the files whose content changed and deletes files that are
+  no longer generated. It refuses to overwrite or delete a file that is not in
+  the manifest or does not carry the marker.
+- `generate-check` fails on changed, missing, stale, or hand-edited generated
+  files.
+
+Development builds regenerate before compiling anything that uses the library.
+Configure with `-DDINGO_GENERATE_ON_BUILD=OFF` to keep the tree as it is; CI
+does so, runs `check`, then runs `generate` and fails when the tree is not
+clean. Emitters live in `tools/generator/emitters.py` and compute the data,
+while the Jinja templates in `tools/generator/templates/` only lay it out. The
+generator runs through `uv`, which provides the pinned clang-format that formats
+the output.
 
 ## Generated Matrix Tests
 

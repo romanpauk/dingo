@@ -1,6 +1,7 @@
 include_guard(GLOBAL)
 
 include(${CMAKE_CURRENT_LIST_DIR}/uv.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/generate.cmake)
 
 function(configure_quality_targets out_check_targets)
   set(check_targets)
@@ -13,6 +14,9 @@ function(configure_quality_targets out_check_targets)
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
   )
   list(APPEND check_targets layers-check)
+
+  configure_generate_targets(generate_check_targets)
+  list(APPEND check_targets ${generate_check_targets})
 
   if(NOT DINGO_CLANG_TOOLS_ENABLED)
     add_custom_target(format DEPENDS markdown-format)
