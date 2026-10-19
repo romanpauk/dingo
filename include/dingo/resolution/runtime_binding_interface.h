@@ -13,6 +13,8 @@
 #include <dingo/type/rebind_type.h>
 #include <dingo/type/type_descriptor.h>
 
+#include <cassert>
+
 namespace dingo {
 template <typename Allocator> class runtime_context;
 
@@ -67,14 +69,27 @@ public:
   using resolve_function = resolved_address (*)(runtime_binding_interface &,
                                                 construction_scope, Context &,
                                                 const request_type &,
-                                                detail::cache::sink);
+                                                const void *);
 
   detail::cache::entry *cache_slot() noexcept { return cache_slot_; }
 
+  // A null cache_key means the request is not cached.
   resolved_address resolve_request(construction_scope scope, Context &context,
                                    const request_type &request,
-                                   detail::cache::sink cache) {
-    return resolve_(*this, scope, context, request, cache);
+                                   const void *cache_key) {
+    return resolve_(*this, scope, context, request, cache_key);
+  }
+
+  // Publishes a stable address for the request key until the transaction
+  // that resolved it is rolled back.
+  void publish_cache(Context &context, const void *key, void *address) {
+    assert(cache_slot_ != nullptr);
+    context.on_rollback(
+        +[](void *slot, void *) noexcept {
+          *static_cast<detail::cache::entry *>(slot) = {};
+        },
+        cache_slot_);
+    *cache_slot_ = {key, address};
   }
 
 protected:

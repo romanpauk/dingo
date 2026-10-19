@@ -35,7 +35,8 @@ struct type_descriptor {
   const char *tag = nullptr;
   type_cv_flags cv = type_cv_flags::none;
   type_reference_kind reference = type_reference_kind::none;
-  type_descriptor (*pointee)() = nullptr;
+  // Descriptor of the pointed-to type; null unless this is a pointer level.
+  const type_descriptor *pointee = nullptr;
 };
 
 constexpr bool operator==(type_descriptor lhs, type_descriptor rhs) {
@@ -48,7 +49,7 @@ constexpr bool operator==(type_descriptor lhs, type_descriptor rhs) {
     return lhs.pointee == rhs.pointee;
   }
 
-  return lhs.pointee() == rhs.pointee();
+  return *lhs.pointee == *rhs.pointee;
 }
 
 template <typename T> constexpr std::string_view raw_type_name();
@@ -72,7 +73,7 @@ constexpr bool same_type_shape(type_descriptor lhs, type_descriptor rhs) {
     return lhs.tag == rhs.tag;
   }
 
-  return same_type_shape(lhs.pointee(), rhs.pointee());
+  return same_type_shape(*lhs.pointee, *rhs.pointee);
 }
 
 constexpr size_t type_name_not_found = static_cast<size_t>(-1);
@@ -201,7 +202,7 @@ constexpr bool is_qualification_conversion(type_descriptor source,
   const bool next_intermediate_const =
       intermediate_const &&
       (depth == 0 || has_cv_flag(target.cv, type_cv_flags::is_const));
-  return is_qualification_conversion(source.pointee(), target.pointee(),
+  return is_qualification_conversion(*source.pointee, *target.pointee,
                                      depth + 1, next_intermediate_const);
 }
 
@@ -244,13 +245,20 @@ template <typename T> constexpr type_reference_kind make_type_reference_kind() {
   }
 }
 
+template <typename T> constexpr type_descriptor make_type_descriptor();
+
+// Pointer levels refer to the descriptor of their pointee as data, so
+// comparing descriptors at runtime never calls through a function pointer.
+template <typename T>
+inline constexpr type_descriptor type_descriptor_v = make_type_descriptor<T>();
+
 template <typename T> constexpr type_descriptor make_type_descriptor() {
   if constexpr (std::is_pointer_v<T>) {
     return {{},
             nullptr,
             make_type_cv_flags<T>(),
             type_reference_kind::none,
-            &make_type_descriptor<std::remove_pointer_t<T>>};
+            &type_descriptor_v<std::remove_pointer_t<T>>};
   } else {
     return {raw_type_name<std::remove_cv_t<T>>(),
             &type_tag<std::remove_cv_t<T>>, make_type_cv_flags<T>(),
@@ -275,7 +283,7 @@ inline void append_type_cv(std::string &name, type_cv_flags flags,
 inline void append_described_type_name(std::string &name,
                                        type_descriptor descriptor) {
   if (descriptor.pointee != nullptr) {
-    append_described_type_name(name, descriptor.pointee());
+    append_described_type_name(name, *descriptor.pointee);
     name += "*";
     append_type_cv(name, descriptor.cv);
   } else {

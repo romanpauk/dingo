@@ -22,24 +22,6 @@ template <typename T> const void *key() noexcept {
   return std::addressof(type_key<T>);
 }
 
-struct sink {
-  void *state = nullptr;
-  void (*publish)(void *, void *) = nullptr;
-
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4702)
-#endif
-  void operator()(void *address) const {
-    if (publish != nullptr) {
-      publish(state, address);
-    }
-  }
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
-};
-
 struct entry {
   const void *key;
   void *address;

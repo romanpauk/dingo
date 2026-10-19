@@ -353,9 +353,8 @@ protected:
                          runtime_context_type &context) {
     auto &binding = *selection.binding;
     if constexpr (detail::cache::supports_v<Request>) {
-      cache_update update{binding.cache_slot(), std::addressof(context),
-                          detail::cache::key<Request>()};
-      return resolve<Request, Result>(scope, binding, context, update.sink());
+      return resolve<Request, Result>(scope, binding, context,
+                                      detail::cache::key<Request>());
     } else {
       return resolve<Request, Result>(scope, binding, context);
     }
@@ -779,25 +778,6 @@ protected:
     return route::has_explicit_collection_lookup;
   }
 
-  struct cache_update {
-    detail::cache::entry *entry;
-    runtime_context_type *context;
-    const void *key;
-
-    detail::cache::sink sink() noexcept { return {this, &publish}; }
-
-    static void publish(void *state, void *address) {
-      auto &update = *reinterpret_cast<cache_update *>(state);
-      assert(update.entry != nullptr);
-      update.context->on_rollback(
-          +[](void *entry, void *) noexcept {
-            *static_cast<detail::cache::entry *>(entry) = {};
-          },
-          update.entry);
-      *update.entry = {update.key, address};
-    }
-  };
-
   template <typename Value, typename Exact, bool AllowMiss, typename LookupKey>
   runtime_selection source_select(runtime_bindings_state *state,
                                   LookupKey key) {
@@ -1177,9 +1157,9 @@ protected:
   template <typename Request, typename Result, typename Binding,
             typename Context>
   Result resolve(construction_scope scope, Binding &binding, Context &context,
-                 detail::cache::sink cache = {}) {
-    return ::dingo::resolve_binding_request<Request, rtti_type>(scope, binding,
-                                                                context, cache);
+                 const void *cache_key = nullptr) {
+    return ::dingo::resolve_binding_request<Request, rtti_type>(
+        scope, binding, context, cache_key);
   }
 
   template <typename T, typename Binding, typename Context>

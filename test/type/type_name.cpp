@@ -99,7 +99,7 @@ TEST(type_name_test, pointer_reference_descriptor) {
   ASSERT_EQ(descriptor.cv, type_cv_flags::is_const);
   ASSERT_NE(descriptor.pointee, nullptr);
 
-  const auto pointee = descriptor.pointee();
+  const auto pointee = *descriptor.pointee;
   ASSERT_EQ(pointee.reference, type_reference_kind::none);
   ASSERT_EQ(pointee.cv, type_cv_flags::is_const);
   ASSERT_EQ(pointee.raw_name, expected_type_name_value());
@@ -114,12 +114,12 @@ TEST(type_name_test, nested_pointer_descriptor) {
   ASSERT_EQ(descriptor.cv, type_cv_flags::is_volatile);
   ASSERT_NE(descriptor.pointee, nullptr);
 
-  const auto first = descriptor.pointee();
+  const auto first = *descriptor.pointee;
   ASSERT_EQ(first.reference, type_reference_kind::none);
   ASSERT_EQ(first.cv, type_cv_flags::is_const);
   ASSERT_NE(first.pointee, nullptr);
 
-  const auto second = first.pointee();
+  const auto second = *first.pointee;
   ASSERT_EQ(second.reference, type_reference_kind::none);
   ASSERT_EQ(second.cv, type_cv_flags::is_const);
   ASSERT_EQ(second.raw_name, expected_type_name_value());
