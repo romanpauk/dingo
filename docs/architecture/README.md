@@ -19,6 +19,9 @@ Read these pages in order for the full picture:
 - [Conversion Model](conversion-model.md): how Dingo chooses value, reference,
   pointer, and wrapper conversions at resolution time.
 
+The target architecture, and the tracking of its implementation, is described in
+[Spec-Driven Design](spec-driven-design.md).
+
 The public API is centered on three container entry points:
 
 ```text
