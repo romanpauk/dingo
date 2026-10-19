@@ -16,7 +16,9 @@
 // A specialization names the layer kind, the wrapper family, and the argument
 // types, and provides `rebind`, the same layer of other argument types,
 // `element`, which reaches the element of a layer object, and `make`, which
-// makes a layer object from the arguments of its element.
+// makes a layer object from the arguments of its element. A handle that owns
+// its element also adopts an element it is given the address of, and a
+// sole-owner handle hands its element to the sharing handle of its family.
 
 #include <dingo/core/base/mechanics.h>
 #include <dingo/core/primitives/shape.h>
@@ -43,8 +45,14 @@ namespace dingo {
 //   rebind     the wrapper of other element types
 //   element    the element of a wrapper object
 //   make       a wrapper object made from the arguments of its element
+//   adopt      for own and share: a wrapper object that takes the ownership
+//              of the element at an address allocated by new
+//   share      for own, when its family has a sharing wrapper: the sharing
+//              wrapper object that takes the element of a consumed one
 //
-// The standard wrappers specialize it below, as a user wrapper does.
+// A wrapper converts to the wrapper of a base of its element, the route to a
+// declared interface, by its converting constructor. The standard wrappers
+// specialize it below, as a user wrapper does.
 template <typename Wrapper, typename = void> struct wrapper_traits {};
 
 using layer_kind = core::layer_kind;
@@ -65,6 +73,14 @@ template <typename Type> struct wrapper_traits<std::unique_ptr<Type>> {
   template <typename... Args>
   static std::unique_ptr<Type> make(Args &&...args) {
     return std::make_unique<Type>(std::forward<Args>(args)...);
+  }
+
+  static std::unique_ptr<Type> adopt(Type *element) {
+    return std::unique_ptr<Type>(element);
+  }
+
+  static std::shared_ptr<Type> share(std::unique_ptr<Type> &&value) {
+    return std::shared_ptr<Type>(std::move(value));
   }
 };
 
@@ -104,6 +120,10 @@ template <typename Type> struct wrapper_traits<std::shared_ptr<Type>> {
   template <typename... Args>
   static std::shared_ptr<Type> make(Args &&...args) {
     return std::make_shared<Type>(std::forward<Args>(args)...);
+  }
+
+  static std::shared_ptr<Type> adopt(Type *element) {
+    return std::shared_ptr<Type>(element);
   }
 };
 

@@ -904,12 +904,24 @@ records the decision when it is made.
 - The wrapper extension point. Decision: `dingo::wrapper_traits`, declared in
   `dingo/type/type_traits.h`, which the standard wrappers specialize too. A
   specialization declares the layer kind, the family, the element types,
-  `rebind`, `element`, and `make`. `dingo::type_traits`, the per-scope
-  `dingo::storage_traits`, and `dingo::is_interface_storage_rebindable_v` leave
-  the public API, declared as the behavior change `wrapper_extension_point`.
+  `rebind`, `element`, and `make`; an owning handle adds `adopt`, and a
+  sole-owner handle `share`, which hands its element to the sharing handle of
+  its family. A handle converts to the handle of an interface by its converting
+  constructor. `dingo::type_traits`, the per-scope `dingo::storage_traits`, and
+  `dingo::is_interface_storage_rebindable_v` leave the public API, declared as
+  the behavior change `wrapper_extension_point`.
 - Development strategy. Proposal: in the same tree behind
   `DINGO_IMPLEMENTATION=next`, rather than on a long-lived branch. Decision:
   open.
+- Constant-time type identity on GCC with UBSan. A type identity is the address
+  of a per-type tag, and GCC rejects comparing the addresses of two distinct
+  objects in a constant expression under `-fsanitize=null`,
+  `-fsanitize=nonnull-attribute`, or `-fsanitize=returns-nonnull-attribute`,
+  which `-fsanitize=undefined` enables, so a static container does not compile
+  there. Every address spelling fails, a variable template, a function, a member
+  array, or a member object. Proposal: a variant point whose portable tier
+  compares type names in constant evaluation and keeps addresses at runtime.
+  Decision: open.
 
 ## Risks
 
@@ -1246,15 +1258,30 @@ the public include paths. A shared binding constructs its object by the detected
 constructor, resolving each argument from the container through the backend that
 serves the request, and constructs the element of every layer in place.
 
+A unique binding constructs its object for every request, and the walk applies
+the consuming rules to it: it moves an element out of a layer, shares the
+element of a sole-owner handle, and converts a consumed handle to the handle of
+an interface. The plan of a term divides it at its boundary. The binding walks
+the rules up to a last copy, address-of, or decay, or up to the first rule that
+creates a wrapper of any family, and the request applies the rest: it wraps into
+its optional or adopts into its handle. The binding upcasts the pointer it hands
+over when the request upcasts the handle it creates. A runtime container erases
+the binding at the boundary and receives the boundary object by value through a
+function of its type, which the request checks, so neither container moves an
+object the reference does not. A request of an rvalue reference to an object it
+constructs refers to an object the container keeps until it is destroyed, as the
+current implementation does. A shared binding keeps the handle of an interface
+converted from its stored handle in the conversion cache of its slot, so a
+request can refer to it.
+
 The route extractor runs against the next implementation with
 `--implementation next`, and `conform.py --exact` compares its table with the
 reference implementation without behavior changes. For shared and external
-bindings in runtime and static containers, 15,652 cases including user wrappers,
-registration, service, copies, constructions, identity, and stability match the
-reference, except for the cases of the two subjects not provided yet: external
-bindings in static containers and the kept sharing handle of an interface, which
-needs the conversion cache. Remaining: those two, the walk of the consuming,
-creating, and converting rules, and the messages of the exceptions.
+bindings in runtime and static containers, 23,478 cases including user wrappers,
+registration, service, copies, moves, temporaries, constructions, identity, and
+stability match the reference, except for the 3,690 cases of external bindings
+in static containers, an open decision. Remaining: those, the two-phase slot of
+`shared_cyclical`, and the messages of the exceptions.
 
 ### M3: Routes And Storage
 
@@ -1532,3 +1559,12 @@ capability tags.
   wrapper does, and the storage traits and the interface rebinding trait leave
   the public API. The public API check requires an entry a behavior change
   declares with an `api:` pattern to be missing from the current implementation.
+
+- 2026-10-20: The unique scope constructs an object per request, and the plan of
+  a term divides it at its boundary between the binding and the request, the
+  same in both backends: a layer a rule creates from a leaf or a pointer is of
+  any family, so only the request names its wrapper type. An owning handle's
+  wrapper traits add `adopt`, and a sole-owner handle's `share`. A request of an
+  rvalue reference to an object it constructs refers to an object the container
+  keeps, and a binding keeps a converted interface handle in the conversion
+  cache of its slot.

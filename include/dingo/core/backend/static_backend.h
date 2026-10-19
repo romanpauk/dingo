@@ -9,7 +9,7 @@
 
 // The static backend: the bindings are known when the container type is
 // formed, the engine selects the binding and the term of a request at compile
-// time, and the term is walked directly.
+// time, and the term is walked and completed directly.
 
 #include <dingo/core/backend/slot.h>
 #include <dingo/core/base/config.h>
@@ -17,8 +17,11 @@
 #include <dingo/core/engine/derive.h>
 #include <dingo/core/engine/execute.h>
 #include <dingo/core/engine/request.h>
+#include <dingo/core/primitives/retained.h>
+#include <dingo/core/vocabulary/vocabulary.gen.h>
 
 #include <cstddef>
+#include <type_traits>
 #include <utility>
 
 namespace dingo::core {
@@ -30,10 +33,19 @@ template <std::size_t Index, typename Binding> struct static_holder {
 
 template <typename Indices, typename... Bindings> struct static_holders;
 
+// The objects a request of an rvalue reference constructs are retained only by
+// a container with a consuming binding.
+template <bool Retains> struct static_retention {
+  retained_objects retained;
+};
+
+template <> struct static_retention<false> {};
+
 template <std::size_t... Indices, typename... Bindings>
 struct DINGO_EMPTY_BASES
     static_holders<std::index_sequence<Indices...>, Bindings...>
-    : static_holder<Indices, Bindings>... {};
+    : static_holder<Indices, Bindings>...,
+      static_retention<(Bindings::consumes || ...)> {};
 
 inline constexpr std::size_t not_found = static_cast<std::size_t>(-1);
 inline constexpr std::size_t ambiguous = static_cast<std::size_t>(-2);
@@ -87,10 +99,37 @@ private:
     static_assert(walk_supported_v<binding, selected>,
                   "the next implementation does not provide the route of the "
                   "requested type yet");
+    using value_type = typename request_traits<Request>::value_type;
+    constexpr const completion_plan &plan = plan_v<binding, selected>;
     auto &holder =
         static_cast<detail::static_holder<Index, binding> &>(holders_);
-    return static_cast<Request>(
-        walk<binding, selected>(holder.slot.get(*this)));
+    auto source = [&]() -> decltype(auto) { return holder.slot.get(*this); };
+    auto make = [&]() -> decltype(auto) {
+      if constexpr (plan.created == 0) {
+        return walk_from<binding, selected,
+                         binding::published.items[selected].rule_count>(
+            holder.slot.context(), source);
+      } else {
+        using layers = planned_layers_t<value_type, binding, selected>;
+        static_assert(layers::valid &&
+                          std::is_same_v<typename layers::boundary,
+                                         boundary_t<binding, selected>>,
+                      "the requested wrapper cannot be created by the route");
+        return layers::make([&]() -> decltype(auto) {
+          return walk_to_boundary<binding, selected>(holder.slot.context(),
+                                                     source);
+        });
+      }
+    };
+    if constexpr (std::is_rvalue_reference_v<Request> &&
+                  binding::published.items[selected].category ==
+                      value_category::rvalue) {
+      return static_cast<Request>(
+          holders_.retained.template emplace<value_type>(
+              [&] { return value_type(make()); }));
+    } else {
+      return static_cast<Request>(make());
+    }
   }
 
   detail::static_holders<std::index_sequence_for<Bindings...>, Bindings...>

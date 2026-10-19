@@ -2,6 +2,7 @@
 // instead of falling back to the current implementation.
 // REQUIRES: linux
 // RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
-// CHECK: dingo/storage/unique.h is not provided by the next implementation
+// CHECK: dingo/storage/shared_cyclical.h is not provided by the next
+// implementation
 
-#include <dingo/storage/unique.h>
+#include <dingo/storage/shared_cyclical.h>

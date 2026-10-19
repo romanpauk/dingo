@@ -166,12 +166,15 @@ struct route_rule {
   std::uint8_t exposure;
   std::uint8_t requires_;
   bool upcast;
+  // Whether the derived object is kept by the binding, so it can be referred
+  // to: the conversion cache.
+  bool cached;
 };
 
 inline constexpr route_rule route_rules[] = {
 {% for rule in routes %}
     // spec: routes.{{ rule.id }}
-    {rule_id::{{ rule.id }}, layer_kind::{{ rule.from_layer }}, value_category::{{ rule.from_category }}, layer_kind::{{ rule.to_layer }}, value_category::{{ rule.to_category }}, access::{{ rule.access }}, {{ rule.exposure }}, {{ rule.requires }}, {{ rule.upcast | lower }}},
+    {rule_id::{{ rule.id }}, layer_kind::{{ rule.from_layer }}, value_category::{{ rule.from_category }}, layer_kind::{{ rule.to_layer }}, value_category::{{ rule.to_category }}, access::{{ rule.access }}, {{ rule.exposure }}, {{ rule.requires }}, {{ rule.upcast | lower }}, {{ rule.cached | lower }}},
 {% endfor %}
 };
 

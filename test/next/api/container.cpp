@@ -141,3 +141,32 @@ TEST(next_static_container, serves_the_same_routes) {
 }
 
 } // namespace
+
+namespace {
+
+template <typename Container> void check_kept_handle(Container &container) {
+  std::shared_ptr<iface> &kept =
+      container.template resolve<std::shared_ptr<iface> &>();
+  EXPECT_EQ(kept->run(), 11);
+  EXPECT_EQ(&container.template resolve<std::shared_ptr<iface> &>(), &kept);
+  EXPECT_EQ(container.template resolve<std::shared_ptr<iface> *>(), &kept);
+  EXPECT_EQ(kept.get(), container.template resolve<iface *>());
+  EXPECT_EQ(kept.use_count(), 2);
+}
+
+TEST(next_container, keeps_the_converted_handle_of_an_interface) {
+  dingo::container<> container;
+  container.register_type<scope<dingo::shared>, storage<std::shared_ptr<impl>>,
+                          dingo::interfaces<iface>>();
+  check_kept_handle(container);
+}
+
+TEST(next_container, keeps_the_converted_handle_of_an_interface_statically) {
+  using bindings = dingo::bindings<
+      dingo::bind<scope<dingo::shared>, storage<std::shared_ptr<impl>>,
+                  dingo::interfaces<iface>>>;
+  dingo::static_container<bindings> container;
+  check_kept_handle(container);
+}
+
+} // namespace

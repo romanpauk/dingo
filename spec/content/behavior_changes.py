@@ -263,8 +263,9 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         ),
         now=(
             "dingo::wrapper_traits declares the layer kind, the family, the "
-            "element types, rebind, element, and make. The storage traits and "
-            "the interface rebinding trait are not part of the public API."
+            "element types, rebind, element, and make, and adopt and share for "
+            "the handles that own their element. The storage traits and the "
+            "interface rebinding trait are not part of the public API."
         ),
         decision=DECISION,
     ),

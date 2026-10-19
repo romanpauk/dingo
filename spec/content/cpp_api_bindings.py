@@ -93,6 +93,7 @@ template <typename T> struct {name}<@H@<T>> {
   template <typename... Args> static @H@<T> make(Args &&...args) {
     return @H@<T>(std::make_shared<T>(std::forward<Args>(args)...));
   }
+  static @H@<T> adopt(T *element) { return @H@<T>(std::shared_ptr<T>(element)); }
 };
 """
 

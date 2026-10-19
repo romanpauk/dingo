@@ -32,6 +32,10 @@ template <typename T> struct wrapper_traits<user_shared<T>> {
   template <typename... Args> static user_shared<T> make(Args &&...args) {
     return user_shared<T>(std::make_shared<T>(std::forward<Args>(args)...));
   }
+
+  static user_shared<T> adopt(T *element) {
+    return user_shared<T>(std::shared_ptr<T>(element));
+  }
 };
 
 template <typename T> struct wrapper_traits<user_unique<T>> {
@@ -44,6 +48,14 @@ template <typename T> struct wrapper_traits<user_unique<T>> {
 
   template <typename... Args> static user_unique<T> make(Args &&...args) {
     return user_unique<T>(std::make_unique<T>(std::forward<Args>(args)...));
+  }
+
+  static user_unique<T> adopt(T *element) {
+    return user_unique<T>(std::unique_ptr<T>(element));
+  }
+
+  static user_shared<T> share(user_unique<T> &&value) {
+    return user_shared<T>(std::move(value));
   }
 };
 
