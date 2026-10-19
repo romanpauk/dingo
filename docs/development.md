@@ -94,18 +94,24 @@ The route tools compare what the library does with the route rules of the spec,
   and request against the library and records the outcome, the constructions,
   copies, and moves, and the identity of the result. Stored shapes use the
   standard wrappers and user wrappers defined through the wrapper-traits
-  extension point. The GCC table is committed under `test/routes/observed/`;
-  regenerating it takes about eight minutes with 32 jobs.
+  extension point. The table is written to `build/routes/observed/` and not
+  committed; extracting it takes about eight minutes with 32 jobs.
 - [`test/routes/conform.py`](../test/routes/conform.py) compares every case with
   the reference implementation. Every difference must be declared by a behavior
   change of the spec, `spec/content/behavior_changes.py`, and every declared
   change must match a difference. The ctest entry `dingo_routes_conform_test`
-  runs it.
+  runs it when a table has been extracted.
 - [`test/routes/summarize.py`](../test/routes/summarize.py) lists where the
   runtime, static, and mixed containers differ from each other.
 
+Extract the table of the pinned baseline and check it:
+
 ```bash
-CXX=g++ python3 test/routes/extract.py --work-dir build/routes
+mkdir -p build/routes/baseline
+git archive "$(cat test/differential/baseline-commit)" include \
+    | tar -x -C build/routes/baseline
+CXX=g++ python3 test/routes/extract.py --work-dir build/routes \
+    --include-dir build/routes/baseline/include
 python3 test/routes/conform.py --summary
 ```
 

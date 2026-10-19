@@ -11,15 +11,19 @@ route rules; it describes the code as it is, not as it is documented.
 Usage:
 
     extract.py --work-dir build/routes [--jobs N] [--cxx-command CMD]
-               [--domains runtime,static,mixed] [--output FILE]
+               [--include-dir DIR] [--domains runtime,static,mixed]
+               [--output FILE]
 
     CXX=g++ extract.py --work-dir build/routes
-    extract.py --work-dir build/routes --cxx-command "clang++ -std=c++20 \\
-        -I include" --domains runtime
+    extract.py --work-dir build/routes \\
+        --include-dir build/differential/baseline-source/include
 
-The default output is test/routes/observed/<toolchain>.jsonl, where the toolchain
-key is the one test/contracts/probe.py uses, such as gcc16-x86_64-c++20. The
-file is JSON Lines sorted by case id; every line is one case.
+The table describes the library whose headers are in --include-dir, include/
+by default; the differential workflow extracts it from the pinned baseline.
+The default output is <work-dir>/observed/<toolchain>.jsonl, where the
+toolchain key is the one test/contracts/probe.py uses, such as
+gcc16-x86_64-c++20. The table is not committed: it is regenerated from the
+headers. The file is JSON Lines sorted by case id; every line is one case.
 
 Universe (the tables below):
 
@@ -109,7 +113,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-OBSERVED_DIR = Path(__file__).resolve().parent / "observed"
 
 # ---------------------------------------------------------------------------
 # The universe.
@@ -1343,9 +1346,15 @@ def log(message, count):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
+        "--include-dir",
+        type=Path,
+        default=PROJECT_ROOT / "include",
+        help="include directory of the library to extract, include/ by default",
+    )
+    parser.add_argument(
         "--cxx-command",
-        default=os.environ.get("CXX", "c++") + f" -std=c++20 -I{PROJECT_ROOT / 'include'}",
-        help="compiler command including the standard and include flags",
+        help="compiler command including the standard and include flags; by "
+        "default $CXX -std=c++20 -I<include-dir>",
     )
     parser.add_argument(
         "--work-dir",
@@ -1368,11 +1377,14 @@ def main():
     if unknown:
         parser.error(f"unknown domains: {unknown}")
 
-    toolchain = Toolchain(args.cxx_command)
+    command = args.cxx_command or (
+        os.environ.get("CXX", "c++") + f" -std=c++20 -I{args.include_dir.resolve()}"
+    )
+    toolchain = Toolchain(command)
     started = time.time()
     extraction = Extraction(toolchain, args.work_dir.resolve(), args.jobs)
     records = extraction.run(domains, args.filter)
-    output = args.output or OBSERVED_DIR / f"{toolchain.key}.jsonl"
+    output = args.output or args.work_dir / "observed" / f"{toolchain.key}.jsonl"
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w") as stream:
         for record in records:

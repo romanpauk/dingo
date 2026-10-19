@@ -23,6 +23,9 @@ Every difference must be declared by a behavior change of the spec whose
 `routes:` pattern must match a difference. The exit status is 0 when both hold, 1
 otherwise.
 
+The table is extracted into the build tree, not committed. Without --observed,
+the single table under build/routes/observed is used.
+
 Usage:
     conform.py [--observed FILE] [--report FILE] [--summary]
 """
@@ -49,7 +52,13 @@ from spec.reference.routes import (  # noqa: E402
     resolve,
 )
 
-DEFAULT_OBSERVED = Path(__file__).resolve().parent / "observed" / "gcc16-x86_64-c++20.jsonl"
+OBSERVED_DIR = PROJECT_ROOT / "build" / "routes" / "observed"
+
+
+def default_observed():
+    """The single extracted table under build/routes/observed, or None."""
+    tables = sorted(OBSERVED_DIR.glob("*.jsonl")) if OBSERVED_DIR.is_dir() else []
+    return tables[0] if len(tables) == 1 else None
 
 # The C++ test types of the extractor and their properties.
 LEAVES = {
@@ -266,16 +275,25 @@ def main():
 
 def main_with(argv):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--observed", type=Path, default=DEFAULT_OBSERVED)
+    parser.add_argument("--observed", type=Path, default=None)
     parser.add_argument("--report", type=Path)
     parser.add_argument(
         "--summary", action="store_true", help="group the differences by pattern"
     )
     args = parser.parse_args(argv)
 
+    observed = args.observed or default_observed()
+    if observed is None:
+        print(
+            f"no single extracted table under {OBSERVED_DIR}; run "
+            "test/routes/extract.py --work-dir build/routes, or pass --observed",
+            file=sys.stderr,
+        )
+        return 2
+
     loaded = spec.load_spec()
     model = Model(loaded)
-    rows = [json.loads(line) for line in args.observed.read_text().splitlines()]
+    rows = [json.loads(line) for line in observed.read_text().splitlines()]
     differences = compare(rows, model)
 
     changes = [

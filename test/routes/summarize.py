@@ -43,7 +43,7 @@ import re
 import sys
 from pathlib import Path
 
-OBSERVED_DIR = Path(__file__).resolve().parent / "observed"
+OBSERVED_DIR = Path(__file__).resolve().parents[2] / "build" / "routes" / "observed"
 DOMAIN_ORDER = ("runtime", "static", "mixed")
 OBSERVATION_FIELDS = (
     "counts",

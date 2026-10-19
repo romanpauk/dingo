@@ -48,5 +48,9 @@ def test_parse_stored_reference():
     assert conform.parse_shape("leaf[2]") == layer("array", LEAF, extent=2)
 
 
+@pytest.mark.skipif(
+    conform.default_observed() is None,
+    reason="no route table extracted under build/routes/observed",
+)
 def test_the_observed_table_conforms():
     assert conform.main_with([]) == 0
