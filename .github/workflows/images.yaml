@@ -54,7 +54,7 @@ jobs:
           file: docker/ubuntu25-toolchains/Containerfile
           build-args: TOOLCHAIN=${{ matrix.compiler.toolchain }}
           load: true
-          tags: dingo-toolchains:ubuntu-25.04-${{ matrix.compiler.toolchain }}
+          tags: dingo-toolchains:ubuntu-26.04-${{ matrix.compiler.toolchain }}
           cache-from: type=gha,scope=toolchain-smoke-${{ matrix.compiler.toolchain }}
           cache-to: type=gha,mode=max,scope=toolchain-smoke-${{ matrix.compiler.toolchain }}
 
@@ -79,7 +79,7 @@ jobs:
             -v "$GITHUB_WORKSPACE:/workspace" \
             -v "$GITHUB_WORKSPACE/.ccache:/ccache" \
             -w /workspace \
-            dingo-toolchains:ubuntu-25.04-${{ matrix.compiler.toolchain }} \
+            dingo-toolchains:ubuntu-26.04-${{ matrix.compiler.toolchain }} \
             bash -lc 'set -euxo pipefail
               command -v uv
               uv --version
@@ -129,7 +129,7 @@ jobs:
           file: docker/ubuntu25-toolchains/Containerfile
           build-args: TOOLCHAIN=msvc-wine
           load: true
-          tags: dingo-toolchains:ubuntu-25.04-msvc-wine
+          tags: dingo-toolchains:ubuntu-26.04-msvc-wine
           cache-from: type=gha,scope=toolchain-smoke-msvc-wine
           cache-to: type=gha,mode=max,scope=toolchain-smoke-msvc-wine
 
@@ -140,7 +140,7 @@ jobs:
 
           docker run --rm \
             --user "$(id -u):$(id -g)" \
-            dingo-toolchains:ubuntu-25.04-msvc-wine \
+            dingo-toolchains:ubuntu-26.04-msvc-wine \
             bash -lc 'set -euxo pipefail
               command -v uv
               uv --version
@@ -163,7 +163,7 @@ jobs:
       #       --user "$(id -u):$(id -g)" \
       #       -v "$GITHUB_WORKSPACE:/workspace" \
       #       -w /workspace \
-      #       dingo-toolchains:ubuntu-25.04-msvc-wine \
+      #       dingo-toolchains:ubuntu-26.04-msvc-wine \
       #       bash -lc 'set -euxo pipefail
       #         export NINJA_STATUS="[%f/%t %es] "
       #         export WINEDEBUG="+timestamp,err+all,warn+all"

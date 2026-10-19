@@ -1,24 +1,24 @@
-# Ubuntu 25.04 toolchain images
+# Ubuntu toolchain images
 
 Container images for local development and CI.
 
 `Containerfile` is parameterized: each build installs exactly one selected
 toolchain plus common development tools. The recipe accepts `gcc-*`, `clang-*`,
 and `msvc` / `msvc-wine` values. The `BASE_IMAGE` build argument selects the
-Ubuntu release and defaults to `ubuntu:25.04`; a toolchain that Ubuntu 25.04
+Ubuntu release and defaults to `ubuntu:26.04`; a toolchain that Ubuntu 26.04
 does not package is built on a newer release.
 
 Linux image-backed CI currently builds and exercises:
 
-- `dingo-toolchains:ubuntu-25.04-gcc-15`
-- `dingo-toolchains:ubuntu-25.04-clang-20`
+- `dingo-toolchains:ubuntu-26.04-gcc-15`
+- `dingo-toolchains:ubuntu-26.04-clang-20`
 - `dingo-toolchains:ubuntu-26.10-gcc-16`, with `BASE_IMAGE=ubuntu:26.10`; C++23
   with sanitizers and C++26 without them, as GCC 16 reports false
   uninitialized-variable warnings for C++26 with sanitizers
 
 For MSVC, the commands below build and run a local example tag:
 
-- `dingo-toolchains:ubuntu-25.04-msvc-wine`
+- `dingo-toolchains:ubuntu-26.04-msvc-wine`
 
 Every image includes the shared build/runtime baseline:
 
@@ -41,7 +41,7 @@ Build the image:
 podman build \
   -f docker/ubuntu25-toolchains/Containerfile \
   --build-arg TOOLCHAIN=gcc-15 \
-  -t dingo-toolchains:ubuntu-25.04-gcc-15 \
+  -t dingo-toolchains:ubuntu-26.04-gcc-15 \
   docker/ubuntu25-toolchains
 ```
 
@@ -51,7 +51,7 @@ Build and test Dingo in one shot:
 podman run --rm \
   -v "$PWD:/workspace:Z" \
   -w /workspace \
-  dingo-toolchains:ubuntu-25.04-gcc-15 \
+  dingo-toolchains:ubuntu-26.04-gcc-15 \
   bash -lc 'set -euxo pipefail; export NINJA_STATUS="[%f/%t %es] "; cmake -S . -B build-gcc15 -G Ninja \
     -DCMAKE_C_COMPILER=gcc-15 \
     -DCMAKE_CXX_COMPILER=g++-15 \
@@ -80,7 +80,7 @@ Build the image:
 podman build \
   -f docker/ubuntu25-toolchains/Containerfile \
   --build-arg TOOLCHAIN=clang-20 \
-  -t dingo-toolchains:ubuntu-25.04-clang-20 \
+  -t dingo-toolchains:ubuntu-26.04-clang-20 \
   docker/ubuntu25-toolchains
 ```
 
@@ -90,7 +90,7 @@ Build and test Dingo in one shot:
 podman run --rm \
   -v "$PWD:/workspace:Z" \
   -w /workspace \
-  dingo-toolchains:ubuntu-25.04-clang-20 \
+  dingo-toolchains:ubuntu-26.04-clang-20 \
   bash -lc 'set -euxo pipefail; export NINJA_STATUS="[%f/%t %es] "; cmake -S . -B build-clang20 -G Ninja \
     -DCMAKE_C_COMPILER=clang-20 \
     -DCMAKE_CXX_COMPILER=clang++-20 \
@@ -104,7 +104,7 @@ podman run --rm \
 
 The MSVC path stays separate from the Linux images above. It uses the
 `msvc-wine` Containerfile mode, and the commands below build and run the local
-example tag `dingo-toolchains:ubuntu-25.04-msvc-wine`.
+example tag `dingo-toolchains:ubuntu-26.04-msvc-wine`.
 
 Build the image:
 
@@ -112,7 +112,7 @@ Build the image:
 podman build \
   -f docker/ubuntu25-toolchains/Containerfile \
   --build-arg TOOLCHAIN=msvc-wine \
-  -t dingo-toolchains:ubuntu-25.04-msvc-wine \
+  -t dingo-toolchains:ubuntu-26.04-msvc-wine \
   docker/ubuntu25-toolchains
 ```
 
@@ -122,7 +122,7 @@ Build and test Dingo in one shot:
 podman run --rm \
   -v "$PWD:/workspace:Z" \
   -w /workspace \
-  dingo-toolchains:ubuntu-25.04-msvc-wine \
+  dingo-toolchains:ubuntu-26.04-msvc-wine \
   bash -lc 'set -euxo pipefail; export NINJA_STATUS="[%f/%t %es] "; CC=cl CXX=cl cmake -S . -B build-msvc -G Ninja \
     -DCMAKE_SYSTEM_NAME=Windows \
     -DCMAKE_BUILD_TYPE=Release \
@@ -141,7 +141,7 @@ jobs:
   linux:
     runs-on: ubuntu-24.04
     container:
-      image: dingo-toolchains:ubuntu-25.04-gcc-15
+      image: dingo-toolchains:ubuntu-26.04-gcc-15
     steps:
       - uses: actions/checkout@v6
       - run: cmake -S . -B build -G Ninja \

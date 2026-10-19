@@ -1,6 +1,6 @@
-# The base image is selectable so a toolchain that Ubuntu 25.04 does not
+# The base image is selectable so a toolchain that Ubuntu 26.04 LTS does not
 # package, such as GCC 16, can be built on a newer release.
-ARG BASE_IMAGE=ubuntu:25.04
+ARG BASE_IMAGE=ubuntu:26.04
 FROM ${BASE_IMAGE}
 
 ARG TOOLCHAIN=gcc-14

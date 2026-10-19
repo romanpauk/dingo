@@ -81,11 +81,11 @@ jobs:
           - id: Release
             label: release
         compiler:
-          - { OS: ubuntu-25.04, BASE_IMAGE: "ubuntu:25.04", TOOLCHAIN: gcc-15, CC: gcc-15, CXX: g++-15, STD: 23, SANITIZER: ON }
-          - { OS: ubuntu-25.04, BASE_IMAGE: "ubuntu:25.04", TOOLCHAIN: gcc-15, CC: gcc-15, CXX: g++-15, STD: 26, SANITIZER: ON }
-          - { OS: ubuntu-25.04, BASE_IMAGE: "ubuntu:25.04", TOOLCHAIN: clang-20, CC: clang-20, CXX: clang++-20, STD: 23, SANITIZER: ON }
-          - { OS: ubuntu-25.04, BASE_IMAGE: "ubuntu:25.04", TOOLCHAIN: clang-20, CC: clang-20, CXX: clang++-20, STD: 26, SANITIZER: ON }
-          # Ubuntu 25.04 does not package GCC 16. With sanitizers, GCC 16 reports
+          - { OS: ubuntu-26.04, BASE_IMAGE: "ubuntu:26.04", TOOLCHAIN: gcc-15, CC: gcc-15, CXX: g++-15, STD: 23, SANITIZER: ON }
+          - { OS: ubuntu-26.04, BASE_IMAGE: "ubuntu:26.04", TOOLCHAIN: gcc-15, CC: gcc-15, CXX: g++-15, STD: 26, SANITIZER: ON }
+          - { OS: ubuntu-26.04, BASE_IMAGE: "ubuntu:26.04", TOOLCHAIN: clang-20, CC: clang-20, CXX: clang++-20, STD: 23, SANITIZER: ON }
+          - { OS: ubuntu-26.04, BASE_IMAGE: "ubuntu:26.04", TOOLCHAIN: clang-20, CC: clang-20, CXX: clang++-20, STD: 26, SANITIZER: ON }
+          # Ubuntu 26.04 LTS only ships a GCC 16 snapshot. With sanitizers, GCC 16 reports
           # reference-bound temporaries as uninitialized in C++26 mode only, so
           # C++26 runs without them.
           - { OS: ubuntu-26.10, BASE_IMAGE: "ubuntu:26.10", TOOLCHAIN: gcc-16, CC: gcc-16, CXX: g++-16, STD: 23, SANITIZER: ON }
