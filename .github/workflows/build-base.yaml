@@ -68,7 +68,7 @@ jobs:
           std: ${{ matrix.compiler.STD }}
 
   linux-toolchain-image:
-    name: ubuntu-25.04 / ${{ matrix.compiler.TOOLCHAIN }} / std-${{ matrix.compiler.STD }} / ${{ matrix.config.label }}
+    name: ${{ matrix.compiler.OS }} / ${{ matrix.compiler.TOOLCHAIN }} / std-${{ matrix.compiler.STD }} / ${{ matrix.config.label }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -81,10 +81,15 @@ jobs:
           - id: Release
             label: release
         compiler:
-          - { TOOLCHAIN: gcc-15, CC: gcc-15, CXX: g++-15, STD: 23, SANITIZER: ON }
-          - { TOOLCHAIN: gcc-15, CC: gcc-15, CXX: g++-15, STD: 26, SANITIZER: ON }
-          - { TOOLCHAIN: clang-20, CC: clang-20, CXX: clang++-20, STD: 23, SANITIZER: ON }
-          - { TOOLCHAIN: clang-20, CC: clang-20, CXX: clang++-20, STD: 26, SANITIZER: ON }
+          - { OS: ubuntu-26.04, BASE_IMAGE: "ubuntu:26.04", TOOLCHAIN: gcc-15, CC: gcc-15, CXX: g++-15, STD: 23, SANITIZER: ON }
+          - { OS: ubuntu-26.04, BASE_IMAGE: "ubuntu:26.04", TOOLCHAIN: gcc-15, CC: gcc-15, CXX: g++-15, STD: 26, SANITIZER: ON }
+          - { OS: ubuntu-26.04, BASE_IMAGE: "ubuntu:26.04", TOOLCHAIN: clang-20, CC: clang-20, CXX: clang++-20, STD: 23, SANITIZER: ON }
+          - { OS: ubuntu-26.04, BASE_IMAGE: "ubuntu:26.04", TOOLCHAIN: clang-20, CC: clang-20, CXX: clang++-20, STD: 26, SANITIZER: ON }
+          # Ubuntu 26.04 LTS only ships a GCC 16 snapshot. With sanitizers, GCC 16 reports
+          # reference-bound temporaries as uninitialized in C++26 mode only, so
+          # C++26 runs without them.
+          - { OS: ubuntu-26.10, BASE_IMAGE: "ubuntu:26.10", TOOLCHAIN: gcc-16, CC: gcc-16, CXX: g++-16, STD: 23, SANITIZER: ON }
+          - { OS: ubuntu-26.10, BASE_IMAGE: "ubuntu:26.10", TOOLCHAIN: gcc-16, CC: gcc-16, CXX: g++-16, STD: 26, SANITIZER: OFF }
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout workflow repo
@@ -98,9 +103,11 @@ jobs:
         with:
           context: docker/ubuntu25-toolchains
           file: docker/ubuntu25-toolchains/Containerfile
-          build-args: TOOLCHAIN=${{ matrix.compiler.TOOLCHAIN }}
+          build-args: |
+            BASE_IMAGE=${{ matrix.compiler.BASE_IMAGE }}
+            TOOLCHAIN=${{ matrix.compiler.TOOLCHAIN }}
           load: true
-          tags: dingo-toolchains:ubuntu-25.04-${{ matrix.compiler.TOOLCHAIN }}
+          tags: dingo-toolchains:${{ matrix.compiler.OS }}-${{ matrix.compiler.TOOLCHAIN }}
           cache-from: type=gha,scope=toolchain-${{ matrix.compiler.TOOLCHAIN }}
           cache-to: type=gha,mode=max,scope=toolchain-${{ matrix.compiler.TOOLCHAIN }}
 
@@ -128,8 +135,8 @@ jobs:
         uses: ./.github/actions/linux-build
         with:
           build_type: ${{ matrix.config.id }}
-          ccache_key: ubuntu-25.04-image-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
-          container_image: dingo-toolchains:ubuntu-25.04-${{ matrix.compiler.TOOLCHAIN }}
+          ccache_key: ${{ matrix.compiler.OS }}-image-${{ matrix.config.id }}-${{ matrix.compiler.CXX }}-${{ matrix.compiler.STD }}
+          container_image: dingo-toolchains:${{ matrix.compiler.OS }}-${{ matrix.compiler.TOOLCHAIN }}
           compiler_cc: ${{ matrix.compiler.CC }}
           compiler_cxx: ${{ matrix.compiler.CXX }}
           matrix_profile: portable
