@@ -63,6 +63,29 @@ template <typename X> const void *reach(const X &x) {
   }
 }
 
+// The message of the exception being handled, as a JSON string.
+inline std::string message() {
+  std::string text;
+  try {
+    throw;
+  } catch (const std::exception &exception) {
+    text = exception.what();
+  } catch (...) {
+  }
+  std::string quoted = "\"";
+  for (char c : text) {
+    if (c == '"' || c == '\\') {
+      quoted += '\\';
+      quoted += c;
+    } else if (static_cast<unsigned char>(c) < 0x20) {
+      quoted += ' ';
+    } else {
+      quoted += c;
+    }
+  }
+  return quoted + "\"";
+}
+
 inline std::string classify() {
   try {
     throw;
@@ -158,7 +181,8 @@ void run(int index, Container &container, const std::string &registration) {
           classify().c_str());
     }
   } catch (...) {
-    std::printf(",\"resolve\":\"throws:%s\"", classify().c_str());
+    std::printf(",\"resolve\":\"throws:%s\",\"message\":%s", classify().c_str(),
+                message().c_str());
   }
   std::printf("}\n");
   std::fflush(stdout);

@@ -165,7 +165,8 @@ set_tests_properties(dingo_spec_test PROPERTIES
 
 add_test(NAME dingo_routes_conform_test
     COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q -p no:cacheprovider
-        ${CMAKE_CURRENT_SOURCE_DIR}/routes/conform_test.py)
+        ${CMAKE_CURRENT_SOURCE_DIR}/routes/conform_test.py
+        ${CMAKE_CURRENT_SOURCE_DIR}/routes/messages_test.py)
 set_tests_properties(dingo_routes_conform_test PROPERTIES
     LABELS "unit;generator"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
@@ -202,6 +203,7 @@ add_custom_command(
 add_executable(dingo_next_test
     next/api/construction.cpp
     next/api/container.cpp
+    next/api/diagnostics.cpp
     next/api/shared_cyclical.cpp
     next/api/unique.cpp
     next/base/mechanics.cpp

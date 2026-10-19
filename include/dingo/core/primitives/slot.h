@@ -9,8 +9,6 @@
 
 // Lifetime slots: where a binding keeps its object.
 
-#include <dingo/core/primitives/exceptions.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -48,13 +46,12 @@ public:
   }
 
   bool constructed() const { return state_ == state::constructed; }
+  bool constructing() const { return state_ == state::constructing; }
 
-  // Constructs the object in place by `construct(void *)` unless it exists.
+  // Constructs the object in place by `construct(void *)` unless it exists;
+  // the caller reports a request while it is being constructed.
   template <typename Construct> Type &get_or_construct(Construct &&construct) {
     if (state_ != state::constructed) {
-      if (state_ == state::constructing) {
-        throw type_recursion_exception("type recursion");
-      }
       state_ = state::constructing;
       struct reset {
         state &value;

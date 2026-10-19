@@ -6,6 +6,7 @@ template that only lays them out.
 """
 
 import re
+import textwrap
 
 from framework import GeneratedFile, GeneratorError, render
 
@@ -274,4 +275,35 @@ def scope_tags(spec):
     ]
 
 
-EMITTERS = (capabilities, variants, vocabulary, scope_tags, next_overlay)
+def cpp_string(text):
+    """The C++ string literal of text."""
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def diagnostics(spec):
+    """include/dingo/core/vocabulary/diagnostics.gen.h from the diagnostics.
+
+    Each diagnostic gets a function that throws its exception with its message,
+    whose placeholders are the parameters of the function.
+    """
+    fields = [
+        {
+            "id": diagnostic.id,
+            "condition_lines": textwrap.wrap(diagnostic.condition, 76),
+            "exception": diagnostic.exception,
+            "message": cpp_string(diagnostic.message),
+            "placeholders": list(diagnostic.placeholders),
+        }
+        for diagnostic in sorted(spec.diagnostics, key=lambda d: d.id)
+    ]
+    return [
+        GeneratedFile(
+            path="include/dingo/core/vocabulary/diagnostics.gen.h",
+            content=render("diagnostics.gen.h.j2", diagnostics=fields),
+            spec_ids=("diagnostics",),
+        )
+    ]
+
+
+EMITTERS = (capabilities, variants, vocabulary, scope_tags, diagnostics, next_overlay)

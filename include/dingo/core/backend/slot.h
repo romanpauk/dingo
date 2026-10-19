@@ -11,18 +11,33 @@
 
 #include <dingo/core/base/config.h>
 #include <dingo/core/base/mechanics.h>
-#include <dingo/core/primitives/exceptions.h>
 #include <dingo/core/primitives/slot.h>
+#include <dingo/core/primitives/type_name.h>
+#include <dingo/core/primitives/type_path.h>
 #include <dingo/core/projection/construct.h>
 #include <dingo/core/projection/layer_traits.h>
+#include <dingo/core/vocabulary/diagnostics.gen.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
 #include <cstdint>
 #include <new>
+#include <string>
 #include <type_traits>
 #include <utility>
 
 namespace dingo::core {
+
+// Reports a request of an object while it is being constructed: the path of
+// the types being constructed, ending with the repeated one.
+template <typename Type> [[noreturn]] void raise_recursion() {
+  std::string path;
+  if (type_frame::active()) {
+    type_frame::append_path(path);
+    path += " -> ";
+  }
+  append_type_name<Type>(path);
+  raise_type_recursion(path);
+}
 
 // The context of the walks of a binding, kept by its slot: the objects its
 // cached rules derive, or nothing.
@@ -49,7 +64,11 @@ public:
   using stored_type = typename Binding::stored_type;
 
   template <typename Resolver> stored_type &get(Resolver &resolver) {
+    if (slot_.constructing()) {
+      raise_recursion<leaf_of_t<stored_type>>();
+    }
     return slot_.get_or_construct([&resolver](void *where) {
+      const auto frame = type_frame::of<leaf_of_t<stored_type>>();
       construct_stored<stored_type>(where, resolver);
     });
   }
@@ -72,8 +91,9 @@ public:
   // the request.
   template <typename Resolver> decltype(auto) get(Resolver &resolver) {
     if (constructing_) {
-      throw type_recursion_exception("type recursion");
+      raise_recursion<leaf_of_t<stored_type>>();
     }
+    const auto frame = type_frame::of<leaf_of_t<stored_type>>();
     constructing_ = true;
     struct reset {
       bool &value;
@@ -141,7 +161,7 @@ public:
       resolver.publications().run(this, &reset_slot,
                                   [&] { publish(resolver); });
     } else if (state_ == state::publishing && !published_while_constructed) {
-      throw type_recursion_exception("type recursion");
+      raise_recursion<leaf_of_t<stored_type>>();
     }
     return *object();
   }

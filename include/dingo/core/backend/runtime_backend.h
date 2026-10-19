@@ -20,6 +20,9 @@
 #include <dingo/core/primitives/retained.h>
 #include <dingo/core/primitives/shape.h>
 #include <dingo/core/primitives/slot.h>
+#include <dingo/core/primitives/type_name.h>
+#include <dingo/core/primitives/type_path.h>
+#include <dingo/core/vocabulary/diagnostics.gen.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
 #include <cstddef>
@@ -27,6 +30,7 @@
 #include <memory>
 #include <new>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -47,13 +51,15 @@ public:
   // object. The backend resolves the dependencies of the object.
   using thunk = void *(*)(runtime_entry &, runtime_backend &);
 
+  using name_function = void (*)(std::string &);
+
   runtime_entry(const binding_descriptor &descriptor, const terms &published,
                 std::uint8_t exposed, const completion_plan *plans,
                 const void *const *boundaries, const thunk *thunks,
-                const void *const *makers)
-      : descriptor_(descriptor), published_(published), exposed_(exposed),
-        plans_(plans), boundaries_(boundaries), thunks_(thunks),
-        makers_(makers) {}
+                const void *const *makers, name_function stored_name)
+      : stored_name_(stored_name), descriptor_(descriptor),
+        published_(published), exposed_(exposed), plans_(plans),
+        boundaries_(boundaries), thunks_(thunks), makers_(makers) {}
 
   virtual ~runtime_entry() = default;
 
@@ -61,6 +67,9 @@ public:
   const terms &published() const { return published_; }
   std::uint8_t exposed() const { return exposed_; }
   const completion_plan &plan(std::size_t term) const { return plans_[term]; }
+
+  // Appends the name of the stored type, for diagnostics.
+  void append_stored_name(std::string &text) const { stored_name_(text); }
 
   void *borrow(std::size_t term, runtime_backend &backend) {
     return thunks_[term](*this, backend);
@@ -80,6 +89,7 @@ public:
   }
 
 private:
+  name_function stored_name_;
   const binding_descriptor &descriptor_;
   const terms &published_;
   std::uint8_t exposed_;
@@ -97,7 +107,8 @@ public:
   explicit runtime_binding(Args &&...args)
       : runtime_entry(Binding::descriptor, Binding::published, Binding::exposed,
                       plans(terms_sequence()), boundaries(terms_sequence()),
-                      thunks(terms_sequence()), makers(terms_sequence())),
+                      thunks(terms_sequence()), makers(terms_sequence()),
+                      &append_type_name<typename Binding::stored_type>),
         slot_(std::forward<Args>(args)...) {}
 
 private:
@@ -203,23 +214,59 @@ public:
     for (const auto &entry : entries_) {
       if (finds(entry->descriptor(), request)) {
         if (found != nullptr) {
-          throw type_ambiguous_exception("type ambiguous");
+          raise_ambiguous<Request>();
         }
         found = entry.get();
       }
     }
     if (found == nullptr) {
-      throw type_not_found_exception("type not found");
+      raise_not_found<Request>();
     }
     std::size_t term =
         select_term(found->published(), request, found->exposed());
     if (term == no_term) {
-      throw type_not_convertible_exception("type not convertible");
+      raise_not_convertible<Request>(*found);
     }
     return complete<Request>(*found, term);
   }
 
 private:
+  template <typename Request>
+  [[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE static void raise_not_found() {
+    const std::string request = type_name_of<Request>();
+    if (type_frame::active()) {
+      std::string path;
+      type_frame::append_path(path);
+      raise_type_not_found_required_by(request, path);
+    }
+    raise_type_not_found(request);
+  }
+
+  template <typename Request>
+  [[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE static void raise_ambiguous() {
+    const std::string request = type_name_of<Request>();
+    if (type_frame::active()) {
+      std::string type;
+      type_frame::append_innermost(type);
+      raise_type_ambiguous_required_by(request, type);
+    }
+    raise_type_ambiguous(request);
+  }
+
+  template <typename Request>
+  [[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE static void
+  raise_not_convertible(const runtime_entry &entry) {
+    const std::string request = type_name_of<Request>();
+    std::string stored;
+    entry.append_stored_name(stored);
+    if (type_frame::active()) {
+      std::string type;
+      type_frame::append_innermost(type);
+      raise_type_not_convertible_required_by(request, stored, type);
+    }
+    raise_type_not_convertible(request, stored);
+  }
+
   template <typename Request>
   Request complete(runtime_entry &entry, std::size_t term) {
     using value_type = typename request_traits<Request>::value_type;

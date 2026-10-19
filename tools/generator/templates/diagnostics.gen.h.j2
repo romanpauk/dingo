@@ -1,0 +1,25 @@
+#pragma once
+
+#include <dingo/core/base/config.h>
+#include <dingo/core/base/mechanics.h>
+#include <dingo/core/primitives/exceptions.h>
+#include <dingo/core/primitives/message.h>
+
+#include <string_view>
+
+// The diagnostics of the spec: a function per diagnostic that throws its
+// exception with its message, out of line and in a cold section.
+
+namespace dingo::core {
+{% for diagnostic in diagnostics %}
+
+// spec: diagnostics.{{ diagnostic.id }}
+{% for line in diagnostic.condition_lines %}
+// {{ line }}
+{% endfor %}
+[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void raise_{{ diagnostic.id }}({% for name in diagnostic.placeholders %}std::string_view {{ name }}{{ ", " if not loop.last }}{% endfor %}) {
+  throw ::dingo::{{ diagnostic.exception }}(format_message({{ diagnostic.message }}, { {% for name in diagnostic.placeholders %}{"{{ name }}", {{ name }}}{{ ", " if not loop.last }}{% endfor %} }));
+}
+{% endfor %}
+
+} // namespace dingo::core

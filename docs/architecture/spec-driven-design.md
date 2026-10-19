@@ -1293,9 +1293,18 @@ bindings in runtime and static containers, 23,478 cases including user wrappers,
 registration, service, copies, moves, temporaries, constructions, identity, and
 stability match the reference without exception, and so do the 31,304 cases of
 all four scopes. A static container takes the instance of every external binding
-as a constructor argument. Remaining: the messages of the exceptions, and an
-interface a published leaf inherits virtually, which cannot be reached before
-the leaf is constructed.
+as a constructor argument. A published leaf that would be converted to an
+interface it inherits virtually is rejected.
+
+The exceptions carry the messages of the diagnostics section of the spec, which
+are those of the current implementation: `diagnostics.gen.h` gives every
+diagnostic a function that throws it, out of line and in a cold section. Types
+are named as the current implementation names them, and the path of the types
+whose objects are being constructed is kept per thread by the slots of the
+scopes that guard recursion. The route probes record the message of every
+exception, and `test/routes/messages.py` compares the 6,582 messages both
+implementations produce for the same cases; all of them match. Remaining: the
+compile-time messages of the static container, which are fixed literals.
 
 ### M3: Routes And Storage
 
@@ -1595,3 +1604,7 @@ capability tags.
   `adopt` with a deleter of the wrapper traits, so user sharing handles are
   stored like the standard one. A failed outermost publication resets every slot
   it published.
+
+- 2026-10-20: The messages of the exceptions are a section of the spec, with the
+  wording of the current implementation, and the route probes compare them with
+  the current implementation case by case.

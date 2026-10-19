@@ -695,6 +695,7 @@ class Extraction:
                 "identity": None,
                 "interfaces": ",".join(group.interfaces),
                 "leaf": group.leaf,
+                "message": None,
                 "registration": "ok",
                 "request": request,
                 "resolve": "compile_error",

@@ -311,6 +311,27 @@ struct canonical<Type,
 };
 } // namespace detail
 
+namespace detail {
+template <typename Type, typename = void> struct leaf_of {
+  using type = Type;
+};
+
+// The leaf a layer holds, through its first argument; an alternative holds
+// several, and is its own leaf.
+template <typename Type>
+struct leaf_of<Type,
+               std::enable_if_t<layer_traits<Type>::kind != layer_kind::leaf &&
+                                layer_traits<Type>::kind != layer_kind::alt>> {
+  using type = typename leaf_of<std::remove_cv_t<
+      type_list_at_t<0, typename layer_traits<Type>::arguments>>>::type;
+};
+} // namespace detail
+
+// The leaf of a type, which diagnostics name as the type being constructed.
+template <typename Type>
+using leaf_of_t = typename detail::leaf_of<
+    std::remove_cv_t<std::remove_reference_t<Type>>>::type;
+
 // The type a shape describes: the type with cv-qualification removed at every
 // layer. Two types of the same shape have the same canonical type.
 template <typename Type>

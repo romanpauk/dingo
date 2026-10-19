@@ -106,6 +106,12 @@ The route tools compare what the library does with the route rules of the spec,
   and `conform.py --exact --observed <table>` requires it to match the reference
   implementation with no behavior change applied. The C++ of the probes is in
   the templates under `test/routes/templates/`.
+- [`test/routes/messages.py`](../test/routes/messages.py) compares the exception
+  messages of a table of the next implementation with those of the current one,
+  case by case where both throw the same exception. Every difference must be
+  declared by a behavior change with a `messages:<case id>` pattern. The
+  messages come from the diagnostics section of the spec,
+  `spec/content/diagnostics.py`.
 - [`test/routes/summarize.py`](../test/routes/summarize.py) lists where the
   runtime, static, and mixed containers differ from each other.
 

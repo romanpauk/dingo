@@ -20,6 +20,13 @@
 #include <type_traits>
 #include <utility>
 
+// Places a function in a cold section, where the compiler supports it.
+#if defined(__GNUC__) || defined(__clang__)
+#define DINGO_CORE_COLD __attribute__((cold))
+#else
+#define DINGO_CORE_COLD
+#endif
+
 namespace dingo::core {
 
 template <typename... Types> struct type_list {
