@@ -1,9 +1,10 @@
 """Content of the scope descriptors section.
 
-The descriptors record the storage scope policies of the current
-implementation, include/dingo/storage/{shared,unique,external,shared_cyclical}.h,
-as they are, including the exposure tables per storage form. Unifying them is
-the job of later milestones; a change to a descriptor here is a behavior change.
+The descriptors record the target scope semantics. They start from the storage
+scope policies of the current implementation,
+include/dingo/storage/{shared,unique,external,shared_cyclical}.h, and every
+difference from those policies is a declared behavior change, see
+spec/content/behavior_changes.py.
 """
 
 from spec.schema import (
@@ -22,7 +23,7 @@ LVALUE = RequestCategory.LVALUE
 RVALUE = RequestCategory.RVALUE
 POINTER = RequestCategory.POINTER
 
-ALL_FORMS = (
+STORED_FORMS = (
     "alternative",
     "bounded_array",
     "optional",
@@ -57,7 +58,9 @@ scopes: tuple[Scope, ...] = (
         stable=True,
         source_access=SourceAccess.BORROW,
         guard=RecursionGuard.NONE,
-        exposures=exposures({form: BORROWED for form in ALL_FORMS}),
+        exposures=exposures(
+            {form: BORROWED for form in (*STORED_FORMS, "reference")}
+        ),
         needs=("instance",),
     ),
     Scope(
@@ -72,32 +75,29 @@ scopes: tuple[Scope, ...] = (
         source_access=SourceAccess.BORROW,
         guard=RecursionGuard.WHILE_UNRESOLVED,
         retains_unresolved_source=True,
-        exposures=exposures({form: BORROWED for form in ALL_FORMS}),
+        exposures=exposures({form: BORROWED for form in STORED_FORMS}),
     ),
     Scope(
         id="shared_cyclical",
         description=(
             "Shares one instance like shared, but publishes it before its "
             "dependencies resolve, so instances can depend on each other in a "
-            "cycle. Only the leaf and a sharing handle are published."
+            "cycle. The instance is never copied, a sharing handle to it is."
         ),
         slot=Slot.TWO_PHASE,
         materializes=ValueCategory.LVALUE,
         stable=False,
         source_access=SourceAccess.BORROW,
         guard=RecursionGuard.NONE,
-        exposure_rule=ExposureRule.LEAF,
+        exposure_rule=ExposureRule.HANDLE_COPIES,
         exposures=exposures(
             {
                 "alternative": (LVALUE, POINTER),
-                "bounded_array": (LVALUE, POINTER),
                 "plain": (LVALUE, POINTER),
-                "pointer": (LVALUE, POINTER),
-                "shared_array_handle": BORROWED,
                 "shared_handle": BORROWED,
-                "unbounded_array": (LVALUE, POINTER),
             }
         ),
+        nested_layers=False,
         phases=("publish", "complete"),
     ),
     Scope(
@@ -115,7 +115,7 @@ scopes: tuple[Scope, ...] = (
                 "alternative": (RVALUE,),
                 "bounded_array": (RVALUE, POINTER),
                 "optional": (RVALUE,),
-                "plain": (LVALUE, RVALUE),
+                "plain": (RVALUE,),
                 "pointer": (RVALUE, POINTER),
                 "shared_array_handle": (RVALUE,),
                 "shared_handle": (RVALUE,),

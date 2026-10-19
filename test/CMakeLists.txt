@@ -163,6 +163,14 @@ set_tests_properties(dingo_spec_test PROPERTIES
     ENVIRONMENT
         "PYTHONDONTWRITEBYTECODE=1;DINGO_SPEC_TEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/spec-test")
 
+add_test(NAME dingo_routes_conform_test
+    COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q -p no:cacheprovider
+        ${CMAKE_CURRENT_SOURCE_DIR}/routes/conform_test.py)
+set_tests_properties(dingo_routes_conform_test PROPERTIES
+    LABELS "unit;generator"
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
+
 add_test(NAME dingo_differential_compare_test
     COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q -p no:cacheprovider
         ${CMAKE_CURRENT_SOURCE_DIR}/differential/compare_test.py)

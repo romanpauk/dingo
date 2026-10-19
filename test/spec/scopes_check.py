@@ -5,12 +5,15 @@ spec/content/scopes.py records the storage scope policies of the current
 implementation. This script generates a program that prints, for every scope of
 the spec, the properties of `dingo::storage_scope_policy` and the request
 categories it exposes for every storage form, compiles and runs it, and
-compares the output with the spec. It fails on any difference, so the
-descriptors stay a faithful record of the implementation until a behavior
-change replaces them.
+compares the output with the spec. Every difference must be declared by a
+behavior change of the spec whose `cases` match `scopes:<scope>/<property>`,
+and every behavior change with a `scopes:` pattern must match a difference.
+The reference form is held only by external storage and has no storage_form
+of its own in the implementation, so it is not compared.
 """
 
 import argparse
+import fnmatch
 import os
 import shlex
 import subprocess
@@ -18,6 +21,8 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# Importing the spec writes no bytecode into the source tree.
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import spec  # noqa: E402
@@ -121,7 +126,7 @@ def expected(loaded):
         result[(scope.id, "consumes")] = "1" if consumes else "0"
         result[(scope.id, "guard")] = scope.guard.value
         result[(scope.id, "retains")] = "1" if scope.retains_unresolved_source else "0"
-        exposed = {e.form: e.categories for e in scope.exposures}
+        exposed = {e.form: e.categories for e in scope.exposures if e.form != "reference"}
         for form in CPP_FORMS:
             bits = sum(
                 EXPOSURE_BITS[CATEGORIES[category]]
@@ -144,7 +149,7 @@ def consistency(loaded):
             )
         if set(GUARDS.values()) and scope.guard not in GUARDS.values():
             errors.append(f"{scope.id}: unknown guard {scope.guard}")
-    forms = {form.id for form in loaded.storage_forms}
+    forms = {form.id for form in loaded.storage_forms} - {"reference"}
     if forms != set(CPP_FORMS):
         errors.append(
             f"storage forms {sorted(forms)} differ from the implementation's "
@@ -197,17 +202,37 @@ def main():
 
     want = expected(loaded)
     have = observed(output)
+    changes = [
+        (change.id, [p for p in change.cases if p.startswith("scopes:")])
+        for change in loaded.behavior_changes
+    ]
+    matched = set()
     for key in sorted(want.keys() | have.keys()):
-        if want.get(key) != have.get(key):
-            scope, what = key
+        if want.get(key) == have.get(key):
+            continue
+        scope, what = key
+        path = f"scopes:{scope}/{what}"
+        owners = [
+            change_id
+            for change_id, patterns in changes
+            if any(fnmatch.fnmatchcase(path, p) for p in patterns)
+        ]
+        matched.update(owners)
+        if not owners:
             errors.append(
                 f"{scope}: {what}: spec {want.get(key)}, implementation {have.get(key)}"
             )
+    for change_id, patterns in changes:
+        if patterns and change_id not in matched:
+            errors.append(f"stale behavior change: {change_id}")
     for error in errors:
         print(error, file=sys.stderr)
     if errors:
         return 1
-    print(f"{len(loaded.scopes)} scopes match the implementation")
+    print(
+        f"{len(loaded.scopes)} scopes match the implementation up to "
+        f"{len(matched)} declared behavior changes"
+    )
     return 0
 
 

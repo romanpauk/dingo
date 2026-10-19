@@ -31,6 +31,8 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# Importing the spec writes no bytecode into the source tree.
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import spec as dingo_spec  # noqa: E402

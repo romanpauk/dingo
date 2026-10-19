@@ -14,6 +14,8 @@ from pathlib import Path
 import sys
 
 sys.dont_write_bytecode = True
+# Importing the spec writes no bytecode into the source tree.
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import emitters  # noqa: E402

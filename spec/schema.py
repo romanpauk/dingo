@@ -121,10 +121,17 @@ class Slot(Enum):
 
 
 class ValueCategory(Enum):
-    """The category a stored value materializes as."""
+    """The category of a stored value or of a term a route derives.
+
+    A scope materializes its stored value as an LVALUE, an object requests
+    borrow, or an RVALUE, an object requests consume. Routes also derive
+    PRVALUE terms: fresh values, such as copies and addresses, that serve value
+    requests but never rvalue reference requests.
+    """
 
     LVALUE = "lvalue"
     RVALUE = "rvalue"
+    PRVALUE = "prvalue"
 
 
 class SourceAccess(Enum):
@@ -164,15 +171,16 @@ class RecursionGuard(Enum):
 
 
 class ExposureRule(Enum):
-    """How a scope derives its request lists from the stored shape.
+    """How a scope restricts the routes of its exposed categories.
 
-    FORM publishes the lists of the stored form in the exposed categories. LEAF
-    publishes the leaf itself, and the handle of a sharing form, in the exposed
-    categories, whatever the stored form.
+    FORM applies every route of the exposed categories. HANDLE_COPIES applies
+    them too, except that a copy is made only of a shape whose outer layer is
+    sharing: the object of such a scope may be published before it is
+    complete, so it is never copied, while a sharing handle to it is.
     """
 
     FORM = "form"
-    LEAF = "leaf"
+    HANDLE_COPIES = "handle_copies"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -188,7 +196,8 @@ class Scope(Entity):
     """A storage descriptor: slot, materialized category, stability, access.
 
     `exposures` lists every storage form the scope can store; a form that is
-    not listed cannot be registered in the scope.
+    not listed cannot be registered in the scope. Without `nested_layers`, the
+    shape under the outer layer of a stored form must be a leaf.
     """
 
     description: str
@@ -200,6 +209,7 @@ class Scope(Entity):
     retains_unresolved_source: bool = False
     exposure_rule: ExposureRule = ExposureRule.FORM
     exposures: tuple[Exposure, ...] = ()
+    nested_layers: bool = True
     extends: str | None = None  # scope id
     phases: tuple[str, ...] = ()
     needs: tuple[str, ...] = ()
@@ -243,6 +253,8 @@ class Predicate(Enum):
     STABLE = "stable"
     COPYABLE = "copyable"
     BORROWABLE = "borrowable"
+    ARRAY = "array"
+    ADDRESSABLE = "addressable"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -261,12 +273,19 @@ class Via(Enum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Route(Entity):
-    """A route rule: a derivation from one shape pattern to another."""
+    """A route rule: a derivation from one shape pattern to another.
+
+    The `category` of `from_shape` is the category of the term the rule
+    applies to, and the `category` of `to_shape` that of the term it derives.
+    `exposure` is the request category a scope must expose for the stored form
+    for the rule to apply; a rule without one always applies.
+    """
 
     description: str
     from_shape: ShapePattern
     to_shape: ShapePattern
     access: Access
+    exposure: RequestCategory | None = None
     requires: tuple[Requirement, ...] = ()
     where: tuple[Requirement, ...] = ()
     via: Via | None = None
@@ -549,7 +568,10 @@ class Contract(Entity):
 class BehaviorChange(Entity):
     """An intended difference from the baseline library.
 
-    `cases` are fnmatch patterns over the differential case paths.
+    `cases` are fnmatch patterns over case paths prefixed with the check that
+    observes them: `routes:<domain>/<leaf>/<scope>/<stored>/<request>#<field>`
+    for the route conformance check, and `scopes:<scope>/<property>` for the
+    scope check.
     """
 
     description: str

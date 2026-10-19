@@ -83,6 +83,30 @@ observes. It is a report and does not fail on a violation.
 python3 test/contracts/evaluate.py
 ```
 
+### Route Conformance
+
+The route tools compare what the library does with the route rules of the spec,
+`spec/content/routes.py`, as interpreted by the reference implementation in
+`spec/reference/routes.py`.
+
+- [`test/routes/extract.py`](../test/routes/extract.py) compiles and runs every
+  combination of container, leaf kind, scope, stored shape, and request against
+  the library and records the outcome, the constructions, copies, and moves, and
+  the identity of the result. The GCC table is committed under
+  `test/routes/observed/`; regenerating it takes about two minutes.
+- [`test/routes/conform.py`](../test/routes/conform.py) compares every case with
+  the reference implementation. Every difference must be declared by a behavior
+  change of the spec, `spec/content/behavior_changes.py`, and every declared
+  change must match a difference. The ctest entry `dingo_routes_conform_test`
+  runs it.
+- [`test/routes/summarize.py`](../test/routes/summarize.py) lists where the
+  runtime, static, and mixed containers differ from each other.
+
+```bash
+CXX=g++ python3 test/routes/extract.py --work-dir build/routes
+python3 test/routes/conform.py --summary
+```
+
 ### Scope Check
 
 [`test/spec/scopes_check.py`](../test/spec/scopes_check.py) generates a program

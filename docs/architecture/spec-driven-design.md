@@ -1071,16 +1071,53 @@ every wrapper through the extension point.
 
 #### M1.6: Route Rules
 
-Status: not started.
+Status: in progress.
 
 Specify the route rules with access, stability, cache, and retention.
 
+The spec records 18 route rules over terms of a shape and a value category:
+borrowing through layers, copying, taking addresses, and the consuming rules
+that take, wrap, and transfer ownership. They are described in
+[Route Conformance](../development.md#route-conformance). Remaining: resolution
+through declared interfaces, user wrappers and custom conversion traits, and
+retained conversions with their cache.
+
 #### M1.7: Reference Implementation For Routes
 
-Status: not started.
+Status: in progress.
 
 Implement route derivation in Python, producing the expected outcome, identity,
 and lifetime counts of a request, with spec-level property tests for the rules.
+
+`spec/reference/routes.py` computes registration, service, constructions,
+copies, identity, and stability for a scope, a stored shape, and a request, and
+is checked by property tests over every stored shape of up to two layers. The
+route conformance check compares it with 12,912 cases extracted from the
+baseline in the runtime, static, and mixed containers. Every difference is
+declared by one of 10 behavior changes:
+
+- borrowing is compositional: every reachable object is borrowed and every
+  copyable one copied, through any combination of layers
+- borrowing never moves: no container serves an rvalue reference from a
+  borrowing scope, which the mixed container did
+- consuming is compositional: the element of a consumed optional can be taken,
+  and what is taken can be wrapped or transferred
+- consumed objects are never borrowed: the runtime and mixed containers returned
+  a reference to a destroyed object
+- consuming moves minimally: every container makes the fewest moves any of them
+  makes
+- eager registration checks: static and mixed containers reject a binding their
+  scope cannot store when it is declared
+- shared_cyclical stores flat shapes: a nested sharing handle aborted on an
+  lvalue reference request
+- shared_cyclical stores no pointers: the stored pointer was null
+- shared_cyclical exposes no arrays: the policy exposed them, but no array
+  binding compiled
+- static containers take external instances, following the Open Decisions
+  proposal
+
+Remaining: the subjects of M1.6, and moving the matrix behavior changes of
+`test/differential/behavior_changes.json` into the spec.
 
 ### M2: New Implementation Foundations
 
@@ -1159,6 +1196,10 @@ against the baseline.
 
 Done when the tests pass and every difference from the baseline is either fixed
 or listed in [Open Decisions](#open-decisions).
+
+The baseline side exists: the route extractor and the conformance check of M1.7.
+Remaining: extracting the same table from the new implementation and requiring
+it to match the reference implementation exactly.
 
 ### M4: Lookup And Selection
 
@@ -1335,3 +1376,9 @@ capability tags.
   of handles defined by traits, and concrete wrappers, the standard ones
   included, map to them through the wrapper-traits extension point of the C++
   library, which users extend with their own handles.
+- 2026-10-19: The scope descriptors and route rules of the spec describe the
+  target semantics, not the baseline. Defects of the baseline found by the route
+  extraction, a reference to a destroyed object and two shared_cyclical shapes
+  that abort or publish a null pointer, are fixed in the new implementation and
+  declared as behavior changes. A borrowing scope never serves an rvalue
+  reference, and the minimal move count of any container is the contract.

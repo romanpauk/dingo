@@ -3,7 +3,8 @@
 A storage form classifies a stored shape by its outer layers. The scopes
 publish request lists per form, see spec/content/scopes.py. The forms are those
 of the current implementation's storage_form, described in
-include/dingo/storage/storage_scope_policy.h.
+include/dingo/storage/storage_scope_policy.h, plus the reference form that only
+external storage holds.
 """
 
 from spec.schema import PatternForm, ShapePattern, StorageForm
@@ -42,6 +43,11 @@ storage_forms: tuple[StorageForm, ...] = (
         id="pointer",
         description="A non-owning address of an element.",
         pattern=layer("ptr", variable("T")),
+    ),
+    StorageForm(
+        id="reference",
+        description="An alias of an element owned elsewhere.",
+        pattern=layer("ref", variable("T")),
     ),
     StorageForm(
         id="shared_array_handle",
