@@ -18,7 +18,7 @@ void run_case_{{ index }}() {
     c.register_type<{{ scope }}, dingo::storage<{{ group.stored }}>{{ interfaces }}>({{ group.external_argument }});
   } catch (...) { registration = probe::classify(); }
 {% else %}
-  {{ "dingo::static_container" if group.domain == "static" else "dingo::container" }}<source> c;
+  {{ "dingo::static_container" if group.domain == "static" else "dingo::container" }}<source> c{{ ("(" ~ group.external_argument ~ ")") if group.external_argument else "" }};
 {% endif %}
 {% if guarded %}
 #if !defined(ONLY) || ONLY == {{ index }}

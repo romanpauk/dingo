@@ -443,11 +443,13 @@ def provided_headers(implementation):
     )
 
 
-def render(group, indices, guarded):
+def render(group, indices, guarded, implementation):
     """The program of a group. With guarded the program contains every request
     but a request is compiled only when ONLY is undefined or its index; the
     registration is always compiled. Otherwise it contains exactly the given
-    requests and runs them, starting at argv[1]."""
+    requests and runs them, starting at argv[1]. The instance of an external
+    binding is the argument of its registration, and in the next
+    implementation of the static container that holds it."""
     fields = {
         "domain": group.domain,
         "scope": group.scope,
@@ -456,7 +458,11 @@ def render(group, indices, guarded):
         "declarations": [spell(d, group.leaf) for d in group.shape.declarations],
         "external_argument": (
             spell(group.shape.external, group.leaf)
-            if group.domain == "runtime" and group.scope == "external"
+            if group.scope == "external"
+            and (
+                group.domain == "runtime"
+                or (group.domain == "static" and implementation == "next")
+            )
             else ""
         ),
         "requests": group.requests,
@@ -575,7 +581,7 @@ class Extraction:
         groups = build_groups(domains, pattern)
         for group in groups:
             self.path(group, ".cpp").write_text(
-                render(group, range(len(group.requests)), guarded=True)
+                render(group, range(len(group.requests)), True, self.implementation)
             )
 
         # Registration outcome: the program without any resolve.
@@ -636,7 +642,7 @@ class Extraction:
         executable = self.path(group, ".exe")
         while indices:
             source = self.path(group, ".run.cpp")
-            source.write_text(render(group, indices, guarded=False))
+            source.write_text(render(group, indices, False, self.implementation))
             ok, error = self.toolchain.compile(
                 ["-O0", f"-I{self.work_dir}", str(source), "-o", str(executable)]
             )
@@ -647,7 +653,7 @@ class Extraction:
             failing = []
             for index in indices:
                 source_one = self.path(group, ".one.cpp")
-                source_one.write_text(render(group, [index], guarded=False))
+                source_one.write_text(render(group, [index], False, self.implementation))
                 if not self.toolchain.compile(
                     ["-c", f"-I{self.work_dir}", str(source_one), "-o", os.devnull]
                 )[0]:

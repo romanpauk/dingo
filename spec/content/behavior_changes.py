@@ -278,9 +278,10 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         cases=both("*/external/*#registration"),
         baseline="Static storage must be default constructible, so it is rejected.",
         now=(
-            "The binding is accepted. This follows the proposal in Open Decisions "
-            "and is revised if the decision differs."
+            "The binding is accepted, and the container takes the instance of "
+            "every external binding as a constructor argument, in the order of "
+            "the bindings."
         ),
-        decision=DECISION,
+        decision="docs/architecture/spec-driven-design.md, Decision Log, 2026-10-20",
     ),
 )

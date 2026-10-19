@@ -170,3 +170,21 @@ TEST(next_container, keeps_the_converted_handle_of_an_interface_statically) {
 }
 
 } // namespace
+
+namespace {
+
+TEST(next_container, takes_static_external_instances_in_binding_order) {
+  counted first;
+  std::shared_ptr<impl> second = std::make_shared<impl>();
+  using bindings = dingo::bindings<
+      dingo::bind<scope<dingo::external>, storage<counted &>>,
+      dingo::bind<scope<dingo::shared>, storage<other>>,
+      dingo::bind<scope<dingo::external>, storage<std::shared_ptr<impl>>,
+                  dingo::interfaces<iface>>>;
+  dingo::static_container<bindings> container(first, second);
+  EXPECT_EQ(&container.resolve<counted &>(), &first);
+  EXPECT_EQ(container.resolve<iface *>(), second.get());
+  EXPECT_EQ(container.resolve<std::shared_ptr<iface>>(), second);
+}
+
+} // namespace

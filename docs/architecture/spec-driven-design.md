@@ -879,9 +879,10 @@ from the reference implementation.
 Writing the spec requires one answer for each current asymmetry. Each entry
 records the decision when it is made.
 
-- External scope in static containers. Proposal: the instance is supplied as a
-  container constructor argument. "Static storage must be default constructible"
-  is an implementation limit, not a binding-time constraint. Decision: open.
+- External scope in static containers. Decision: the container takes the
+  instance of every external binding as a constructor argument, in the order of
+  the bindings. "Static storage must be default constructible" is an
+  implementation limit, not a binding-time constraint.
 - Runtime key values against a static table. Proposal: selection over key values
   runs at runtime even when the table is static. Decision: open.
 - Duplicate registrations. Either reject them at registration in both domains or
@@ -1279,9 +1280,9 @@ The route extractor runs against the next implementation with
 reference implementation without behavior changes. For shared and external
 bindings in runtime and static containers, 23,478 cases including user wrappers,
 registration, service, copies, moves, temporaries, constructions, identity, and
-stability match the reference, except for the 3,690 cases of external bindings
-in static containers, an open decision. Remaining: those, the two-phase slot of
-`shared_cyclical`, and the messages of the exceptions.
+stability match the reference without exception. A static container takes the
+instance of every external binding as a constructor argument. Remaining: the
+two-phase slot of `shared_cyclical`, and the messages of the exceptions.
 
 ### M3: Routes And Storage
 
@@ -1568,3 +1569,6 @@ capability tags.
   rvalue reference to an object it constructs refers to an object the container
   keeps, and a binding keeps a converted interface handle in the conversion
   cache of its slot.
+
+- 2026-10-20: A static container takes the instance of every external binding as
+  a constructor argument, in the order of the bindings.

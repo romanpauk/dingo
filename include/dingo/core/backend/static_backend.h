@@ -21,15 +21,45 @@
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
 #include <cstddef>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
 namespace dingo::core {
 
 namespace detail {
-template <std::size_t Index, typename Binding> struct static_holder {
+// The slot of a binding. A binding whose scope needs an instance takes the
+// instance at its position among such bindings, `Ordinal`.
+template <std::size_t Index, typename Binding,
+          bool Instance = info(Binding::scope).needs_instance>
+struct static_holder {
+  template <typename Instances, std::size_t Ordinal>
+  static_holder(Instances & /*instances*/,
+                std::integral_constant<std::size_t, Ordinal> /*ordinal*/) {}
+
   binding_slot<Binding> slot;
 };
+
+template <std::size_t Index, typename Binding>
+struct static_holder<Index, Binding, true> {
+  template <typename Instances, std::size_t Ordinal>
+  static_holder(Instances &instances,
+                std::integral_constant<std::size_t, Ordinal> /*ordinal*/)
+      : slot(std::get<Ordinal>(std::move(instances))) {}
+
+  binding_slot<Binding> slot;
+};
+
+// The number of bindings before `Index` whose scope needs an instance.
+template <typename... Bindings>
+constexpr std::size_t instance_ordinal(std::size_t index) {
+  constexpr bool needs[] = {info(Bindings::scope).needs_instance..., false};
+  std::size_t ordinal = 0;
+  for (std::size_t before = 0; before < index; ++before) {
+    ordinal += needs[before] ? 1 : 0;
+  }
+  return ordinal;
+}
 
 template <typename Indices, typename... Bindings> struct static_holders;
 
@@ -45,7 +75,14 @@ template <std::size_t... Indices, typename... Bindings>
 struct DINGO_EMPTY_BASES
     static_holders<std::index_sequence<Indices...>, Bindings...>
     : static_holder<Indices, Bindings>...,
-      static_retention<(Bindings::consumes || ...)> {};
+      static_retention<(Bindings::consumes || ...)> {
+  template <typename Instances>
+  explicit static_holders(Instances &instances)
+      : static_holder<Indices, Bindings>(
+            instances,
+            std::integral_constant<std::size_t, instance_ordinal<Bindings...>(
+                                                    Indices)>())... {}
+};
 
 inline constexpr std::size_t not_found = static_cast<std::size_t>(-1);
 inline constexpr std::size_t ambiguous = static_cast<std::size_t>(-2);
@@ -72,6 +109,19 @@ template <typename... Bindings> class static_backend {
                 "a binding cannot be stored by its scope");
 
 public:
+  // Takes the instance of every binding whose scope needs one, in the order of
+  // the bindings.
+  template <typename... Instances>
+  explicit static_backend(Instances &&...instances)
+      : static_backend(
+            std::forward_as_tuple(std::forward<Instances>(instances)...), 0) {
+    static_assert(
+        sizeof...(Instances) ==
+            (std::size_t(info(Bindings::scope).needs_instance) + ... + 0),
+        "a static container takes the instance of every external "
+        "binding, in the order of the bindings");
+  }
+
   template <typename Request> Request resolve() {
     if constexpr (sizeof...(Bindings) == 0) {
       static_assert(dependent_false<Request>,
@@ -131,6 +181,10 @@ private:
       return static_cast<Request>(make());
     }
   }
+
+  template <typename Instances>
+  static_backend(Instances &&instances, int /*delegated*/)
+      : holders_(instances) {}
 
   detail::static_holders<std::index_sequence_for<Bindings...>, Bindings...>
       holders_;
