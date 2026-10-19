@@ -71,11 +71,21 @@ template <bool Retains> struct static_retention {
 
 template <> struct static_retention<false> {};
 
+// The publications of two-phase slots are logged only by a container with a
+// two-phase binding.
+template <bool Publishes> struct static_publications {
+  publication_log publications;
+};
+
+template <> struct static_publications<false> {};
+
 template <std::size_t... Indices, typename... Bindings>
 struct DINGO_EMPTY_BASES
     static_holders<std::index_sequence<Indices...>, Bindings...>
     : static_holder<Indices, Bindings>...,
-      static_retention<(Bindings::consumes || ...)> {
+      static_retention<(Bindings::consumes || ...)>,
+      static_publications<(
+          (info(Bindings::scope).storage_slot == slot::two_phase) || ...)> {
   template <typename Instances>
   explicit static_holders(Instances &instances)
       : static_holder<Indices, Bindings>(
@@ -121,6 +131,9 @@ public:
         "a static container takes the instance of every external "
         "binding, in the order of the bindings");
   }
+
+  // The publications of the two-phase slots in progress.
+  publication_log &publications() { return holders_.publications; }
 
   template <typename Request> Request resolve() {
     if constexpr (sizeof...(Bindings) == 0) {

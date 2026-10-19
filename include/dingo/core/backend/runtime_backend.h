@@ -193,6 +193,9 @@ public:
         std::forward<Args>(args)...));
   }
 
+  // The publications of the two-phase slots in progress.
+  publication_log &publications() { return publications_; }
+
   template <typename Request> Request resolve() {
     using traits = request_traits<Request>;
     constexpr request_descriptor request = traits::descriptor;
@@ -325,6 +328,7 @@ private:
   }
 
   retained_objects retained_;
+  publication_log publications_;
   std::vector<std::unique_ptr<runtime_entry>> entries_;
 };
 

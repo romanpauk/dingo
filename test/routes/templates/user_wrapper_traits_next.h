@@ -36,6 +36,11 @@ template <typename T> struct wrapper_traits<user_shared<T>> {
   static user_shared<T> adopt(T *element) {
     return user_shared<T>(std::shared_ptr<T>(element));
   }
+
+  template <typename Deleter>
+  static user_shared<T> adopt(T *element, Deleter deleter) {
+    return user_shared<T>(std::shared_ptr<T>(element, std::move(deleter)));
+  }
 };
 
 template <typename T> struct wrapper_traits<user_unique<T>> {

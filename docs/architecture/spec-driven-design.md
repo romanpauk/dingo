@@ -905,12 +905,13 @@ records the decision when it is made.
 - The wrapper extension point. Decision: `dingo::wrapper_traits`, declared in
   `dingo/type/type_traits.h`, which the standard wrappers specialize too. A
   specialization declares the layer kind, the family, the element types,
-  `rebind`, `element`, and `make`; an owning handle adds `adopt`, and a
-  sole-owner handle `share`, which hands its element to the sharing handle of
-  its family. A handle converts to the handle of an interface by its converting
-  constructor. `dingo::type_traits`, the per-scope `dingo::storage_traits`, and
-  `dingo::is_interface_storage_rebindable_v` leave the public API, declared as
-  the behavior change `wrapper_extension_point`.
+  `rebind`, `element`, and `make`; an owning handle adds `adopt`, a sharing
+  handle a scope publishes before its element exists also adopts an address with
+  a deleter, and a sole-owner handle adds `share`, which hands its element to
+  the sharing handle of its family. A handle converts to the handle of an
+  interface by its converting constructor. `dingo::type_traits`, the per-scope
+  `dingo::storage_traits`, and `dingo::is_interface_storage_rebindable_v` leave
+  the public API, declared as the behavior change `wrapper_extension_point`.
 - Development strategy. Proposal: in the same tree behind
   `DINGO_IMPLEMENTATION=next`, rather than on a long-lived branch. Decision:
   open.
@@ -1277,14 +1278,24 @@ current implementation does. A shared binding keeps the handle of an interface
 converted from its stored handle in the conversion cache of its slot, so a
 request can refer to it.
 
+A shared_cyclical binding publishes its object before it constructs it: a plain
+leaf in its slot, and a sharing handle, a standard or a user one, as a handle
+that adopts a block whose deleter destroys the element only once it is
+constructed. A request during the construction refers to the published object,
+so objects can depend on each other in a cycle; an alternative is not published,
+since reaching its element reads it. When the outermost publication fails, every
+slot published during it is reset, as the current implementation does.
+
 The route extractor runs against the next implementation with
 `--implementation next`, and `conform.py --exact` compares its table with the
 reference implementation without behavior changes. For shared and external
 bindings in runtime and static containers, 23,478 cases including user wrappers,
 registration, service, copies, moves, temporaries, constructions, identity, and
-stability match the reference without exception. A static container takes the
-instance of every external binding as a constructor argument. Remaining: the
-two-phase slot of `shared_cyclical`, and the messages of the exceptions.
+stability match the reference without exception, and so do the 31,304 cases of
+all four scopes. A static container takes the instance of every external binding
+as a constructor argument. Remaining: the messages of the exceptions, and an
+interface a published leaf inherits virtually, which cannot be reached before
+the leaf is constructed.
 
 ### M3: Routes And Storage
 
@@ -1578,3 +1589,9 @@ capability tags.
 - 2026-10-20: The rejection of constant address comparisons under GCC's null and
   nonnull sanitizers is a compiler defect. The compiler variant `named_type_id`
   detects it and compares type identities by name in constant evaluation.
+
+- 2026-10-20: shared_cyclical publishes a plain leaf in its slot and a sharing
+  handle as a handle of a block whose element it constructs later, through the
+  `adopt` with a deleter of the wrapper traits, so user sharing handles are
+  stored like the standard one. A failed outermost publication resets every slot
+  it published.

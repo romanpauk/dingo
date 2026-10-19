@@ -46,7 +46,9 @@ namespace dingo {
 //   element    the element of a wrapper object
 //   make       a wrapper object made from the arguments of its element
 //   adopt      for own and share: a wrapper object that takes the ownership
-//              of the element at an address allocated by new
+//              of the element at an address allocated by new; a sharing
+//              wrapper that a scope publishes before its element exists also
+//              adopts an address with the deleter that frees it
 //   share      for own, when its family has a sharing wrapper: the sharing
 //              wrapper object that takes the element of a consumed one
 //
@@ -124,6 +126,11 @@ template <typename Type> struct wrapper_traits<std::shared_ptr<Type>> {
 
   static std::shared_ptr<Type> adopt(Type *element) {
     return std::shared_ptr<Type>(element);
+  }
+
+  template <typename Deleter>
+  static std::shared_ptr<Type> adopt(Type *element, Deleter deleter) {
+    return std::shared_ptr<Type>(element, std::move(deleter));
   }
 };
 

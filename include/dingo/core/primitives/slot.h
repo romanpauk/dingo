@@ -17,6 +17,7 @@
 #include <new>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace dingo::core {
 
@@ -106,6 +107,72 @@ template <typename Type, std::size_t Extent>
 class external_slot<Type[Extent]> : public external_slot<Type (&)[Extent]> {
 public:
   using external_slot<Type (&)[Extent]>::external_slot;
+};
+
+// The storage of an element a sharing handle publishes before the element is
+// constructed.
+template <typename Type> struct publication_block {
+  alignas(Type) unsigned char storage[sizeof(Type)];
+  bool constructed = false;
+
+  Type *object() { return reinterpret_cast<Type *>(storage); }
+
+  static publication_block *of(Type *object) {
+    return reinterpret_cast<publication_block *>(object);
+  }
+};
+
+// Frees the block of a published element, destroying the element only when
+// it was constructed.
+template <typename Type> struct publication_deleter {
+  void operator()(Type *object) const noexcept {
+    auto *block = publication_block<Type>::of(object);
+    if (block->constructed) {
+      destroy_object(object);
+    }
+    delete block;
+  }
+};
+
+// The slots the outermost publication in progress published, each reset when
+// it fails: an object constructed during it may refer to an object whose
+// construction failed.
+class publication_log {
+public:
+  using reset_function = void (*)(void *) noexcept;
+
+  // Runs `publish`, the publication of `slot`, which `reset` resets.
+  template <typename Publish>
+  void run(void *slot, reset_function reset, Publish &&publish) {
+    entries_.push_back(entry{slot, reset});
+    ++depth_;
+    struct leave {
+      publication_log &log;
+      bool failed = true;
+      ~leave() {
+        if (--log.depth_ == 0) {
+          if (failed) {
+            for (auto it = log.entries_.rbegin(); it != log.entries_.rend();
+                 ++it) {
+              it->reset(it->slot);
+            }
+          }
+          log.entries_.clear();
+        }
+      }
+    } guard{*this};
+    publish();
+    guard.failed = false;
+  }
+
+private:
+  struct entry {
+    void *slot;
+    reset_function reset;
+  };
+
+  std::vector<entry> entries_;
+  std::size_t depth_ = 0;
 };
 
 } // namespace dingo::core
