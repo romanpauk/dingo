@@ -1010,8 +1010,8 @@ changes, and a first generated header is committed.
 
 The generator is described in
 [Generated Code](../development.md#generated-code). The first generated header
-is `include/dingo/core/capabilities.gen.h`, which defines a `DINGO_HAS_*` macro
-per language capability for the mechanics of M2.2. Build ordering after
+is `include/dingo/core/base/capabilities.gen.h`, which defines a `DINGO_HAS_*`
+macro per language capability for the mechanics of M2.2. Build ordering after
 `generate` is verified with Ninja only. The clean-tree CI step has not run on
 GitHub yet.
 
@@ -1155,7 +1155,7 @@ implementation is complete.
 
 #### M2.2: Mechanics
 
-Status: not started.
+Status: done.
 
 Add the mechanics header with capability detection, the language tiers, the
 compiler variants with override macros, the annotation macros, `pack_at`,
@@ -1164,6 +1164,18 @@ and compiler variants in the spec.
 
 Done when no header outside the mechanics header tests a standard version or a
 compiler, and every standard C++ variant is tested in Linux CI.
+
+`include/dingo/core/base/` holds the generated `capabilities.gen.h` and
+`variants.gen.h`, the configuration macros of the public API in `config.h`, and
+`mechanics.h` with the type list, `dependent_false`, and `pack_at_t`. Each
+variant point of the spec gets a `DINGO_VARIANT_*` macro that defaults to its
+capability and can be defined to override it, and every variant the compiler
+accepts is tested: by `dingo_next_test` and by a lit test that forces the
+portable implementation. `fail<>` moves to M5.3, where the diagnostics it
+reports are generated. Compiler variants use the same override macros and arrive
+with the primitives that need them in M2.3. The new implementation has its own
+header layers in `tools/layers.py`, and neither implementation includes the
+other.
 
 #### M2.3: Primitive Layer
 
@@ -1285,7 +1297,8 @@ template.
 Status: not started.
 
 Generate the diagnostics enum, `diag_message`, `diag_literal`, the carrier
-templates, and the exception mapping.
+templates, the exception mapping, and the `fail<>` mechanic that reports a
+diagnostic at compile time.
 
 #### M5.4: Compile-Time Detection Rule
 

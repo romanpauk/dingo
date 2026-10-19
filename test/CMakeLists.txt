@@ -179,6 +179,15 @@ set_tests_properties(dingo_differential_compare_test PROPERTIES
     ENVIRONMENT
         "PYTHONDONTWRITEBYTECODE=1;DINGO_DIFFERENTIAL_TEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/differential-test")
 
+# The tests of the next implementation of the spec-driven design, built against
+# the dingo_next target in every development build.
+add_executable(dingo_next_test
+    next/base/mechanics.cpp
+)
+target_link_libraries(dingo_next_test PRIVATE dingo::next gtest_main)
+add_test(NAME dingo_next_test COMMAND dingo_next_test)
+set_tests_properties(dingo_next_test PROPERTIES LABELS "unit;next")
+
 add_executable(dingo_unit_test
     container/construct_dependency.cpp
     container/container_move.cpp

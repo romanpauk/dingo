@@ -11,9 +11,7 @@ import re
 import sys
 
 LAYERS = [
-    # core hosts the new implementation of the spec-driven design, see
-    # docs/architecture/spec-driven-design.md.
-    ("base", "core"),
+    ("base",),
     ("memory", "rtti", "type"),
     ("resolution", "lookup"),
     ("factory",),
@@ -25,16 +23,36 @@ LAYERS = [
     (".",),
 ]
 
+# core hosts the new implementation of the spec-driven design, see
+# docs/architecture/spec-driven-design.md. Its modules are the directories under
+# core, layered on their own: core includes only core, and the current
+# implementation never includes core.
+CORE_LAYERS = [
+    ("core/base",),
+    ("core/primitives",),
+    ("core/vocabulary",),
+    ("core/engine",),
+    ("core/backend",),
+    ("core/api",),
+]
+
 INCLUDE = re.compile(r"^\s*#\s*include\s*<dingo/([^>]+)>")
 
 
 def module_of(path):
     parts = Path(path).parts
+    if parts[0] == "core":
+        return "/".join(parts[:2]) if len(parts) > 2 else "core"
     return parts[0] if len(parts) > 1 else "."
 
 
+def is_core(module):
+    return module == "core" or module.startswith("core/")
+
+
 def layer_of(module):
-    for index, modules in enumerate(LAYERS):
+    layers = CORE_LAYERS if is_core(module) else LAYERS
+    for index, modules in enumerate(layers):
         if module in modules:
             return index
     return None
@@ -59,6 +77,12 @@ def check(include_directory):
             target = match.group(1)
             target_module = module_of(target)
             target_layer = layer_of(target_module)
+            if is_core(source_module) != is_core(target_module):
+                violations.append(
+                    f"{source}:{number}: {source_module} must not include {target}: "
+                    "the current and the next implementation are independent"
+                )
+                continue
             if target_layer is None:
                 violations.append(
                     f"{source}:{number}: includes {target} of module "

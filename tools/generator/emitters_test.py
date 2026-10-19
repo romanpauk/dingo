@@ -51,7 +51,7 @@ def body():
 
 def test_capabilities_path_and_ids():
     generated = body()
-    assert generated.path == "include/dingo/core/capabilities.gen.h"
+    assert generated.path == "include/dingo/core/base/capabilities.gen.h"
     assert generated.spec_ids == ("cpp.capabilities",)
 
 

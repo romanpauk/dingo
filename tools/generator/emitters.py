@@ -43,7 +43,7 @@ def capability_fields(capability):
 
 
 def capabilities(spec):
-    """include/dingo/core/capabilities.gen.h from cpp.capabilities."""
+    """include/dingo/core/base/capabilities.gen.h from cpp.capabilities."""
     entries = sorted(spec.cpp.capabilities, key=lambda capability: capability.id)
     headers = sorted(
         {capability.header for capability in entries if capability.header}
@@ -55,9 +55,42 @@ def capabilities(spec):
     )
     return [
         GeneratedFile(
-            path="include/dingo/core/capabilities.gen.h",
+            path="include/dingo/core/base/capabilities.gen.h",
             content=content,
             spec_ids=("cpp.capabilities",),
+        )
+    ]
+
+
+def variants(spec):
+    """include/dingo/core/base/variants.gen.h from the language-tier variants.
+
+    Each variant point gets a DINGO_VARIANT_<ID> macro that defaults to the
+    capability selecting it and can be defined to override the selection.
+    """
+    capability_ids = {capability.id for capability in spec.cpp.capabilities}
+    fields = []
+    for point in sorted(spec.variant_points, key=lambda p: p.id):
+        if point.kind.value != "language_tier":
+            continue
+        if point.capability not in capability_ids:
+            raise GeneratorError(
+                f"variant_points.{point.id}: capability {point.capability!r} "
+                "does not exist"
+            )
+        fields.append(
+            {
+                "spec_id": f"variant_points.{point.id}",
+                "macro": f"DINGO_VARIANT_{point.id.upper()}",
+                "capability_macro": f"DINGO_HAS_{point.capability.upper()}",
+                "justification_lines": point.justification.strip().splitlines(),
+            }
+        )
+    return [
+        GeneratedFile(
+            path="include/dingo/core/base/variants.gen.h",
+            content=render("variants.gen.h.j2", variants=fields),
+            spec_ids=("variant_points",),
         )
     ]
 
@@ -93,4 +126,4 @@ def next_overlay(spec):
     return files
 
 
-EMITTERS = (capabilities, next_overlay)
+EMITTERS = (capabilities, variants, next_overlay)

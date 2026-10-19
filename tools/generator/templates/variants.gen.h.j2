@@ -1,0 +1,14 @@
+#pragma once
+
+#include <dingo/core/base/capabilities.gen.h>
+{% for variant in variants %}
+
+// spec: {{ variant.spec_id }}
+{% for line in variant.justification_lines %}
+// {{ line }}
+{% endfor %}
+// Defaults to {{ variant.capability_macro }}; define it to 0 or 1 to override.
+#if !defined({{ variant.macro }})
+#define {{ variant.macro }} {{ variant.capability_macro }}
+#endif
+{% endfor %}
