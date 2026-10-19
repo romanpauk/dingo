@@ -101,6 +101,11 @@ The route tools compare what the library does with the route rules of the spec,
   change of the spec, `spec/content/behavior_changes.py`, and every declared
   change must match a difference. The ctest entry `dingo_routes_conform_test`
   runs it when a table has been extracted.
+- With `--implementation next`, the extractor probes the next implementation
+  through `include/next` and writes the table to `build/routes/observed-next/`,
+  and `conform.py --exact --observed <table>` requires it to match the reference
+  implementation with no behavior change applied. The C++ of the probes is in
+  the templates under `test/routes/templates/`.
 - [`test/routes/summarize.py`](../test/routes/summarize.py) lists where the
   runtime, static, and mixed containers differ from each other.
 

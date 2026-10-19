@@ -1,0 +1,14 @@
+#pragma once
+
+// The prelude of the route probes for the {{ implementation }} implementation.
+{% for header in headers %}
+#include <{{ header }}>
+{% endfor %}
+
+#include <cstdlib>
+
+#include "probe_types.h"
+{% if user_wrappers %}
+#include "user_wrapper_traits.h"
+{% endif %}
+#include "probe_run.h"

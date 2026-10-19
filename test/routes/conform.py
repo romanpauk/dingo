@@ -26,8 +26,11 @@ otherwise.
 The table is extracted into the build tree, not committed. Without --observed,
 the single table under build/routes/observed is used.
 
+With --exact, the table is of the next implementation, which implements the
+reference without behavior changes: every difference fails, grouped by pattern.
+
 Usage:
-    conform.py [--observed FILE] [--report FILE] [--summary]
+    conform.py [--observed FILE] [--report FILE] [--summary] [--exact]
 """
 
 import argparse
@@ -280,6 +283,11 @@ def main_with(argv):
     parser.add_argument(
         "--summary", action="store_true", help="group the differences by pattern"
     )
+    parser.add_argument(
+        "--exact",
+        action="store_true",
+        help="no behavior change applies: the table is of the next implementation",
+    )
     args = parser.parse_args(argv)
 
     observed = args.observed or default_observed()
@@ -296,10 +304,14 @@ def main_with(argv):
     rows = [json.loads(line) for line in observed.read_text().splitlines()]
     differences = compare(rows, model)
 
-    changes = [
-        (change, [p for p in change.cases if p.startswith("routes:")])
-        for change in loaded.behavior_changes
-    ]
+    changes = (
+        []
+        if args.exact
+        else [
+            (change, [p for p in change.cases if p.startswith("routes:")])
+            for change in loaded.behavior_changes
+        ]
+    )
     matched = collections.Counter()
     undeclared = []
     for difference in differences:

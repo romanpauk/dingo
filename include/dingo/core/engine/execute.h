@@ -143,7 +143,8 @@ decltype(auto) walk_step(Value &&value) {
                        rule.from_category == value_category::lvalue) {
     return continue_with<Binding, Term, Steps, Step>(
         [&] { return std::addressof(value); });
-  } else if constexpr (rule.from_layer == layer_kind::array &&
+  } else if constexpr ((rule.from_layer == layer_kind::array ||
+                        rule.from_layer == layer_kind::array_unbounded) &&
                        rule.to_layer == layer_kind::ptr &&
                        rule.from_category == value_category::lvalue) {
     return continue_with<Binding, Term, Steps, Step>([&] { return &value[0]; });
@@ -164,7 +165,8 @@ constexpr std::size_t binding_steps() {
   } else {
     constexpr rule_id last = route.rules[route.rule_count - 1];
     if constexpr (last == rule_id::copy || last == rule_id::address_of ||
-                  last == rule_id::decay_array) {
+                  last == rule_id::decay_array ||
+                  last == rule_id::decay_unbounded_array) {
       return route.rule_count - 1;
     } else {
       return route.rule_count;

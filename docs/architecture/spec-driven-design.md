@@ -901,6 +901,13 @@ records the decision when it is made.
 - Location of the new implementation. Decision: `include/dingo/core/`, its final
   location, so the switch deletes the current internals without moving the new
   ones. It is a layer-0 module until the primitive layer of M2.3 refines it.
+- The wrapper extension point. The current `dingo::type_traits` passes the
+  internal factory, context, and type descriptors of the current implementation
+  to `resolve_type`, does not tell a sharing handle from a sole-owner one, and
+  needs a `storage_traits` specialization per scope beside it. Proposal: a
+  smaller public extension point with the layer kind, the wrapper family, the
+  argument types, `rebind`, `element`, and `make`, which the standard wrappers
+  use as well, declared as a change of the public API. Decision: open.
 - Development strategy. Proposal: in the same tree behind
   `DINGO_IMPLEMENTATION=next`, rather than on a long-lived branch. Decision:
   open.
@@ -1231,10 +1238,18 @@ it, and a shared value is copied once in both backends. `core/api` holds the
 facade of `dingo/container.h`, `dingo/static_container.h`, and the scope
 headers, with the registration vocabulary and the public exceptions, and the
 scope tags are generated from the spec. `dingo_next_test` exercises it through
-the public include paths. Remaining: the walk of the consuming, creating, and
-converting rules, the conversion cache of the kept interface handle, external
-bindings in static containers, the messages of the exceptions, and running the
-route extractor against the next implementation.
+the public include paths.
+
+The route extractor runs against the next implementation with
+`--implementation next`, and `conform.py --exact` compares its table with the
+reference implementation without behavior changes. For shared and external
+bindings in runtime and static containers, 10,324 cases, registration, service,
+copies, constructions, identity, and stability match the reference, except for
+2,538 cases of the two subjects not provided yet: external bindings in static
+containers and the kept sharing handle of an interface, which needs the
+conversion cache. Remaining: those two, the walk of the consuming, creating, and
+converting rules, the messages of the exceptions, and user wrappers, whose
+public extension point is an open decision.
 
 ### M3: Routes And Storage
 

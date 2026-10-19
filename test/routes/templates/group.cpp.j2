@@ -1,0 +1,39 @@
+{%- set scope = "dingo::scope<dingo::" ~ group.scope ~ ">" -%}
+{%- set interfaces = (", dingo::interfaces<" ~ group.interfaces | join(", ") ~ ">") if group.interfaces else "" -%}
+#include "prelude.h"
+
+{% if group.domain != "runtime" %}
+using source = dingo::bindings<dingo::bind<{{ scope }}, dingo::storage<{{ group.stored }}>{{ interfaces }}>>;
+
+{% endif %}
+{% for index in selected %}
+void run_case_{{ index }}() {
+{% for declaration in group.declarations %}
+  {{ declaration }}
+{% endfor %}
+  std::string registration = "ok";
+{% if group.domain == "runtime" %}
+  dingo::container<> c;
+  try {
+    c.register_type<{{ scope }}, dingo::storage<{{ group.stored }}>{{ interfaces }}>({{ group.external_argument }});
+  } catch (...) { registration = probe::classify(); }
+{% else %}
+  {{ "dingo::static_container" if group.domain == "static" else "dingo::container" }}<source> c;
+{% endif %}
+{% if guarded %}
+#if !defined(ONLY) || ONLY == {{ index }}
+{% endif %}
+  probe::run<{{ group.requests[index] }}>({{ index }}, c, registration);
+{% if guarded %}
+#endif
+{% endif %}
+}
+
+{% endfor %}
+int main(int argc, char **argv) {
+  int from = argc > 1 ? std::atoi(argv[1]) : 0;
+{% for index in selected %}
+  if (from <= {{ index }}) run_case_{{ index }}();
+{% endfor %}
+  return 0;
+}

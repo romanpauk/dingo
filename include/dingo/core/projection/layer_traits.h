@@ -87,6 +87,31 @@ template <typename Type> struct layer_traits<std::unique_ptr<Type>> {
   }
 };
 
+// A handle of an array of runtime size: its element is the array.
+template <typename Type> struct layer_traits<std::unique_ptr<Type[]>> {
+  static constexpr layer_kind kind = layer_kind::own;
+  using family = standard_family;
+  using arguments = type_list<Type[]>;
+  template <typename Element> using rebind = std::unique_ptr<Element>;
+  using array_type = Type[];
+
+  static array_type &element(const std::unique_ptr<Type[]> &value) {
+    return *reinterpret_cast<array_type *>(value.get());
+  }
+};
+
+template <typename Type> struct layer_traits<std::shared_ptr<Type[]>> {
+  static constexpr layer_kind kind = layer_kind::share;
+  using family = standard_family;
+  using arguments = type_list<Type[]>;
+  template <typename Element> using rebind = std::shared_ptr<Element>;
+  using array_type = Type[];
+
+  static array_type &element(const std::shared_ptr<Type[]> &value) {
+    return *reinterpret_cast<array_type *>(value.get());
+  }
+};
+
 template <typename Type> struct layer_traits<std::shared_ptr<Type>> {
   static constexpr layer_kind kind = layer_kind::share;
   using family = standard_family;

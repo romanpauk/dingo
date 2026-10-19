@@ -63,6 +63,7 @@ public:
       return completion::copy;
     case rule_id::address_of:
     case rule_id::decay_array:
+    case rule_id::decay_unbounded_array:
       return completion::address;
     default:
       return completion::construct;

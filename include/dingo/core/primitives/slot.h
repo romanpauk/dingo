@@ -9,6 +9,7 @@
 
 // Lifetime slots: where a binding keeps its object.
 
+#include <cstddef>
 #include <memory>
 #include <new>
 #include <type_traits>
@@ -59,8 +60,8 @@ private:
   bool constructed_ = false;
 };
 
-// Holds an object supplied by the caller: a reference is kept as an address,
-// any other object by value.
+// Holds an object supplied by the caller: a reference and an array are kept
+// as the address of the caller's object, any other object by value.
 template <typename Type> class external_slot {
 public:
   template <typename Instance>
@@ -81,6 +82,12 @@ public:
 
 private:
   Type *instance_;
+};
+
+template <typename Type, std::size_t Extent>
+class external_slot<Type[Extent]> : public external_slot<Type (&)[Extent]> {
+public:
+  using external_slot<Type (&)[Extent]>::external_slot;
 };
 
 } // namespace dingo::core

@@ -107,6 +107,8 @@ import re
 import shlex
 import signal
 import subprocess
+
+import jinja2
 import sys
 import time
 from dataclasses import dataclass, field
@@ -359,645 +361,7 @@ def case_id(domain, leaf, scope, stored, request, interfaces=()):
 # Generated C++.
 # ---------------------------------------------------------------------------
 
-PRELUDE = r"""#pragma once
-#include <dingo/base/exceptions.h>
-#include <dingo/container.h>
-#include <dingo/static_container.h>
-#include <dingo/storage/external.h>
-#include <dingo/storage/shared.h>
-#include <dingo/storage/shared_cyclical.h>
-#include <dingo/storage/type_storage_traits.h>
-#include <dingo/storage/unique.h>
-#include <dingo/type/type_conversion_traits.h>
-#include <dingo/type/type_traits.h>
 
-#include <cstdio>
-#include <cstdlib>
-#include <exception>
-#include <map>
-#include <memory>
-#include <optional>
-#include <string>
-#include <type_traits>
-#include <utility>
-#include <variant>
-
-namespace probe {
-struct state {
-  unsigned long def = 0, copy = 0, move = 0, dtor = 0, seq = 0;
-  std::map<const void *, unsigned long> live;
-};
-inline state &st() {
-  static state &s = *new state;
-  return s;
-}
-inline void created(const void *p) { st().live[p] = ++st().seq; }
-// An address that reaches the same instance as p, such as an interface subobject.
-inline void alias(const void *a, const void *p) { st().live[a] = st().live[p]; }
-inline void destroyed(const void *p) {
-  st().live.erase(p);
-  ++st().dtor;
-}
-inline void unalias(const void *a) { st().live.erase(a); }
-} // namespace probe
-
-struct other_leaf {
-  other_leaf() {}
-};
-
-struct leaf {
-  leaf() { probe::created(this); ++probe::st().def; }
-  leaf(const leaf &) { probe::created(this); ++probe::st().copy; }
-  leaf(leaf &&) noexcept { probe::created(this); ++probe::st().move; }
-  leaf &operator=(const leaf &) = default;
-  leaf &operator=(leaf &&) = default;
-  ~leaf() { probe::destroyed(this); }
-};
-
-struct move_only_leaf {
-  move_only_leaf() { probe::created(this); ++probe::st().def; }
-  move_only_leaf(const move_only_leaf &) = delete;
-  move_only_leaf(move_only_leaf &&) noexcept { probe::created(this); ++probe::st().move; }
-  move_only_leaf &operator=(const move_only_leaf &) = delete;
-  move_only_leaf &operator=(move_only_leaf &&) = default;
-  ~move_only_leaf() { probe::destroyed(this); }
-};
-
-// Two polymorphic interfaces and the instrumented implementation of both.
-struct iface {
-  virtual ~iface() = default;
-  virtual int first() const = 0;
-};
-
-struct other_iface {
-  virtual ~other_iface() = default;
-  virtual int second() const = 0;
-};
-
-struct impl : iface, other_iface {
-  impl() {
-    probe::created(this);
-    alias();
-    ++probe::st().def;
-  }
-  impl(const impl &) : iface(), other_iface() {
-    probe::created(this);
-    alias();
-    ++probe::st().copy;
-  }
-  impl(impl &&) noexcept : iface(), other_iface() {
-    probe::created(this);
-    alias();
-    ++probe::st().move;
-  }
-  impl &operator=(const impl &) = default;
-  impl &operator=(impl &&) = default;
-  ~impl() override {
-    probe::unalias(static_cast<other_iface *>(this));
-    probe::destroyed(this);
-  }
-  int first() const override { return 1; }
-  int second() const override { return 2; }
-
-private:
-  void alias() {
-    probe::alias(static_cast<iface *>(this), this);
-    probe::alias(static_cast<other_iface *>(this), this);
-  }
-};
-
-// User wrappers, made known to dingo the way test/support/custom_wrappers.h
-// does: a sole-owner handle, a sharing handle, and an optional-like value.
-template <typename T> class user_unique;
-template <typename T> class user_shared;
-template <typename T> class user_optional;
-
-template <typename T> class user_shared {
-public:
-  user_shared() = default;
-  explicit user_shared(std::shared_ptr<T> ptr) : ptr_(std::move(ptr)) {}
-
-  template <typename U,
-            typename = std::enable_if_t<std::is_convertible_v<U *, T *>>>
-  user_shared(user_unique<U> &&other) : ptr_(std::move(other).native()) {}
-
-  T *get() const { return ptr_.get(); }
-  void reset() { ptr_.reset(); }
-  explicit operator bool() const { return static_cast<bool>(ptr_); }
-  const std::shared_ptr<T> &native() const & { return ptr_; }
-  std::shared_ptr<T> &&native() && { return std::move(ptr_); }
-
-private:
-  std::shared_ptr<T> ptr_;
-};
-
-template <typename T> class user_unique {
-public:
-  user_unique() = default;
-  explicit user_unique(std::unique_ptr<T> ptr) : ptr_(std::move(ptr)) {}
-
-  template <typename U,
-            typename = std::enable_if_t<std::is_convertible_v<U *, T *>>>
-  user_unique(user_unique<U> &&other) : ptr_(std::move(other).native()) {}
-
-  T *get() const { return ptr_.get(); }
-  void reset() { ptr_.reset(); }
-  explicit operator bool() const { return static_cast<bool>(ptr_); }
-  std::unique_ptr<T> &&native() && { return std::move(ptr_); }
-
-private:
-  std::unique_ptr<T> ptr_;
-};
-
-template <typename T> class user_optional {
-public:
-  user_optional() = default;
-  explicit user_optional(T value) : value_(std::move(value)) {}
-  template <typename... Args>
-  explicit user_optional(std::in_place_t, Args &&...args)
-      : value_(std::in_place, std::forward<Args>(args)...) {}
-  user_optional(const user_optional &) = default;
-  user_optional(user_optional &&) = default;
-
-  user_optional &operator=(const user_optional &other) {
-    if (other.value_) {
-      value_.emplace(*other.value_);
-    } else {
-      value_.reset();
-    }
-    return *this;
-  }
-
-  user_optional &operator=(user_optional &&other) {
-    if (other.value_) {
-      value_.emplace(std::move(*other.value_));
-    } else {
-      value_.reset();
-    }
-    return *this;
-  }
-
-  T *get() { return value_ ? std::addressof(*value_) : nullptr; }
-  const T *get() const { return value_ ? std::addressof(*value_) : nullptr; }
-  void reset() { value_.reset(); }
-  bool has_value() const { return value_.has_value(); }
-
-private:
-  std::optional<T> value_;
-};
-
-namespace dingo {
-namespace probe_detail {
-template <typename T, template <typename...> class Template>
-struct is_instance : std::false_type {};
-
-template <template <typename...> class Template, typename... Args>
-struct is_instance<Template<Args...>, Template> : std::true_type {};
-} // namespace probe_detail
-
-template <typename T> struct type_traits<user_shared<T>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = true;
-  static constexpr bool is_owning_handle = true;
-
-  template <typename> static constexpr bool is_handle_rebindable = true;
-
-  using value_type = T;
-
-  template <typename U> using rebind_t = user_shared<U>;
-
-  template <typename Target>
-  static constexpr bool is_rebindable =
-      probe_detail::is_instance<std::remove_cv_t<Target>, user_shared>::value;
-
-  static T *get(user_shared<T> &wrapper) { return wrapper.get(); }
-  static const T *get(const user_shared<T> &wrapper) { return wrapper.get(); }
-  static T &borrow(user_shared<T> &wrapper) { return *wrapper.get(); }
-  static const T &borrow(const user_shared<T> &wrapper) {
-    return *wrapper.get();
-  }
-  static bool empty(const user_shared<T> &wrapper) { return !wrapper.get(); }
-  static void reset(user_shared<T> &wrapper) { wrapper.reset(); }
-
-  // A wrapped wrapper is made through its own traits, as the std handles do;
-  // a plain new T would leave it empty.
-  template <typename... Args> static user_shared<T> make(Args &&...args) {
-    if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
-      return user_shared<T>(
-          std::make_shared<T>(type_traits<T>::make(std::forward<Args>(args)...)));
-    else if constexpr (std::is_constructible_v<T, Args...>)
-      return user_shared<T>(std::make_shared<T>(std::forward<Args>(args)...));
-    else
-      return user_shared<T>(
-          std::shared_ptr<T>(new T{std::forward<Args>(args)...}));
-  }
-
-  static user_shared<T> from_pointer(T *ptr) {
-    return user_shared<T>(std::shared_ptr<T>(ptr));
-  }
-
-  template <typename TargetWrapper, typename Factory, typename Context>
-  static TargetWrapper &resolve_type(Factory &factory, Context &context,
-                                     type_descriptor, type_descriptor) {
-    return factory.template resolve<TargetWrapper>(context);
-  }
-};
-
-template <typename T> struct type_traits<user_unique<T>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = true;
-  static constexpr bool is_value_borrowable = true;
-  static constexpr bool is_owning_handle = true;
-
-  template <typename> static constexpr bool is_handle_rebindable = true;
-
-  using value_type = T;
-
-  template <typename U> using rebind_t = user_unique<U>;
-
-  template <typename Target>
-  static constexpr bool is_rebindable = std::is_same_v<Target, rebind_t<T>>;
-
-  static T *get(user_unique<T> &wrapper) { return wrapper.get(); }
-  static const T *get(const user_unique<T> &wrapper) { return wrapper.get(); }
-  static T &borrow(user_unique<T> &wrapper) { return *wrapper.get(); }
-  static const T &borrow(const user_unique<T> &wrapper) {
-    return *wrapper.get();
-  }
-  static bool empty(const user_unique<T> &wrapper) { return !wrapper.get(); }
-  static void reset(user_unique<T> &wrapper) { wrapper.reset(); }
-
-  template <typename... Args> static user_unique<T> make(Args &&...args) {
-    if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
-      return user_unique<T>(std::unique_ptr<T>(
-          new T(type_traits<T>::make(std::forward<Args>(args)...))));
-    else if constexpr (std::is_constructible_v<T, Args...>)
-      return user_unique<T>(
-          std::unique_ptr<T>(new T(std::forward<Args>(args)...)));
-    else
-      return user_unique<T>(
-          std::unique_ptr<T>(new T{std::forward<Args>(args)...}));
-  }
-
-  static user_unique<T> from_pointer(T *ptr) {
-    return user_unique<T>(std::unique_ptr<T>(ptr));
-  }
-
-  template <typename TargetWrapper, typename Factory, typename Context>
-  static TargetWrapper &resolve_type(Factory &factory, Context &context,
-                                     type_descriptor requested_type,
-                                     type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetWrapper, rebind_t<T>>) {
-      return factory.resolve(context);
-    } else {
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
-    }
-  }
-};
-
-template <typename T> struct type_traits<user_optional<T>> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = false;
-  static constexpr bool is_value_borrowable = true;
-  static constexpr bool is_owning_handle = false;
-
-  template <typename> static constexpr bool is_handle_rebindable = false;
-
-  using value_type = T;
-
-  template <typename U> using rebind_t = user_optional<U>;
-
-  template <typename Target>
-  static constexpr bool is_rebindable = std::is_same_v<Target, rebind_t<T>>;
-
-  static T *get(user_optional<T> &wrapper) { return wrapper.get(); }
-  static const T *get(const user_optional<T> &wrapper) { return wrapper.get(); }
-  static T &borrow(user_optional<T> &wrapper) { return *wrapper.get(); }
-  static const T &borrow(const user_optional<T> &wrapper) {
-    return *wrapper.get();
-  }
-  static bool empty(const user_optional<T> &wrapper) {
-    return !wrapper.has_value();
-  }
-  static void reset(user_optional<T> &wrapper) { wrapper.reset(); }
-
-  template <typename Value> static user_optional<T> wrap(Value &&value) {
-    return user_optional<T>(std::in_place, std::forward<Value>(value));
-  }
-
-  static user_optional<T> make_empty() { return {}; }
-
-  template <typename... Args> static user_optional<T> make(Args &&...args) {
-    if constexpr (type_traits<T>::enabled && !std::is_pointer_v<T>)
-      return user_optional<T>(
-          std::in_place, type_traits<T>::make(std::forward<Args>(args)...));
-    else if constexpr (std::is_constructible_v<T, Args...>)
-      return user_optional<T>(std::in_place, std::forward<Args>(args)...);
-    else
-      return user_optional<T>(std::in_place, T{std::forward<Args>(args)...});
-  }
-
-  template <typename TargetWrapper, typename Factory, typename Context>
-  static TargetWrapper &resolve_type(Factory &factory, Context &context,
-                                     type_descriptor requested_type,
-                                     type_descriptor registered_type) {
-    if constexpr (std::is_same_v<TargetWrapper, rebind_t<T>>) {
-      return factory.resolve(context);
-    } else {
-      throw detail::make_type_not_convertible_exception(
-          requested_type, registered_type, context);
-    }
-  }
-};
-
-// What each scope publishes for a user wrapper is written the way the built-in
-// cell of the matching handle form is: user_shared like std::shared_ptr,
-// user_unique like std::unique_ptr, user_optional like std::optional. The stored
-// handle and the handles it wraps are published through rebind_leaf, so a
-// wrapped wrapper is reachable as it is for the std handles.
-namespace probe_detail {
-template <typename Handle, typename U> struct handle_cell {
-private:
-  using rebound = detail::wrapper_rebind_leaf_t<Handle, U>;
-  using types = detail::wrapper_storage_types<rebound>;
-
-public:
-  using rebound_type = rebound;
-  using value_types = type_list_unique_t<
-      type_list_cat_t<type_list<U>, typename types::copyable_value_types>>;
-  using lvalue_reference_types = typename types::lvalue_reference_types;
-  using pointer_types = typename types::pointer_types;
-};
-} // namespace probe_detail
-
-template <typename T, typename U>
-struct storage_traits<unique, user_shared<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types =
-      type_list<detail::wrapper_rebind_leaf_t<user_shared<T>, U> &&>;
-  using pointer_types = type_list<>;
-};
-
-template <typename T, typename U>
-struct storage_traits<shared, user_shared<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using cell = probe_detail::handle_cell<user_shared<T>, U>;
-  using value_types = typename cell::value_types;
-  using lvalue_reference_types = typename cell::lvalue_reference_types;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = typename cell::pointer_types;
-};
-
-template <typename T, typename U>
-struct storage_traits<external, user_shared<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using cell = probe_detail::handle_cell<user_shared<T>, U>;
-  using value_types = typename cell::value_types;
-  using lvalue_reference_types = typename cell::lvalue_reference_types;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = typename cell::pointer_types;
-};
-
-template <typename T, typename U>
-struct storage_traits<unique, user_unique<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types =
-      type_list<detail::wrapper_rebind_leaf_t<user_unique<T>, U> &&,
-                user_shared<detail::wrapper_rebind_leaf_t<T, U>> &&>;
-  using pointer_types = type_list<>;
-};
-
-template <typename T, typename U>
-struct storage_traits<shared, user_unique<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using cell = probe_detail::handle_cell<user_unique<T>, U>;
-  using value_types = type_list<U>;
-  using lvalue_reference_types = typename cell::lvalue_reference_types;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = typename cell::pointer_types;
-};
-
-template <typename T, typename U>
-struct storage_traits<external, user_unique<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using cell = probe_detail::handle_cell<user_unique<T>, U>;
-  using value_types = type_list<U>;
-  using lvalue_reference_types = typename cell::lvalue_reference_types;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = typename cell::pointer_types;
-};
-
-template <typename T, typename U>
-struct storage_traits<unique, user_optional<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = false;
-
-  using value_types = type_list<>;
-  using lvalue_reference_types = type_list<>;
-  using rvalue_reference_types = type_list<user_optional<T> &&>;
-  using pointer_types = type_list<>;
-};
-
-template <typename T, typename U>
-struct storage_traits<shared, user_optional<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using value_types = type_list<U>;
-  using lvalue_reference_types =
-      type_list<U &, exact_lookup<user_optional<T>> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *, exact_lookup<user_optional<T>> *>;
-};
-
-template <typename T, typename U>
-struct storage_traits<external, user_optional<T>, U> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_stable = true;
-
-  using value_types = type_list<U>;
-  using lvalue_reference_types =
-      type_list<U &, exact_lookup<user_optional<T>> &>;
-  using rvalue_reference_types = type_list<>;
-  using pointer_types = type_list<U *, exact_lookup<user_optional<T>> *>;
-};
-
-template <typename T, typename U>
-struct type_conversion_traits<
-    user_shared<U>, user_shared<T>,
-    std::enable_if_t<std::is_convertible_v<T *, U *>>> {
-  template <typename Source>
-  using required_access =
-      std::conditional_t<std::is_rvalue_reference_v<Source>, consume, borrow>;
-
-  static user_shared<U> convert(const user_shared<T> &source) {
-    return user_shared<U>(std::static_pointer_cast<U>(source.native()));
-  }
-
-  static user_shared<U> convert(user_shared<T> &&source) {
-    return user_shared<U>(
-        std::static_pointer_cast<U>(std::move(source).native()));
-  }
-};
-} // namespace dingo
-
-namespace probe {
-template <typename T>
-inline constexpr bool is_leaf_v =
-    std::is_same_v<std::remove_cv_t<T>, leaf> ||
-    std::is_same_v<std::remove_cv_t<T>, move_only_leaf> ||
-    std::is_same_v<std::remove_cv_t<T>, impl>;
-
-// An interface reference reaches an instance through its aliased address.
-template <typename T>
-inline constexpr bool is_interface_v =
-    std::is_same_v<std::remove_cv_t<T>, iface> ||
-    std::is_same_v<std::remove_cv_t<T>, other_iface>;
-
-// The address of the leaf a result reaches, or null for an empty handle.
-template <typename X> const void *reach(const X &x) {
-  using U = std::remove_cv_t<X>;
-  if constexpr (is_leaf_v<U> || is_interface_v<U>) {
-    return &x;
-  } else if constexpr (std::is_array_v<U>) {
-    return reach(x[0]);
-  } else if constexpr (std::is_pointer_v<U>) {
-    return x ? reach(*x) : nullptr;
-  } else if constexpr (std::is_same_v<U, std::optional<leaf>> ||
-                       std::is_same_v<U, std::optional<move_only_leaf>> ||
-                       std::is_same_v<U, std::optional<impl>>) {
-    return x ? reach(*x) : nullptr;
-  } else if constexpr (requires { x.get(); }) {
-    return reach(x.get());
-  } else if constexpr (requires { x.has_value(); }) {
-    return x ? reach(*x) : nullptr;
-  } else {
-    return std::visit(
-        [](const auto &v) -> const void * {
-          if constexpr (is_leaf_v<std::remove_cvref_t<decltype(v)>>)
-            return &v;
-          else
-            return nullptr;
-        },
-        x);
-  }
-}
-
-inline std::string classify() {
-  try {
-    throw;
-  } catch (const dingo::type_not_found_exception &) {
-    return "type_not_found_exception";
-  } catch (const dingo::type_not_convertible_exception &) {
-    return "type_not_convertible_exception";
-  } catch (const dingo::type_ambiguous_exception &) {
-    return "type_ambiguous_exception";
-  } catch (const dingo::type_recursion_exception &) {
-    return "type_recursion_exception";
-  } catch (const dingo::lookup_already_registered_exception &) {
-    return "lookup_already_registered_exception";
-  } catch (const dingo::type_index_out_of_range_exception &) {
-    return "type_index_out_of_range_exception";
-  } catch (const dingo::virtual_pointer_exception &) {
-    return "virtual_pointer_exception";
-#ifdef _DEBUG
-  } catch (const dingo::arena_allocation_exception &) {
-    return "arena_allocation_exception";
-#endif
-  } catch (const dingo::exception &) {
-    return "exception";
-  } catch (const std::exception &) {
-    return "std";
-  } catch (...) {
-    return "unknown";
-  }
-}
-
-struct snapshot {
-  unsigned long def, copy, move, dtor, seq;
-};
-inline snapshot take() {
-  auto &s = st();
-  return {s.def, s.copy, s.move, s.dtor, s.seq};
-}
-inline void print_counts(const char *key, const snapshot &a, const snapshot &b) {
-  std::printf(",\"%s\":{\"default\":%ld,\"copy\":%ld,\"move\":%ld,\"destroy\":%ld}",
-              key, (long)(b.def - a.def), (long)(b.copy - a.copy),
-              (long)(b.move - a.move), (long)(b.dtor - a.dtor));
-}
-inline const char *identity(const void *address, unsigned long before) {
-  if (!address)
-    return "none";
-  auto it = st().live.find(address);
-  if (it == st().live.end())
-    return "unknown";
-  return it->second > before ? "new" : "existing";
-}
-inline void print_identity(const char *key, const void *address, unsigned long before,
-                           bool applicable) {
-  if (applicable)
-    std::printf(",\"%s\":\"%s\"", key, identity(address, before));
-  else
-    std::printf(",\"%s\":null", key);
-}
-
-// Resolves R twice from a fresh container and prints one JSON line.
-template <typename R, typename Container>
-void run(int index, Container &container, const std::string &registration) {
-  std::printf("{\"i\":%d,\"registration\":\"%s\"", index, registration.c_str());
-  if (registration != "ok") {
-    std::printf(",\"resolve\":\"not_run\"}\n");
-    std::fflush(stdout);
-    return;
-  }
-  constexpr bool plain_leaf =
-      !std::is_reference_v<R> && is_leaf_v<std::remove_cvref_t<R>>;
-  snapshot before = take();
-  try {
-    decltype(auto) first = container.template resolve<R>();
-    snapshot after = take();
-    const void *address = plain_leaf ? nullptr : reach(first);
-    std::printf(",\"resolve\":\"ok\"");
-    print_counts("counts", before, after);
-    print_identity("identity", address, before.seq, !plain_leaf);
-    snapshot before2 = take();
-    try {
-      decltype(auto) second = container.template resolve<R>();
-      snapshot after2 = take();
-      const void *address2 = plain_leaf ? nullptr : reach(second);
-      std::printf(",\"stable\":%s", (!plain_leaf && address == address2) ? "true" : "false");
-      print_counts("warm_counts", before2, after2);
-      print_identity("warm_identity", address2, before2.seq, !plain_leaf);
-    } catch (...) {
-      std::printf(",\"stable\":false,\"warm_counts\":null,\"warm_identity\":null,"
-                  "\"warm_resolve\":\"throws:%s\"", classify().c_str());
-    }
-  } catch (...) {
-    std::printf(",\"resolve\":\"throws:%s\"", classify().c_str());
-  }
-  std::printf("}\n");
-  std::fflush(stdout);
-}
-} // namespace probe
-"""
 
 
 @dataclass
@@ -1042,29 +406,36 @@ class Group:
         )
 
 
-def container_code(group):
-    """Lines declaring the container of a case, the registration, and the
-    registration exception handling. The container is named c."""
-    stored = group.stored
-    scope = f"dingo::scope<dingo::{group.scope}>"
-    interfaces = (
-        f", dingo::interfaces<{', '.join(group.interfaces)}>"
-        if group.interfaces
-        else ""
+TEMPLATES = Path(__file__).resolve().parent / "templates"
+ENVIRONMENT = jinja2.Environment(
+    loader=jinja2.FileSystemLoader(str(TEMPLATES)),
+    undefined=jinja2.StrictUndefined,
+    trim_blocks=True,
+    lstrip_blocks=True,
+    keep_trailing_newline=True,
+)
+# The headers the prelude copies next to the programs.
+PRELUDE_HEADERS = ("probe_types.h", "probe_run.h", "user_wrapper_traits.h")
+PROBED_HEADERS = (
+    "dingo/container.h",
+    "dingo/static_container.h",
+    "dingo/storage/external.h",
+    "dingo/storage/shared.h",
+    "dingo/storage/shared_cyclical.h",
+    "dingo/storage/unique.h",
+)
+
+
+def provided_headers(implementation):
+    """The probed public headers the implementation provides."""
+    if implementation == "current":
+        return PROBED_HEADERS
+    facades = PROJECT_ROOT / "include" / "dingo" / "core" / "api"
+    return tuple(
+        header
+        for header in PROBED_HEADERS
+        if (facades / header[len("dingo/") :]).is_file()
     )
-    if group.domain == "runtime":
-        arguments = ""
-        if group.scope == "external":
-            arguments = spell(group.shape.external, group.leaf)
-        return [
-            "dingo::container<> c;",
-            "try {",
-            f"  c.register_type<{scope}, dingo::storage<{stored}>{interfaces}>"
-            f"({arguments});",
-            "} catch (...) { registration = probe::classify(); }",
-        ]
-    template = "dingo::static_container" if group.domain == "static" else "dingo::container"
-    return [f"{template}<source> c;"]
 
 
 def render(group, indices, guarded):
@@ -1072,42 +443,23 @@ def render(group, indices, guarded):
     but a request is compiled only when ONLY is undefined or its index; the
     registration is always compiled. Otherwise it contains exactly the given
     requests and runs them, starting at argv[1]."""
-    leaf = group.leaf
-    lines = ['#include "prelude.h"', ""]
-    if group.domain != "runtime":
-        interfaces = (
-            f", dingo::interfaces<{', '.join(group.interfaces)}>"
-            if group.interfaces
+    fields = {
+        "domain": group.domain,
+        "scope": group.scope,
+        "stored": group.stored,
+        "interfaces": list(group.interfaces),
+        "declarations": [spell(d, group.leaf) for d in group.shape.declarations],
+        "external_argument": (
+            spell(group.shape.external, group.leaf)
+            if group.domain == "runtime" and group.scope == "external"
             else ""
-        )
-        lines += [
-            "using source = dingo::bindings<dingo::bind<"
-            f"dingo::scope<dingo::{group.scope}>, dingo::storage<{group.stored}>"
-            f"{interfaces}>>;",
-            "",
-        ]
-    declarations = [spell(d, leaf) for d in group.shape.declarations]
+        ),
+        "requests": group.requests,
+    }
     selected = range(len(group.requests)) if guarded else indices
-    for index in selected:
-        request = group.requests[index]
-        lines.append(f"void run_case_{index}() {{")
-        lines += [f"  {line}" for line in declarations]
-        lines.append('  std::string registration = "ok";')
-        lines += [f"  {line}" for line in container_code(group)]
-        if guarded:
-            lines.append(f"#if !defined(ONLY) || ONLY == {index}")
-        lines.append(f"  probe::run<{request}>({index}, c, registration);")
-        if guarded:
-            lines.append("#endif")
-        lines.append("}")
-        lines.append("")
-    lines.append("int main(int argc, char **argv) {")
-    lines.append("  int from = argc > 1 ? std::atoi(argv[1]) : 0;")
-    for index in selected:
-        lines.append(f"  if (from <= {index}) run_case_{index}();")
-    lines.append("  return 0;")
-    lines.append("}")
-    return "\n".join(lines) + "\n"
+    return ENVIRONMENT.get_template("group.cpp.j2").render(
+        group=fields, selected=list(selected), guarded=guarded
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1162,12 +514,13 @@ class Toolchain:
 # ---------------------------------------------------------------------------
 
 
-def build_groups(domains, pattern=None):
+def build_groups(domains, pattern=None, user_wrappers=True):
     groups = []
     for domain, (leaf, interfaces), scope in itertools.product(
         domains, LEAF_KINDS, SCOPES
     ):
-        shapes = SHAPES + (USER_SHAPES if leaf in USER_WRAPPER_LEAVES else ())
+        user = user_wrappers and leaf in USER_WRAPPER_LEAVES
+        shapes = SHAPES + (USER_SHAPES if user else ())
         for shape in shapes:
             group = Group(domain, leaf, scope, shape, interfaces)
             group.requests = requests_for(shape, leaf, interfaces)
@@ -1177,12 +530,20 @@ def build_groups(domains, pattern=None):
 
 
 class Extraction:
-    def __init__(self, toolchain, work_dir, jobs):
+    def __init__(self, toolchain, work_dir, jobs, implementation="current"):
         self.toolchain = toolchain
-        self.work_dir = work_dir / toolchain.key
+        self.implementation = implementation
+        self.work_dir = work_dir / implementation / toolchain.key
         self.jobs = jobs
         self.work_dir.mkdir(parents=True, exist_ok=True)
-        (self.work_dir / "prelude.h").write_text(PRELUDE)
+        prelude = ENVIRONMENT.get_template("prelude.h.j2").render(
+            implementation=implementation,
+            headers=provided_headers(implementation),
+            user_wrappers=implementation == "current",
+        )
+        (self.work_dir / "prelude.h").write_text(prelude)
+        for header in PRELUDE_HEADERS:
+            (self.work_dir / header).write_text((TEMPLATES / header).read_text())
         self.errors = {}
 
     def path(self, group, suffix):
@@ -1202,7 +563,9 @@ class Extraction:
             return list(pool.map(function, items))
 
     def run(self, domains, pattern=None):
-        groups = build_groups(domains, pattern)
+        groups = build_groups(
+            domains, pattern, user_wrappers=self.implementation == "current"
+        )
         for group in groups:
             self.path(group, ".cpp").write_text(
                 render(group, range(len(group.requests)), guarded=True)
@@ -1357,6 +720,13 @@ def main():
         "default $CXX -std=c++20 -I<include-dir>",
     )
     parser.add_argument(
+        "--implementation",
+        choices=("current", "next"),
+        default="current",
+        help="next probes the next implementation through include/next, without "
+        "the user wrappers, whose traits target the current implementation",
+    )
+    parser.add_argument(
         "--work-dir",
         type=Path,
         required=True,
@@ -1377,14 +747,18 @@ def main():
     if unknown:
         parser.error(f"unknown domains: {unknown}")
 
-    command = args.cxx_command or (
-        os.environ.get("CXX", "c++") + f" -std=c++20 -I{args.include_dir.resolve()}"
-    )
+    include = f"-I{args.include_dir.resolve()}"
+    if args.implementation == "next":
+        include = f"-I{(PROJECT_ROOT / 'include' / 'next').resolve()} {include}"
+    command = args.cxx_command or (os.environ.get("CXX", "c++") + f" -std=c++20 {include}")
     toolchain = Toolchain(command)
     started = time.time()
-    extraction = Extraction(toolchain, args.work_dir.resolve(), args.jobs)
+    extraction = Extraction(
+        toolchain, args.work_dir.resolve(), args.jobs, args.implementation
+    )
     records = extraction.run(domains, args.filter)
-    output = args.output or args.work_dir / "observed" / f"{toolchain.key}.jsonl"
+    observed = "observed" if args.implementation == "current" else "observed-next"
+    output = args.output or args.work_dir / observed / f"{toolchain.key}.jsonl"
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w") as stream:
         for record in records:
