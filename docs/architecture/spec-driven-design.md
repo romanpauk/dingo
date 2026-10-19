@@ -1212,6 +1212,30 @@ value and request categories, the storage forms, the scope descriptors with
 their exposure tables, and the route rules as constexpr data, generated from the
 spec. `shape_v<T>` is the descriptor of a type. Remaining: the public tag types.
 
+#### M2.5: Walking Skeleton
+
+Status: in progress.
+
+Make `container<>` and `static_container` serve shared and external bindings end
+to end through the descriptors, the engine, and both backends, before the
+remaining primitives grow around them.
+
+`core/engine/execute.h` walks the rules of a term on C++ objects, one operation
+per rule as the rule table describes it, through `layer_traits`. The static
+backend selects the binding and the term at compile time and walks it directly.
+The runtime backend publishes the terms of a binding at registration with a
+thunk per term, and a request selects with the same engine functions. A last
+copy, address-of, or decay of a borrowed object depends only on the requested
+type, so the runtime thunk returns the borrowed object and the request completes
+it, and a shared value is copied once in both backends. `core/api` holds the
+facade of `dingo/container.h`, `dingo/static_container.h`, and the scope
+headers, with the registration vocabulary and the public exceptions, and the
+scope tags are generated from the spec. `dingo_next_test` exercises it through
+the public include paths. Remaining: the walk of the consuming, creating, and
+converting rules, the conversion cache of the kept interface handle, external
+bindings in static containers, the messages of the exceptions, and running the
+route extractor against the next implementation.
+
 ### M3: Routes And Storage
 
 #### M3.1: Route Table

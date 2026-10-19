@@ -54,6 +54,9 @@ struct term {
   shape value;
   value_category category = value_category::lvalue;
   rule_id rules[max_rules_per_route] = {};
+  // For each rule, the argument of the source layer it reached, or for an
+  // upcast, the index of the interface it converted to.
+  std::uint8_t arguments[max_rules_per_route] = {};
   std::size_t rule_count = 0;
   bool copied = false;
   // The leaves the copy rule of the route copied.
@@ -219,7 +222,8 @@ constexpr bool seen(const terms &found, const shape &value,
 }
 
 constexpr void add(terms &found, const term &from, const route_rule &rule,
-                   const shape &value, const shape &bound) {
+                   const shape &value, const shape &bound,
+                   std::size_t argument) {
   if (seen(found, value, rule.to_category)) {
     return;
   }
@@ -230,6 +234,7 @@ constexpr void add(terms &found, const term &from, const route_rule &rule,
   term derived = from;
   derived.value = value;
   derived.category = rule.to_category;
+  derived.arguments[derived.rule_count] = static_cast<std::uint8_t>(argument);
   derived.rules[derived.rule_count++] = rule.id;
   if (rule.id == rule_id::copy) {
     derived.copied = true;
@@ -244,7 +249,8 @@ constexpr void add(terms &found, const term &from, const route_rule &rule,
 // layer.
 constexpr void apply(const binding_descriptor &binding, terms &found,
                      const term &from, const route_rule &rule,
-                     const shape &bound, std::size_t limit) {
+                     const shape &bound, std::size_t argument,
+                     std::size_t limit) {
   if (!requirements_hold(binding, rule, bound)) {
     return;
   }
@@ -261,7 +267,7 @@ constexpr void apply(const binding_descriptor &binding, terms &found,
               : wrap(static_cast<std::uint8_t>(rule.to_layer),
                      source.nodes[0].family, source.nodes[0].copyable,
                      binding.interfaces[index], source.nodes[0].extent);
-      add(found, from, rule, value, bound);
+      add(found, from, rule, value, bound, index);
     }
     return;
   }
@@ -279,7 +285,7 @@ constexpr void apply(const binding_descriptor &binding, terms &found,
   if (value.size > limit) {
     return;
   }
-  add(found, from, rule, value, bound);
+  add(found, from, rule, value, bound, argument);
 }
 } // namespace detail
 
@@ -298,7 +304,7 @@ constexpr void derive_from(const binding_descriptor &binding, terms &found,
       continue;
     }
     if (rule.from_layer == layer_kind::leaf) {
-      apply(binding, found, from, rule, from.value, limit);
+      apply(binding, found, from, rule, from.value, 0, limit);
       continue;
     }
     if (kind_of(from.value) != rule.from_layer) {
@@ -310,7 +316,7 @@ constexpr void derive_from(const binding_descriptor &binding, terms &found,
     for (std::size_t argument = 0; argument < arguments; ++argument) {
       shape bound =
           subtree(from.value, argument_index(from.value, 0, argument));
-      apply(binding, found, from, rule, bound, limit);
+      apply(binding, found, from, rule, bound, argument, limit);
     }
   }
 }

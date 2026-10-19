@@ -237,4 +237,28 @@ def vocabulary(spec):
     ]
 
 
-EMITTERS = (capabilities, variants, vocabulary, next_overlay)
+def scope_tags(spec):
+    """include/dingo/core/vocabulary/scope_tags.gen.h from cpp.scope_projections."""
+    tags = []
+    namespaces = set()
+    for projection in sorted(spec.cpp.scope_projections, key=lambda p: p.scope):
+        namespace, _, name = projection.spelling.rpartition("::")
+        if not namespace or not name:
+            raise GeneratorError(
+                f"cpp.scope_projections.{projection.id}: {projection.spelling} "
+                "is not a qualified name"
+            )
+        namespaces.add(namespace)
+        tags.append({"scope": projection.scope, "name": name})
+    if len(namespaces) != 1:
+        raise GeneratorError("cpp.scope_projections: tags span several namespaces")
+    return [
+        GeneratedFile(
+            path="include/dingo/core/vocabulary/scope_tags.gen.h",
+            content=render("scope_tags.gen.h.j2", namespace=namespaces.pop(), tags=tags),
+            spec_ids=("cpp.scope_projections",),
+        )
+    ]
+
+
+EMITTERS = (capabilities, variants, vocabulary, scope_tags, next_overlay)

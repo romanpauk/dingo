@@ -12,14 +12,22 @@
 // Wrappers are classified by layer_traits, which the standard wrappers
 // specialize here and user wrappers through the public extension point; no
 // wrapper gets other treatment.
+//
+// A specialization names the layer kind, the wrapper family, and the argument
+// types, and provides `rebind`, the same layer of other argument types,
+// `element`, which reaches the element of a layer object, and `make`, which
+// makes a layer object from the arguments of its element.
 
+#include <dingo/core/base/mechanics.h>
 #include <dingo/core/primitives/shape.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <type_traits>
+#include <utility>
 #include <variant>
 
 namespace dingo::core {
@@ -32,22 +40,34 @@ template <typename Type, typename = void> struct layer_traits {
 template <typename Type> struct layer_traits<Type *> {
   static constexpr layer_kind kind = layer_kind::ptr;
   using arguments = type_list<Type>;
+  template <typename Element> using rebind = Element *;
+
+  static Type &element(Type *value) { return *value; }
+
+  template <typename... Args> static Type *make(Args &&...args) {
+    return new Type(std::forward<Args>(args)...);
+  }
 };
 
 template <typename Type> struct layer_traits<Type &> {
   static constexpr layer_kind kind = layer_kind::ref;
   using arguments = type_list<Type>;
+  template <typename Element> using rebind = Element &;
+
+  static Type &element(Type &value) { return value; }
 };
 
 template <typename Type, std::size_t Extent> struct layer_traits<Type[Extent]> {
   static constexpr layer_kind kind = layer_kind::array;
   static constexpr std::size_t extent = Extent;
   using arguments = type_list<Type>;
+  template <typename Element> using rebind = Element[Extent];
 };
 
 template <typename Type> struct layer_traits<Type[]> {
   static constexpr layer_kind kind = layer_kind::array_unbounded;
   using arguments = type_list<Type>;
+  template <typename Element> using rebind = Element[];
 };
 
 // The family of the standard wrappers.
@@ -57,24 +77,66 @@ template <typename Type> struct layer_traits<std::unique_ptr<Type>> {
   static constexpr layer_kind kind = layer_kind::own;
   using family = standard_family;
   using arguments = type_list<Type>;
+  template <typename Element> using rebind = std::unique_ptr<Element>;
+
+  static Type &element(const std::unique_ptr<Type> &value) { return *value; }
+
+  template <typename... Args>
+  static std::unique_ptr<Type> make(Args &&...args) {
+    return std::make_unique<Type>(std::forward<Args>(args)...);
+  }
 };
 
 template <typename Type> struct layer_traits<std::shared_ptr<Type>> {
   static constexpr layer_kind kind = layer_kind::share;
   using family = standard_family;
   using arguments = type_list<Type>;
+  template <typename Element> using rebind = std::shared_ptr<Element>;
+
+  static Type &element(const std::shared_ptr<Type> &value) { return *value; }
+
+  template <typename... Args>
+  static std::shared_ptr<Type> make(Args &&...args) {
+    return std::make_shared<Type>(std::forward<Args>(args)...);
+  }
 };
 
 template <typename Type> struct layer_traits<std::optional<Type>> {
   static constexpr layer_kind kind = layer_kind::opt;
   using family = standard_family;
   using arguments = type_list<Type>;
+  template <typename Element> using rebind = std::optional<Element>;
+
+  static Type &element(std::optional<Type> &value) { return *value; }
+  static Type &&element(std::optional<Type> &&value) {
+    return std::move(*value);
+  }
+
+  template <typename... Args> static std::optional<Type> make(Args &&...args) {
+    return std::optional<Type>(std::in_place, std::forward<Args>(args)...);
+  }
 };
 
 template <typename... Types> struct layer_traits<std::variant<Types...>> {
   static constexpr layer_kind kind = layer_kind::alt;
   using family = standard_family;
   using arguments = type_list<Types...>;
+  template <typename... Elements> using rebind = std::variant<Elements...>;
+
+  template <std::size_t Index>
+  static auto &element(std::variant<Types...> &value) {
+    return std::get<Index>(value);
+  }
+  template <std::size_t Index>
+  static auto &&element(std::variant<Types...> &&value) {
+    return std::get<Index>(std::move(value));
+  }
+
+  template <typename... Args>
+  static std::variant<Types...> make(Args &&...args) {
+    return std::variant<Types...>(std::in_place_index<0>,
+                                  std::forward<Args>(args)...);
+  }
 };
 
 namespace detail {
@@ -120,7 +182,10 @@ template <typename Type> constexpr shape make_shape() {
   shape result;
   shape_node &node = result.nodes[0];
   node.kind = static_cast<std::uint8_t>(traits::kind);
-  node.type = type_id_v<value_type>;
+  // Only a leaf has an identity of its own; a layer is its kind and family.
+  if constexpr (traits::kind == layer_kind::leaf) {
+    node.type = type_id_v<value_type>;
+  }
   if constexpr (std::is_reference_v<value_type>) {
     node.copyable = false;
   } else {
@@ -141,5 +206,33 @@ template <typename Type> constexpr shape make_shape() {
 // The shape of a C++ type; cv-qualification is not part of a shape.
 template <typename Type>
 inline constexpr shape shape_v = detail::make_shape<Type>();
+
+namespace detail {
+template <typename Type, typename = void> struct canonical {
+  using type = std::remove_cv_t<Type>;
+};
+
+template <typename Traits, typename List> struct canonical_rebind;
+
+template <typename Traits, typename... Arguments>
+struct canonical_rebind<Traits, type_list<Arguments...>> {
+  using type =
+      typename Traits::template rebind<typename canonical<Arguments>::type...>;
+};
+
+template <typename Type>
+struct canonical<Type,
+                 std::enable_if_t<layer_traits<std::remove_cv_t<Type>>::kind !=
+                                  layer_kind::leaf>> {
+  using traits = layer_traits<std::remove_cv_t<Type>>;
+  using type =
+      typename canonical_rebind<traits, typename traits::arguments>::type;
+};
+} // namespace detail
+
+// The type a shape describes: the type with cv-qualification removed at every
+// layer. Two types of the same shape have the same canonical type.
+template <typename Type>
+using canonical_t = typename detail::canonical<Type>::type;
 
 } // namespace dingo::core

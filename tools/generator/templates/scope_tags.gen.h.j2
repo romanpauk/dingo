@@ -1,0 +1,29 @@
+#pragma once
+
+#include <dingo/core/vocabulary/vocabulary.gen.h>
+
+// The public tags of the scopes and the scope each one selects.
+
+namespace {{ namespace }} {
+{% for tag in tags %}
+
+// spec: scopes.{{ tag.scope }}
+struct {{ tag.name }} {};
+{% endfor %}
+
+} // namespace {{ namespace }}
+
+namespace dingo::core {
+
+template <typename Tag> struct scope_of;
+{% for tag in tags %}
+
+template <> struct scope_of<::{{ namespace }}::{{ tag.name }}> {
+  static constexpr scope_id value = scope_id::{{ tag.scope }};
+};
+{% endfor %}
+
+template <typename Tag>
+inline constexpr scope_id scope_of_v = scope_of<Tag>::value;
+
+} // namespace dingo::core

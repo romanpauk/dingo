@@ -13,8 +13,6 @@
 // wrapper's family, so two wrappers of the same kind stay apart, while a
 // family of any_family stands for a layer a route creates.
 
-#include <dingo/core/base/mechanics.h>
-
 #include <cstddef>
 #include <cstdint>
 
@@ -45,7 +43,7 @@ struct shape_node {
   std::uint8_t arity = 0;
   std::uint32_t extent = 0;
   type_id family = nullptr;
-  // The type of the leaf, or of the whole subtree for a layer.
+  // The type of a leaf; a layer is identified by its kind and family.
   type_id type = nullptr;
   bool copyable = false;
   // Whether a leaf can be constructed by a factory: it is not abstract.
