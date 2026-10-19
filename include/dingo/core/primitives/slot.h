@@ -9,7 +9,10 @@
 
 // Lifetime slots: where a binding keeps its object.
 
+#include <dingo/core/primitives/exceptions.h>
+
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <new>
 #include <type_traits>
@@ -29,7 +32,8 @@ template <typename Type> void destroy_object(Type *object) {
   }
 }
 
-// Holds an object constructed on first use and destroyed with the slot.
+// Holds an object constructed on first use and destroyed with the slot. A
+// request of the object while it is being constructed is a recursion.
 template <typename Type> class lazy_slot {
 public:
   lazy_slot() = default;
@@ -37,27 +41,41 @@ public:
   lazy_slot &operator=(const lazy_slot &) = delete;
 
   ~lazy_slot() {
-    if (constructed_) {
+    if (state_ == state::constructed) {
       destroy_object(get());
     }
   }
 
-  bool constructed() const { return constructed_; }
+  bool constructed() const { return state_ == state::constructed; }
 
   // Constructs the object in place by `construct(void *)` unless it exists.
   template <typename Construct> Type &get_or_construct(Construct &&construct) {
-    if (!constructed_) {
+    if (state_ != state::constructed) {
+      if (state_ == state::constructing) {
+        throw type_recursion_exception("type recursion");
+      }
+      state_ = state::constructing;
+      struct reset {
+        state &value;
+        ~reset() {
+          if (value == state::constructing) {
+            value = state::empty;
+          }
+        }
+      } guard{state_};
       construct(static_cast<void *>(storage_));
-      constructed_ = true;
+      state_ = state::constructed;
     }
     return *get();
   }
 
 private:
+  enum class state : std::uint8_t { empty, constructing, constructed };
+
   Type *get() { return std::launder(reinterpret_cast<Type *>(storage_)); }
 
   alignas(Type) unsigned char storage_[sizeof(Type)];
-  bool constructed_ = false;
+  state state_ = state::empty;
 };
 
 // Holds an object supplied by the caller: a reference and an array are kept

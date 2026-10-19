@@ -1202,9 +1202,14 @@ preorder array of nodes, comparable in constant expressions, without knowing the
 layer kinds of the spec. `core/projection/layer_traits.h`, a layer between the
 vocabulary and the engine, classifies C++ types into layer kinds: pointers,
 references, and arrays as language layers, and the standard wrappers through the
-same `layer_traits` a user wrapper specializes. Remaining: lifetime slots,
-factory invocation and constructor detection, conversion primitives, index
-structures, the arena, and the thunk shape.
+same `layer_traits` a user wrapper specializes. `core/primitives/slot.h` holds
+the lazy and external lifetime slots; the lazy slot reports a recursion while
+its object is being constructed and is empty again after a failed construction.
+`core/primitives/constructor.h` detects the constructor of a type and calls it
+with arguments that resolve their parameter types, the `detected_constructor`
+factory kind of the spec. Remaining: the two-phase slot, the compiler variant of
+constructor detection for MSVC, the declared, function, and callable factories,
+conversion primitives, index structures, the arena, and the thunk shape.
 
 #### M2.4: Vocabulary And Descriptors
 
@@ -1237,7 +1242,9 @@ it, and a shared value is copied once in both backends. `core/api` holds the
 facade of `dingo/container.h`, `dingo/static_container.h`, and the scope
 headers, with the registration vocabulary and the public exceptions, and the
 scope tags are generated from the spec. `dingo_next_test` exercises it through
-the public include paths.
+the public include paths. A shared binding constructs its object by the detected
+constructor, resolving each argument from the container through the backend that
+serves the request, and constructs the element of every layer in place.
 
 The route extractor runs against the next implementation with
 `--implementation next`, and `conform.py --exact` compares its table with the

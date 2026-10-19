@@ -200,6 +200,7 @@ add_custom_command(
     VERBATIM)
 
 add_executable(dingo_next_test
+    next/api/construction.cpp
     next/api/container.cpp
     next/base/mechanics.cpp
     next/engine/engine_conformance.cpp

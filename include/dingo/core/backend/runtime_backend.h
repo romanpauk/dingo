@@ -35,11 +35,14 @@ namespace dingo::core {
 // its address, or decays it; or the binding constructs the value at `out`.
 enum class completion : std::uint8_t { refer, copy, address, construct };
 
+class runtime_backend;
+
 class runtime_entry {
 public:
   // Walks a term up to its erasure boundary and returns the address of the
-  // borrowed object, or of the value it constructed at `out`.
-  using thunk = void *(*)(runtime_entry &, void *out);
+  // borrowed object, or of the value it constructed at `out`. The backend
+  // resolves the dependencies of the object.
+  using thunk = void *(*)(runtime_entry &, void *out, runtime_backend &);
 
   runtime_entry(const binding_descriptor &descriptor, const terms &published,
                 std::uint8_t exposed, const thunk *thunks)
@@ -51,7 +54,9 @@ public:
   const binding_descriptor &descriptor() const { return descriptor_; }
   const terms &published() const { return published_; }
   std::uint8_t exposed() const { return exposed_; }
-  void *run(std::size_t term, void *out) { return thunks_[term](*this, out); }
+  void *run(std::size_t term, void *out, runtime_backend &backend) {
+    return thunks_[term](*this, out, backend);
+  }
 
   completion completion_of(std::size_t term) const {
     const struct term &route = published_.items[term];
@@ -88,7 +93,8 @@ public:
 
 private:
   template <std::size_t Term>
-  static void *run_term(runtime_entry &entry, void *out) {
+  static void *run_term(runtime_entry &entry, void *out,
+                        runtime_backend &backend) {
     if constexpr (!walk_supported_v<Binding, Term>) {
       throw std::logic_error(
           "the next implementation does not provide this route yet");
@@ -99,13 +105,14 @@ private:
           steps < Binding::published.items[Term].rule_count ||
           Binding::published.items[Term].category == value_category::lvalue;
       if constexpr (borrowed) {
-        auto &object = walk<Binding, Term, steps>(self.slot_.get());
+        auto &object = walk<Binding, Term, steps>(self.slot_.get(backend));
         return const_cast<void *>(
             static_cast<const void *>(std::addressof(object)));
       } else {
         using value_type = std::remove_cv_t<
             std::remove_reference_t<walk_result_t<Binding, Term>>>;
-        return ::new (out) value_type(walk<Binding, Term>(self.slot_.get()));
+        return ::new (out)
+            value_type(walk<Binding, Term>(self.slot_.get(backend)));
       }
     }
   }
@@ -153,33 +160,33 @@ public:
 
 private:
   template <typename Request>
-  static Request complete(runtime_entry &entry, std::size_t term) {
+  Request complete(runtime_entry &entry, std::size_t term) {
     using value_type = typename request_traits<Request>::value_type;
     switch (entry.completion_of(term)) {
     case completion::refer:
       if constexpr (std::is_lvalue_reference_v<Request>) {
         return static_cast<Request>(
-            *static_cast<value_type *>(entry.run(term, nullptr)));
+            *static_cast<value_type *>(entry.run(term, nullptr, *this)));
       }
       break;
     case completion::copy:
       if constexpr (!std::is_reference_v<Request> &&
                     std::is_copy_constructible_v<value_type>) {
         return static_cast<Request>(value_type(
-            *static_cast<const value_type *>(entry.run(term, nullptr))));
+            *static_cast<const value_type *>(entry.run(term, nullptr, *this))));
       }
       break;
     case completion::address:
       if constexpr (std::is_pointer_v<value_type>) {
         return static_cast<Request>(
-            static_cast<value_type>(entry.run(term, nullptr)));
+            static_cast<value_type>(entry.run(term, nullptr, *this)));
       }
       break;
     case completion::construct:
       if constexpr (!std::is_lvalue_reference_v<Request>) {
         alignas(value_type) unsigned char buffer[sizeof(value_type)];
         auto *value = std::launder(static_cast<value_type *>(
-            entry.run(term, static_cast<void *>(buffer))));
+            entry.run(term, static_cast<void *>(buffer), *this)));
         struct destroy {
           value_type *value;
           ~destroy() { value->~value_type(); }

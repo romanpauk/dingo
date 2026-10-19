@@ -24,14 +24,19 @@ class binding_slot {
                 "the next implementation does not provide this scope yet");
 };
 
-// A lazily constructed object, made by the default factory on first use.
+// A lazily constructed object, made by the factory on first use, whose
+// dependencies the resolver resolves.
 template <typename Binding> class binding_slot<Binding, slot::lazy> {
+  static_assert(info(Binding::scope).guard == recursion_guard::while_unresolved,
+                "a lazy slot guards the recursion while it is unresolved");
+
 public:
   using stored_type = typename Binding::stored_type;
 
-  stored_type &get() {
-    return slot_.get_or_construct(
-        [](void *where) { construct_default<stored_type>(where); });
+  template <typename Resolver> stored_type &get(Resolver &resolver) {
+    return slot_.get_or_construct([&resolver](void *where) {
+      construct_stored<stored_type>(where, resolver);
+    });
   }
 
 private:
@@ -47,7 +52,9 @@ public:
   explicit binding_slot(Instance &&instance)
       : slot_(std::forward<Instance>(instance)) {}
 
-  auto &get() { return slot_.get(); }
+  template <typename Resolver> auto &get(Resolver & /*resolver*/) {
+    return slot_.get();
+  }
 
 private:
   external_slot<stored_type> slot_;

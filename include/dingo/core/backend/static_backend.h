@@ -89,7 +89,8 @@ private:
                   "requested type yet");
     auto &holder =
         static_cast<detail::static_holder<Index, binding> &>(holders_);
-    return static_cast<Request>(walk<binding, selected>(holder.slot.get()));
+    return static_cast<Request>(
+        walk<binding, selected>(holder.slot.get(*this)));
   }
 
   detail::static_holders<std::index_sequence_for<Bindings...>, Bindings...>
