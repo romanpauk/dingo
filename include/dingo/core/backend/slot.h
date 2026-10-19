@@ -92,6 +92,31 @@ private:
   bool constructing_ = false;
 };
 
+namespace detail {
+template <typename Base, typename Derived, typename = void>
+struct converts_down : std::false_type {};
+
+template <typename Base, typename Derived>
+struct converts_down<
+    Base, Derived,
+    std::void_t<decltype(static_cast<Derived *>(std::declval<Base *>()))>>
+    : std::true_type {};
+
+// Whether `Base` is a base of `Derived` that a pointer to `Derived` reaches
+// only through the object, a virtual base: a static conversion down from it is
+// ill-formed.
+template <typename Base, typename Derived>
+inline constexpr bool is_virtual_base_v =
+    std::is_base_of_v<Base, Derived> && !std::is_same_v<Base, Derived> &&
+    !converts_down<Base, Derived>::value;
+
+template <typename Leaf, typename List> struct reaches_interfaces_statically;
+
+template <typename Leaf, typename... Interfaces>
+struct reaches_interfaces_statically<Leaf, type_list<Interfaces...>>
+    : std::bool_constant<(!is_virtual_base_v<Interfaces, Leaf> && ...)> {};
+} // namespace detail
+
 // An object published before it is constructed: a request during its
 // construction refers to the published object, so objects can depend on each
 // other in a cycle. A plain leaf is published in the slot, and a sharing
@@ -126,6 +151,21 @@ private:
   static constexpr bool handle = traits::kind == layer_kind::share;
   static constexpr bool published_while_constructed =
       traits::kind != layer_kind::alt;
+
+  template <typename Type, bool Handle> struct published_leaf {
+    using type = Type;
+  };
+
+  template <typename Type> struct published_leaf<Type, true> {
+    using type = type_list_at_t<0, typename layer_traits<Type>::arguments>;
+  };
+
+  static_assert(detail::reaches_interfaces_statically<
+                    typename published_leaf<stored_type, handle>::type,
+                    typename Binding::interfaces>::value,
+                "shared_cyclical cannot publish a leaf as an interface it "
+                "inherits virtually: the conversion reads the object, which "
+                "is not constructed yet");
 
   enum class state : std::uint8_t { empty, publishing, constructed };
 
