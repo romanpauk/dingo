@@ -62,4 +62,35 @@ def capabilities(spec):
     ]
 
 
-EMITTERS = (capabilities,)
+def next_overlay(spec):
+    """include/next/<path> for every public include path of the spec.
+
+    Each forwards to the facade of the next implementation under
+    include/dingo/core/api, or reports that it is not provided yet.
+    """
+    include_paths = {
+        entry.id for entry in spec.public_api if entry.kind.value == "include_path"
+    }
+    files = []
+    for binding in sorted(spec.cpp.api_bindings, key=lambda b: b.spelling):
+        if binding.api not in include_paths:
+            continue
+        include_path = binding.spelling
+        if not include_path.startswith("dingo/"):
+            raise GeneratorError(
+                f"cpp.api_bindings.{binding.id}: {include_path} is not under dingo/"
+            )
+        facade = "dingo/core/api/" + include_path[len("dingo/") :]
+        files.append(
+            GeneratedFile(
+                path=f"include/next/{include_path}",
+                content=render(
+                    "next_overlay.h.j2", include_path=include_path, facade=facade
+                ),
+                spec_ids=(f"public_api.{binding.api}",),
+            )
+        )
+    return files
+
+
+EMITTERS = (capabilities, next_overlay)

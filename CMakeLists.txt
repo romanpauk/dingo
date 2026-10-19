@@ -35,6 +35,33 @@ target_include_directories(dingo INTERFACE
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
 
+# The next implementation of the spec-driven design. include/next holds the
+# public include paths of the next implementation, generated from the spec.
+# DINGO_IMPLEMENTATION=next makes the dingo target select them; the dingo_next
+# target always does, so the next implementation is built alongside the current
+# one. See docs/architecture/spec-driven-design.md, Development Strategy.
+set(DINGO_IMPLEMENTATION "current" CACHE STRING
+    "Development only: the implementation the public headers select")
+set_property(CACHE DINGO_IMPLEMENTATION PROPERTY STRINGS current next)
+if(DINGO_DEVELOPMENT_MODE)
+    if(NOT DINGO_IMPLEMENTATION MATCHES "^(current|next)$")
+        message(FATAL_ERROR "DINGO_IMPLEMENTATION must be current or next")
+    endif()
+    add_library(dingo_next INTERFACE)
+    add_library(dingo::next ALIAS dingo_next)
+    target_include_directories(dingo_next INTERFACE
+        "${PROJECT_SOURCE_DIR}/include/next"
+        "${PROJECT_SOURCE_DIR}/include"
+    )
+    target_compile_definitions(dingo_next INTERFACE DINGO_IMPLEMENTATION_NEXT=1)
+    if(DINGO_IMPLEMENTATION STREQUAL "next")
+        target_include_directories(dingo BEFORE INTERFACE
+            "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/next>")
+        target_compile_definitions(dingo INTERFACE DINGO_IMPLEMENTATION_NEXT=1)
+        message(STATUS "The public headers select the next implementation")
+    endif()
+endif()
+
 if(NOT CMAKE_SKIP_INSTALL_RULES AND DINGO_INSTALL)
     include(GNUInstallDirs)
 

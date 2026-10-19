@@ -1,0 +1,10 @@
+#pragma once
+
+// The public include path {{ include_path }} of the next implementation, which
+// development builds select with DINGO_IMPLEMENTATION=next. See
+// docs/architecture/spec-driven-design.md, Development Strategy.
+#if __has_include(<{{ facade }}>)
+#include <{{ facade }}> // IWYU pragma: export
+#else
+#error "{{ include_path }} is not provided by the next implementation yet"
+#endif

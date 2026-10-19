@@ -88,6 +88,11 @@ if platform.system() == 'Windows':
     )
 else:
     config.substitutions.append(
+        ('%dingo_next_cxx',
+         f'{cxx} -std=c++20 -I"{os.path.join(project_root, "include", "next")}" '
+         f'-I"{os.path.join(project_root, "include")}"')
+    )
+    config.substitutions.append(
         ('%dingo_cxx', f'{cxx} -std=c++20 -I"{os.path.join(project_root, "include")}"')
     )
 config.substitutions.append(('%dingo_project_root', project_root))

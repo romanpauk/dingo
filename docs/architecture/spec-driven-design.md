@@ -1135,7 +1135,7 @@ Remaining: the subjects of M1.6.
 
 #### M2.1: Implementation Switch
 
-Status: not started.
+Status: done.
 
 Create the directory of the new implementation, add the
 `DINGO_IMPLEMENTATION=next` development option that makes the public headers
@@ -1143,6 +1143,15 @@ forward to it, and add the CI job that builds with the option.
 
 Done when the CI job builds the new implementation and runs the cases it
 supports so far.
+
+The generator emits `include/next/<path>` for every public include path of the
+spec. Each forwards to the facade of the new implementation under
+`include/dingo/core/api/`, or reports that the new implementation does not
+provide it yet. `DINGO_IMPLEMENTATION=next` puts `include/next` first on the
+include path of the `dingo` target, and the `dingo_next` target always does, so
+the tests of the new implementation build in every development build next to the
+current implementation. The CI job is deferred: no CI runs until the new
+implementation is complete.
 
 #### M2.2: Mechanics
 
@@ -1399,3 +1408,5 @@ capability tags.
   declare, in every scope. A binding with interfaces is found only by them and
   reaches them by conversion, with one interface as with several. A binding
   whose interfaces no request can reach is rejected.
+- 2026-10-19: No CI runs until the new implementation is complete. The new
+  implementation is built and tested locally through the `dingo_next` target.
