@@ -42,13 +42,13 @@ def test_capability_content():
     assert all(c.description.endswith(".") for c in capabilities)
 
 
-def test_other_sections_are_empty():
+def test_every_section_is_a_tuple():
     loaded = spec.load_spec()
     for field in dataclasses.fields(Spec):
         if field.name != "cpp":
-            assert getattr(loaded, field.name) == (), field.name
-    assert loaded.cpp.shape_projections == ()
-    assert loaded.cpp.api_bindings == ()
+            assert isinstance(getattr(loaded, field.name), tuple), field.name
+    for field in dataclasses.fields(spec.CppProjection):
+        assert isinstance(getattr(loaded.cpp, field.name), tuple), field.name
 
 
 def test_every_section_has_a_content_module():

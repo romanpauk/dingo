@@ -28,14 +28,17 @@ __all__ = [
     "Contract",
     "ContractDimension",
     "CppApiBinding",
+    "CppContractProbe",
     "CppProjection",
-    "CppShapeProjection",
+    "CppScopeProjection",
     "Decoration",
     "DependencyVisibility",
     "Diagnostic",
     "Domain",
     "EdgeTime",
     "Entity",
+    "Exposure",
+    "ExposureRule",
     "FactoryKind",
     "FilterDimension",
     "GraphRule",
@@ -47,6 +50,8 @@ __all__ = [
     "PatternForm",
     "Predicate",
     "PublicApiEntry",
+    "RecursionGuard",
+    "RequestCategory",
     "Requirement",
     "Route",
     "Scope",
@@ -61,6 +66,7 @@ __all__ = [
     "Spec",
     "Status",
     "StepCondition",
+    "StorageForm",
     "ValueCategory",
     "VariantKind",
     "VariantPoint",
@@ -129,14 +135,71 @@ class SourceAccess(Enum):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class StorageForm(Entity):
+    """A class of stored shapes that storage exposure distinguishes.
+
+    `pattern` matches the outer layers of a stored shape. The plain form, whose
+    pattern is a variable, matches a shape no other form matches.
+    """
+
+    description: str
+    pattern: "ShapePattern"
+
+
+class RequestCategory(Enum):
+    """The request lists a storage publishes for a form."""
+
+    VALUE = "value"
+    LVALUE = "lvalue"
+    RVALUE = "rvalue"
+    POINTER = "pointer"
+
+
+class RecursionGuard(Enum):
+    """When a recursive materialization of a storage is detected."""
+
+    NONE = "none"
+    WHILE_UNRESOLVED = "while_unresolved"
+    ALWAYS = "always"
+
+
+class ExposureRule(Enum):
+    """How a scope derives its request lists from the stored shape.
+
+    FORM publishes the lists of the stored form in the exposed categories. LEAF
+    publishes the leaf itself, and the handle of a sharing form, in the exposed
+    categories, whatever the stored form.
+    """
+
+    FORM = "form"
+    LEAF = "leaf"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Exposure:
+    """The request categories a scope publishes for one storage form."""
+
+    form: str  # storage form id
+    categories: tuple[RequestCategory, ...]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Scope(Entity):
-    """A storage descriptor: slot, materialized category, stability, access."""
+    """A storage descriptor: slot, materialized category, stability, access.
+
+    `exposures` lists every storage form the scope can store; a form that is
+    not listed cannot be registered in the scope.
+    """
 
     description: str
     slot: Slot
     materializes: ValueCategory
     stable: bool
     source_access: SourceAccess
+    guard: RecursionGuard = RecursionGuard.NONE
+    retains_unresolved_source: bool = False
+    exposure_rule: ExposureRule = ExposureRule.FORM
+    exposures: tuple[Exposure, ...] = ()
     extends: str | None = None  # scope id
     phases: tuple[str, ...] = ()
     needs: tuple[str, ...] = ()
@@ -433,13 +496,21 @@ class BoundKind(Enum):
     """AT_MOST and EXACTLY take a `value`, LINEAR takes a `variable`.
 
     ALWAYS, NEVER, and COLD are the inlining bounds. CONSTANT means
-    independent of the inputs.
+    independent of the inputs. RECORDED means at most a limit that is recorded
+    per probe and toolchain outside the spec, for bounds such as code size
+    that differ per compiler.
+
+    LINEAR means at most linear in its `variable`. A LINEAR bound may also
+    carry a `value`, the most `unit` per unit of the variable, so that
+    `LINEAR(value=1, unit="instantiations", variable="bindings")` reads at
+    most one instantiation per binding.
     """
 
     AT_MOST = "at_most"
     EXACTLY = "exactly"
     CONSTANT = "constant"
     LINEAR = "linear"
+    RECORDED = "recorded"
     ALWAYS = "always"
     NEVER = "never"
     COLD = "cold"
@@ -455,12 +526,20 @@ class Bound:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Contract(Entity):
-    """The bound on one dimension of one operation or component."""
+    """The bound on one dimension of one operation or component.
 
+    A compile cost contract names the internal `construct` whose
+    instantiations it counts, such as a kernel; without one it counts all
+    instantiations of the operation. Constructs and operations are abstract
+    names, their C++ spellings are not part of the contract.
+    """
+
+    description: str
     operation: str
     dimension: ContractDimension
     bound: Bound
     domain: Domain | None = None
+    construct: str | None = None
 
 
 # Behavior changes
@@ -512,27 +591,54 @@ class Capability:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class CppShapeProjection(Entity):
-    """The C++ spelling of a layer kind and the headers it needs."""
+class CppScopeProjection(Entity):
+    """The C++ tag of a scope and the header that declares it."""
 
-    layer: str  # layer kind id
+    scope: str  # scope id
     spelling: str
-    headers: tuple[str, ...] = ()
+    header: str
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CppApiBinding(Entity):
-    """The C++ spelling (path, name, or macro) of a public API entry."""
+    """The C++ spelling (path, name, or macro) of a public API entry.
+
+    `header` is the public include path that makes a name or extension point
+    available. `declarations` is namespace-scope code and `usage` the
+    statements of a function body that use the name; the generated public API
+    check compiles them.
+    """
 
     api: str  # public API entry id
     spelling: str
+    header: str | None = None
+    declarations: str | None = None
+    usage: str | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CppContractProbe(Entity):
+    """What observes a contract on the C++ implementation.
+
+    `metrics` are fnmatch patterns over the flattened metric paths of
+    test/contracts/baseline.json (`object_size/flat_resolved.static.32`,
+    `codegen/probes/<probe>/dingo_calls`), and `excluding` removes paths from
+    them. A contract that no current probe isolates sets `not_observable` to the
+    reason instead.
+    """
+
+    contract: str  # contract id
+    metrics: tuple[str, ...] = ()
+    excluding: tuple[str, ...] = ()
+    not_observable: str | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CppProjection:
     capabilities: tuple[Capability, ...] = ()
-    shape_projections: tuple[CppShapeProjection, ...] = ()
+    scope_projections: tuple[CppScopeProjection, ...] = ()
     api_bindings: tuple[CppApiBinding, ...] = ()
+    contract_probes: tuple[CppContractProbe, ...] = ()
 
 
 # The spec
@@ -541,6 +647,7 @@ class CppProjection:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Spec:
     layer_kinds: tuple[LayerKind, ...] = ()
+    storage_forms: tuple[StorageForm, ...] = ()
     scopes: tuple[Scope, ...] = ()
     routes: tuple[Route, ...] = ()
     key_kinds: tuple[KeyKind, ...] = ()

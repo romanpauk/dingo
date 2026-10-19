@@ -19,12 +19,13 @@ from spec.schema import (
     ContractDimension,
     CppApiBinding,
     CppProjection,
-    CppShapeProjection,
+    CppScopeProjection,
     Decoration,
     DependencyVisibility,
     Diagnostic,
     Domain,
     EdgeTime,
+    Exposure,
     FactoryKind,
     FilterDimension,
     GraphRule,
@@ -36,6 +37,7 @@ from spec.schema import (
     PatternForm,
     Predicate,
     PublicApiEntry,
+    RequestCategory,
     Requirement,
     Route,
     Scope,
@@ -48,6 +50,7 @@ from spec.schema import (
     Slot,
     SourceAccess,
     Spec,
+    StorageForm,
     Status,
     StepCondition,
     ValueCategory,
@@ -79,6 +82,14 @@ def sample_spec() -> Spec:
             LayerKind(id="alt", description="An alternative.", parameters=1, variadic=True),
             LayerKind(id="array", description="A sized array.", parameters=1, has_extent=True),
         ),
+        storage_forms=(
+            StorageForm(id="plain", description="The leaf.", pattern=variable("T")),
+            StorageForm(
+                id="unique_handle",
+                description="An owning handle.",
+                pattern=layer("own", variable("T")),
+            ),
+        ),
         scopes=(
             Scope(
                 id="shared",
@@ -87,6 +98,13 @@ def sample_spec() -> Spec:
                 materializes=ValueCategory.LVALUE,
                 stable=True,
                 source_access=SourceAccess.BORROW,
+                exposures=(
+                    Exposure(
+                        form="plain",
+                        categories=(RequestCategory.VALUE, RequestCategory.LVALUE),
+                    ),
+                    Exposure(form="unique_handle", categories=(RequestCategory.LVALUE,)),
+                ),
             ),
             Scope(
                 id="shared_cyclical",
@@ -96,6 +114,7 @@ def sample_spec() -> Spec:
                 stable=True,
                 source_access=SourceAccess.BORROW,
                 extends="shared",
+                exposures=(Exposure(form="plain", categories=(RequestCategory.LVALUE,)),),
                 phases=("publish", "complete"),
                 needs=("instance",),
             ),
@@ -248,6 +267,7 @@ def sample_spec() -> Spec:
         contracts=(
             Contract(
                 id="resolve_static_allocations",
+                description="A static resolution makes no allocation.",
                 operation="resolve",
                 dimension=ContractDimension.RUNTIME_COST,
                 bound=Bound(kind=BoundKind.AT_MOST, value=0, unit="allocations"),
@@ -255,6 +275,7 @@ def sample_spec() -> Spec:
             ),
             Contract(
                 id="resolve_static_inline",
+                description="A static resolution is always inlined.",
                 operation="resolve",
                 dimension=ContractDimension.INLINING,
                 bound=Bound(kind=BoundKind.ALWAYS),
@@ -262,6 +283,7 @@ def sample_spec() -> Spec:
             ),
             Contract(
                 id="register_compile",
+                description="Registering types grows linearly in the bindings.",
                 operation="register_type",
                 dimension=ContractDimension.COMPILE_COST,
                 bound=Bound(kind=BoundKind.LINEAR, variable="bindings"),
@@ -290,12 +312,18 @@ def sample_spec() -> Spec:
                     minimum=202311,
                 ),
             ),
-            shape_projections=(
-                CppShapeProjection(
-                    id="own_projection",
-                    layer="own",
-                    spelling="std::unique_ptr",
-                    headers=("memory",),
+            scope_projections=(
+                CppScopeProjection(
+                    id="shared_tag",
+                    scope="shared",
+                    spelling="dingo::shared",
+                    header="dingo/storage/shared.h",
+                ),
+                CppScopeProjection(
+                    id="shared_cyclical_tag",
+                    scope="shared_cyclical",
+                    spelling="dingo::shared_cyclical",
+                    header="dingo/storage/shared_cyclical.h",
                 ),
             ),
             api_bindings=(
@@ -303,6 +331,13 @@ def sample_spec() -> Spec:
                     id="container_header_path",
                     api="container_header",
                     spelling="dingo/container.h",
+                ),
+                CppApiBinding(
+                    id="shared_ptr_shape_name",
+                    api="shared_ptr_shape",
+                    spelling="std::shared_ptr",
+                    header="dingo/container.h",
+                    usage="{name}<int> pointer;",
                 ),
             ),
         ),

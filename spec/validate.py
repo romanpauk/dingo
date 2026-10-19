@@ -9,7 +9,12 @@ error starts with the section and the entity id it concerns. The checks are:
   and requirements name pattern variables
 - scope inheritance has no cycle
 - diagnostic message placeholders match the declared placeholders
-- contract bounds carry the fields their kind needs and match the dimension
+- contract bounds carry the fields their kind needs and match the dimension,
+  and every contract has a description
+- contract probes name a contract and either metric patterns or the reason the
+  contract is not observable
+- every public API entry has exactly one C++ binding, bound with the fields
+  its kind needs, and a name's header is a public include path
 - capability detection is well-formed: exactly one of a feature macro with a
   minimum or a builtin, and a header only with a feature macro
 """
@@ -20,6 +25,7 @@ import string
 from collections.abc import Iterable, Iterator
 
 from spec.schema import (
+    ApiKind,
     Bound,
     BoundKind,
     Capability,
@@ -58,8 +64,9 @@ def validate(spec: Spec) -> list[str]:
     """Returns the errors of the spec, in a deterministic order."""
     errors: list[str] = []
     check_ids(spec, errors)
-    check_scopes(spec, errors)
     check_layer_kinds(spec, errors)
+    check_storage_forms(spec, errors)
+    check_scopes(spec, errors)
     check_routes(spec, errors)
     check_lookups(spec, errors)
     check_selection_rules(spec, errors)
@@ -68,6 +75,7 @@ def validate(spec: Spec) -> list[str]:
     check_binding_time_constraints(spec, errors)
     check_variant_points(spec, errors)
     check_contracts(spec, errors)
+    check_contract_probes(spec, errors)
     check_behavior_changes(spec, errors)
     check_cpp(spec, errors)
     return errors
@@ -97,8 +105,22 @@ def check_unique(errors: list[str], where: str, what: str, values: Iterable) -> 
         errors.append(f"{where}: {what} has duplicates")
 
 
+def check_storage_forms(spec: Spec, errors: list[str]) -> None:
+    layers = {kind.id: kind for kind in spec.layer_kinds}
+    for storage_form in spec.storage_forms:
+        where = f"storage_forms.{storage_form.id}"
+        check_pattern(storage_form.pattern, where, layers, errors)
+    check_unique(
+        errors,
+        "storage_forms",
+        "patterns",
+        (storage_form.pattern for storage_form in spec.storage_forms),
+    )
+
+
 def check_scopes(spec: Spec, errors: list[str]) -> None:
     scope_ids = ids(spec.scopes)
+    form_ids = ids(spec.storage_forms)
     parents = {scope.id: scope.extends for scope in spec.scopes}
     for scope in spec.scopes:
         where = f"scopes.{scope.id}"
@@ -112,6 +134,18 @@ def check_scopes(spec: Spec, errors: list[str]) -> None:
                 break
             seen.add(parent)
             parent = parents[parent]
+        if not scope.exposures:
+            errors.append(f"{where}: exposes no storage form")
+        check_unique(
+            errors, where, "exposed forms", (e.form for e in scope.exposures)
+        )
+        for exposure in scope.exposures:
+            require_ref(errors, where, "storage form", exposure.form, form_ids)
+            if not exposure.categories:
+                errors.append(f"{where}: form {exposure.form!r} exposes no category")
+            check_unique(
+                errors, where, f"categories of {exposure.form}", exposure.categories
+            )
         for what, values in (("phases", scope.phases), ("needs", scope.needs)):
             check_unique(errors, where, what, values)
             for value in values:
@@ -316,29 +350,67 @@ def check_variant_points(spec: Spec, errors: list[str]) -> None:
 def check_bound(bound: Bound, where: str, errors: list[str]) -> None:
     kind = bound.kind
     needs_value = kind in (BoundKind.AT_MOST, BoundKind.EXACTLY)
+    takes_value = needs_value or kind is BoundKind.LINEAR
+    takes_unit = takes_value or kind is BoundKind.RECORDED
     if needs_value and (bound.value is None or bound.value < 0):
         errors.append(f"{where}: {kind.value} needs a non-negative value")
-    if not needs_value and bound.value is not None:
+    if kind is BoundKind.LINEAR and bound.value is not None and bound.value < 0:
+        errors.append(f"{where}: linear takes a non-negative value")
+    if not takes_value and bound.value is not None:
         errors.append(f"{where}: {kind.value} takes no value")
     if kind is BoundKind.LINEAR and not bound.variable:
         errors.append(f"{where}: linear names its variable")
+    if kind is BoundKind.LINEAR and bound.variable and not SNAKE_CASE.match(bound.variable):
+        errors.append(f"{where}: variable {bound.variable!r} is not snake_case")
     if kind is not BoundKind.LINEAR and bound.variable is not None:
         errors.append(f"{where}: {kind.value} takes no variable")
-    if bound.unit is not None and not needs_value:
+    if bound.unit is not None and not takes_unit:
         errors.append(f"{where}: {kind.value} takes no unit")
+    if bound.unit is not None and not SNAKE_CASE.match(bound.unit):
+        errors.append(f"{where}: unit {bound.unit!r} is not snake_case")
 
 
 def check_contracts(spec: Spec, errors: list[str]) -> None:
     for contract in spec.contracts:
         where = f"contracts.{contract.id}"
-        if not contract.operation.strip():
-            errors.append(f"{where}: operation is empty")
+        for what in ("description", "operation"):
+            if not getattr(contract, what).strip():
+                errors.append(f"{where}: {what} is empty")
         check_bound(contract.bound, where, errors)
         is_inlining = contract.dimension is ContractDimension.INLINING
         if is_inlining != (contract.bound.kind in INLINING_BOUNDS):
             errors.append(
                 f"{where}: {contract.bound.kind.value} does not fit {contract.dimension.value}"
             )
+        if contract.construct is not None:
+            if contract.dimension is not ContractDimension.COMPILE_COST:
+                errors.append(f"{where}: only a compile cost contract names a construct")
+            if not SNAKE_CASE.match(contract.construct):
+                errors.append(f"{where}: construct {contract.construct!r} is not snake_case")
+
+
+def check_contract_probes(spec: Spec, errors: list[str]) -> None:
+    contract_ids = ids(spec.contracts)
+    for probe in spec.cpp.contract_probes:
+        where = f"cpp.contract_probes.{probe.id}"
+        require_ref(errors, where, "contract", probe.contract, contract_ids)
+        observable = bool(probe.metrics)
+        if observable == (probe.not_observable is not None):
+            errors.append(f"{where}: set metrics or not_observable, exactly one")
+        if probe.not_observable is not None and not probe.not_observable.strip():
+            errors.append(f"{where}: not_observable gives no reason")
+        if probe.excluding and not observable:
+            errors.append(f"{where}: excluding needs metrics")
+        check_unique(errors, where, "metrics", probe.metrics)
+        for pattern in (*probe.metrics, *probe.excluding):
+            if not pattern.strip() or pattern != pattern.strip() or "/" not in pattern:
+                errors.append(f"{where}: metric pattern {pattern!r} is not a metric path")
+    check_unique(
+        errors,
+        "cpp.contract_probes",
+        "contracts",
+        (probe.contract for probe in spec.cpp.contract_probes),
+    )
 
 
 def check_behavior_changes(spec: Spec, errors: list[str]) -> None:
@@ -381,31 +453,80 @@ def check_capability(capability: Capability, errors: list[str]) -> None:
             errors.append(f"{where}: header {capability.header!r} is malformed")
 
 
-def check_cpp(spec: Spec, errors: list[str]) -> None:
-    for capability in spec.cpp.capabilities:
-        check_capability(capability, errors)
-    layer_ids = ids(spec.layer_kinds)
-    api_ids = ids(spec.public_api)
-    for projection in spec.cpp.shape_projections:
-        where = f"cpp.shape_projections.{projection.id}"
-        require_ref(errors, where, "layer kind", projection.layer, layer_ids)
-        if not projection.spelling.strip():
-            errors.append(f"{where}: spelling is empty")
-        check_unique(errors, where, "headers", projection.headers)
-    check_unique(
-        errors,
-        "cpp.shape_projections",
-        "layer kinds",
-        (projection.layer for projection in spec.cpp.shape_projections),
-    )
-    for binding in spec.cpp.api_bindings:
-        where = f"cpp.api_bindings.{binding.id}"
-        require_ref(errors, where, "public API entry", binding.api, api_ids)
-        if not binding.spelling.strip():
-            errors.append(f"{where}: spelling is empty")
+def check_api_bindings(spec: Spec, errors: list[str]) -> None:
+    """Every public API entry has exactly one C++ binding, and vice versa.
+
+    An include path binds a header name and a configuration macro a macro
+    name. A name or extension point binds its spelling, the public include
+    path that makes it available, and the usage the public API check compiles.
+    """
+    kinds = {entry.id: entry.kind for entry in spec.public_api}
+    for entry in spec.public_api:
+        if not entry.description.strip():
+            errors.append(f"public_api.{entry.id}: description is empty")
+    bindings = {binding.api: binding for binding in spec.cpp.api_bindings}
+    for entry in spec.public_api:
+        if entry.id not in bindings:
+            errors.append(f"public_api.{entry.id}: has no C++ binding")
     check_unique(
         errors,
         "cpp.api_bindings",
         "public API entries",
         (binding.api for binding in spec.cpp.api_bindings),
     )
+    include_paths = {
+        binding.spelling
+        for binding in spec.cpp.api_bindings
+        if kinds.get(binding.api) is ApiKind.INCLUDE_PATH
+    }
+    for binding in spec.cpp.api_bindings:
+        where = f"cpp.api_bindings.{binding.id}"
+        require_ref(errors, where, "public API entry", binding.api, set(kinds))
+        if not binding.spelling.strip():
+            errors.append(f"{where}: spelling is empty")
+        for what in ("header", "declarations", "usage"):
+            value = getattr(binding, what)
+            if value is not None and not value.strip():
+                errors.append(f"{where}: {what} is empty")
+        kind = kinds.get(binding.api)
+        carries_code = kind in (ApiKind.NAME, ApiKind.EXTENSION_POINT)
+        if kind is ApiKind.INCLUDE_PATH and not HEADER_NAME.match(binding.spelling):
+            errors.append(f"{where}: include path {binding.spelling!r} is malformed")
+        if kind is ApiKind.CONFIGURATION_MACRO and not MACRO_NAME.match(
+            binding.spelling
+        ):
+            errors.append(f"{where}: macro {binding.spelling!r} is malformed")
+        if kind is not None and not carries_code:
+            for what in ("header", "declarations", "usage"):
+                if getattr(binding, what) is not None:
+                    errors.append(f"{where}: only a name or extension point has {what}")
+        if carries_code:
+            if binding.usage is None:
+                errors.append(f"{where}: a name or extension point needs usage")
+            elif "{name}" not in f"{binding.declarations or ''}{binding.usage}":
+                errors.append(f"{where}: declarations or usage must use {{name}}")
+            if binding.header is None:
+                errors.append(f"{where}: a name or extension point needs a header")
+            elif binding.header not in include_paths:
+                errors.append(
+                    f"{where}: header {binding.header!r} is not a public include path"
+                )
+
+
+def check_cpp(spec: Spec, errors: list[str]) -> None:
+    for capability in spec.cpp.capabilities:
+        check_capability(capability, errors)
+    scope_ids = ids(spec.scopes)
+    for projection in spec.cpp.scope_projections:
+        where = f"cpp.scope_projections.{projection.id}"
+        require_ref(errors, where, "scope", projection.scope, scope_ids)
+        if not projection.spelling.strip():
+            errors.append(f"{where}: spelling is empty")
+        if not HEADER_NAME.match(projection.header):
+            errors.append(f"{where}: header {projection.header!r} is malformed")
+    projected = [projection.scope for projection in spec.cpp.scope_projections]
+    check_unique(errors, "cpp.scope_projections", "scopes", projected)
+    for scope in spec.scopes:
+        if scope.id not in projected:
+            errors.append(f"scopes.{scope.id}: has no C++ scope projection")
+    check_api_bindings(spec, errors)

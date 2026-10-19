@@ -239,12 +239,18 @@ change and is declared like one.
 
 ### Shape Algebra
 
-Handles are abstract constructors: `Val`, `LRef`, `CRef`, `RRef`, `Ptr`,
-`Own<_>`, `Share<_>`, `Opt<_>`, `Alt<...>`, and `Array<_, N>`. User wrappers are
-declared by traits: owning, sharing, nullable, and borrowable. Leaf extraction
-and rebinding are defined generically on the algebra. The C++ projection maps
-`Own` to `std::unique_ptr`, `Share` to `std::shared_ptr`, and so on, and lists
-the headers each projection needs.
+A shape is a leaf wrapped in layers. Layer kinds are abstract classes of handles
+defined by their traits, owning, sharing, nullable, and borrowable, such as a
+sole-owner handle, a sharing handle, an optional value, an alternative, a
+pointer, a reference, and an array. Leaf extraction and rebinding are defined
+generically on the algebra.
+
+The spec does not name concrete wrapper types. Users extend the library with
+their own sole-owner, sharing, and optional handles through the wrapper-traits
+extension point, so a concrete wrapper is mapped to a layer kind by that
+extension point in the C++ library, not by the spec. The standard library
+wrappers, `std::unique_ptr`, `std::shared_ptr`, and `std::optional`, are the
+built-in uses of the same extension point and get no special treatment.
 
 ### Scopes
 
@@ -1011,7 +1017,7 @@ GitHub yet.
 
 #### M1.3: Public API
 
-Status: not started.
+Status: done.
 
 Record the public include paths, names, extension points, and configuration
 macros of the current library in the spec.
@@ -1019,19 +1025,49 @@ macros of the current library in the spec.
 Done when the generated public surface check passes against the current
 implementation.
 
+The spec records 93 entries: 22 include paths, 54 names, 11 extension points,
+and 6 configuration macros, taken from the documentation, the README, and the
+examples. Names reachable only through `dingo::detail` are internal. The check
+is described in [Public API Check](../development.md#public-api-check).
+
 #### M1.4: Contracts Schema
 
-Status: not started.
+Status: done.
 
 Specify contracts for the public operations and components, including inlining,
 seeded with the baseline values from M0.1.
 
+The spec records 38 contracts across object size, compile cost, runtime cost,
+code size, inlining, and header cost, each linked to the baseline metrics that
+observe it or marked as not observable with the reason.
+[Contract Evaluation](../development.md#contract-evaluation) reports which hold
+on the current implementation. On the recorded baselines, 14 hold on both
+toolchains. Two are violated on Clang 22: two static resolution probes still
+call Dingo functions, and chain instantiations grow slightly faster than
+linearly. The others, including every contract on a construct of the new
+implementation and every runtime cost contract, are not observable by the
+current probes.
+
 #### M1.5: Shapes And Scopes
 
-Status: not started.
+Status: done.
 
 Specify the shape algebra, the C++ projection, and the four scopes as
 descriptors.
+
+The spec records 8 layer kinds, 10 storage forms as patterns over layer kinds,
+and the four scopes with their slot, materialized category, stability, source
+access, recursion guard, source retention, and the request categories they
+publish per storage form. `shared_cyclical` publishes the leaf and a sharing
+handle whatever the stored form, which its descriptor records as its own
+exposure rule. The C++ projection names only the scope tags. The
+[Scope Check](../development.md#scope-check) compares the descriptors with the
+current scope policies.
+
+The current implementation classifies stored shapes with dedicated cases for the
+standard sole-owner, sharing, and optional handles instead of the wrapper-traits
+extension point user wrappers go through. The new implementation classifies
+every wrapper through the extension point.
 
 #### M1.6: Route Rules
 
@@ -1295,3 +1331,7 @@ capability tags.
   committed tree, then regenerates and requires a clean tree. The clang-format
   configuration treats the generated-file marker as a comment pragma, so it is
   never reflowed.
+- 2026-10-19: The spec names no concrete wrapper types. Layer kinds are classes
+  of handles defined by traits, and concrete wrappers, the standard ones
+  included, map to them through the wrapper-traits extension point of the C++
+  library, which users extend with their own handles.

@@ -15,7 +15,6 @@ from spec.schema import (
     Contract,
     ContractDimension,
     CppApiBinding,
-    CppShapeProjection,
     Diagnostic,
     PatternForm,
     Requirement,
@@ -340,21 +339,6 @@ def test_behavior_change_fields():
     assert_one_error(spec, "cases is not a non-empty list")
     spec = replace_first(sample_spec(), "behavior_changes", decision="")
     assert_one_error(spec, "decision is empty")
-
-
-def test_cpp_shape_projection_references():
-    spec = sample_spec()
-    projection = replace(spec.cpp.shape_projections[0], layer="missing")
-    spec = replace(spec, cpp=replace(spec.cpp, shape_projections=(projection,)))
-    assert_one_error(spec, "layer kind 'missing' does not exist")
-
-
-def test_cpp_shape_projection_is_unique_per_layer():
-    spec = sample_spec()
-    second = CppShapeProjection(id="again", layer="own", spelling="x")
-    projections = (*spec.cpp.shape_projections, second)
-    spec = replace(spec, cpp=replace(spec.cpp, shape_projections=projections))
-    assert_one_error(spec, "layer kinds has duplicates")
 
 
 def test_cpp_api_binding_references():

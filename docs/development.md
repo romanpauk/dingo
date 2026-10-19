@@ -65,6 +65,31 @@ python3 -m spec.export --output build/spec.json
 
 The spec tests run as `dingo_spec_test` in ctest.
 
+### Public API Check
+
+[`test/spec/public_api_check.py`](../test/spec/public_api_check.py) compiles
+every public include path of the spec alone, and one translation unit that uses
+every public name and extension point and checks every configuration macro. A
+failure names the spec entry. The lit test `public-api.t` runs it.
+
+### Contract Evaluation
+
+[`test/contracts/evaluate.py`](../test/contracts/evaluate.py) reports, per
+toolchain of the contract baseline, which contracts of the spec the current
+implementation satisfies, which it violates, and which no current probe
+observes. It is a report and does not fail on a violation.
+
+```bash
+python3 test/contracts/evaluate.py
+```
+
+### Scope Check
+
+[`test/spec/scopes_check.py`](../test/spec/scopes_check.py) generates a program
+that prints the storage scope policies of the current implementation and
+compares them with the scope descriptors of the spec. The lit test
+`spec-scopes.t` runs it.
+
 ## Generated Code
 
 [`tools/generator/generate.py`](../tools/generator/generate.py) generates files

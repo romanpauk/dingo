@@ -79,6 +79,7 @@ def test_spec_sections():
     names = [field.name for field in dataclasses.fields(Spec)]
     assert names == [
         "layer_kinds",
+        "storage_forms",
         "scopes",
         "routes",
         "key_kinds",
