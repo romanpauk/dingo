@@ -66,7 +66,16 @@ template <typename T> struct recursion_guard {
         throw detail::make_type_recursion_exception<T>(context);
       }
     }
+    // The destructor unlinks the guard, which GCC does not see when it warns
+    // about the address of a local guard escaping into head_.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
     head_ = this;
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
   }
 
   recursion_guard(const recursion_guard &) = delete;

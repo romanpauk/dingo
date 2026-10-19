@@ -1,4 +1,7 @@
-FROM ubuntu:25.04
+# The base image is selectable so a toolchain that Ubuntu 26.04 LTS does not
+# package, such as GCC 16, can be built on a newer release.
+ARG BASE_IMAGE=ubuntu:26.04
+FROM ${BASE_IMAGE}
 
 ARG TOOLCHAIN=gcc-14
 ARG MSVC_WINE_DEST=/opt/msvc
@@ -91,9 +94,9 @@ case \"${TOOLCHAIN}\" in \
         : \
         ;; \
     msvc|msvc-wine) \
-        ln -sf /usr/lib/wine/wine64 /usr/local/bin/wine64 && \
-        ln -sf /usr/lib/wine/wine64 /usr/local/bin/wine && \
-        /usr/lib/wine/wine64 wineboot --init && \
+        ln -sf /usr/bin/wine64-stable /usr/local/bin/wine64 && \
+        ln -sf /usr/bin/wine64-stable /usr/local/bin/wine && \
+        /usr/bin/wine64-stable wineboot --init && \
         while pgrep wineserver > /dev/null; do sleep 1; done && \
         /usr/local/bin/install-msvc-wine \
             --dest \"${MSVC_WINE_DEST}\" \

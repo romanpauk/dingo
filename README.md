@@ -13,7 +13,7 @@ interface lookups when the selected storage and scope allow it.
 Tested with:
 
 - C++17, C++20, C++23, C++26
-- GCC 13-15
+- GCC 13-16
 - Clang 18-20
 - Visual Studio 2022, 2026
 
