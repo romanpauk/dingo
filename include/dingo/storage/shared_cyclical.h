@@ -7,15 +7,15 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
+#include <dingo/base/config.h>
 
+#include <dingo/base/type_descriptor.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/memory/aligned_storage.h>
 #include <dingo/storage/storage.h>
 #include <dingo/storage/storage_scope_policy.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/normalized_type.h>
-#include <dingo/type/type_descriptor.h>
 
 #include <atomic>
 #include <memory>

@@ -18,17 +18,17 @@
 // strategies that recover concrete parameters also expose their argument type
 // list. Both construct overloads use the constructor selected by the result.
 
-#include <dingo/core/config.h>
+#include <dingo/base/config.h>
 
-#include <dingo/core/construction_scope.h>
-#include <dingo/core/key.h>
+#include <dingo/base/complete_type.h>
+#include <dingo/base/construction_scope.h>
+#include <dingo/base/type_list.h>
 #include <dingo/factory/constructor_traits.h>
 #include <dingo/factory/constructor_typedef.h>
-#include <dingo/registration/annotated.h>
-#include <dingo/type/complete_type.h>
+#include <dingo/type/annotated.h>
 #include <dingo/type/dependency_traits.h>
+#include <dingo/type/key.h>
 #include <dingo/type/normalized_type.h>
-#include <dingo/type/type_list.h>
 
 #include <type_traits>
 #include <utility>

@@ -17,14 +17,15 @@ Everything else is either runtime/static implementation detail or shared core.
 
 ## Internal Layout
 
-The container stack is split into three layers:
+The container stack is split into three groups:
 
-- `include/dingo/core/`: shared runtime/static substrate
+- `include/dingo/binding/`: shared runtime/static substrate
 - `include/dingo/runtime/`: runtime registry internals
 - `include/dingo/static/`: static registry and graph internals
 
 The split keeps public headers small while leaving runtime and static
-implementation details in their own directories.
+implementation details in their own directories. The full header hierarchy is
+described in [Header Layers](overview.md#header-layers).
 
 ## Unified Container
 
@@ -131,6 +132,6 @@ The key implementation headers behind this model are:
 - [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
-- [include/dingo/core/binding_selection.h](../../include/dingo/core/binding_selection.h)
-- [include/dingo/core/binding_resolution.h](../../include/dingo/core/binding_resolution.h)
-- [include/dingo/core/binding_resolution_policy.h](../../include/dingo/core/binding_resolution_policy.h)
+- [include/dingo/binding/binding_selection.h](../../include/dingo/binding/binding_selection.h)
+- [include/dingo/binding/binding_resolution.h](../../include/dingo/binding/binding_resolution.h)
+- [include/dingo/binding/binding_resolution_policy.h](../../include/dingo/binding/binding_resolution_policy.h)

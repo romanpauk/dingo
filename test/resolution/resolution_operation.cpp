@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/core/binding_resolution.h>
-#include <dingo/core/exceptions.h>
+#include <dingo/base/exceptions.h>
+#include <dingo/binding/binding_resolution.h>
 #include <dingo/resolution/resolution_operation.h>
 #include <dingo/storage/shared.h>
 

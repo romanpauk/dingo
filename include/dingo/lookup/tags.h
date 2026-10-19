@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/core/none.h>
+#include <dingo/base/none.h>
 
 namespace dingo {
 template <typename... Definitions> struct lookups {};

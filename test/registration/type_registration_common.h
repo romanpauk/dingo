@@ -7,17 +7,17 @@
 
 #pragma once
 
+#include <dingo/binding/binding_model.h>
 #include <dingo/container.h>
-#include <dingo/core/binding_model.h>
-#include <dingo/core/factory_traits.h>
 #include <dingo/factory/callable.h>
+#include <dingo/factory/factory_traits.h>
 #include <dingo/registration/constructor.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/resolution/conversion_cache.h>
-#include <dingo/resolution/runtime_binding.h>
 #include <dingo/rtti/rtti.h>
 #include <dingo/rtti/typeid_provider.h>
 #include <dingo/runtime/container_runtime.h>
+#include <dingo/runtime/runtime_binding.h>
 #include <dingo/runtime/transaction.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/interface_storage_traits.h>

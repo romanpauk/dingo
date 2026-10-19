@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
+#include <dingo/base/config.h>
 
-#include <dingo/core/binding_resolution.h>
-#include <dingo/resolution/runtime_binding_interface.h>
+#include <dingo/binding/binding_resolution.h>
+#include <dingo/binding/runtime_binding_interface.h>
 #include <dingo/runtime/container_runtime.h>
 #include <dingo/runtime/context.h>
 #include <dingo/type/rebind_type.h>

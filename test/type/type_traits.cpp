@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/core/dependency.h>
-#include <dingo/registration/collection_traits.h>
 #include <dingo/storage/interface_storage_traits.h>
+#include <dingo/type/collection_traits.h>
+#include <dingo/type/dependency.h>
 #include <dingo/type/dependency_traits.h>
 #include <dingo/type/type_traits.h>
 

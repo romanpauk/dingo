@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/type/type_list.h>
+#include <dingo/base/type_list.h>
 
 #include <cstddef>
 #include <type_traits>

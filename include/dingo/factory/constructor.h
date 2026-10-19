@@ -7,12 +7,12 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
+#include <dingo/base/config.h>
 
+#include <dingo/base/type_list.h>
 #include <dingo/factory/constructor_detection.h>
 #include <dingo/factory/constructor_traits.h>
 #include <dingo/type/normalized_type.h>
-#include <dingo/type/type_list.h>
 
 namespace dingo {
 

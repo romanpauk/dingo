@@ -7,14 +7,14 @@
 
 #pragma once
 
-// #include <dingo/core/config.h>
+// #include <dingo/base/config.h>
 
-#include <dingo/core/factory_traits.h>
-#include <dingo/core/key.h>
+#include <dingo/base/type_list.h>
 #include <dingo/factory/constructor.h>
+#include <dingo/factory/factory_traits.h>
 #include <dingo/storage/storage.h>
+#include <dingo/type/key.h>
 #include <dingo/type/rebind_type.h>
-#include <dingo/type/type_list.h>
 
 #include <type_traits>
 #include <utility>

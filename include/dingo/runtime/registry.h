@@ -7,33 +7,33 @@
 
 #pragma once
 
-#include <dingo/core/auto_constructible.h>
-#include <dingo/core/binding_collection.h>
-#include <dingo/core/binding_model.h>
-#include <dingo/core/binding_resolution_policy.h>
-#include <dingo/core/binding_selection.h>
-#include <dingo/core/config.h>
-#include <dingo/core/exceptions.h>
-#include <dingo/core/key.h>
-#include <dingo/core/none.h>
+#include <dingo/base/config.h>
+#include <dingo/base/exceptions.h>
+#include <dingo/base/none.h>
+#include <dingo/base/type_list.h>
+#include <dingo/binding/binding_collection.h>
+#include <dingo/binding/binding_model.h>
+#include <dingo/binding/binding_resolution_policy.h>
+#include <dingo/binding/binding_selection.h>
 #include <dingo/factory/callable.h>
 #include <dingo/lookup/lookup.h>
 #include <dingo/lookup/operations.h>
 #include <dingo/memory/allocator.h>
-#include <dingo/registration/annotated.h>
-#include <dingo/registration/collection_traits.h>
 #include <dingo/registration/requirements.h>
-#include <dingo/resolution/runtime_binding.h>
 #include <dingo/runtime/container_runtime.h>
 #include <dingo/runtime/container_traits.h>
 #include <dingo/runtime/context.h>
 #include <dingo/runtime/lookup_index.h>
 #include <dingo/runtime/registration_api.h>
+#include <dingo/runtime/runtime_binding.h>
 #include <dingo/runtime/transaction.h>
 #include <dingo/storage/interface_storage_traits.h>
+#include <dingo/type/annotated.h>
+#include <dingo/type/auto_constructible.h>
+#include <dingo/type/collection_traits.h>
 #include <dingo/type/dependency_traits.h>
+#include <dingo/type/key.h>
 #include <dingo/type/normalized_type.h>
-#include <dingo/type/type_list.h>
 
 #include <algorithm>
 #include <cassert>

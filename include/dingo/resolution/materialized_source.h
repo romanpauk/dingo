@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
+#include <dingo/base/config.h>
 #include <dingo/memory/object_lifetime.h>
 
 #include <cstddef>

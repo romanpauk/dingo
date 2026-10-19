@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include <dingo/core/key.h>
-#include <dingo/core/selected.h>
+#include <dingo/base/selected.h>
+#include <dingo/type/key.h>
 
 #include <type_traits>
 

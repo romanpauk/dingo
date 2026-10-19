@@ -7,16 +7,9 @@
 
 #pragma once
 
-#include <dingo/type/type_descriptor.h>
-
-#include <string>
-
 namespace dingo {
 
-template <typename T> std::string type_name() {
-  std::string name;
-  append_type_name(name, describe_type<T>());
-  return name;
-}
+struct borrow {};
+struct consume {};
 
 } // namespace dingo

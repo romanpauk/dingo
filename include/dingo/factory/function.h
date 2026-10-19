@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
+#include <dingo/base/config.h>
 #include <dingo/factory/callable.h>
 
 namespace dingo {

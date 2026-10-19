@@ -34,6 +34,9 @@ Run a quality target with `cmake --build build -t <target>`.
   and `docker`.
 - `markdown-format-check`: verifies the same Markdown files.
 - `format-check`: runs `sources-format-check` and `markdown-format-check`.
+- `layers-check`: verifies that headers include only headers of lower layers or
+  of their own directory, as described in
+  [Header Layers](architecture/overview.md#header-layers).
 - `includes-compile`: compiles one generated translation unit per standalone
   public header.
 - `includes-tidy`: runs clang-tidy on those generated translation units on

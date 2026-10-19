@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
+#include <dingo/base/config.h>
 
-#include <dingo/core/exceptions.h>
-#include <dingo/type/type_list.h>
+#include <dingo/base/exceptions.h>
+#include <dingo/base/type_list.h>
 
 #include <memory>
 #include <optional>

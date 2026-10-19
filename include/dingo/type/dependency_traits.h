@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include <dingo/core/construction_scope.h>
-#include <dingo/registration/annotated.h>
+#include <dingo/base/construction_scope.h>
+#include <dingo/type/annotated.h>
 #include <dingo/type/normalized_type.h>
 
 #include <type_traits>

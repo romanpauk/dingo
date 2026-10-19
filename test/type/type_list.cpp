@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: MIT
 //
 
+#include <dingo/base/type_list.h>
 #include <dingo/rtti/typeid_provider.h>
-#include <dingo/type/type_list.h>
 
 #include <gtest/gtest.h>
 

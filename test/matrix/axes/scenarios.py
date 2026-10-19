@@ -131,7 +131,7 @@ REGRESSION_SCENARIOS = (
         test_name="runtime_shared_scenario_scenario_scenario_{container}",
         function="runtime_exception_regression_scenario::run",
         supported_containers=RUNTIME_CONTAINERS,
-        system_headers=("dingo/type/type_name.h",),
+        system_headers=("dingo/base/type_name.h",),
         headers=("matrix/scenarios/runtime/exceptions.h",),
     ),
     ScenarioSpec(

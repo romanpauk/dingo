@@ -7,14 +7,14 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
+#include <dingo/base/config.h>
 
-#include <dingo/registration/annotated.h>
+#include <dingo/base/complete_type.h>
+#include <dingo/base/type_list.h>
 #include <dingo/storage/interface_storage_traits.h>
 #include <dingo/storage/storage.h>
-#include <dingo/type/complete_type.h>
+#include <dingo/type/annotated.h>
 #include <dingo/type/normalized_type.h>
-#include <dingo/type/type_list.h>
 
 #include <type_traits>
 

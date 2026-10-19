@@ -7,15 +7,15 @@
 
 #pragma once
 
-#include <dingo/core/exceptions.h>
-#include <dingo/core/key.h>
+#include <dingo/base/exceptions.h>
+#include <dingo/base/type_list.h>
 #include <dingo/lookup/array.h>
 #include <dingo/lookup/base.h>
 #include <dingo/lookup/collection.h>
 #include <dingo/lookup/ordered.h>
 #include <dingo/lookup/unordered.h>
+#include <dingo/type/key.h>
 #include <dingo/type/normalized_type.h>
-#include <dingo/type/type_list.h>
 
 #include <tuple>
 #include <type_traits>

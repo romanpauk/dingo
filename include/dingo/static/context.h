@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/core/context_base.h>
+#include <dingo/context/context_base.h>
 #include <dingo/static/graph.h>
 
 #include <array>

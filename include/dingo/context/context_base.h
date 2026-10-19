@@ -7,13 +7,13 @@
 
 #pragma once
 
-#include <dingo/core/construction_scope.h>
-#include <dingo/core/exceptions.h>
-#include <dingo/core/key.h>
+#include <dingo/base/construction_scope.h>
+#include <dingo/base/exceptions.h>
 #include <dingo/factory/constructor_detection.h>
 #include <dingo/memory/aligned_storage.h>
-#include <dingo/registration/annotated.h>
 #include <dingo/resolution/resolving_frame_fwd.h>
+#include <dingo/type/annotated.h>
+#include <dingo/type/key.h>
 
 #include <array>
 #include <cassert>

@@ -5,6 +5,15 @@ include(${CMAKE_CURRENT_LIST_DIR}/uv.cmake)
 function(configure_quality_targets out_check_targets)
   set(check_targets)
 
+  uv_get_run_command(layers_run PROJECT_DIRECTORY "${PROJECT_SOURCE_DIR}")
+  add_custom_target(layers-check
+    COMMENT "Verifying header layering"
+    COMMAND ${layers_run} ${PROJECT_SOURCE_DIR}/tools/layers.py
+      ${PROJECT_SOURCE_DIR}/include
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+  )
+  list(APPEND check_targets layers-check)
+
   if(NOT DINGO_CLANG_TOOLS_ENABLED)
     add_custom_target(format DEPENDS markdown-format)
     add_custom_target(format-check DEPENDS markdown-format-check)

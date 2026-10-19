@@ -7,9 +7,9 @@
 
 #pragma once
 
-#include <dingo/core/context_base.h>
-#include <dingo/core/factory_traits.h>
+#include <dingo/context/context_base.h>
 #include <dingo/factory/constructor.h>
+#include <dingo/factory/factory_traits.h>
 #include <dingo/memory/aligned_storage.h>
 
 namespace dingo {

@@ -7,9 +7,9 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
+#include <dingo/base/config.h>
 
-#include <dingo/type/type_list.h>
+#include <dingo/base/type_list.h>
 #include <dingo/type/type_traits.h>
 
 #include <type_traits>

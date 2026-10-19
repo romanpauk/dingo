@@ -7,11 +7,11 @@
 
 #pragma once
 
-#include <dingo/core/config.h>
-#include <dingo/core/construction_scope.h>
+#include <dingo/base/config.h>
+#include <dingo/base/construction_scope.h>
+#include <dingo/base/type_descriptor.h>
 #include <dingo/resolution/cache.h>
 #include <dingo/type/rebind_type.h>
-#include <dingo/type/type_descriptor.h>
 
 #include <cassert>
 
