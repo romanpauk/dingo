@@ -15,10 +15,23 @@ endif()
 
 project(dingo VERSION 0.1.2)
 
+set(DINGO_DIFFERENTIAL_INCLUDE_DIR "" CACHE PATH
+    "Development only: build tests against this include directory instead of include/.")
+set(DINGO_BUILD_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/include")
+if(DINGO_DEVELOPMENT_MODE AND DINGO_DIFFERENTIAL_INCLUDE_DIR)
+    if(NOT EXISTS "${DINGO_DIFFERENTIAL_INCLUDE_DIR}/dingo/container.h")
+        message(FATAL_ERROR
+            "DINGO_DIFFERENTIAL_INCLUDE_DIR must be an include directory "
+            "containing dingo/container.h: ${DINGO_DIFFERENTIAL_INCLUDE_DIR}")
+    endif()
+    set(DINGO_BUILD_INCLUDE_DIR "${DINGO_DIFFERENTIAL_INCLUDE_DIR}")
+    message(STATUS "Differential build against ${DINGO_BUILD_INCLUDE_DIR}")
+endif()
+
 add_library(dingo INTERFACE)
 add_library(dingo::dingo ALIAS dingo)
 target_include_directories(dingo INTERFACE
-    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+    "$<BUILD_INTERFACE:${DINGO_BUILD_INCLUDE_DIR}>"
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
 

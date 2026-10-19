@@ -10,6 +10,8 @@ if(NOT DINGO_MATRIX_PROFILE MATCHES "^(full|portable)$")
     message(FATAL_ERROR
         "DINGO_MATRIX_PROFILE must be either full or portable")
 endif()
+option(DINGO_MATRIX_RECORD
+    "Record matrix assertion outcomes for differential testing" OFF)
 option(DINGO_MATRIX_TEST_AFTER_BUILD
     "Run each matrix test executable immediately after linking" OFF)
 
@@ -151,6 +153,14 @@ set_tests_properties(dingo_matrix_generator_test PROPERTIES
     LABELS "unit;generator"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/matrix)
 
+add_test(NAME dingo_differential_compare_test
+    COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q -p no:cacheprovider
+        ${CMAKE_CURRENT_SOURCE_DIR}/differential/compare_test.py)
+set_tests_properties(dingo_differential_compare_test PROPERTIES
+    LABELS "unit;generator"
+    ENVIRONMENT
+        "PYTHONDONTWRITEBYTECODE=1;DINGO_DIFFERENTIAL_TEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/differential-test")
+
 add_executable(dingo_unit_test
     container/construct_dependency.cpp
     container/container_move.cpp
@@ -230,6 +240,10 @@ function(dingo_configure_matrix_compile_target DINGO_MATRIX_TARGET)
         $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
     target_compile_options(${DINGO_MATRIX_TARGET} PRIVATE
         $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
+    if(DINGO_MATRIX_RECORD)
+        target_compile_definitions(${DINGO_MATRIX_TARGET} PRIVATE
+            DINGO_MATRIX_RECORD=1)
+    endif()
 endfunction()
 
 foreach(DINGO_MATRIX_TEST_TARGET IN LISTS DINGO_MATRIX_TEST_TARGETS)
@@ -251,6 +265,10 @@ foreach(DINGO_MATRIX_TEST_TARGET IN LISTS DINGO_MATRIX_TEST_TARGETS)
     set_tests_properties(${DINGO_MATRIX_TEST_TARGET}
         PROPERTIES LABELS "runtime")
     dingo_configure_matrix_compile_target(${DINGO_MATRIX_TEST_TARGET})
+    if(DINGO_MATRIX_RECORD)
+        target_sources(${DINGO_MATRIX_TEST_TARGET} PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/differential/recorder.cpp")
+    endif()
 
     set(DINGO_MATRIX_DIAGNOSTIC_INDEX 0)
     foreach(DINGO_MATRIX_ISOLATED_SOURCE IN LISTS

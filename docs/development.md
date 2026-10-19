@@ -115,6 +115,35 @@ CXX=clang++ python3 test/contracts/probe.py report \
     --work-dir build/contracts --scenario chain.static.32
 ```
 
+## Differential Tests
+
+The differential tests compare the behavior of the working tree with a pinned
+baseline of the library, as described in
+[Differential Testing](architecture/spec-driven-design.md#differential-testing).
+
+[`test/differential/run.py`](../test/differential/run.py) extracts the
+`include/` directory of the commit in
+[`test/differential/baseline-commit`](../test/differential/baseline-commit) and
+builds the generated matrix twice from the working-tree test sources: once
+against `include/`, and once against the extracted baseline through the
+development-only `DINGO_DIFFERENTIAL_INCLUDE_DIR` cache variable. Both builds
+enable `DINGO_MATRIX_RECORD`, which makes every matrix assertion record what it
+observed: the expression, its result, and printable operand values such as
+counts and messages. Each executable writes its records to the file named by
+`DINGO_MATRIX_RECORD_FILE`.
+
+[`test/differential/compare.py`](../test/differential/compare.py) compares the
+records. Every difference must be declared in
+[`test/differential/behavior_changes.json`](../test/differential/behavior_changes.json),
+and every declared change must match a difference. The constructor-detection
+matrix family tests internal names and does not take part.
+
+```bash
+python3 test/differential/run.py --build-root build/differential --profile portable
+```
+
+The `differential` workflow runs the same command with GCC 14.
+
 ## Compile-Time Profiling
 
 For template compile-cost investigations, use

@@ -1,0 +1,65 @@
+name: differential
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+on:
+  schedule:
+    - cron: "0 0 * * *" # Daily
+  pull_request:
+  push:
+    branches:
+      - master
+
+env:
+  BUILD_JOBS: ${{ vars.DINGO_BUILD_JOBS || '4' }}
+  CCACHE_MAX_SIZE: ${{ vars.DINGO_CCACHE_MAX_SIZE || '700M' }}
+  CMAKE_CXX_COMPILER_LAUNCHER: ccache
+
+jobs:
+  differential:
+    name: ubuntu-24.04 / g++-14 / portable / differential
+    timeout-minutes: 90
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout workflow repo
+        uses: actions/checkout@v7.0.0
+        with:
+          # The pinned baseline commit is extracted with git archive.
+          fetch-depth: 0
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          version: 0.11.3
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: CCache
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        with:
+          key: ubuntu-24.04-differential-g++-14
+          restore-keys: ubuntu-24.04-differential-g++-14
+          max-size: ${{ env.CCACHE_MAX_SIZE }}
+          evict-old-files: job
+
+      - name: Install Compiler
+        shell: bash
+        run: |
+          command -v g++-14 >/dev/null || sudo apt-get install -y g++-14
+
+      - name: Run differential tests
+        shell: bash
+        run: |
+          python3 test/differential/run.py --build-root build/differential --profile portable --jobs "$BUILD_JOBS" --cxx g++-14
+
+      - name: Upload Failure Artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: failure-differential
+          if-no-files-found: ignore
+          path: build/differential/report.json

@@ -959,13 +959,21 @@ Observations from the baseline:
 
 #### M0.2: Differential Harness
 
-Status: not started.
+Status: done.
 
 Build the pinned baseline separately, emit outcome records from the public-API
 matrix cases, add the comparator, and add an empty behavior changes list.
 
 Done when the matrix outcomes of the working tree compare equal to the baseline
 in CI.
+
+The harness is described in
+[Differential Tests](../development.md#differential-tests). Records are written
+per assertion, so a changed expectation shows the observed value of both sides.
+A self-test that changed the text of `type_not_found_exception` was reported as
+32 undeclared differences, including message lengths observed by unrelated
+parent-container cases, and passed once declared. The `differential` workflow
+has not run on GitHub yet.
 
 ### M1: Spec And Generator
 
@@ -1261,3 +1269,7 @@ capability tags.
   architecture, and C++ standard, and act as upper limits. Header cost is
   measured as preprocessed Dingo lines rather than compile time, so it is
   deterministic.
+- 2026-10-19: The differential harness records an observation per matrix
+  assertion rather than a pass or fail per case, and runs as a separate
+  workflow, because the build workflow is reused by the release workflow on a
+  source tree without git history.
