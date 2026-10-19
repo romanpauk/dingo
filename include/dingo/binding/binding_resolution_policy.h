@@ -10,6 +10,8 @@
 #include <dingo/base/exceptions.h>
 #include <dingo/binding/binding_selection.h>
 
+#include <utility>
+
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4702)
@@ -94,39 +96,30 @@ resolve_binding_status(binding_status primary,
       resolve_binding(primary, SecondaryStatus, policy));
 }
 
-template <typename ErrorRequest, typename ResolveRequest = ErrorRequest,
-          typename Context, typename Sources>
-ResolveRequest resolve_from_binding_sources(Context &context,
-                                            Sources &sources) {
-  auto selection = sources.select();
-  if (selection.ambiguous()) {
-    throw make_type_ambiguous_exception<ErrorRequest>(context);
+// Resolves a request that two sources may answer. The primary source selected
+// at run time; the status of the secondary is known at compile time. The policy
+// decides which side wins, or whether both finding a binding is an error.
+template <binding_resolution_policy Policy, binding_status SecondaryStatus,
+          typename R, typename Request, typename PrimarySelection,
+          typename Context, typename PrimaryResolve, typename SecondaryResolve,
+          typename Missing>
+R resolve_combined_selection(const PrimarySelection &primary, Context &context,
+                             PrimaryResolve &&resolve_primary,
+                             SecondaryResolve &&resolve_secondary,
+                             Missing &&missing) {
+  const auto result = resolve_binding(primary.status, SecondaryStatus, Policy);
+  if (result == binding_result::primary) {
+    return std::forward<PrimaryResolve>(resolve_primary)();
   }
-
-  return sources.template resolve<ResolveRequest>(context, selection);
-}
-
-template <typename SelectedSource, typename MissingSource>
-struct selected_binding_sources {
-  SelectedSource &selected;
-  MissingSource &missing;
-
-  decltype(auto) select() { return selected.select(); }
-
-  template <typename Request, typename Context, typename Selection>
-  decltype(auto) resolve(Context &context, Selection selection) {
-    if (selection.found()) {
-      return selected.template resolve<Request>(context, selection);
+  if constexpr (SecondaryStatus == binding_status::found) {
+    if (result == binding_result::secondary) {
+      return std::forward<SecondaryResolve>(resolve_secondary)();
     }
-    return missing.template resolve<Request>(context);
   }
-};
-
-template <typename SelectedSource, typename MissingSource>
-selected_binding_sources<SelectedSource, MissingSource>
-make_selected_binding_sources(SelectedSource &selected,
-                              MissingSource &missing) {
-  return {selected, missing};
+  if (result == binding_result::missing) {
+    return std::forward<Missing>(missing)();
+  }
+  throw make_type_ambiguous_exception<Request>(context);
 }
 
 } // namespace dingo::detail

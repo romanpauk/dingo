@@ -1,7 +1,7 @@
 // RUN: %dingo_cxx -c %s
 
 #include <dingo/binding/binding_selection.h>
-#include <dingo/static/registry.h>
+#include <dingo/static/registration.h>
 #include <dingo/storage/unique.h>
 
 struct duplicate_key : std::integral_constant<int, 0> {};

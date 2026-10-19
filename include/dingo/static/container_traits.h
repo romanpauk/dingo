@@ -41,19 +41,6 @@ struct is_static_bindings<static_bindings<Registrations...>> : std::true_type {
 template <typename T>
 inline constexpr bool is_static_bindings_v = is_static_bindings<T>::value;
 
-template <typename T, typename = void>
-struct is_static_container_traits : std::false_type {};
-
-template <typename T>
-struct is_static_container_traits<
-    T, std::void_t<container_lookup_definition_type_t<T>,
-                   typename T::allocator_type, typename T::rtti_type>>
-    : std::true_type {};
-
-template <typename T>
-inline constexpr bool is_static_container_traits_v =
-    is_static_container_traits<T>::value;
-
 template <typename T, typename = void> struct static_container_traits {
   using type = ::dingo::static_container_traits;
 };

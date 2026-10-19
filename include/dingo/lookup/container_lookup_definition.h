@@ -34,6 +34,20 @@ template <typename T>
 using container_lookup_definition_type_t =
     typename container_lookup_definition_type<T>::type;
 
+// The configuration of a container: the rtti, the allocator and the lookup
+// definitions. Both the runtime and the static container are configured by it.
+template <typename T, typename = void>
+struct is_container_traits : std::false_type {};
+
+template <typename T>
+struct is_container_traits<
+    T, std::void_t<container_lookup_definition_type_t<T>,
+                   typename T::allocator_type, typename T::rtti_type>>
+    : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_container_traits_v = is_container_traits<T>::value;
+
 // Containers that keep their state behind a movable handle are used by their
 // implementation wherever another container or a binding refers to them.
 template <typename T, typename = void> struct container_implementation {

@@ -178,8 +178,7 @@ struct container_base_invalid_two_parameter_tag {};
 
 template <typename First>
 using container_base_two_parameter_tag_t = std::conditional_t<
-    is_runtime_container_traits_v<First>,
-    container_base_runtime_two_parameter_tag,
+    is_container_traits_v<First>, container_base_runtime_two_parameter_tag,
     std::conditional_t<is_static_bindings_v<First> ||
                            is_bindings_wrapper_v<First>,
                        container_base_static_parent_tag,
@@ -220,7 +219,7 @@ struct container_base<container_base_invalid_two_parameter_tag, First, Second> {
 template <typename First, typename Second, typename Third>
 struct container_base<First, Second, Third> {
   static_assert(
-      is_runtime_container_traits_v<First>,
+      is_container_traits_v<First>,
       "container<T, U, V> requires runtime traits + allocator + parent");
   using type = runtime_container<First, Second, Third>;
 };
@@ -244,7 +243,7 @@ struct container_base_from_parameter {
 
 template <typename Param>
 struct container_base_from_parameter<
-    Param, std::enable_if_t<is_runtime_container_traits_v<Param>>> {
+    Param, std::enable_if_t<is_container_traits_v<Param>>> {
   using type = runtime_container<Param, typename Param::allocator_type, void>;
 };
 

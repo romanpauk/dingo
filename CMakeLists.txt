@@ -90,8 +90,15 @@ if(DINGO_DEVELOPMENT_MODE)
     set(DINGO_SOURCE_FILES
         base/config.h
         static/graph.h
+        static/binding.h
+        static/lookup.h
+        static/registration.h
         static/registry.h
+        static/resolution.h
+        static/selection.h
+        static/state.h
         container.h
+        container_api.h
         type/auto_constructible.h
         binding/binding_model.h
         binding/binding_resolution.h
@@ -101,7 +108,6 @@ if(DINGO_DEVELOPMENT_MODE)
         factory/factory_traits.h
         type/key.h
         base/none.h
-        static/activation_set.h
         static/container_traits.h
         base/exceptions.h
         factory/callable.h
@@ -129,9 +135,14 @@ if(DINGO_DEVELOPMENT_MODE)
         registration/type_registration.h
         runtime_container.h
         runtime/container_traits.h
-        runtime/registration_api.h
+        runtime/binding.h
+        runtime/lookup.h
         runtime/lookup_index.h
+        runtime/registration.h
         runtime/registry.h
+        runtime/resolution.h
+        runtime/selection.h
+        runtime/state.h
         runtime/transaction.h
         static_container.h
         lookup/array.h
@@ -146,8 +157,6 @@ if(DINGO_DEVELOPMENT_MODE)
         resolution/cache.h
         resolution/conversion_cache.h
         resolution/conversion_resolution.h
-        binding/runtime_binding_interface.h
-        runtime/runtime_binding.h
         storage/interface_storage_traits.h
         context/context_base.h
         runtime/context.h

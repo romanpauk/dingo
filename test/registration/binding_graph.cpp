@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/static/activation_set.h>
 #include <dingo/static/context.h>
 #include <dingo/static/graph.h>
+#include <dingo/static/state.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>
 #include <dingo/storage/unique.h>

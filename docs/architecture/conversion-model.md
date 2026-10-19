@@ -18,7 +18,7 @@ The full conversion behavior is spread across a few layers:
 The important source files are:
 
 - [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
-- [include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
+- [include/dingo/runtime/resolution.h](../../include/dingo/runtime/resolution.h)
 - [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
 - [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
 
@@ -183,8 +183,7 @@ again.
 ## Conversion Cache
 
 Shared and external resolution can preserve conversion objects through
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-and
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h) and
 [include/dingo/resolution/conversion_cache.h](../../include/dingo/resolution/conversion_cache.h).
 
 That cache matters when a conversion object must outlive a single expression,

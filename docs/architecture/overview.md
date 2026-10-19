@@ -29,6 +29,44 @@ static | | 8 | `runtime/`, `static/` | runtime registry and static registry,
 graph and activation | | 9 | `dingo/*.h` | `container`, `runtime_container`,
 `static_container`, `container_base` |
 
+## Runtime And Static Mirror
+
+`runtime/` and `static/` answer the same questions with different means: the
+runtime side keeps mutable state and discovers bindings by lookup, the static
+side derives everything from the `bindings<...>` type list. They are kept
+mirrored, so both directories contain headers of the same names with the same
+roles. The `layers-check` target enforces the file names.
+
+- `container_traits.h`: container configuration and its detection. Runtime holds
+  rtti, allocator and lookup definitions; static holds the same for
+  `static_container`.
+- `context.h`: per-resolution state, construction and the type path. Runtime is
+  backed by an arena and a transaction; static uses fixed frames sized by the
+  graph.
+- `lookup.h`: finding the bindings of an interface and key. Runtime uses lookup
+  indexes and routes; static uses a type-list index answered by overload
+  resolution.
+- `selection.h`: the outcome of a lookup, found, missing or ambiguous. Runtime
+  returns the value `runtime_binding_selection`; static yields the type
+  `binding_choice`.
+- `registration.h`: how bindings come to exist. Runtime has `prepare_binding`,
+  key commit and rollback; static has `static_bindings` with dependency and key
+  validation.
+- `state.h`: where binding state lives. Runtime has `runtime_registry_data` and
+  scopes; static has `static_binding_storage` and the activation sets.
+- `binding.h`: one binding, its storage, factory and conversion cache. Runtime
+  has `runtime_binding`; static has the storage slots and `binding_activation`.
+- `resolution.h`: turning a selected binding and a request into a value. Runtime
+  dispatches by type descriptor; static uses `static_binding_resolver`.
+- `registry.h`: the source that selects, resolves and enumerates bindings.
+  Runtime has `runtime_registry`; static has `static_registry`.
+
+Some headers exist on one side only. The runtime side owns its storage and rolls
+it back (`container_runtime.h`, `transaction.h`) and holds the index data
+structure (`lookup_index.h`); the static side proves its resolution graph at
+compile time (`graph.h`). Those names are listed in
+[tools/layers.py](../../tools/layers.py).
+
 ## Main Owners
 
 ### Public Containers
@@ -90,14 +128,13 @@ That deduction step is the boundary between the public registration syntax and
 the internal binding machinery.
 
 For compile-time sources, the public spelling is `bindings<...>`. Those bindings
-are normalized internally through the static registry path under
-[include/dingo/static/registry.h](../../include/dingo/static/registry.h).
+are normalized internally through the static registration path under
+[include/dingo/static/registration.h](../../include/dingo/static/registration.h).
 
 ### Factory And Storage
 
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-wraps a storage object and the child container used to resolve constructor
-dependencies.
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h) wraps a
+storage object and the child container used to resolve constructor dependencies.
 
 The factory owns the conversion-facing interface:
 
@@ -117,8 +154,8 @@ own lifetime policy:
 
 ### Resolution And Conversion Path
 
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-now owns the conversion-facing resolution flow. It is responsible for:
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h) now
+owns the conversion-facing resolution flow. It is responsible for:
 
 - asking storage to `resolve(...)` its native source shape
 - applying guard and closure scope through `storage_materialization_traits`
@@ -179,5 +216,5 @@ For the core path in source order, start here:
 - [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
 - [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
 - [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
-- [include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
+- [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)
 - [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)

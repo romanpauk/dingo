@@ -8,11 +8,14 @@
 #pragma once
 
 #include <dingo/base/config.h>
+#include <dingo/base/construction_scope.h>
+#include <dingo/base/type_descriptor.h>
 
 #include <dingo/binding/binding_resolution.h>
-#include <dingo/binding/runtime_binding_interface.h>
+#include <dingo/resolution/cache.h>
 #include <dingo/runtime/container_runtime.h>
 #include <dingo/runtime/context.h>
+#include <dingo/runtime/resolution.h>
 #include <dingo/type/rebind_type.h>
 
 #include <cassert>
@@ -199,45 +202,50 @@ struct runtime_storage_can_reset<
                 decltype(std::declval<const Storage &>().is_resolved())>>
     : std::true_type {};
 
-template <typename... Resolutions>
-std::size_t resolution_request_index(type_list<Resolutions...>,
-                                     type_descriptor requested_type) {
-  std::size_t index = 0;
-  std::size_t result = sizeof...(Resolutions);
-  (void)(((matches_resolution_request<Resolutions>(requested_type)
-               ? (result = index, true)
-               : (++index, false)) ||
-          ...));
-  return result;
-}
-
-template <typename Storage, typename Resolver, typename Context,
-          typename MaterializedSource, typename... Resolutions>
-resolved_address resolve_request_address_from_source(
-    construction_scope scope, Resolver &resolver, Context &context,
-    MaterializedSource &&source, std::size_t resolution_index,
-    type_list<Resolutions...>, type_descriptor requested_type,
-    type_descriptor registered_type) {
-  resolved_address result{};
-  std::size_t index = 0;
-  // Short-circuiting guarantees that exactly one arm forwards the source.
-  const bool matched =
-      (((resolution_index == index++)
-            ? (result = resolve_address_from_source<Resolutions, Storage>(
-                   scope, resolver, context,
-                   std::forward<MaterializedSource>(
-                       source), // NOLINT(bugprone-use-after-move)
-                   requested_type, registered_type),
-               true)
-            : false) ||
-       ...);
-  (void)index;
-  (void)matched;
-  assert(matched);
-  return result;
-}
-
 } // namespace detail
+
+template <typename RTTI, typename Context> class runtime_binding_interface {
+public:
+  using request_type = instance_request<RTTI>;
+  using resolve_function = resolved_address (*)(runtime_binding_interface &,
+                                                construction_scope, Context &,
+                                                const request_type &,
+                                                const void *);
+
+  detail::cache::entry *cache_slot() noexcept { return cache_slot_; }
+
+  // A null cache_key means the request is not cached.
+  resolved_address resolve_request(construction_scope scope, Context &context,
+                                   const request_type &request,
+                                   const void *cache_key) {
+    return resolve_(*this, scope, context, request, cache_key);
+  }
+
+  // Publishes a stable address for the request key until the transaction
+  // that resolved it is rolled back.
+  void publish_cache(Context &context, const void *key, void *address) {
+    assert(cache_slot_ != nullptr);
+    context.on_rollback(
+        +[](void *slot, void *) noexcept {
+          *static_cast<detail::cache::entry *>(slot) = {};
+        },
+        cache_slot_);
+    *cache_slot_ = {key, address};
+  }
+
+protected:
+  // Runtime lookup is non-owning; transaction storage destroys concrete
+  // bindings, so dispatch does not need a distinct virtual base per container.
+  explicit runtime_binding_interface(resolve_function resolve)
+      : resolve_(resolve) {}
+  ~runtime_binding_interface() = default;
+
+  void cache_slot(detail::cache::entry *slot) noexcept { cache_slot_ = slot; }
+
+private:
+  resolve_function resolve_;
+  detail::cache::entry *cache_slot_ = nullptr;
+};
 
 // TODO: the container here is just for RTTI, but it is needed to get the
 // inner container type and that is very hard. Perhaps pass RTTI and inner

@@ -10,7 +10,6 @@
 #include <dingo/base/exceptions.h>
 #include <dingo/base/type_descriptor.h>
 #include <dingo/binding/binding_selection.h>
-#include <dingo/binding/runtime_binding_interface.h>
 #include <dingo/context/context_base.h>
 #include <dingo/resolution/conversion_cache.h>
 #include <dingo/resolution/resolution_operation.h>
@@ -32,6 +31,15 @@
 #endif
 
 namespace dingo {
+
+struct resolved_address {
+  void *address;
+  enum class access_kind {
+    borrow,
+    consume,
+  } access;
+};
+
 namespace detail {
 
 template <typename Storage, typename T, typename Context, typename Source,
@@ -103,19 +111,6 @@ private:
   Context &context_;
   typename Context::frame_type frame_;
 };
-
-template <typename RTTI> struct binding_request {
-  instance_request<RTTI> request;
-  const void *cache_key;
-};
-
-template <typename T, typename RTTI>
-constexpr binding_request<RTTI>
-make_binding_request(const void *cache_key = nullptr) {
-  return {{RTTI::template get_type_index<request_lookup_type_t<T>>(),
-           describe_type<T>()},
-          cache_key};
-}
 
 template <typename T> T convert_resolved_binding(resolved_address result) {
   using result_type = std::remove_reference_t<T>;
@@ -447,54 +442,7 @@ consume_binding_resolution_request(construction_scope scope, Context &context,
   }
 }
 
-template <typename Target, typename Context, typename Instance>
-resolved_address resolve_binding_address_from_instance(construction_scope scope,
-                                                       Context &context,
-                                                       Instance &&instance) {
-  constexpr bool owns_value =
-      !std::is_reference_v<Instance> &&
-      !std::is_pointer_v<std::remove_reference_t<Instance>>;
-  return {detail::result_address<Target>(
-              scope, context, std::forward<decltype(instance)>(instance)),
-          owns_value ? resolved_address::access_kind::consume
-                     : resolved_address::access_kind::borrow};
-}
-
-template <typename Resolution, typename Storage, typename Resolver,
-          typename Context, typename MaterializedSource>
-resolved_address
-resolve_address_from_source(construction_scope scope, Resolver &resolver,
-                            Context &context, MaterializedSource &&source,
-                            type_descriptor requested_type,
-                            type_descriptor registered_type) {
-  using address_type = typename Resolution::result_type;
-  using operation = typename Resolution::operation;
-  auto &&instance = operation::template apply<Storage>(
-      resolver, context, std::forward<MaterializedSource>(source),
-      requested_type, registered_type);
-  return resolve_binding_address_from_instance<address_type>(
-      scope, context, std::forward<decltype(instance)>(instance));
-}
-
-template <typename RTTI, typename Binding, typename Context>
-resolved_address
-dispatch_binding_request(construction_scope scope, Binding &binding,
-                         Context &context,
-                         const binding_request<RTTI> &request) {
-  return binding.resolve_request(scope, context, request.request,
-                                 request.cache_key);
-}
-
 } // namespace detail
-
-template <typename T, typename RTTI, typename Binding, typename Context>
-T resolve_binding_request(construction_scope scope, Binding &binding,
-                          Context &context, const void *cache_key = nullptr) {
-  auto request = detail::make_binding_request<T, RTTI>(cache_key);
-  auto result =
-      detail::dispatch_binding_request<RTTI>(scope, binding, context, request);
-  return detail::convert_resolved_binding<T>(result);
-}
 
 template <typename Request>
 inline constexpr bool can_construct_from_normalized_request_v =
