@@ -27,19 +27,13 @@ def capability_fields(capability):
         raise GeneratorError(f"cpp.capabilities.{name}: feature_macro needs minimum")
     if capability.header is not None and not has_feature:
         raise GeneratorError(f"cpp.capabilities.{name}: header needs feature_macro")
-    fields = {
-        "spec_id": f"cpp.capabilities.{name}",
-        "macro": f"DINGO_HAS_{name.upper()}",
+    return {
+        "id": name,
         "description_lines": capability.description.strip().splitlines(),
         "builtin": capability.builtin,
-        "condition": None,
+        "feature_macro": capability.feature_macro,
+        "minimum": capability.minimum,
     }
-    if has_feature:
-        macro = capability.feature_macro
-        fields["condition"] = (
-            f"defined({macro}) && {macro} >= {capability.minimum}L"
-        )
-    return fields
 
 
 def capabilities(spec):
@@ -80,9 +74,8 @@ def variants(spec):
             )
         fields.append(
             {
-                "spec_id": f"variant_points.{point.id}",
-                "macro": f"DINGO_VARIANT_{point.id.upper()}",
-                "capability_macro": f"DINGO_HAS_{point.capability.upper()}",
+                "id": point.id,
+                "capability": point.capability,
                 "justification_lines": point.justification.strip().splitlines(),
             }
         )

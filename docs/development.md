@@ -142,9 +142,11 @@ Development builds regenerate before compiling anything that uses the library.
 Configure with `-DDINGO_GENERATE_ON_BUILD=OFF` to keep the tree as it is; CI
 does so, runs `check`, then runs `generate` and fails when the tree is not
 clean. Emitters live in `tools/generator/emitters.py` and compute the data,
-while the Jinja templates in `tools/generator/templates/` only lay it out. The
-generator runs through `uv`, which provides the pinned clang-format that formats
-the output.
+while the Jinja templates in `tools/generator/templates/` only lay it out. All
+output text, including the file header with its marker and license block and the
+manifest, is in the templates; the Python code passes data only. The generator
+runs through `uv`, which provides the pinned clang-format that formats the
+output.
 
 ## Generated Matrix Tests
 

@@ -2,13 +2,15 @@
 
 #include <dingo/core/base/capabilities.gen.h>
 {% for variant in variants %}
+{% set macro = "DINGO_VARIANT_" ~ variant.id | upper %}
+{% set capability_macro = "DINGO_HAS_" ~ variant.capability | upper %}
 
-// spec: {{ variant.spec_id }}
+// spec: variant_points.{{ variant.id }}
 {% for line in variant.justification_lines %}
 // {{ line }}
 {% endfor %}
-// Defaults to {{ variant.capability_macro }}; define it to 0 or 1 to override.
-#if !defined({{ variant.macro }})
-#define {{ variant.macro }} {{ variant.capability_macro }}
+// Defaults to {{ capability_macro }}; define it to 0 or 1 to override.
+#if !defined({{ macro }})
+#define {{ macro }} {{ capability_macro }}
 #endif
 {% endfor %}

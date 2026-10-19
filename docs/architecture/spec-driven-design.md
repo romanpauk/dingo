@@ -706,7 +706,10 @@ diagnostic text. `layers-check` enforces this.
 ### Rules For Generated Code
 
 - Logic lives in Python and the Jinja templates contain no logic. Python
-  computes the data, and the templates only lay it out.
+  computes the data, and the templates only lay it out. Python never contains
+  output text: every line of a generated file, including its marker, its license
+  block, macro names, and conditions, comes from a template under
+  `tools/generator/templates/`, and so does the manifest.
 - Generate data plus small generic C++ rather than near-identical copies of
   code. Every translation unit that includes a generated header parses it, so
   one specialization per cell costs more than one table and one consumer. The

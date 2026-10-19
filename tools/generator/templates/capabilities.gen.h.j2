@@ -6,26 +6,27 @@
 #endif
 {% endfor %}
 {% for capability in capabilities %}
+{% set macro = "DINGO_HAS_" ~ capability.id | upper %}
 
-// spec: {{ capability.spec_id }}
+// spec: cpp.capabilities.{{ capability.id }}
 {% for line in capability.description_lines %}
 // {{ line }}
 {% endfor %}
 {% if capability.builtin %}
 #if defined(__has_builtin)
 #if __has_builtin({{ capability.builtin }})
-#define {{ capability.macro }} 1
+#define {{ macro }} 1
 #else
-#define {{ capability.macro }} 0
+#define {{ macro }} 0
 #endif
 #else
-#define {{ capability.macro }} 0
+#define {{ macro }} 0
 #endif
 {% else %}
-#if {{ capability.condition }}
-#define {{ capability.macro }} 1
+#if defined({{ capability.feature_macro }}) && {{ capability.feature_macro }} >= {{ capability.minimum }}L
+#define {{ macro }} 1
 #else
-#define {{ capability.macro }} 0
+#define {{ macro }} 0
 #endif
 {% endif %}
 {% endfor %}
