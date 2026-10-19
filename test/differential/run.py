@@ -30,7 +30,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DIFFERENTIAL_ROOT = Path(__file__).resolve().parent
 BASELINE_COMMIT_FILE = DIFFERENTIAL_ROOT / "baseline-commit"
 COMPARE = DIFFERENTIAL_ROOT / "compare.py"
-BEHAVIOR_CHANGES = DIFFERENTIAL_ROOT / "behavior_changes.json"
 
 SIDES = ("current", "baseline")
 
@@ -288,7 +287,7 @@ def main():
             sys.executable, COMPARE,
             "--baseline", records / "baseline",
             "--current", records / "current",
-            "--behavior-changes", BEHAVIOR_CHANGES,
+            "--spec",
             "--report", build_root / "report.json",
         ]
     ).returncode

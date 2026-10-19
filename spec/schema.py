@@ -570,8 +570,9 @@ class BehaviorChange(Entity):
 
     `cases` are fnmatch patterns over case paths prefixed with the check that
     observes them: `routes:<domain>/<leaf>/<scope>/<stored>/<request>#<field>`
-    for the route conformance check, and `scopes:<scope>/<property>` for the
-    scope check.
+    for the route conformance check, `scopes:<scope>/<property>` for the scope
+    check, and `matrix:<executable>/<Suite>.<Name>` for the differential
+    tests of the generated matrix.
     """
 
     description: str

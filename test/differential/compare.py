@@ -156,6 +156,37 @@ def load_changes(path):
     return sorted(data["changes"], key=lambda change: change["id"])
 
 
+def load_spec_changes():
+    """Returns the behavior changes of the spec that the matrix observes.
+
+    A change takes part when one of its case patterns starts with `matrix:`;
+    the prefix is removed, and the patterns of other checks are ignored.
+    """
+    project_root = Path(__file__).resolve().parents[2]
+    # Importing the spec writes no bytecode into the source tree.
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, str(project_root))
+    import spec
+
+    changes = []
+    for change in spec.load_spec().behavior_changes:
+        patterns = [
+            pattern[len("matrix:") :]
+            for pattern in change.cases
+            if pattern.startswith("matrix:")
+        ]
+        if patterns:
+            changes.append(
+                {
+                    "id": change.id,
+                    "description": change.description,
+                    "decision": change.decision,
+                    "cases": patterns,
+                }
+            )
+    return sorted(changes, key=lambda change: change["id"])
+
+
 def encode(value):
     return json.dumps(value, sort_keys=True)
 
@@ -356,17 +387,25 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--baseline", type=Path, required=True, help="baseline records directory")
     parser.add_argument("--current", type=Path, required=True, help="current records directory")
-    parser.add_argument(
+    changes_source = parser.add_mutually_exclusive_group(required=True)
+    changes_source.add_argument(
         "--behavior-changes",
         type=Path,
-        required=True,
         help="JSON file listing the declared behavior changes",
+    )
+    changes_source.add_argument(
+        "--spec",
+        action="store_true",
+        help="use the behavior changes of the spec with matrix: case patterns",
     )
     parser.add_argument("--report", type=Path, help="write all differences as JSON")
     args = parser.parse_args(argv)
 
     try:
-        changes = load_changes(args.behavior_changes)
+        if args.spec:
+            changes = load_spec_changes()
+        else:
+            changes = load_changes(args.behavior_changes)
     except ChangesError as error:
         print(f"malformed behavior changes: {error}", file=sys.stderr)
         return 1

@@ -1116,8 +1116,8 @@ declared by one of 10 behavior changes:
 - static containers take external instances, following the Open Decisions
   proposal
 
-Remaining: the subjects of M1.6, and moving the matrix behavior changes of
-`test/differential/behavior_changes.json` into the spec.
+Remaining: the subjects of M1.6. The differential tests of the matrix read their
+behavior changes from the spec too, so every declared change lives in one place.
 
 ### M2: New Implementation Foundations
 

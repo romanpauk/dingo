@@ -224,10 +224,11 @@ counts and messages. Each executable writes its records to the file named by
 `DINGO_MATRIX_RECORD_FILE`.
 
 [`test/differential/compare.py`](../test/differential/compare.py) compares the
-records. Every difference must be declared in
-[`test/differential/behavior_changes.json`](../test/differential/behavior_changes.json),
-and every declared change must match a difference. The constructor-detection
-matrix family tests internal names and does not take part.
+records. Every difference must be declared by a behavior change of the spec,
+[`spec/content/behavior_changes.py`](../spec/content/behavior_changes.py), with
+a `matrix:<executable>/<Suite>.<Name>` case pattern, and every such change must
+match a difference. The constructor-detection matrix family tests internal names
+and does not take part.
 
 ```bash
 python3 test/differential/run.py --build-root build/differential --profile portable

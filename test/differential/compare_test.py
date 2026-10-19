@@ -267,9 +267,12 @@ def test_missing_change_key_is_malformed(work, capsys):
     assert "lacks keys: decision" in err
 
 
-def test_committed_behavior_changes_file_is_valid():
-    path = Path(__file__).resolve().parent / "behavior_changes.json"
-    assert isinstance(compare.load_changes(path), list)
+def test_spec_behavior_changes_load():
+    changes = compare.load_spec_changes()
+    assert isinstance(changes, list)
+    for change in changes:
+        assert change["cases"]
+        assert not any(pattern.startswith("matrix:") for pattern in change["cases"])
 
 
 def test_report_lists_all_differences(work, capsys):
