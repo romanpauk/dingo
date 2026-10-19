@@ -35,7 +35,8 @@ Run a quality target with `cmake --build build -t <target>`.
 - `markdown-format-check`: verifies the same Markdown files.
 - `format-check`: runs `sources-format-check` and `markdown-format-check`.
 - `layers-check`: verifies that headers include only headers of lower layers or
-  of their own directory, as described in
+  of their own directory, do not include each other in a cycle and stay within
+  the header size limit, as described in
   [Header Layers](architecture/overview.md#header-layers).
 - `includes-compile`: compiles one generated translation unit per standalone
   public header.

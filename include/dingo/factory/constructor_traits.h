@@ -8,7 +8,7 @@
 #pragma once
 
 #include <dingo/base/config.h>
-#include <dingo/resolution/resolution_operation.h>
+#include <dingo/resolution/operation.h>
 #include <dingo/type/type_traits.h>
 
 #include <array>

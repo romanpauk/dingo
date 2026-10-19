@@ -362,7 +362,7 @@ assert(&repo.replica == &replica);
 See:
 
 - [test/matrix/README.md](../test/matrix/README.md)
-- [include/dingo/type/annotated.h](../include/dingo/type/annotated.h)
+- [include/dingo/key/annotated.h](../include/dingo/key/annotated.h)
 
 ## Runtime And Compile-Time Registration
 

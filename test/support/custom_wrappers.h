@@ -8,8 +8,12 @@
 #pragma once
 
 #include <dingo/base/exceptions.h>
-#include <dingo/storage/type_storage_traits.h>
-#include <dingo/type/type_conversion_traits.h>
+#include <dingo/conversion/type_conversion_traits.h>
+#include <dingo/exposure/storage_traits.h>
+#include <dingo/exposure/type_storage_traits.h>
+#include <dingo/storage/external.h>
+#include <dingo/storage/shared.h>
+#include <dingo/storage/unique.h>
 #include <dingo/type/type_traits.h>
 
 #include <memory>

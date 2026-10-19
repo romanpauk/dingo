@@ -1,7 +1,7 @@
 // RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
 
 #include <dingo/factory/callable.h>
-#include <dingo/static/registry.h>
+#include <dingo/static/bindings.h>
 #include <dingo/storage/unique.h>
 
 auto factory = dingo::callable<int()>([] { return 7; });

@@ -9,7 +9,7 @@
 
 #include <dingo/memory/arena_allocator.h>
 #include <dingo/memory/object_store.h>
-#include <dingo/runtime/container_runtime.h>
+#include <dingo/runtime/memory.h>
 
 #include <cassert>
 #include <cstddef>

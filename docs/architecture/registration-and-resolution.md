@@ -44,8 +44,9 @@ dingo::container<app_bindings> container;
 ```
 
 That path is normalized through
-[include/dingo/static/registry.h](../../include/dingo/static/registry.h) and
-validated by [include/dingo/static/graph.h](../../include/dingo/static/graph.h).
+[include/dingo/static/bindings.h](../../include/dingo/static/bindings.h) and
+validated by
+[include/dingo/static/graph/graph.h](../../include/dingo/static/graph/graph.h).
 
 There are two registration modes:
 
@@ -99,7 +100,7 @@ The sequence is:
 5. Call the matching runtime factory entry point or static resolution path for
    the requested form and convert the result back to `T`.
 
-[include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
+[include/dingo/binding/interface.h](../../include/dingo/binding/interface.h)
 defines the request object the container passes to the factory. The object
 stores:
 
@@ -143,8 +144,7 @@ container cannot be rolled back.
 ## Factory Path
 
 The factory implementation in
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-owns:
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h) owns:
 
 - a storage object
 - a lightweight child-container view for constructor injection
@@ -162,7 +162,7 @@ possible conversion shapes from `Storage::conversions` and tries to match the
 requested lookup type against that list.
 
 If a match is found, the factory produces the source object and
-[include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
+[include/dingo/resolution/operation.h](../../include/dingo/resolution/operation.h)
 converts it to the requested shape.
 
 The static path uses the same binding model and conversion rules, but it selects
@@ -224,8 +224,8 @@ These files are useful while reading this flow:
 - [include/dingo/container.h](../../include/dingo/container.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 - [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
-- [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
-- [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
-- [include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-- [include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
+- [include/dingo/static/bindings.h](../../include/dingo/static/bindings.h)
+- [include/dingo/static/graph/graph.h](../../include/dingo/static/graph/graph.h)
+- [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)
+- [include/dingo/binding/interface.h](../../include/dingo/binding/interface.h)
 - [include/dingo/factory/constructor_detection.h](../../include/dingo/factory/constructor_detection.h)

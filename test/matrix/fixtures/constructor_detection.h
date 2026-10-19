@@ -9,10 +9,10 @@
 
 #include "matrix/fixtures/dependency_shapes.h"
 
+#include <dingo/factory/auto_constructible.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/factory/detail/constructor_detection_msvc.hpp>
 #include <dingo/registration/constructor.h>
-#include <dingo/type/auto_constructible.h>
 
 #include <array>
 #include <initializer_list>

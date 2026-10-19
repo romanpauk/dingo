@@ -6,8 +6,8 @@
 //
 
 #include <dingo/container.h>
-#include <dingo/resolution/conversion_cache.h>
-#include <dingo/runtime/container_runtime.h>
+#include <dingo/context/conversion_cache.h>
+#include <dingo/runtime/memory.h>
 #include <dingo/runtime/transaction.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>

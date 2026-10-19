@@ -720,7 +720,7 @@ dispatcher.process(std::string(""));
 
 See:
 
-- [include/dingo/type/collection_traits.h](../include/dingo/type/collection_traits.h)
+- [include/dingo/dependency/collection.h](../include/dingo/dependency/collection.h)
 
 ## Runtime Model And Error Handling
 

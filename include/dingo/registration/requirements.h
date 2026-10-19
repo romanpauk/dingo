@@ -11,10 +11,10 @@
 
 #include <dingo/base/complete_type.h>
 #include <dingo/base/type_list.h>
-#include <dingo/storage/interface_storage_traits.h>
+#include <dingo/dependency/normalized_type.h>
+#include <dingo/exposure/interface_storage_traits.h>
+#include <dingo/key/annotated.h>
 #include <dingo/storage/storage.h>
-#include <dingo/type/annotated.h>
-#include <dingo/type/normalized_type.h>
 
 #include <type_traits>
 

@@ -11,23 +11,33 @@ Dingo is easiest to understand when separated into four concerns:
 
 The headers under `include/dingo/` form a hierarchy. A header may include
 headers of the layers below its own and of its own directory; directories that
-share a layer do not include each other. The `layers-check` target enforces
-this, and the layer list lives in [tools/layers.py](../../tools/layers.py).
+share a layer do not include each other. A concept that grows large is split
+into several headers of its directory, and the original header stays as the
+entry point that includes them. The `layers-check` target enforces the layering,
+rejects include cycles and caps the size of a header; the layer list lives in
+[tools/layers.py](../../tools/layers.py).
 
-| Layer | Directories | Owns | | ----- | ----------------------- |
-\-----------------------------------------------------------------------------------------------
-| | 0 | `base/` | configuration, `none`, `selected`, exceptions, `type_list`,
-type descriptors | | 1 | `memory/`, `rtti/`, `type/` | allocators and object
-stores, rtti providers, type traits, conversions, keys, annotations | | 2 |
-`resolution/`, `lookup/` | resolution operations and conversion resolutions,
-lookup indexes | | 3 | `factory/` | constructors, callables, constructor
-detection, factory traits | | 4 | `context/` | resolution context base and
-recursion guard | | 5 | `storage/` | storage tags, scope policies, storage
-exposure traits | | 6 | `registration/` | registration options, requirements | |
-7 | `binding/` | binding model, selection and resolution shared by runtime and
-static | | 8 | `runtime/`, `static/` | runtime registry and static registry,
-graph and activation | | 9 | `dingo/*.h` | `container`, `runtime_container`,
-`static_container`, `container_base` |
+From the bottom layer to the top, each folder is one feature:
+
+- `base/`: configuration, `none`, exceptions, `type_list`, type descriptors
+- `memory/`, `rtti/`, `type/`: allocators and object stores, rtti providers,
+  type traits and the pointer, smart pointer, optional, variant and array
+  wrappers
+- `key/`, `conversion/`: keys, selectors and annotations; conversion paths
+  between stored and requested types
+- `dependency/`: normalized types, requests and collections
+- `resolution/`, `lookup/`: resolution operations and sources, lookup indexes
+- `factory/`: constructors, callables, constructor detection, factory traits
+- `context/`: state of one resolve (frames, recursion guard, caches)
+- `exposure/`: which result forms a storage exposes
+- `storage/`: scopes (`shared`, `unique`, `external`, `shared_cyclical`)
+- `registration/`: registration options, deduction and requirements
+- `binding/`: binding model, selection and request resolution shared by runtime
+  and static
+- `runtime/`, `static/`: runtime registry with its lookup, and static bindings,
+  registry, graph and activation
+- `container/`: pieces of the container front-ends
+- `dingo/*.h`: `container`, `runtime_container` and `static_container`
 
 ## Main Owners
 
@@ -91,13 +101,12 @@ the internal binding machinery.
 
 For compile-time sources, the public spelling is `bindings<...>`. Those bindings
 are normalized internally through the static registry path under
-[include/dingo/static/registry.h](../../include/dingo/static/registry.h).
+[include/dingo/static/bindings.h](../../include/dingo/static/bindings.h).
 
 ### Factory And Storage
 
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-wraps a storage object and the child container used to resolve constructor
-dependencies.
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h) wraps a
+storage object and the child container used to resolve constructor dependencies.
 
 The factory owns the conversion-facing interface:
 
@@ -117,24 +126,24 @@ own lifetime policy:
 
 ### Resolution And Conversion Path
 
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-now owns the conversion-facing resolution flow. It is responsible for:
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h) now
+owns the conversion-facing resolution flow. It is responsible for:
 
 - asking storage to `resolve(...)` its native source shape
 - applying guard and closure scope through `storage_materialization_traits`
 - constructing cached conversion objects for shared and external cases
 
-[include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
+[include/dingo/resolution/operation.h](../../include/dingo/resolution/operation.h)
 contains the last-mile conversion rules from the stored source shape to the
 requested target shape.
 
 The shared runtime/static binding and resolution kernel now lives under
 [include/dingo/binding/](../../include/dingo/binding):
 
-- `binding_model.h`
-- `binding_selection.h`
-- `binding_resolution.h`
-- `binding_resolution_policy.h`
+- `model.h`
+- `selection.h`
+- `request.h`
+- `policy.h`
 
 Runtime and static implementation code sits under:
 
@@ -177,7 +186,7 @@ For the core path in source order, start here:
 - [include/dingo/static_container.h](../../include/dingo/static_container.h)
 - [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
 - [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
-- [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
-- [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
-- [include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-- [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
+- [include/dingo/static/bindings.h](../../include/dingo/static/bindings.h)
+- [include/dingo/static/graph/graph.h](../../include/dingo/static/graph/graph.h)
+- [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)
+- [include/dingo/resolution/operation.h](../../include/dingo/resolution/operation.h)

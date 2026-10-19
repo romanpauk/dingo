@@ -6,8 +6,8 @@
 //
 
 #include <dingo/container.h>
-#include <dingo/resolution/cache.h>
-#include <dingo/resolution/conversion_cache.h>
+#include <dingo/context/cache.h>
+#include <dingo/context/conversion_cache.h>
 #include <dingo/storage/shared.h>
 
 #include <gtest/gtest.h>

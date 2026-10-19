@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include <dingo/context/context_base.h>
-#include <dingo/static/graph.h>
+#include <dingo/context/context.h>
+#include <dingo/static/graph/graph.h>
 
 #include <array>
 #include <cassert>

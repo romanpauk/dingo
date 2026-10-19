@@ -10,7 +10,7 @@
 #include "matrix/fixtures/dependency_shapes.h"
 #include "matrix/policies/policy_core.h"
 
-#include <dingo/type/dependency.h>
+#include <dingo/dependency/selector.h>
 
 #include <cstddef>
 #include <memory>

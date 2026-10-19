@@ -2,7 +2,9 @@
 
 A header may include headers of the layers below its own and headers of its
 own module. Modules that share a layer are independent of each other. The
-headers directly under include/dingo form the topmost layer.
+headers directly under include/dingo form the topmost layer. Headers must not
+include each other in a cycle, must stay below a size limit so that a header
+keeps to a single concept, and must not repeat the name of their folder.
 """
 
 import argparse
@@ -13,15 +15,26 @@ import sys
 LAYERS = [
     ("base",),
     ("memory", "rtti", "type"),
+    ("key", "conversion"),
+    ("dependency",),
     ("resolution", "lookup"),
     ("factory",),
     ("context",),
+    ("exposure",),
     ("storage",),
     ("registration",),
     ("binding",),
     ("runtime", "static"),
+    ("container",),
     (".",),
 ]
+
+# Headers whose name is that of the concept they define and starts with the
+# folder, as the entry point of a documented extension point.
+NAME_EXCEPTIONS = {"type/type_traits.h"}
+MAX_LINES = 800
+# Headers that are one cohesive class and exceed the limit.
+MAX_LINES_EXCEPTIONS = {"container.h": 1100}
 
 INCLUDE = re.compile(r"^\s*#\s*include\s*<dingo/([^>]+)>")
 
@@ -38,23 +51,78 @@ def layer_of(module):
     return None
 
 
+def find_cycles(graph):
+    """Returns the include cycles of the graph as strongly connected components."""
+    index = {}
+    lowlink = {}
+    stack = []
+    on_stack = set()
+    cycles = []
+    counter = [0]
+
+    def visit(node):
+        index[node] = lowlink[node] = counter[0]
+        counter[0] += 1
+        stack.append(node)
+        on_stack.add(node)
+        for target in graph.get(node, ()):
+            if target not in index:
+                visit(target)
+                lowlink[node] = min(lowlink[node], lowlink[target])
+            elif target in on_stack:
+                lowlink[node] = min(lowlink[node], index[target])
+        if lowlink[node] == index[node]:
+            component = []
+            while True:
+                member = stack.pop()
+                on_stack.discard(member)
+                component.append(member)
+                if member == node:
+                    break
+            if len(component) > 1:
+                cycles.append(sorted(component))
+
+    for node in sorted(graph):
+        if node not in index:
+            visit(node)
+    return cycles
+
+
 def check(include_directory):
     root = Path(include_directory) / "dingo"
     violations = []
+    graph = {}
     for header in sorted(root.rglob("*")):
         if header.suffix not in (".h", ".hpp"):
             continue
         source = header.relative_to(root)
         source_module = module_of(source)
         source_layer = layer_of(source_module)
+        lines = header.read_text().splitlines()
+        limit = MAX_LINES_EXCEPTIONS.get(str(source), MAX_LINES)
+        if len(lines) > limit:
+            violations.append(
+                f"{source}: {len(lines)} lines exceed the limit of {limit}"
+            )
+        graph[str(source)] = set()
+        if (
+            source.parent != Path(".")
+            and source.stem.startswith(source.parts[0] + "_")
+            and str(source) not in NAME_EXCEPTIONS
+        ):
+            violations.append(
+                f"{source}: the name repeats the folder, the folder already "
+                "gives the context"
+            )
         if source_layer is None:
             violations.append(f"{source}: module '{source_module}' has no layer")
             continue
-        for number, line in enumerate(header.read_text().splitlines(), 1):
+        for number, line in enumerate(lines, 1):
             match = INCLUDE.match(line)
             if not match:
                 continue
             target = match.group(1)
+            graph[str(source)].add(target)
             target_module = module_of(target)
             target_layer = layer_of(target_module)
             if target_layer is None:
@@ -70,6 +138,8 @@ def check(include_directory):
                     f"must not include {target} ({target_module}, "
                     f"layer {target_layer})"
                 )
+    for cycle in find_cycles(graph):
+        violations.append("include cycle: " + " -> ".join(cycle))
     return violations
 
 

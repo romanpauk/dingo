@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/type/dependency.h>
+#include <dingo/dependency/selector.h>
 
 #include <cstddef>
 #include <functional>

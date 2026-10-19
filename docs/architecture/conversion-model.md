@@ -17,10 +17,10 @@ The full conversion behavior is spread across a few layers:
 
 The important source files are:
 
-- [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
-- [include/dingo/binding/runtime_binding_interface.h](../../include/dingo/binding/runtime_binding_interface.h)
-- [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
-- [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
+- [include/dingo/exposure/type_storage_traits.h](../../include/dingo/exposure/type_storage_traits.h)
+- [include/dingo/binding/interface.h](../../include/dingo/binding/interface.h)
+- [include/dingo/resolution/operation.h](../../include/dingo/resolution/operation.h)
+- [include/dingo/conversion/type_conversion_traits.h](../../include/dingo/conversion/type_conversion_traits.h)
 
 ## Storage Exposure
 
@@ -161,7 +161,7 @@ return only an address because they are borrowed by definition.
 
 ## Runtime Conversion
 
-[include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
+[include/dingo/resolution/operation.h](../../include/dingo/resolution/operation.h)
 executes the operation selected during publication. `type_resolution` carries
 the target, source, and conversion types. It extracts the source with the
 published value category and delegates to the selected conversion node. Identity
@@ -183,9 +183,8 @@ again.
 ## Conversion Cache
 
 Shared and external resolution can preserve conversion objects through
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
-and
-[include/dingo/resolution/conversion_cache.h](../../include/dingo/resolution/conversion_cache.h).
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h) and
+[include/dingo/context/conversion_cache.h](../../include/dingo/context/conversion_cache.h).
 
 That cache matters when a conversion object must outlive a single expression,
 for example when a resolved shared object hands out references into a converted

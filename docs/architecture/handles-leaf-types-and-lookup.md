@@ -24,7 +24,7 @@ The leaf type is the underlying type after wrappers, references, and pointer
 shape are stripped according to Dingo's wrapper rules.
 
 The core operation is `leaf_type_t<T>` in
-[include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h).
+[include/dingo/type/rebind.h](../../include/dingo/type/rebind.h).
 
 Examples:
 
@@ -53,7 +53,7 @@ Instead it converts the request into a lookup form that replaces the leaf with
 `runtime_type`.
 
 That operation is `lookup_type_t<T>` in
-[include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h).
+[include/dingo/type/rebind.h](../../include/dingo/type/rebind.h).
 
 The point of this step is to match requests by shape:
 
@@ -72,9 +72,9 @@ concrete leaf in advance.
 leaf-based lookup would be too permissive.
 
 It is defined in
-[include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h) and
-enforced by the matching logic in
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h).
+[include/dingo/type/rebind.h](../../include/dingo/type/rebind.h) and enforced by
+the matching logic in
+[include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h).
 
 Use it when the caller must request a specific wrapper spelling instead of "any
 request with this leaf type."
@@ -105,7 +105,7 @@ The rebinding utilities are what allow those three layers to compose.
 
 ## Good Source Companions
 
-- [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
+- [include/dingo/type/rebind.h](../../include/dingo/type/rebind.h)
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
-- [include/dingo/type/dependency_traits.h](../../include/dingo/type/dependency_traits.h)
-- [include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
+- [include/dingo/dependency/request.h](../../include/dingo/dependency/request.h)
+- [include/dingo/runtime/binding.h](../../include/dingo/runtime/binding.h)

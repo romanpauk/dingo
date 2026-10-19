@@ -8,7 +8,7 @@
 #include <dingo/container.h>
 #include <dingo/factory/function.h>
 #include <dingo/registration/constructor.h>
-#include <dingo/static/registry.h>
+#include <dingo/static/bindings.h>
 #include <dingo/static_container.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>

@@ -1,6 +1,6 @@
 // RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
 
-#include <dingo/storage/type_storage_traits.h>
+#include <dingo/exposure/type_storage_traits.h>
 
 struct custom_storage_tag {};
 

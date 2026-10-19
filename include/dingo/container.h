@@ -11,36 +11,40 @@
 #include <dingo/base/config.h>
 #include <dingo/base/exceptions.h>
 #include <dingo/base/none.h>
-#include <dingo/binding/binding_collection.h>
-#include <dingo/binding/binding_model.h>
-#include <dingo/binding/binding_resolution_policy.h>
-#include <dingo/binding/binding_selection.h>
-#include <dingo/container_base.h>
+#include <dingo/binding/collection.h>
+#include <dingo/binding/model.h>
+#include <dingo/binding/policy.h>
+#include <dingo/binding/selection.h>
+#include <dingo/container/base.h>
+#include <dingo/container/collection.h>
+#include <dingo/container/config.h>
+#include <dingo/container/implementation.h>
+#include <dingo/dependency/collection.h>
+#include <dingo/dependency/normalized_type.h>
+#include <dingo/dependency/request.h>
+#include <dingo/dependency/selector.h>
+#include <dingo/exposure/interface_storage_traits.h>
+#include <dingo/factory/auto_constructible.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/invoke.h>
-#include <dingo/lookup/container_lookup_definition.h>
+#include <dingo/key/annotated.h>
+#include <dingo/lookup/definition.h>
 #include <dingo/lookup/lookup.h>
 #include <dingo/memory/allocator.h>
 #include <dingo/registration/requirements.h>
 #include <dingo/registration/type_registration.h>
 #include <dingo/rtti/static_provider.h>
 #include <dingo/rtti/typeid_provider.h>
-#include <dingo/runtime/container_traits.h>
+#include <dingo/runtime/binding.h>
 #include <dingo/runtime/context.h>
-#include <dingo/runtime/registration_api.h>
-#include <dingo/runtime/runtime_binding.h>
-#include <dingo/static/activation_set.h>
-#include <dingo/static/container_traits.h>
-#include <dingo/static/graph.h>
+#include <dingo/runtime/registration.h>
+#include <dingo/runtime/traits.h>
+#include <dingo/static/activation/set.h>
+#include <dingo/static/bindings.h>
+#include <dingo/static/graph/graph.h>
+#include <dingo/static/probe.h>
 #include <dingo/static/registry.h>
-#include <dingo/static/resolution.h>
-#include <dingo/storage/interface_storage_traits.h>
-#include <dingo/type/annotated.h>
-#include <dingo/type/auto_constructible.h>
-#include <dingo/type/collection_traits.h>
-#include <dingo/type/dependency.h>
-#include <dingo/type/dependency_traits.h>
-#include <dingo/type/normalized_type.h>
+#include <dingo/static/traits.h>
 
 #include <algorithm>
 #include <functional>
@@ -57,92 +61,6 @@
 #endif
 
 namespace dingo {
-namespace detail {
-
-template <typename Self, typename RuntimeConfig>
-struct static_container_runtime_configuration {
-  using runtime_base = runtime_registry<
-      typename RuntimeConfig::container_traits_type,
-      typename RuntimeConfig::allocator_type,
-      typename RuntimeConfig::parent_registry_type,
-      std::conditional_t<
-          std::is_void_v<typename RuntimeConfig::resolve_root_type>, Self,
-          typename RuntimeConfig::resolve_root_type>,
-      RuntimeConfig::owns_runtime_data>;
-
-  static constexpr bool owns_runtime_data = RuntimeConfig::owns_runtime_data;
-  static constexpr bool merge_parent_collections =
-      RuntimeConfig::merge_parent_collections;
-  // A runtime-only front-end has no parent registry: the container is the
-  // resolve root and consults its parent container directly.
-  static constexpr bool runtime_only =
-      std::is_void_v<typename RuntimeConfig::parent_registry_type>;
-};
-
-template <typename Self>
-struct static_container_runtime_configuration<Self, void> {
-  using runtime_base =
-      runtime_registry<dynamic_container_traits,
-                       typename dynamic_container_traits::allocator_type, Self,
-                       Self>;
-
-  static constexpr bool owns_runtime_data = true;
-  static constexpr bool merge_parent_collections = false;
-  static constexpr bool runtime_only = false;
-};
-
-// Compile-time requirements of the static part of a container. They are
-// instantiated only for containers that actually carry static bindings.
-template <bool Enabled, typename Bindings, typename ContainerTraits,
-          typename RuntimeConfig>
-struct static_requirements {
-  static constexpr bool value = true;
-};
-
-template <typename... Registrations, typename ContainerTraits,
-          typename RuntimeConfig>
-struct static_requirements<true, static_bindings<Registrations...>,
-                           ContainerTraits, RuntimeConfig> {
-  using bindings_type = static_bindings<Registrations...>;
-  using index_entries = normalize_lookup_definitions_t<
-      container_lookup_definition_type_t<ContainerTraits>>;
-
-  static_assert(bindings_type::valid,
-                "container requires a valid compile-time bindings source");
-  static_assert(
-      key_value_bindings_are_declared<
-          typename bindings_type::interface_bindings, index_entries>::value,
-      "container fixed dingo::key_type<Key, Value> bindings require "
-      "static_container with associative<Key, Interface, one> or "
-      "associative<Key, Interface, many>");
-  static_assert(
-      key_value_bindings_are_unique<typename bindings_type::interface_bindings,
-                                    index_entries>::value,
-      "container fixed runtime-key lookup bindings must be unique "
-      "for one lookups and unique by storage for many lookups");
-  static_assert(
-      std::is_void_v<RuntimeConfig> ||
-          graph_analysis<bindings_type, true>::resolvable,
-      "register_type bindings<...> requires a resolvable compile-time binding "
-      "graph");
-  static_assert(!std::is_void_v<RuntimeConfig> ||
-                    graph_analysis<bindings_type, true>::resolvable,
-                "container requires a resolvable compile-time binding graph");
-  static_assert((binding_factory_is_default_constructible<
-                     binding_model<Registrations>>::value &&
-                 ...),
-                "container requires default-constructible compile-time "
-                "factories");
-  static_assert((binding_storage_is_default_constructible<
-                     binding_model<Registrations>>::value &&
-                 ...),
-                "container requires default-constructible compile-time "
-                "storage objects");
-
-  static constexpr bool value = true;
-};
-
-} // namespace detail
 
 // One resolve front-end for all container shapes: runtime-only containers
 // (container<>, runtime_container) are the form with empty static bindings
@@ -155,6 +73,15 @@ class detail::container_with_static_bindings<static_bindings<Registrations...>,
     : public detail::runtime_registration_api<
           detail::container_with_static_bindings<
               static_bindings<Registrations...>, ParentContainer,
+              RuntimeConfig>>,
+      public detail::container_collection_api<
+          detail::container_with_static_bindings<
+              static_bindings<Registrations...>, ParentContainer,
+              RuntimeConfig>,
+          detail::static_container_runtime_context_t<
+              detail::container_with_static_bindings<
+                  static_bindings<Registrations...>, ParentContainer,
+                  RuntimeConfig>,
               RuntimeConfig>>,
       // Empty bindings leave an empty base, so the object does not grow.
       private std::conditional_t<
@@ -183,6 +110,9 @@ private:
   using runtime_context_type =
       runtime_context<typename runtime_base::allocator_type>;
   friend runtime_base;
+  using collection_api_type =
+      detail::container_collection_api<self_type, runtime_context_type>;
+  friend collection_api_type;
   template <typename, typename, typename, typename, bool>
   friend class ::dingo::runtime_registry;
 
@@ -203,6 +133,11 @@ public:
   using allocator_type = typename runtime_base::allocator_type;
   using rtti_type = typename runtime_base::rtti_type;
   using lookup_definition_type = typename runtime_base::lookup_definition_type;
+
+  // The static registry base has the collection names as well.
+  using collection_api_type::append_collection;
+  using collection_api_type::construct_collection;
+  using collection_api_type::count_collection;
 
 private:
   static constexpr bool has_parent_v = !std::is_void_v<parent_container_type>;
@@ -345,42 +280,26 @@ private:
     }
   }
 
-  template <typename T, typename LookupKey, typename Fn,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection_impl(construction_scope scope,
-                              runtime_context_type &context, LookupKey key,
-                              Fn &&fn) {
-    using collection_type = collection_traits<T>;
-    using resolve_type = typename collection_type::resolve_type;
-
-    static_assert(collection_type::is_collection,
-                  "missing collection_traits specialization for type T");
-
-    const std::size_t total = count_collection<T>(key);
-    // A declared collection lookup with no rows is a valid empty collection.
-    if (total == 0 &&
-        !runtime_registry_.template has_explicit_collection_lookup<T>(key)) {
-      throw detail::make_collection_type_not_found_exception<T, resolve_type>();
-    }
-
-    T results;
-    collection_type::reserve(results, total);
-
-    auto &&append = fn;
-    append_collection_impl<T>(scope, results, context, key, append);
-    return results;
-  }
-
-  template <typename T, typename Fn, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(construction_scope scope,
-                         runtime_context_type &context, Fn &&fn,
-                         LookupKey key) {
-    return construct_collection_impl<T>(scope, context, std::move(key),
-                                        std::forward<Fn>(fn));
-  }
-
   static_registry_type &statics() { return *this; }
+
+  // The runtime registry access of container_collection_api.
+  auto &runtime() { return runtime_registry_.runtime(); }
+
+  template <typename T, typename LookupKey>
+  std::size_t runtime_count_collection(LookupKey key) {
+    return runtime_registry_.template count_collection<T>(key);
+  }
+
+  template <typename T, typename LookupKey>
+  bool runtime_has_explicit_collection_lookup(const LookupKey &key) {
+    return runtime_registry_.template has_explicit_collection_lookup<T>(key);
+  }
+
+  template <typename T, typename... Args>
+  std::size_t runtime_append_collection(Args &&...args) {
+    return runtime_registry_.template append_collection<T>(
+        std::forward<Args>(args)...);
+  }
 
   template <typename Request, typename LookupKey, typename Context,
             typename R = typename Request::result_type>
@@ -773,76 +692,6 @@ public:
     }
   }
 
-  template <typename T> T construct_collection() {
-    return construct_collection<T>(detail::no_lookup_key());
-  }
-
-  template <
-      typename T, typename Fn,
-      std::enable_if_t<!detail::is_lookup_key_v<std::decay_t<Fn>>, int> = 0>
-  T construct_collection(Fn &&fn) {
-    return construct_collection<T>(std::forward<Fn>(fn),
-                                   detail::no_lookup_key());
-  }
-
-  template <typename T, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(LookupKey key) {
-    if constexpr (has_static_v && detail::is_static_lookup_key_v<LookupKey>) {
-      if (select_static_collection_construct<T, LookupKey>()) {
-        return execute_transaction(
-            runtime_registry_.runtime(),
-            [&](runtime_context_type &context) -> T {
-              return statics().template construct_collection<T, LookupKey>(
-                  ephemeral_scope, *this, context);
-            });
-      }
-    }
-
-    return execute_transaction(
-        runtime_registry_.runtime(), [&](runtime_context_type &context) -> T {
-          return construct_collection<T>(ephemeral_scope, context,
-                                         detail::binding_collection_append{},
-                                         std::move(key));
-        });
-  }
-
-  template <typename T, typename Fn, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  T construct_collection(Fn &&fn, LookupKey key) {
-    if constexpr (has_static_v && detail::is_static_lookup_key_v<LookupKey>) {
-      if (select_static_collection_construct<T, LookupKey>()) {
-        return execute_transaction(
-            runtime_registry_.runtime(),
-            [&](runtime_context_type &context) -> T {
-              return statics().template construct_collection<T, LookupKey>(
-                  ephemeral_scope, *this, context, std::forward<Fn>(fn));
-            });
-      }
-    }
-
-    return execute_transaction(
-        runtime_registry_.runtime(), [&](runtime_context_type &context) -> T {
-          return construct_collection<T>(ephemeral_scope, context,
-                                         std::forward<Fn>(fn), std::move(key));
-        });
-  }
-
-  template <typename T, typename Key> T construct_collection(key_type<Key>) {
-    return construct_collection<T>(detail::make_lookup_key(key_type<Key>{}));
-  }
-
-  template <typename T, typename Fn, typename Key>
-  T construct_collection(Fn &&fn, key_type<Key>) {
-    return construct_collection<T>(std::forward<Fn>(fn),
-                                   detail::make_lookup_key(key_type<Key>{}));
-  }
-
-  template <typename T, typename Fn> T construct_collection(Fn &&fn, none_t) {
-    return construct_collection<T>(std::forward<Fn>(fn),
-                                   detail::no_lookup_key());
-  }
-
   template <typename Signature = void, typename Callable>
   auto invoke(Callable &&callable) {
     using callable_type = std::remove_cv_t<std::remove_reference_t<Callable>>;
@@ -883,87 +732,6 @@ public:
           runtime_status,
           detail::binding_resolution_policy::ambiguous_on_conflict);
     }
-  }
-
-  template <typename T, typename Fn>
-  std::size_t append_collection(construction_scope scope, T &results,
-                                runtime_context_type &context, Fn &&fn) {
-    return append_collection<T>(scope, results, context, std::forward<Fn>(fn),
-                                detail::no_lookup_key());
-  }
-
-  template <typename T, typename Key, typename Fn>
-  std::size_t append_collection(construction_scope scope, T &results,
-                                runtime_context_type &context, Fn &&fn) {
-    return append_collection<T>(scope, results, context, std::forward<Fn>(fn),
-                                detail::make_lookup_key(type_selector<Key>{}));
-  }
-
-  template <typename T, typename Fn, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t append_collection(construction_scope scope, T &results,
-                                runtime_context_type &context, Fn &&fn,
-                                LookupKey key) {
-    return append_collection_impl<T>(scope, results, context, std::move(key),
-                                     std::forward<Fn>(fn));
-  }
-
-  template <typename T, typename LookupKey, typename Fn,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t append_collection_impl(construction_scope scope, T &results,
-                                     runtime_context_type &context,
-                                     LookupKey key, Fn &&fn) {
-    std::size_t count = 0;
-    if constexpr (runtime_configuration::merge_parent_collections &&
-                  has_parent_v) {
-      if (parent_) {
-        count += parent_->template append_collection<T>(scope, results, context,
-                                                        fn, key);
-      }
-    }
-    if constexpr (has_static_v) {
-      count += detail::append_binding_collection(
-          results,
-          [&](auto &collection, auto &&append) {
-            return runtime_registry_.template append_collection<T>(
-                scope, collection, context,
-                std::forward<decltype(append)>(append), key);
-          },
-          [&](auto &collection, auto &&append) {
-            return statics().template append_collection<T, LookupKey>(
-                scope, collection, *this, context,
-                std::forward<decltype(append)>(append));
-          },
-          std::forward<Fn>(fn));
-    } else {
-      count += runtime_registry_.template append_collection<T>(
-          scope, results, context, std::forward<Fn>(fn), key);
-    }
-    return count;
-  }
-
-  template <typename T> std::size_t count_collection() {
-    return count_collection<T>(detail::no_lookup_key());
-  }
-
-  template <typename T, typename Key> std::size_t count_collection() {
-    return count_collection<T>(detail::make_lookup_key(type_selector<Key>{}));
-  }
-
-  template <typename T, typename LookupKey,
-            std::enable_if_t<detail::is_lookup_key_v<LookupKey>, int> = 0>
-  std::size_t count_collection(LookupKey key) {
-    std::size_t count = runtime_registry_.template count_collection<T>(key);
-    if constexpr (has_static_v) {
-      count += static_registry_type::template count_collection<T, LookupKey>();
-    }
-    if constexpr (runtime_configuration::merge_parent_collections &&
-                  has_parent_v) {
-      if (parent_) {
-        count += parent_->template count_collection<T>(key);
-      }
-    }
-    return count;
   }
 
 private:
@@ -1050,7 +818,7 @@ private:
                   selected, scope, context);
         }
       }
-      if (count_collection<R>(key) == 0) {
+      if (this->template count_collection<R>(key) == 0) {
         if constexpr (parent_serves<typename collection_traits<R>::resolve_type,
                                     LookupKey>()) {
           if (parent_) {
@@ -1064,15 +832,15 @@ private:
       // no-key collections through scalar registry resolution would bypass
       // registered collection factories and re-enter missing-binding fallback.
       if constexpr (detail::default_collection_append_v<R>) {
-        return construct_collection<R>(scope, context,
-                                       detail::binding_collection_append{},
-                                       std::move(key));
+        return this->template construct_collection_scoped<R>(
+            scope, context, detail::binding_collection_append{},
+            std::move(key));
       } else {
         return origin.template unresolved<Request, false, LookupKey, R>(
             scope, context, key);
       }
     } else if constexpr (detail::is_static_lookup_key_definition_v<LookupKey>) {
-      if (count_collection<R>(key) == 0 &&
+      if (this->template count_collection<R>(key) == 0 &&
           !runtime_registry_.template has_explicit_collection_lookup<R>(key)) {
         if constexpr (has_parent_v) {
           if (parent_) {
@@ -1082,7 +850,7 @@ private:
         return origin.template unresolved<Request, false, LookupKey, R>(
             scope, context, key);
       }
-      return construct_collection<R>(
+      return this->template construct_collection_scoped<R>(
           scope, context, detail::binding_collection_append{}, std::move(key));
     } else {
       if constexpr (has_parent_v) {
@@ -1183,9 +951,9 @@ public:
 
     if constexpr (collection_traits<R>::is_collection) {
       if constexpr (detail::default_collection_append_v<R>) {
-        return construct_collection<R>(scope, context,
-                                       detail::binding_collection_append{},
-                                       std::move(key));
+        return this->template construct_collection_scoped<R>(
+            scope, context, detail::binding_collection_append{},
+            std::move(key));
       } else if constexpr (runtime_only_v) {
         throw detail::make_type_not_found_exception<
             typename Request::lookup_type>(context, key);

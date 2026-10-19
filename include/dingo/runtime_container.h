@@ -8,5 +8,5 @@
 #pragma once
 
 // runtime_container is the runtime-only spelling of the container front-end;
-// it is declared next to the container<> base selection.
+// it is declared in container_runtime_facade.h and needs the full container.
 #include <dingo/container.h>

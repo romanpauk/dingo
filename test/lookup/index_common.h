@@ -10,7 +10,7 @@
 #include <dingo/base/type_name.h>
 #include <dingo/container.h>
 #include <dingo/rtti/typeid_provider.h>
-#include <dingo/runtime/lookup_index.h>
+#include <dingo/runtime/lookup/index.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 

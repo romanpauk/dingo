@@ -8,13 +8,16 @@
 #pragma once
 
 #include <dingo/container.h>
+#include <dingo/container/implementation.h>
+#include <dingo/container/static.h>
+#include <dingo/dependency/request.h>
 #include <dingo/factory/invoke.h>
-#include <dingo/lookup/container_lookup_definition.h>
-#include <dingo/static/activation_set.h>
-#include <dingo/static/container_traits.h>
+#include <dingo/lookup/definition.h>
+#include <dingo/static/activation/set.h>
 #include <dingo/static/context.h>
-#include <dingo/static/resolution.h>
-#include <dingo/type/dependency_traits.h>
+#include <dingo/static/probe.h>
+#include <dingo/static/registry.h>
+#include <dingo/static/traits.h>
 
 #include <type_traits>
 #include <utility>
@@ -27,60 +30,6 @@
 namespace dingo {
 
 namespace detail {
-
-struct static_container_no_dependency_diagnostics {};
-
-template <typename... Bindings> struct static_bindings_cat;
-
-template <> struct static_bindings_cat<> {
-  using type = static_bindings<>;
-};
-
-template <typename... Registrations>
-struct static_bindings_cat<static_bindings<Registrations...>> {
-  using type = static_bindings<Registrations...>;
-};
-
-template <typename... FirstRegistrations, typename... SecondRegistrations,
-          typename... Tail>
-struct static_bindings_cat<static_bindings<FirstRegistrations...>,
-                           static_bindings<SecondRegistrations...>, Tail...>
-    : static_bindings_cat<
-          static_bindings<FirstRegistrations..., SecondRegistrations...>,
-          Tail...> {};
-
-template <typename... Bindings>
-using static_bindings_cat_t = typename static_bindings_cat<Bindings...>::type;
-
-template <typename Container, typename = void>
-struct static_container_context_bindings {
-  using type = static_bindings<>;
-};
-
-template <typename Container>
-struct static_container_context_bindings<
-    Container, std::void_t<typename Container::context_static_bindings_type>> {
-  using type = typename Container::context_static_bindings_type;
-};
-
-template <typename Container>
-using static_container_context_bindings_t =
-    typename static_container_context_bindings<Container>::type;
-
-template <typename StaticRegistry, bool HasParent>
-struct static_container_dependency_diagnostics_base;
-
-template <typename... Registrations>
-struct static_container_dependency_diagnostics_base<
-    static_bindings<Registrations...>, false>
-    : static_registry_dependency_diagnostics<
-          typename static_bindings<Registrations...>::interface_bindings,
-          binding_model<Registrations>...> {};
-
-template <typename... Registrations>
-struct static_container_dependency_diagnostics_base<
-    static_bindings<Registrations...>, true>
-    : static_container_no_dependency_diagnostics {};
 
 template <typename StaticRegistry, typename ParentContainer = void,
           typename ContainerTraits = ::dingo::static_container_traits>

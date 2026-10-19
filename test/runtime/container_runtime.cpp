@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 //
 
-#include <dingo/runtime/container_runtime.h>
+#include <dingo/runtime/memory.h>
 
 #include <gtest/gtest.h>
 

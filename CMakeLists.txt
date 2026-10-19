@@ -88,89 +88,152 @@ if(DINGO_DEVELOPMENT_MODE)
     )
 
     set(DINGO_SOURCE_FILES
+        base/complete_type.h
         base/config.h
-        static/graph.h
-        static/registry.h
-        container.h
-        type/auto_constructible.h
-        binding/binding_model.h
-        binding/binding_resolution.h
-        binding/binding_resolution_policy.h
-        binding/binding_selection.h
-        type/dependency.h
-        factory/factory_traits.h
-        type/key.h
-        base/none.h
-        static/activation_set.h
-        static/container_traits.h
+        base/construction_scope.h
         base/exceptions.h
+        base/none.h
+        base/type_descriptor.h
+        base/type_list.h
+        base/type_name.h
+        binding/collection.h
+        binding/conversion.h
+        binding/interface.h
+        binding/model.h
+        binding/policy.h
+        binding/request.h
+        binding/selection.h
+        binding/source.h
+        container.h
+        container/base.h
+        container/collection.h
+        container/config.h
+        container/implementation.h
+        container/runtime.h
+        container/static.h
+        context/cache.h
+        context/context.h
+        context/conversion_cache.h
+        context/frame.h
+        context/frame_fwd.h
+        context/recursion_guard.h
+        conversion/access.h
+        conversion/candidates.h
+        conversion/conversions.h
+        conversion/direct_paths.h
+        conversion/indirect_candidates.h
+        conversion/type_conversion_traits.h
+        dependency/collection.h
+        dependency/normalized_type.h
+        dependency/request.h
+        dependency/selector.h
+        exposure/interface_storage_traits.h
+        exposure/object_resolutions.h
+        exposure/resolutions.h
+        exposure/shape_resolutions.h
+        exposure/source.h
+        exposure/storage_traits.h
+        exposure/type_storage_traits.h
+        factory/auto_constructible.h
         factory/callable.h
+        factory/constructor.h
+        factory/constructor_detection.h
+        factory/constructor_traits.h
+        factory/constructor_typedef.h
         factory/detail/constructor_arity.hpp
         factory/detail/constructor_arity_msvc.hpp
         factory/detail/constructor_detection.hpp
         factory/detail/constructor_detection_msvc.hpp
         factory/detail/constructor_signature.hpp
         factory/detail/constructor_signature_msvc.hpp
-        factory/constructor_traits.h
-        factory/constructor_detection.h
-        factory/constructor_typedef.h
-        factory/constructor.h
         factory/function.h
         factory/invoke.h
-        memory/aligned_storage.h
-        memory/allocator.h
-        memory/arena_allocator.h
-        memory/object_store.h
-        memory/object_lifetime.h
-        type/access.h
-        type/annotated.h
-        type/collection_traits.h
-        registration/constructor.h
-        registration/type_registration.h
-        runtime_container.h
-        runtime/container_traits.h
-        runtime/registration_api.h
-        runtime/lookup_index.h
-        runtime/registry.h
-        runtime/transaction.h
-        static_container.h
+        factory/traits.h
+        key/annotated.h
+        key/key.h
+        key/selected.h
         lookup/array.h
         lookup/base.h
         lookup/collection.h
+        lookup/definition.h
         lookup/lookup.h
         lookup/operations.h
         lookup/ordered.h
         lookup/storage.h
         lookup/tags.h
         lookup/unordered.h
-        resolution/cache.h
-        resolution/conversion_cache.h
-        resolution/conversion_resolution.h
-        binding/runtime_binding_interface.h
-        runtime/runtime_binding.h
-        storage/interface_storage_traits.h
-        context/context_base.h
-        runtime/context.h
-        static/context.h
-        rtti/static_provider.h
+        memory/aligned_storage.h
+        memory/allocator.h
+        memory/arena_allocator.h
+        memory/object_lifetime.h
+        memory/object_store.h
+        registration/args.h
+        registration/constructor.h
+        registration/deduction.h
+        registration/options.h
+        registration/requirements.h
+        registration/type_registration.h
+        resolution/conversion.h
+        resolution/operation.h
+        resolution/resolution.h
+        resolution/source.h
         rtti/rtti.h
+        rtti/static_provider.h
         rtti/typeid_provider.h
+        runtime/binding.h
+        runtime/binding_value.h
+        runtime/context.h
+        runtime/data.h
+        runtime/lookup/commit.h
+        runtime/lookup/index.h
+        runtime/lookup/keys.h
+        runtime/lookup/query.h
+        runtime/lookup/route.h
+        runtime/memory.h
+        runtime/registration.h
+        runtime/registry.h
+        runtime/request.h
+        runtime/store.h
+        runtime/traits.h
+        runtime/transaction.h
+        runtime_container.h
+        static/activation/cache.h
+        static/activation/requests.h
+        static/activation/resolver.h
+        static/activation/set.h
+        static/activation/storage.h
+        static/bindings.h
+        static/context.h
+        static/dependencies.h
+        static/graph/cost.h
+        static/graph/graph.h
+        static/graph/structure.h
+        static/graph/topology.h
+        static/index.h
+        static/probe.h
+        static/registry.h
+        static/traits.h
+        static/validation.h
+        static_container.h
         storage/external.h
-        resolution/materialized_source.h
-        storage/shared_cyclical.h
+        storage/scope_policy.h
         storage/shared.h
+        storage/shared_cyclical.h
         storage/storage.h
-        storage/storage_scope_policy.h
-        storage/type_storage_traits.h
         storage/unique.h
-        type/normalized_type.h
-        type/rebind_type.h
-        type/type_conversion_traits.h
-        base/type_descriptor.h
-        base/type_list.h
-        base/type_name.h
+        type/array.h
+        type/array_construction.h
+        type/brace_constructible.h
+        type/copy_constructible.h
+        type/exact_lookup.h
+        type/optional.h
+        type/pointer.h
+        type/primary.h
+        type/rebind.h
+        type/smart_pointer.h
         type/type_traits.h
-        resolution/resolution_operation.h
+        type/variant.h
+        type/wrapper.h
     )
 
     set(DINGO_INTERFACE_SOURCES "")

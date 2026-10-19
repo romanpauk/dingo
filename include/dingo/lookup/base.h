@@ -8,9 +8,9 @@
 #pragma once
 
 #include <dingo/base/type_list.h>
+#include <dingo/key/key.h>
 #include <dingo/lookup/ordered.h>
 #include <dingo/lookup/tags.h>
-#include <dingo/type/key.h>
 
 #include <cstddef>
 #include <functional>

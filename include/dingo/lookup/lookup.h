@@ -9,13 +9,13 @@
 
 #include <dingo/base/exceptions.h>
 #include <dingo/base/type_list.h>
+#include <dingo/dependency/normalized_type.h>
+#include <dingo/key/key.h>
 #include <dingo/lookup/array.h>
 #include <dingo/lookup/base.h>
 #include <dingo/lookup/collection.h>
 #include <dingo/lookup/ordered.h>
 #include <dingo/lookup/unordered.h>
-#include <dingo/type/key.h>
-#include <dingo/type/normalized_type.h>
 
 #include <tuple>
 #include <type_traits>

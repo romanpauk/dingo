@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/type/type_conversion_traits.h>
+#include <dingo/conversion/type_conversion_traits.h>
 
 #include <utility>
 

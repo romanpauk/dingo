@@ -45,8 +45,8 @@ the alternative selected by overload resolution.
 
 ### 2. `storage_traits`
 
-Specialize `storage_traits` in
-[include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
+Specialize `storage_traits` declared in
+[include/dingo/exposure/storage_traits.h](../../include/dingo/exposure/storage_traits.h)
 when defining which result forms a given storage/scope combination can expose.
 
 This trait defines whether a registration can service requests such as:
@@ -64,7 +64,7 @@ The built-in scopes do not specialize `storage_traits` per wrapper. Each scope
 is described once by a `storage_scope_policy` specialization (stability,
 consumed versus borrowed source, recursion guard, and the request lists it
 publishes for each `storage_form`), and
-[include/dingo/storage/storage_scope_policy.h](../../include/dingo/storage/storage_scope_policy.h)
+[include/dingo/storage/scope_policy.h](../../include/dingo/storage/scope_policy.h)
 generates `storage_traits` and `storage_materialization_traits` from it. A
 (scope, form) cell that deviates from that rule specializes
 `detail::storage_cell`. A custom wrapper that the built-in forms do not classify
@@ -82,7 +82,7 @@ or exact lookup behavior from the request spelling.
 ### 3. `type_conversion_traits`
 
 Specialize `type_conversion_traits` in
-[include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
+[include/dingo/conversion/type_conversion_traits.h](../../include/dingo/conversion/type_conversion_traits.h)
 when two wrapper types need a concrete conversion step that is not covered by a
 direct converting constructor or pointer cast.
 
@@ -127,7 +127,7 @@ That file is worth treating as executable documentation.
 ## Interface Storage Rebinding
 
 One extra extension point is
-[include/dingo/storage/interface_storage_traits.h](../../include/dingo/storage/interface_storage_traits.h).
+[include/dingo/exposure/interface_storage_traits.h](../../include/dingo/exposure/interface_storage_traits.h).
 
 The container uses it to decide whether a storage handle can be rebound from a
 concrete leaf type to an interface leaf type. That is the mechanism behind the
@@ -139,6 +139,7 @@ correct ownership and deletion semantics for interface use.
 ## Good Source Companions
 
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
-- [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
-- [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
+- [include/dingo/exposure/storage_traits.h](../../include/dingo/exposure/storage_traits.h)
+- [include/dingo/exposure/type_storage_traits.h](../../include/dingo/exposure/type_storage_traits.h)
+- [include/dingo/conversion/type_conversion_traits.h](../../include/dingo/conversion/type_conversion_traits.h)
 - [test/type/type_traits.cpp](../../test/type/type_traits.cpp)

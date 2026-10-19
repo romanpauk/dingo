@@ -9,15 +9,15 @@
 
 #include <dingo/base/config.h>
 
+#include <dingo/dependency/normalized_type.h>
+#include <dingo/exposure/type_storage_traits.h>
 #include <dingo/factory/constructor.h>
-#include <dingo/factory/factory_traits.h>
+#include <dingo/factory/traits.h>
 #include <dingo/memory/aligned_storage.h>
 #include <dingo/memory/object_lifetime.h>
-#include <dingo/resolution/resolution_operation.h>
+#include <dingo/resolution/operation.h>
+#include <dingo/storage/scope_policy.h>
 #include <dingo/storage/storage.h>
-#include <dingo/storage/storage_scope_policy.h>
-#include <dingo/storage/type_storage_traits.h>
-#include <dingo/type/normalized_type.h>
 
 #include <new>
 

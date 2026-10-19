@@ -7,8 +7,8 @@
 
 #pragma once
 
+#include <dingo/key/key.h>
 #include <dingo/lookup/tags.h>
-#include <dingo/type/key.h>
 
 namespace dingo {
 template <typename Interface>
