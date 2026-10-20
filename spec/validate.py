@@ -277,6 +277,14 @@ def check_selection_rules(spec: Spec, errors: list[str]) -> None:
         ):
             errors.append(f"{where}: {rule.mode.value} requests combine with first_non_empty")
         for step in rule.steps:
+            if SelectionSource.ELEMENTS in step.sources and (
+                rule.mode is not SelectionMode.SINGULAR
+                or step.when is not StepCondition.COLLECTION
+            ):
+                errors.append(
+                    f"{where}: the elements are a source of singular requests of "
+                    "a collection type"
+                )
             if SelectionSource.FACTORY in step.sources and (
                 rule.mode is not SelectionMode.CONSTRUCT
                 or step.when is not StepCondition.HAS_FACTORY

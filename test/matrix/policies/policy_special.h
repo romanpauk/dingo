@@ -47,7 +47,9 @@ template <typename Type> struct ambiguous {
 template <typename Value, template <typename> typename Stats>
 struct custom_allocator {
   template <typename Container> static void check(Container &container) {
-    ASSERT_GT(Stats<void>::allocated(), 0u);
+    // How many bytes the container allocates is the implementation's; that it
+    // allocates by the allocator is compared.
+    ASSERT_TRUE(Stats<void>::allocated() > 0u);
     auto &resolved = container.template resolve<Value &>();
     ASSERT_TRUE(is_constructed_value(resolved));
   }

@@ -1671,12 +1671,20 @@ parent. A memoized request of an object that exists constructs nothing and runs
 in no transaction, and a lazy slot is settled, its address kept by a memo, only
 outside a transaction.
 
-Remaining: the allocators, which the container does not allocate by yet, and the
-keys of a binding per interface, `key_value<Key, Interface>`; a stored variant,
-which the baseline default-constructs and the next implementation makes from its
-first alternative by its detected constructor, a behavior change to declare; and
-the declaration of the differences the differential runner,
-`--implementation next`, finds.
+A runtime container allocates its bindings by its allocator, aligned by padding
+the bytes the allocator gives. A registration names the key value of one
+interface by `key_value<Key, Interface>`, and keys of other key types the
+binding is also found by. A request of a collection type that no binding of a
+container stores is the collection of the elements of the container before its
+parent is asked, the elements step of the singular rule.
+
+The differential tests run the generated matrix against the next implementation
+with `--implementation next`: every target builds, and every difference from the
+baseline is declared by a behavior change of the spec with a `matrix:` case
+pattern; the changes apply to the next implementation only, as the current one
+is the baseline code. Remaining: a stored variant, which the baseline
+default-constructs and the next implementation makes from its first alternative
+by its detected constructor, which no matrix case observes.
 
 #### M9.2: Switch And Removal
 

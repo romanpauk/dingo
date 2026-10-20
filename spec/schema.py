@@ -410,6 +410,9 @@ class SelectionSource(Enum):
     # The factory of a construct request: the detected constructor of its
     # type, or the factory the request names.
     FACTORY = "factory"
+    # The bindings of the element type of a collection request at the level,
+    # its local and container bindings, collected.
+    ELEMENTS = "elements"
 
 
 class Combine(Enum):
@@ -422,6 +425,8 @@ class StepCondition(Enum):
     CONSTRUCTIBLE = "constructible"
     # The request is of a type its factory can make.
     HAS_FACTORY = "has_factory"
+    # The request is of a collection type, by value.
+    COLLECTION = "collection"
 
 
 class Cardinality(Enum):

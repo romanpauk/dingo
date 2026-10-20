@@ -298,6 +298,16 @@ python3 test/differential/run.py --build-root build/differential --profile porta
 
 The `differential` workflow runs the same command with GCC 14.
 
+With `--implementation next`, the working-tree side is built against the next
+implementation, and the behavior changes of the spec with `matrix:` case
+patterns declare its differences; against the current implementation no
+difference is declared.
+
+```bash
+python3 test/differential/run.py --build-root build/differential-next \
+    --profile portable --implementation next
+```
+
 ### Resolution Benchmarks
 
 [`benchmark/resolve/resolve.cpp`](../benchmark/resolve/resolve.cpp) measures

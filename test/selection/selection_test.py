@@ -178,3 +178,19 @@ def test_keys_of_an_interface_and_of_other_key_types(model):
     assert model.select(level, Request("animal", name)).bindings == (binding,)
     clash = Binding("c", ("processor",), Key("runtime", "int", 1), aliases=(name,))
     assert not model.register(level, clash)[0]
+
+
+def test_a_collection_of_the_elements_of_a_level_precedes_the_parent(model):
+    from spec.reference.selection import Binding, Level, Request
+
+    parent = Level()
+    child = Level(parent=parent)
+    stored = Binding("stored", ("collection",))
+    assert model.register(parent, stored)[0]
+    assert model.register(child, Binding("element", ("iface",)))[0]
+    # A request of the collection type, of iface elements: the child's element
+    # comes before the parent's stored collection.
+    request = Request("collection", element="iface")
+    assert model.select(child, request).collected
+    # Without elements of its own, the child asks the parent.
+    assert model.select(Level(parent=parent), request).bindings == (stored,)

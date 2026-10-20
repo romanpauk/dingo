@@ -167,8 +167,9 @@ template <typename Tag> struct key_type_of<tag_key<Tag>> {
   using type = Tag;
 };
 
+// A fixed key is named by its key_type, as the baseline names it.
 template <typename Key, auto Value> struct key_type_of<fixed_key<Key, Value>> {
-  using type = Key;
+  using type = ::dingo::key_type<Key, Value>;
 };
 
 template <typename Key> struct key_type_of<runtime_key<Key>> {

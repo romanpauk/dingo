@@ -32,13 +32,20 @@ selection_rules: tuple[SelectionRule, ...] = (
         description=(
             "A request of one object: the local bindings shadow the container, "
             "the container its parent, and an unregistered type that can be "
-            "auto-constructed is constructed when no level names a binding."
+            "auto-constructed is constructed when no level names a binding. A "
+            "request of a collection type that no binding of the container "
+            "stores is the collection of the bindings of its element type the "
+            "container holds, before its parent is asked."
         ),
         mode=SelectionMode.SINGULAR,
         combine=Combine.FIRST_NON_EMPTY,
         steps=(
             SelectionStep(sources=LOCAL),
             SelectionStep(sources=CONTAINER),
+            SelectionStep(
+                sources=(SelectionSource.ELEMENTS,),
+                when=StepCondition.COLLECTION,
+            ),
             SelectionStep(sources=(SelectionSource.PARENT,)),
             SelectionStep(
                 sources=(SelectionSource.AUTO_CONSTRUCT,),

@@ -14,7 +14,8 @@
 
 namespace dingo {
 
-template <typename Traits = dynamic_container_traits, typename... Rest>
-using runtime_container = container<Traits, Rest...>;
+template <typename Traits = dynamic_container_traits, typename Allocator = void,
+          typename Parent = void>
+using runtime_container = container<Traits, Allocator, Parent>;
 
 } // namespace dingo

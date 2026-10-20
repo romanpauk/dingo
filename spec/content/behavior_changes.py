@@ -90,6 +90,7 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         cases=(
             "routes:*/*/unique/*leaf/*leaf&#served",
             "scopes:unique/form plain",
+            "matrix:dingo_matrix_test_runtime_unique_reference_regressions/*",
         ),
         baseline=(
             "The runtime and mixed containers return an lvalue reference to the "
@@ -104,13 +105,20 @@ behavior_changes: tuple[BehaviorChange, ...] = (
             "Serving a consumed object makes no more moves and destroys no more "
             "temporaries than the container that makes the fewest."
         ),
-        cases=("routes:*/*/unique/*#moves", "routes:*/*/unique/*#temporaries"),
+        cases=(
+            "routes:*/*/unique/*#moves",
+            "routes:*/*/unique/*#temporaries",
+            "matrix:dingo_matrix_test_lifetime_counts/*_unique_*",
+        ),
         baseline=(
             "The runtime container moves a consumed value one more time than the "
             "static container, and the mixed container one more time for rvalue "
             "references."
         ),
-        now="Every container makes the fewest moves any of them makes.",
+        now=(
+            "Every container moves a consumed object only as far as the request "
+            "needs, no more than the container that moves the fewest."
+        ),
         decision=DECISION,
     ),
     BehaviorChange(
@@ -302,6 +310,7 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         cases=(
             "selection:*#duplicate",
             "selection:static/many/*#registration",
+            "matrix:dingo_matrix_test_static_parent_container/*",
         ),
         baseline=(
             "A static or mixed container accepts duplicates and fails only when "
@@ -326,7 +335,10 @@ behavior_changes: tuple[BehaviorChange, ...] = (
     BehaviorChange(
         id="empty_collections_are_valid",
         description="A collection request that names no binding yields an empty collection.",
-        cases=("selection:*#empty_collection",),
+        cases=(
+            "selection:*#empty_collection",
+            "matrix:dingo_matrix_test_runtime_exception_regressions/*",
+        ),
         baseline=(
             "A runtime container returns an empty collection only where a many "
             "lookup is declared, a mixed container throws type_not_found_exception, "
@@ -346,7 +358,8 @@ behavior_changes: tuple[BehaviorChange, ...] = (
             for domain in ("runtime", "parent")
             for setting in ("default", "bounded")
             for key in ("fixed", "runtime")
-        ),
+        )
+        + ("matrix:dingo_matrix_test_lookup_route_regressions/*",),
         baseline="A collection of a value key declared one throws type_not_found_exception.",
         now="The collection holds the one binding, as a query over the bindings.",
         decision=COLLECTION_DECISION,
@@ -411,5 +424,53 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         baseline="It fails to compile.",
         now="The collection holds the runtime bindings the request names.",
         decision=DECISION,
+    ),
+    BehaviorChange(
+        id="stored_objects_are_constructed_in_place",
+        description=(
+            "A binding constructs the object it stores in place, every layer "
+            "around its leaf, so storing it moves nothing."
+        ),
+        cases=("matrix:dingo_matrix_test_lifetime_counts/*_shared_value_optional_*",),
+        baseline=(
+            "A binding that stores an optional of its leaf constructs the leaf "
+            "and moves it into the optional."
+        ),
+        now="The leaf is constructed in the optional.",
+        decision=DECISION,
+    ),
+    BehaviorChange(
+        id="static_bindings_refuse_when_compiled",
+        description=(
+            "A request that a static binding names and cannot serve is rejected "
+            "when the request is compiled, in a static and in a mixed container."
+        ),
+        cases=(
+            "matrix:dingo_matrix_test_conversion_delivery_regressions/*",
+            "matrix:dingo_matrix_test_nested_wrappers/*leaf_access_move_only*",
+            "matrix:dingo_matrix_test_nested_wrappers/*leaf_refusal*",
+        ),
+        baseline=(
+            "A mixed container throws type_not_convertible_exception when the "
+            "request is resolved, and a static container serves a move-only "
+            "interface by value from a shared binding, which the runtime "
+            "containers refuse."
+        ),
+        now="The request does not compile.",
+        decision=DECISION,
+    ),
+    BehaviorChange(
+        id="keys_apply_to_every_interface",
+        description=(
+            "The key value of a registration is the key of every interface the "
+            "binding declares, whether or not the lookups declare its domain."
+        ),
+        cases=("matrix:dingo_matrix_test_runtime_lookup_routing_regressions/*",),
+        baseline=(
+            "A key value applies only to the interfaces whose domain the lookups "
+            "declare; the binding is found without a key by the others."
+        ),
+        now="The binding is found by its key for every interface.",
+        decision=LOOKUP_DECISION,
     ),
 )

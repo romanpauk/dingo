@@ -23,6 +23,8 @@ from spec.schema import (
 
 VALUE_KINDS = ("fixed", "runtime")
 
+OUTERMOST_CONDITIONS = (StepCondition.CONSTRUCTIBLE, StepCondition.HAS_FACTORY)
+
 # The reason a binding is rejected whose key value is outside the bound of the
 # dense array that indexes its domain: such a key is never stored.
 KEY_OUT_OF_RANGE = "key out of range"
@@ -104,6 +106,9 @@ class Request:
     constructible: bool = False
     # Whether the factory of a construct request can make its type.
     has_factory: bool = False
+    # The element interface of a request of a collection type, by value, whose
+    # `interface` is the collection type.
+    element: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +118,9 @@ class Selection:
     auto_constructed: bool = False
     # The object of a construct request is made by its factory.
     made: bool = False
+    # A request of a collection type is the collection of the elements its
+    # level holds.
+    collected: bool = False
 
 
 class Model:
@@ -171,6 +179,13 @@ class Model:
             return ["auto"]
         if source is SelectionSource.FACTORY:
             return ["factory"]
+        if source is SelectionSource.ELEMENTS:
+            own = [
+                b
+                for b in (*local, *level.bindings)
+                if b.names(request.element, request.key)
+            ]
+            return ["elements"] if own else []
         raise ValueError(source)
 
     @staticmethod
@@ -179,6 +194,8 @@ class Model:
             return request.constructible
         if condition is StepCondition.HAS_FACTORY:
             return request.has_factory
+        if condition is StepCondition.COLLECTION:
+            return request.element is not None
         raise ValueError(condition)
 
     def gather(self, level, local, request, mode, outermost=True) -> list:
@@ -188,7 +205,11 @@ class Model:
         rule = self.rules[mode]
         found: list = []
         for step in rule.steps:
-            if step.when is not None and not (outermost and self.meets(step.when, request)):
+            if step.when is not None and not self.meets(step.when, request):
+                continue
+            # Only the outermost level constructs: auto-construction and the
+            # factory of a construct request.
+            if step.when in OUTERMOST_CONDITIONS and not outermost:
                 continue
             step_found = [
                 candidate
@@ -225,4 +246,6 @@ class Model:
             return Selection(status, (), auto_constructed=True)
         if found == ["factory"]:
             return Selection(status, (), made=True)
+        if found == ["elements"]:
+            return Selection(status, (), collected=True)
         return Selection(status, tuple(found) if status is Status.OK else ())

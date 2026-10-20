@@ -411,6 +411,7 @@ enum class selection_source : std::uint8_t {
   parent,
   auto_construct,
   factory,
+  elements,
 };
 
 enum class selection_mode : std::uint8_t {
@@ -424,11 +425,12 @@ enum class step_condition : std::uint8_t {
   always,
   constructible,
   has_factory,
+  collection,
 };
 
 enum class selection_status : std::uint8_t { ok, ambiguous, not_found };
 
-inline constexpr std::size_t max_selection_steps = 4;
+inline constexpr std::size_t max_selection_steps = 5;
 inline constexpr std::size_t max_step_sources = 4;
 
 // The union of the sources of a step, taken when the request meets its
@@ -463,9 +465,10 @@ inline constexpr selection_rule selection_rules[] = {
         selection_source::container_runtime},
        2,
        step_condition::always},
+      {{selection_source::elements}, 1, step_condition::collection},
       {{selection_source::parent}, 1, step_condition::always},
       {{selection_source::auto_construct}, 1, step_condition::constructible}},
-     4,
+     5,
      selection_status::not_found,
      selection_status::ok,
      selection_status::ambiguous},

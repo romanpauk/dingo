@@ -296,6 +296,7 @@ def main():
             "--baseline", records / "baseline",
             "--current", records / "current",
             "--spec",
+            "--implementation", args.implementation,
             "--report", build_root / "report.json",
         ]
     ).returncode

@@ -843,32 +843,27 @@ private:
     throw std::logic_error("the selected term does not complete the request");
   }
 
-  // Makes the request from the boundary object by the creating rules of the
-  // plan: none, wrapping into an optional, or adopting a pointer, which may be
-  // wrapped into an optional in turn.
-  template <typename Request>
-  static Request construct(Resolver &resolver, entry &binding, std::size_t term,
-                           const completion_plan &plan) {
-    using made_type = typename request_traits<Request>::made_type;
+  // Calls `visit` with the created layers of the plan made of `Made`: none,
+  // wrapping into an optional, or adopting a pointer, which may be wrapped
+  // into an optional in turn; or returns visit.unsupported().
+  template <typename Made, typename Visit>
+  static decltype(auto) visit_layers(const completion_plan &plan,
+                                     Visit &visit) {
     const rule_id *rules = plan.creating;
     switch (plan.created) {
     case 0:
-      return construct_with<Request, created_layers<made_type>>(resolver,
-                                                                binding, term);
+      return visit.template apply<created_layers<Made>>();
     case 1:
       switch (rules[0]) {
       case rule_id::wrap_optional:
-        return construct_with<
-            Request, created_layers<made_type, rule_id::wrap_optional>>(
-            resolver, binding, term);
+        return visit
+            .template apply<created_layers<Made, rule_id::wrap_optional>>();
       case rule_id::adopt_pointer_owned:
-        return construct_with<
-            Request, created_layers<made_type, rule_id::adopt_pointer_owned>>(
-            resolver, binding, term);
+        return visit.template apply<
+            created_layers<Made, rule_id::adopt_pointer_owned>>();
       case rule_id::adopt_pointer_shared:
-        return construct_with<
-            Request, created_layers<made_type, rule_id::adopt_pointer_shared>>(
-            resolver, binding, term);
+        return visit.template apply<
+            created_layers<Made, rule_id::adopt_pointer_shared>>();
       default:
         break;
       }
@@ -877,15 +872,11 @@ private:
       if (rules[1] == rule_id::wrap_optional) {
         switch (rules[0]) {
         case rule_id::adopt_pointer_owned:
-          return construct_with<
-              Request, created_layers<made_type, rule_id::wrap_optional,
-                                      rule_id::adopt_pointer_owned>>(
-              resolver, binding, term);
+          return visit.template apply<created_layers<
+              Made, rule_id::wrap_optional, rule_id::adopt_pointer_owned>>();
         case rule_id::adopt_pointer_shared:
-          return construct_with<
-              Request, created_layers<made_type, rule_id::wrap_optional,
-                                      rule_id::adopt_pointer_shared>>(
-              resolver, binding, term);
+          return visit.template apply<created_layers<
+              Made, rule_id::wrap_optional, rule_id::adopt_pointer_shared>>();
         default:
           break;
         }
@@ -894,7 +885,56 @@ private:
     default:
       break;
     }
-    throw std::logic_error("the selected term does not complete the request");
+    return visit.unsupported();
+  }
+
+  // Whether the binding makes the boundary object of the layers of a plan.
+  struct makes_boundary {
+    entry &binding;
+    std::size_t term;
+
+    template <typename Layers> bool apply() const {
+      if constexpr (Layers::valid) {
+        return binding.template makes<typename Layers::boundary>(term);
+      } else {
+        return false;
+      }
+    }
+
+    static bool unsupported() { return false; }
+  };
+
+  template <typename Request> struct constructs_request {
+    Resolver &resolver;
+    entry &binding;
+    std::size_t term;
+
+    template <typename Layers> Request apply() const {
+      return construct_with<Request, Layers>(resolver, binding, term);
+    }
+
+    [[noreturn]] static Request unsupported() {
+      throw std::logic_error("the selected term does not complete the request");
+    }
+  };
+
+  // Makes the request from the boundary object by the creating rules of the
+  // plan. The binding makes the boundary object of the type of its term,
+  // which has the qualifiers of the request when the request names them, and
+  // otherwise none; the request asks for the qualified one first.
+  template <typename Request>
+  static Request construct(Resolver &resolver, entry &binding, std::size_t term,
+                           const completion_plan &plan) {
+    using value_type = typename request_traits<Request>::value_type;
+    using made_type = typename request_traits<Request>::made_type;
+    constructs_request<Request> constructs{resolver, binding, term};
+    if constexpr (!std::is_same_v<value_type, made_type>) {
+      makes_boundary qualified{binding, term};
+      if (visit_layers<value_type>(plan, qualified)) {
+        return visit_layers<value_type>(plan, constructs);
+      }
+    }
+    return visit_layers<made_type>(plan, constructs);
   }
 
   // Makes the request by the created layers `Layers` from the boundary object

@@ -233,8 +233,17 @@ private:
       return Outermost && unkeyed && auto_constructs_by<Request, Self>();
     case step_condition::has_factory:
       return Outermost && unkeyed && has_detected_factory<Request>::value;
+    case step_condition::collection:
+      return is_collection_request<Request>();
     }
     return false;
+  }
+
+  // Whether a request is of a collection type, by value.
+  template <typename Request> static constexpr bool is_collection_request() {
+    return !std::is_reference_v<Request> &&
+           collection_traits<
+               typename request_traits<Request>::value_type>::is_collection;
   }
 
   // The number of bindings a source names when the request is compiled, or
@@ -256,6 +265,15 @@ private:
     } else if constexpr (Source == selection_source::auto_construct ||
                          Source == selection_source::factory) {
       return 1;
+    } else if constexpr (Source == selection_source::elements) {
+      if constexpr (Self::has_runtime_source ||
+                    Self::has_local_runtime_source ||
+                    Key::descriptor.kind == key_kind::runtime ||
+                    !is_collection_request<Request>()) {
+        return is_collection_request<Request>() ? unknown_count : 0;
+      } else {
+        return elements_known<Request, Key>() ? 1 : 0;
+      }
     } else if constexpr (Source == selection_source::local_static) {
       if constexpr (!Self::has_local_static_source) {
         return 0;
@@ -331,6 +349,13 @@ private:
     case selection_source::auto_construct:
     case selection_source::factory:
       return 1;
+    case selection_source::elements:
+      if constexpr (is_collection_request<Request>()) {
+        using element = typename collection_traits<
+            typename request_traits<Request>::value_type>::resolve_type;
+        return own_count<element, Key>(key_value) != 0 ? 1 : 0;
+      }
+      return 0;
     case selection_source::local_static:
       if constexpr (Self::has_local_static_source) {
         return self().local_static_source().template count<Request, Key>(
@@ -380,7 +405,8 @@ private:
     for (std::size_t source = 0; source < step.source_count; ++source) {
       if (step.sources[source] == selection_source::parent ||
           step.sources[source] == selection_source::auto_construct ||
-          step.sources[source] == selection_source::factory) {
+          step.sources[source] == selection_source::factory ||
+          step.sources[source] == selection_source::elements) {
         return false;
       }
     }
@@ -552,9 +578,47 @@ private:
       });
     } else if constexpr (Source == selection_source::factory) {
       return make_by_factory<Request, Key>();
+    } else if constexpr (Source == selection_source::elements) {
+      return collect_elements<Request, Key>(key_value);
     } else {
       return auto_construct<Request, Key>();
     }
+  }
+
+  // The collection of the elements the container's own bindings name.
+  template <typename Request, typename Key>
+  Request collect_elements([[maybe_unused]] const void *key_value) {
+    if constexpr (is_collection_request<Request>()) {
+      using collection = typename request_traits<Request>::value_type;
+      return self().transactions().run([&]() -> Request {
+        collection result;
+        collection_append append;
+        counting_append<collection_append> counted{append};
+        collect_own<collection, Key>(result, key_value, counted);
+        return result;
+      });
+    } else {
+      raise_not_found<Request, Key>();
+    }
+  }
+
+  // Whether the static bindings of a container without runtime bindings name
+  // an element of the collection a request asks for.
+  template <typename Request, typename Key>
+  static constexpr bool elements_known() {
+    using element = typename collection_traits<
+        typename request_traits<Request>::value_type>::resolve_type;
+    std::size_t count = 0;
+    if constexpr (Self::has_static_source &&
+                  Key::descriptor.kind != key_kind::runtime) {
+      count += Self::static_source_type::template fixed_count<element, Key>();
+    }
+    if constexpr (Self::has_local_static_source &&
+                  Key::descriptor.kind != key_kind::runtime) {
+      count +=
+          Self::local_static_source_type::template fixed_count<element, Key>();
+    }
+    return count != 0;
   }
 
   template <typename Request, typename Key> Request make_by_factory() {

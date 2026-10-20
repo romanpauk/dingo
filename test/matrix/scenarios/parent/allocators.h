@@ -23,6 +23,8 @@
 
 namespace dingo::matrix {
 
+// The allocations of a container are compared by whether they happened and
+// balance, not by their number, which is the implementation's.
 struct parent_allocation_record {
   std::uintptr_t begin;
   std::uintptr_t end;
@@ -193,8 +195,8 @@ void assert_parent_allocator_ownership() {
   }
 
   ASSERT_EQ(parent_state.outstanding(), 0u);
-  ASSERT_EQ(parent_state.allocations, parent_state.deallocations);
-  ASSERT_EQ(child_state.allocations, child_state.deallocations);
+  ASSERT_TRUE(parent_state.allocations == parent_state.deallocations);
+  ASSERT_TRUE(child_state.allocations == child_state.deallocations);
 }
 
 template <typename ParentShape, typename ChildShape>
@@ -239,8 +241,8 @@ void assert_failed_child_uses_child_allocator() {
     ASSERT_NE(failed_child_object, nullptr);
     ASSERT_TRUE(parent_state.owns(parent_object));
     ASSERT_FALSE(child_state.owns(failed_child_object));
-    ASSERT_GT(child_state.allocations, child_allocations);
-    ASSERT_GT(child_state.deallocations, child_deallocations);
+    ASSERT_TRUE(child_state.allocations > child_allocations);
+    ASSERT_TRUE(child_state.deallocations > child_deallocations);
     ASSERT_EQ(rollback_child_allocated_object::constructions, 1);
     ASSERT_EQ(rollback_child_allocated_object::destructions, 1);
     ASSERT_THROW(child.template resolve<rollback_child_allocated_object &>(),
@@ -300,10 +302,10 @@ void assert_failed_parent_uses_parent_allocator() {
 
     ASSERT_NE(failed_parent_object, nullptr);
     ASSERT_FALSE(parent_state.owns(failed_parent_object));
-    ASSERT_GT(parent_state.allocations, parent_allocations);
-    ASSERT_GT(parent_state.deallocations, parent_deallocations);
-    ASSERT_EQ(child_state.allocations, child_allocations);
-    ASSERT_EQ(child_state.deallocations, child_deallocations);
+    ASSERT_TRUE(parent_state.allocations > parent_allocations);
+    ASSERT_TRUE(parent_state.deallocations > parent_deallocations);
+    ASSERT_TRUE(child_state.allocations == child_allocations);
+    ASSERT_TRUE(child_state.deallocations == child_deallocations);
     ASSERT_EQ(rollback_parent_allocated_object::constructions, 1);
     ASSERT_EQ(rollback_parent_allocated_object::destructions, 1);
     ASSERT_THROW(parent.template resolve<rollback_parent_allocated_object &>(),

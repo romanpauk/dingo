@@ -36,47 +36,25 @@ template <typename Type> struct is_bindings : std::false_type {};
 template <typename... Binds>
 struct is_bindings<bindings<Binds...>> : std::true_type {};
 
-// The parent of a runtime container: Parent of container<Traits, Allocator,
-// Parent>, and otherwise a container of its own type.
-template <typename Self, typename... Rest> struct runtime_parent {
-  using type = Self;
-};
-
-template <typename Self, typename Allocator, typename Parent>
-struct runtime_parent<Self, Allocator, Parent> {
-  using type = Parent;
-};
-
-// The allocator of a runtime container, void without one.
-template <typename... Rest> struct runtime_allocator {
-  using type = void;
-};
-
-template <typename Allocator, typename... Rest>
-struct runtime_allocator<Allocator, Rest...> {
-  using type = Allocator;
-};
-
 template <typename Type> using is_traits = is_traits_type<Type>;
 
 // The traits and the parent of a mixed container: container<bindings<...>>,
 // container<bindings<...>, Traits>, container<bindings<...>, Parent>, or
-// container<bindings<...>, Traits, Parent>.
-template <typename... Rest> struct mixed_parameters {
-  using traits = dynamic_container_traits;
-  using parent = void;
+// container<bindings<...>, Traits, Parent>; void stands for none.
+template <typename Second, typename Third> struct mixed_parameters {
+  using traits = Second;
+  using parent = Third;
 };
 
-template <typename Second> struct mixed_parameters<Second> {
+template <typename Second> struct mixed_parameters<Second, void> {
   using traits = std::conditional_t<is_traits<Second>::value, Second,
                                     dynamic_container_traits>;
   using parent = std::conditional_t<is_traits<Second>::value, void, Second>;
 };
 
-template <typename Traits, typename Parent>
-struct mixed_parameters<Traits, Parent> {
-  using traits = Traits;
-  using parent = Parent;
+template <> struct mixed_parameters<void, void> {
+  using traits = dynamic_container_traits;
+  using parent = void;
 };
 
 } // namespace detail
@@ -84,28 +62,27 @@ struct mixed_parameters<Traits, Parent> {
 // A container of runtime registrations, with the lookup declarations of its
 // traits: container<Traits>, container<Traits, Allocator>, or
 // container<Traits, Allocator, Parent>, a child of a parent container that a
-// request falls back to.
-template <typename Traits = dynamic_container_traits, typename... Rest>
+// request falls back to. An Allocator or a Parent of void stands for none:
+// the allocator of the traits, and a parent of the container's own type.
+template <typename Traits = dynamic_container_traits, typename Allocator = void,
+          typename Parent = void>
 class container
-    : public core::selection<container<Traits, Rest...>>,
-      public detail::container_operations<container<Traits, Rest...>>,
+    : public core::selection<container<Traits, Allocator, Parent>>,
+      public detail::container_operations<container<Traits, Allocator, Parent>>,
       public detail::container_member_types<Traits> {
-  static_assert(sizeof...(Rest) <= 2,
-                "container<Traits, Allocator, Parent> takes at most three "
-                "parameters");
-
 public:
   static constexpr bool has_static_source = false;
   static constexpr bool has_runtime_source = true;
   static constexpr bool has_local_static_source = false;
   static constexpr bool has_local_runtime_source = false;
-  using parent_type = typename detail::runtime_parent<container, Rest...>::type;
+  using parent_type =
+      std::conditional_t<std::is_void_v<Parent>, container, Parent>;
   // The allocator of container<Traits, Allocator>, or of its traits, which
   // allocates its bindings.
-  using allocator_type = std::conditional_t<
-      std::is_void_v<typename detail::runtime_allocator<Rest...>::type>,
-      typename detail::traits_allocator<Traits>::type,
-      typename detail::runtime_allocator<Rest...>::type>;
+  using allocator_type =
+      std::conditional_t<std::is_void_v<Allocator>,
+                         typename detail::traits_allocator<Traits>::type,
+                         Allocator>;
 
   container() : backend_(core::lookup_table_v<Traits>) {}
 
@@ -156,14 +133,14 @@ private:
 // rejected. It takes the parent, when it has one, and the instance of every
 // external static binding as constructor arguments, in the order of the
 // bindings.
-template <typename... Binds, typename... Rest>
-class container<bindings<Binds...>, Rest...>
-    : public core::selection<container<bindings<Binds...>, Rest...>>,
+template <typename... Binds, typename Second, typename Third>
+class container<bindings<Binds...>, Second, Third>
+    : public core::selection<container<bindings<Binds...>, Second, Third>>,
       public detail::container_operations<
-          container<bindings<Binds...>, Rest...>>,
+          container<bindings<Binds...>, Second, Third>>,
       public detail::container_member_types<
-          typename detail::mixed_parameters<Rest...>::traits> {
-  using parameters = detail::mixed_parameters<Rest...>;
+          typename detail::mixed_parameters<Second, Third>::traits> {
+  using parameters = detail::mixed_parameters<Second, Third>;
   using lookups = core::lookup_table_of<typename core::lookup_list<
       typename parameters::traits::lookup_definition_type>::type>;
 
