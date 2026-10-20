@@ -304,7 +304,7 @@ STORED_TYPES = (
         storage="dingo::storage<std::variant<variant_a, variant_b>>",
         supported_scopes=frozenset({"unique", "shared"}),
         provides=frozenset({"stored_variant"}),
-        factory="dingo::factory<dingo::constructor<variant_a(value_type&)>>",
+        factory="dingo::factory<dingo::constructor<variant_a(value_type)>>",
         headers=("matrix/fixtures/variant_types.h",),
     ),
     StoredType(

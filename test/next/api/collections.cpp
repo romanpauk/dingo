@@ -143,3 +143,28 @@ TEST(next_collections, an_empty_static_collection_is_valid) {
 }
 
 } // namespace
+
+namespace {
+
+struct collected_tag {};
+
+TEST(next_collections, registers_a_collection_of_a_key) {
+  struct traits : dingo::dynamic_container_traits {
+    using lookup_definition_type =
+        dingo::lookups<dingo::typed<collected_tag, iface, dingo::many>>;
+  };
+  dingo::container<traits> container;
+  container.register_type<scope<dingo::shared>, storage<impl<1>>,
+                          dingo::interfaces<iface>,
+                          dingo::key_type<collected_tag>>();
+  container.register_type<scope<dingo::shared>, storage<impl<2>>,
+                          dingo::interfaces<iface>>();
+  container.register_type_collection<scope<dingo::unique>,
+                                     storage<std::vector<iface *>>>(
+      dingo::key_type<collected_tag>{});
+  std::vector<iface *> keyed = container.resolve<std::vector<iface *>>();
+  ASSERT_EQ(keyed.size(), 1u);
+  EXPECT_EQ(keyed[0]->id(), 1);
+}
+
+} // namespace

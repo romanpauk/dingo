@@ -258,7 +258,7 @@ public:
           request_traits<Request, Key>::descriptor);
       static_assert(index != detail::not_found && index != detail::ambiguous,
                     "a request resolves from the one binding it names");
-      return resolve_from<Request, index>(resolver);
+      return resolve_from<Request, Key, index>(resolver);
     } else if constexpr (sizeof...(Bindings) == 0) {
       raise_not_found<Request, Key>();
     } else {
@@ -278,7 +278,7 @@ public:
     using element = typename collection_traits<Collection>::resolve_type;
     each_named<element, Key>(key_value, [&](auto index) {
       append(collection,
-             resolve_from<element, decltype(index)::value>(resolver));
+             resolve_from<element, Key, decltype(index)::value>(resolver));
     });
   }
 
@@ -346,7 +346,7 @@ private:
     if constexpr (finds(binding::descriptor,
                         request_traits<Request, Key>::descriptor)) {
       if (index == Index) {
-        return resolve_from<Request, Index>(resolver);
+        return resolve_from<Request, Key, Index>(resolver);
       }
     }
     if constexpr (Index + 1 < sizeof...(Bindings)) {
@@ -356,12 +356,15 @@ private:
     }
   }
 
-  template <typename Request, std::size_t Index, typename Resolver>
+  // The term is selected by the descriptor of the request by `Key`, which
+  // carries the annotation of an annotated request.
+  template <typename Request, typename Key, std::size_t Index,
+            typename Resolver>
   Request resolve_from(Resolver &resolver) {
     using binding = pack_at_t<Index, Bindings...>;
     constexpr std::size_t selected =
-        select_term(binding::published, request_traits<Request>::descriptor,
-                    binding::exposed);
+        select_term(binding::published,
+                    request_traits<Request, Key>::descriptor, binding::exposed);
     static_assert(selected != no_term,
                   "static resolution cannot satisfy a request the storage "
                   "does not publish");

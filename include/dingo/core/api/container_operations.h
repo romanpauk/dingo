@@ -29,11 +29,12 @@ namespace dingo::detail {
 template <typename Self> class container_operations {
 public:
   // Registers a binding that stores a collection of the bindings of its
-  // element type, each added by `append`, or by its collection traits.
+  // element type: by the key, or each added by the append function, of its
+  // argument, or by its collection traits.
   template <typename... Parts, typename... Append>
   void register_type_collection(Append &&...append) {
     static_assert(sizeof...(Append) <= 1,
-                  "a collection takes at most one append function");
+                  "a collection takes at most one key or append function");
     if constexpr (sizeof...(Append) == 0) {
       self().template register_type<Parts...>(
           core::collection_factory<core::collection_append>(

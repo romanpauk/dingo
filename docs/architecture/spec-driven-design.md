@@ -1644,11 +1644,29 @@ wrappers of `test/support/custom_wrappers.h` are layers by
 `dingo::wrapper_traits` in the next implementation, as the behavior change
 `wrapper_extension_point` declares, and made by `make_test_wrapper`. A
 registration that declares only its stored type as its interface names the
-binding by its own type, as one that declares none. Remaining: 31 of the matrix
-sources do not compile against the next implementation, among them tests of
-behavior the spec changes, such as static bindings of one key, which need the
-spec cases instead of the baseline ones, and the differential runner does not
-build the next implementation yet.
+binding by its own type, as one that declares none.
+
+The matrix follows the spec where the baseline behavior it tested changes:
+
+- A case whose static bindings share a domain declares every domain many, by
+  `test/matrix/containers/many.h`, as the next implementation rejects a second
+  binding of a domain declared one.
+- A test that asserts that a request is refused skips the assertion when the
+  next implementation refuses the request when it is compiled, by
+  `test/matrix/common/refusal.h`; the route and selection tables check those
+  refusals.
+- A dependency of the scope of its consumer is taken by value, as a unique
+  object is not borrowed, and a variant of a test of a copy-only alternative is
+  made by a factory.
+
+Remaining: the matrix sources that do not compile against the next
+implementation yet, among them the user conversions of a leaf by
+`type_conversion_traits`, which the next implementation applies to handles only;
+the allocators and the `rtti_type` and `allocator_type` of a container; a stored
+variant, which the baseline default-constructs and the next implementation makes
+from its first alternative by its detected constructor, a behavior change to
+declare; and the differential runner, which does not build the next
+implementation yet.
 
 #### M9.2: Switch And Removal
 

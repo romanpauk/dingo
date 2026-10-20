@@ -46,6 +46,10 @@ class RegistrationPlan:
     runtime_setup: tuple[str, ...]
     mixed_static_bindings: tuple[str, ...] | None
     mixed_runtime_setup: tuple[str, ...]
+    # Whether the static bindings of the static, or the registrations of the
+    # mixed container, share a domain: an interface and a key.
+    static_shares_domain: bool = False
+    mixed_shares_domain: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -313,6 +317,18 @@ def runtime_setup_prefix(
     return tuple(lines)
 
 
+def shares_domain(
+    recipe: RegistrationRecipe, specs: tuple[RegistrationSpec, ...]
+) -> bool:
+    """Whether two registrations name one domain: their interfaces, or their
+    storage when they declare none, and their key."""
+    domains = [
+        (spec.interfaces or spec_storage(spec, recipe), spec.key or spec.indexed_key)
+        for spec in specs
+    ]
+    return len(domains) != len(set(domains))
+
+
 def build_registration_plan_from_recipe(
     recipe: RegistrationRecipe,
 ) -> RegistrationPlan:
@@ -360,6 +376,9 @@ def build_registration_plan_from_recipe(
                 for spec in mixed_runtime_specs
             )
         ),
+        static_shares_domain=shares_domain(recipe, static_specs),
+        mixed_shares_domain=recipe.mixed
+        and shares_domain(recipe, mixed_static_specs + mixed_runtime_specs),
     )
 
 
@@ -379,6 +398,32 @@ def build_registration_plan(
             mixed=exposed_type.mixed,
         )
     )
+
+
+# The containers of the matrix whose static bindings may share a domain, and
+# the ones that declare every domain many in the next implementation.
+MANY_CONTAINERS = {
+    "dingo::static_container<static_bindings>": (
+        "dingo::matrix::many_static_container<static_bindings>"
+    ),
+    "dingo::container<static_bindings>": (
+        "dingo::matrix::many_container<static_bindings>"
+    ),
+}
+MANY_HEADER = "matrix/containers/many.h"
+
+
+def plan_container(
+    mode: str, plan: RegistrationPlan, container_type: str
+) -> tuple[str, tuple[str, ...]]:
+    """The container type of a case and the headers it needs: a container
+    whose bindings share a domain declares every domain many."""
+    shares = plan.static_shares_domain if mode == "static" else (
+        plan.mixed_shares_domain if mode == "mixed" else False
+    )
+    if shares and container_type in MANY_CONTAINERS:
+        return MANY_CONTAINERS[container_type], (MANY_HEADER,)
+    return container_type, ()
 
 
 def render_registration_plan(

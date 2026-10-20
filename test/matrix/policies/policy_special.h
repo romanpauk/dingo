@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "matrix/common/refusal.h"
 #include "matrix/policies/policy_core.h"
 
 #include <dingo/container.h>
@@ -36,8 +37,10 @@ template <typename Type> struct local_collection_ref {
 
 template <typename Type> struct ambiguous {
   template <typename Container> static void check(Container &container) {
-    ASSERT_THROW(container.template resolve<Type &>(),
-                 dingo::type_ambiguous_exception);
+    if constexpr (!ambiguity_refused_when_compiled_v<Container, Type &>) {
+      ASSERT_THROW(container.template resolve<Type &>(),
+                   dingo::type_ambiguous_exception);
+    }
   }
 };
 

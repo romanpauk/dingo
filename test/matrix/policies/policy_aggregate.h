@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "matrix/common/refusal.h"
 #include "matrix/policies/policy_core.h"
 
 #include <cstddef>
@@ -238,15 +239,19 @@ template <typename Type> struct leaf_access_move_only {
     auto &reference = container.template resolve<Type &>();
     ASSERT_TRUE(is_constructed_value(reference));
     ASSERT_EQ(std::addressof(reference), container.template resolve<Type *>());
-    ASSERT_THROW(container.template resolve<Type>(),
-                 dingo::type_not_convertible_exception);
+    if constexpr (!conversion_refused_when_compiled_v<Container, Type>) {
+      ASSERT_THROW(container.template resolve<Type>(),
+                   dingo::type_not_convertible_exception);
+    }
   }
 };
 
 template <typename Type> struct leaf_refusal {
   template <typename Container> static void check(Container &container) {
-    ASSERT_THROW(container.template resolve<Type>(),
-                 dingo::type_not_convertible_exception);
+    if constexpr (!conversion_refused_when_compiled_v<Container, Type>) {
+      ASSERT_THROW(container.template resolve<Type>(),
+                   dingo::type_not_convertible_exception);
+    }
   }
 };
 

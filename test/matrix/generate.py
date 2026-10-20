@@ -66,6 +66,7 @@ from plugins import (
     LIFETIME_POLICIES,
     RegistrationPlan,
     build_registration_plan,
+    plan_container,
     render_registration_plan,
     select_case_lines,
 )
@@ -590,11 +591,14 @@ def make_case(row: MatrixRow) -> GeneratedCase:
         row.plan,
         context=f"row {row.name}",
     )
+    container_type, container_headers = plan_container(
+        row.mode.name, row.plan, row.container.container_type
+    )
 
     return GeneratedCase(
         suite=row.feature.name,
         name=row.name,
-        container_type=row.container.container_type,
+        container_type=container_type,
         static_bindings=registration.static_bindings,
         setup_lines=registration.setup_lines,
         policy=row.lines.policy,
@@ -619,6 +623,7 @@ def make_case(row: MatrixRow) -> GeneratedCase:
                     *row.exposed_type.headers,
                     *row.resolved_type.headers,
                     *row.container.headers,
+                    *container_headers,
                     row.feature.policy_header,
                 }
             )

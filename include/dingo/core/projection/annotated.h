@@ -21,15 +21,28 @@
 
 namespace dingo {
 
-template <typename Type, typename Tag> class annotated {
+namespace detail {
+// The value of an annotated request. An annotated abstract interface names an
+// interface and holds none, so it is complete wherever the interface is.
+template <typename Type, bool = std::is_abstract_v<Type>>
+class annotated_value {
 public:
-  annotated(Type value) : value_(std::move(value)) {}
+  annotated_value(Type value) : value_(std::move(value)) {}
 
   operator Type() && { return std::move(value_); }
   operator Type() const & { return value_; }
 
 private:
   Type value_;
+};
+
+template <typename Type> class annotated_value<Type, true> {};
+} // namespace detail
+
+template <typename Type, typename Tag>
+class annotated : public detail::annotated_value<Type> {
+public:
+  using detail::annotated_value<Type>::annotated_value;
 };
 
 template <typename Type, typename Tag> class annotated<Type &, Tag> {

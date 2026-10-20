@@ -13,8 +13,10 @@
 
 namespace dingo::matrix {
 
+// Takes its dependency by value: the dependency is registered in the scope of
+// the variant, and a unique one is consumed, so it is not borrowed.
 struct variant_a {
-  explicit variant_a(value_type &dependency) : value(dependency.marker()) {}
+  explicit variant_a(value_type dependency) : value(dependency.marker()) {}
 
   int value;
 };

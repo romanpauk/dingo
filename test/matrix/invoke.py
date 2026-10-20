@@ -34,6 +34,7 @@ from family import (
 from plugins import (
     RegistrationPlan,
     build_registration_plan,
+    plan_container,
     render_registration_plan,
 )
 from schema import (
@@ -259,10 +260,13 @@ def _make_case(row: InvokeRow) -> GeneratedInvokeCase:
         row.plan,
         context=f"invoke row {row.name}",
     )
+    container_type, container_headers = plan_container(
+        row.mode.name, row.plan, row.container.container_type
+    )
 
     return GeneratedInvokeCase(
         name=row.name,
-        container_type=row.container.container_type,
+        container_type=container_type,
         static_bindings=registration.static_bindings,
         setup_lines=registration.setup_lines,
         policy=row.callable.policy,
@@ -285,6 +289,7 @@ def _make_case(row: InvokeRow) -> GeneratedInvokeCase:
                     *row.exposed_type.headers,
                     *row.resolved_type.headers,
                     *row.container.headers,
+                    *container_headers,
                     "matrix/policies/resolution.h",
                 }
             )

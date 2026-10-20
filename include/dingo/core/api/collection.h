@@ -54,18 +54,20 @@ Collection collect_by(Backend &backend, Argument &&argument) {
 }
 
 // The factory of a binding that stores a collection: it collects the bindings
-// of its element type, each added by `Append`.
-template <typename Append> class collection_factory {
+// of its element type by `Argument`, the key of the collected bindings or the
+// function that adds each, as construct_collection takes it.
+template <typename Argument> class collection_factory {
 public:
-  explicit collection_factory(Append append) : append_(std::move(append)) {}
+  explicit collection_factory(Argument argument)
+      : argument_(std::move(argument)) {}
 
   template <typename Stored, typename Resolver>
   Stored make(Resolver &resolver) {
-    return resolver.template collect<Stored, no_key>(nullptr, append_);
+    return collect_by<Stored>(resolver, argument_);
   }
 
 private:
-  Append append_;
+  Argument argument_;
 };
 
 template <typename Type> struct is_collection_factory : std::false_type {};

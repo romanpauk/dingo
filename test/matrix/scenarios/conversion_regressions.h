@@ -8,6 +8,7 @@
 #pragma once
 
 #include "matrix/common/assertions.h"
+#include "matrix/common/refusal.h"
 #include "support/resolution_test_types.h"
 
 #include <dingo/container.h>
@@ -87,6 +88,12 @@ namespace conversion_delivery {
 
 inline resolution_test::move_target make_move_target() {
   return resolution_test::move_target{};
+}
+
+inline std::variant<resolution_test::copy_only, int>
+make_copy_only_alternative() {
+  return std::variant<resolution_test::copy_only, int>(
+      std::in_place_type<resolution_test::copy_only>);
 }
 
 template <typename Container>
@@ -175,10 +182,14 @@ template <template <typename...> typename Container> void exercise_static() {
     check_const_move_only_value(container);
   }
   {
+    // The variant is made by a factory: without one, the current
+    // implementation default-constructs it, and the next one makes its first
+    // alternative by its detected constructor, which takes an int.
     using bindings = dingo::bindings<dingo::bind<
         dingo::scope<dingo::shared>,
         dingo::storage<std::variant<resolution_test::copy_only, int>>,
-        dingo::interfaces<resolution_test::copy_only>>>;
+        dingo::interfaces<resolution_test::copy_only>,
+        dingo::factory<dingo::function<&make_copy_only_alternative>>>>;
     Container<bindings> container;
     check_copy_only_alternative(container, 31);
   }
@@ -189,7 +200,13 @@ template <template <typename...> typename Container> void exercise_static() {
                     dingo::interfaces<resolution_test::move_target,
                                       resolution_test::secondary>>>;
     Container<bindings> container;
-    check_fresh_move_only_conversions(container);
+    // The current static container serves a move-only interface by value from
+    // a shared binding, which every runtime container refuses; the next
+    // implementation refuses it when the request is compiled.
+    if constexpr (!conversion_refused_when_compiled_v<
+                      Container<bindings>, resolution_test::move_target>) {
+      check_fresh_move_only_conversions(container);
+    }
   }
   {
     using bindings = dingo::bindings<dingo::bind<
