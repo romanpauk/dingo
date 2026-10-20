@@ -1662,22 +1662,21 @@ The matrix follows the spec where the baseline behavior it tested changes:
 A request that starts at a container is a transaction of it, as the transaction
 rules of the spec describe: when the outermost one fails, the registrations into
 the container, the objects its slots constructed, and the objects it retained
-during it are undone in reverse order, by the transaction log of the container,
-which every public operation of a container runs in. A request a child makes of
-its parent is a transaction of the parent, so the effects on another container
-are its own. The log records only while a request is in progress, and checks for
-a failure only when it recorded an effect, so a memoized request pays an
-increment and a decrement; a lazy slot is settled, and its address kept by a
-memo, only outside a transaction.
+during it are undone in reverse order, by the transaction log of the container.
+A construction runs in the log, as do a collection, `construct` by a factory,
+and `invoke`, and a request of the parent runs in the log of the child, so a
+registration into the child that a construction of the parent makes is undone
+with the child's request; a request made of the parent is a transaction of the
+parent. A memoized request of an object that exists constructs nothing and runs
+in no transaction, and a lazy slot is settled, its address kept by a memo, only
+outside a transaction.
 
-Remaining: the matrix sources that do not compile against the next
-implementation yet, among them the user conversions of a leaf by
-`type_conversion_traits`, which the next implementation applies to handles only;
-the allocators and the `rtti_type` and `allocator_type` of a container; a stored
-variant, which the baseline default-constructs and the next implementation makes
-from its first alternative by its detected constructor, a behavior change to
-declare; and the differential runner, which does not build the next
-implementation yet.
+Remaining: the allocators, which the container does not allocate by yet, and the
+keys of a binding per interface, `key_value<Key, Interface>`; a stored variant,
+which the baseline default-constructs and the next implementation makes from its
+first alternative by its detected constructor, a behavior change to declare; and
+the declaration of the differences the differential runner,
+`--implementation next`, finds.
 
 #### M9.2: Switch And Removal
 
