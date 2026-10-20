@@ -41,7 +41,7 @@ dingo::associative<{{ declaration.key }}, iface, dingo::{{ declaration.cardinali
 {% elif group.domain == "static" %}
   dingo::static_container<source, traits> c;
 {% elif group.domain == "mixed" %}
-  dingo::container<source> c;
+    dingo::container<source{{ ", traits" if group.traits else "" }}> c;
 {% else %}
   dingo::container<traits> parent;
   dingo::container<traits, traits::allocator_type, dingo::container<traits>> c(

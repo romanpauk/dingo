@@ -281,8 +281,15 @@ public:
 
   // Adds a binding, whose arguments are the arguments of its slot and the
   // value of its runtime key. A binding whose key a binding of a common
-  // interface already holds is rejected, unless its domain holds many.
+  // interface already holds is rejected, unless its domain holds many; `held`
+  // tells whether another source of the container holds its key.
   template <typename Binding, typename... Args> void add(Args &&...args) {
+    add_unless<Binding>([](const void * /*key_value*/) { return false; },
+                        std::forward<Args>(args)...);
+  }
+
+  template <typename Binding, typename Held, typename... Args>
+  void add_unless(Held &&held, Args &&...args) {
     static_assert(Binding::status == registration_status::registered,
                   "a binding cannot be stored by its scope");
     using arguments = detail::registration_arguments<Args...>;
@@ -293,6 +300,9 @@ public:
         make_entry<Binding, arguments, std::tuple<std::decay_t<Args>...>>(
             all, std::make_index_sequence<sizeof...(Args) -
                                           arguments::key_count()>());
+    if (held(added->key_value())) {
+      raise_already_registered<Binding>();
+    }
     for (const auto &existing : entries_) {
       if (conflicts(*table_, existing->descriptor(), Binding::descriptor) &&
           existing->key_equals(added->key_value())) {

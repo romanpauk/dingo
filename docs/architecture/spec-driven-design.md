@@ -1369,7 +1369,7 @@ the descriptor too; the scope tags are generated from the spec.
 
 #### M3.4: Route Conformance
 
-Status: in progress.
+Status: done.
 
 Generate route conformance tests across runtime, static, and mixed containers
 from the reference implementation, and run the route cases differentially
@@ -1381,8 +1381,9 @@ or listed in [Open Decisions](#open-decisions).
 The baseline side exists: the route extractor and the conformance check of M1.7.
 The same table extracted from the new implementation in runtime and static
 containers matches the reference implementation exactly, see M2.5, and the
-exception messages match the baseline. Remaining: the mixed containers, which
-wait for M4.6.
+exception messages match the baseline. With the mixed containers of M4.6, all
+46,956 cases of the runtime, static, and mixed containers match the reference
+implementation.
 
 ### M4: Lookup And Selection
 
@@ -1477,9 +1478,18 @@ binding. Remaining: the index structures and memoization.
 
 #### M4.6: Mixed Backend
 
-Status: not started.
+Status: done.
 
 Pass static candidates as a constant input and merge runtime candidates.
+
+A mixed container, `container<bindings<...>>` with optional traits and parent,
+is a selection over a static and a runtime source that share its lookup
+declarations: the static source counts what it names when the request is
+compiled, and the runtime source when it is resolved. A runtime registration
+whose key a static binding holds is rejected, and the container takes the
+instances of its external static bindings as constructor arguments. The
+selection extractor finds all 23,240 of its cases, mixed ones with lookup
+declarations among them, equal to the reference implementation.
 
 ### M5: Graph Validation And Diagnostics
 

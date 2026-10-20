@@ -157,7 +157,7 @@ implementation without behavior changes:
 ```bash
 python3 test/selection/extract.py --work-dir build/selection-next \
     --cxx-command "g++ -std=c++20 -I$PWD/include/next -I$PWD/include" \
-    --domains runtime,static,parent
+    --mixed-traits
 python3 test/selection/conform.py --exact \
     --observed build/selection-next/observed/gcc16-x86_64-c++20.jsonl
 ```

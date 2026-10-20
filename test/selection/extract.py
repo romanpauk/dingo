@@ -72,7 +72,8 @@ A record has the keys
                   indices (all), or null unless the selection is "ok"
 
 A combination the current library cannot spell is "not_expressible": a runtime
-value key in a static binding, and the many setting of the mixed container.
+value key in a static binding, and the many setting of the mixed container,
+which --mixed-traits spells for an implementation that takes traits there.
 Every case uses a fresh container. <exception> is the most specific dingo
 exception type caught, else "std" or "unknown".
 
@@ -155,6 +156,10 @@ TRAITS_BASE = {
     "parent": "dynamic_container_traits",
     "static": "static_container_traits",
 }
+
+# Whether the mixed container takes traits, container<bindings<...>,
+# Traits>, as the next implementation does; --mixed-traits sets it.
+MIXED_TRAITS = False
 
 # The dingo exception types, as test/routes/extract.py lists them.
 EXCEPTIONS = (
@@ -241,7 +246,7 @@ class Group:
 
     @property
     def expressible(self):
-        if self.domain == "mixed" and self.setting != "default":
+        if self.domain == "mixed" and self.setting != "default" and not MIXED_TRAITS:
             return False
         return all(b.expressible for b in self.bindings)
 
@@ -281,7 +286,12 @@ PRELUDE_HEADERS = ("probe.h",)
 def group_data(group):
     """The data the template renders a group from."""
     traits = None
-    if group.domain in TRAITS_BASE:
+    if group.domain == "mixed" and MIXED_TRAITS:
+        traits = {
+            "base": "dynamic_container_traits",
+            "lookups": list(LOOKUPS[group.setting]),
+        }
+    elif group.domain in TRAITS_BASE:
         traits = {
             "base": TRAITS_BASE[group.domain],
             "lookups": list(LOOKUPS[group.setting]),
@@ -540,12 +550,20 @@ def main():
     parser.add_argument("--domains", default=",".join(DOMAINS))
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument(
+        "--mixed-traits",
+        action="store_true",
+        help="give the mixed container traits, container<bindings<...>, "
+        "Traits>, as the next implementation takes them",
+    )
+    parser.add_argument(
         "--filter",
         help="regular expression selecting groups by domain/setting/bindings "
         "(development aid; the output then covers the selection only)",
     )
     args = parser.parse_args()
 
+    global MIXED_TRAITS
+    MIXED_TRAITS = args.mixed_traits
     domains = args.domains.split(",")
     unknown = [d for d in domains if d not in DOMAINS]
     if unknown:

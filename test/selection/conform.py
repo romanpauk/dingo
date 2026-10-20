@@ -26,8 +26,10 @@ Mapping: the bindings of a static container and the static bindings of a
 mixed one have static=True; a parent case has a child level whose parent
 level holds the parent bindings; the many setting declares every key domain
 of the universe many in Level.declarations (on both levels of a parent case);
-the default setting and the mixed container declare nothing, which the spec
-treats as cardinality one.
+the default setting declares nothing, which the spec treats as cardinality
+one. The library of the baseline cannot declare lookups in a mixed container,
+so its many setting there is "not_expressible", a difference the spec
+declares.
 
 Every difference must be declared by a behavior change of the spec whose
 `cases` match `selection:<case id>#<field>`, and every behavior change with a
@@ -102,7 +104,7 @@ def impl_index(name):
 
 
 def declarations(domain, setting):
-    if setting == "many" and domain != "mixed":
+    if setting == "many":
         return {(INTERFACE, d): Cardinality.MANY for d in MANY_DOMAINS}
     return {}
 

@@ -176,6 +176,14 @@ public:
   // The publications of the two-phase slots in progress.
   publication_log &publications() { return holders_.publications; }
 
+  // Whether a static binding holds the key `key_value` of a binding of type
+  // `Binding` added at runtime, of a common interface whose domain holds one
+  // binding.
+  template <typename Binding> static bool holds_key_of(const void *key_value) {
+    return holds_key_of_at<Binding>(key_value,
+                                    std::index_sequence_for<Bindings...>());
+  }
+
   // The number of bindings a request by `Key`, a key known when the request
   // is compiled, names: 0, 1, or 2 for many.
   template <typename Request, typename Key>
@@ -216,6 +224,8 @@ public:
       static_assert(index != detail::not_found && index != detail::ambiguous,
                     "a request resolves from the one binding it names");
       return resolve_from<Request, index>(resolver);
+    } else if constexpr (sizeof...(Bindings) == 0) {
+      raise_not_found<Request, Key>();
     } else {
       std::size_t found = detail::not_found;
       each_named<Request, Key>(key_value,
@@ -238,6 +248,24 @@ public:
   }
 
 private:
+  template <typename Binding, std::size_t... Indices>
+  static bool holds_key_of_at([[maybe_unused]] const void *key_value,
+                              std::index_sequence<Indices...> /*indices*/) {
+    bool held = false;
+    (
+        [&] {
+          using binding = pack_at_t<Indices, Bindings...>;
+          using key_type = typename binding::key_type;
+          if constexpr (conflicts(LookupTable::value, binding::descriptor,
+                                  Binding::descriptor)) {
+            held = held || key_store<key_type>::equal(
+                               key_store<key_type>().value(), key_value);
+          }
+        }(),
+        ...);
+    return held;
+  }
+
   // Calls `visit` with the index, as an integral_constant, of every binding a
   // request by `Key` names: by its domain and its fixed key when the request
   // is compiled, and by the value of a runtime key when it is resolved.

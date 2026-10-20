@@ -215,6 +215,7 @@ add_executable(dingo_next_test
     next/api/collections.cpp
     next/api/factories.cpp
     next/api/keys.cpp
+    next/api/mixed.cpp
     next/api/parents.cpp
     next/api/shared_cyclical.cpp
     next/api/unique.cpp

@@ -461,7 +461,7 @@ def render(group, indices, guarded, implementation):
             if group.scope == "external"
             and (
                 group.domain == "runtime"
-                or (group.domain == "static" and implementation == "next")
+                or (group.domain in ("static", "mixed") and implementation == "next")
             )
             else ""
         ),
