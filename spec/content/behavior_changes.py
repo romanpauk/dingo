@@ -9,6 +9,14 @@ test/routes/conform.py, the scope changes by test/spec/scopes_check.py.
 from spec.schema import BehaviorChange
 
 DECISION = "docs/architecture/spec-driven-design.md, Decision Log, 2026-10-19"
+LOOKUP_DECISION = (
+    "docs/architecture/spec-driven-design.md, Open Decisions, lookup and "
+    "selection decisions of 2026-10-20"
+)
+COLLECTION_DECISION = (
+    "docs/architecture/spec-driven-design.md, Decision Log, collections and "
+    "mixed traits, 2026-10-20"
+)
 
 
 def both(pattern):
@@ -283,5 +291,110 @@ behavior_changes: tuple[BehaviorChange, ...] = (
             "the bindings."
         ),
         decision="docs/architecture/spec-driven-design.md, Decision Log, 2026-10-20",
+    ),
+    BehaviorChange(
+        id="duplicates_rejected_in_both_domains",
+        description=(
+            "A second binding of a key of an interface is rejected in every "
+            "container unless its lookup is declared many, and a domain declared "
+            "many accepts any number."
+        ),
+        cases=(
+            "selection:*#duplicate",
+            "selection:static/many/*#registration",
+        ),
+        baseline=(
+            "A static or mixed container accepts duplicates and fails only when "
+            "one is resolved, and a static container rejects two bindings of one "
+            "implementation and key even where many is declared."
+        ),
+        now="Duplicates are rejected when the container is formed or the binding is registered.",
+        decision=LOOKUP_DECISION,
+    ),
+    BehaviorChange(
+        id="empty_collections_are_valid",
+        description="A collection request that names no binding yields an empty collection.",
+        cases=("selection:*#empty_collection",),
+        baseline=(
+            "A runtime container returns an empty collection only where a many "
+            "lookup is declared, a mixed container throws type_not_found_exception, "
+            "and a static container fails to compile."
+        ),
+        now="Every container returns an empty collection.",
+        decision=LOOKUP_DECISION,
+    ),
+    BehaviorChange(
+        id="collections_of_a_domain_of_one",
+        description=(
+            "A collection request of a domain declared one yields the binding the "
+            "domain holds."
+        ),
+        cases=(
+            "selection:runtime/default/*/all:fixed[78]#collection",
+            "selection:runtime/default/*/all:runtime[78]#collection",
+            "selection:parent/default/*/all:fixed[78]#collection",
+            "selection:parent/default/*/all:runtime[78]#collection",
+        ),
+        baseline="A collection of a value key declared one throws type_not_found_exception.",
+        now="The collection holds the one binding, as a query over the bindings.",
+        decision=COLLECTION_DECISION,
+    ),
+    BehaviorChange(
+        id="collections_fall_back_to_the_parent",
+        description=(
+            "A collection request in a child container that names none of its "
+            "bindings yields the collection of its parent."
+        ),
+        cases=("selection:parent/*/all:*#collection",),
+        baseline=(
+            "A child container never gathers the bindings of its parent into a "
+            "collection; only a collection the parent registers whole is found."
+        ),
+        now="A child shadows its parent for collections as for singular requests.",
+        decision=COLLECTION_DECISION,
+    ),
+    BehaviorChange(
+        id="keys_in_every_container",
+        description=(
+            "Every key kind works in every container: a fixed key in a runtime "
+            "registration, a key in a mixed container, and a runtime key value "
+            "against static bindings."
+        ),
+        cases=(
+            "selection:runtime/*#registration",
+            "selection:parent/*#registration",
+            "selection:mixed/default/*#registration",
+            "selection:static/*/one:runtime[78]#selection",
+            "selection:static/*/all:runtime[78]#collection",
+        ),
+        baseline=(
+            "A fixed key in a runtime registration and a value key in a mixed "
+            "container do not compile, and a static container rejects a request "
+            "by a runtime key value."
+        ),
+        now=(
+            "A fixed key is stored as its value, and a runtime key value is "
+            "compared with the fixed keys of static bindings when it is resolved."
+        ),
+        decision=LOOKUP_DECISION,
+    ),
+    BehaviorChange(
+        id="mixed_containers_declare_lookups",
+        description="A mixed container takes container traits that declare its lookups.",
+        cases=("selection:mixed/many/*#registration",),
+        baseline="A mixed container has fixed traits and cannot declare a lookup.",
+        now="container<bindings<...>, Traits> declares lookups as the runtime container does.",
+        decision=COLLECTION_DECISION,
+    ),
+    BehaviorChange(
+        id="mixed_collections_with_unmatched_static_bindings",
+        description=(
+            "A collection request of a mixed container whose static bindings do "
+            "not match it gathers its runtime bindings."
+        ),
+        cases=("selection:mixed/default/*:static+*:runtime/all:*#collection",),
+        baseline="It fails to compile.",
+        now="The collection holds the runtime bindings the request names.",
+        decision=DECISION,
     ),
 )

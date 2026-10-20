@@ -49,9 +49,14 @@ def test_a_request_names_the_bindings_of_its_interface_and_key(model):
     assert model.select(container, Request("other")).status is Status.NOT_FOUND
 
 
+def test_a_static_binding_carries_no_runtime_key(model):
+    rejected = model.register(Level(), Binding("static", ("iface",), SEVEN, static=True))
+    assert rejected == (False, "a static binding carries no runtime key value")
+
+
 def test_a_second_binding_of_a_key_declared_one_is_rejected(model):
-    container = level(model, Binding("first", ("iface",), SEVEN, static=True))
-    rejected = model.register(container, Binding("second", ("iface",), FIXED_SEVEN))
+    container = level(model, Binding("first", ("iface",), FIXED_SEVEN, static=True))
+    rejected = model.register(container, Binding("second", ("iface",), SEVEN))
     assert rejected == (False, "lookup already registered: iface")
     assert model.register(container, Binding("eight", ("iface",), EIGHT)) == (True, "")
 
@@ -154,4 +159,5 @@ def test_registration_rejects_exactly_the_duplicates_of_a_domain_of_one(model):
         container = Level()
         for binding in bindings:
             duplicate = any(b.key.names(binding.key) for b in container.bindings)
-            assert model.register(container, binding)[0] is not duplicate
+            constrained = binding.static and binding.key.kind == "runtime"
+            assert model.register(container, binding)[0] is not (duplicate or constrained)

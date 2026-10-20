@@ -95,7 +95,10 @@ class Model:
     def register(self, level: Level, binding: Binding) -> tuple[bool, str]:
         """Adds the binding unless a domain of cardinality one already holds a
         binding of its key, among the static and runtime bindings of the
-        level alike."""
+        level alike. A static binding carries no runtime key value, the
+        binding-time constraint static_bindings_carry_no_runtime_key."""
+        if binding.static and binding.key.kind == "runtime":
+            return False, "a static binding carries no runtime key value"
         for interface in binding.interfaces:
             if self.cardinality(level, interface, binding.key) is not Cardinality.ONE:
                 continue

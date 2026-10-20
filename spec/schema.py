@@ -598,8 +598,9 @@ class BehaviorChange(Entity):
     for the route conformance check, `scopes:<scope>/<property>` for the scope
     check, `matrix:<executable>/<Suite>.<Name>` for the differential tests of
     the generated matrix, `api:<public API entry id>` for the public API
-    check, and `messages:<case id>` for the exception messages of the route
-    cases.
+    check, `messages:<case id>` for the exception messages of the route
+    cases, and `selection:<case id>#<field>` for the selection conformance
+    check.
     """
 
     description: str

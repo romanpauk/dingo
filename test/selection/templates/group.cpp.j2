@@ -1,0 +1,131 @@
+{#- One container configuration of the selection probes: the container of a
+    domain and a declaration setting, its bindings, and one function per
+    request that builds a fresh container and runs the request. With guarded
+    the program contains every request but compiles a request only when ONLY
+    is undefined or its index; otherwise it contains the selected requests and
+    runs them from argv[1]. -#}
+{%- macro key_parameter(key) -%}
+{%- if key.kind == "tag" -%}
+, dingo::key_type<{{ key.type }}>
+{%- elif key.kind == "fixed" -%}
+, dingo::key_type<{{ key.type }}, {{ key.value }}>
+{%- endif -%}
+{%- endmacro -%}
+{%- macro key_argument(key) -%}
+{%- if key.kind == "runtime" -%}
+dingo::key_value{ {{- key.value -}} }
+{%- endif -%}
+{%- endmacro -%}
+{%- macro request_argument(key) -%}
+{%- if key.kind == "tag" -%}
+dingo::key_type<{{ key.type }}>{}
+{%- elif key.kind == "fixed" -%}
+dingo::key_type<{{ key.type }}, {{ key.value }}>{}
+{%- elif key.kind == "runtime" -%}
+{{ key.value }}
+{%- endif -%}
+{%- endmacro -%}
+{%- macro lookup(declaration) -%}
+{%- if declaration.kind == "collection" -%}
+dingo::collection<iface>
+{%- elif declaration.kind == "typed" -%}
+dingo::typed<{{ declaration.key }}, iface, dingo::{{ declaration.cardinality }}>
+{%- else -%}
+dingo::associative<{{ declaration.key }}, iface, dingo::{{ declaration.cardinality }}>
+{%- endif -%}
+{%- endmacro -%}
+{%- macro container() %}
+  probe::registrations regs;
+{% if group.domain == "runtime" %}
+  dingo::container<traits> c;
+{% elif group.domain == "static" %}
+  dingo::static_container<source, traits> c;
+{% elif group.domain == "mixed" %}
+  dingo::container<source> c;
+{% else %}
+  dingo::container<traits> parent;
+  dingo::container<traits, traits::allocator_type, dingo::container<traits>> c(
+      &parent);
+{% endif %}
+{% for binding in group.bindings %}
+{% if binding.place == "static" %}
+  regs.fixed();
+{% else %}
+  regs.attempt([&] {
+    {{ "parent" if binding.place == "parent" else "c" }}.template register_type<
+        dingo::scope<dingo::shared>, dingo::storage<{{ binding.impl }}>,
+        dingo::interfaces<iface>{{ key_parameter(binding.key) }}>({{ key_argument(binding.key) }});
+  });
+{% endif %}
+{% endfor %}
+{%- endmacro -%}
+#include "probe.h"
+
+{% if group.traits %}
+struct traits : dingo::{{ group.traits.base }} {
+  using lookup_definition_type = dingo::lookups<
+{% for declaration in group.traits.lookups %}
+      {{ lookup(declaration) }}{{ "," if not loop.last else ">;" }}
+{% endfor %}
+};
+
+{% endif %}
+{% if group.domain in ("static", "mixed") %}
+using source = dingo::bindings<
+{% for binding in group.bindings if binding.place == "static" %}
+    dingo::bind<dingo::scope<dingo::shared>, dingo::storage<{{ binding.impl }}>,
+                dingo::interfaces<iface>{{ key_parameter(binding.key) }}>{{ "," if not loop.last }}
+{% endfor %}
+    >;
+
+{% endif %}
+// The registrations alone, run with argv[1] == -1.
+void run_registrations() {
+{{ container() }}  probe::report_registrations(regs);
+}
+
+{% for index in selected %}
+{% set request = group.requests[index] %}
+void run_case_{{ index }}() {
+{{ container() }}{% if guarded %}
+#if !defined(ONLY) || ONLY == {{ index }}
+{% endif %}
+{% if request.mode == "one" %}
+  probe::singular({{ index }}, regs, [&]() -> int {
+{% if request.key.kind == "fixed" %}
+    return c.template construct<consumer<{{ request.key.value }}>>().selected.id();
+{% else %}
+    return c.template resolve<iface &>({{ request_argument(request.key) }}).id();
+{% endif %}
+  });
+{% elif group.domain != "static" and request.key.kind in ("fixed", "runtime") %}
+{# dingo::container::construct_collection takes no value key: the collection
+   of a value key is resolved. #}
+  probe::collection({{ index }}, regs, [&] {
+    return c.template resolve<std::vector<iface *>>({{ request_argument(request.key) }});
+  });
+{% else %}
+  probe::collection({{ index }}, regs, [&] {
+    return c.template construct_collection<std::vector<iface *>>({{ request_argument(request.key) }});
+  });
+{% endif %}
+{% if guarded %}
+#else
+  (void)regs;
+#endif
+{% endif %}
+}
+
+{% endfor %}
+int main(int argc, char **argv) {
+  int from = argc > 1 ? std::atoi(argv[1]) : 0;
+  if (from < 0) {
+    run_registrations();
+    return 0;
+  }
+{% for index in selected %}
+  if (from <= {{ index }})
+    run_case_{{ index }}();
+{% endfor %}
+  return 0;
+}

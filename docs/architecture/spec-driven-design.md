@@ -1388,7 +1388,7 @@ wait for M4.6.
 
 #### M4.1: Lookup And Selection Spec
 
-Status: in progress.
+Status: done.
 
 Specify the lookup filter, the index structures, and the selection rules, and
 extend the reference implementation with them.
@@ -1401,9 +1401,13 @@ duplicates, empty collections, auto-construction, and keys across domains.
 `spec/reference/selection.py` interprets the selection rules of the spec over
 containers of static and runtime bindings with parents and local bindings, and
 decides registration by the declared cardinality; property tests check it over
-every container of up to three bindings of every key kind. Remaining: extracting
-the selection behavior of the baseline and comparing it with the reference, with
-the decided differences declared as behavior changes.
+every container of up to three bindings of every key kind. The selection
+conformance check of
+[Selection Conformance](../development.md#selection-conformance) compares 23,240
+cases extracted from the baseline in runtime, static, mixed, and child
+containers with it; every difference is declared by one of seven behavior
+changes that follow the decisions. A static binding carries no runtime key
+value, a binding-time constraint.
 
 #### M4.2: Lookup Filter
 
@@ -1674,3 +1678,8 @@ capability tags.
   `static_container` auto-constructs on a miss as the runtime container does,
   and every key kind works in every container: a runtime key value against a
   static table, and a fixed key in a runtime registration.
+
+- 2026-10-20: Collections and mixed traits. A child container's collection is
+  its own bindings, and its parent's collection when it has none, as for
+  singular requests; a collection of a domain declared one holds the binding it
+  has; and a mixed container takes container traits that declare its lookups.

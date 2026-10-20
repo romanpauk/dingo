@@ -126,6 +126,31 @@ CXX=g++ python3 test/routes/extract.py --work-dir build/routes \
 python3 test/routes/conform.py --summary
 ```
 
+### Selection Conformance
+
+The selection tools compare how the library selects bindings by key with the
+selection rules of the spec, `spec/content/selection_rules.py`, as interpreted
+by the reference implementation in `spec/reference/selection.py`.
+
+- [`test/selection/extract.py`](../test/selection/extract.py) compiles and runs
+  every combination of container domain (runtime, static, mixed, and a child of
+  a runtime parent), up to two bindings of one interface with every key kind,
+  declaration setting (the default, or every key domain declared many), and
+  request (singular or collection, by every key), and records the outcome of
+  every registration and the implementations a request selects. The table is
+  written to `build/selection/observed/`; extracting it takes about two and a
+  half minutes with 30 jobs.
+- [`test/selection/conform.py`](../test/selection/conform.py) compares every
+  case with the reference implementation. Every difference must be declared by a
+  behavior change of the spec whose `cases` match `selection:<case id>#<field>`,
+  and every declared change must match a difference. The ctest entry
+  `dingo_selection_conform_test` runs its unit tests.
+
+```bash
+CXX=g++ python3 test/selection/extract.py --include-dir build/routes/baseline/include
+python3 test/selection/conform.py --summary
+```
+
 ### Scope Check
 
 [`test/spec/scopes_check.py`](../test/spec/scopes_check.py) generates a program
