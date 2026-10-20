@@ -534,10 +534,12 @@ class TransactionRule(Entity):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GraphRule(Entity):
-    """A cycle is legal if and only if every node has a scope in `legal_scopes`."""
+    """A cycle is legal if and only if the scope of every node has a slot in
+    `legal_slots`: a property of the descriptor, so a user scope with such a
+    slot is legal too."""
 
     description: str
-    legal_scopes: tuple[str, ...]  # scope ids
+    legal_slots: tuple[Slot, ...]
     checked_at: tuple[EdgeTime, ...]
     diagnostic: str  # diagnostic id
 

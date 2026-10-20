@@ -4,6 +4,7 @@
 #include "engine/engine_types.h"
 
 #include <dingo/core/engine/derive.h>
+#include <dingo/core/vocabulary/scope_tags.gen.h>
 
 #include <cstddef>
 {% macro spell(shape) -%}
@@ -22,13 +23,12 @@
 namespace dingo::next_test {
 
 using core::rule_id;
-using core::scope_id;
 using core::shape_v;
 
 struct engine_case {
   const char *name;
   const core::shape *stored;
-  scope_id scope;
+  const core::scope_info *scope;
   const core::shape *interfaces[core::max_interfaces];
   std::size_t interface_count;
   core::request_kind kind;
@@ -42,7 +42,7 @@ struct engine_case {
 
 extern const engine_case engine_cases[] = {
 {% for case in cases %}
-    {"{{ case.scope }} {{ case.interfaces | join(",") }} {{ spell(case.stored) }} {{ case.kind }} {{ spell(case.request) }}", &shape_v<{{ spell(case.stored) }}>, scope_id::{{ case.scope }}, { {% for interface in case.interfaces %}&shape_v<{{ interface }}>{{ ", " if not loop.last }}{% endfor %} }, {{ case.interfaces | length }}, core::request_kind::{{ case.kind }}, &shape_v<{{ spell(case.request) }}>, {{ case.registered | lower }}, {{ case.found | lower }}, {{ case.served | lower }}, { {% for rule in case.rules %}rule_id::{{ rule }}{{ ", " if not loop.last }}{% endfor %} }, {{ case.rules | length }}},
+    {"{{ case.scope }} {{ case.interfaces | join(",") }} {{ spell(case.stored) }} {{ case.kind }} {{ spell(case.request) }}", &shape_v<{{ spell(case.stored) }}>, &::dingo::scope_traits<::dingo::{{ case.scope }}>::descriptor, { {% for interface in case.interfaces %}&shape_v<{{ interface }}>{{ ", " if not loop.last }}{% endfor %} }, {{ case.interfaces | length }}, core::request_kind::{{ case.kind }}, &shape_v<{{ spell(case.request) }}>, {{ case.registered | lower }}, {{ case.found | lower }}, {{ case.served | lower }}, { {% for rule in case.rules %}rule_id::{{ rule }}{{ ", " if not loop.last }}{% endfor %} }, {{ case.rules | length }}},
 {% endfor %}
 };
 

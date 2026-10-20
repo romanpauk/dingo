@@ -254,7 +254,7 @@ def sample_spec() -> Spec:
             GraphRule(
                 id="cycle",
                 description="Only cyclical scopes may form a cycle.",
-                legal_scopes=("shared_cyclical",),
+                legal_slots=(Slot.TWO_PHASE,),
                 checked_at=(EdgeTime.CONTAINER_FORMATION, EdgeTime.RESOLUTION),
                 diagnostic="ambiguous_binding",
             ),

@@ -264,7 +264,6 @@ def vocabulary(spec):
         slots=[s.value for s in Slot],
         guards=[g.value for g in RecursionGuard],
         exposure_rules=[r.value for r in ExposureRule],
-        scopes=[scope_fields(scope, form_ids) for scope in sorted(spec.scopes, key=lambda s: s.id)],
         requirements=[{"name": name, "bit": bit} for name, bit in REQUIREMENT_BITS.items()],
         routes=[route_fields(rule) for rule in spec.routes],
         key_kinds=[
@@ -299,7 +298,12 @@ def vocabulary(spec):
 
 
 def scope_tags(spec):
-    """include/dingo/core/vocabulary/scope_tags.gen.h from cpp.scope_projections."""
+    """include/dingo/core/vocabulary/scope_tags.gen.h from cpp.scope_projections
+    and the scopes: the tag of each built-in scope and its scope_traits, which
+    hold its descriptor."""
+    forms = sorted(spec.storage_forms, key=lambda form: form.id)
+    form_ids = [form.id for form in forms]
+    scopes = {scope.id: scope_fields(scope, form_ids) for scope in spec.scopes}
     tags = []
     namespaces = set()
     for projection in sorted(spec.cpp.scope_projections, key=lambda p: p.scope):
@@ -310,7 +314,9 @@ def scope_tags(spec):
                 "is not a qualified name"
             )
         namespaces.add(namespace)
-        tags.append({"scope": projection.scope, "name": name})
+        tags.append(
+            {"scope": projection.scope, "name": name, "fields": scopes[projection.scope]}
+        )
     if len(namespaces) != 1:
         raise GeneratorError("cpp.scope_projections: tags span several namespaces")
     return [

@@ -55,7 +55,8 @@ struct binding_descriptor {
   // type of its own.
   key_descriptor aliases[max_key_aliases] = {};
   std::size_t alias_count = 0;
-  scope_id scope = scope_id::shared;
+  // The descriptor of the scope of the binding.
+  scope_info scope = {};
   shape interfaces[max_interfaces] = {};
   std::size_t interface_count = 0;
   // Whether the binding declares its factory, so its leaf need not be
@@ -122,7 +123,7 @@ constexpr storage_form storage_form_of(const shape &stored) {
 }
 
 constexpr std::uint8_t exposed_categories(const binding_descriptor &binding) {
-  return info(binding.scope)
+  return binding.scope
       .exposures[static_cast<std::size_t>(storage_form_of(binding.stored))];
 }
 
@@ -228,7 +229,7 @@ constexpr bool requirements_hold(const binding_descriptor &binding,
     return false;
   }
   if (rule.id == rule_id::copy &&
-      info(binding.scope).rule == exposure_rule::handle_copies &&
+      binding.scope.rule == exposure_rule::handle_copies &&
       !info(kind_of(bound)).sharing) {
     return false;
   }
@@ -369,7 +370,7 @@ constexpr void derive_from(const binding_descriptor &binding, terms &found,
 } // namespace detail
 
 constexpr terms derive(const binding_descriptor &binding) {
-  const scope_info &scope = info(binding.scope);
+  const scope_info &scope = binding.scope;
   terms found;
   term start;
   start.value = binding.stored;
@@ -563,7 +564,7 @@ enum class registration_status : std::uint8_t {
 
 constexpr registration_status
 register_status(const binding_descriptor &binding) {
-  const scope_info &scope = info(binding.scope);
+  const scope_info &scope = binding.scope;
   if (exposed_categories(binding) == 0) {
     return registration_status::form_not_stored;
   }

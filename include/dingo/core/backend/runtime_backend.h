@@ -207,7 +207,7 @@ public:
   }
 
   bool settled(Resolver &resolver) const override {
-    if constexpr (info(Binding::scope).stable) {
+    if constexpr (Binding::scope.stable) {
       return slot_.settled(resolver);
     } else {
       return false;
@@ -377,7 +377,7 @@ private:
       interface_keys_{};
   typename alias_storage<aliases_type>::type aliases_;
   local_bindings<Resolver, typename Binding::locals> locals_;
-  binding_slot<Binding> slot_;
+  slot_of_t<Binding> slot_;
 };
 
 namespace detail {

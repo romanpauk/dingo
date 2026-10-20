@@ -499,4 +499,24 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         now="The child constructs the request from the binding of its parent.",
         decision=DECISION,
     ),
+    BehaviorChange(
+        id="scope_extension_point",
+        description=(
+            "A scope is a tag type whose dingo::scope_traits hold its "
+            "descriptor, and may name a slot class derived from "
+            "dingo::scope_slot."
+        ),
+        cases=("api:scope_traits", "api:scope_descriptor", "api:scope_slot"),
+        baseline=(
+            "A scope is added by specializing dingo::storage_scope_policy and a "
+            "storage class for its tag, which are internals of the "
+            "implementation and not part of the public API."
+        ),
+        now=(
+            "dingo::scope_traits holds the descriptor of a scope, the fields of "
+            "the Scope schema, and may name a slot class; the built-in scopes "
+            "are specializations of it."
+        ),
+        decision=DECISION,
+    ),
 )

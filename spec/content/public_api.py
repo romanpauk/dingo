@@ -236,6 +236,23 @@ public_api: tuple[PublicApiEntry, ...] = (
         "definitions of a container.",
     ),
     entry(
+        "scope_traits",
+        EXTENSION,
+        "Makes a tag type a scope: holds its descriptor, which may copy the "
+        "descriptor of a built-in scope, and may name a slot class of its own.",
+    ),
+    entry(
+        "scope_descriptor",
+        NAME,
+        "The descriptor of a scope, the fields of the spec's Scope schema.",
+    ),
+    entry(
+        "scope_slot",
+        EXTENSION,
+        "The base of a slot class a scope names, which keeps the factory of the "
+        "binding and constructs its stored object.",
+    ),
+    entry(
         "lookup_backend",
         EXTENSION,
         "A user-defined storage backend of a runtime-keyed lookup.",

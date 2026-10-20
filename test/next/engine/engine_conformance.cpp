@@ -23,7 +23,7 @@ namespace dingo::next_test {
 struct engine_case {
   const char *name;
   const core::shape *stored;
-  core::scope_id scope;
+  const core::scope_info *scope;
   const core::shape *interfaces[core::max_interfaces];
   std::size_t interface_count;
   core::request_kind kind;
@@ -54,7 +54,7 @@ TEST(engine, computes_what_the_reference_computes) {
     const engine_case &expected = engine_cases[index];
     core::binding_descriptor binding;
     binding.stored = *expected.stored;
-    binding.scope = expected.scope;
+    binding.scope = *expected.scope;
     for (std::size_t i = 0; i < expected.interface_count; ++i) {
       binding.interfaces[i] = *expected.interfaces[i];
     }

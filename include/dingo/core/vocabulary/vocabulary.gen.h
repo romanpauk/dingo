@@ -143,15 +143,10 @@ enum class exposure_rule : std::uint8_t {
   handle_copies,
 };
 
-enum class scope_id : std::uint8_t {
-  external,
-  shared,
-  shared_cyclical,
-  unique,
-};
-
+// The descriptor of a scope, the fields of the spec's Scope schema. A scope
+// is a type whose dingo::scope_traits specialization holds its descriptor, so
+// a user scope needs no id of a closed list.
 struct scope_info {
-  scope_id id;
   slot storage_slot;
   value_category materializes;
   bool stable;
@@ -164,57 +159,6 @@ struct scope_info {
   // The request categories exposed per storage form, indexed by storage_form.
   std::uint8_t exposures[storage_form_count];
 };
-
-inline constexpr scope_info scopes[] = {
-    {scope_id::external,
-     slot::external_ref,
-     value_category::lvalue,
-     true,
-     false,
-     recursion_guard::none,
-     false,
-     exposure_rule::form,
-     true,
-     true,
-     {11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11}},
-    {scope_id::shared,
-     slot::lazy,
-     value_category::lvalue,
-     true,
-     false,
-     recursion_guard::while_unresolved,
-     true,
-     exposure_rule::form,
-     true,
-     false,
-     {11, 11, 11, 11, 11, 0, 11, 11, 11, 11, 11}},
-    {scope_id::shared_cyclical,
-     slot::two_phase,
-     value_category::lvalue,
-     false,
-     false,
-     recursion_guard::none,
-     false,
-     exposure_rule::handle_copies,
-     false,
-     false,
-     {10, 0, 0, 10, 0, 0, 0, 11, 0, 0, 0}},
-    {scope_id::unique,
-     slot::none,
-     value_category::rvalue,
-     false,
-     true,
-     recursion_guard::always,
-     false,
-     exposure_rule::form,
-     true,
-     false,
-     {4, 12, 4, 4, 12, 0, 4, 4, 12, 4, 4}},
-};
-
-constexpr const scope_info &info(scope_id scope) {
-  return scopes[static_cast<std::size_t>(scope)];
-}
 
 // spec: routes
 enum class rule_id : std::uint8_t {

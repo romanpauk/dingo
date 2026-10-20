@@ -219,6 +219,7 @@ add_executable(dingo_next_test
     next/api/local.cpp
     next/api/mixed.cpp
     next/api/parents.cpp
+    next/api/scopes.cpp
     next/api/shared_cyclical.cpp
     next/api/transactions.cpp
     next/api/unique.cpp

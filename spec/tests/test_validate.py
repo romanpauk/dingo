@@ -248,8 +248,8 @@ def test_a_factory_is_a_conditional_source_of_construct_requests():
 
 
 def test_graph_rule_references():
-    spec = replace_first(sample_spec(), "graph_rules", legal_scopes=("missing",))
-    assert_one_error(spec, "scope 'missing' does not exist")
+    spec = replace_first(sample_spec(), "graph_rules", legal_slots=())
+    assert_one_error(spec, "no legal slots")
     spec = replace_first(sample_spec(), "graph_rules", diagnostic="missing")
     assert_one_error(spec, "diagnostic 'missing' does not exist")
     spec = replace_first(sample_spec(), "graph_rules", checked_at=())

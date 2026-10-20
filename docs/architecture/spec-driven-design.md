@@ -1807,12 +1807,24 @@ provides, which carries the data of its spec schema.
 
 #### M10.1: Scopes
 
+Status: done.
+
 A scope is a type whose `scope_of` specialization carries its descriptor, the
 fields of the spec's `Scope` schema, instead of an id into a generated table.
 Bindings carry the descriptor, so scopes need no registry. The built-in scopes
 are generated specializations; a user scope combines one of the built-in slot
 mechanisms with its descriptor, or names a slot class of its own. Rules that
 name scopes become rules on descriptor properties.
+
+The public `dingo::scope_traits<Tag>` holds the `dingo::scope_descriptor` of a
+scope; the generator emits the specializations of the built-in scopes, and the
+closed list of scope ids is gone. A binding takes the tag type of its scope and
+carries its descriptor, from which the routes are derived as for a built-in
+scope. A specialization may name a slot class derived from `dingo::scope_slot`,
+which keeps the factory of the binding and constructs its object, and keeps the
+contract of the slot kind of its descriptor; a static container with one keeps a
+transaction log that grows. The cycle rule allows the scopes with a two-phase
+slot, not shared_cyclical by name.
 
 #### M10.2: Index Structures
 

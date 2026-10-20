@@ -1220,6 +1220,71 @@ struct api_lookup_backend {
 """,
     ),
     name(
+        "scope_traits",
+        "dingo::scope_traits",
+        CONTAINER,
+        """\
+struct service {};
+dingo::container<> container;
+container.register_type<dingo::scope<@P@scope>, dingo::storage<service>>();
+service &resolved = container.resolve<service &>();
+(void)resolved;
+""",
+        declarations="""\
+struct @P@scope {};
+template <> struct {name}<@P@scope> {
+  static constexpr dingo::scope_descriptor descriptor =
+      {name}<dingo::shared>::descriptor;
+};
+""",
+    ),
+    name(
+        "scope_descriptor",
+        "dingo::scope_descriptor",
+        CONTAINER,
+        """\
+constexpr {name} descriptor = dingo::scope_traits<dingo::unique>::descriptor;
+(void)descriptor;
+""",
+    ),
+    name(
+        "scope_slot",
+        "dingo::scope_slot",
+        CONTAINER,
+        """\
+struct service {};
+dingo::container<> container;
+container.register_type<dingo::scope<@P@scope>, dingo::storage<service>>();
+service &resolved = container.resolve<service &>();
+(void)resolved;
+""",
+        declarations="""\
+template <typename Binding> class @P@slot : public {name}<Binding> {
+public:
+  using stored_type = typename Binding::stored_type;
+  using {name}<Binding>::scope_slot;
+  template <typename Resolver> stored_type &get(Resolver &resolver) {
+    if (!made_) {
+      this->construct(storage_, resolver);
+      made_ = true;
+    }
+    return *reinterpret_cast<stored_type *>(storage_);
+  }
+  template <typename Resolver> bool settled(Resolver &) const { return true; }
+
+private:
+  alignas(stored_type) unsigned char storage_[sizeof(stored_type)];
+  bool made_ = false;
+};
+struct @P@scope {};
+template <> struct dingo::scope_traits<@P@scope> {
+  static constexpr dingo::scope_descriptor descriptor =
+      dingo::scope_traits<dingo::shared>::descriptor;
+  template <typename Binding> using slot = @P@slot<Binding>;
+};
+""",
+    ),
+    name(
         "rtti_provider",
         "dingo::rtti",
         "dingo/rtti/typeid_provider.h",

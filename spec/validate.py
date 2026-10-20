@@ -326,14 +326,12 @@ def check_transaction_rules(spec: Spec, errors: list[str]) -> None:
 
 
 def check_graph_rules(spec: Spec, errors: list[str]) -> None:
-    scope_ids = ids(spec.scopes)
     diagnostic_ids = ids(spec.diagnostics)
     for rule in spec.graph_rules:
         where = f"graph_rules.{rule.id}"
-        if not rule.legal_scopes:
-            errors.append(f"{where}: no legal scopes")
-        for scope in rule.legal_scopes:
-            require_ref(errors, where, "scope", scope, scope_ids)
+        if not rule.legal_slots:
+            errors.append(f"{where}: no legal slots")
+        check_unique(errors, where, "legal_slots", rule.legal_slots)
         if not rule.checked_at:
             errors.append(f"{where}: no check times")
         check_unique(errors, where, "checked_at", rule.checked_at)

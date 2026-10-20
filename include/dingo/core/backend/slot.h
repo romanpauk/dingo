@@ -18,6 +18,7 @@
 #include <dingo/core/projection/layer_traits.h>
 #include <dingo/core/vocabulary/compile_diagnostics.gen.h>
 #include <dingo/core/vocabulary/diagnostics.gen.h>
+#include <dingo/core/vocabulary/scope_tags.gen.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
 #include <cstdint>
@@ -75,7 +76,7 @@ public:
   void clear_context() noexcept { context().clear(); }
 };
 
-template <typename Binding, slot Kind = info(Binding::scope).storage_slot>
+template <typename Binding, slot Kind = Binding::scope.storage_slot>
 class binding_slot {
   static_assert(dependent_false<Binding>,
                 "the next implementation does not provide this scope yet");
@@ -85,7 +86,7 @@ class binding_slot {
 // dependencies the resolver resolves.
 template <typename Binding>
 class binding_slot<Binding, slot::lazy> : public binding_context<Binding> {
-  static_assert(info(Binding::scope).guard == recursion_guard::while_unresolved,
+  static_assert(Binding::scope.guard == recursion_guard::while_unresolved,
                 "a lazy slot guards the recursion while it is unresolved");
 
 public:
@@ -140,7 +141,7 @@ private:
 // A request of the object while it is being constructed is a recursion.
 template <typename Binding>
 class binding_slot<Binding, slot::none> : public binding_context<Binding> {
-  static_assert(info(Binding::scope).guard == recursion_guard::always,
+  static_assert(Binding::scope.guard == recursion_guard::always,
                 "a scope without a slot guards every recursion");
 
 public:
@@ -224,7 +225,7 @@ struct virtual_interface<Leaf, type_list<Interface, Interfaces...>>
 // resets every slot of the outermost publication.
 template <typename Binding>
 class binding_slot<Binding, slot::two_phase> : public binding_context<Binding> {
-  static_assert(info(Binding::scope).guard == recursion_guard::none,
+  static_assert(Binding::scope.guard == recursion_guard::none,
                 "a two-phase slot refers to the published object instead");
 
 public:
@@ -351,4 +352,53 @@ private:
   external_slot<stored_type> slot_;
 };
 
+// The slot of a binding: the slot class its scope names, or the built-in slot
+// of the slot kind of its descriptor.
+template <typename Binding, typename = void> struct slot_of {
+  using type = binding_slot<Binding>;
+};
+
+template <typename Binding>
+struct slot_of<Binding,
+               std::void_t<typename ::dingo::scope_traits<
+                   typename Binding::scope_tag>::template slot<Binding>>> {
+  using type = typename ::dingo::scope_traits<
+      typename Binding::scope_tag>::template slot<Binding>;
+};
+
+template <typename Binding> using slot_of_t = typename slot_of<Binding>::type;
+
+// Whether the slot of a binding is a class its scope names.
+template <typename Binding>
+inline constexpr bool custom_slot_v =
+    !std::is_same_v<slot_of_t<Binding>, binding_slot<Binding>>;
+
 } // namespace dingo::core
+
+namespace dingo {
+
+// The base of a slot class a scope names: it keeps the factory of the binding
+// and the context of its walks, and constructs the stored object. A slot
+// derived from it provides
+//
+//   template <typename Resolver> stored_type &get(Resolver &resolver);
+//   template <typename Resolver> bool settled(Resolver &resolver) const;
+//
+// get() yields the object a request walks from; settled() tells whether that
+// object lives as long as the container, so its address may be kept.
+template <typename Binding>
+class scope_slot : public core::binding_context<Binding> {
+public:
+  using stored_type = typename Binding::stored_type;
+  using core::binding_context<Binding>::binding_context;
+
+protected:
+  // Constructs the stored object at `where` by the factory of the binding,
+  // which resolves its dependencies from `resolver`.
+  template <typename Resolver> void construct(void *where, Resolver &resolver) {
+    const auto frame = core::type_frame::of<core::leaf_of_t<stored_type>>();
+    core::construct_stored<stored_type>(where, this->factory(), resolver);
+  }
+};
+
+} // namespace dingo

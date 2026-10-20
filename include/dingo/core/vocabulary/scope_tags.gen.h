@@ -10,7 +10,8 @@
 
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
-// The public tags of the scopes and the scope each one selects.
+// The public tags of the built-in scopes, and the scope_traits that make a
+// tag type a scope.
 
 namespace dingo {
 
@@ -26,29 +27,86 @@ struct shared_cyclical {};
 // spec: scopes.unique
 struct unique {};
 
+// The descriptor of a scope: the fields of the spec's Scope schema.
+using scope_descriptor = core::scope_info;
+
+// Makes `Tag` a scope. A specialization holds its descriptor,
+//
+//   static constexpr scope_descriptor descriptor = ...;
+//
+// which a user scope may copy from a built-in scope and change, and may name
+// a slot class of its own that keeps the contract of the slot kind of its
+// descriptor,
+//
+//   template <typename Binding> using slot = ...;
+//
+// deriving from scope_slot<Binding>, which supplies the factory of the
+// binding and the context of its walks.
+template <typename Tag> struct scope_traits;
+
+template <> struct scope_traits<::dingo::external> {
+  static constexpr scope_descriptor descriptor = {
+      core::slot::external_ref,
+      core::value_category::lvalue,
+      true,
+      false,
+      core::recursion_guard::none,
+      false,
+      core::exposure_rule::form,
+      true,
+      true,
+      {11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11}};
+};
+
+template <> struct scope_traits<::dingo::shared> {
+  static constexpr scope_descriptor descriptor = {
+      core::slot::lazy,
+      core::value_category::lvalue,
+      true,
+      false,
+      core::recursion_guard::while_unresolved,
+      true,
+      core::exposure_rule::form,
+      true,
+      false,
+      {11, 11, 11, 11, 11, 0, 11, 11, 11, 11, 11}};
+};
+
+template <> struct scope_traits<::dingo::shared_cyclical> {
+  static constexpr scope_descriptor descriptor = {
+      core::slot::two_phase,
+      core::value_category::lvalue,
+      false,
+      false,
+      core::recursion_guard::none,
+      false,
+      core::exposure_rule::handle_copies,
+      false,
+      false,
+      {10, 0, 0, 10, 0, 0, 0, 11, 0, 0, 0}};
+};
+
+template <> struct scope_traits<::dingo::unique> {
+  static constexpr scope_descriptor descriptor = {
+      core::slot::none,
+      core::value_category::rvalue,
+      false,
+      true,
+      core::recursion_guard::always,
+      false,
+      core::exposure_rule::form,
+      true,
+      false,
+      {4, 12, 4, 4, 12, 0, 4, 4, 12, 4, 4}};
+};
+
 } // namespace dingo
 
 namespace dingo::core {
 
-template <typename Tag> struct scope_of;
-
-template <> struct scope_of<::dingo::external> {
-  static constexpr scope_id value = scope_id::external;
-};
-
-template <> struct scope_of<::dingo::shared> {
-  static constexpr scope_id value = scope_id::shared;
-};
-
-template <> struct scope_of<::dingo::shared_cyclical> {
-  static constexpr scope_id value = scope_id::shared_cyclical;
-};
-
-template <> struct scope_of<::dingo::unique> {
-  static constexpr scope_id value = scope_id::unique;
-};
-
+// The descriptor of the scope `Tag`.
 template <typename Tag>
-inline constexpr scope_id scope_of_v = scope_of<Tag>::value;
+inline constexpr const scope_info &scope_of_v =
+    ::dingo::scope_traits<Tag>::descriptor;
 
 } // namespace dingo::core

@@ -43,7 +43,7 @@ template <> struct static_locals<type_list<>> {};
 // The slot of a binding. A binding whose scope needs an instance takes the
 // instance at its position among such bindings, `Ordinal`.
 template <std::size_t Index, typename Binding,
-          bool Instance = info(Binding::scope).needs_instance>
+          bool Instance = Binding::scope.needs_instance>
 struct DINGO_EMPTY_BASES static_holder
     : static_locals<typename Binding::locals> {
   template <typename Instances, std::size_t Ordinal>
@@ -53,7 +53,7 @@ struct DINGO_EMPTY_BASES static_holder
   static_holder &operator=(static_holder &&) = default;
   DINGO_ALWAYS_INLINE ~static_holder() = default;
 
-  binding_slot<Binding> slot;
+  slot_of_t<Binding> slot;
 };
 
 template <std::size_t Index, typename Binding>
@@ -67,13 +67,13 @@ struct DINGO_EMPTY_BASES static_holder<Index, Binding, true>
   static_holder &operator=(static_holder &&) = default;
   DINGO_ALWAYS_INLINE ~static_holder() = default;
 
-  binding_slot<Binding> slot;
+  slot_of_t<Binding> slot;
 };
 
 // The number of bindings before `Index` whose scope needs an instance.
 template <typename... Bindings>
 constexpr std::size_t instance_ordinal(std::size_t index) {
-  constexpr bool needs[] = {info(Bindings::scope).needs_instance..., false};
+  constexpr bool needs[] = {Bindings::scope.needs_instance..., false};
   std::size_t ordinal = 0;
   for (std::size_t before = 0; before < index; ++before) {
     ordinal += needs[before] ? 1 : 0;
@@ -88,15 +88,16 @@ template <typename Indices, typename... Bindings> struct static_holders;
 // The transaction of a static container, whose `Slots` slots that construct
 // an object are each recorded once in a transaction, and its retained objects
 // once: a transaction of a few slots records them in its frame and never
-// grows.
-template <std::size_t Slots> struct static_transactions {
+// grows. A slot class a scope names records what it records, so a container
+// with one has a log that grows.
+template <std::size_t Slots, bool Custom = false> struct static_transactions {
   static constexpr std::size_t bound = Slots + 1;
-  basic_transaction_log<(bound < 8 ? bound : 8), (bound > 8)> log;
+  basic_transaction_log<(bound < 8 ? bound : 8), (Custom || bound > 8)> log;
 };
 
 // A container of no slot that constructs an object keeps nothing to undo, and
 // its empty log adds nothing to its size.
-template <> struct static_transactions<0> {
+template <> struct static_transactions<0, false> {
   static inline no_transaction_log log;
 };
 
@@ -104,10 +105,12 @@ template <std::size_t... Indices, typename... Bindings>
 struct DINGO_EMPTY_BASES
     static_holders<std::index_sequence<Indices...>, Bindings...>
     : static_holder<Indices, Bindings>...,
-      static_transactions<(
-          std::size_t(0) + ... +
-          std::size_t(info(Bindings::scope).storage_slot == slot::two_phase ||
-                      info(Bindings::scope).storage_slot == slot::lazy))> {
+      static_transactions<
+          (std::size_t(0) + ... +
+           std::size_t(Bindings::scope.storage_slot == slot::two_phase ||
+                       Bindings::scope.storage_slot == slot::lazy ||
+                       custom_slot_v<Bindings>)),
+          (custom_slot_v<Bindings> || ...)> {
   template <typename Instances>
   explicit static_holders(Instances &instances)
       : static_holder<Indices, Bindings>(
@@ -287,20 +290,21 @@ template <typename... Bindings> struct dependency_graph {
     return (declares<Indices>() || ...);
   }
 
+  template <std::size_t Index> static constexpr void add_binding(edges &graph) {
+    if constexpr (declares<Index>()) {
+      using binding = pack_at_t<Index, Bindings...>;
+      add<Index>(graph, typename declared_arguments<
+                            typename binding::factory_type,
+                            leaf_of_t<typename binding::stored_type>>::type());
+    } else {
+      (void)graph;
+    }
+  }
+
   template <std::size_t... Indices>
   static constexpr edges make(std::index_sequence<Indices...> /*indices*/) {
     edges graph{};
-    (
-        [&graph] {
-          if constexpr (declares<Indices>()) {
-            using binding = pack_at_t<Indices, Bindings...>;
-            add<Indices>(graph,
-                         typename declared_arguments<
-                             typename binding::factory_type,
-                             leaf_of_t<typename binding::stored_type>>::type());
-          }
-        }(),
-        ...);
+    (add_binding<Indices>(graph), ...);
     return graph;
   }
 
@@ -308,8 +312,8 @@ template <typename... Bindings> struct dependency_graph {
   // and reaches itself. spec: graph_rules.cycle
   static constexpr cycle find() {
     constexpr edges graph = make(std::index_sequence_for<Bindings...>());
-    constexpr bool legal[] = {(Bindings::scope == scope_id::shared_cyclical)...,
-                              false};
+    constexpr bool legal[] = {
+        (Bindings::scope.storage_slot == slot::two_phase)..., false};
     cycle found{};
     for (std::size_t start = 0; start < count; ++start) {
       if (legal[start]) {
@@ -442,8 +446,7 @@ public:
             std::forward_as_tuple(std::forward<Instances>(instances)...), 0) {
     static_assert(
         require<sizeof...(Instances) ==
-                    (std::size_t(info(Bindings::scope).needs_instance) + ... +
-                     0),
+                    (std::size_t(Bindings::scope.needs_instance) + ... + 0),
                 diag::static_instances>());
   }
 

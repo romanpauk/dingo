@@ -105,14 +105,10 @@ enum class exposure_rule : std::uint8_t {
 {% endfor %}
 };
 
-enum class scope_id : std::uint8_t {
-{% for scope in scopes %}
-  {{ scope.id }},
-{% endfor %}
-};
-
+// The descriptor of a scope, the fields of the spec's Scope schema. A scope
+// is a type whose dingo::scope_traits specialization holds its descriptor, so
+// a user scope needs no id of a closed list.
 struct scope_info {
-  scope_id id;
   slot storage_slot;
   value_category materializes;
   bool stable;
@@ -125,16 +121,6 @@ struct scope_info {
   // The request categories exposed per storage form, indexed by storage_form.
   std::uint8_t exposures[storage_form_count];
 };
-
-inline constexpr scope_info scopes[] = {
-{% for scope in scopes %}
-    {scope_id::{{ scope.id }}, slot::{{ scope.slot }}, value_category::{{ scope.materializes }}, {{ scope.stable | lower }}, {{ scope.consumes | lower }}, recursion_guard::{{ scope.guard }}, {{ scope.retains | lower }}, exposure_rule::{{ scope.exposure_rule }}, {{ scope.nested_layers | lower }}, {{ scope.needs_instance | lower }}, { {{ scope.exposures | join(", ") }} }},
-{% endfor %}
-};
-
-constexpr const scope_info &info(scope_id scope) {
-  return scopes[static_cast<std::size_t>(scope)];
-}
 
 // spec: routes
 enum class rule_id : std::uint8_t {

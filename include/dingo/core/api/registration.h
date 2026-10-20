@@ -229,7 +229,7 @@ template <typename... Parts> struct registration {
 
   template <typename... Args>
   using binding_for = binding_type<
-      scope_of_v<typename scope_part::type>, typename storage_part::type,
+      typename scope_part::type, typename storage_part::type,
       typename detail::declared_interfaces<
           typename storage_part::type, typename interfaces_part::type>::type,
       typename with_arguments<Args...>::factory,

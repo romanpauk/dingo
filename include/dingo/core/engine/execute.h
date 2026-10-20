@@ -28,6 +28,7 @@
 #include <dingo/core/projection/conversion.h>
 #include <dingo/core/projection/layer_traits.h>
 #include <dingo/core/vocabulary/compile_diagnostics.gen.h>
+#include <dingo/core/vocabulary/scope_tags.gen.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
 #include <cstddef>
@@ -82,8 +83,9 @@ struct no_kept_objects {
 
 // A binding of a scope, a stored type, the interfaces it declares, the factory
 // that makes its object, detected_factory unless one is declared, its key, and
-// the static bindings it declares locally, a type_list of binding types.
-template <scope_id Scope, typename Stored, typename Interfaces,
+// the static bindings it declares locally, a type_list of binding types. The
+// scope is its tag type, whose scope_traits hold its descriptor.
+template <typename Scope, typename Stored, typename Interfaces,
           typename Factory = detected_factory, typename Key = no_key,
           typename Locals = type_list<>, typename KeyAliases = type_list<>>
 struct binding_type {
@@ -94,9 +96,10 @@ struct binding_type {
   // The runtime keys of other key types the binding is also found by.
   using key_aliases = KeyAliases;
   using locals = Locals;
-  static constexpr scope_id scope = Scope;
+  using scope_tag = Scope;
+  static constexpr const scope_info &scope = scope_of_v<Scope>;
   // Whether a request consumes an object the binding constructs for it.
-  static constexpr bool consumes = info(Scope).consumes;
+  static constexpr bool consumes = scope.consumes;
   // The stored object the slot yields to a walk: the object of a borrowing
   // scope, or of an array, which a consuming scope allocates so its ownership
   // passes to the request, and a new object otherwise.
@@ -106,7 +109,7 @@ struct binding_type {
   static constexpr binding_descriptor make_descriptor() {
     binding_descriptor binding;
     binding.stored = shape_v<Stored>;
-    binding.scope = Scope;
+    binding.scope = scope;
     binding.declared_factory = !std::is_same_v<Factory, detected_factory>;
     binding.key = Key::descriptor;
     set_aliases(binding, KeyAliases());
