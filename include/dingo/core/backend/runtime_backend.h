@@ -195,8 +195,9 @@ public:
                   "key");
     constexpr std::size_t index =
         type_list_index_of<Interface, typename Binding::interfaces>();
-    static_assert(index != Binding::descriptor.interface_count,
-                  "a key value names an interface the binding declares");
+    static_assert(require<index != Binding::descriptor.interface_count,
+                          diag::key_interface_undeclared, Interface,
+                          typename Binding::stored_type>());
     interface_keys_[index] = value;
   }
 
@@ -508,12 +509,11 @@ public:
 
   template <typename Binding, typename Held, typename... Args>
   auto &add_unless(Held &&held, Args &&...args) {
-    static_assert(Binding::status == registration_status::registered,
-                  "a binding cannot be stored by its scope");
+    static_assert(registers<Binding>());
     using arguments = detail::registration_arguments<Args...>;
-    static_assert(arguments::shared_key_count() <= 1,
-                  "a registration takes at most one key value of every "
-                  "interface, and one of each interface");
+    static_assert(require<arguments::shared_key_count() <= 1,
+                          diag::registration_key_values,
+                          typename Binding::stored_type>());
     auto all = std::forward_as_tuple(std::forward<Args>(args)...);
     entry_pointer added = make_entry<Binding, arguments,
                                      std::tuple<std::decay_t<Args>...>>(

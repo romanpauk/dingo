@@ -1,0 +1,107 @@
+#pragma once
+
+#include <dingo/core/base/capabilities.gen.h>
+#include <dingo/core/base/mechanics.h>
+#include <dingo/core/primitives/diagnostic_message.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
+
+// The diagnostics of the spec reported when the program is compiled: a code
+// of diag, which fail<Code, Subjects...>() reports in a static_assert, with
+// the message formatted with the names of its subjects where the compiler
+// takes a user-generated message, else with the literal message, whose
+// carrier names the subjects in the compiler's note.
+
+// Clang takes a user-generated message in every language mode, as an
+// extension before C++26.
+#if defined(__clang__)
+#define DINGO_FORMATTED_MESSAGE_BEGIN                                          \
+  _Pragma("clang diagnostic push")                                             \
+      _Pragma("clang diagnostic ignored \"-Wunknown-warning-option\"")         \
+          _Pragma("clang diagnostic ignored \"-Wc++26-extensions\"")
+#define DINGO_FORMATTED_MESSAGE_END _Pragma("clang diagnostic pop")
+#else
+#define DINGO_FORMATTED_MESSAGE_BEGIN
+#define DINGO_FORMATTED_MESSAGE_END
+#endif
+
+namespace dingo {
+
+// The carriers of the subjects of the diagnostics reported when compiled.
+{% for carrier in carriers %}
+template <typename... Subjects> struct {{ carrier }} {};
+{% endfor %}
+
+} // namespace dingo
+
+namespace dingo::core {
+
+// The diagnostics reported when the program is compiled.
+enum class diag : std::uint8_t {
+{% for diagnostic in diagnostics if diagnostic.compile %}
+  {{ diagnostic.id }},
+{% endfor %}
+};
+
+// The number of subjects of each diagnostic, one per placeholder.
+inline constexpr std::uint8_t diag_subjects[] = { {% for diagnostic in diagnostics if diagnostic.compile %}{{ diagnostic.placeholders | length }}{{ ", " if not loop.last }}{% endfor %} };
+
+#if DINGO_HAS_STATIC_ASSERT_MESSAGE
+// The text of a diagnostic around its placeholders, and its carrier.
+template <diag Code> struct diag_text;
+{% for diagnostic in diagnostics if diagnostic.compile %}
+
+// spec: diagnostics.{{ diagnostic.id }}
+template <> struct diag_text<diag::{{ diagnostic.id }}> {
+  template <typename... Subjects> using carrier = ::dingo::{{ diagnostic.carrier }}<Subjects...>;
+  static constexpr std::string_view pieces[] = { {% for piece in diagnostic.pieces %}{{ piece }}{{ ", " if not loop.last }}{% endfor %} };
+};
+{% endfor %}
+
+// The report of a diagnostic about `Subjects`: its message formatted with
+// their names.
+template <diag Code, typename... Subjects> struct diag_report {
+  static constexpr void fail() {
+    DINGO_FORMATTED_MESSAGE_BEGIN
+    static_assert(dependent_false<typename diag_text<Code>::template carrier<Subjects...>>, formatted_message<diag_text<Code>, Subjects...>());
+    DINGO_FORMATTED_MESSAGE_END
+  }
+};
+#else
+// The report of a diagnostic about `Subjects`: its literal message, and its
+// carrier of the subjects.
+template <diag Code, typename... Subjects> struct diag_report;
+{% for diagnostic in diagnostics if diagnostic.compile %}
+
+// spec: diagnostics.{{ diagnostic.id }}
+template <typename... Subjects> struct diag_report<diag::{{ diagnostic.id }}, Subjects...> {
+  static constexpr void fail() {
+    static_assert(dependent_false<::dingo::{{ diagnostic.carrier }}<Subjects...>>, {{ diagnostic.message }});
+  }
+};
+{% endfor %}
+#endif
+
+// Reports diagnostic `Code` about `Subjects` when the program is compiled:
+// the call is instantiated only where the condition holds.
+template <diag Code, typename... Subjects> constexpr void fail() {
+  static_assert(sizeof...(Subjects) ==
+                    diag_subjects[static_cast<std::size_t>(Code)],
+                "a diagnostic names one subject per placeholder");
+  diag_report<Code, Subjects...>::fail();
+}
+
+// Reports diagnostic `Code` about `Subjects` when `Holds` does not hold, and
+// is true otherwise, for a static_assert at any scope:
+// static_assert(require<Holds, Code, Subjects...>()).
+template <bool Holds, diag Code, typename... Subjects>
+constexpr bool require() {
+  if constexpr (!Holds) {
+    fail<Code, Subjects...>();
+  }
+  return true;
+}
+
+} // namespace dingo::core

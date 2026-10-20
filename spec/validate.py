@@ -26,6 +26,7 @@ from collections.abc import Iterable, Iterator
 
 from spec.schema import (
     ApiKind,
+    BindingTime,
     Bound,
     BoundKind,
     Capability,
@@ -43,6 +44,7 @@ from spec.schema import (
 )
 
 SNAKE_CASE = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
+IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 PATTERN_VARIABLE = re.compile(r"^[A-Z][A-Za-z0-9]*$")
 MACRO_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 HEADER_NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]*$")
@@ -77,6 +79,7 @@ def validate(spec: Spec) -> list[str]:
     check_transaction_rules(spec, errors)
     check_graph_rules(spec, errors)
     check_diagnostics(spec, errors)
+    check_diagnostic_examples(spec, errors)
     check_binding_time_constraints(spec, errors)
     check_variant_points(spec, errors)
     check_contracts(spec, errors)
@@ -355,9 +358,20 @@ def message_fields(message: str) -> list[str] | str:
 def check_diagnostics(spec: Spec, errors: list[str]) -> None:
     for diagnostic in spec.diagnostics:
         where = f"diagnostics.{diagnostic.id}"
-        for what in ("condition", "exception", "message", "fallback_carrier"):
+        for what in ("condition", "message", "fallback_carrier"):
             if not getattr(diagnostic, what).strip():
                 errors.append(f"{where}: {what} is empty")
+        if not diagnostic.reported:
+            errors.append(f"{where}: reported at no time")
+        check_unique(errors, where, "reported", diagnostic.reported)
+        runtime = BindingTime.RUNTIME in diagnostic.reported
+        if runtime != bool(diagnostic.exception and diagnostic.exception.strip()):
+            errors.append(
+                f"{where}: a diagnostic has an exception if and only if it is "
+                "reported at runtime"
+            )
+        if not IDENTIFIER.match(diagnostic.fallback_carrier):
+            errors.append(f"{where}: fallback_carrier is not an identifier")
         check_unique(errors, where, "placeholders", diagnostic.placeholders)
         for name in diagnostic.placeholders:
             if not SNAKE_CASE.match(name):
@@ -370,6 +384,37 @@ def check_diagnostics(spec: Spec, errors: list[str]) -> None:
             errors.append(f"{where}: message uses undeclared placeholder {name!r}")
         for name in sorted(set(diagnostic.placeholders) - set(used)):
             errors.append(f"{where}: placeholder {name!r} is not used by the message")
+        if BindingTime.COMPILE in diagnostic.reported and used != list(
+            diagnostic.placeholders
+        ):
+            errors.append(
+                f"{where}: a diagnostic reported when compiled uses each "
+                "placeholder once, in the declared order"
+            )
+
+
+def check_diagnostic_examples(spec: Spec, errors: list[str]) -> None:
+    diagnostics = {diagnostic.id: diagnostic for diagnostic in spec.diagnostics}
+    examples = {}
+    for example in spec.cpp.diagnostic_examples:
+        where = f"cpp.diagnostic_examples.{example.id}"
+        diagnostic = diagnostics.get(example.diagnostic)
+        if diagnostic is None:
+            errors.append(f"{where}: unknown diagnostic {example.diagnostic!r}")
+            continue
+        examples.setdefault(example.diagnostic, []).append(example)
+        if BindingTime.COMPILE not in diagnostic.reported:
+            errors.append(f"{where}: {example.diagnostic} is not reported when compiled")
+        if len(example.subjects) != len(diagnostic.placeholders):
+            errors.append(f"{where}: one subject per placeholder of {example.diagnostic}")
+        if not example.program.strip():
+            errors.append(f"{where}: program is empty")
+    for diagnostic in spec.diagnostics:
+        if BindingTime.COMPILE in diagnostic.reported and diagnostic.id not in examples:
+            errors.append(
+                f"diagnostics.{diagnostic.id}: reported when compiled, with no "
+                "cpp.diagnostic_examples entry"
+            )
 
 
 def check_binding_time_constraints(spec: Spec, errors: list[str]) -> None:

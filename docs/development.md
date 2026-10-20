@@ -232,6 +232,15 @@ Run them through the normal lit test target:
 ctest --test-dir build --output-on-failure -R dingo_lit_tests
 ```
 
+## Diagnostic Tests
+
+The lit tests under `test/lit/generated/diagnostics` are generated from the
+diagnostic examples of the spec: each program is rejected by its diagnostic when
+it is compiled. A test of the formatted message runs where the compiler formats
+`static_assert` messages, with its newest standard, and a test of the literal
+message where it formats none with C++17. Regenerate them with the `generate`
+target after changing a diagnostic or an example.
+
 ## Contract Baseline
 
 [`test/contracts/probe.py`](../test/contracts/probe.py) measures the contract

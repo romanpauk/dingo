@@ -1,11 +1,21 @@
 """Content of the diagnostics section.
 
-The messages are those of the current implementation. A message names types
-as the C++ library spells them, and `path` is the path of the types whose
-objects are being constructed, outermost first, separated by " -> ".
+The messages of the runtime diagnostics are those of the current
+implementation. A message names types as the C++ library spells them, and
+`path` is the path of the types whose objects are being constructed,
+outermost first, separated by " -> ".
+
+A diagnostic of a request is reported when the request is compiled where the
+selection decides it then, see selection_sources, and when it is resolved
+otherwise. One that names the path of the objects being constructed is
+reported only when it is resolved. The diagnostics of a declaration, which a
+program spells wrong, are reported only when it is compiled.
 """
 
-from spec.schema import Diagnostic
+from spec.schema import BindingTime, Diagnostic
+
+COMPILE = (BindingTime.COMPILE,)
+BOTH = (BindingTime.COMPILE, BindingTime.RUNTIME)
 
 diagnostics: tuple[Diagnostic, ...] = (
     Diagnostic(
@@ -15,6 +25,7 @@ diagnostics: tuple[Diagnostic, ...] = (
         message="type not found: {request}",
         placeholders=("request",),
         fallback_carrier="type_not_found_carrier",
+        reported=BOTH,
     ),
     Diagnostic(
         id="type_not_found_required_by",
@@ -34,6 +45,7 @@ diagnostics: tuple[Diagnostic, ...] = (
         message="type not found: {request} (index type: {key})",
         placeholders=("request", "key"),
         fallback_carrier="type_not_found_carrier",
+        reported=BOTH,
     ),
     Diagnostic(
         id="type_not_found_keyed_required_by",
@@ -56,6 +68,7 @@ diagnostics: tuple[Diagnostic, ...] = (
         message="lookup already registered: interface {interface}, storage {stored}, key type {key}",
         placeholders=("interface", "stored", "key"),
         fallback_carrier="lookup_already_registered_carrier",
+        reported=BOTH,
     ),
     Diagnostic(
         id="type_index_out_of_range",
@@ -67,6 +80,7 @@ diagnostics: tuple[Diagnostic, ...] = (
         message="type index out of range: key type {key}",
         placeholders=("key",),
         fallback_carrier="type_index_out_of_range_carrier",
+        reported=BOTH,
     ),
     Diagnostic(
         id="type_ambiguous",
@@ -75,6 +89,7 @@ diagnostics: tuple[Diagnostic, ...] = (
         message="type resolution is ambiguous: {request}",
         placeholders=("request",),
         fallback_carrier="type_ambiguous_carrier",
+        reported=BOTH,
     ),
     Diagnostic(
         id="type_ambiguous_required_by",
@@ -94,6 +109,7 @@ diagnostics: tuple[Diagnostic, ...] = (
         message="type is not convertible to {request} from {stored}",
         placeholders=("request", "stored"),
         fallback_carrier="type_not_convertible_carrier",
+        reported=BOTH,
     ),
     Diagnostic(
         id="type_not_convertible_required_by",
@@ -116,5 +132,222 @@ diagnostics: tuple[Diagnostic, ...] = (
         message="recursive dependency detected: {path}",
         placeholders=("path",),
         fallback_carrier="type_recursion_carrier",
+    ),
+
+    # Reported when the program is compiled
+    Diagnostic(
+        id="registration_without_scope",
+        condition="A registration names no scope<>.",
+        exception=None,
+        message="a registration needs a scope<>",
+        placeholders=(),
+        fallback_carrier="registration_without_scope_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="registration_without_storage",
+        condition="A registration names no storage<>.",
+        exception=None,
+        message="a registration needs a storage<>",
+        placeholders=(),
+        fallback_carrier="registration_without_storage_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="registration_key_twice",
+        condition="A registration names a key_type<> and takes a key value too.",
+        exception=None,
+        message="the registration of {stored} takes its key from a key_type<> or a key_value, not both",
+        placeholders=("stored",),
+        fallback_carrier="registration_key_twice_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="registration_key_values",
+        condition=(
+            "A registration takes two key values of one interface, or two key "
+            "values that name no interface."
+        ),
+        exception=None,
+        message=(
+            "the registration of {stored} takes at most one key value of every "
+            "interface, and one of each interface"
+        ),
+        placeholders=("stored",),
+        fallback_carrier="registration_key_values_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="key_interface_undeclared",
+        condition="A key value names an interface its binding does not declare.",
+        exception=None,
+        message="a key value names {interface}, which the binding of {stored} does not declare",
+        placeholders=("interface", "stored"),
+        fallback_carrier="key_interface_undeclared_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="key_type_values",
+        condition="A key_type<> names more than one value.",
+        exception=None,
+        message="dingo::key_type of {key} accepts at most one value",
+        placeholders=("key",),
+        fallback_carrier="key_type_values_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="dense_key_type",
+        condition=(
+            "An associative lookup indexed by a dense array takes a key that "
+            "is not integral or an enumeration."
+        ),
+        exception=None,
+        message=(
+            "an associative lookup of {interface} indexed by dingo::array<N> takes "
+            "an integral or enum key, not {key}"
+        ),
+        placeholders=("interface", "key"),
+        fallback_carrier="dense_key_type_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="interface_limit",
+        condition="A binding declares more interfaces than the limit.",
+        exception=None,
+        message="a binding of {stored} declares more than max_interfaces interfaces",
+        placeholders=("stored",),
+        fallback_carrier="interface_limit_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="key_alias_limit",
+        condition="A binding has more keys of other key types than the limit.",
+        exception=None,
+        message="a binding of {stored} has more than max_key_aliases keys of other types",
+        placeholders=("stored",),
+        fallback_carrier="key_alias_limit_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="interface_not_derived",
+        condition=(
+            "A request is served by converting the stored leaf to an interface "
+            "the binding declares, which the leaf does not derive from."
+        ),
+        exception=None,
+        message="{stored} does not derive from the interface {interface}",
+        placeholders=("stored", "interface"),
+        fallback_carrier="interface_not_derived_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="scope_form_not_stored",
+        condition="The scope of a binding does not store the form of its stored type.",
+        exception=None,
+        message="the scope of the binding does not store {stored}",
+        placeholders=("stored",),
+        fallback_carrier="scope_form_not_stored_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="scope_nested_layers",
+        condition="The scope of a binding does not store nested layers, which its stored type has.",
+        exception=None,
+        message="the scope of the binding does not store the nested layers of {stored}",
+        placeholders=("stored",),
+        fallback_carrier="scope_nested_layers_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="no_default_factory",
+        condition=(
+            "A binding whose scope constructs its object declares no factory, "
+            "and its stored type has no default factory."
+        ),
+        exception=None,
+        message="{stored} has no default factory; the binding needs a factory<>",
+        placeholders=("stored",),
+        fallback_carrier="no_default_factory_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="interface_in_array",
+        condition="A binding that stores an array declares interfaces.",
+        exception=None,
+        message="an element of the array {stored} cannot be exposed as an interface",
+        placeholders=("stored",),
+        fallback_carrier="interface_in_array_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="no_interface_served",
+        condition="No interface a binding declares can be served from its stored type.",
+        exception=None,
+        message="no interface the binding of {stored} declares can be served",
+        placeholders=("stored",),
+        fallback_carrier="no_interface_served_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="cyclical_virtual_interface",
+        condition=(
+            "A shared_cyclical binding exposes its leaf as an interface the leaf "
+            "inherits virtually, which reaching would read the object before it "
+            "is constructed."
+        ),
+        exception=None,
+        message=(
+            "shared_cyclical cannot publish {stored} as {interface}, which it "
+            "inherits virtually: the conversion reads the object, which is not "
+            "constructed yet"
+        ),
+        placeholders=("stored", "interface"),
+        fallback_carrier="cyclical_virtual_interface_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="constructor_not_detected",
+        condition="No constructor of a type the detected factory makes is detected.",
+        exception=None,
+        message="no constructor of {type} is detected",
+        placeholders=("type",),
+        fallback_carrier="constructor_not_detected_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="constructor_generic",
+        condition=(
+            "A constructor of a type the detected factory makes accepts any "
+            "argument, such as a constructor template."
+        ),
+        exception=None,
+        message="a generic constructor of {type} is detected; use an explicit factory",
+        placeholders=("type",),
+        fallback_carrier="constructor_generic_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="static_instances",
+        condition=(
+            "A static container is not given the instance of every external "
+            "binding."
+        ),
+        exception=None,
+        message=(
+            "a static container takes the instance of every external binding, "
+            "in the order of the bindings"
+        ),
+        placeholders=(),
+        fallback_carrier="static_instances_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="collection_arguments",
+        condition="A collection registration takes more than one key or append function.",
+        exception=None,
+        message="a collection takes at most one key or append function",
+        placeholders=(),
+        fallback_carrier="collection_arguments_carrier",
+        reported=COMPILE,
     ),
 )

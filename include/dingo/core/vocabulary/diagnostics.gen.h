@@ -12,11 +12,13 @@
 #include <dingo/core/base/mechanics.h>
 #include <dingo/core/primitives/exceptions.h>
 #include <dingo/core/primitives/message.h>
+#include <dingo/core/vocabulary/compile_diagnostics.gen.h> // IWYU pragma: export
 
 #include <string_view>
 
-// The diagnostics of the spec: a function per diagnostic that throws its
-// exception with its message, out of line and in a cold section.
+// The diagnostics of the spec reported at runtime: a function per diagnostic
+// that throws its exception with its message, out of line and in a cold
+// section.
 
 namespace dingo::core {
 

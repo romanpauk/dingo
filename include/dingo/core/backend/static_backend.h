@@ -148,6 +148,41 @@ template <const lookup_table &Table, typename... Bindings> struct duplicates {
     return (row<Indices>(std::index_sequence_for<Bindings...>()) || ...);
   }
 
+  // The index of the later binding of the first two that conflict, which
+  // registering them in order rejects.
+  static constexpr std::size_t rejected() {
+    return rejected_in(
+        std::make_index_sequence<sizeof...(Bindings) * sizeof...(Bindings)>());
+  }
+
+  template <std::size_t... Indices>
+  static constexpr std::size_t
+  rejected_in(std::index_sequence<Indices...> /*pairs*/) {
+    constexpr std::size_t count = sizeof...(Bindings);
+    // Pair `index` is of the later binding index / count and the earlier
+    // index % count, so the pairs are in the order of registration.
+    constexpr bool pairs[] = {pair<Indices % count, Indices / count>()...,
+                              false};
+    for (std::size_t index = 0; index < count * count; ++index) {
+      if (pairs[index]) {
+        return index / count;
+      }
+    }
+    return 0;
+  }
+
+  template <std::size_t Earlier, std::size_t Later>
+  static constexpr bool pair() {
+    if constexpr (Earlier >= Later) {
+      return false;
+    } else {
+      return conflicts(Table, pack_at_t<Earlier, Bindings...>::descriptor,
+                       pack_at_t<Later, Bindings...>::descriptor) &&
+             same_fixed_key<typename pack_at_t<Earlier, Bindings...>::key_type,
+                            typename pack_at_t<Later, Bindings...>::key_type>();
+    }
+  }
+
   template <std::size_t Index, std::size_t... Others>
   static constexpr bool row(std::index_sequence<Others...> /*others*/) {
     return (
@@ -199,15 +234,45 @@ constexpr bool within_bound() {
 // A backend of the bindings `Bindings`, with the lookup declarations of the
 // table `LookupTable::value`.
 template <typename LookupTable, typename... Bindings> class static_backend {
-  static_assert(((Bindings::status == registration_status::registered) && ...),
-                "a binding cannot be stored by its scope");
-  static_assert(!detail::duplicates<LookupTable::value, Bindings...>::any(
-                    std::index_sequence_for<Bindings...>()),
-                "a static container holds one binding of a key of an "
-                "interface: lookup already registered");
-  static_assert((detail::within_bound<LookupTable::value, Bindings>() && ...),
-                "type index out of range: the key of a static binding is "
-                "outside the bound of the dense array of its domain");
+  static_assert((registers<Bindings>() && ...));
+
+  // Reports the binding a static binding of its key rejects, decided when
+  // the container is compiled.
+  template <bool Unique> static constexpr bool unique() {
+    if constexpr (!Unique) {
+      using binding = pack_at_t<
+          detail::duplicates<LookupTable::value, Bindings...>::rejected(),
+          Bindings...>;
+      fail<diag::lookup_already_registered, first_interface_t<binding>,
+           typename binding::stored_type,
+           typename detail::key_type_of<typename binding::key_type>::type>();
+    }
+    return true;
+  }
+  static_assert(
+      unique<!detail::duplicates<LookupTable::value, Bindings...>::any(
+          std::index_sequence_for<Bindings...>())>());
+
+  // Reports the binding whose key is outside the bound of its domain.
+  template <bool Within> static constexpr bool within() {
+    if constexpr (!Within) {
+      constexpr bool inside[] = {
+          detail::within_bound<LookupTable::value, Bindings>()..., false};
+      constexpr std::size_t index = [&] {
+        std::size_t found = 0;
+        while (inside[found]) {
+          ++found;
+        }
+        return found;
+      }();
+      using binding = pack_at_t<index, Bindings...>;
+      fail<diag::type_index_out_of_range,
+           typename detail::key_type_of<typename binding::key_type>::type>();
+    }
+    return true;
+  }
+  static_assert(
+      within<(detail::within_bound<LookupTable::value, Bindings>() && ...)>());
 
 public:
   // Takes the instance of every binding whose scope needs one, in the order of
@@ -217,10 +282,10 @@ public:
       : static_backend(
             std::forward_as_tuple(std::forward<Instances>(instances)...), 0) {
     static_assert(
-        sizeof...(Instances) ==
-            (std::size_t(info(Bindings::scope).needs_instance) + ... + 0),
-        "a static container takes the instance of every external "
-        "binding, in the order of the bindings");
+        require<sizeof...(Instances) ==
+                    (std::size_t(info(Bindings::scope).needs_instance) + ... +
+                     0),
+                diag::static_instances>());
   }
 
   static_backend(static_backend &&) = default;
@@ -408,9 +473,8 @@ private:
     constexpr std::size_t selected =
         select_term(binding::published,
                     request_traits<Request, Key>::descriptor, binding::exposed);
-    static_assert(selected != no_term,
-                  "static resolution cannot satisfy a request the storage "
-                  "does not publish");
+    static_assert(require<selected != no_term, diag::type_not_convertible,
+                          Request, typename binding::stored_type>());
     static_assert(walk_supported_v<binding, selected>,
                   "the next implementation does not provide the route of the "
                   "requested type yet");

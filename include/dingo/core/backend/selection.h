@@ -777,10 +777,9 @@ private:
         // whatever is registered later; it is decided when the steps before
         // are known to name none, and the request is the outermost.
         static_assert(
-            dependent_false<Request> ||
-                !(Outermost &&
-                  closed_before<Request, Key, Outermost, Mode, Step>()),
-            "static_container cannot resolve an ambiguously bound type");
+            require<!(Outermost &&
+                      closed_before<Request, Key, Outermost, Mode, Step>()),
+                    diag::type_ambiguous, Request>());
         raise_ambiguous<Request>();
       } else if constexpr (possible_sources<Request, Key, Mode, Step>() == 1 &&
                            is_runtime_source(
@@ -810,8 +809,16 @@ private:
       // its element type.
       return collect<value_type, Key>(key_value, collection_append());
     } else {
-      static_assert(!(Outermost && decided_when_compiled<Request, Key, Mode>()),
-                    "static_container cannot resolve an unbound type");
+      // A request no source can answer when it is compiled is reported
+      // then, and otherwise when it is resolved.
+      if constexpr (Outermost && decided_when_compiled<Request, Key, Mode>()) {
+        if constexpr (std::is_same_v<Key, no_key>) {
+          fail<diag::type_not_found, Request>();
+        } else {
+          fail<diag::type_not_found_keyed, Request,
+               typename detail::key_type_of<Key>::type>();
+        }
+      }
       raise_not_found<Request, Key>();
     }
   }

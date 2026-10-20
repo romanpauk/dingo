@@ -6,6 +6,7 @@ template that only lays them out.
 """
 
 import re
+import string
 import textwrap
 
 from framework import GeneratedFile, GeneratorError, render
@@ -327,12 +328,30 @@ def cpp_string(text):
     return f'"{escaped}"'
 
 
-def diagnostics(spec):
-    """include/dingo/core/vocabulary/diagnostics.gen.h from the diagnostics.
+def message_pieces(message):
+    """The text of a message around its placeholders, as C++ literals."""
+    pieces = [""]
+    for literal, name, _, _ in string.Formatter().parse(message):
+        pieces[-1] += literal
+        if name is not None:
+            pieces.append("")
+    return [cpp_string(piece) for piece in pieces]
 
-    Each diagnostic gets a function that throws its exception with its message,
-    whose placeholders are the parameters of the function.
+
+def diagnostics(spec):
+    """include/dingo/core/vocabulary/diagnostics.gen.h and
+    compile_diagnostics.gen.h from the diagnostics.
+
+    A diagnostic reported at runtime gets a function that throws its exception
+    with its message, whose placeholders are the parameters of the function.
+    One reported when compiled gets a code of the diag enumeration, its text
+    around its placeholders, its carrier, and the report that fail<Code,
+    Subjects...>() makes: a static_assert with the formatted message where
+    the compiler takes one, else with the literal message, whose carrier names
+    the subjects.
     """
+    from spec.schema import BindingTime
+
     fields = [
         {
             "id": diagnostic.id,
@@ -340,10 +359,22 @@ def diagnostics(spec):
             "exception": diagnostic.exception,
             "message": cpp_string(diagnostic.message),
             "placeholders": list(diagnostic.placeholders),
+            "runtime": BindingTime.RUNTIME in diagnostic.reported,
+            "compile": BindingTime.COMPILE in diagnostic.reported,
+            "pieces": message_pieces(diagnostic.message),
+            "carrier": diagnostic.fallback_carrier,
         }
         for diagnostic in sorted(spec.diagnostics, key=lambda d: d.id)
     ]
+    carriers = sorted({field["carrier"] for field in fields if field["compile"]})
     return [
+        GeneratedFile(
+            path="include/dingo/core/vocabulary/compile_diagnostics.gen.h",
+            content=render(
+                "compile_diagnostics.gen.h.j2", diagnostics=fields, carriers=carriers
+            ),
+            spec_ids=("diagnostics",),
+        ),
         GeneratedFile(
             path="include/dingo/core/vocabulary/diagnostics.gen.h",
             content=render("diagnostics.gen.h.j2", diagnostics=fields),
@@ -352,4 +383,64 @@ def diagnostics(spec):
     ]
 
 
-EMITTERS = (capabilities, variants, vocabulary, scope_tags, diagnostics, next_overlay)
+def check_pattern(text):
+    """A FileCheck pattern of text that a compiler may spell with a space
+    between closing angle brackets or before an array bound."""
+    pattern = ""
+    for index, letter in enumerate(text):
+        if letter == ">" and index > 0 and text[index - 1] == ">":
+            pattern += "{{ ?}}>"
+        elif letter == "[":
+            pattern += "{{ ?\\[}}"
+        else:
+            pattern += letter
+    return pattern
+
+
+def diagnostic_tests(spec):
+    """test/lit/generated/diagnostics/<example>.cpp and <example>.literal.cpp
+    from cpp.diagnostic_examples: the program of an example, which its
+    diagnostic rejects when it is compiled, with the message formatted with
+    its subjects where the compiler formats one, and literal where it does
+    not."""
+    diagnostics = {diagnostic.id: diagnostic for diagnostic in spec.diagnostics}
+    files = []
+    for example in sorted(spec.cpp.diagnostic_examples, key=lambda e: e.id):
+        diagnostic = diagnostics[example.diagnostic]
+        formatted = "".join(
+            literal + (check_pattern(example.subjects[index]) if name is not None else "")
+            for index, (literal, name, _, _) in enumerate(
+                string.Formatter().parse(diagnostic.message)
+            )
+        )
+        for tier, message in (("formatted", formatted), ("literal", diagnostic.message)):
+            suffix = "" if tier == "formatted" else ".literal"
+            files.append(
+                GeneratedFile(
+                    path=f"test/lit/generated/diagnostics/{example.id}{suffix}.cpp",
+                    content=render(
+                        "diagnostic_test.cpp.j2",
+                        diagnostic=example.diagnostic,
+                        tier=tier,
+                        message=message,
+                        includes=example.includes,
+                        program=example.program,
+                    ),
+                    spec_ids=(
+                        f"diagnostics.{example.diagnostic}",
+                        f"cpp.diagnostic_examples.{example.id}",
+                    ),
+                )
+            )
+    return files
+
+
+EMITTERS = (
+    capabilities,
+    variants,
+    vocabulary,
+    scope_tags,
+    diagnostics,
+    diagnostic_tests,
+    next_overlay,
+)

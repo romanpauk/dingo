@@ -16,6 +16,7 @@
 #include <dingo/core/base/mechanics.h>
 #include <dingo/core/primitives/type_path.h>
 #include <dingo/core/projection/construct.h>
+#include <dingo/core/vocabulary/compile_diagnostics.gen.h>
 
 #include <functional>
 #include <type_traits>
@@ -33,8 +34,8 @@ public:
   // argument, or by its collection traits.
   template <typename... Parts, typename... Append>
   void register_type_collection(Append &&...append) {
-    static_assert(sizeof...(Append) <= 1,
-                  "a collection takes at most one key or append function");
+    static_assert(core::require<sizeof...(Append) <= 1,
+                                core::diag::collection_arguments>());
     if constexpr (sizeof...(Append) == 0) {
       self().template register_type<Parts...>(
           core::collection_factory<core::collection_append>(

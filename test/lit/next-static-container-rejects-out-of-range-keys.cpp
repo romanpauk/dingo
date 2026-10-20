@@ -27,5 +27,4 @@ int main() {
   (void)container;
 }
 
-// CHECK: type index out of range: the key of a static binding is outside the
-// bound of the dense array of its domain
+// CHECK: type index out of range: key type

@@ -214,10 +214,10 @@ decltype(auto) invoke_constructor(Resolver &resolver, Sink &&sink) {
         typename declared_constructor<Type>::arguments());
   } else {
     using constructor = detected_constructor<Type>;
-    static_assert(constructor::kind != constructor_kind::invalid,
-                  "no constructor of the type is detected");
-    static_assert(constructor::kind != constructor_kind::generic,
-                  "a generic constructor is detected; use an explicit factory");
+    // The factory that calls it reports a constructor that is not detected
+    // or generic.
+    static_assert(constructor::kind == constructor_kind::concrete,
+                  "a detected constructor is concrete");
     return detail::invoke_detected<Type>(
         resolver, std::forward<Sink>(sink),
         std::make_index_sequence<constructor::arity>{});

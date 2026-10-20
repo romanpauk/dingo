@@ -29,6 +29,7 @@ __all__ = [
     "ContractDimension",
     "CppApiBinding",
     "CppContractProbe",
+    "CppDiagnosticExample",
     "CppProjection",
     "CppScopeProjection",
     "Decoration",
@@ -546,13 +547,23 @@ class GraphRule(Entity):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Diagnostic(Entity):
-    """A diagnostic. `message` uses `{name}` placeholders listed in `placeholders`."""
+    """A diagnostic. `message` uses `{name}` placeholders listed in `placeholders`.
+
+    `reported` lists when it is reported. RUNTIME throws `exception` when the
+    condition arises as a program runs. COMPILE is a compile error, where the
+    condition is decided when the program is compiled, see
+    selection_sources: the placeholders then name the types the diagnostic is
+    about, its subjects in placeholder order, and a tier without formatted
+    compile errors shows the subjects as the arguments of `fallback_carrier`.
+    A diagnostic reported only when compiled has no exception.
+    """
 
     condition: str
-    exception: str
+    exception: str | None
     message: str
     placeholders: tuple[str, ...]
     fallback_carrier: str
+    reported: tuple[BindingTime, ...] = (BindingTime.RUNTIME,)
 
 
 # Binding-time constraints
@@ -758,11 +769,27 @@ class CppContractProbe(Entity):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class CppDiagnosticExample(Entity):
+    """A C++ program that a diagnostic reported when compiled rejects.
+
+    `program` is the source after the `includes`; `subjects` spell the types
+    the diagnostic names, in placeholder order, as its message prints them.
+    The generator makes a lit test of the program for each language tier.
+    """
+
+    diagnostic: str  # diagnostic id
+    includes: tuple[str, ...]
+    program: str
+    subjects: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class CppProjection:
     capabilities: tuple[Capability, ...] = ()
     scope_projections: tuple[CppScopeProjection, ...] = ()
     api_bindings: tuple[CppApiBinding, ...] = ()
     contract_probes: tuple[CppContractProbe, ...] = ()
+    diagnostic_examples: tuple[CppDiagnosticExample, ...] = ()
 
 
 # The spec

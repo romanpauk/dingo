@@ -27,6 +27,7 @@
 #include <dingo/core/projection/construct.h>
 #include <dingo/core/projection/conversion.h>
 #include <dingo/core/projection/layer_traits.h>
+#include <dingo/core/vocabulary/compile_diagnostics.gen.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
 #include <cstddef>
@@ -43,8 +44,8 @@ template <typename Leaf, typename List> struct interface_shapes;
 
 template <typename Leaf, typename... Interfaces>
 struct interface_shapes<Leaf, type_list<Interfaces...>> {
-  static_assert(sizeof...(Interfaces) <= max_interfaces,
-                "a binding declares at most max_interfaces interfaces");
+  static_assert(require<sizeof...(Interfaces) <= max_interfaces,
+                        diag::interface_limit, Leaf>());
 
   static constexpr binding_descriptor apply(binding_descriptor binding) {
     std::size_t index = 0;
@@ -115,8 +116,8 @@ struct binding_type {
   template <typename... Aliases>
   static constexpr void set_aliases(binding_descriptor &binding,
                                     type_list<Aliases...> /*aliases*/) {
-    static_assert(sizeof...(Aliases) <= max_key_aliases,
-                  "a binding has at most max_key_aliases keys of other types");
+    static_assert(require<sizeof...(Aliases) <= max_key_aliases,
+                          diag::key_alias_limit, Stored>());
     ((binding.aliases[binding.alias_count++] = Aliases::descriptor), ...);
   }
 
@@ -146,6 +147,24 @@ template <typename Binding>
 using first_interface_t =
     typename detail::first_interface<Binding,
                                      typename Binding::interfaces>::type;
+
+// Whether the scope of `Binding` stores it, reporting why not when the
+// program is compiled.
+template <typename Binding> constexpr bool registers() {
+  using stored = typename Binding::stored_type;
+  constexpr registration_status status = Binding::status;
+  static_assert(require<status != registration_status::form_not_stored,
+                        diag::scope_form_not_stored, stored>());
+  static_assert(require<status != registration_status::nested_layers,
+                        diag::scope_nested_layers, stored>());
+  static_assert(require<status != registration_status::no_default_factory,
+                        diag::no_default_factory, stored>());
+  static_assert(require<status != registration_status::interface_in_array,
+                        diag::interface_in_array, stored>());
+  static_assert(require<status != registration_status::no_interface_served,
+                        diag::no_interface_served, stored>());
+  return status == registration_status::registered;
+}
 
 // The result of walking a route whose operation the next implementation does
 // not implement yet.
@@ -328,6 +347,13 @@ decltype(auto) keep_step(Context &context, Value &value) {
 template <typename Binding, typename Step, typename Context, typename Value>
 decltype(auto) upcast_step(Context &context, Value &&value) {
   using interface = interface_t<Step, Binding>;
+  if constexpr (Step::rule.to_layer == layer_kind::leaf ||
+                Step::rule.to_layer == layer_kind::ptr) {
+    using leaf = std::remove_pointer_t<remove_cvref_t<Value>>;
+    static_assert(require<std::is_convertible_v<leaf *, interface *>,
+                          diag::interface_not_derived,
+                          typename Binding::stored_type, interface>());
+  }
   if constexpr (Step::rule.to_layer == layer_kind::leaf) {
     return Step::reach(context, static_cast<interface &>(value));
   } else if constexpr (Step::rule.to_layer == layer_kind::ptr) {

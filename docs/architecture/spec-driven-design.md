@@ -1571,22 +1571,41 @@ one rule for compile-time and runtime detection.
 
 #### M5.2: Diagnostics Catalog
 
-Status: in progress.
+Status: done.
 
 Specify every diagnostic with its condition, exception type, and message
 template.
 
 The runtime diagnostics of lookup, conversion, and recursion are specified with
-the messages of the baseline, see M2.5. Remaining: the diagnostics of keys,
-collections, and registration, and the compile-time ones.
+the messages of the baseline, see M2.5. Every diagnostic states when it is
+reported: a diagnostic of a request when the request is compiled where the
+selection decides it then, see M5.4, and when it is resolved otherwise; one that
+names the path of the objects being constructed only when it is resolved; and
+the 20 diagnostics of a declaration the program spells wrong, of its
+registrations, keys, lookups, interfaces, scopes, constructors, and static
+instances, only when it is compiled, without an exception. A diagnostic reported
+when compiled names types in its placeholders, its subjects.
 
 #### M5.3: Generated Diagnostics
 
-Status: not started.
+Status: done.
 
 Generate the diagnostics enum, `diag_message`, `diag_literal`, the carrier
 templates, the exception mapping, and the `fail<>` mechanic that reports a
 diagnostic at compile time.
+
+`diagnostics.gen.h` holds the functions that throw the runtime diagnostics, and
+`compile_diagnostics.gen.h` the `diag` enumeration, a carrier template per
+diagnostic, and `fail<Code, Subjects...>()`, with
+`require<Holds, Code, Subjects...>()` for a `static_assert` at any scope. Where
+the compiler takes a user-generated `static_assert` message, which Clang does in
+every language mode and GCC from C++26, the message is formatted when compiled
+by `formatted_message` from the text of the diagnostic around its placeholders,
+with its subjects spelled as at runtime; elsewhere the `static_assert` has the
+literal message, and the carrier names the subjects in the compiler's note.
+Every user-facing check of the next implementation reports a diagnostic of the
+catalog; the static assertions that remain state invariants of the
+implementation.
 
 #### M5.4: Compile-Time Detection Rule
 
@@ -1619,9 +1638,16 @@ child decides is reported then; no extracted case has a static parent.
 
 #### M5.5: Diagnostics Tests Per Tier
 
-Status: not started.
+Status: done.
 
 Generate lit tests checking the diagnostic text per tier.
+
+The C++ projection gives every diagnostic reported when compiled an example
+program and the spelling of its subjects. The generator makes two lit tests of
+each under `test/lit/generated/diagnostics`: one checks the formatted message
+where the compiler formats one, the other the literal message where C++17
+formats none, which the lit configuration detects as the features
+`static-assert-message` and `literal-static-assert`.
 
 ### M6: Resolve Asymmetries
 

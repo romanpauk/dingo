@@ -13,6 +13,7 @@
 #include <dingo/core/api/collection.h>
 #include <dingo/core/base/mechanics.h>
 #include <dingo/core/engine/execute.h>
+#include <dingo/core/vocabulary/compile_diagnostics.gen.h>
 #include <dingo/core/vocabulary/scope_tags.gen.h> // IWYU pragma: export
 
 #include <type_traits>
@@ -184,10 +185,11 @@ template <typename... Parts> struct registration {
   using interfaces_part =
       typename detail::find_part<::dingo::interfaces, ::dingo::interfaces<>,
                                  Parts...>::type;
-  static_assert(!std::is_same_v<scope_part, detail::missing_part>,
-                "a registration needs a scope<>");
-  static_assert(!std::is_same_v<storage_part, detail::missing_part>,
-                "a registration needs a storage<>");
+  static_assert(core::require<!std::is_same_v<scope_part, detail::missing_part>,
+                              core::diag::registration_without_scope>());
+  static_assert(
+      core::require<!std::is_same_v<storage_part, detail::missing_part>,
+                    core::diag::registration_without_storage>());
 
   using factory_part =
       typename detail::find_part<::dingo::factory, detail::missing_part,
@@ -216,9 +218,10 @@ template <typename... Parts> struct registration {
     using factory =
         typename detail::find_callable_factory<declared_factory, Args...>::type;
     using runtime = typename detail::find_runtime_key<void, Args...>::type;
-    static_assert(std::is_void_v<runtime> || std::is_same_v<key_part, no_key>,
-                  "a registration takes its key from a key_type<> or a "
-                  "key_value, not both");
+    static_assert(
+        core::require<
+            std::is_void_v<runtime> || std::is_same_v<key_part, no_key>,
+            core::diag::registration_key_twice, typename storage_part::type>());
     using key = std::conditional_t<std::is_void_v<runtime>, key_part, runtime>;
     using aliases =
         typename detail::find_key_aliases<key, type_list<>, Args...>::type;

@@ -16,6 +16,7 @@
 #include <dingo/core/primitives/type_path.h>
 #include <dingo/core/projection/construct.h>
 #include <dingo/core/projection/layer_traits.h>
+#include <dingo/core/vocabulary/compile_diagnostics.gen.h>
 #include <dingo/core/vocabulary/diagnostics.gen.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
@@ -202,6 +203,17 @@ template <typename Leaf, typename List> struct reaches_interfaces_statically;
 template <typename Leaf, typename... Interfaces>
 struct reaches_interfaces_statically<Leaf, type_list<Interfaces...>>
     : std::bool_constant<(!is_virtual_base_v<Interfaces, Leaf> && ...)> {};
+
+// The first of `List` that `Leaf` inherits virtually, or void.
+template <typename Leaf, typename List> struct virtual_interface {
+  using type = void;
+};
+
+template <typename Leaf, typename Interface, typename... Interfaces>
+struct virtual_interface<Leaf, type_list<Interface, Interfaces...>>
+    : std::conditional_t<is_virtual_base_v<Interface, Leaf>,
+                         std::enable_if<true, Interface>,
+                         virtual_interface<Leaf, type_list<Interfaces...>>> {};
 } // namespace detail
 
 // An object published before it is constructed: a request during its
@@ -258,12 +270,14 @@ private:
     using type = type_list_at_t<0, typename layer_traits<Type>::arguments>;
   };
 
-  static_assert(detail::reaches_interfaces_statically<
-                    typename published_leaf<stored_type, handle>::type,
-                    typename Binding::interfaces>::value,
-                "shared_cyclical cannot publish a leaf as an interface it "
-                "inherits virtually: the conversion reads the object, which "
-                "is not constructed yet");
+  static_assert(require<detail::reaches_interfaces_statically<
+                            typename published_leaf<stored_type, handle>::type,
+                            typename Binding::interfaces>::value,
+                        diag::cyclical_virtual_interface,
+                        typename published_leaf<stored_type, handle>::type,
+                        typename detail::virtual_interface<
+                            typename published_leaf<stored_type, handle>::type,
+                            typename Binding::interfaces>::type>());
 
   enum class state : std::uint8_t { empty, publishing, constructed };
 

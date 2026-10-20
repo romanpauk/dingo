@@ -17,6 +17,7 @@
 #include <dingo/core/base/mechanics.h>
 #include <dingo/core/primitives/constructor.h>
 #include <dingo/core/projection/layer_traits.h>
+#include <dingo/core/vocabulary/compile_diagnostics.gen.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
 #include <functional>
@@ -32,9 +33,20 @@ namespace dingo::core {
 struct detected_leaf {
   template <typename Leaf, typename Resolver>
   static Leaf make(Resolver &resolver) {
-    return invoke_constructor<Leaf>(resolver, [](auto &&...args) {
-      return Leaf{std::forward<decltype(args)>(args)...};
-    });
+    if constexpr (declared_constructor<Leaf>::declared ||
+                  detected_constructor<Leaf>::kind ==
+                      constructor_kind::concrete) {
+      return invoke_constructor<Leaf>(resolver, [](auto &&...args) {
+        return Leaf{std::forward<decltype(args)>(args)...};
+      });
+    } else {
+      constexpr constructor_kind kind = detected_constructor<Leaf>::kind;
+      static_assert(require<kind != constructor_kind::invalid,
+                            diag::constructor_not_detected, Leaf>());
+      static_assert(require<kind != constructor_kind::generic,
+                            diag::constructor_generic, Leaf>());
+      return Leaf(resolver);
+    }
   }
 };
 

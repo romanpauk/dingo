@@ -28,4 +28,4 @@ int main() {
   (void)container.resolve<iface &>(dingo::key_type<int, 7>{});
 }
 
-// CHECK: static_container cannot resolve an ambiguously bound type
+// CHECK: type resolution is ambiguous:

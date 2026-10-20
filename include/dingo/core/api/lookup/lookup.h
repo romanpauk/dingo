@@ -17,6 +17,7 @@
 #include <dingo/core/base/mechanics.h>
 #include <dingo/core/engine/lookup.h>
 #include <dingo/core/projection/key.h>
+#include <dingo/core/vocabulary/compile_diagnostics.gen.h>
 
 #include <cstddef>
 #include <tuple>
@@ -76,10 +77,10 @@ using lookup_declaration_t =
 template <typename Key, typename Interface, typename Cardinality,
           typename Backend>
 struct associative_declaration {
-  static_assert(backend_index<Backend>::bound == core::unbounded ||
-                    std::is_integral_v<Key> || std::is_enum_v<Key>,
-                "dingo::array<N> associative backend requires an integral "
-                "or enum key");
+  static_assert(
+      core::require<backend_index<Backend>::bound == core::unbounded ||
+                        std::is_integral_v<Key> || std::is_enum_v<Key>,
+                    core::diag::dense_key_type, Interface, Key>());
   using type = lookup_declaration_t<Interface, core::runtime_key<Key>,
                                     Cardinality, Backend>;
 };

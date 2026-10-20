@@ -225,6 +225,7 @@ add_executable(dingo_next_test
     next/backend/memo.cpp
     next/base/mechanics.cpp
     next/engine/engine_conformance.cpp
+    next/primitives/diagnostic_message.cpp
     next/projection/shape.cpp
     "${DINGO_NEXT_GENERATED_DIR}/engine_cases.cpp"
 )

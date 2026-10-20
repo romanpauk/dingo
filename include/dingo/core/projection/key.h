@@ -13,6 +13,7 @@
 
 #include <dingo/core/primitives/shape.h>
 #include <dingo/core/primitives/type_name.h>
+#include <dingo/core/vocabulary/compile_diagnostics.gen.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
 #include <string>
@@ -26,8 +27,8 @@ struct none_t;
 // key_type<Tag> is a tag key, key_type<Key, Value> a fixed key of the value
 // Key{Value}, and key_type<none_t> no key.
 template <typename Type, auto... Values> struct key_type {
-  static_assert(sizeof...(Values) <= 1,
-                "dingo::key_type<T, V> accepts at most one value");
+  static_assert(core::require<sizeof...(Values) <= 1,
+                              core::diag::key_type_values, Type>());
   using type = Type;
 };
 
@@ -196,6 +197,13 @@ template <typename Tag> struct key_of<::dingo::key_type<Tag>> {
 template <typename Key, auto Value>
 struct key_of<::dingo::key_type<Key, Value>> {
   using type = fixed_key<Key, Value>;
+};
+
+template <typename Key, auto First, auto Second, auto... Values>
+struct key_of<::dingo::key_type<Key, First, Second, Values...>> {
+  static_assert(
+      require<sizeof...(Values) + 2 <= 1, diag::key_type_values, Key>());
+  using type = no_key;
 };
 
 template <typename KeyType> using key_of_t = typename key_of<KeyType>::type;

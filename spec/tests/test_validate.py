@@ -7,6 +7,7 @@ import pytest
 
 from spec import SpecError, build_spec, load_spec, validate
 from spec.schema import (
+    BindingTime,
     Bound,
     BoundKind,
     Capability,
@@ -276,8 +277,22 @@ def test_diagnostic_message_must_be_a_valid_template():
 
 
 def test_diagnostic_fields_are_not_empty():
+    spec = replace_first(sample_spec(), "diagnostics", condition=" ")
+    assert_one_error(spec, "condition is empty")
+
+
+def test_a_runtime_diagnostic_has_an_exception():
     spec = replace_first(sample_spec(), "diagnostics", exception=" ")
-    assert_one_error(spec, "exception is empty")
+    assert_one_error(spec, "has an exception if and only if it is reported at runtime")
+
+
+def test_a_compiled_diagnostic_has_an_example():
+    spec = replace_first(
+        sample_spec(),
+        "diagnostics",
+        reported=(BindingTime.COMPILE, BindingTime.RUNTIME),
+    )
+    assert_one_error(spec, "with no cpp.diagnostic_examples entry")
 
 
 def test_diagnostic_placeholder_names():
