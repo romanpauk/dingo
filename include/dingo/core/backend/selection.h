@@ -1,0 +1,364 @@
+//
+// This file is part of dingo project <https://github.com/romanpauk/dingo>
+//
+// See LICENSE for license and copyright information
+// SPDX-License-Identifier: MIT
+//
+
+#pragma once
+
+// The selection of a container: the interpreter of the selection rules of
+// the spec over its sources, its static and runtime bindings, its parent, and
+// auto-construction of an unregistered type. A step whose sources all know
+// what they name when the request is compiled is decided then, and reported
+// at compile time when no runtime source can change it; any other step is
+// decided when the request is resolved. spec: selection_rules
+//
+// `Self` derives from selection<Self> and declares its sources:
+// `has_static_source` with static_source(), `has_runtime_source` with
+// runtime_source(), and `parent_type`, void without a parent, with parent(),
+// which may be null.
+
+#include <dingo/core/backend/diagnose.h>
+#include <dingo/core/base/mechanics.h>
+#include <dingo/core/engine/request.h>
+#include <dingo/core/primitives/retained.h>
+#include <dingo/core/projection/auto_constructible.h>
+#include <dingo/core/projection/collection.h>
+#include <dingo/core/projection/construct.h>
+#include <dingo/core/projection/key.h>
+#include <dingo/core/vocabulary/vocabulary.gen.h>
+
+#include <cstddef>
+#include <type_traits>
+#include <utility>
+
+namespace dingo::core {
+
+inline constexpr std::size_t unknown_count = static_cast<std::size_t>(-1);
+
+template <typename Self> class selection {
+public:
+  // Resolves a request; a keyed request carries its key.
+  template <typename Request> Request resolve() {
+    if constexpr (is_keyed<Request>::value) {
+      using key = typename Request::key;
+      return Request(
+          select<typename Request::type, key, true>(key_store<key>().value()));
+    } else {
+      return select<Request, no_key, true>(nullptr);
+    }
+  }
+
+  // Resolves a request by a key: a key_type object, a key_value, or a value
+  // of the key type.
+  template <typename Request, typename Value> Request resolve(Value &&value) {
+    using key = request_key_of<std::decay_t<Value>>;
+    return select<Request, typename key::type, true>(key::value(value));
+  }
+
+  // The collection of every binding a request of its element type by `Key`
+  // names, by the collection rule, each added by `append`.
+  template <typename Collection, typename Key, typename Append>
+  Collection collect(const void *key_value, Append &&append) {
+    Collection result;
+    collect_into<Collection, Key>(result, key_value, append);
+    return result;
+  }
+
+  // The number of bindings a request names in this container or its
+  // ancestors, by the singular rule without auto-construction: 0, 1, or 2.
+  template <typename Request, typename Key>
+  std::size_t inherited_count(const void *key_value) {
+    return inherited_count_at<Request, Key, 0>(key_value);
+  }
+
+  // Resolves a request from this container or its ancestors, without
+  // auto-construction.
+  template <typename Request, typename Key>
+  Request resolve_inherited(const void *key_value) {
+    return select<Request, Key, false>(key_value);
+  }
+
+  // Adds the bindings a collection request names by the collection rule to
+  // `collection`, and returns whether it added any.
+  template <typename Collection, typename Key, typename Append>
+  bool collect_into(Collection &collection, const void *key_value,
+                    Append &append) {
+    constexpr const selection_rule &rule = rule_of(selection_mode::collection);
+    bool added = false;
+    auto counted = [&](Collection &target, auto &&element) {
+      added = true;
+      append(target, std::forward<decltype(element)>(element));
+    };
+    for (std::size_t step = 0; step < rule.step_count; ++step) {
+      for (std::size_t source = 0; source < rule.steps[step].source_count;
+           ++source) {
+        collect_source<Collection, Key>(rule.steps[step].sources[source],
+                                        collection, key_value, counted);
+      }
+      if (rule.first_non_empty && added) {
+        return true;
+      }
+    }
+    return added;
+  }
+
+  // The objects a request constructs and the container keeps: an rvalue
+  // reference of a consumed object, and a const reference of an
+  // auto-constructed one.
+  retained_objects &retained() { return retained_; }
+
+private:
+  static constexpr const selection_rule &singular =
+      rule_of(selection_mode::singular);
+
+  Self &self() { return static_cast<Self &>(*this); }
+
+  // The number of bindings a source names when the request is compiled, or
+  // unknown_count when it depends on the container or the key at runtime.
+  template <typename Request, typename Key, selection_source Source>
+  static constexpr std::size_t known_count() {
+    if constexpr (Source == selection_source::container_static) {
+      if constexpr (!Self::has_static_source) {
+        return 0;
+      } else if constexpr (Key::descriptor.kind == key_kind::runtime) {
+        return unknown_count;
+      } else {
+        return Self::static_source_type::template fixed_count<Request, Key>();
+      }
+    } else if constexpr (Source == selection_source::container_runtime) {
+      return Self::has_runtime_source ? unknown_count : 0;
+    } else if constexpr (Source == selection_source::parent) {
+      return std::is_void_v<typename Self::parent_type> ? 0 : unknown_count;
+    } else if constexpr (Source == selection_source::auto_construct) {
+      return 1;
+    } else {
+      // The local bindings of a registration are not provided yet.
+      return 0;
+    }
+  }
+
+  template <typename Request, typename Key, std::size_t Step,
+            std::size_t... Sources>
+  static constexpr std::size_t
+  known_step_count(std::index_sequence<Sources...> /*sources*/) {
+    constexpr std::size_t counts[] = {
+        known_count<Request, Key, singular.steps[Step].sources[Sources]>()...,
+        0};
+    std::size_t total = 0;
+    for (std::size_t index = 0; index < sizeof...(Sources); ++index) {
+      if (counts[index] == unknown_count) {
+        return unknown_count;
+      }
+      total += counts[index];
+    }
+    return total;
+  }
+
+  template <typename Request, typename Key, std::size_t Step>
+  static constexpr std::size_t known_step_count() {
+    return known_step_count<Request, Key, Step>(
+        std::make_index_sequence<singular.steps[Step].source_count>());
+  }
+
+  // Whether every step of the rule is decided when the request is compiled.
+  template <typename Request, typename Key, std::size_t Step = 0>
+  static constexpr bool decided_when_compiled() {
+    if constexpr (Step == singular.step_count) {
+      return true;
+    } else {
+      return known_step_count<Request, Key, Step>() != unknown_count &&
+             decided_when_compiled<Request, Key, Step + 1>();
+    }
+  }
+
+  template <typename Request, typename Key>
+  std::size_t source_count(selection_source source, const void *key_value) {
+    switch (source) {
+    case selection_source::container_static:
+      if constexpr (Self::has_static_source) {
+        return self().static_source().template count<Request, Key>(key_value);
+      }
+      return 0;
+    case selection_source::container_runtime:
+      if constexpr (Self::has_runtime_source) {
+        return self().runtime_source().template count<Request, Key>(key_value);
+      }
+      return 0;
+    case selection_source::parent:
+      if constexpr (!std::is_void_v<typename Self::parent_type>) {
+        if (self().parent() != nullptr) {
+          return self().parent()->template inherited_count<Request, Key>(
+              key_value);
+        }
+      }
+      return 0;
+    case selection_source::auto_construct:
+      return 1;
+    default:
+      return 0;
+    }
+  }
+
+  template <typename Request, typename Key, std::size_t Step>
+  std::size_t step_count(const void *key_value) {
+    std::size_t total = 0;
+    for (std::size_t source = 0; source < singular.steps[Step].source_count;
+         ++source) {
+      total += source_count<Request, Key>(singular.steps[Step].sources[source],
+                                          key_value);
+    }
+    return total < 2 ? total : 2;
+  }
+
+  template <typename Request, typename Key, std::size_t Step>
+  std::size_t inherited_count_at(const void *key_value) {
+    if constexpr (Step == singular.step_count) {
+      return 0;
+    } else if constexpr (singular.steps[Step].when_constructible) {
+      return inherited_count_at<Request, Key, Step + 1>(key_value);
+    } else {
+      const std::size_t count = step_count<Request, Key, Step>(key_value);
+      return count != 0 ? count
+                        : inherited_count_at<Request, Key, Step + 1>(key_value);
+    }
+  }
+
+  // Resolves the request from the source of step `Step` that names its one
+  // binding.
+  template <typename Request, typename Key, std::size_t Step>
+  Request resolve_step(const void *key_value) {
+    for (std::size_t source = 0; source < singular.steps[Step].source_count;
+         ++source) {
+      const selection_source kind = singular.steps[Step].sources[source];
+      if (source_count<Request, Key>(kind, key_value) != 0) {
+        return resolve_source<Request, Key>(kind, key_value);
+      }
+    }
+    raise_not_found<Request, Key>();
+  }
+
+  template <typename Request, typename Key>
+  Request resolve_source(selection_source source, const void *key_value) {
+    if constexpr (Self::has_static_source) {
+      // A static source with a key known when the request is compiled is
+      // asked only when it names one binding.
+      if constexpr (Key::descriptor.kind == key_kind::runtime ||
+                    Self::static_source_type::template fixed_count<Request,
+                                                                   Key>() ==
+                        1) {
+        if (source == selection_source::container_static) {
+          return self().static_source().template resolve_named<Request, Key>(
+              self(), key_value);
+        }
+      }
+    }
+    if constexpr (Self::has_runtime_source) {
+      if (source == selection_source::container_runtime) {
+        return self().runtime_source().template resolve_named<Request, Key>(
+            self(), key_value);
+      }
+    }
+    if constexpr (!std::is_void_v<typename Self::parent_type>) {
+      if (source == selection_source::parent) {
+        return self().parent()->template resolve_inherited<Request, Key>(
+            key_value);
+      }
+    }
+    return auto_construct<Request, Key>();
+  }
+
+  template <typename Request, typename Key> Request auto_construct() {
+    if constexpr (auto_constructs<Request>::value &&
+                  std::is_same_v<Key, no_key>) {
+      using value_type = std::remove_cv_t<std::remove_reference_t<Request>>;
+      if constexpr (std::is_reference_v<Request>) {
+        return retained_.template emplace<value_type>(
+            [this] { return detected_factory().make<value_type>(self()); });
+      } else {
+        return detected_factory().make<value_type>(self());
+      }
+    } else {
+      raise_not_found<Request, Key>();
+    }
+  }
+
+  // Answers a request by the singular rule from step `Step`; only the
+  // outermost container auto-constructs and collects a collection no
+  // binding stores.
+  template <typename Request, typename Key, bool Outermost,
+            std::size_t Step = 0>
+  Request select(const void *key_value) {
+    if constexpr (Step == singular.step_count) {
+      return nothing_selected<Request, Key, Outermost>(key_value);
+    } else if constexpr (singular.steps[Step].when_constructible &&
+                         !(Outermost && auto_constructs<Request>::value &&
+                           std::is_same_v<Key, no_key>)) {
+      return select<Request, Key, Outermost, Step + 1>(key_value);
+    } else {
+      constexpr std::size_t known = known_step_count<Request, Key, Step>();
+      if constexpr (known == 0) {
+        return select<Request, Key, Outermost, Step + 1>(key_value);
+      } else if constexpr (known == 1) {
+        return resolve_step<Request, Key, Step>(key_value);
+      } else if constexpr (known != unknown_count) {
+        static_assert(
+            dependent_false<Request> || !decided_when_compiled<Request, Key>(),
+            "static_container cannot resolve an ambiguously bound type");
+        raise_ambiguous<Request>();
+      } else {
+        const std::size_t count = step_count<Request, Key, Step>(key_value);
+        if (count == 0) {
+          return select<Request, Key, Outermost, Step + 1>(key_value);
+        }
+        if (count > 1) {
+          raise_ambiguous<Request>();
+        }
+        return resolve_step<Request, Key, Step>(key_value);
+      }
+    }
+  }
+
+  template <typename Request, typename Key, bool Outermost>
+  Request nothing_selected(const void *key_value) {
+    using value_type = typename request_traits<Request>::value_type;
+    if constexpr (Outermost && collection_traits<value_type>::is_collection &&
+                  !std::is_reference_v<Request>) {
+      // A collection no binding stores is the collection of the bindings of
+      // its element type.
+      return collect<value_type, Key>(key_value, collection_append());
+    } else {
+      static_assert(!(Outermost && decided_when_compiled<Request, Key>()),
+                    "static_container cannot resolve an unbound type");
+      raise_not_found<Request, Key>();
+    }
+  }
+
+  template <typename Collection, typename Key, typename Append>
+  void collect_source(selection_source source, Collection &collection,
+                      const void *key_value, Append &append) {
+    if constexpr (Self::has_static_source) {
+      if (source == selection_source::container_static) {
+        self().static_source().template collect<Collection, Key>(
+            self(), collection, key_value, append);
+      }
+    }
+    if constexpr (Self::has_runtime_source) {
+      if (source == selection_source::container_runtime) {
+        self().runtime_source().template collect<Collection, Key>(
+            self(), collection, key_value, append);
+      }
+    }
+    if constexpr (!std::is_void_v<typename Self::parent_type>) {
+      if (source == selection_source::parent && self().parent() != nullptr) {
+        self().parent()->template collect_into<Collection, Key>(
+            collection, key_value, append);
+      }
+    }
+  }
+
+  retained_objects retained_;
+};
+
+} // namespace dingo::core

@@ -34,7 +34,10 @@ std::string message_of(Resolve &&resolve) {
   return "no exception";
 }
 
-struct missing_type {};
+// Not an aggregate, so a container does not auto-construct it.
+struct missing_type {
+  missing_type() {}
+};
 
 struct dependency {};
 

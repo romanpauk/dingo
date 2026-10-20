@@ -17,60 +17,107 @@
 #include <dingo/core/api/key.h>                 // IWYU pragma: export
 #include <dingo/core/api/lookup/lookup.h>
 #include <dingo/core/api/registration.h>
+#include <dingo/core/backend/selection.h>
 #include <dingo/core/backend/static_backend.h>
 #include <dingo/core/primitives/exceptions.h> // IWYU pragma: export
 
+#include <type_traits>
 #include <utility>
 
 namespace dingo {
 
-template <typename Bindings, typename Traits = static_container_traits>
+namespace detail {
+template <typename Type, typename = void>
+struct is_container_traits : std::false_type {};
+
+template <typename Type>
+struct is_container_traits<Type,
+                           std::void_t<typename Type::lookup_definition_type>>
+    : std::true_type {};
+
+// The parent of a container, nothing without one.
+template <typename Parent> struct parent_holder {
+  Parent *parent_pointer = nullptr;
+};
+
+template <> struct parent_holder<void> {};
+} // namespace detail
+
+template <typename Bindings, typename Second = static_container_traits>
 class static_container;
 
-// A container of the bindings of its type. It takes the instance of every
-// external binding as a constructor argument, in the order of the bindings.
-template <typename... Binds, typename Traits>
-class static_container<bindings<Binds...>, Traits> {
+// A container of the bindings of its type: static_container<bindings<...>>,
+// with the lookup declarations of traits static_container<bindings<...>,
+// Traits>, or a child of a parent container static_container<bindings<...>,
+// Parent>. It takes the parent, when it has one, and the instance of every
+// external binding as constructor arguments, in the order of the bindings.
+template <typename... Binds, typename Second>
+class DINGO_EMPTY_BASES static_container<bindings<Binds...>, Second>
+    : public core::selection<static_container<bindings<Binds...>, Second>>,
+      private detail::parent_holder<std::conditional_t<
+          detail::is_container_traits<Second>::value, void, Second>> {
+  using traits = std::conditional_t<detail::is_container_traits<Second>::value,
+                                    Second, static_container_traits>;
+
 public:
-  template <typename... Instances>
+  using static_source_type = core::static_backend<
+      core::lookup_table_of<typename core::lookup_list<
+          typename traits::lookup_definition_type>::type>,
+      typename core::bind_registration<Binds>::type::binding...>;
+  static constexpr bool has_static_source = true;
+  static constexpr bool has_runtime_source = false;
+  using parent_type =
+      std::conditional_t<detail::is_container_traits<Second>::value, void,
+                         Second>;
+
+  template <typename... Instances, bool Orphan = std::is_void_v<parent_type>,
+            typename = std::enable_if_t<Orphan>>
   explicit static_container(Instances &&...instances)
       : backend_(std::forward<Instances>(instances)...) {}
 
-  template <typename Request> Request resolve() {
-    return backend_.template resolve<Request>();
-  }
-
-  // Resolves a request by a key value: a key_value, or a value of the key
-  // type.
-  template <typename Request, typename Value> Request resolve(Value &&value) {
-    return backend_.template resolve<Request>(std::forward<Value>(value));
+  // A child of `parent`, which outlives it.
+  template <typename... Instances, bool Child = !std::is_void_v<parent_type>,
+            typename = std::enable_if_t<Child>>
+  explicit static_container(
+      std::conditional_t<Child, parent_type, static_container> *parent,
+      Instances &&...instances)
+      : backend_(std::forward<Instances>(instances)...) {
+    this->parent_pointer = parent;
   }
 
   // Constructs an object of `Type` that no binding stores, by its detected
   // constructor or by the callable factory given, resolving its dependencies
   // from the container.
   template <typename Type> Type construct() {
-    return core::detected_factory().make<Type>(backend_);
+    return core::detected_factory().make<Type>(*this);
   }
 
   template <typename Type, typename Factory> Type construct(Factory &&factory) {
-    return factory.template make<Type>(backend_);
+    return factory.template make<Type>(*this);
   }
 
   // Constructs a collection of every binding of its element type, by a key
   // and an append function, either of which may be given.
   template <typename Collection, typename... Arguments>
   Collection construct_collection(Arguments &&...arguments) {
-    return core::collect_by<Collection>(backend_,
+    return core::collect_by<Collection>(*this,
                                         std::forward<Arguments>(arguments)...);
   }
 
+  // The sources of the selection of the container.
+  static_source_type &static_source() { return backend_; }
+  core::publication_log &publications() { return backend_.publications(); }
+
+  template <typename Parent = parent_type> Parent *parent() {
+    if constexpr (std::is_void_v<Parent>) {
+      return nullptr;
+    } else {
+      return this->parent_pointer;
+    }
+  }
+
 private:
-  core::static_backend<
-      core::lookup_table_of<typename core::lookup_list<
-          typename Traits::lookup_definition_type>::type>,
-      typename core::bind_registration<Binds>::type::binding...>
-      backend_;
+  static_source_type backend_;
 };
 
 } // namespace dingo

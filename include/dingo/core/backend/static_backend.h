@@ -66,14 +66,6 @@ constexpr std::size_t instance_ordinal(std::size_t index) {
 
 template <typename Indices, typename... Bindings> struct static_holders;
 
-// The objects a request of an rvalue reference constructs are retained only by
-// a container with a consuming binding.
-template <bool Retains> struct static_retention {
-  retained_objects retained;
-};
-
-template <> struct static_retention<false> {};
-
 // The publications of two-phase slots are logged only by a container with a
 // two-phase binding.
 template <bool Publishes> struct static_publications {
@@ -86,7 +78,6 @@ template <std::size_t... Indices, typename... Bindings>
 struct DINGO_EMPTY_BASES
     static_holders<std::index_sequence<Indices...>, Bindings...>
     : static_holder<Indices, Bindings>...,
-      static_retention<(Bindings::consumes || ...)>,
       static_publications<(
           (info(Bindings::scope).storage_slot == slot::two_phase) || ...)> {
   template <typename Instances>
@@ -185,154 +176,121 @@ public:
   // The publications of the two-phase slots in progress.
   publication_log &publications() { return holders_.publications; }
 
-  // Resolves a request; a keyed request carries its key, which is known at
-  // compile time.
-  template <typename Request> Request resolve() {
-    if constexpr (is_keyed<Request>::value) {
-      return Request(
-          resolve_by<typename Request::type, typename Request::key>());
+  // The number of bindings a request by `Key`, a key known when the request
+  // is compiled, names: 0, 1, or 2 for many.
+  template <typename Request, typename Key>
+  static constexpr std::size_t fixed_count() {
+    [[maybe_unused]] constexpr request_descriptor request =
+        request_traits<Request, Key>::descriptor;
+    constexpr bool named[] = {
+        (finds(Bindings::descriptor, request) &&
+         detail::same_fixed_key<typename Bindings::key_type, Key>())...,
+        false};
+    std::size_t found = 0;
+    for (std::size_t index = 0; index < sizeof...(Bindings); ++index) {
+      found += named[index] ? 1 : 0;
+    }
+    return found < 2 ? found : 2;
+  }
+
+  // The number of bindings a request by `Key` names, whose value a runtime
+  // key compares when it is resolved: 0, 1, or 2 for many.
+  template <typename Request, typename Key>
+  std::size_t count(const void *key_value) const {
+    if constexpr (Key::descriptor.kind != key_kind::runtime) {
+      return fixed_count<Request, Key>();
     } else {
-      return resolve_by<Request, no_key>();
+      std::size_t found = 0;
+      each_named<Request, Key>(key_value,
+                               [&found](auto /*index*/) { ++found; });
+      return found < 2 ? found : 2;
     }
   }
 
-  // Resolves a request by a key value supplied at runtime, compared with the
-  // fixed keys of the bindings of its domain when it is resolved.
-  template <typename Request, typename Value> Request resolve(Value &&value) {
-    using key = request_key_of<std::decay_t<Value>>;
-    using value_type = typename request_traits<Request>::value_type;
-    if constexpr (is_key_type<std::decay_t<Value>>::value) {
-      return resolve_by<Request, typename key::type>();
-    } else if constexpr (collection_traits<value_type>::is_collection &&
-                         !std::is_reference_v<Request> &&
-                         !(finds(
-                               Bindings::descriptor,
-                               request_traits<
-                                   Request, typename key::type>::descriptor) ||
-                           ...)) {
-      // A collection no binding stores is the collection of the bindings of
-      // its element type.
-      return collect<value_type, typename key::type>(key::value(value),
-                                                     collection_append());
+  // Resolves a request from the one binding it names.
+  template <typename Request, typename Key, typename Resolver>
+  Request resolve_named(Resolver &resolver, const void *key_value) {
+    if constexpr (Key::descriptor.kind != key_kind::runtime) {
+      constexpr std::size_t index = detail::find_binding<Key, Bindings...>(
+          request_traits<Request, Key>::descriptor);
+      static_assert(index != detail::not_found && index != detail::ambiguous,
+                    "a request resolves from the one binding it names");
+      return resolve_from<Request, index>(resolver);
     } else {
-      return resolve_by_value<Request, typename key::type>(
-          *static_cast<const typename key::type::value_type *>(
-              key::value(value)),
-          std::index_sequence_for<Bindings...>());
+      std::size_t found = detail::not_found;
+      each_named<Request, Key>(key_value,
+                               [&found](auto index) { found = index; });
+      return resolve_at<Request, Key>(resolver, found);
     }
   }
 
-  // The collection of every binding a request of its element type by `Key`
-  // names, in the order of the bindings, each added by `append`; the value of
-  // a runtime key is compared when it is resolved.
-  template <typename Collection, typename Key, typename Append>
-  Collection collect(const void *key_value, Append &&append) {
-    return collect_from<Collection, Key>(
-        key_value, append, std::index_sequence_for<Bindings...>());
+  // Adds every binding a request of the element type of `Collection` by
+  // `Key` names to `collection`, in the order of the bindings.
+  template <typename Collection, typename Key, typename Resolver,
+            typename Append>
+  void collect(Resolver &resolver, Collection &collection,
+               const void *key_value, Append &append) {
+    using element = typename collection_traits<Collection>::resolve_type;
+    each_named<element, Key>(key_value, [&](auto index) {
+      append(collection,
+             resolve_from<element, decltype(index)::value>(resolver));
+    });
   }
 
 private:
-  template <typename Request, typename Key> Request resolve_by() {
-    {
-      constexpr request_descriptor request =
-          request_traits<Request, Key>::descriptor;
-      constexpr std::size_t index =
-          detail::find_binding<Key, Bindings...>(request);
-      using value_type = typename request_traits<Request>::value_type;
-      if constexpr (index == detail::not_found &&
-                    collection_traits<value_type>::is_collection &&
-                    !std::is_reference_v<Request>) {
-        // A collection no binding stores is the collection of the bindings
-        // of its element type.
-        return collect<value_type, Key>(key_store<Key>().value(),
-                                        collection_append());
-      } else {
-        static_assert(index != detail::not_found,
-                      "static_container cannot resolve an unbound type");
-        static_assert(
-            index != detail::ambiguous,
-            "static_container cannot resolve an ambiguously bound type");
-        return resolve_from<Request, index>();
-      }
-    }
+  // Calls `visit` with the index, as an integral_constant, of every binding a
+  // request by `Key` names: by its domain and its fixed key when the request
+  // is compiled, and by the value of a runtime key when it is resolved.
+  template <typename Request, typename Key, typename Visit>
+  void each_named(const void *key_value, Visit &&visit) const {
+    each_named_at<Request, Key>(key_value, visit,
+                                std::index_sequence_for<Bindings...>());
   }
 
-  template <typename Collection, typename Key, typename Append,
+  template <typename Request, typename Key, typename Visit,
             std::size_t... Indices>
-  Collection collect_from([[maybe_unused]] const void *key_value,
-                          [[maybe_unused]] Append &append,
-                          std::index_sequence<Indices...> /*indices*/) {
-    using element = typename collection_traits<Collection>::resolve_type;
+  static void each_named_at([[maybe_unused]] const void *key_value,
+                            [[maybe_unused]] Visit &visit,
+                            std::index_sequence<Indices...> /*indices*/) {
     [[maybe_unused]] constexpr request_descriptor request =
-        request_traits<element, Key>::descriptor;
-    Collection result;
+        request_traits<Request, Key>::descriptor;
     (
         [&] {
           using binding = pack_at_t<Indices, Bindings...>;
           using key_type = typename binding::key_type;
-          // A runtime key value is compared with the fixed key of a binding
-          // here, and any other key when the request is compiled.
           if constexpr (finds(binding::descriptor, request) &&
                         detail::same_fixed_key<key_type, Key>()) {
             if (Key::descriptor.kind != key_kind::runtime ||
                 key_store<key_type>::equal(key_store<key_type>().value(),
                                            key_value)) {
-              append(result, resolve_from<element, Indices>());
+              visit(std::integral_constant<std::size_t, Indices>());
             }
           }
         }(),
         ...);
-    return result;
-  }
-
-  template <typename Request, typename Key, typename Value,
-            std::size_t... Indices>
-  Request resolve_by_value(const Value &value,
-                           std::index_sequence<Indices...> /*indices*/) {
-    constexpr request_descriptor request =
-        request_traits<Request, Key>::descriptor;
-    std::size_t found = detail::not_found;
-    std::size_t count = 0;
-    (
-        [&] {
-          using binding = pack_at_t<Indices, Bindings...>;
-          if constexpr (finds(binding::descriptor, request)) {
-            if (key_store<typename binding::key_type>::equal(
-                    key_store<typename binding::key_type>().value(), &value)) {
-              found = Indices;
-              ++count;
-            }
-          }
-        }(),
-        ...);
-    if (count == 0) {
-      raise_not_found<Request, Key>();
-    }
-    if (count > 1) {
-      raise_ambiguous<Request>();
-    }
-    return resolve_at<Request, Key>(found);
   }
 
   // Resolves the request from the binding at the runtime index `index`, one
-  // the request finds.
-  template <typename Request, typename Key, std::size_t Index = 0>
-  Request resolve_at(std::size_t index) {
+  // the request names.
+  template <typename Request, typename Key, typename Resolver,
+            std::size_t Index = 0>
+  Request resolve_at(Resolver &resolver, std::size_t index) {
     using binding = pack_at_t<Index, Bindings...>;
     if constexpr (finds(binding::descriptor,
                         request_traits<Request, Key>::descriptor)) {
       if (index == Index) {
-        return resolve_from<Request, Index>();
+        return resolve_from<Request, Index>(resolver);
       }
     }
     if constexpr (Index + 1 < sizeof...(Bindings)) {
-      return resolve_at<Request, Key, Index + 1>(index);
+      return resolve_at<Request, Key, Resolver, Index + 1>(resolver, index);
     } else {
       raise_not_found<Request, Key>();
     }
   }
 
-  template <typename Request, std::size_t Index> Request resolve_from() {
+  template <typename Request, std::size_t Index, typename Resolver>
+  Request resolve_from(Resolver &resolver) {
     using binding = pack_at_t<Index, Bindings...>;
     constexpr std::size_t selected =
         select_term(binding::published, request_traits<Request>::descriptor,
@@ -347,7 +305,7 @@ private:
     constexpr const completion_plan &plan = plan_v<binding, selected>;
     auto &holder =
         static_cast<detail::static_holder<Index, binding> &>(holders_);
-    auto source = [&]() -> decltype(auto) { return holder.slot.get(*this); };
+    auto source = [&]() -> decltype(auto) { return holder.slot.get(resolver); };
     auto make = [&]() -> decltype(auto) {
       if constexpr (plan.created == 0) {
         return walk_from<binding, selected,
@@ -369,7 +327,7 @@ private:
                   binding::published.items[selected].category ==
                       value_category::rvalue) {
       return static_cast<Request>(
-          holders_.retained.template emplace<value_type>(
+          resolver.retained().template emplace<value_type>(
               [&] { return value_type(make()); }));
     } else {
       return static_cast<Request>(make());

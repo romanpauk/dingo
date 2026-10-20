@@ -202,12 +202,35 @@ def route_fields(rule):
     }
 
 
+def selection_fields(rule):
+    """The fields of a selection rule: its steps, and the status of each
+    outcome count."""
+    outcomes = {outcome.count.value: outcome.status.value for outcome in rule.outcomes}
+    return {
+        "id": rule.id,
+        "mode": rule.mode.value,
+        "first_non_empty": rule.combine.value == "first_non_empty",
+        "steps": [
+            {
+                "sources": [source.value for source in step.sources],
+                "when_constructible": step.when is not None
+                and step.when.value == "constructible",
+            }
+            for step in rule.steps
+        ],
+        "empty": outcomes["empty"],
+        "one": outcomes["one"],
+        "many": outcomes["many"],
+    }
+
+
 def vocabulary(spec):
     """include/dingo/core/vocabulary/vocabulary.gen.h from the semantic sections."""
     from spec.schema import (
         Access,
         ExposureRule,
         RecursionGuard,
+        SelectionSource,
         Slot,
         ValueCategory,
     )
@@ -245,12 +268,26 @@ def vocabulary(spec):
             {"id": kind.id, "has_value": kind.value_time is not None}
             for kind in spec.key_kinds
         ],
+        selection_sources=[source.value for source in SelectionSource],
+        selection_rules=[selection_fields(rule) for rule in spec.selection_rules],
+        max_selection_steps=max((len(r.steps) for r in spec.selection_rules), default=1),
+        max_step_sources=max(
+            (len(step.sources) for r in spec.selection_rules for step in r.steps),
+            default=1,
+        ),
     )
     return [
         GeneratedFile(
             path="include/dingo/core/vocabulary/vocabulary.gen.h",
             content=content,
-            spec_ids=("key_kinds", "layer_kinds", "routes", "scopes", "storage_forms"),
+            spec_ids=(
+                "key_kinds",
+                "layer_kinds",
+                "routes",
+                "scopes",
+                "selection_rules",
+                "storage_forms",
+            ),
         )
     ]
 

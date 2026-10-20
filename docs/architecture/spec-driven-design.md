@@ -1418,7 +1418,7 @@ the index structures as declared accelerations tested against a linear scan.
 
 #### M4.3: Generated Engine
 
-Status: not started.
+Status: in progress.
 
 Generate `engine::select` from the selection rules for singular and collection
 requests, local bindings, parent fallback, and auto-construction, and cross-test
@@ -1426,6 +1426,15 @@ it against the reference implementation.
 
 Following the route engine of M3.2, the selection engine is a generic
 interpreter of generated selection rule tables rather than generated code.
+
+The selection rules are generated into `vocabulary.gen.h`, and
+`core/backend/selection.h` interprets them over the sources of a container: its
+static bindings, its runtime bindings, its parent, and auto-construction. A step
+whose sources all know what they name when the request is compiled is decided
+then, and reported at compile time when nothing at runtime can change it; any
+other step is decided when the request is resolved. A container is the resolver
+of the dependencies of its bindings, so a binding a parent serves resolves its
+dependencies in the parent. Remaining: local bindings.
 
 #### M4.4: Static Backend
 
@@ -1440,8 +1449,8 @@ its domain when it is resolved. A second binding of a key of an interface is
 rejected when the container type is formed, unless the lookup declarations of
 the traits of the container declare its domain many. A collection request
 gathers the bindings of its element type in the order of the bindings, by its
-key, also when no binding matches. Remaining: local bindings, parents, and
-auto-construction.
+key, also when no binding matches. A static container with a parent falls back
+to it, and auto-constructs an eligible type. Remaining: local bindings.
 
 #### M4.5: Runtime Backend
 
@@ -1459,9 +1468,12 @@ request of a collection type no binding stores, a constructor parameter among
 them, is a collection request, and `register_type_collection` registers a
 binding that stores one. The selection extractor of
 [Selection Conformance](../development.md#selection-conformance) run against the
-next implementation finds its 5,936 runtime and static cases equal to the
-reference implementation. Remaining: the index structures, parents,
-auto-construction, and memoization.
+next implementation finds its 14,588 runtime, static, and child-container cases
+equal to the reference implementation. A child container,
+`container<Traits, Allocator, Parent>`, falls back to its parent by the
+selection rules, and an unregistered type that `is_auto_constructible` declares,
+a complete aggregate by default, is constructed when no container names a
+binding. Remaining: the index structures and memoization.
 
 #### M4.6: Mixed Backend
 
