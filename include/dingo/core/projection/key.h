@@ -84,6 +84,27 @@ template <typename Key> struct runtime_key {
   static constexpr key_descriptor descriptor{key_kind::runtime, type_id_v<Key>};
 };
 
+// Whether `value`, a key value, is 0 up to `bound`, excluded: the index of a
+// dense array of `bound` entries. A value of a type that is neither integral
+// nor an enumeration indexes none.
+template <typename Value>
+constexpr bool key_within(const Value &value, std::size_t bound) {
+  if constexpr (std::is_enum_v<Value>) {
+    return key_within(static_cast<std::underlying_type_t<Value>>(value), bound);
+  } else if constexpr (std::is_same_v<Value, bool>) {
+    return static_cast<std::size_t>(value) < bound;
+  } else if constexpr (std::is_integral_v<Value>) {
+    if constexpr (std::is_signed_v<Value>) {
+      if (value < 0) {
+        return false;
+      }
+    }
+    return static_cast<std::make_unsigned_t<Value>>(value) < bound;
+  } else {
+    return false;
+  }
+}
+
 // The value a key holds, by address for comparison: nothing for a key without
 // a value, the constant of a fixed key, or the value of a runtime key.
 template <typename Key> class key_store {
@@ -91,6 +112,10 @@ public:
   const void *value() const { return nullptr; }
 
   static bool equal(const void * /*left*/, const void * /*right*/) {
+    return true;
+  }
+
+  static bool within(const void * /*value*/, std::size_t /*bound*/) {
     return true;
   }
 };
@@ -101,6 +126,10 @@ public:
 
   static bool equal(const void *left, const void *right) {
     return *static_cast<const Key *>(left) == *static_cast<const Key *>(right);
+  }
+
+  static bool within(const void *value, std::size_t bound) {
+    return key_within(*static_cast<const Key *>(value), bound);
   }
 
   static constexpr Key constant = fixed_key<Key, Value>::value();
@@ -114,6 +143,10 @@ public:
 
   static bool equal(const void *left, const void *right) {
     return *static_cast<const Key *>(left) == *static_cast<const Key *>(right);
+  }
+
+  static bool within(const void *value, std::size_t bound) {
+    return key_within(*static_cast<const Key *>(value), bound);
   }
 
 private:

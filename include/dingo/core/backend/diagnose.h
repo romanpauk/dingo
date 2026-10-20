@@ -51,6 +51,11 @@ template <typename Binding>
                                   key_type_name<typename Binding::key_type>());
 }
 
+template <typename Binding>
+[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE void raise_out_of_range() {
+  raise_type_index_out_of_range(key_type_name<typename Binding::key_type>());
+}
+
 template <typename Request>
 [[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE void raise_ambiguous() {
   const std::string request = type_name_of<Request>();

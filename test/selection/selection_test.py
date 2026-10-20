@@ -108,6 +108,34 @@ def test_reference_outcomes(model):
     assert conform.expected(model, shadowed) == (["ok", "ok"], 1)
 
 
+def test_a_key_outside_the_bound_is_never_stored(model):
+    # The dense array of the bounded setting stores the key 7 and not 8, of a
+    # fixed or a runtime key alike.
+    case = "runtime/bounded/impl_0:runtime7+impl_1:fixed8/one:runtime8"
+    assert conform.expected(model, case) == (["ok", "out_of_range"], "not_found")
+    assert conform.observed_registrations(
+        {
+            "registration": "throws:type_index_out_of_range_exception",
+            "registrations": ["ok", "throws:type_index_out_of_range_exception"],
+        }
+    ) == ["ok", "out_of_range"]
+    assert conform.same_registrations("compile_error", ["out_of_range"])
+
+
+def test_a_registration_rejected_for_its_bound_is_its_own_difference(model):
+    rows = [
+        {
+            "id": "runtime/bounded/impl_0:runtime7+impl_1:runtime8/one:runtime7",
+            "registration": "throws:std",
+            "registrations": ["ok", "throws:std"],
+            "selection": "ok",
+            "selected": 0,
+        }
+    ]
+    [(case, field, have, want)] = conform.compare(rows, model)
+    assert field == "out_of_range" and want == ["ok", "out_of_range"]
+
+
 def test_construct_resolves_a_binding_of_its_type(model):
     # construct names the binding as a singular request does; the abstract
     # interface has no factory, so without a binding it is not found.

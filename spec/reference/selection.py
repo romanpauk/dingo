@@ -23,6 +23,10 @@ from spec.schema import (
 
 VALUE_KINDS = ("fixed", "runtime")
 
+# The reason a binding is rejected whose key value is outside the bound of the
+# dense array that indexes its domain: such a key is never stored.
+KEY_OUT_OF_RANGE = "key out of range"
+
 
 @dataclass(frozen=True, slots=True)
 class Key:
@@ -59,11 +63,14 @@ class Binding:
 class Level:
     """The bindings of one container, its lookup declarations, and its parent.
 
-    `declarations` maps (interface, key domain) to the declared cardinality.
+    `declarations` maps (interface, key domain) to the declared cardinality,
+    and `bounds` a domain of value keys indexed by a dense array to its bound:
+    the key values it stores are 0 up to the bound, excluded.
     """
 
     bindings: list[Binding] = field(default_factory=list)
     declarations: dict = field(default_factory=dict)
+    bounds: dict = field(default_factory=dict)
     parent: "Level | None" = None
 
 
@@ -98,12 +105,17 @@ class Model:
         return level.declarations.get((interface, key.domain()), self.default_cardinality)
 
     def register(self, level: Level, binding: Binding) -> tuple[bool, str]:
-        """Adds the binding unless a domain of cardinality one already holds a
-        binding of its key, among the static and runtime bindings of the
-        level alike. A static binding carries no runtime key value, the
+        """Adds the binding unless its key value is outside the bound of its
+        domain, or a domain of cardinality one already holds a binding of its
+        key, among the static and runtime bindings of the level alike. A static binding carries no runtime key value, the
         binding-time constraint static_bindings_carry_no_runtime_key."""
         if binding.static and binding.key.kind == "runtime":
             return False, "a static binding carries no runtime key value"
+        if binding.key.kind in VALUE_KINDS:
+            for interface in binding.interfaces:
+                bound = level.bounds.get((interface, binding.key.domain()))
+                if bound is not None and not 0 <= binding.key.value < bound:
+                    return False, KEY_OUT_OF_RANGE
         for interface in binding.interfaces:
             if self.cardinality(level, interface, binding.key) is not Cardinality.ONE:
                 continue

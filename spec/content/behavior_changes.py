@@ -312,6 +312,18 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         decision=LOOKUP_DECISION,
     ),
     BehaviorChange(
+        id="out_of_range_keys_raise_the_index_exception",
+        description=(
+            "A registration whose key value is outside the bound of the dense "
+            "array of its domain raises type_index_out_of_range_exception, the "
+            "exception the public API names for it."
+        ),
+        cases=("selection:*/bounded/*#out_of_range",),
+        baseline="It raises std::out_of_range.",
+        now="It raises type_index_out_of_range_exception.",
+        decision=DECISION,
+    ),
+    BehaviorChange(
         id="empty_collections_are_valid",
         description="A collection request that names no binding yields an empty collection.",
         cases=("selection:*#empty_collection",),
@@ -329,11 +341,11 @@ behavior_changes: tuple[BehaviorChange, ...] = (
             "A collection request of a domain declared one yields the binding the "
             "domain holds."
         ),
-        cases=(
-            "selection:runtime/default/*/all:fixed[78]#collection",
-            "selection:runtime/default/*/all:runtime[78]#collection",
-            "selection:parent/default/*/all:fixed[78]#collection",
-            "selection:parent/default/*/all:runtime[78]#collection",
+        cases=tuple(
+            f"selection:{domain}/{setting}/*/all:{key}[78]#collection"
+            for domain in ("runtime", "parent")
+            for setting in ("default", "bounded")
+            for key in ("fixed", "runtime")
         ),
         baseline="A collection of a value key declared one throws type_not_found_exception.",
         now="The collection holds the one binding, as a query over the bindings.",
@@ -381,7 +393,10 @@ behavior_changes: tuple[BehaviorChange, ...] = (
     BehaviorChange(
         id="mixed_containers_declare_lookups",
         description="A mixed container takes container traits that declare its lookups.",
-        cases=("selection:mixed/many/*#registration",),
+        cases=(
+            "selection:mixed/many/*#registration",
+            "selection:mixed/bounded/*#registration",
+        ),
         baseline="A mixed container has fixed traits and cannot declare a lookup.",
         now="container<bindings<...>, Traits> declares lookups as the runtime container does.",
         decision=COLLECTION_DECISION,

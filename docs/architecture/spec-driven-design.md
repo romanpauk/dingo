@@ -1507,7 +1507,16 @@ equal to the reference implementation. A child container,
 `container<Traits, Allocator, Parent>`, falls back to its parent by the
 selection rules, and an unregistered type that `is_auto_constructible` declares,
 a complete aggregate by default, is constructed when no container names a
-binding. Remaining: the index structures and memoization.
+binding.
+
+A lookup declaration `associative<Key, Interface, Cardinality, array<N>>` bounds
+its domain: the dense array stores the key values 0 up to `N`, excluded, of an
+integral or enumeration key, so a runtime registration of a value outside it
+raises `type_index_out_of_range_exception`, a static binding of one is rejected
+when the container type is formed, and a request of one finds no binding. The
+reference implementation models the bound, and the selection extractor checks it
+with the bounded setting. Remaining: the index structures that accelerate the
+lookup, and memoization.
 
 #### M4.6: Mixed Backend
 

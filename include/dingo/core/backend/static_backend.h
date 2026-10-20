@@ -159,6 +159,21 @@ constexpr std::size_t find_binding(const request_descriptor &request) {
 }
 } // namespace detail
 
+namespace detail {
+// Whether the fixed key of a static binding, if any, is within the bound of
+// the dense array of its domain.
+template <const lookup_table &Table, typename Binding>
+constexpr bool within_bound() {
+  using key = typename Binding::key_type;
+  if constexpr (key::descriptor.kind == key_kind::fixed) {
+    constexpr std::size_t bound = key_bound(Table, Binding::descriptor);
+    return bound == unbounded || key_within(key_store<key>::constant, bound);
+  } else {
+    return true;
+  }
+}
+} // namespace detail
+
 // A backend of the bindings `Bindings`, with the lookup declarations of the
 // table `LookupTable::value`.
 template <typename LookupTable, typename... Bindings> class static_backend {
@@ -168,6 +183,9 @@ template <typename LookupTable, typename... Bindings> class static_backend {
                     std::index_sequence_for<Bindings...>()),
                 "a static container holds one binding of a key of an "
                 "interface: lookup already registered");
+  static_assert((detail::within_bound<LookupTable::value, Bindings>() && ...),
+                "type index out of range: the key of a static binding is "
+                "outside the bound of the dense array of its domain");
 
 public:
   // Takes the instance of every binding whose scope needs one, in the order of

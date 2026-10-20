@@ -58,6 +58,17 @@ diagnostics: tuple[Diagnostic, ...] = (
         fallback_carrier="lookup_already_registered_carrier",
     ),
     Diagnostic(
+        id="type_index_out_of_range",
+        condition=(
+            "A binding is registered with a key value outside the bound of the "
+            "dense array that indexes its domain."
+        ),
+        exception="type_index_out_of_range_exception",
+        message="type index out of range: key type {key}",
+        placeholders=("key",),
+        fallback_carrier="type_index_out_of_range_carrier",
+    ),
+    Diagnostic(
         id="type_ambiguous",
         condition="More than one binding is named by the request.",
         exception="type_ambiguous_exception",

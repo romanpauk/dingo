@@ -66,6 +66,7 @@ _extract_spec.loader.exec_module(selection_extract)
 bindings_label = selection_extract.bindings_label
 parse_case_id = selection_extract.parse_case_id
 from spec.reference.selection import (  # noqa: E402
+    KEY_OUT_OF_RANGE,
     NO_KEY,
     Binding,
     Key,
@@ -109,15 +110,25 @@ def declarations(domain, setting):
     return {}
 
 
+# The bound of the dense array of the int keys of the bounded setting.
+BOUND = 8
+
+
+def bounds(setting):
+    if setting == "bounded":
+        return {(INTERFACE, ("value", "int")): BOUND}
+    return {}
+
+
 def to_reference(case):
     """The reference of a case: (the level asked, request, mode, {binding:
     implementation index}, [(level, Binding)] in binding order). The request
     of iface, an abstract interface, has no factory."""
     domain, setting, bindings, mode, key = parse_case_id(case)
-    child = Level(declarations=declarations(domain, setting))
+    child = Level(declarations=declarations(domain, setting), bounds=bounds(setting))
     parent = None
     if domain == "parent":
-        parent = Level(declarations=declarations(domain, setting))
+        parent = Level(declarations=declarations(domain, setting), bounds=bounds(setting))
         child.parent = parent
     placed = []
     impls = {}
@@ -136,14 +147,16 @@ def to_reference(case):
 
 def expected(model, case):
     """(registrations, selection) of the reference: the registrations as
-    "ok" or "rejected" in binding order; the selection as an implementation
+    "ok", "rejected", or "out_of_range" in binding order; the selection as an implementation
     index, a list of them, "ambiguous", or "not_found"."""
     level, request, mode, impls, placed = to_reference(case)
     collection = mode == "all"
     registrations = []
     for target, binding in placed:
-        ok, _ = model.register(target, binding)
-        registrations.append("ok" if ok else "rejected")
+        ok, reason = model.register(target, binding)
+        registrations.append(
+            "ok" if ok else "out_of_range" if reason == KEY_OUT_OF_RANGE else "rejected"
+        )
     selection = model.select(level, request, collection=collection, construct=mode == "make")
     if selection.status is Status.AMBIGUOUS:
         return registrations, "ambiguous"
@@ -161,6 +174,8 @@ def observed_registrations(row):
         if outcome == "ok"
         else "rejected"
         if outcome == "throws:lookup_already_registered_exception"
+        else "out_of_range"
+        if outcome == "throws:type_index_out_of_range_exception"
         else outcome
         for outcome in row["registrations"]
     ]
@@ -178,7 +193,7 @@ def observed_selection(row):
 
 def same_registrations(observed, reference):
     if observed in ("compile_error", "not_expressible"):
-        return "rejected" in reference
+        return "rejected" in reference or "out_of_range" in reference
     return observed == reference
 
 
@@ -198,7 +213,20 @@ def compare(rows, model):
             duplicate = isinstance(have_registrations, list) and all(
                 outcome == "ok" for outcome in have_registrations
             )
-            field = "duplicate" if duplicate else "registration"
+            # The reference rejects every binding the registrations differ
+            # in for a key outside the bound of its domain.
+            out_of_range = isinstance(have_registrations, list) and all(
+                want == "out_of_range"
+                for have, want in zip(have_registrations, want_registrations)
+                if have != want
+            )
+            field = (
+                "duplicate"
+                if duplicate
+                else "out_of_range"
+                if out_of_range
+                else "registration"
+            )
             differences.append((case, field, have_registrations, want_registrations))
             continue
         if have_registrations in ("compile_error", "not_expressible"):

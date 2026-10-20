@@ -296,9 +296,11 @@ public:
   explicit runtime_backend(const lookup_table &table) : table_(&table) {}
 
   // Adds a binding, whose arguments are the arguments of its slot and the
-  // value of its runtime key. A binding whose key a binding of a common
-  // interface already holds is rejected, unless its domain holds many; `held`
-  // tells whether another source of the container holds its key.
+  // value of its runtime key. A binding whose key value is outside the bound
+  // of the dense array of its domain is rejected, and so is a binding whose
+  // key a binding of a common interface already holds, unless its domain
+  // holds many; `held` tells whether another source of the container holds
+  // its key.
   // Returns the local bindings of the added binding.
   template <typename Binding, typename... Args> auto &add(Args &&...args) {
     return add_unless<Binding>([](const void * /*key_value*/) { return false; },
@@ -317,6 +319,15 @@ public:
         make_entry<Binding, arguments, std::tuple<std::decay_t<Args>...>>(
             all, std::make_index_sequence<sizeof...(Args) -
                                           arguments::key_count()>());
+    if constexpr (Binding::key_type::descriptor.kind == key_kind::fixed ||
+                  Binding::key_type::descriptor.kind == key_kind::runtime) {
+      // A key value outside the bound of a dense array is never stored.
+      const std::size_t bound = key_bound(*table_, Binding::descriptor);
+      if (bound != unbounded && !key_store<typename Binding::key_type>::within(
+                                    added->key_value(), bound)) {
+        raise_out_of_range<Binding>();
+      }
+    }
     if (held(added->key_value())) {
       raise_already_registered<Binding>();
     }

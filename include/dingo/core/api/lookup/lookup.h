@@ -44,10 +44,32 @@ struct lookup_interfaces<::dingo::interfaces<Interfaces...>> {
   using type = core::type_list<Interfaces...>;
 };
 
-template <typename Interface, typename Key, typename Cardinality>
+// The bound of the key values of a backend: the size of a dense array.
+template <typename Backend> struct backend_bound {
+  static constexpr std::size_t value = core::unbounded;
+};
+
+template <std::size_t Size> struct backend_bound<array<Size>> {
+  static constexpr std::size_t value = Size;
+};
+
+template <typename Interface, typename Key, typename Cardinality,
+          typename Backend = ordered>
 using lookup_declaration_t =
     core::lookup_declaration<typename lookup_interfaces<Interface>::type, Key,
-                             std::is_same_v<Cardinality, many>>;
+                             std::is_same_v<Cardinality, many>,
+                             backend_bound<Backend>::value>;
+
+template <typename Key, typename Interface, typename Cardinality,
+          typename Backend>
+struct associative_declaration {
+  static_assert(backend_bound<Backend>::value == core::unbounded ||
+                    std::is_integral_v<Key> || std::is_enum_v<Key>,
+                "dingo::array<N> associative backend requires an integral "
+                "or enum key");
+  using type = lookup_declaration_t<Interface, core::runtime_key<Key>,
+                                    Cardinality, Backend>;
+};
 } // namespace detail
 
 // The bindings of an interface without a key, one of them.
@@ -64,12 +86,14 @@ using typed =
     detail::lookup_declaration_t<Interface, core::tag_key<Tag>, Cardinality>;
 
 // The bindings of an interface by the value of a key type, fixed or supplied
-// at runtime.
+// at runtime. A dense array<N> stores the values 0 up to N, excluded, of an
+// integral or enumeration key type; a binding of a value outside it is
+// rejected, and a request of one finds no binding.
 template <typename Key, typename Interface, typename Cardinality = one,
           typename Backend = ordered>
 using associative =
-    detail::lookup_declaration_t<Interface, core::runtime_key<Key>,
-                                 Cardinality>;
+    typename detail::associative_declaration<Key, Interface, Cardinality,
+                                             Backend>::type;
 
 // Every domain no other declaration covers.
 template <typename Cardinality = one, typename Backend = ordered>

@@ -8,8 +8,9 @@
 #pragma once
 
 // The lookup declarations of a container: the cardinality of the domains of
-// its interfaces and keys, one binding or many, and whether two bindings may
-// share a key. spec: lookup_declarations
+// its interfaces and keys, one binding or many, whether two bindings may
+// share a key, and the bound of the key values a dense array indexes.
+// spec: lookup_declarations, index_structures
 
 #include <dingo/core/base/mechanics.h>
 #include <dingo/core/engine/derive.h>
@@ -20,12 +21,17 @@
 
 namespace dingo::core {
 
+// The bound of a domain whose key values no dense array indexes.
+inline constexpr std::size_t unbounded = static_cast<std::size_t>(-1);
+
 // A declaration of the domain of an interface and a key, or with a null
-// interface the default of every domain no other declaration covers.
+// interface the default of every domain no other declaration covers. A domain
+// indexed by a dense array stores the key values 0 up to `bound`, excluded.
 struct lookup_descriptor {
   type_id interface = nullptr;
   key_descriptor domain;
   bool many = false;
+  std::size_t bound = unbounded;
 };
 
 struct lookup_table {
@@ -76,21 +82,49 @@ constexpr bool conflicts(const lookup_table &table,
   return false;
 }
 
+// The bound of the key values of the domain of a binding: the least bound of
+// the declarations of the domains of its interfaces, or of its leaf without
+// interfaces.
+constexpr std::size_t key_bound(const lookup_table &table,
+                                const binding_descriptor &binding) {
+  auto bound_of = [&](type_id interface) {
+    for (std::size_t index = 0; index < table.size; ++index) {
+      const lookup_descriptor &declaration = table.items[index];
+      if (declaration.interface == interface &&
+          same_key_domain(declaration.domain, binding.key)) {
+        return declaration.bound;
+      }
+    }
+    return unbounded;
+  };
+  if (binding.interface_count == 0) {
+    return bound_of(innermost_leaf(binding.stored));
+  }
+  std::size_t bound = unbounded;
+  for (std::size_t index = 0; index < binding.interface_count; ++index) {
+    const std::size_t of = bound_of(binding.interfaces[index].nodes[0].type);
+    bound = of < bound ? of : bound;
+  }
+  return bound;
+}
+
 // A lookup declaration of the domains of the interfaces `Interfaces`, a
-// type_list, and `Key`, a key of the domain, with `Many` bindings; an empty
+// type_list, and `Key`, a key of the domain, with `Many` bindings, whose key
+// values a dense array of `Bound` indexes unless it is unbounded; an empty
 // list declares the default of every other domain.
-template <typename Interfaces, typename Key, bool Many>
+template <typename Interfaces, typename Key, bool Many,
+          std::size_t Bound = unbounded>
 struct lookup_declaration;
 
-template <typename... Interfaces, typename Key, bool Many>
-struct lookup_declaration<type_list<Interfaces...>, Key, Many> {
+template <typename... Interfaces, typename Key, bool Many, std::size_t Bound>
+struct lookup_declaration<type_list<Interfaces...>, Key, Many, Bound> {
   static constexpr std::size_t size = sizeof...(Interfaces);
   static constexpr lookup_descriptor items[] = {
-      {type_id_v<Interfaces>, Key::descriptor, Many}...};
+      {type_id_v<Interfaces>, Key::descriptor, Many, Bound}...};
 };
 
-template <typename Key, bool Many>
-struct lookup_declaration<type_list<>, Key, Many> {
+template <typename Key, bool Many, std::size_t Bound>
+struct lookup_declaration<type_list<>, Key, Many, Bound> {
   static constexpr std::size_t size = 1;
   static constexpr lookup_descriptor items[] = {{nullptr, {}, Many}};
 };

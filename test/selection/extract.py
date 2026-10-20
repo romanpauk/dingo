@@ -39,8 +39,10 @@ Universe:
   current library needs a declaration for value keys) and nothing else;
   "many" declares every key domain of the universe many: collection<iface>,
   typed<tag_a, iface, many>, typed<tag_b, iface, many>, and
-  associative<int, iface, many>. The mixed container has no traits, so it has
-  the default setting only, without any declaration.
+  associative<int, iface, many>; "bounded" declares associative<int, iface,
+  one, array<8>>, a dense array whose bound admits the key 7 and not 8. The
+  mixed container has no traits, so it has the default setting only, without
+  any declaration.
 - requests: "one" is a singular request, resolve<iface &>() with no key,
   resolve<iface &>(key_type<tag>{}) with a tag, the constructor parameter
   dependency<iface &, key_type<int, V>> of consumer<V> constructed with
@@ -114,7 +116,7 @@ TEMPLATES = Path(__file__).resolve().parent / "templates"
 # ---------------------------------------------------------------------------
 
 DOMAINS = ("runtime", "static", "mixed", "parent")
-SETTINGS = ("default", "many")
+SETTINGS = ("default", "many", "bounded")
 
 # Key names of case ids and their C++ data: kind, type, value.
 KEYS = {
@@ -152,6 +154,9 @@ LOOKUPS = {
         {"kind": "typed", "key": "tag_a", "cardinality": "many"},
         {"kind": "typed", "key": "tag_b", "cardinality": "many"},
         {"kind": "associative", "key": "int", "cardinality": "many"},
+    ),
+    "bounded": (
+        {"kind": "associative", "key": "int", "cardinality": "one", "bound": 8},
     ),
 }
 TRAITS_BASE = {

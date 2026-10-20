@@ -30,6 +30,8 @@ dingo::key_type<{{ key.type }}, {{ key.value }}>{}
 dingo::collection<iface>
 {%- elif declaration.kind == "typed" -%}
 dingo::typed<{{ declaration.key }}, iface, dingo::{{ declaration.cardinality }}>
+{%- elif declaration.bound is defined -%}
+dingo::associative<{{ declaration.key }}, iface, dingo::{{ declaration.cardinality }}, dingo::array<{{ declaration.bound }}>>
 {%- else -%}
 dingo::associative<{{ declaration.key }}, iface, dingo::{{ declaration.cardinality }}>
 {%- endif -%}

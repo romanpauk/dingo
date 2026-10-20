@@ -51,6 +51,15 @@ raise_type_ambiguous_required_by(std::string_view request,
       {{"request", request}, {"type", type}}));
 }
 
+// spec: diagnostics.type_index_out_of_range
+// A binding is registered with a key value outside the bound of the dense
+// array that indexes its domain.
+[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+raise_type_index_out_of_range(std::string_view key) {
+  throw ::dingo::type_index_out_of_range_exception(format_message(
+      "type index out of range: key type {key}", {{"key", key}}));
+}
+
 // spec: diagnostics.type_not_convertible
 // The binding the request names serves no term it accepts.
 [[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void

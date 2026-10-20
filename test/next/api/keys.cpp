@@ -9,10 +9,14 @@
 // values, in runtime and static containers alike.
 
 #include <dingo/container.h>
+#include <dingo/lookup/lookup.h>
 #include <dingo/static_container.h>
 #include <dingo/storage/shared.h>
 
 #include <gtest/gtest.h>
+
+#include <cstddef>
+#include <vector>
 
 namespace {
 
@@ -95,6 +99,53 @@ TEST(next_keys, selects_static_bindings_by_key) {
   EXPECT_EQ(container.resolve<iface &>(7).id(), 2);
   EXPECT_EQ(container.resolve<iface &>(dingo::key_value{8}).id(), 3);
   EXPECT_THROW(container.resolve<iface &>(9), dingo::type_not_found_exception);
+}
+
+} // namespace
+
+namespace {
+
+struct dense_traits : dingo::dynamic_container_traits {
+  using lookup_definition_type = dingo::lookups<
+      dingo::associative<std::size_t, iface, dingo::one, dingo::array<2>>>;
+};
+
+TEST(next_keys, a_dense_array_never_stores_a_key_outside_its_bound) {
+  dingo::container<dense_traits> container;
+  container.register_type<scope<dingo::shared>, storage<impl<1>>,
+                          dingo::interfaces<iface>>(
+      dingo::key_value{std::size_t(1)});
+  EXPECT_THROW((container.register_type<scope<dingo::shared>, storage<impl<2>>,
+                                        dingo::interfaces<iface>>(
+                   dingo::key_value{std::size_t(2)})),
+               dingo::type_index_out_of_range_exception);
+  EXPECT_THROW((container.register_type<scope<dingo::shared>, storage<impl<2>>,
+                                        dingo::interfaces<iface>,
+                                        dingo::key_type<std::size_t, 5>>()),
+               dingo::type_index_out_of_range_exception);
+  EXPECT_EQ(container.resolve<iface &>(std::size_t(1)).id(), 1);
+  EXPECT_THROW(container.resolve<iface &>(std::size_t(2)),
+               dingo::type_not_found_exception);
+}
+
+enum class channel : int { first, second, third };
+
+struct channel_traits : dingo::dynamic_container_traits {
+  using lookup_definition_type = dingo::lookups<
+      dingo::associative<channel, iface, dingo::many, dingo::array<2>>>;
+};
+
+TEST(next_keys, a_dense_array_indexes_enumeration_keys) {
+  dingo::container<channel_traits> container;
+  container.register_type<scope<dingo::shared>, storage<impl<1>>,
+                          dingo::interfaces<iface>>(
+      dingo::key_value{channel::second});
+  EXPECT_THROW((container.register_type<scope<dingo::shared>, storage<impl<2>>,
+                                        dingo::interfaces<iface>>(
+                   dingo::key_value{channel::third})),
+               dingo::type_index_out_of_range_exception);
+  EXPECT_EQ(container.resolve<std::vector<iface *>>(channel::second).size(),
+            1u);
 }
 
 } // namespace
