@@ -106,8 +106,13 @@ TEST(next_shared_cyclical, resets_the_publication_of_a_failed_cycle) {
   // The holder, which referred to the failed object, and the counted object
   // it published are reset with it.
   EXPECT_EQ(counted::live, 0);
+  // The address of the counted object borrowed during the failed publication
+  // is not kept, so a request constructs it again.
+  counted &alone = container.resolve<counted &>();
+  EXPECT_EQ(counted::live, 1);
   failing::fail = false;
   holder &object = container.resolve<holder &>();
+  EXPECT_EQ(&object.object, &alone);
   EXPECT_EQ(&object.other, &container.resolve<failing &>());
   EXPECT_EQ(counted::live, 1);
 }

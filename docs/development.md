@@ -298,6 +298,21 @@ python3 test/differential/run.py --build-root build/differential --profile porta
 
 The `differential` workflow runs the same command with GCC 14.
 
+### Resolution Benchmarks
+
+[`benchmark/resolve/resolve.cpp`](../benchmark/resolve/resolve.cpp) measures
+resolutions through the public API alone, so it builds against both
+implementations: `dingo_resolve_benchmark` against the current one and
+`dingo_next_resolve_benchmark` against the next one. Build them optimized, in a
+separate build directory:
+
+```bash
+cmake -S . -B build/release -DDINGO_DEVELOPMENT_MODE=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build/release -t dingo_resolve_benchmark dingo_next_resolve_benchmark
+build/release/benchmark/dingo_resolve_benchmark
+build/release/benchmark/dingo_next_resolve_benchmark
+```
+
 ## Compile-Time Profiling
 
 For template compile-cost investigations, use

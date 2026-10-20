@@ -16,6 +16,8 @@
 
 #include <gtest/gtest.h>
 
+#include <stdexcept>
+
 #include <memory>
 #include <optional>
 #include <variant>
@@ -262,6 +264,31 @@ TEST(next_container, rejects_constructing_an_ambiguously_bound_type) {
   container.register_type<scope<dingo::unique>, storage<constructed_state>>();
   EXPECT_THROW(container.construct<constructed_state>(),
                dingo::type_ambiguous_exception);
+}
+
+} // namespace
+
+namespace {
+
+struct fails_once {
+  static inline int attempts = 0;
+  fails_once() {
+    if (attempts++ == 0) {
+      throw std::runtime_error("first construction fails");
+    }
+  }
+};
+
+TEST(next_container, a_failed_construction_keeps_no_address) {
+  fails_once::attempts = 0;
+  dingo::container<> container;
+  container.register_type<scope<dingo::shared>, storage<fails_once>>();
+  EXPECT_THROW(container.resolve<fails_once &>(), std::runtime_error);
+  fails_once &constructed = container.resolve<fails_once &>();
+  EXPECT_EQ(fails_once::attempts, 2);
+  EXPECT_EQ(&container.resolve<fails_once &>(), &constructed);
+  EXPECT_EQ(container.resolve<fails_once *>(), &constructed);
+  EXPECT_EQ(fails_once::attempts, 2);
 }
 
 } // namespace

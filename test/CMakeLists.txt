@@ -221,6 +221,7 @@ add_executable(dingo_next_test
     next/api/parents.cpp
     next/api/shared_cyclical.cpp
     next/api/unique.cpp
+    next/backend/memo.cpp
     next/base/mechanics.cpp
     next/engine/engine_conformance.cpp
     next/projection/shape.cpp

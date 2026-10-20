@@ -210,10 +210,13 @@ contracts: tuple[Contract, ...] = (
     ),
     Contract(
         id="runtime_runtime_resolve_indirect_calls",
-        description="A memoized runtime resolution makes one indirect call.",
+        description=(
+            "A memoized runtime resolution makes at most one indirect call; one "
+            "that returns an object of a stable binding makes none."
+        ),
         operation="resolve.memoized",
         dimension=RUNTIME_COST,
-        bound=exactly(1, "indirect_calls"),
+        bound=at_most(1, "indirect_calls"),
         domain=Domain.RUNTIME,
     ),
     Contract(

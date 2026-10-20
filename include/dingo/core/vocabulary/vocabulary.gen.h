@@ -378,6 +378,17 @@ inline constexpr route_rule route_rules[] = {
      true},
 };
 
+// spec: index_structures
+// The structures that index the bindings of a domain; the choice never
+// changes which bindings a request names.
+enum class index_structure : std::uint8_t {
+  slot,
+  sequence,
+  ordered,
+  unordered,
+  dense_array,
+};
+
 // spec: selection_rules
 enum class selection_source : std::uint8_t {
   local_static,

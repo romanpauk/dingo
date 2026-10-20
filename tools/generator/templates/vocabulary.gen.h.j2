@@ -178,6 +178,15 @@ inline constexpr route_rule route_rules[] = {
 {% endfor %}
 };
 
+// spec: index_structures
+// The structures that index the bindings of a domain; the choice never
+// changes which bindings a request names.
+enum class index_structure : std::uint8_t {
+{% for index in index_structures %}
+  {{ index }},
+{% endfor %}
+};
+
 // spec: selection_rules
 enum class selection_source : std::uint8_t {
 {% for source in selection_sources %}

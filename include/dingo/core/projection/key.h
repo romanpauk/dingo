@@ -59,6 +59,11 @@ struct key_descriptor {
   type_id type = nullptr;
 };
 
+// Whether a key carries a value, which a request compares after the domain.
+constexpr bool key_has_value(const key_descriptor &key) {
+  return key.kind == key_kind::fixed || key.kind == key_kind::runtime;
+}
+
 struct no_key {
   static constexpr key_descriptor descriptor{};
 };

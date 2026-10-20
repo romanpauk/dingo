@@ -48,6 +48,9 @@ public:
   bool constructed() const { return state_ == state::constructed; }
   bool constructing() const { return state_ == state::constructing; }
 
+  // The object, which constructed() tells exists.
+  Type &object() { return *get(); }
+
   // Constructs the object in place by `construct(void *)` unless it exists;
   // the caller reports a request while it is being constructed.
   template <typename Construct> Type &get_or_construct(Construct &&construct) {
@@ -161,6 +164,9 @@ public:
     publish();
     guard.failed = false;
   }
+
+  // Whether a publication is in progress, whose failure resets its slots.
+  bool active() const { return depth_ != 0; }
 
 private:
   struct entry {

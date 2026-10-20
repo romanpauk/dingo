@@ -386,8 +386,8 @@ contracts:
   resolve<T>:
     compile: selection_v<T> and one kernel per used route
     runtime.static: no indirect calls, no allocations
-    runtime.runtime: one memoized lookup, one indirect call, no allocations
-      after the first resolution
+    runtime.runtime: one memoized lookup, at most one indirect call, none for
+      an object of a stable binding, no allocations after the first resolution
     inline.static: always
     inline.runtime.memoized: always
     inline.runtime.first_resolution: never
@@ -437,7 +437,8 @@ else
 
 The runtime backend calls the same `engine::select` over the arena table and
 memoizes the result per request type in the existing type cache. The hot path
-stays one indirect call through a thunk. The benchmarks and the
+makes at most one indirect call through a thunk, and none once the memo keeps
+the address of an object of a stable binding. The benchmarks and the
 [code size probes](../development.md#code-size-tests) guard it.
 
 The mixed backend passes the static candidates of a request as a constant input
@@ -1515,8 +1516,38 @@ integral or enumeration key, so a runtime registration of a value outside it
 raises `type_index_out_of_range_exception`, a static binding of one is rejected
 when the container type is formed, and a request of one finds no binding. The
 reference implementation models the bound, and the selection extractor checks it
-with the bounded setting. Remaining: the index structures that accelerate the
-lookup, and memoization.
+with the bounded setting.
+
+A runtime backend memoizes every request type, by a process-wide id: the
+candidates of its domain, in the order of registration, each with the term that
+serves the request, valid until the next registration. A request by a key value
+indexes its candidates by the index structure of its domain when the key type
+has what it needs, a dense array of integral or enumeration keys, an ordered
+index of keys with `<`, an unordered one of hashable keys, and otherwise the
+first of them it has or a linear scan; a unit test compares every index with a
+linear scan. When the only source of a step that can name a binding is a runtime
+backend, the step is answered in one visit of its memo.
+
+A candidate of a stable binding, shared or external, keeps the address its term
+borrows once its slot is settled, so a resolution after the first makes no
+indirect call, and a failed construction keeps none; shared_cyclical is not
+stable, as a failed publication resets its slots. A lazy slot checks for the
+constructed object first, so a static resolution compares once.
+
+With the [resolution benchmarks](../development.md#resolution-benchmarks), on
+GCC 16 at `-O3`, the medians of the current and the next implementation are:
+
+| Benchmark | Current | Next | | ----------------------------------- | ------: |
+------: | | shared reference among 32 bindings | 4.7 ns | 0.75 ns | | unique
+value among 32 bindings | 20.0 ns | 1.8 ns | | construction with a dependency |
+28.9 ns | 1.6 ns | | collection of 8 bindings | 108 ns | 28 ns | | key among 64,
+ordered | 2.3 ns | 4.1 ns | | key among 64, unordered | 1.4 ns | 2.0 ns | | key
+among 64, dense array | 0.74 ns | 1.5 ns | | static shared reference | 0.19 ns |
+0.19 ns |
+
+A request by a key value finds the memo of its request type before it searches
+the index of the memo, where the current implementation searches one index of
+the domain; the memo costs about 0.7 ns.
 
 #### M4.6: Mixed Backend
 

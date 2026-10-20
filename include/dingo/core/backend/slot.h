@@ -86,7 +86,17 @@ public:
   using stored_type = typename Binding::stored_type;
   using binding_context<Binding>::binding_context;
 
+  // Whether the object is constructed, so its address does not change.
+  template <typename Resolver> bool settled(Resolver & /*resolver*/) const {
+    return slot_.constructed();
+  }
+
+  // The object, constructed on first use; the constructed object is checked
+  // first, so a request of it compares once.
   template <typename Resolver> stored_type &get(Resolver &resolver) {
+    if (slot_.constructed()) {
+      return slot_.object();
+    }
     if (slot_.constructing()) {
       raise_recursion<leaf_of_t<stored_type>>();
     }
@@ -110,6 +120,11 @@ class binding_slot<Binding, slot::none> : public binding_context<Binding> {
 public:
   using stored_type = typename Binding::stored_type;
   using binding_context<Binding>::binding_context;
+
+  // A request consumes a new object, so none is settled.
+  template <typename Resolver> bool settled(Resolver & /*resolver*/) const {
+    return false;
+  }
 
   // A new object, or a new array, allocated so that its ownership passes to
   // the request.
@@ -179,6 +194,12 @@ public:
   binding_slot(const binding_slot &) = delete;
   binding_slot &operator=(const binding_slot &) = delete;
   ~binding_slot() { reset(); }
+
+  // Whether the object is constructed and no publication that a failure
+  // would reset it with is in progress.
+  template <typename Resolver> bool settled(Resolver &resolver) const {
+    return state_ == state::constructed && !resolver.publications().active();
+  }
 
   template <typename Resolver> stored_type &get(Resolver &resolver) {
     if (state_ == state::empty) {
@@ -269,6 +290,10 @@ public:
   template <typename Instance>
   explicit binding_slot(Instance &&instance)
       : slot_(std::forward<Instance>(instance)) {}
+
+  template <typename Resolver> bool settled(Resolver & /*resolver*/) const {
+    return true;
+  }
 
   template <typename Resolver> auto &get(Resolver & /*resolver*/) {
     return slot_.get();

@@ -44,13 +44,25 @@ struct lookup_interfaces<::dingo::interfaces<Interfaces...>> {
   using type = core::type_list<Interfaces...>;
 };
 
-// The bound of the key values of a backend: the size of a dense array.
-template <typename Backend> struct backend_bound {
-  static constexpr std::size_t value = core::unbounded;
+// The index structure of a backend, and the bound of its key values, the
+// size of a dense array. A backend of the user, which names its storage, is
+// indexed in order: the index structure never changes which bindings a
+// request names.
+template <typename Backend> struct backend_index {
+  static constexpr core::index_structure index = core::index_structure::ordered;
+  static constexpr std::size_t bound = core::unbounded;
 };
 
-template <std::size_t Size> struct backend_bound<array<Size>> {
-  static constexpr std::size_t value = Size;
+template <> struct backend_index<unordered> {
+  static constexpr core::index_structure index =
+      core::index_structure::unordered;
+  static constexpr std::size_t bound = core::unbounded;
+};
+
+template <std::size_t Size> struct backend_index<array<Size>> {
+  static constexpr core::index_structure index =
+      core::index_structure::dense_array;
+  static constexpr std::size_t bound = Size;
 };
 
 template <typename Interface, typename Key, typename Cardinality,
@@ -58,12 +70,13 @@ template <typename Interface, typename Key, typename Cardinality,
 using lookup_declaration_t =
     core::lookup_declaration<typename lookup_interfaces<Interface>::type, Key,
                              std::is_same_v<Cardinality, many>,
-                             backend_bound<Backend>::value>;
+                             backend_index<Backend>::index,
+                             backend_index<Backend>::bound>;
 
 template <typename Key, typename Interface, typename Cardinality,
           typename Backend>
 struct associative_declaration {
-  static_assert(backend_bound<Backend>::value == core::unbounded ||
+  static_assert(backend_index<Backend>::bound == core::unbounded ||
                     std::is_integral_v<Key> || std::is_enum_v<Key>,
                 "dingo::array<N> associative backend requires an integral "
                 "or enum key");
@@ -98,7 +111,9 @@ using associative =
 // Every domain no other declaration covers.
 template <typename Cardinality = one, typename Backend = ordered>
 using base = core::lookup_declaration<core::type_list<>, core::no_key,
-                                      std::is_same_v<Cardinality, many>>;
+                                      std::is_same_v<Cardinality, many>,
+                                      detail::backend_index<Backend>::index,
+                                      detail::backend_index<Backend>::bound>;
 
 } // namespace dingo
 

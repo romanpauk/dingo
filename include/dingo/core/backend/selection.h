@@ -385,6 +385,83 @@ private:
     }
   }
 
+  // The number of sources of step `Step` that may name a binding when the
+  // request is compiled. With one, the step is answered by that source alone;
+  // a source that names several makes the step ambiguous, so it counts.
+  template <typename Request, typename Key, selection_mode Mode,
+            std::size_t Step, std::size_t... Sources>
+  static constexpr std::size_t
+  possible_sources(std::index_sequence<Sources...> /*sources*/) {
+    constexpr std::size_t counts[] = {
+        known_count<Request, Key,
+                    rule_of(Mode).steps[Step].sources[Sources]>()...,
+        0};
+    std::size_t possible = 0;
+    for (std::size_t index = 0; index < sizeof...(Sources); ++index) {
+      possible += counts[index] != 0;
+    }
+    return possible;
+  }
+
+  template <typename Request, typename Key, selection_mode Mode,
+            std::size_t Step>
+  static constexpr std::size_t possible_sources() {
+    return possible_sources<Request, Key, Mode, Step>(
+        std::make_index_sequence<rule_of(Mode).steps[Step].source_count>());
+  }
+
+  // The source of step `Step` that can name its one binding, when only one
+  // can.
+  template <typename Request, typename Key, selection_mode Mode,
+            std::size_t Step>
+  static constexpr selection_source sole_source() {
+    constexpr const selection_step &step = rule_of(Mode).steps[Step];
+    return sole_source_of<Request, Key, Mode, Step>(
+        std::make_index_sequence<step.source_count>());
+  }
+
+  template <typename Request, typename Key, selection_mode Mode,
+            std::size_t Step, std::size_t... Sources>
+  static constexpr selection_source
+  sole_source_of(std::index_sequence<Sources...> /*sources*/) {
+    constexpr const selection_step &step = rule_of(Mode).steps[Step];
+    constexpr std::size_t counts[] = {
+        known_count<Request, Key, step.sources[Sources]>()..., 0};
+    for (std::size_t index = 0; index < sizeof...(Sources); ++index) {
+      if (counts[index] != 0) {
+        return step.sources[index];
+      }
+    }
+    return step.sources[0];
+  }
+
+  static constexpr bool is_runtime_source(selection_source source) {
+    return source == selection_source::container_runtime ||
+           source == selection_source::local_runtime;
+  }
+
+  // Answers step `Step`, whose one possible source is a runtime backend, in
+  // one visit of the backend; a step that names nothing goes on to the next.
+  template <typename Request, typename Key, bool Outermost, selection_mode Mode,
+            std::size_t Step>
+  Request select_sole(const void *key_value) {
+    auto otherwise = [&]() -> Request {
+      return select<Request, Key, Outermost, Mode, Step + 1>(key_value);
+    };
+    if constexpr (sole_source<Request, Key, Mode, Step>() ==
+                  selection_source::container_runtime) {
+      return self().runtime_source().template select_named<Request, Key>(
+          self().container_resolver(), key_value, otherwise);
+    } else {
+      auto *source = self().local_runtime_source();
+      if (source == nullptr) {
+        return otherwise();
+      }
+      return source->template select_named<Request, Key>(self(), key_value,
+                                                         otherwise);
+    }
+  }
+
   // Resolves the request from the source of step `Step` that names its one
   // binding. A source that names none or several bindings when the request is
   // compiled cannot name the one, so it is not asked and its code is not
@@ -400,8 +477,13 @@ private:
       constexpr std::size_t known = known_count<Request, Key, kind>();
       if constexpr (known == 0 || (known != unknown_count && known > 1)) {
         return resolve_step<Request, Key, Mode, Step, Source + 1>(key_value);
+      } else if constexpr (known == 1 ||
+                           possible_sources<Request, Key, Mode, Step>() == 1) {
+        // The one binding of the step is in the one source that can hold
+        // it, so it is not counted again.
+        return resolve_source<Request, Key, kind>(key_value);
       } else {
-        if (known == 1 || source_count<Request, Key>(kind, key_value) != 0) {
+        if (source_count<Request, Key>(kind, key_value) != 0) {
           return resolve_source<Request, Key, kind>(key_value);
         }
         return resolve_step<Request, Key, Mode, Step, Source + 1>(key_value);
@@ -483,6 +565,10 @@ private:
                       "static_container cannot resolve an ambiguously bound "
                       "type");
         raise_ambiguous<Request>();
+      } else if constexpr (possible_sources<Request, Key, Mode, Step>() == 1 &&
+                           is_runtime_source(
+                               sole_source<Request, Key, Mode, Step>())) {
+        return select_sole<Request, Key, Outermost, Mode, Step>(key_value);
       } else {
         const std::size_t count =
             step_count<Request, Key, Mode, Step>(key_value);

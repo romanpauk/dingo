@@ -149,3 +149,28 @@ TEST(next_keys, a_dense_array_indexes_enumeration_keys) {
 }
 
 } // namespace
+
+namespace {
+
+struct many_traits : dingo::dynamic_container_traits {
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<int, iface, dingo::many>>;
+};
+
+TEST(next_keys, a_registration_after_a_request_is_found) {
+  dingo::container<many_traits> container;
+  EXPECT_THROW(container.resolve<iface &>(1), dingo::type_not_found_exception);
+  container.register_type<scope<dingo::shared>, storage<impl<1>>,
+                          dingo::interfaces<iface>>(dingo::key_value{1});
+  EXPECT_EQ(container.resolve<iface &>(1).id(), 1);
+  EXPECT_EQ(container.resolve<std::vector<iface *>>(1).size(), 1u);
+  container.register_type<scope<dingo::shared>, storage<impl<2>>,
+                          dingo::interfaces<iface>>(dingo::key_value{1});
+  EXPECT_THROW(container.resolve<iface &>(1), dingo::type_ambiguous_exception);
+  std::vector<iface *> both = container.resolve<std::vector<iface *>>(1);
+  ASSERT_EQ(both.size(), 2u);
+  EXPECT_EQ(both[0]->id(), 1);
+  EXPECT_EQ(both[1]->id(), 2);
+}
+
+} // namespace

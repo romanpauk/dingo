@@ -106,3 +106,24 @@ TEST(next_mixed, takes_the_instances_of_external_static_bindings) {
 }
 
 } // namespace
+
+namespace {
+
+struct many_mixed_traits : dingo::dynamic_container_traits {
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<int, iface, dingo::many>>;
+};
+
+TEST(next_mixed, two_static_bindings_of_a_key_are_ambiguous) {
+  using bindings = dingo::bindings<
+      dingo::bind<scope<dingo::shared>, storage<impl<1>>,
+                  dingo::interfaces<iface>, dingo::key_type<int, 7>>,
+      dingo::bind<scope<dingo::shared>, storage<impl<2>>,
+                  dingo::interfaces<iface>, dingo::key_type<int, 7>>>;
+  dingo::container<bindings, many_mixed_traits> container;
+  EXPECT_THROW(container.resolve<iface &>(dingo::key_type<int, 7>{}),
+               dingo::type_ambiguous_exception);
+  EXPECT_THROW(container.resolve<iface &>(7), dingo::type_ambiguous_exception);
+}
+
+} // namespace

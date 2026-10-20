@@ -64,6 +64,21 @@ public:
     return host_->template resolve_own<Request, Key>(key_value);
   }
 
+  template <typename Request, typename Key, typename Resolver,
+            typename Otherwise>
+  Request select_named(Resolver & /*resolver*/, const void *key_value,
+                       Otherwise &&otherwise) {
+    const std::size_t count =
+        host_->template own_count<Request, Key>(key_value);
+    if (count == 0) {
+      return otherwise();
+    }
+    if (count > 1) {
+      raise_ambiguous<Request>();
+    }
+    return host_->template resolve_own<Request, Key>(key_value);
+  }
+
   template <typename Collection, typename Key, typename Resolver,
             typename Append>
   void collect(Resolver & /*resolver*/, Collection &collection,

@@ -14,6 +14,7 @@
 
 #include <dingo/core/backend/diagnose.h>
 #include <dingo/core/backend/local.h>
+#include <dingo/core/backend/memo.h>
 #include <dingo/core/backend/slot.h>
 #include <dingo/core/engine/derive.h>
 #include <dingo/core/engine/execute.h>
@@ -74,6 +75,10 @@ public:
   // Whether the key value of the binding equals `value`, a value of the type
   // of its key domain; a key without a value is always equal.
   virtual bool key_equals(const void *value) const = 0;
+
+  // Whether the objects the binding borrows keep their addresses: its scope
+  // is stable and its slot settled.
+  virtual bool settled(Resolver &resolver) const = 0;
 
   const binding_descriptor &descriptor() const { return descriptor_; }
   const terms &published() const { return published_; }
@@ -150,6 +155,14 @@ public:
 
   bool key_equals(const void *value) const override {
     return key_store_type::equal(key_.value(), value);
+  }
+
+  bool settled(Resolver &resolver) const override {
+    if constexpr (info(Binding::scope).stable) {
+      return slot_.settled(resolver);
+    } else {
+      return false;
+    }
   }
 
 private:
@@ -339,6 +352,7 @@ public:
     }
     auto &locals = added->locals();
     entries_.push_back(std::move(added));
+    ++generation_;
     return locals;
   }
 
@@ -348,32 +362,46 @@ public:
   // The number of bindings a request by `Key` names, 0, 1, or 2 for many.
   template <typename Request, typename Key>
   std::size_t count(const void *key_value) const {
-    constexpr request_descriptor request =
-        request_traits<Request, Key>::descriptor;
     std::size_t found = 0;
-    for (const auto &binding : entries_) {
-      if (finds(binding->descriptor(), request) &&
-          binding->key_equals(key_value)) {
-        if (++found == 2) {
-          break;
-        }
-      }
-    }
+    memo<Request, Key>().visit(
+        key_value, [&](const candidate_type &) { return ++found != 2; });
     return found;
   }
 
   // Resolves a request from the one binding it names.
   template <typename Request, typename Key>
   Request resolve_named(Resolver &resolver, const void *key_value) {
-    constexpr request_descriptor request =
-        request_traits<Request, Key>::descriptor;
-    for (const auto &binding : entries_) {
-      if (finds(binding->descriptor(), request) &&
-          binding->key_equals(key_value)) {
-        return resolve_from<Request, Key>(resolver, *binding);
-      }
+    const candidate_type *named = nullptr;
+    memo<Request, Key>().visit(key_value, [&](const candidate_type &found) {
+      named = &found;
+      return false;
+    });
+    if (named == nullptr) {
+      raise_not_found<Request, Key>();
     }
-    raise_not_found<Request, Key>();
+    return resolve_from<Request>(resolver, *named);
+  }
+
+  // Resolves a request from the one binding it names, in one visit of its
+  // memo: it raises the ambiguity of two, and returns `otherwise()` when it
+  // names none.
+  template <typename Request, typename Key, typename Otherwise>
+  Request select_named(Resolver &resolver, const void *key_value,
+                       Otherwise &&otherwise) {
+    const candidate_type *named = nullptr;
+    bool many = false;
+    memo<Request, Key>().visit(key_value, [&](const candidate_type &found) {
+      many = named != nullptr;
+      named = &found;
+      return !many;
+    });
+    if (many) {
+      raise_ambiguous<Request>();
+    }
+    if (named == nullptr) {
+      return otherwise();
+    }
+    return resolve_from<Request>(resolver, *named);
   }
 
   // Adds every binding a request of the element type of `Collection` by
@@ -382,17 +410,53 @@ public:
   void collect(Resolver &resolver, Collection &collection,
                const void *key_value, Append &append) {
     using element = typename collection_traits<Collection>::resolve_type;
-    constexpr request_descriptor request =
-        request_traits<element, Key>::descriptor;
-    for (const auto &binding : entries_) {
-      if (finds(binding->descriptor(), request) &&
-          binding->key_equals(key_value)) {
-        append(collection, resolve_from<element, Key>(resolver, *binding));
-      }
-    }
+    memo<element, Key>().visit(key_value, [&](const candidate_type &found) {
+      append(collection, resolve_from<element>(resolver, found));
+      return true;
+    });
   }
 
 private:
+  using candidate_type = candidate<entry>;
+
+  // The memo of a request by `Key`, made by its first resolution and made
+  // again by the first one after a registration.
+  template <typename Request, typename Key>
+  const request_memo<entry, Key> &memo() const {
+    using memo_type = request_memo<entry, Key>;
+    const std::size_t id = request_id<Request, Key>();
+    if (id >= memos_.size()) {
+      memos_.resize(id + 1);
+    }
+    std::unique_ptr<memo_base> &held = memos_[id];
+    if (!held) {
+      held = std::make_unique<memo_type>();
+    }
+    auto &found = static_cast<memo_type &>(*held);
+    if (found.generation != generation_) {
+      remember<Request, Key>(found);
+    }
+    return found;
+  }
+
+  template <typename Request, typename Key>
+  DINGO_NOINLINE void remember(request_memo<entry, Key> &found) const {
+    constexpr request_descriptor request =
+        request_traits<Request, Key>::descriptor;
+    found.clear();
+    for (const auto &binding : entries_) {
+      if (finds(binding->descriptor(), request)) {
+        const std::size_t term =
+            select_term(binding->published(), request, binding->exposed());
+        found.add({binding.get(), term, binding->key_value(),
+                   term == no_term ? completion::construct
+                                   : binding->plan(term).kind});
+      }
+    }
+    found.index(
+        declaration_of(*table_, innermost_leaf(request.value), request.key));
+    found.generation = generation_;
+  }
   template <typename Binding, typename Arguments, typename Decayed,
             typename All, std::size_t... Slots>
   static std::unique_ptr<runtime_binding<Binding, Resolver>>
@@ -411,16 +475,25 @@ private:
     }
   }
 
-  template <typename Request, typename Key>
-  static Request resolve_from(Resolver &resolver, entry &binding) {
-    constexpr request_descriptor request =
-        request_traits<Request, Key>::descriptor;
-    const std::size_t term =
-        select_term(binding.published(), request, binding.exposed());
-    if (term == no_term) {
-      raise_not_convertible<Request>(binding);
+  template <typename Request>
+  static Request resolve_from(Resolver &resolver, const candidate_type &found) {
+    if (found.term == no_term) {
+      raise_not_convertible<Request>(*found.binding);
     }
-    return complete<Request>(resolver, binding, term);
+    return complete<Request>(resolver, found);
+  }
+
+  // The address the term of `found` borrows, kept once its binding is
+  // settled.
+  static void *borrowed(Resolver &resolver, const candidate_type &found) {
+    if (found.resolved != nullptr) {
+      return found.resolved;
+    }
+    void *address = found.binding->borrow(found.term, resolver);
+    if (found.binding->settled(resolver)) {
+      found.resolved = address;
+    }
+    return address;
   }
 
   template <typename Request>
@@ -438,33 +511,32 @@ private:
   }
 
   template <typename Request>
-  static Request complete(Resolver &resolver, entry &binding,
-                          std::size_t term) {
+  static Request complete(Resolver &resolver, const candidate_type &found) {
     using value_type = typename request_traits<Request>::value_type;
-    const completion_plan &plan = binding.plan(term);
-    switch (plan.kind) {
+    switch (found.kind) {
     case completion::refer:
       if constexpr (std::is_lvalue_reference_v<Request>) {
         return static_cast<Request>(
-            *static_cast<value_type *>(binding.borrow(term, resolver)));
+            *static_cast<value_type *>(borrowed(resolver, found)));
       }
       break;
     case completion::copy:
       if constexpr (!std::is_reference_v<Request> &&
                     std::is_copy_constructible_v<value_type>) {
         return static_cast<Request>(value_type(
-            *static_cast<const value_type *>(binding.borrow(term, resolver))));
+            *static_cast<const value_type *>(borrowed(resolver, found))));
       }
       break;
     case completion::address:
       if constexpr (std::is_pointer_v<value_type>) {
         return static_cast<Request>(
-            static_cast<value_type>(binding.borrow(term, resolver)));
+            static_cast<value_type>(borrowed(resolver, found)));
       }
       break;
     case completion::construct:
       if constexpr (!std::is_lvalue_reference_v<Request>) {
-        return construct<Request>(resolver, binding, term, plan);
+        return construct<Request>(resolver, *found.binding, found.term,
+                                  found.binding->plan(found.term));
       }
       break;
     }
@@ -550,6 +622,10 @@ private:
   const lookup_table *table_;
   publication_log publications_;
   std::vector<std::unique_ptr<entry>> entries_;
+  // The memos of the request types by request_id, and the number of
+  // registrations they are valid for.
+  mutable std::vector<std::unique_ptr<memo_base>> memos_;
+  std::size_t generation_ = 0;
 };
 
 } // namespace dingo::core

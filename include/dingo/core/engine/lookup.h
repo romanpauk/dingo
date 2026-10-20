@@ -25,13 +25,15 @@ namespace dingo::core {
 inline constexpr std::size_t unbounded = static_cast<std::size_t>(-1);
 
 // A declaration of the domain of an interface and a key, or with a null
-// interface the default of every domain no other declaration covers. A domain
-// indexed by a dense array stores the key values 0 up to `bound`, excluded.
+// interface the default of every domain no other declaration covers. The key
+// values of a domain are indexed by `index`; a domain indexed by a dense
+// array stores the values 0 up to `bound`, excluded.
 struct lookup_descriptor {
   type_id interface = nullptr;
   key_descriptor domain;
   bool many = false;
   std::size_t bound = unbounded;
+  index_structure index = index_structure::ordered;
 };
 
 struct lookup_table {
@@ -39,6 +41,24 @@ struct lookup_table {
   lookup_descriptor items[capacity] = {};
   std::size_t size = 0;
 };
+
+// The declaration of the domain of `interface` and `key`: its own, or the
+// default declaration, or none, which indexes its key values in order.
+constexpr lookup_descriptor declaration_of(const lookup_table &table,
+                                           type_id interface,
+                                           const key_descriptor &key) {
+  lookup_descriptor found;
+  for (std::size_t index = 0; index < table.size; ++index) {
+    const lookup_descriptor &declaration = table.items[index];
+    if (declaration.interface == nullptr) {
+      found = declaration;
+    } else if (declaration.interface == interface &&
+               same_key_domain(declaration.domain, key)) {
+      return declaration;
+    }
+  }
+  return found;
+}
 
 // Whether the domain of `interface` and `key` holds many bindings: by its
 // declaration, or by the default declaration, which holds one unless it is
@@ -110,23 +130,26 @@ constexpr std::size_t key_bound(const lookup_table &table,
 
 // A lookup declaration of the domains of the interfaces `Interfaces`, a
 // type_list, and `Key`, a key of the domain, with `Many` bindings, whose key
-// values a dense array of `Bound` indexes unless it is unbounded; an empty
-// list declares the default of every other domain.
+// values `Index` indexes, a dense array of `Bound` unless it is unbounded; an
+// empty list declares the default of every other domain.
 template <typename Interfaces, typename Key, bool Many,
+          index_structure Index = index_structure::ordered,
           std::size_t Bound = unbounded>
 struct lookup_declaration;
 
-template <typename... Interfaces, typename Key, bool Many, std::size_t Bound>
-struct lookup_declaration<type_list<Interfaces...>, Key, Many, Bound> {
+template <typename... Interfaces, typename Key, bool Many,
+          index_structure Index, std::size_t Bound>
+struct lookup_declaration<type_list<Interfaces...>, Key, Many, Index, Bound> {
   static constexpr std::size_t size = sizeof...(Interfaces);
   static constexpr lookup_descriptor items[] = {
-      {type_id_v<Interfaces>, Key::descriptor, Many, Bound}...};
+      {type_id_v<Interfaces>, Key::descriptor, Many, Bound, Index}...};
 };
 
-template <typename Key, bool Many, std::size_t Bound>
-struct lookup_declaration<type_list<>, Key, Many, Bound> {
+template <typename Key, bool Many, index_structure Index, std::size_t Bound>
+struct lookup_declaration<type_list<>, Key, Many, Index, Bound> {
   static constexpr std::size_t size = 1;
-  static constexpr lookup_descriptor items[] = {{nullptr, {}, Many}};
+  static constexpr lookup_descriptor items[] = {
+      {nullptr, {}, Many, Bound, Index}};
 };
 
 template <typename Declarations> struct lookup_table_of;
