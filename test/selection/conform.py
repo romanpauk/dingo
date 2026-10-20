@@ -110,8 +110,9 @@ def declarations(domain, setting):
 
 
 def to_reference(case):
-    """The reference of a case: (levels, the level asked, request, collection,
-    {binding: implementation index}, [(level, Binding)] in binding order)."""
+    """The reference of a case: (the level asked, request, mode, {binding:
+    implementation index}, [(level, Binding)] in binding order). The request
+    of iface, an abstract interface, has no factory."""
     domain, setting, bindings, mode, key = parse_case_id(case)
     child = Level(declarations=declarations(domain, setting))
     parent = None
@@ -130,19 +131,20 @@ def to_reference(case):
         impls[reference] = impl_index(binding.impl)
         placed.append((parent if binding.place == "parent" else child, reference))
     request = Request(INTERFACE, KEYS[key])
-    return child, request, mode == "all", impls, placed
+    return child, request, mode, impls, placed
 
 
 def expected(model, case):
     """(registrations, selection) of the reference: the registrations as
     "ok" or "rejected" in binding order; the selection as an implementation
     index, a list of them, "ambiguous", or "not_found"."""
-    level, request, collection, impls, placed = to_reference(case)
+    level, request, mode, impls, placed = to_reference(case)
+    collection = mode == "all"
     registrations = []
     for target, binding in placed:
         ok, _ = model.register(target, binding)
         registrations.append("ok" if ok else "rejected")
-    selection = model.select(level, request, collection=collection)
+    selection = model.select(level, request, collection=collection, construct=mode == "make")
     if selection.status is Status.AMBIGUOUS:
         return registrations, "ambiguous"
     if selection.status is Status.NOT_FOUND:

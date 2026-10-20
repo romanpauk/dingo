@@ -391,6 +391,9 @@ class FactoryKind(Entity):
 class SelectionMode(Enum):
     SINGULAR = "singular"
     COLLECTION = "collection"
+    # A request to construct an object, which a binding of its type answers
+    # before the object is made by its factory.
+    CONSTRUCT = "construct"
 
 
 class SelectionSource(Enum):
@@ -400,6 +403,9 @@ class SelectionSource(Enum):
     CONTAINER_RUNTIME = "container_runtime"
     PARENT = "parent"
     AUTO_CONSTRUCT = "auto_construct"
+    # The factory of a construct request: the detected constructor of its
+    # type, or the factory the request names.
+    FACTORY = "factory"
 
 
 class Combine(Enum):
@@ -408,8 +414,10 @@ class Combine(Enum):
 
 
 class StepCondition(Enum):
+    # The request is of a type the container may auto-construct.
     CONSTRUCTIBLE = "constructible"
-    MERGE_PARENT = "merge_parent"
+    # The request is of a type its factory can make.
+    HAS_FACTORY = "has_factory"
 
 
 class Cardinality(Enum):

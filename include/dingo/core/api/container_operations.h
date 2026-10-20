@@ -45,14 +45,14 @@ public:
     }
   }
 
-  // Constructs an object of `Type` that no binding stores, by its detected
-  // constructor or by the callable factory given, resolving its dependencies
-  // from the container.
-  // `Factory`, when given, is a factory of the public API, such as
-  // constructor<Leaf>, that makes the object.
+  // Constructs an object of `Type`: a binding of the type answers the request
+  // as resolve does, and otherwise its detected constructor makes it,
+  // resolving its dependencies from the container. `Factory`, when given, is
+  // a factory of the public API, such as constructor<Leaf>, that makes the
+  // object, and so does the callable factory given.
   template <typename Type, typename Factory = void> Type construct() {
     if constexpr (std::is_void_v<Factory>) {
-      return core::detected_factory().make<Type>(self());
+      return self().template construct_by_rule<Type>();
     } else {
       return typename core::factory_of<Factory>::type().template make<Type>(
           self());

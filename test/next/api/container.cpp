@@ -223,3 +223,45 @@ TEST(next_container, constructs_by_a_named_factory) {
 }
 
 } // namespace
+
+namespace {
+
+struct constructed_state {
+  constructed_state() {}
+  int value = 0;
+};
+
+TEST(next_container, constructs_by_a_binding_of_the_type) {
+  dingo::container<> container;
+  container.register_type<scope<dingo::shared>, storage<constructed_state>>();
+  container.resolve<constructed_state &>().value = 5;
+  EXPECT_EQ(container.construct<constructed_state>().value, 5);
+  EXPECT_EQ(&container.construct<constructed_state &>(),
+            &container.resolve<constructed_state &>());
+  dingo::container<> child(&container);
+  EXPECT_EQ(child.construct<constructed_state>().value, 5);
+  dingo::container<> unbound;
+  EXPECT_EQ(unbound.construct<constructed_state>().value, 0);
+}
+
+TEST(next_container, constructs_by_a_static_binding_of_the_type) {
+  using bindings = dingo::bindings<
+      dingo::bind<scope<dingo::shared>, storage<constructed_state>>>;
+  dingo::static_container<bindings> container;
+  container.resolve<constructed_state &>().value = 6;
+  EXPECT_EQ(container.construct<constructed_state>().value, 6);
+}
+
+TEST(next_container, rejects_constructing_an_ambiguously_bound_type) {
+  struct traits : dingo::dynamic_container_traits {
+    using lookup_definition_type =
+        dingo::lookups<dingo::collection<constructed_state>>;
+  };
+  dingo::container<traits> container;
+  container.register_type<scope<dingo::shared>, storage<constructed_state>>();
+  container.register_type<scope<dingo::unique>, storage<constructed_state>>();
+  EXPECT_THROW(container.construct<constructed_state>(),
+               dingo::type_ambiguous_exception);
+}
+
+} // namespace

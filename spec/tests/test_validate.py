@@ -20,8 +20,12 @@ from spec.schema import (
     Requirement,
     Predicate,
     ShapePattern,
+    SelectionMode,
     SelectionOutcome,
+    SelectionSource,
+    SelectionStep,
     Status,
+    StepCondition,
     VariantKind,
     VariantPoint,
 )
@@ -223,6 +227,23 @@ def test_selection_rule_shape():
         outcomes=(SelectionOutcome(count=Cardinality.ONE, status=Status.OK),),
     )
     assert_one_error(spec, "outcomes must cover empty, one, and many")
+
+
+def test_a_factory_is_a_conditional_source_of_construct_requests():
+    factory = SelectionStep(sources=(SelectionSource.FACTORY,), when=StepCondition.HAS_FACTORY)
+    spec = replace_first(sample_spec(), "selection_rules", steps=(factory,))
+    assert_one_error(spec, "a factory is a source of construct requests")
+    spec = replace_first(
+        sample_spec(),
+        "selection_rules",
+        mode=SelectionMode.CONSTRUCT,
+        steps=(SelectionStep(sources=(SelectionSource.FACTORY,)),),
+    )
+    assert_one_error(spec, "a factory is a source of construct requests")
+    spec = replace_first(
+        sample_spec(), "selection_rules", mode=SelectionMode.CONSTRUCT, steps=(factory,)
+    )
+    validate(spec)
 
 
 def test_graph_rule_references():

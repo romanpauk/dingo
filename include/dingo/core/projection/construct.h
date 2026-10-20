@@ -96,6 +96,15 @@ template <typename LeafMaker, typename Leaf = void> struct constructor_factory {
 // The factory of a binding that declares none.
 using detected_factory = constructor_factory<detected_leaf>;
 
+// Whether the detected factory makes a request of `Type`: a value, neither a
+// reference nor a pointer, of a leaf that is an object type and not abstract.
+template <typename Type>
+struct has_detected_factory
+    : std::bool_constant<!std::is_reference_v<Type> &&
+                         !std::is_pointer_v<Type> && !std::is_array_v<Type> &&
+                         std::is_object_v<leaf_of_t<Type>> &&
+                         !std::is_abstract_v<leaf_of_t<Type>>> {};
+
 // Calls `function` with its arguments, `Args`, each resolved as the type it
 // names; the result constructs the stored object.
 template <typename Stored, typename... Args, typename Function,

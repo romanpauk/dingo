@@ -4,8 +4,9 @@ It interprets the key kinds, lookup declarations, and selection rules of the
 spec over a model of containers: a level holds the static and runtime bindings
 of one container, a container may have a parent level, and the registration
 whose object is being constructed may have local bindings. It computes whether
-a binding can be registered and which bindings a singular or a collection
-request selects, the oracle the C++ implementations are compared against.
+a binding can be registered and which bindings a singular, a collection, or a
+construct request selects, the oracle the C++ implementations are compared
+against.
 """
 
 from dataclasses import dataclass, field
@@ -73,6 +74,8 @@ class Request:
     # Whether the request is of an unregistered type the container may
     # construct: a value or a const reference of an auto-constructible leaf.
     constructible: bool = False
+    # Whether the factory of a construct request can make its type.
+    has_factory: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +83,8 @@ class Selection:
     status: Status
     bindings: tuple[Binding, ...] = ()
     auto_constructed: bool = False
+    # The object of a construct request is made by its factory.
+    made: bool = False
 
 
 class Model:
@@ -132,18 +137,26 @@ class Model:
             return list(self.gather(level.parent, (), request, mode, outermost=False))
         if source is SelectionSource.AUTO_CONSTRUCT:
             return ["auto"]
+        if source is SelectionSource.FACTORY:
+            return ["factory"]
         raise ValueError(source)
+
+    @staticmethod
+    def meets(condition, request) -> bool:
+        if condition is StepCondition.CONSTRUCTIBLE:
+            return request.constructible
+        if condition is StepCondition.HAS_FACTORY:
+            return request.has_factory
+        raise ValueError(condition)
 
     def gather(self, level, local, request, mode, outermost=True) -> list:
         """The candidates of the first step that names one. A parent is asked
-        by the same rule, without auto-construction, which the outermost
-        level applies once."""
+        by the same rule, without the conditional steps, auto-construction and
+        the factory, which the outermost level applies once."""
         rule = self.rules[mode]
         found: list = []
         for step in rule.steps:
-            if step.when is StepCondition.CONSTRUCTIBLE and not (
-                outermost and request.constructible
-            ):
+            if step.when is not None and not (outermost and self.meets(step.when, request)):
                 continue
             step_found = [
                 candidate
@@ -157,8 +170,16 @@ class Model:
                 found += step_found
         return found
 
-    def select(self, level: Level, request: Request, local=(), collection=False) -> Selection:
-        mode = SelectionMode.COLLECTION if collection else SelectionMode.SINGULAR
+    def select(
+        self, level: Level, request: Request, local=(), collection=False, construct=False
+    ) -> Selection:
+        mode = (
+            SelectionMode.COLLECTION
+            if collection
+            else SelectionMode.CONSTRUCT
+            if construct
+            else SelectionMode.SINGULAR
+        )
         found = self.gather(level, tuple(local), request, mode)
         count = (
             Cardinality.EMPTY
@@ -170,4 +191,6 @@ class Model:
         status = next(o.status for o in self.rules[mode].outcomes if o.count is count)
         if found == ["auto"]:
             return Selection(status, (), auto_constructed=True)
+        if found == ["factory"]:
+            return Selection(status, (), made=True)
         return Selection(status, tuple(found) if status is Status.OK else ())

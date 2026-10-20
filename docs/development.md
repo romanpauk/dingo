@@ -140,10 +140,10 @@ by the reference implementation in `spec/reference/selection.py`.
   every combination of container domain (runtime, static, mixed, and a child of
   a runtime parent), up to two bindings of one interface with every key kind,
   declaration setting (the default, or every key domain declared many), and
-  request (singular or collection, by every key), and records the outcome of
-  every registration and the implementations a request selects. The table is
-  written to `build/selection/observed/`; extracting it takes about two and a
-  half minutes with 30 jobs.
+  request (singular or collection by every key, or a construct, which takes no
+  key), and records the outcome of every registration and the implementations a
+  request selects. The table is written to `build/selection/observed/`;
+  extracting it takes about two and a half minutes with 30 jobs.
 - [`test/selection/conform.py`](../test/selection/conform.py) compares every
   case with the reference implementation. Every difference must be declared by a
   behavior change of the spec whose `cases` match `selection:<case id>#<field>`,

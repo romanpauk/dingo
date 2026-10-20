@@ -98,6 +98,10 @@ void run_case_{{ index }}() {
     return c.template resolve<iface &>({{ request_argument(request.key) }}).id();
 {% endif %}
   });
+{% elif request.mode == "make" %}
+  probe::singular({{ index }}, regs, [&]() -> int {
+    return c.template construct<iface &>().id();
+  });
 {% elif group.domain != "static" and request.key.kind in ("fixed", "runtime") %}
 {# dingo::container::construct_collection takes no value key: the collection
    of a value key is resolved. #}

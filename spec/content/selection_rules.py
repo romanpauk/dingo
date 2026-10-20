@@ -2,7 +2,8 @@
 
 A request is answered from the sources of a resolution in steps: the local
 bindings of the registration whose object is being constructed, the bindings
-of the container, its parent, and auto-construction of an unregistered type.
+of the container, its parent, and auto-construction of an unregistered type,
+or the factory of a request to construct an object.
 The static and runtime bindings of one level are united, so a static and a
 runtime binding of one key are two candidates. The first step that names a
 binding answers the request: a child shadows its parent, and an ambiguous
@@ -75,6 +76,31 @@ selection_rules: tuple[SelectionRule, ...] = (
             SelectionOutcome(count=Cardinality.EMPTY, status=Status.OK),
             SelectionOutcome(count=Cardinality.ONE, status=Status.OK),
             SelectionOutcome(count=Cardinality.MANY, status=Status.OK),
+        ),
+    ),
+    SelectionRule(
+        id="construct",
+        description=(
+            "A request to construct an object: a binding of its type answers "
+            "it as a singular request does, and when no level names one, its "
+            "factory makes the object, whether or not the type could be "
+            "auto-constructed."
+        ),
+        mode=SelectionMode.CONSTRUCT,
+        combine=Combine.FIRST_NON_EMPTY,
+        steps=(
+            SelectionStep(sources=LOCAL),
+            SelectionStep(sources=CONTAINER),
+            SelectionStep(sources=(SelectionSource.PARENT,)),
+            SelectionStep(
+                sources=(SelectionSource.FACTORY,),
+                when=StepCondition.HAS_FACTORY,
+            ),
+        ),
+        outcomes=(
+            SelectionOutcome(count=Cardinality.ONE, status=Status.OK),
+            SelectionOutcome(count=Cardinality.MANY, status=Status.AMBIGUOUS),
+            SelectionOutcome(count=Cardinality.EMPTY, status=Status.NOT_FOUND),
         ),
     ),
 )

@@ -34,9 +34,11 @@ from spec.schema import (
     ContractDimension,
     CppProjection,
     SelectionMode,
+    SelectionSource,
     ShapePattern,
     PatternForm,
     Spec,
+    StepCondition,
     VariantKind,
 )
 
@@ -268,8 +270,23 @@ def check_selection_rules(spec: Spec, errors: list[str]) -> None:
         for step in rule.steps:
             if not step.sources:
                 errors.append(f"{where}: a step has no sources")
-        if rule.mode is SelectionMode.SINGULAR and rule.combine is not Combine.FIRST_NON_EMPTY:
-            errors.append(f"{where}: singular requests combine with first_non_empty")
+        if (
+            rule.mode in (SelectionMode.SINGULAR, SelectionMode.CONSTRUCT)
+            and rule.combine is not Combine.FIRST_NON_EMPTY
+        ):
+            errors.append(f"{where}: {rule.mode.value} requests combine with first_non_empty")
+        for step in rule.steps:
+            if SelectionSource.FACTORY in step.sources and (
+                rule.mode is not SelectionMode.CONSTRUCT
+                or step.when is not StepCondition.HAS_FACTORY
+            ):
+                errors.append(
+                    f"{where}: a factory is a source of construct requests, "
+                    "taken when the request has a factory"
+                )
+        modes = [r.mode for r in spec.selection_rules]
+        if modes.count(rule.mode) > 1:
+            errors.append(f"{where}: one rule per mode")
         counts = [outcome.count for outcome in rule.outcomes]
         check_unique(errors, where, "outcome counts", counts)
         if set(counts) != set(Cardinality):

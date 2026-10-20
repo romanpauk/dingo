@@ -386,21 +386,33 @@ enum class selection_source : std::uint8_t {
   container_runtime,
   parent,
   auto_construct,
+  factory,
 };
 
-enum class selection_mode : std::uint8_t { singular, collection };
+enum class selection_mode : std::uint8_t {
+  singular,
+  collection,
+  construct,
+};
+
+// The condition on the request under which a step is taken.
+enum class step_condition : std::uint8_t {
+  always,
+  constructible,
+  has_factory,
+};
 
 enum class selection_status : std::uint8_t { ok, ambiguous, not_found };
 
 inline constexpr std::size_t max_selection_steps = 4;
 inline constexpr std::size_t max_step_sources = 4;
 
-// The union of the sources of a step, taken only when the request is of a type
-// the container may construct if `when_constructible`.
+// The union of the sources of a step, taken when the request meets its
+// condition `when`.
 struct selection_step {
   selection_source sources[max_step_sources];
   std::size_t source_count;
-  bool when_constructible;
+  step_condition when;
 };
 
 // A selection rule answers a request from the first step that names a
@@ -422,13 +434,13 @@ inline constexpr selection_rule selection_rules[] = {
      true,
      {{{selection_source::local_static, selection_source::local_runtime},
        2,
-       false},
+       step_condition::always},
       {{selection_source::container_static,
         selection_source::container_runtime},
        2,
-       false},
-      {{selection_source::parent}, 1, false},
-      {{selection_source::auto_construct}, 1, true}},
+       step_condition::always},
+      {{selection_source::parent}, 1, step_condition::always},
+      {{selection_source::auto_construct}, 1, step_condition::constructible}},
      4,
      selection_status::not_found,
      selection_status::ok,
@@ -439,12 +451,28 @@ inline constexpr selection_rule selection_rules[] = {
      {{{selection_source::container_runtime, selection_source::container_static,
         selection_source::local_runtime, selection_source::local_static},
        4,
-       false},
-      {{selection_source::parent}, 1, false}},
+       step_condition::always},
+      {{selection_source::parent}, 1, step_condition::always}},
      2,
      selection_status::ok,
      selection_status::ok,
      selection_status::ok},
+    // spec: selection_rules.construct
+    {selection_mode::construct,
+     true,
+     {{{selection_source::local_static, selection_source::local_runtime},
+       2,
+       step_condition::always},
+      {{selection_source::container_static,
+        selection_source::container_runtime},
+       2,
+       step_condition::always},
+      {{selection_source::parent}, 1, step_condition::always},
+      {{selection_source::factory}, 1, step_condition::has_factory}},
+     4,
+     selection_status::not_found,
+     selection_status::ok,
+     selection_status::ambiguous},
 };
 
 constexpr const selection_rule &rule_of(selection_mode mode) {

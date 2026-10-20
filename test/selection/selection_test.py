@@ -64,6 +64,7 @@ def test_the_place_of_a_single_place_domain_is_implied():
         "runtime/default/impl_0:tag_c/one:none",
         "mixed/default/impl_0:none:parent/one:none",
         "runtime/default/empty/some:none",
+        "runtime/default/empty/make:tag_a",
     ],
 )
 def test_malformed_case_ids_are_rejected(case):
@@ -79,18 +80,18 @@ def test_canonical_bindings_put_static_before_runtime():
 
 def test_mapping_marks_static_bindings_and_parent_levels():
     case = "parent/many/impl_0:tag_a:parent+impl_1:tag_a:child/one:tag_a"
-    level, request, collection, impls, placed = conform.to_reference(case)
+    level, request, mode, impls, placed = conform.to_reference(case)
     (parent, first), (child, second) = placed
     assert child is level and parent is level.parent
     assert not first.static and not second.static
     assert impls == {first: 0, second: 1}
-    assert request.key == conform.KEYS["tag_a"] and not collection
+    assert request.key == conform.KEYS["tag_a"] and mode == "one"
     assert ("iface", ("tag", "tag_a")) in level.declarations
 
     mixed = "mixed/default/impl_0:fixed7:static+impl_0:runtime7:runtime/all:fixed7"
-    level, _, collection, _, placed = conform.to_reference(mixed)
+    level, _, mode, _, placed = conform.to_reference(mixed)
     assert [b.static for _, b in placed] == [True, False]
-    assert level.declarations == {} and level.parent is None and collection
+    assert level.declarations == {} and level.parent is None and mode == "all"
 
 
 def test_reference_outcomes(model):
@@ -105,6 +106,18 @@ def test_reference_outcomes(model):
     )
     shadowed = "parent/default/impl_0:none:parent+impl_1:none:child/one:none"
     assert conform.expected(model, shadowed) == (["ok", "ok"], 1)
+
+
+def test_construct_resolves_a_binding_of_its_type(model):
+    # construct names the binding as a singular request does; the abstract
+    # interface has no factory, so without a binding it is not found.
+    inherited = "parent/default/impl_0:none:parent/make:none"
+    assert conform.expected(model, inherited) == (["ok"], 0)
+    assert conform.expected(model, "runtime/default/empty/make:none") == ([], "not_found")
+    ambiguous = "runtime/many/impl_0:none+impl_1:none/make:none"
+    assert conform.expected(model, ambiguous) == (["ok", "ok"], "ambiguous")
+    keyed = "runtime/default/impl_0:tag_a/make:none"
+    assert conform.expected(model, keyed) == (["ok"], "not_found")
 
 
 def test_a_compile_error_matches_a_rejection_or_not_found():

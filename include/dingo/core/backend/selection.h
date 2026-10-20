@@ -8,8 +8,9 @@
 #pragma once
 
 // The selection of a container: the interpreter of the selection rules of
-// the spec over its sources, its static and runtime bindings, its parent, and
-// auto-construction of an unregistered type. A step whose sources all know
+// the spec over its sources, its static and runtime bindings, its parent,
+// auto-construction of an unregistered type, and the factory of a request to
+// construct an object. A step whose sources all know
 // what they name when the request is compiled is decided then, and reported
 // at compile time when no runtime source can change it; any other step is
 // decided when the request is resolved. spec: selection_rules
@@ -96,6 +97,12 @@ public:
     }
   }
 
+  // Constructs an object of `Type` by the construct rule: a binding of the
+  // type answers it, and otherwise its detected factory makes it.
+  template <typename Type> Type construct_by_rule() {
+    return select<Type, no_key, true, selection_mode::construct>(nullptr);
+  }
+
   // The collection of every binding a request of its element type by `Key`
   // names, by the collection rule, each added by `append`.
   template <typename Collection, typename Key, typename Append>
@@ -178,6 +185,22 @@ private:
 
   Self &self() { return static_cast<Self &>(*this); }
 
+  // Whether a request meets the condition of a step; only the outermost
+  // container takes a conditional step.
+  template <typename Request, typename Key, bool Outermost>
+  static constexpr bool meets(step_condition condition) {
+    constexpr bool unkeyed = std::is_same_v<Key, no_key>;
+    switch (condition) {
+    case step_condition::always:
+      return true;
+    case step_condition::constructible:
+      return Outermost && unkeyed && auto_constructs<Request>::value;
+    case step_condition::has_factory:
+      return Outermost && unkeyed && has_detected_factory<Request>::value;
+    }
+    return false;
+  }
+
   // The number of bindings a source names when the request is compiled, or
   // unknown_count when it depends on the container or the key at runtime.
   template <typename Request, typename Key, selection_source Source>
@@ -194,7 +217,8 @@ private:
       return Self::has_runtime_source ? unknown_count : 0;
     } else if constexpr (Source == selection_source::parent) {
       return std::is_void_v<typename Self::parent_type> ? 0 : unknown_count;
-    } else if constexpr (Source == selection_source::auto_construct) {
+    } else if constexpr (Source == selection_source::auto_construct ||
+                         Source == selection_source::factory) {
       return 1;
     } else if constexpr (Source == selection_source::local_static) {
       if constexpr (!Self::has_local_static_source) {
@@ -210,12 +234,13 @@ private:
     }
   }
 
-  template <typename Request, typename Key, std::size_t Step,
-            std::size_t... Sources>
+  template <typename Request, typename Key, selection_mode Mode,
+            std::size_t Step, std::size_t... Sources>
   static constexpr std::size_t
   known_step_count(std::index_sequence<Sources...> /*sources*/) {
     constexpr std::size_t counts[] = {
-        known_count<Request, Key, singular.steps[Step].sources[Sources]>()...,
+        known_count<Request, Key,
+                    rule_of(Mode).steps[Step].sources[Sources]>()...,
         0};
     std::size_t total = 0;
     for (std::size_t index = 0; index < sizeof...(Sources); ++index) {
@@ -227,20 +252,22 @@ private:
     return total;
   }
 
-  template <typename Request, typename Key, std::size_t Step>
+  template <typename Request, typename Key, selection_mode Mode,
+            std::size_t Step>
   static constexpr std::size_t known_step_count() {
-    return known_step_count<Request, Key, Step>(
-        std::make_index_sequence<singular.steps[Step].source_count>());
+    return known_step_count<Request, Key, Mode, Step>(
+        std::make_index_sequence<rule_of(Mode).steps[Step].source_count>());
   }
 
   // Whether every step of the rule is decided when the request is compiled.
-  template <typename Request, typename Key, std::size_t Step = 0>
+  template <typename Request, typename Key, selection_mode Mode,
+            std::size_t Step = 0>
   static constexpr bool decided_when_compiled() {
-    if constexpr (Step == singular.step_count) {
+    if constexpr (Step == rule_of(Mode).step_count) {
       return true;
     } else {
-      return known_step_count<Request, Key, Step>() != unknown_count &&
-             decided_when_compiled<Request, Key, Step + 1>();
+      return known_step_count<Request, Key, Mode, Step>() != unknown_count &&
+             decided_when_compiled<Request, Key, Mode, Step + 1>();
     }
   }
 
@@ -266,6 +293,7 @@ private:
       }
       return 0;
     case selection_source::auto_construct:
+    case selection_source::factory:
       return 1;
     case selection_source::local_static:
       if constexpr (Self::has_local_static_source) {
@@ -285,13 +313,13 @@ private:
     return 0;
   }
 
-  template <typename Request, typename Key, std::size_t Step>
+  template <typename Request, typename Key, selection_mode Mode,
+            std::size_t Step>
   std::size_t step_count(const void *key_value) {
+    constexpr const selection_step &step = rule_of(Mode).steps[Step];
     std::size_t total = 0;
-    for (std::size_t source = 0; source < singular.steps[Step].source_count;
-         ++source) {
-      total += source_count<Request, Key>(singular.steps[Step].sources[source],
-                                          key_value);
+    for (std::size_t source = 0; source < step.source_count; ++source) {
+      total += source_count<Request, Key>(step.sources[source], key_value);
     }
     return total < 2 ? total : 2;
   }
@@ -300,10 +328,11 @@ private:
   std::size_t inherited_count_at(const void *key_value) {
     if constexpr (Step == singular.step_count) {
       return 0;
-    } else if constexpr (singular.steps[Step].when_constructible) {
+    } else if constexpr (singular.steps[Step].when != step_condition::always) {
       return inherited_count_at<Request, Key, Step + 1>(key_value);
     } else {
-      const std::size_t count = step_count<Request, Key, Step>(key_value);
+      const std::size_t count =
+          step_count<Request, Key, selection_mode::singular, Step>(key_value);
       return count != 0 ? count
                         : inherited_count_at<Request, Key, Step + 1>(key_value);
     }
@@ -314,7 +343,8 @@ private:
   static constexpr bool is_own_step(const selection_step &step) {
     for (std::size_t source = 0; source < step.source_count; ++source) {
       if (step.sources[source] == selection_source::parent ||
-          step.sources[source] == selection_source::auto_construct) {
+          step.sources[source] == selection_source::auto_construct ||
+          step.sources[source] == selection_source::factory) {
         return false;
       }
     }
@@ -328,7 +358,8 @@ private:
     } else if constexpr (!is_own_step(singular.steps[Step])) {
       return own_count_at<Request, Key, Step + 1>(key_value);
     } else {
-      const std::size_t count = step_count<Request, Key, Step>(key_value);
+      const std::size_t count =
+          step_count<Request, Key, selection_mode::singular, Step>(key_value);
       return count != 0 ? count
                         : own_count_at<Request, Key, Step + 1>(key_value);
     }
@@ -341,77 +372,75 @@ private:
     } else if constexpr (!is_own_step(singular.steps[Step])) {
       return resolve_own_at<Request, Key, Step + 1>(key_value);
     } else {
-      const std::size_t count = step_count<Request, Key, Step>(key_value);
+      const std::size_t count =
+          step_count<Request, Key, selection_mode::singular, Step>(key_value);
       if (count == 0) {
         return resolve_own_at<Request, Key, Step + 1>(key_value);
       }
       if (count > 1) {
         raise_ambiguous<Request>();
       }
-      return resolve_step<Request, Key, Step>(key_value);
+      return resolve_step<Request, Key, selection_mode::singular, Step>(
+          key_value);
     }
   }
 
   // Resolves the request from the source of step `Step` that names its one
-  // binding.
-  template <typename Request, typename Key, std::size_t Step>
+  // binding. A source that names none or several bindings when the request is
+  // compiled cannot name the one, so it is not asked and its code is not
+  // instantiated.
+  template <typename Request, typename Key, selection_mode Mode,
+            std::size_t Step, std::size_t Source = 0>
   Request resolve_step(const void *key_value) {
-    for (std::size_t source = 0; source < singular.steps[Step].source_count;
-         ++source) {
-      const selection_source kind = singular.steps[Step].sources[source];
-      if (source_count<Request, Key>(kind, key_value) != 0) {
-        return resolve_source<Request, Key>(kind, key_value);
+    constexpr const selection_step &step = rule_of(Mode).steps[Step];
+    if constexpr (Source == step.source_count) {
+      raise_not_found<Request, Key>();
+    } else {
+      constexpr selection_source kind = step.sources[Source];
+      constexpr std::size_t known = known_count<Request, Key, kind>();
+      if constexpr (known == 0 || (known != unknown_count && known > 1)) {
+        return resolve_step<Request, Key, Mode, Step, Source + 1>(key_value);
+      } else {
+        if (known == 1 || source_count<Request, Key>(kind, key_value) != 0) {
+          return resolve_source<Request, Key, kind>(key_value);
+        }
+        return resolve_step<Request, Key, Mode, Step, Source + 1>(key_value);
       }
     }
-    raise_not_found<Request, Key>();
   }
 
-  template <typename Request, typename Key>
-  Request resolve_source(selection_source source, const void *key_value) {
-    if constexpr (Self::has_static_source) {
-      // A static source with a key known when the request is compiled is
-      // asked only when it names one binding.
-      if constexpr (Key::descriptor.kind == key_kind::runtime ||
-                    Self::static_source_type::template fixed_count<Request,
-                                                                   Key>() ==
-                        1) {
-        if (source == selection_source::container_static) {
-          return self().static_source().template resolve_named<Request, Key>(
-              self().container_resolver(), key_value);
-        }
-      }
+  template <typename Request, typename Key, selection_source Source>
+  Request resolve_source(const void *key_value) {
+    if constexpr (Source == selection_source::container_static) {
+      return self().static_source().template resolve_named<Request, Key>(
+          self().container_resolver(), key_value);
+    } else if constexpr (Source == selection_source::container_runtime) {
+      return self().runtime_source().template resolve_named<Request, Key>(
+          self().container_resolver(), key_value);
+    } else if constexpr (Source == selection_source::local_static) {
+      return self().local_static_source().template resolve_named<Request, Key>(
+          self(), key_value);
+    } else if constexpr (Source == selection_source::local_runtime) {
+      return self()
+          .local_runtime_source()
+          ->template resolve_named<Request, Key>(self(), key_value);
+    } else if constexpr (Source == selection_source::parent) {
+      return self().parent()->template resolve_inherited<Request, Key>(
+          key_value);
+    } else if constexpr (Source == selection_source::factory) {
+      return make_by_factory<Request, Key>();
+    } else {
+      return auto_construct<Request, Key>();
     }
-    if constexpr (Self::has_runtime_source) {
-      if (source == selection_source::container_runtime) {
-        return self().runtime_source().template resolve_named<Request, Key>(
-            self().container_resolver(), key_value);
-      }
+  }
+
+  template <typename Request, typename Key> Request make_by_factory() {
+    if constexpr (has_detected_factory<Request>::value &&
+                  std::is_same_v<Key, no_key>) {
+      return detected_factory().make<Request>(self());
+    } else {
+      raise_not_found<Request, Key>();
     }
-    if constexpr (Self::has_local_static_source) {
-      if constexpr (Key::descriptor.kind == key_kind::runtime ||
-                    Self::local_static_source_type::template fixed_count<
-                        Request, Key>() == 1) {
-        if (source == selection_source::local_static) {
-          return self()
-              .local_static_source()
-              .template resolve_named<Request, Key>(self(), key_value);
-        }
-      }
-    }
-    if constexpr (Self::has_local_runtime_source) {
-      if (source == selection_source::local_runtime) {
-        return self()
-            .local_runtime_source()
-            ->template resolve_named<Request, Key>(self(), key_value);
-      }
-    }
-    if constexpr (!std::is_void_v<typename Self::parent_type>) {
-      if (source == selection_source::parent) {
-        return self().parent()->template resolve_inherited<Request, Key>(
-            key_value);
-      }
-    }
-    return auto_construct<Request, Key>();
   }
 
   template <typename Request, typename Key> Request auto_construct() {
@@ -429,52 +458,56 @@ private:
     }
   }
 
-  // Answers a request by the singular rule from step `Step`; only the
-  // outermost container auto-constructs and collects a collection no
-  // binding stores.
+  // Answers a request by the rule of `Mode` from step `Step`; only the
+  // outermost container takes a conditional step, auto-construction or the
+  // factory, and collects a collection no binding stores.
   template <typename Request, typename Key, bool Outermost,
+            selection_mode Mode = selection_mode::singular,
             std::size_t Step = 0>
   Request select(const void *key_value) {
-    if constexpr (Step == singular.step_count) {
-      return nothing_selected<Request, Key, Outermost>(key_value);
-    } else if constexpr (singular.steps[Step].when_constructible &&
-                         !(Outermost && auto_constructs<Request>::value &&
-                           std::is_same_v<Key, no_key>)) {
-      return select<Request, Key, Outermost, Step + 1>(key_value);
+    if constexpr (Step == rule_of(Mode).step_count) {
+      return nothing_selected<Request, Key, Outermost, Mode>(key_value);
+    } else if constexpr (!meets<Request, Key, Outermost>(
+                             rule_of(Mode).steps[Step].when)) {
+      return select<Request, Key, Outermost, Mode, Step + 1>(key_value);
     } else {
-      constexpr std::size_t known = known_step_count<Request, Key, Step>();
+      constexpr std::size_t known =
+          known_step_count<Request, Key, Mode, Step>();
       if constexpr (known == 0) {
-        return select<Request, Key, Outermost, Step + 1>(key_value);
+        return select<Request, Key, Outermost, Mode, Step + 1>(key_value);
       } else if constexpr (known == 1) {
-        return resolve_step<Request, Key, Step>(key_value);
+        return resolve_step<Request, Key, Mode, Step>(key_value);
       } else if constexpr (known != unknown_count) {
-        static_assert(
-            dependent_false<Request> || !decided_when_compiled<Request, Key>(),
-            "static_container cannot resolve an ambiguously bound type");
+        static_assert(dependent_false<Request> ||
+                          !decided_when_compiled<Request, Key, Mode>(),
+                      "static_container cannot resolve an ambiguously bound "
+                      "type");
         raise_ambiguous<Request>();
       } else {
-        const std::size_t count = step_count<Request, Key, Step>(key_value);
+        const std::size_t count =
+            step_count<Request, Key, Mode, Step>(key_value);
         if (count == 0) {
-          return select<Request, Key, Outermost, Step + 1>(key_value);
+          return select<Request, Key, Outermost, Mode, Step + 1>(key_value);
         }
         if (count > 1) {
           raise_ambiguous<Request>();
         }
-        return resolve_step<Request, Key, Step>(key_value);
+        return resolve_step<Request, Key, Mode, Step>(key_value);
       }
     }
   }
 
-  template <typename Request, typename Key, bool Outermost>
+  template <typename Request, typename Key, bool Outermost, selection_mode Mode>
   Request nothing_selected(const void *key_value) {
     using value_type = typename request_traits<Request>::value_type;
-    if constexpr (Outermost && collection_traits<value_type>::is_collection &&
+    if constexpr (Outermost && Mode == selection_mode::singular &&
+                  collection_traits<value_type>::is_collection &&
                   !std::is_reference_v<Request>) {
       // A collection no binding stores is the collection of the bindings of
       // its element type.
       return collect<value_type, Key>(key_value, collection_append());
     } else {
-      static_assert(!(Outermost && decided_when_compiled<Request, Key>()),
+      static_assert(!(Outermost && decided_when_compiled<Request, Key, Mode>()),
                     "static_container cannot resolve an unbound type");
       raise_not_found<Request, Key>();
     }

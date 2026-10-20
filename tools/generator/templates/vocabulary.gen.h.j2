@@ -185,19 +185,30 @@ enum class selection_source : std::uint8_t {
 {% endfor %}
 };
 
-enum class selection_mode : std::uint8_t { singular, collection };
+enum class selection_mode : std::uint8_t {
+{% for mode in selection_modes %}
+  {{ mode }},
+{% endfor %}
+};
+
+// The condition on the request under which a step is taken.
+enum class step_condition : std::uint8_t {
+{% for condition in step_conditions %}
+  {{ condition }},
+{% endfor %}
+};
 
 enum class selection_status : std::uint8_t { ok, ambiguous, not_found };
 
 inline constexpr std::size_t max_selection_steps = {{ max_selection_steps }};
 inline constexpr std::size_t max_step_sources = {{ max_step_sources }};
 
-// The union of the sources of a step, taken only when the request is of a type
-// the container may construct if `when_constructible`.
+// The union of the sources of a step, taken when the request meets its
+// condition `when`.
 struct selection_step {
   selection_source sources[max_step_sources];
   std::size_t source_count;
-  bool when_constructible;
+  step_condition when;
 };
 
 // A selection rule answers a request from the first step that names a
@@ -217,7 +228,7 @@ inline constexpr selection_rule selection_rules[] = {
 {% for rule in selection_rules %}
     // spec: selection_rules.{{ rule.id }}
     {selection_mode::{{ rule.mode }}, {{ rule.first_non_empty | lower }},
-     { {% for step in rule.steps %}{ { {% for source in step.sources %}selection_source::{{ source }}{{ ", " if not loop.last }}{% endfor %} }, {{ step.sources | length }}, {{ step.when_constructible | lower }} }{{ ", " if not loop.last }}{% endfor %} },
+     { {% for step in rule.steps %}{ { {% for source in step.sources %}selection_source::{{ source }}{{ ", " if not loop.last }}{% endfor %} }, {{ step.sources | length }}, step_condition::{{ step.when }} }{{ ", " if not loop.last }}{% endfor %} },
      {{ rule.steps | length }}, selection_status::{{ rule.empty }}, selection_status::{{ rule.one }}, selection_status::{{ rule.many }}},
 {% endfor %}
 };

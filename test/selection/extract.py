@@ -45,7 +45,8 @@ Universe:
   resolve<iface &>(key_type<tag>{}) with a tag, the constructor parameter
   dependency<iface &, key_type<int, V>> of consumer<V> constructed with
   construct<consumer<V>>() with a fixed value, resolve<iface &>(V) with a
-  runtime value; "all" is construct_collection<std::vector<iface *>>() with
+  runtime value; "make" is construct<iface &>(), which takes no key, so it
+  has the key none only; "all" is construct_collection<std::vector<iface *>>() with
   the same argument (key_type<tag>{}, key_type<int, V>{}, or V). The
   construct_collection of dingo::container takes no value key (a key_type<int,
   V> or an int argument is taken for the append function), so outside the
@@ -56,7 +57,7 @@ A case id is "<domain>/<setting>/<bindings>/<request>". The bindings are
 "empty" or joined with "+", each "<impl>:<key>" followed by ":<place>" in the
 mixed (static, runtime) and parent (parent, child) domains. A key is none,
 tag_a, tag_b, fixed7, fixed8, runtime7, runtime8. The request is
-"<mode>:<key>" with the mode one or all. For example
+"<mode>:<key>" with the mode one, make, or all. For example
 "mixed/default/impl_0:fixed7:static+impl_1:runtime7:runtime/one:runtime7".
 
 A record has the keys
@@ -126,8 +127,10 @@ KEYS = {
     "runtime8": {"kind": "runtime", "type": "int", "value": 8},
 }
 
-MODES = ("one", "all")
-REQUESTS = tuple(f"{mode}:{key}" for mode in MODES for key in KEYS)
+MODES = ("one", "make", "all")
+# The keys of the requests of each mode: construct takes no key.
+MODE_KEYS = {"one": tuple(KEYS), "make": ("none",), "all": tuple(KEYS)}
+REQUESTS = tuple(f"{mode}:{key}" for mode in MODES for key in MODE_KEYS[mode])
 
 # The places a binding of each domain can have, in canonical order.
 PLACES = {
@@ -212,7 +215,7 @@ def parse_case_id(case):
                 raise ValueError(f"malformed binding {text!r} in {case!r}")
             bindings.append(Binding(impl, key, place))
     mode, key = request.split(":")
-    if mode not in MODES or key not in KEYS:
+    if mode not in MODES or key not in MODE_KEYS[mode]:
         raise ValueError(f"malformed request {request!r} in {case!r}")
     return domain, setting, tuple(bindings), mode, key
 

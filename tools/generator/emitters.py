@@ -213,8 +213,7 @@ def selection_fields(rule):
         "steps": [
             {
                 "sources": [source.value for source in step.sources],
-                "when_constructible": step.when is not None
-                and step.when.value == "constructible",
+                "when": step.when.value if step.when is not None else "always",
             }
             for step in rule.steps
         ],
@@ -230,8 +229,10 @@ def vocabulary(spec):
         Access,
         ExposureRule,
         RecursionGuard,
+        SelectionMode,
         SelectionSource,
         Slot,
+        StepCondition,
         ValueCategory,
     )
 
@@ -269,6 +270,8 @@ def vocabulary(spec):
             for kind in spec.key_kinds
         ],
         selection_sources=[source.value for source in SelectionSource],
+        selection_modes=[mode.value for mode in SelectionMode],
+        step_conditions=["always", *(condition.value for condition in StepCondition)],
         selection_rules=[selection_fields(rule) for rule in spec.selection_rules],
         max_selection_steps=max((len(r.steps) for r in spec.selection_rules), default=1),
         max_step_sources=max(

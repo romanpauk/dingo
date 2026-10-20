@@ -1460,8 +1460,14 @@ public API of the spec, which the public API check compiles against it:
 of an object by a named factory, the conversion and rebinding traits, and the
 names of the type identity providers, which it does not need. A collection
 request passes one counting append function through every level of its rule, so
-a parent of the container's own type instantiates nothing more. Remaining:
-`construct` of a type a binding stores, which the baseline makes by the binding.
+a parent of the container's own type instantiates nothing more.
+
+`construct<T>()` follows the construct rule of the spec: a binding of `T`, of
+the registration, the container, or its parent, answers it as a singular request
+does, and otherwise the factory of `T` makes the object, whether or not `T`
+could be auto-constructed. The interpreter asks only the sources that can name
+the one binding of a step when the request is compiled, so a static container
+that resolves `T` by its binding does not instantiate the factory of `T`.
 
 #### M4.4: Static Backend
 
