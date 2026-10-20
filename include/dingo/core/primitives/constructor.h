@@ -13,13 +13,16 @@
 // for. The detection searches from the largest arity down, so the constructor
 // with the most parameters wins, and it ignores the copy constructor. A
 // constructor that accepts any argument, such as a constructor template, is
-// generic and needs an explicit factory.
+// generic and needs an explicit factory. A type that declares its constructor,
+// with a `dingo_constructor_type` naming its signature, is constructed by it,
+// and a scalar is value-initialized.
 //
 // The technique is the one of the current implementation in
 // dingo/factory/detail/constructor_detection.hpp, without its request
 // decorations.
 
 #include <dingo/core/base/config.h>
+#include <dingo/core/base/mechanics.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -106,11 +109,38 @@ template <typename Type, std::size_t Arity> constexpr std::size_t find_arity() {
 }
 } // namespace detail
 
+namespace detail {
+template <typename Signature> struct declared_signature {};
+
+template <template <typename...> typename Template, typename Type,
+          typename... Args>
+struct declared_signature<Template<Type(Args...)>> {
+  using arguments = type_list<Args...>;
+};
+} // namespace detail
+
+// The argument types a type declares for its constructor.
+template <typename Type, typename = void> struct declared_constructor {
+  static constexpr bool declared = false;
+};
+
+template <typename Type>
+struct declared_constructor<Type,
+                            std::void_t<typename Type::dingo_constructor_type>>
+    : detail::declared_signature<typename Type::dingo_constructor_type> {
+  static constexpr bool declared = true;
+};
+
 // The constructor a factory calls for `Type`.
 template <typename Type> struct detected_constructor {
 private:
-  static constexpr std::size_t found =
-      detail::find_arity<Type, DINGO_CONSTRUCTOR_DETECTION_ARGS>();
+  static constexpr std::size_t found = [] {
+    if constexpr (std::is_scalar_v<Type>) {
+      return std::size_t(0);
+    } else {
+      return detail::find_arity<Type, DINGO_CONSTRUCTOR_DETECTION_ARGS>();
+    }
+  }();
   static constexpr bool generic = [] {
     if constexpr (found == detail::invalid_arity || found == 0) {
       return false;
@@ -166,19 +196,32 @@ decltype(auto) invoke_detected(Resolver &resolver, Sink &&sink,
   return std::forward<Sink>(sink)(
       ((void)Indices, constructor_argument<Type, Resolver>(resolver))...);
 }
+
+template <typename Resolver, typename Sink, typename... Args>
+decltype(auto) invoke_declared(Resolver &resolver, Sink &&sink,
+                               type_list<Args...> /*arguments*/) {
+  return std::forward<Sink>(sink)(resolver.template resolve<Args>()...);
+}
 } // namespace detail
 
-// Calls `sink` with the arguments of the detected constructor of `Type`.
+// Calls `sink` with the arguments of the constructor of `Type`: the one it
+// declares, or the detected one.
 template <typename Type, typename Resolver, typename Sink>
 decltype(auto) invoke_constructor(Resolver &resolver, Sink &&sink) {
-  using constructor = detected_constructor<Type>;
-  static_assert(constructor::kind != constructor_kind::invalid,
-                "no constructor of the type is detected");
-  static_assert(constructor::kind != constructor_kind::generic,
-                "a generic constructor is detected; use an explicit factory");
-  return detail::invoke_detected<Type>(
-      resolver, std::forward<Sink>(sink),
-      std::make_index_sequence<constructor::arity>{});
+  if constexpr (declared_constructor<Type>::declared) {
+    return detail::invoke_declared(
+        resolver, std::forward<Sink>(sink),
+        typename declared_constructor<Type>::arguments());
+  } else {
+    using constructor = detected_constructor<Type>;
+    static_assert(constructor::kind != constructor_kind::invalid,
+                  "no constructor of the type is detected");
+    static_assert(constructor::kind != constructor_kind::generic,
+                  "a generic constructor is detected; use an explicit factory");
+    return detail::invoke_detected<Type>(
+        resolver, std::forward<Sink>(sink),
+        std::make_index_sequence<constructor::arity>{});
+  }
 }
 
 } // namespace dingo::core

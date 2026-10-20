@@ -36,6 +36,9 @@ struct binding_descriptor {
   scope_id scope = scope_id::shared;
   shape interfaces[max_interfaces] = {};
   std::size_t interface_count = 0;
+  // Whether the binding declares its factory, so its leaf need not be
+  // constructible.
+  bool declared_factory = false;
 };
 
 enum class request_kind : std::uint8_t {
@@ -436,7 +439,8 @@ register_status(const binding_descriptor &binding) {
       }
     }
   }
-  if (!scope.needs_instance && !constructible(binding.stored)) {
+  if (!scope.needs_instance && !binding.declared_factory &&
+      !constructible(binding.stored)) {
     return registration_status::no_default_factory;
   }
   if (binding.interface_count != 0) {

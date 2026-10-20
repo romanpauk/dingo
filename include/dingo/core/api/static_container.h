@@ -9,6 +9,9 @@
 
 // dingo/static_container.h of the next implementation.
 
+#include <dingo/core/api/factory/callable.h>    // IWYU pragma: export
+#include <dingo/core/api/factory/constructor.h> // IWYU pragma: export
+#include <dingo/core/api/factory/function.h>    // IWYU pragma: export
 #include <dingo/core/api/registration.h>
 #include <dingo/core/backend/static_backend.h>
 #include <dingo/core/primitives/exceptions.h> // IWYU pragma: export
@@ -29,6 +32,17 @@ public:
 
   template <typename Request> Request resolve() {
     return backend_.template resolve<Request>();
+  }
+
+  // Constructs an object of `Type` that no binding stores, by its detected
+  // constructor or by the callable factory given, resolving its dependencies
+  // from the container.
+  template <typename Type> Type construct() {
+    return core::detected_factory().make<Type>(backend_);
+  }
+
+  template <typename Type, typename Factory> Type construct(Factory &&factory) {
+    return factory.template make<Type>(backend_);
   }
 
 private:

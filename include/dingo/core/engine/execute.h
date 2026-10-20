@@ -23,6 +23,7 @@
 #include <dingo/core/engine/derive.h>
 #include <dingo/core/primitives/retained.h>
 #include <dingo/core/primitives/shape.h>
+#include <dingo/core/projection/construct.h>
 #include <dingo/core/projection/layer_traits.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
@@ -62,10 +63,14 @@ constexpr bool keeps_objects(const terms &published) {
 // The context of a binding without cached rules.
 struct no_kept_objects {};
 
-template <scope_id Scope, typename Stored, typename Interfaces>
+// A binding of a scope, a stored type, the interfaces it declares, and the
+// factory that makes its object, detected_factory unless one is declared.
+template <scope_id Scope, typename Stored, typename Interfaces,
+          typename Factory = detected_factory>
 struct binding_type {
   using stored_type = Stored;
   using interfaces = Interfaces;
+  using factory_type = Factory;
   static constexpr scope_id scope = Scope;
   // Whether a request consumes an object the binding constructs for it.
   static constexpr bool consumes = info(Scope).consumes;
@@ -79,6 +84,7 @@ struct binding_type {
     binding_descriptor binding;
     binding.stored = shape_v<Stored>;
     binding.scope = Scope;
+    binding.declared_factory = !std::is_same_v<Factory, detected_factory>;
     return interface_shapes<Interfaces>::apply(binding);
   }
 

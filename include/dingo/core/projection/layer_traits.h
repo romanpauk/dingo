@@ -332,6 +332,28 @@ template <typename Type>
 using leaf_of_t = typename detail::leaf_of<
     std::remove_cv_t<std::remove_reference_t<Type>>>::type;
 
+namespace detail {
+template <typename Type, typename Leaf, typename = void> struct replace_leaf {
+  using type = Leaf;
+};
+
+template <typename Type, typename Leaf>
+struct replace_leaf<
+    Type, Leaf,
+    std::enable_if_t<layer_traits<Type>::kind != layer_kind::leaf &&
+                     layer_traits<Type>::kind != layer_kind::alt>> {
+  using type =
+      typename layer_traits<Type>::template rebind<typename replace_leaf<
+          type_list_at_t<0, typename layer_traits<Type>::arguments>,
+          Leaf>::type>;
+};
+} // namespace detail
+
+// The type with its leaf, through the first argument of every layer, replaced
+// by `Leaf`.
+template <typename Type, typename Leaf>
+using replace_leaf_t = typename detail::replace_leaf<Type, Leaf>::type;
+
 // The type a shape describes: the type with cv-qualification removed at every
 // layer. Two types of the same shape have the same canonical type.
 template <typename Type>

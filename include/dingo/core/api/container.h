@@ -9,6 +9,9 @@
 
 // dingo/container.h of the next implementation.
 
+#include <dingo/core/api/factory/callable.h>    // IWYU pragma: export
+#include <dingo/core/api/factory/constructor.h> // IWYU pragma: export
+#include <dingo/core/api/factory/function.h>    // IWYU pragma: export
 #include <dingo/core/api/registration.h>
 #include <dingo/core/backend/runtime_backend.h>
 #include <dingo/core/base/mechanics.h>
@@ -31,12 +34,24 @@ public:
   // external binding takes its instance as the argument.
   template <typename... Parts, typename... Args>
   void register_type(Args &&...args) {
-    using binding = typename core::registration<Parts...>::binding;
+    using binding =
+        typename core::registration<Parts...>::template binding_for<Args...>;
     backend_.add<binding>(std::forward<Args>(args)...);
   }
 
   template <typename Request> Request resolve() {
     return backend_.resolve<Request>();
+  }
+
+  // Constructs an object of `Type` that no binding stores, by its detected
+  // constructor or by the callable factory given, resolving its dependencies
+  // from the container.
+  template <typename Type> Type construct() {
+    return core::detected_factory().make<Type>(backend_);
+  }
+
+  template <typename Type, typename Factory> Type construct(Factory &&factory) {
+    return factory.template make<Type>(backend_);
   }
 
 private:

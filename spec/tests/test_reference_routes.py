@@ -290,3 +290,24 @@ def test_a_created_layer_may_be_of_any_family(model):
     for family in ("std", "user"):
         request = Request(RequestKind.VALUE, layer("opt", leaf(COPYABLE), family=family))
         assert resolve(model, "unique", stored, request).served
+
+
+ABSTRACT = Leaf("abstract", constructible=False)
+
+
+@pytest.mark.parametrize("scope", ("shared", "shared_cyclical", "unique"))
+def test_a_declared_factory_makes_an_abstract_leaf(model, scope):
+    from spec.reference.routes import register
+
+    stored = leaf(ABSTRACT) if scope == "shared_cyclical" else layer("own", leaf(ABSTRACT))
+    if scope == "unique":
+        stored = layer("ptr", leaf(ABSTRACT))
+    assert register(model, scope, stored) == (False, "the stored shape has no default factory")
+    assert register(model, scope, stored, factory="function") == (True, "")
+
+
+def test_an_unknown_factory_kind_is_rejected(model):
+    from spec.reference.routes import register
+
+    with pytest.raises(ValueError):
+        register(model, "shared", leaf(COPYABLE), factory="missing")

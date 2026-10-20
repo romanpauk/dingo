@@ -30,6 +30,12 @@ template <typename... Interfaces> struct interfaces {
   using type = core::type_list<Interfaces...>;
 };
 
+// The factory a registration declares: a constructor, a function, or a
+// callable object passed at registration.
+template <typename Factory> struct factory {
+  using type = Factory;
+};
+
 template <typename... Parts> struct bind {};
 
 template <typename... Binds> struct bindings {};
@@ -37,6 +43,9 @@ template <typename... Binds> struct bindings {};
 } // namespace dingo
 
 namespace dingo::core {
+
+// The factory of the next implementation that a public factory declares.
+template <typename Factory> struct factory_of;
 
 namespace detail {
 template <template <typename...> typename Part, typename Type>
@@ -64,7 +73,8 @@ struct missing_part {
 };
 } // namespace detail
 
-// The binding type a registration declares.
+// The binding type a registration declares. A registration whose only
+// argument is a callable factory makes its object by it.
 template <typename... Parts> struct registration {
   using scope_part =
       typename detail::find_part<::dingo::scope, detail::missing_part,
@@ -80,9 +90,31 @@ template <typename... Parts> struct registration {
   static_assert(!std::is_same_v<storage_part, detail::missing_part>,
                 "a registration needs a storage<>");
 
-  using binding =
+  using factory_part =
+      typename detail::find_part<::dingo::factory, detail::missing_part,
+                                 Parts...>::type;
+  using declared_factory = typename std::conditional_t<
+      std::is_same_v<factory_part, detail::missing_part>,
+      std::enable_if<true, detected_factory>,
+      factory_of<typename factory_part::type>>::type;
+
+  template <typename... Args> struct with_arguments {
+    using factory = declared_factory;
+  };
+
+  template <typename Arg> struct with_arguments<Arg> {
+    using factory =
+        std::conditional_t<is_callable_factory<std::decay_t<Arg>>::value,
+                           std::decay_t<Arg>, declared_factory>;
+  };
+
+  template <typename... Args>
+  using binding_for =
       binding_type<scope_of_v<typename scope_part::type>,
-                   typename storage_part::type, typename interfaces_part::type>;
+                   typename storage_part::type, typename interfaces_part::type,
+                   typename with_arguments<Args...>::factory>;
+
+  using binding = binding_for<>;
 };
 
 template <typename Bind> struct bind_registration;

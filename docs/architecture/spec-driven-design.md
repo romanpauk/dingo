@@ -1223,9 +1223,16 @@ the lazy and external lifetime slots; the lazy slot reports a recursion while
 its object is being constructed and is empty again after a failed construction.
 `core/primitives/constructor.h` detects the constructor of a type and calls it
 with arguments that resolve their parameter types, the `detected_constructor`
-factory kind of the spec. Remaining: the two-phase slot, the compiler variant of
-constructor detection for MSVC, the declared, function, and callable factories,
-conversion primitives, index structures, the arena, and the thunk shape.
+factory kind of the spec, or by the constructor a type declares with
+`DINGO_CONSTRUCTOR`. `core/projection/construct.h` holds the other factory
+kinds: a declared constructor, which list-initializes the leaf from its declared
+argument types inside the layers of the stored shape, and a function or callable
+object, whose result is the stored object. A slot keeps the factory of its
+binding, empty unless it holds a callable object, and a declared factory lifts
+the check that the stored leaf is constructible. The containers construct an
+object no binding stores with `construct`. Remaining: the compiler variant of
+constructor detection for MSVC, conversion primitives, index structures, the
+arena, and the thunk shape.
 
 #### M2.4: Vocabulary And Descriptors
 
@@ -1608,3 +1615,8 @@ capability tags.
 - 2026-10-20: The messages of the exceptions are a section of the spec, with the
   wording of the current implementation, and the route probes compare them with
   the current implementation case by case.
+
+- 2026-10-20: A binding's factory is a type of the binding, kept by its slot:
+  the detected constructor unless a constructor, a function, or a callable
+  object is declared. A declared factory lifts the check that the stored leaf is
+  constructible, in the reference implementation as in the C++ one.

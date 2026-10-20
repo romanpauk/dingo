@@ -204,6 +204,7 @@ add_executable(dingo_next_test
     next/api/construction.cpp
     next/api/container.cpp
     next/api/diagnostics.cpp
+    next/api/factories.cpp
     next/api/shared_cyclical.cpp
     next/api/unique.cpp
     next/base/mechanics.cpp

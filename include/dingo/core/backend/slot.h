@@ -39,11 +39,33 @@ template <typename Type> [[noreturn]] void raise_recursion() {
   raise_type_recursion(path);
 }
 
-// The context of the walks of a binding, kept by its slot: the objects its
-// cached rules derive, or nothing.
-template <typename Binding>
-class DINGO_EMPTY_BASES binding_context : private Binding::context_type {
+// The factory of a binding, kept by its slot, empty unless it holds a callable
+// object.
+template <typename Factory> class factory_holder : private Factory {
 public:
+  factory_holder() = default;
+
+  template <typename Argument>
+  explicit factory_holder(Argument &&factory)
+      : Factory(std::forward<Argument>(factory)) {}
+
+  Factory &factory() { return *this; }
+};
+
+// What a slot keeps besides its object: the factory of the binding, and the
+// context of its walks, the objects its cached rules derive, or nothing.
+template <typename Binding>
+class DINGO_EMPTY_BASES binding_context
+    : private Binding::context_type,
+      public factory_holder<typename Binding::factory_type> {
+public:
+  binding_context() = default;
+
+  template <typename Factory>
+  explicit binding_context(Factory &&factory)
+      : factory_holder<typename Binding::factory_type>(
+            std::forward<Factory>(factory)) {}
+
   typename Binding::context_type &context() { return *this; }
 };
 
@@ -62,14 +84,15 @@ class binding_slot<Binding, slot::lazy> : public binding_context<Binding> {
 
 public:
   using stored_type = typename Binding::stored_type;
+  using binding_context<Binding>::binding_context;
 
   template <typename Resolver> stored_type &get(Resolver &resolver) {
     if (slot_.constructing()) {
       raise_recursion<leaf_of_t<stored_type>>();
     }
-    return slot_.get_or_construct([&resolver](void *where) {
+    return slot_.get_or_construct([this, &resolver](void *where) {
       const auto frame = type_frame::of<leaf_of_t<stored_type>>();
-      construct_stored<stored_type>(where, resolver);
+      construct_stored<stored_type>(where, this->factory(), resolver);
     });
   }
 
@@ -86,6 +109,7 @@ class binding_slot<Binding, slot::none> : public binding_context<Binding> {
 
 public:
   using stored_type = typename Binding::stored_type;
+  using binding_context<Binding>::binding_context;
 
   // A new object, or a new array, allocated so that its ownership passes to
   // the request.
@@ -104,7 +128,7 @@ public:
       element *first = new element[std::extent_v<stored_type>]();
       return *reinterpret_cast<stored_type *>(first);
     } else {
-      return make_stored<stored_type>(resolver);
+      return this->factory().template make<stored_type>(resolver);
     }
   }
 
@@ -151,7 +175,7 @@ class binding_slot<Binding, slot::two_phase> : public binding_context<Binding> {
 public:
   using stored_type = typename Binding::stored_type;
 
-  binding_slot() = default;
+  using binding_context<Binding>::binding_context;
   binding_slot(const binding_slot &) = delete;
   binding_slot &operator=(const binding_slot &) = delete;
   ~binding_slot() { reset(); }
@@ -209,10 +233,10 @@ private:
           traits::adopt(block->object(), publication_deleter<element>()));
       holds_handle_ = true;
       ::new (static_cast<void *>(block->object()))
-          element(make_stored<element>(resolver));
+          element(this->factory().template make<element>(resolver));
       block->constructed = true;
     } else {
-      construct_stored<stored_type>(storage_, resolver);
+      construct_stored<stored_type>(storage_, this->factory(), resolver);
     }
     state_ = state::constructed;
     guard.active = false;

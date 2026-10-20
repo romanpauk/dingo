@@ -285,8 +285,17 @@ def interface_probes(interfaces: tuple[Leaf, ...]) -> list[Request]:
 
 
 def register(
-    model: Model, scope_id: str, stored: Shape, interfaces: tuple[Leaf, ...] = ()
+    model: Model,
+    scope_id: str,
+    stored: Shape,
+    interfaces: tuple[Leaf, ...] = (),
+    factory: str | None = None,
 ) -> tuple[bool, str]:
+    """Whether a binding can be registered, and why not. `factory` is the id
+    of the factory kind the binding declares, or None for the detected
+    constructor."""
+    if factory is not None and factory not in {kind.id for kind in model.spec.factory_kinds}:
+        raise ValueError(f"unknown factory kind {factory!r}")
     scope = model.scopes[scope_id]
     form = storage_form(model, stored)
     if not exposed_categories(model, scope_id, form):
@@ -294,7 +303,7 @@ def register(
     if not scope.nested_layers and stored.layer is not None:
         if any(arg.layer is not None for arg in stored.args):
             return False, f"{scope_id} does not store nested layers"
-    if "instance" not in scope.needs and not constructible(stored):
+    if "instance" not in scope.needs and factory is None and not constructible(stored):
         return False, "the stored shape has no default factory"
     if interfaces:
         if holds_in_array(stored):
