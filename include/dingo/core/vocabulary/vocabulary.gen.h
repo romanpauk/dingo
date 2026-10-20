@@ -162,12 +162,12 @@ struct scope_info {
 
 // spec: routes
 enum class rule_id : std::uint8_t {
+  select_alternative,
   borrow_optional,
   borrow_owned,
-  borrow_shared,
   deref_pointer,
   deref_reference,
-  select_alternative,
+  borrow_shared,
   copy,
   address_of,
   decay_array,
@@ -182,10 +182,10 @@ enum class rule_id : std::uint8_t {
   release_whole_array,
   upcast_reference,
   upcast_pointer,
-  upcast_consumed_pointer,
-  upcast_owned,
-  upcast_shared,
   upcast_copied_shared,
+  upcast_owned,
+  upcast_consumed_pointer,
+  upcast_shared,
   convert_borrowed,
   convert_consumed,
   retain_shared_upcast,
@@ -226,16 +226,16 @@ struct route_rule {
 };
 
 inline constexpr route_rule route_rules[] = {
+    // spec: routes.select_alternative
+    {rule_id::select_alternative, layer_kind::alt, value_category::lvalue,
+     layer_kind::leaf, value_category::lvalue, access::inherit, 0, 0, false,
+     false, false},
     // spec: routes.borrow_optional
     {rule_id::borrow_optional, layer_kind::opt, value_category::lvalue,
      layer_kind::leaf, value_category::lvalue, access::inherit, 0, 0, false,
      false, false},
     // spec: routes.borrow_owned
     {rule_id::borrow_owned, layer_kind::own, value_category::lvalue,
-     layer_kind::leaf, value_category::lvalue, access::inherit, 0, 0, false,
-     false, false},
-    // spec: routes.borrow_shared
-    {rule_id::borrow_shared, layer_kind::share, value_category::lvalue,
      layer_kind::leaf, value_category::lvalue, access::inherit, 0, 0, false,
      false, false},
     // spec: routes.deref_pointer
@@ -246,8 +246,8 @@ inline constexpr route_rule route_rules[] = {
     {rule_id::deref_reference, layer_kind::ref, value_category::lvalue,
      layer_kind::leaf, value_category::lvalue, access::inherit, 0, 0, false,
      false, false},
-    // spec: routes.select_alternative
-    {rule_id::select_alternative, layer_kind::alt, value_category::lvalue,
+    // spec: routes.borrow_shared
+    {rule_id::borrow_shared, layer_kind::share, value_category::lvalue,
      layer_kind::leaf, value_category::lvalue, access::inherit, 0, 0, false,
      false, false},
     // spec: routes.copy
@@ -305,21 +305,21 @@ inline constexpr route_rule route_rules[] = {
     {rule_id::upcast_pointer, layer_kind::ptr, value_category::prvalue,
      layer_kind::ptr, value_category::prvalue, access::inherit, 0, 8, true,
      false, false},
-    // spec: routes.upcast_consumed_pointer
-    {rule_id::upcast_consumed_pointer, layer_kind::ptr, value_category::rvalue,
-     layer_kind::ptr, value_category::rvalue, access::inherit, 0, 8, true,
+    // spec: routes.upcast_copied_shared
+    {rule_id::upcast_copied_shared, layer_kind::share, value_category::prvalue,
+     layer_kind::share, value_category::prvalue, access::inherit, 0, 8, true,
      false, false},
     // spec: routes.upcast_owned
     {rule_id::upcast_owned, layer_kind::own, value_category::rvalue,
      layer_kind::own, value_category::rvalue, access::inherit, 0, 8, true,
      false, false},
+    // spec: routes.upcast_consumed_pointer
+    {rule_id::upcast_consumed_pointer, layer_kind::ptr, value_category::rvalue,
+     layer_kind::ptr, value_category::rvalue, access::inherit, 0, 8, true,
+     false, false},
     // spec: routes.upcast_shared
     {rule_id::upcast_shared, layer_kind::share, value_category::rvalue,
      layer_kind::share, value_category::rvalue, access::inherit, 0, 8, true,
-     false, false},
-    // spec: routes.upcast_copied_shared
-    {rule_id::upcast_copied_shared, layer_kind::share, value_category::prvalue,
-     layer_kind::share, value_category::prvalue, access::inherit, 0, 8, true,
      false, false},
     // spec: routes.convert_borrowed
     {rule_id::convert_borrowed, layer_kind::leaf, value_category::lvalue,

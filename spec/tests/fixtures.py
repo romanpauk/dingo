@@ -4,6 +4,7 @@ The shipped content leaves most sections empty, so the tests build their own
 spec with one or more entities of every section and mutate it.
 """
 
+from spec.content.route_forms import route_forms as ROUTE_FORMS
 from spec.schema import (
     SelectionSourceTime,
     SourceTime,
@@ -233,6 +234,7 @@ def sample_spec() -> Spec:
                 ),
             ),
         ),
+        route_forms=ROUTE_FORMS,
         selection_sources=tuple(
             SelectionSourceTime(
                 id=source.value,

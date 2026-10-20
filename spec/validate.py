@@ -25,6 +25,7 @@ import string
 from collections.abc import Iterable, Iterator
 
 from spec.schema import (
+    RouteForm,
     ApiKind,
     BindingTime,
     Bound,
@@ -75,6 +76,7 @@ def validate(spec: Spec) -> list[str]:
     check_routes(spec, errors)
     check_lookups(spec, errors)
     check_selection_rules(spec, errors)
+    check_route_forms(spec, errors)
     check_selection_sources(spec, errors)
     check_transaction_rules(spec, errors)
     check_graph_rules(spec, errors)
@@ -304,6 +306,63 @@ def check_selection_rules(spec: Spec, errors: list[str]) -> None:
         check_unique(errors, where, "outcome counts", counts)
         if set(counts) != set(Cardinality):
             errors.append(f"{where}: outcomes must cover empty, one, and many")
+
+
+def route_form_signature(route) -> tuple:
+    """A route without its layer kinds, which the routes of a form share."""
+    return (
+        route.from_shape.category,
+        route.to_shape.category,
+        route.access,
+        route.exposure,
+        tuple(requirement.predicate for requirement in route.requires),
+        route.via,
+        route.cache is not None,
+    )
+
+
+def names_target(pattern) -> bool:
+    if pattern is None:
+        return False
+    return pattern.name == "T" or any(names_target(arg) for arg in pattern.args)
+
+
+def check_kind_forms(spec: Spec, errors: list[str]) -> None:
+    templates = {template.form: template for template in spec.route_forms}
+    for form in RouteForm:
+        if form not in templates:
+            errors.append(f"route_forms: no template of the form {form.value}")
+    kinds = ids(spec.layer_kinds)
+    for kind in spec.layer_kinds:
+        for kind_form in kind.forms:
+            where = f"layer_kinds.{kind.id}.{kind_form.id}"
+            template = templates.get(kind_form.form)
+            if template is None:
+                continue
+            targets = names_target(template.from_shape) or names_target(
+                template.to_shape
+            )
+            if targets and kind_form.target is None:
+                errors.append(f"{where}: the form {kind_form.form.value} needs a target kind")
+            if not targets and kind_form.target is not None:
+                errors.append(f"{where}: the form {kind_form.form.value} takes no target kind")
+            if kind_form.target is not None:
+                require_ref(errors, where, "target kind", kind_form.target, kinds)
+
+
+def check_route_forms(spec: Spec, errors: list[str]) -> None:
+    check_kind_forms(spec, errors)
+    signatures: dict = {}
+    for route in spec.routes:
+        if route.form is None:
+            continue
+        signature = route_form_signature(route)
+        first = signatures.setdefault(route.form, (route.id, signature))
+        if first[1] != signature:
+            errors.append(
+                f"routes.{route.id}: differs from routes.{first[0]} of the form "
+                f"{route.form.value} in more than its layer kinds"
+            )
 
 
 def check_selection_sources(spec: Spec, errors: list[str]) -> None:

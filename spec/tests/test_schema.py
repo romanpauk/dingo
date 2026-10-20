@@ -81,6 +81,7 @@ def test_spec_sections():
         "layer_kinds",
         "storage_forms",
         "scopes",
+        "route_forms",
         "routes",
         "key_kinds",
         "decorations",

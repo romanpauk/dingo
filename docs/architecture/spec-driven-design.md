@@ -1849,9 +1849,41 @@ of the baseline.
 
 #### M10.3: Layer Kinds And Routes
 
-Wrappers map onto the built-in layer kinds through `layer_traits`. A new kind of
-layer brings its own route rules, which the engine merges into the route table
-when it is compiled.
+Status: in progress.
+
+The shape algebra is the only built-in: its rule forms, each executed by one
+operation of a wrapper's traits (reaching the element, taking it, wrapping it,
+adopting an owned pointer, sharing an owned handle, taking an address, decaying
+or releasing an array, and upcasting or keeping an interface handle); the rules
+of a leaf, which copy it, upcast it, or convert it; and the value categories.
+Every layer kind is a declaration: a tag type whose public `layer_kind_traits`
+give its properties, owning, sharing, nullable, borrowable, in place, variadic,
+and extent, and its forms, with the kind a form leads to, such as the sharing
+kind of a family. The kinds of the library, unique, shared, optional, variant,
+the arrays, the pointer, and the reference, are generated from the spec as such
+declarations, and `std::` and language types map onto them through
+`wrapper_traits` as a user type does. The engine knows no kind by name: a node
+of a shape holds the identity of its kind, its properties, and its forms, and
+the rules of a derivation are the forms of its kinds. A storage form is a
+classification of the properties of the outer layers, which a scope exposes
+categories for.
+
+A form that creates a layer, wrapping or adopting, applies at the request: a
+binding cannot know every kind requested of it, so a request of a layer whose
+kind wraps or adopts resolves its element and makes the layer of it. A form that
+reaches into a layer or converts it applies at the binding.
+
+Steps, each checked against the route table, which must not change:
+
+1. the spec states the routes as the forms of the layer kinds and the rules of a
+   leaf, from which the reference implementation derives the table
+2. the engine takes kinds as identities and the rules from their forms; the
+   kinds of the library, and the mapping of the `std::` and language types, are
+   generated through the public extension point, and the closed list of layer
+   kinds and the global route table are gone
+3. the creating forms apply at the request
+4. the public API records the extension point, and the route extraction adds a
+   kind of the user, checked as a kind of the library
 
 #### M10.4: Selection Sources
 

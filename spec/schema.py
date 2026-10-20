@@ -45,6 +45,7 @@ __all__ = [
     "GraphRule",
     "IndexStructure",
     "KeyKind",
+    "KindForm",
     "LayerKind",
     "LayerTrait",
     "LookupDeclaration",
@@ -54,6 +55,8 @@ __all__ = [
     "PublicApiEntry",
     "RecursionGuard",
     "RequestCategory",
+    "RouteForm",
+    "RouteFormTemplate",
     "Requirement",
     "Route",
     "Scope",
@@ -97,6 +100,9 @@ class LayerTrait(Enum):
     SHARING = "sharing"
     NULLABLE = "nullable"
     BORROWABLE = "borrowable"
+    # Holds its element in its own storage, as an optional or an array does,
+    # rather than by a handle.
+    IN_PLACE = "in_place"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -112,6 +118,8 @@ class LayerKind(Entity):
     variadic: bool = False
     has_extent: bool = False
     traits: tuple[LayerTrait, ...] = ()
+    # The forms of the kind, from which its routes are made.
+    forms: tuple["KindForm", ...] = ()
 
 
 # Scopes
@@ -285,6 +293,69 @@ class Via(Enum):
     UPCAST = "upcast"
 
 
+class RouteForm(Enum):
+    """The forms of the routes of a layer, each executed by one operation of
+    the traits of a layer of the kind. The forms, the rules of a leaf, and the
+    value categories are the algebra of shapes; a layer kind, of the library or
+    of the user, is a declaration of the forms it has."""
+
+    # A borrowed layer reaches its element (element).
+    BORROW = "borrow"
+    # A consumed layer gives up its element (element).
+    TAKE = "take"
+    # A consumed element is wrapped into a layer of the kind (make).
+    WRAP = "wrap"
+    # A consumed layer of the target kind, a pointer, is adopted by a layer of
+    # the kind (adopt).
+    ADOPT = "adopt"
+    # A consumed layer hands its element to a layer of the target kind, the
+    # sharing layer of its family (share).
+    SHARE = "share"
+    # The address of a borrowed object is a layer of the kind, a pointer.
+    ADDRESS = "address"
+    # A borrowed layer decays to a layer of the target kind, a pointer to its
+    # first element.
+    DECAY = "decay"
+    # A consumed layer hands out a layer of the target kind, a pointer to its
+    # first element, whose ownership passes to the caller.
+    RELEASE = "release"
+    # A consumed array is handed out as a layer of the kind, a pointer, whose
+    # ownership passes to the caller.
+    RELEASE_WHOLE = "release_whole"
+    # A copied layer converts to the layer of a declared interface (rebind).
+    UPCAST_COPIED = "upcast_copied"
+    # A consumed layer converts to the layer of a declared interface (rebind).
+    UPCAST_CONSUMED = "upcast_consumed"
+    # A borrowed layer converts to the layer of a declared interface, which
+    # the binding keeps (rebind).
+    RETAIN = "retain"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RouteFormTemplate(Entity):
+    """The route of a form, whose patterns name the kind that has the form
+    `K` and the kind it leads to `T`."""
+
+    form: RouteForm
+    from_shape: "ShapePattern"
+    to_shape: "ShapePattern"
+    access: "Access"
+    exposure: "RequestCategory | None" = None
+    requires: tuple["Requirement", ...] = ()
+    via: "Via | None" = None
+    cache: "ShapePattern | None" = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class KindForm(Entity):
+    """A form a layer kind has: the route `id` of it, and the kind it leads
+    to, for a form whose template names `T`."""
+
+    form: RouteForm
+    description: str
+    target: str | None = None  # layer kind id
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Route(Entity):
     """A route rule: a derivation from one shape pattern to another.
@@ -304,6 +375,8 @@ class Route(Entity):
     where: tuple[Requirement, ...] = ()
     via: Via | None = None
     cache: ShapePattern | None = None
+    # The form a route of a layer kind is of; None for a rule of a leaf.
+    form: RouteForm | None = None
 
 
 # Requests and keys
@@ -802,6 +875,7 @@ class Spec:
     layer_kinds: tuple[LayerKind, ...] = ()
     storage_forms: tuple[StorageForm, ...] = ()
     scopes: tuple[Scope, ...] = ()
+    route_forms: tuple[RouteFormTemplate, ...] = ()
     routes: tuple[Route, ...] = ()
     key_kinds: tuple[KeyKind, ...] = ()
     decorations: tuple[Decoration, ...] = ()
