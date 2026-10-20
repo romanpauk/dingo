@@ -17,8 +17,10 @@
 #include <dingo/core/base/mechanics.h>
 #include <dingo/core/engine/derive.h>
 #include <dingo/core/engine/execute.h>
+#include <dingo/core/engine/lookup.h>
 #include <dingo/core/engine/request.h>
 #include <dingo/core/primitives/retained.h>
+#include <dingo/core/projection/collection.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
 #include <cstddef>
@@ -99,10 +101,11 @@ inline constexpr std::size_t not_found = static_cast<std::size_t>(-1);
 inline constexpr std::size_t ambiguous = static_cast<std::size_t>(-2);
 
 // Whether two keys known at compile time have equal values: keys without a
-// value are equal within their domain, and fixed keys compare their values.
+// value are equal within their domain, and fixed keys compare their values. A
+// runtime key compares its value when it is resolved, so it is equal here.
 template <typename Left, typename Right> constexpr bool same_fixed_key() {
-  if constexpr (has_value(Left::descriptor.kind) &&
-                has_value(Right::descriptor.kind)) {
+  if constexpr (Left::descriptor.kind == key_kind::fixed &&
+                Right::descriptor.kind == key_kind::fixed) {
     if constexpr (std::is_same_v<typename Left::value_type,
                                  typename Right::value_type>) {
       return Left::value() == Right::value();
@@ -114,9 +117,9 @@ template <typename Left, typename Right> constexpr bool same_fixed_key() {
   }
 }
 
-// Whether two bindings hold a key of a common interface, so that a container
-// of both is rejected.
-template <typename... Bindings> struct duplicates {
+// Whether two bindings hold a key of a common interface whose domain holds
+// one binding, so that a container of both is rejected.
+template <const lookup_table &Table, typename... Bindings> struct duplicates {
   template <std::size_t... Indices>
   static constexpr bool any(std::index_sequence<Indices...> /*indices*/) {
     return (row<Indices>(std::index_sequence_for<Bindings...>()) || ...);
@@ -126,8 +129,8 @@ template <typename... Bindings> struct duplicates {
   static constexpr bool row(std::index_sequence<Others...> /*others*/) {
     return (
         (Others > Index &&
-         share_domain(pack_at_t<Index, Bindings...>::descriptor,
-                      pack_at_t<Others, Bindings...>::descriptor) &&
+         conflicts(Table, pack_at_t<Index, Bindings...>::descriptor,
+                   pack_at_t<Others, Bindings...>::descriptor) &&
          same_fixed_key<typename pack_at_t<Index, Bindings...>::key_type,
                         typename pack_at_t<Others, Bindings...>::key_type>()) ||
         ...);
@@ -138,9 +141,10 @@ template <typename... Bindings> struct duplicates {
 // finds, not_found, or ambiguous.
 template <typename Key, typename... Bindings>
 constexpr std::size_t find_binding(const request_descriptor &request) {
-  constexpr binding_descriptor descriptors[] = {Bindings::descriptor...};
+  constexpr binding_descriptor descriptors[] = {Bindings::descriptor...,
+                                                binding_descriptor{}};
   constexpr bool values[] = {
-      same_fixed_key<typename Bindings::key_type, Key>()...};
+      same_fixed_key<typename Bindings::key_type, Key>()..., false};
   std::size_t found = not_found;
   for (std::size_t index = 0; index < sizeof...(Bindings); ++index) {
     if (finds(descriptors[index], request) && values[index]) {
@@ -154,10 +158,12 @@ constexpr std::size_t find_binding(const request_descriptor &request) {
 }
 } // namespace detail
 
-template <typename... Bindings> class static_backend {
+// A backend of the bindings `Bindings`, with the lookup declarations of the
+// table `LookupTable::value`.
+template <typename LookupTable, typename... Bindings> class static_backend {
   static_assert(((Bindings::status == registration_status::registered) && ...),
                 "a binding cannot be stored by its scope");
-  static_assert(!detail::duplicates<Bindings...>::any(
+  static_assert(!detail::duplicates<LookupTable::value, Bindings...>::any(
                     std::index_sequence_for<Bindings...>()),
                 "a static container holds one binding of a key of an "
                 "interface: lookup already registered");
@@ -193,28 +199,90 @@ public:
   // Resolves a request by a key value supplied at runtime, compared with the
   // fixed keys of the bindings of its domain when it is resolved.
   template <typename Request, typename Value> Request resolve(Value &&value) {
-    using runtime = runtime_key_of<std::decay_t<Value>>;
-    return resolve_by_value<Request, typename runtime::type>(
-        runtime::value(value), std::index_sequence_for<Bindings...>());
+    using key = request_key_of<std::decay_t<Value>>;
+    using value_type = typename request_traits<Request>::value_type;
+    if constexpr (is_key_type<std::decay_t<Value>>::value) {
+      return resolve_by<Request, typename key::type>();
+    } else if constexpr (collection_traits<value_type>::is_collection &&
+                         !std::is_reference_v<Request> &&
+                         !(finds(
+                               Bindings::descriptor,
+                               request_traits<
+                                   Request, typename key::type>::descriptor) ||
+                           ...)) {
+      // A collection no binding stores is the collection of the bindings of
+      // its element type.
+      return collect<value_type, typename key::type>(key::value(value),
+                                                     collection_append());
+    } else {
+      return resolve_by_value<Request, typename key::type>(
+          *static_cast<const typename key::type::value_type *>(
+              key::value(value)),
+          std::index_sequence_for<Bindings...>());
+    }
+  }
+
+  // The collection of every binding a request of its element type by `Key`
+  // names, in the order of the bindings, each added by `append`; the value of
+  // a runtime key is compared when it is resolved.
+  template <typename Collection, typename Key, typename Append>
+  Collection collect(const void *key_value, Append &&append) {
+    return collect_from<Collection, Key>(
+        key_value, append, std::index_sequence_for<Bindings...>());
   }
 
 private:
   template <typename Request, typename Key> Request resolve_by() {
-    if constexpr (sizeof...(Bindings) == 0) {
-      static_assert(dependent_false<Request>,
-                    "static_container cannot resolve an unbound type");
-    } else {
+    {
       constexpr request_descriptor request =
           request_traits<Request, Key>::descriptor;
       constexpr std::size_t index =
           detail::find_binding<Key, Bindings...>(request);
-      static_assert(index != detail::not_found,
-                    "static_container cannot resolve an unbound type");
-      static_assert(
-          index != detail::ambiguous,
-          "static_container cannot resolve an ambiguously bound type");
-      return resolve_from<Request, index>();
+      using value_type = typename request_traits<Request>::value_type;
+      if constexpr (index == detail::not_found &&
+                    collection_traits<value_type>::is_collection &&
+                    !std::is_reference_v<Request>) {
+        // A collection no binding stores is the collection of the bindings
+        // of its element type.
+        return collect<value_type, Key>(key_store<Key>().value(),
+                                        collection_append());
+      } else {
+        static_assert(index != detail::not_found,
+                      "static_container cannot resolve an unbound type");
+        static_assert(
+            index != detail::ambiguous,
+            "static_container cannot resolve an ambiguously bound type");
+        return resolve_from<Request, index>();
+      }
     }
+  }
+
+  template <typename Collection, typename Key, typename Append,
+            std::size_t... Indices>
+  Collection collect_from([[maybe_unused]] const void *key_value,
+                          [[maybe_unused]] Append &append,
+                          std::index_sequence<Indices...> /*indices*/) {
+    using element = typename collection_traits<Collection>::resolve_type;
+    [[maybe_unused]] constexpr request_descriptor request =
+        request_traits<element, Key>::descriptor;
+    Collection result;
+    (
+        [&] {
+          using binding = pack_at_t<Indices, Bindings...>;
+          using key_type = typename binding::key_type;
+          // A runtime key value is compared with the fixed key of a binding
+          // here, and any other key when the request is compiled.
+          if constexpr (finds(binding::descriptor, request) &&
+                        detail::same_fixed_key<key_type, Key>()) {
+            if (Key::descriptor.kind != key_kind::runtime ||
+                key_store<key_type>::equal(key_store<key_type>().value(),
+                                           key_value)) {
+              append(result, resolve_from<element, Indices>());
+            }
+          }
+        }(),
+        ...);
+    return result;
   }
 
   template <typename Request, typename Key, typename Value,

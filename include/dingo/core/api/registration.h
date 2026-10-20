@@ -10,6 +10,7 @@
 // The registration vocabulary of the public API and its reduction to a binding
 // type of the next implementation.
 
+#include <dingo/core/api/collection.h>
 #include <dingo/core/base/mechanics.h>
 #include <dingo/core/engine/execute.h>
 #include <dingo/core/vocabulary/scope_tags.gen.h> // IWYU pragma: export
@@ -90,7 +91,8 @@ template <typename Default, typename... Args> struct find_callable_factory {
 template <typename Default, typename First, typename... Rest>
 struct find_callable_factory<Default, First, Rest...> {
   using type = typename std::conditional_t<
-      is_callable_factory<std::decay_t<First>>::value,
+      is_callable_factory<std::decay_t<First>>::value ||
+          is_collection_factory<std::decay_t<First>>::value,
       std::enable_if<true, std::decay_t<First>>,
       find_callable_factory<Default, Rest...>>::type;
 };

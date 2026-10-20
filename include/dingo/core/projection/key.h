@@ -187,6 +187,24 @@ struct runtime_key_of<::dingo::key_value<Type, Interface>> {
   }
 };
 
+// The key of a request argument: a key_type object names its key, and a
+// key_value or a value of the key type is a runtime key. `value` is the
+// address of the value of the key, or nullptr.
+template <typename Argument, bool = is_key_type<Argument>::value>
+struct request_key_of {
+  using type = typename runtime_key_of<Argument>::type;
+  static const void *value(const Argument &argument) {
+    return &runtime_key_of<Argument>::value(argument);
+  }
+};
+
+template <typename Argument> struct request_key_of<Argument, true> {
+  using type = key_of_t<Argument>;
+  static const void *value(const Argument & /*argument*/) {
+    return key_store<type>().value();
+  }
+};
+
 // A request of `Type` by the key `Key`, which converts to the object it
 // resolved.
 template <typename Type, typename Key> class keyed {

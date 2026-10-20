@@ -1437,8 +1437,11 @@ A static binding carries no key, a tag key, or a fixed key, and the engine
 compares the key domain of a request in its descriptor. Fixed keys are compared
 when the request is compiled, and a runtime key value against the fixed keys of
 its domain when it is resolved. A second binding of a key of an interface is
-rejected when the container type is formed. Remaining: lookup declarations,
-collections, local bindings, parents, and auto-construction.
+rejected when the container type is formed, unless the lookup declarations of
+the traits of the container declare its domain many. A collection request
+gathers the bindings of its element type in the order of the bindings, by its
+key, also when no binding matches. Remaining: local bindings, parents, and
+auto-construction.
 
 #### M4.5: Runtime Backend
 
@@ -1449,8 +1452,16 @@ Implement runtime resolution on the engine, memoized per request type.
 A runtime binding keeps the value of its key, a runtime key value or the value
 of a fixed key, and a request compares it after the key domain; a second binding
 of a key of an interface is rejected at registration with the message of the
-baseline. Remaining: lookup declarations and the index structures, collections,
-parents, auto-construction, and memoization.
+baseline, unless the lookup declarations of the traits of the container declare
+its domain many. A collection request gathers the bindings of its element type
+in the order of registration, by its key, also when no binding matches; a
+request of a collection type no binding stores, a constructor parameter among
+them, is a collection request, and `register_type_collection` registers a
+binding that stores one. The selection extractor of
+[Selection Conformance](../development.md#selection-conformance) run against the
+next implementation finds its 5,936 runtime and static cases equal to the
+reference implementation. Remaining: the index structures, parents,
+auto-construction, and memoization.
 
 #### M4.6: Mixed Backend
 

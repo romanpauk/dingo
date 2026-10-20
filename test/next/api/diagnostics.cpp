@@ -9,6 +9,7 @@
 // request and the types whose objects are being constructed.
 
 #include <dingo/container.h>
+#include <dingo/lookup/lookup.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 
@@ -71,6 +72,20 @@ TEST(next_diagnostics, names_the_request_that_is_not_convertible) {
                 [&] { (void)container.resolve<dependency &&>(); }),
             "type is not convertible to " + type_name_of<dependency &&>() +
                 " from " + type_name_of<dependency>());
+}
+
+struct many_traits : dingo::dynamic_container_traits {
+  using lookup_definition_type = dingo::lookups<dingo::collection<dependency>>;
+};
+
+TEST(next_diagnostics, names_the_request_that_is_ambiguous) {
+  dingo::container<many_traits> container;
+  container.register_type<scope<dingo::shared>, storage<dependency>>();
+  container.register_type<scope<dingo::shared>,
+                          storage<std::shared_ptr<dependency>>>();
+  EXPECT_EQ(message_of<dingo::type_ambiguous_exception>(
+                [&] { (void)container.resolve<dependency &>(); }),
+            "type resolution is ambiguous: " + type_name_of<dependency &>());
 }
 
 TEST(next_diagnostics, names_the_binding_that_is_already_registered) {

@@ -16,6 +16,7 @@
 #include <dingo/core/backend/slot.h>
 #include <dingo/core/engine/derive.h>
 #include <dingo/core/engine/execute.h>
+#include <dingo/core/engine/lookup.h>
 #include <dingo/core/engine/request.h>
 #include <dingo/core/primitives/exceptions.h>
 #include <dingo/core/primitives/retained.h>
@@ -23,6 +24,7 @@
 #include <dingo/core/primitives/slot.h>
 #include <dingo/core/primitives/type_name.h>
 #include <dingo/core/primitives/type_path.h>
+#include <dingo/core/projection/collection.h>
 #include <dingo/core/vocabulary/diagnostics.gen.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
@@ -264,6 +266,9 @@ template <typename... Args> struct registration_arguments {
 
 class runtime_backend {
 public:
+  // A backend of the lookup declarations of `table`, which outlives it.
+  explicit runtime_backend(const lookup_table &table) : table_(&table) {}
+
   // Adds a binding, whose arguments are the arguments of its slot and the
   // value of its runtime key. A binding whose key a binding of a common
   // interface already holds is rejected.
@@ -279,7 +284,7 @@ public:
             all, std::make_index_sequence<sizeof...(Args) -
                                           arguments::key_count()>());
     for (const auto &existing : entries_) {
-      if (share_domain(existing->descriptor(), Binding::descriptor) &&
+      if (conflicts(*table_, existing->descriptor(), Binding::descriptor) &&
           existing->key_equals(entry->key_value())) {
         raise_already_registered<Binding>();
       }
@@ -304,9 +309,29 @@ public:
   // Resolves a request by a key value supplied at runtime: a key_value, or a
   // value of the key type.
   template <typename Request, typename Value> Request resolve(Value &&value) {
-    using runtime = runtime_key_of<std::decay_t<Value>>;
-    const auto &key = runtime::value(value);
-    return resolve_by<Request, typename runtime::type>(&key);
+    using key = request_key_of<std::decay_t<Value>>;
+    return resolve_by<Request, typename key::type>(key::value(value));
+  }
+
+  // The collection of every binding a request of its element type by `Key`
+  // names, in the order of registration, each added by `append`.
+  template <typename Collection, typename Key, typename Append>
+  Collection collect(const void *key_value, Append &&append) {
+    using element = typename collection_traits<Collection>::resolve_type;
+    constexpr request_descriptor request =
+        request_traits<element, Key>::descriptor;
+    Collection result;
+    for (const auto &entry : entries_) {
+      if (finds(entry->descriptor(), request) && entry->key_equals(key_value)) {
+        const std::size_t term =
+            select_term(entry->published(), request, entry->exposed());
+        if (term == no_term) {
+          raise_not_convertible<element>(*entry);
+        }
+        append(result, complete<element>(*entry, term));
+      }
+    }
+    return result;
   }
 
 private:
@@ -342,7 +367,15 @@ private:
       }
     }
     if (found == nullptr) {
-      raise_not_found<Request, Key>();
+      using value_type = typename traits::value_type;
+      if constexpr (collection_traits<value_type>::is_collection &&
+                    !std::is_reference_v<Request>) {
+        // A collection no binding stores is the collection of the bindings
+        // of its element type.
+        return collect<value_type, Key>(key_value, collection_append());
+      } else {
+        raise_not_found<Request, Key>();
+      }
     }
     std::size_t term =
         select_term(found->published(), request, found->exposed());
@@ -473,6 +506,7 @@ private:
     throw std::logic_error("the selected term does not complete the request");
   }
 
+  const lookup_table *table_;
   retained_objects retained_;
   publication_log publications_;
   std::vector<std::unique_ptr<runtime_entry>> entries_;

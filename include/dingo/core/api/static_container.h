@@ -9,10 +9,13 @@
 
 // dingo/static_container.h of the next implementation.
 
+#include <dingo/core/api/collection.h>
+#include <dingo/core/api/container_traits.h>    // IWYU pragma: export
 #include <dingo/core/api/factory/callable.h>    // IWYU pragma: export
 #include <dingo/core/api/factory/constructor.h> // IWYU pragma: export
 #include <dingo/core/api/factory/function.h>    // IWYU pragma: export
 #include <dingo/core/api/key.h>                 // IWYU pragma: export
+#include <dingo/core/api/lookup/lookup.h>
 #include <dingo/core/api/registration.h>
 #include <dingo/core/backend/static_backend.h>
 #include <dingo/core/primitives/exceptions.h> // IWYU pragma: export
@@ -21,11 +24,13 @@
 
 namespace dingo {
 
-template <typename Bindings> class static_container;
+template <typename Bindings, typename Traits = static_container_traits>
+class static_container;
 
 // A container of the bindings of its type. It takes the instance of every
 // external binding as a constructor argument, in the order of the bindings.
-template <typename... Binds> class static_container<bindings<Binds...>> {
+template <typename... Binds, typename Traits>
+class static_container<bindings<Binds...>, Traits> {
 public:
   template <typename... Instances>
   explicit static_container(Instances &&...instances)
@@ -52,8 +57,18 @@ public:
     return factory.template make<Type>(backend_);
   }
 
+  // Constructs a collection of every binding of its element type, by a key
+  // and an append function, either of which may be given.
+  template <typename Collection, typename... Arguments>
+  Collection construct_collection(Arguments &&...arguments) {
+    return core::collect_by<Collection>(backend_,
+                                        std::forward<Arguments>(arguments)...);
+  }
+
 private:
   core::static_backend<
+      core::lookup_table_of<typename core::lookup_list<
+          typename Traits::lookup_definition_type>::type>,
       typename core::bind_registration<Binds>::type::binding...>
       backend_;
 };

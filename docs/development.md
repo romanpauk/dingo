@@ -151,6 +151,17 @@ CXX=g++ python3 test/selection/extract.py --include-dir build/routes/baseline/in
 python3 test/selection/conform.py --summary
 ```
 
+Against the next implementation, its table must match the reference
+implementation without behavior changes:
+
+```bash
+python3 test/selection/extract.py --work-dir build/selection-next \
+    --cxx-command "g++ -std=c++20 -I$PWD/include/next -I$PWD/include" \
+    --domains runtime,static
+python3 test/selection/conform.py --exact \
+    --observed build/selection-next/observed/gcc16-x86_64-c++20.jsonl
+```
+
 ### Scope Check
 
 [`test/spec/scopes_check.py`](../test/spec/scopes_check.py) generates a program
