@@ -167,4 +167,20 @@ TEST(next_factories, serves_declared_factories_statically) {
   EXPECT_EQ(container.resolve<overloaded_constructor>().chosen, 2);
 }
 
+struct overloaded_operator {
+  int operator()(int value) const { return value * 2; }
+  float operator()(float value) const { return value; }
+};
+
+TEST(next_factories, invokes_a_callable_with_resolved_arguments) {
+  dingo::container<> container;
+  container.register_type<scope<dingo::external>, storage<int>>(7);
+  EXPECT_EQ(container.invoke([](int value) { return value + 1; }), 8);
+  EXPECT_EQ(container.invoke<int(int)>(overloaded_operator{}), 14);
+  using bindings =
+      dingo::bindings<dingo::bind<scope<dingo::shared>, storage<double>>>;
+  dingo::static_container<bindings> fixed;
+  EXPECT_EQ(fixed.invoke([](double &value) { return value; }), 0.0);
+}
+
 } // namespace

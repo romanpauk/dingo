@@ -226,10 +226,12 @@ def changed_entries(loaded):
     return changed
 
 
-def check(loaded, command, work_dir, jobs):
-    """Returns (number of entries checked, failures)."""
+def check(loaded, command, work_dir, jobs, implementation="current"):
+    """Returns (number of entries checked, failures). The next implementation
+    provides the target public API, so every entry, the changed ones too, must
+    compile against it."""
     includes, code, macros = collect_units(loaded)
-    changed = changed_entries(loaded)
+    changed = changed_entries(loaded) if implementation == "current" else {}
     work_dir.mkdir(parents=True, exist_ok=True)
     checker = Checker(command, work_dir, jobs)
     prelude = names_prelude(declaring_headers(loaded))
@@ -272,6 +274,13 @@ def main():
         help="directory for the generated translation units, such as build/public-api",
     )
     parser.add_argument("--jobs", type=int, default=min(os.cpu_count() or 1, 8))
+    parser.add_argument(
+        "--implementation",
+        choices=("current", "next"),
+        default="current",
+        help="next checks the target public API, changed entries included, "
+        "against the next implementation, given by --cxx-command",
+    )
     args = parser.parse_args()
 
     try:
@@ -280,7 +289,9 @@ def main():
         print(f"the spec is invalid:\n{error}", file=sys.stderr)
         return 2
     command = shlex.split(args.cxx_command)
-    checked, failures = check(loaded, command, args.work_dir, args.jobs)
+    checked, failures = check(
+        loaded, command, args.work_dir, args.jobs, args.implementation
+    )
     if failures:
         report(failures)
         print(f"public API check failed: {len(failures)} of {checked} entries", file=sys.stderr)

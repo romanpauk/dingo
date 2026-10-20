@@ -21,6 +21,15 @@ public:
   retained_objects(const retained_objects &) = delete;
   retained_objects &operator=(const retained_objects &) = delete;
 
+  retained_objects(retained_objects &&other) noexcept : head_(other.head_) {
+    other.head_ = nullptr;
+  }
+
+  retained_objects &operator=(retained_objects &&other) noexcept {
+    std::swap(head_, other.head_);
+    return *this;
+  }
+
   ~retained_objects() {
     while (head_ != nullptr) {
       node *next = head_->next;

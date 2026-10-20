@@ -70,7 +70,11 @@ The spec tests run as `dingo_spec_test` in ctest.
 [`test/spec/public_api_check.py`](../test/spec/public_api_check.py) compiles
 every public include path of the spec alone, and one translation unit that uses
 every public name and extension point and checks every configuration macro. A
-failure names the spec entry. The lit test `public-api.t` runs it.
+failure names the spec entry. The lit test `public-api.t` runs it. An entry a
+behavior change declares with an `api:` pattern is missing from the current
+implementation, and the check requires it to be. With `--implementation next`,
+the check compiles every entry against the next implementation, which provides
+the target API; the lit test `next-public-api.t` runs it.
 
 ### Contract Evaluation
 

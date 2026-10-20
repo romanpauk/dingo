@@ -1454,6 +1454,15 @@ annotated interfaces; a request `annotated<T, Tag>`, a constructor parameter or
 a top-level one, with or without a key, names it by carrying the annotation in
 its key.
 
+The next implementation provides every public include path and the whole target
+public API of the spec, which the public API check compiles against it:
+`invoke`, the runtime container and its parent of its own type, the construction
+of an object by a named factory, the conversion and rebinding traits, and the
+names of the type identity providers, which it does not need. A collection
+request passes one counting append function through every level of its rule, so
+a parent of the container's own type instantiates nothing more. Remaining:
+`construct` of a type a binding stores, which the baseline makes by the binding.
+
 #### M4.4: Static Backend
 
 Status: in progress.

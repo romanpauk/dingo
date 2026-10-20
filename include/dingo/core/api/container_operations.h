@@ -1,0 +1,94 @@
+//
+// This file is part of dingo project <https://github.com/romanpauk/dingo>
+//
+// See LICENSE for license and copyright information
+// SPDX-License-Identifier: MIT
+//
+
+#pragma once
+
+// The operations every container of the next implementation provides on its
+// selection.
+
+#include <dingo/core/api/collection.h>
+#include <dingo/core/api/factory/callable.h>
+#include <dingo/core/api/registration.h>
+#include <dingo/core/base/mechanics.h>
+#include <dingo/core/primitives/type_path.h>
+#include <dingo/core/projection/construct.h>
+
+#include <functional>
+#include <type_traits>
+#include <utility>
+
+namespace dingo::detail {
+
+// The operations of a container on its selection: constructing objects and
+// collections no binding stores, invoking a callable with its arguments
+// resolved, and registering a binding that stores a collection.
+template <typename Self> class container_operations {
+public:
+  // Registers a binding that stores a collection of the bindings of its
+  // element type, each added by `append`, or by its collection traits.
+  template <typename... Parts, typename... Append>
+  void register_type_collection(Append &&...append) {
+    static_assert(sizeof...(Append) <= 1,
+                  "a collection takes at most one append function");
+    if constexpr (sizeof...(Append) == 0) {
+      self().template register_type<Parts...>(
+          core::collection_factory<core::collection_append>(
+              core::collection_append()));
+    } else {
+      self().template register_type<Parts...>(
+          core::collection_factory<std::decay_t<Append>...>(
+              std::forward<Append>(append)...));
+    }
+  }
+
+  // Constructs an object of `Type` that no binding stores, by its detected
+  // constructor or by the callable factory given, resolving its dependencies
+  // from the container.
+  // `Factory`, when given, is a factory of the public API, such as
+  // constructor<Leaf>, that makes the object.
+  template <typename Type, typename Factory = void> Type construct() {
+    if constexpr (std::is_void_v<Factory>) {
+      return core::detected_factory().make<Type>(self());
+    } else {
+      return typename core::factory_of<Factory>::type().template make<Type>(
+          self());
+    }
+  }
+
+  template <typename Type, typename Factory> Type construct(Factory &&factory) {
+    return factory.template make<Type>(self());
+  }
+
+  // Constructs a collection of every binding of its element type, by a key
+  // and an append function, either of which may be given.
+  template <typename Collection, typename... Arguments>
+  Collection construct_collection(Arguments &&...arguments) {
+    return core::collect_by<Collection>(self(),
+                                        std::forward<Arguments>(arguments)...);
+  }
+
+  // Calls `callable` with its arguments resolved from the container;
+  // `Signature`, when given, names the argument types of a callable whose
+  // call operator is overloaded or a template.
+  template <typename Signature = void, typename Callable>
+  decltype(auto) invoke(Callable &&callable) {
+    using arguments = typename ::dingo::detail::callable_arguments<
+        Signature, std::decay_t<Callable>>::type;
+    const auto frame = core::type_frame::of<std::decay_t<Callable>>();
+    return invoke_with(callable, arguments());
+  }
+
+private:
+  template <typename Callable, typename... Args>
+  decltype(auto) invoke_with(Callable &callable,
+                             core::type_list<Args...> /*arguments*/) {
+    return std::invoke(callable, self().template resolve<Args>()...);
+  }
+
+  Self &self() { return static_cast<Self &>(*this); }
+};
+} // namespace dingo::detail

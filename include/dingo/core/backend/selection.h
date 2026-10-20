@@ -41,6 +41,20 @@ namespace dingo::core {
 
 inline constexpr std::size_t unknown_count = static_cast<std::size_t>(-1);
 
+// Adds an element by `append` and records that it added one. One is made by
+// the outermost collection request and passed to every level, so a level of
+// any depth instantiates the same functions.
+template <typename Append> struct counting_append {
+  Append &append;
+  bool added = false;
+
+  template <typename Collection, typename Element>
+  void operator()(Collection &collection, Element &&element) {
+    added = true;
+    append(collection, std::forward<Element>(element));
+  }
+};
+
 template <typename Request> struct annotated_request;
 
 template <typename Type, typename Tag>
@@ -87,7 +101,8 @@ public:
   template <typename Collection, typename Key, typename Append>
   Collection collect(const void *key_value, Append &&append) {
     Collection result;
-    collect_into<Collection, Key>(result, key_value, append);
+    counting_append<std::remove_reference_t<Append>> counted{append};
+    collect_into<Collection, Key>(result, key_value, counted);
     return result;
   }
 
@@ -136,27 +151,25 @@ public:
   }
 
   // Adds the bindings a collection request names by the collection rule to
-  // `collection`, and returns whether it added any.
-  template <typename Collection, typename Key, typename Append>
-  bool collect_into(Collection &collection, const void *key_value,
-                    Append &append) {
+  // `collection` through `counted`, a counting_append.
+  template <typename Collection, typename Key, typename Counted>
+  void collect_into(Collection &collection, const void *key_value,
+                    Counted &counted) {
     constexpr const selection_rule &rule = rule_of(selection_mode::collection);
-    bool added = false;
-    auto counted = [&](Collection &target, auto &&element) {
-      added = true;
-      append(target, std::forward<decltype(element)>(element));
-    };
     for (std::size_t step = 0; step < rule.step_count; ++step) {
+      const bool before = counted.added;
+      counted.added = false;
       for (std::size_t source = 0; source < rule.steps[step].source_count;
            ++source) {
         collect_source<Collection, Key>(rule.steps[step].sources[source],
                                         collection, key_value, counted);
       }
+      const bool added = counted.added;
+      counted.added = before || added;
       if (rule.first_non_empty && added) {
-        return true;
+        return;
       }
     }
-    return added;
   }
 
 private:

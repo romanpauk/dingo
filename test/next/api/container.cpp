@@ -9,6 +9,7 @@
 // paths: runtime and static containers of shared and external bindings.
 
 #include <dingo/container.h>
+#include <dingo/runtime_container.h>
 #include <dingo/static_container.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
@@ -189,6 +190,36 @@ TEST(next_container, takes_static_external_instances_in_binding_order) {
   EXPECT_EQ(&container.resolve<counted &>(), &first);
   EXPECT_EQ(container.resolve<iface *>(), second.get());
   EXPECT_EQ(container.resolve<std::shared_ptr<iface>>(), second);
+}
+
+} // namespace
+
+namespace {
+
+TEST(next_container, a_runtime_container_moves) {
+  dingo::runtime_container<> container;
+  container.register_type<scope<dingo::shared>, storage<counted>>();
+  counted &first = container.resolve<counted &>();
+  dingo::runtime_container<> moved = std::move(container);
+  EXPECT_EQ(&moved.resolve<counted &>(), &first);
+}
+
+struct alternative_a {
+  explicit alternative_a(int init) : value(init) {}
+  int value;
+};
+
+struct alternative_b {
+  explicit alternative_b(float init) : value(init) {}
+  float value;
+};
+
+TEST(next_container, constructs_by_a_named_factory) {
+  dingo::container<> container;
+  container.register_type<scope<dingo::external>, storage<int>>(7);
+  auto chosen = container.construct<std::variant<alternative_a, alternative_b>,
+                                    dingo::constructor<alternative_a>>();
+  EXPECT_EQ(std::get<alternative_a>(chosen).value, 7);
 }
 
 } // namespace

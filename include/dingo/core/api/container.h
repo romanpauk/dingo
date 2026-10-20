@@ -10,6 +10,7 @@
 // dingo/container.h of the next implementation.
 
 #include <dingo/core/api/collection.h>
+#include <dingo/core/api/container_operations.h>
 #include <dingo/core/api/container_traits.h>    // IWYU pragma: export
 #include <dingo/core/api/factory/callable.h>    // IWYU pragma: export
 #include <dingo/core/api/factory/constructor.h> // IWYU pragma: export
@@ -35,13 +36,25 @@ template <typename Type> struct is_bindings : std::false_type {};
 template <typename... Binds>
 struct is_bindings<bindings<Binds...>> : std::true_type {};
 
-template <typename... Rest> struct runtime_parent {
+// The parent of a runtime container: Parent of container<Traits, Allocator,
+// Parent>, and otherwise a container of its own type.
+template <typename Self, typename... Rest> struct runtime_parent {
+  using type = Self;
+};
+
+template <typename Self, typename Allocator, typename Parent>
+struct runtime_parent<Self, Allocator, Parent> {
+  using type = Parent;
+};
+
+// The allocator of a runtime container, void without one.
+template <typename... Rest> struct runtime_allocator {
   using type = void;
 };
 
-template <typename Allocator, typename Parent>
-struct runtime_parent<Allocator, Parent> {
-  using type = Parent;
+template <typename Allocator, typename... Rest>
+struct runtime_allocator<Allocator, Rest...> {
+  using type = Allocator;
 };
 
 template <typename Type, typename = void> struct is_traits : std::false_type {};
@@ -70,50 +83,6 @@ struct mixed_parameters<Traits, Parent> {
   using parent = Parent;
 };
 
-// The operations of a container on its selection: constructing objects and
-// collections no binding stores, and registering a binding that stores a
-// collection.
-template <typename Self> class container_operations {
-public:
-  // Registers a binding that stores a collection of the bindings of its
-  // element type, each added by `append`, or by its collection traits.
-  template <typename... Parts, typename... Append>
-  void register_type_collection(Append &&...append) {
-    static_assert(sizeof...(Append) <= 1,
-                  "a collection takes at most one append function");
-    if constexpr (sizeof...(Append) == 0) {
-      self().template register_type<Parts...>(
-          core::collection_factory<core::collection_append>(
-              core::collection_append()));
-    } else {
-      self().template register_type<Parts...>(
-          core::collection_factory<std::decay_t<Append>...>(
-              std::forward<Append>(append)...));
-    }
-  }
-
-  // Constructs an object of `Type` that no binding stores, by its detected
-  // constructor or by the callable factory given, resolving its dependencies
-  // from the container.
-  template <typename Type> Type construct() {
-    return core::detected_factory().make<Type>(self());
-  }
-
-  template <typename Type, typename Factory> Type construct(Factory &&factory) {
-    return factory.template make<Type>(self());
-  }
-
-  // Constructs a collection of every binding of its element type, by a key
-  // and an append function, either of which may be given.
-  template <typename Collection, typename... Arguments>
-  Collection construct_collection(Arguments &&...arguments) {
-    return core::collect_by<Collection>(self(),
-                                        std::forward<Arguments>(arguments)...);
-  }
-
-private:
-  Self &self() { return static_cast<Self &>(*this); }
-};
 } // namespace detail
 
 // A container of runtime registrations, with the lookup declarations of its
@@ -133,14 +102,21 @@ public:
   static constexpr bool has_runtime_source = true;
   static constexpr bool has_local_static_source = false;
   static constexpr bool has_local_runtime_source = false;
-  using parent_type = typename detail::runtime_parent<Rest...>::type;
+  using parent_type = typename detail::runtime_parent<container, Rest...>::type;
 
   container() : backend_(core::lookup_table_v<Traits>) {}
 
   // A child of `parent`, which outlives it.
-  template <bool Child = !std::is_void_v<parent_type>,
-            typename = std::enable_if_t<Child>>
-  explicit container(std::conditional_t<Child, parent_type, container> *parent)
+  explicit container(parent_type *parent)
+      : backend_(core::lookup_table_v<Traits>), parent_(parent) {}
+
+  // A container of `Allocator`, which the next implementation does not use
+  // yet.
+  template <typename Allocator,
+            typename = std::enable_if_t<std::is_same_v<
+                std::decay_t<Allocator>,
+                typename detail::runtime_allocator<Rest...>::type>>>
+  explicit container(Allocator && /*allocator*/, parent_type *parent = nullptr)
       : backend_(core::lookup_table_v<Traits>), parent_(parent) {}
 
   // Registers a binding declared by scope<>, storage<>, interfaces<>, a key,

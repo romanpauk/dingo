@@ -10,6 +10,7 @@
 // dingo/static_container.h of the next implementation.
 
 #include <dingo/core/api/collection.h>
+#include <dingo/core/api/container_operations.h>
 #include <dingo/core/api/container_traits.h>    // IWYU pragma: export
 #include <dingo/core/api/factory/callable.h>    // IWYU pragma: export
 #include <dingo/core/api/factory/constructor.h> // IWYU pragma: export
@@ -54,6 +55,8 @@ class static_container;
 template <typename... Binds, typename Second>
 class DINGO_EMPTY_BASES static_container<bindings<Binds...>, Second>
     : public core::selection<static_container<bindings<Binds...>, Second>>,
+      public detail::container_operations<
+          static_container<bindings<Binds...>, Second>>,
       private detail::parent_holder<std::conditional_t<
           detail::is_container_traits<Second>::value, void, Second>> {
   using traits = std::conditional_t<detail::is_container_traits<Second>::value,
@@ -85,25 +88,6 @@ public:
       Instances &&...instances)
       : backend_(std::forward<Instances>(instances)...) {
     this->parent_pointer = parent;
-  }
-
-  // Constructs an object of `Type` that no binding stores, by its detected
-  // constructor or by the callable factory given, resolving its dependencies
-  // from the container.
-  template <typename Type> Type construct() {
-    return core::detected_factory().make<Type>(*this);
-  }
-
-  template <typename Type, typename Factory> Type construct(Factory &&factory) {
-    return factory.template make<Type>(*this);
-  }
-
-  // Constructs a collection of every binding of its element type, by a key
-  // and an append function, either of which may be given.
-  template <typename Collection, typename... Arguments>
-  Collection construct_collection(Arguments &&...arguments) {
-    return core::collect_by<Collection>(*this,
-                                        std::forward<Arguments>(arguments)...);
   }
 
   // The sources of the selection of the container, which resolves the

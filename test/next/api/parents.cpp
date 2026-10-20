@@ -125,3 +125,15 @@ TEST(next_parents, a_static_container_auto_constructs) {
 }
 
 } // namespace
+
+namespace {
+
+TEST(next_parents, a_container_is_a_child_of_its_own_type) {
+  dingo::container<> parent;
+  parent.register_type<scope<dingo::shared>, storage<impl<7>>,
+                       dingo::interfaces<iface>>();
+  dingo::container<> child(&parent);
+  EXPECT_EQ(child.resolve<iface &>().id(), 7);
+}
+
+} // namespace

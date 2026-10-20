@@ -352,7 +352,8 @@ int selected = container.{name}<int(int)>(overloaded{});
         + """\
 using source = {name}<
     dingo::bind<dingo::scope<dingo::shared>, dingo::storage<service>>,
-    dingo::bind<dingo::scope<dingo::unique>, dingo::storage<implementation>,
+    dingo::bind<dingo::scope<dingo::unique>,
+                dingo::storage<std::unique_ptr<implementation>>,
                 dingo::interfaces<interface>>>;
 dingo::container<source> container;
 // Local bindings of a registration configure its child container.

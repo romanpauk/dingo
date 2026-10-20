@@ -25,6 +25,7 @@
 #include <dingo/core/primitives/shape.h>
 #include <dingo/core/projection/annotated.h>
 #include <dingo/core/projection/construct.h>
+#include <dingo/core/projection/conversion.h>
 #include <dingo/core/projection/layer_traits.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
@@ -286,10 +287,12 @@ template <typename Binding, typename Step, typename Context, typename Value>
 decltype(auto) keep_step(Context &context, Value &value) {
   using target = typename layer_traits<remove_cvref_t<Value>>::template rebind<
       interface_t<Step, Binding>>;
-  if constexpr (std::is_constructible_v<target, Value &>) {
+  if constexpr (converts<target, remove_cvref_t<Value>, const Value &>()) {
     return Step::reach(
-        context, context.template get_or_emplace<target>(
-                     type_address_v<target>, [&] { return target(value); }));
+        context,
+        context.template get_or_emplace<target>(type_address_v<target>, [&] {
+          return convert_to<target>(std::as_const(value));
+        }));
   } else {
     return unsupported_route{};
   }
@@ -308,9 +311,10 @@ decltype(auto) upcast_step(Context &context, Value &&value) {
   } else {
     using target = typename layer_traits<
         remove_cvref_t<Value>>::template rebind<interface>;
-    if constexpr (std::is_constructible_v<target, Value &&>) {
-      return Step::yield(context,
-                         [&] { return target(std::forward<Value>(value)); });
+    if constexpr (converts<target, remove_cvref_t<Value>, Value &&>()) {
+      return Step::yield(context, [&] {
+        return convert_to<target>(std::forward<Value>(value));
+      });
     } else {
       return unsupported_route{};
     }
