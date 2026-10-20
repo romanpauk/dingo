@@ -81,21 +81,37 @@ constexpr bool holds_many(const lookup_table &table, type_id interface,
 // Whether a binding of the key of `added` conflicts with `existing`: they
 // share an interface whose domain holds one binding. The values of their keys
 // are compared by the backend.
-constexpr bool conflicts(const lookup_table &table,
-                         const binding_descriptor &existing,
-                         const binding_descriptor &added) {
-  if (!same_key_domain(existing.key, added.key)) {
+// Whether two bindings conflict in the key domain `key` of `added`.
+constexpr bool conflicts_in(const lookup_table &table,
+                            const binding_descriptor &existing,
+                            const binding_descriptor &added,
+                            const key_descriptor &key) {
+  if (!has_key_domain(existing, key)) {
     return false;
   }
   auto conflict_on = [&](type_id interface) {
     return serves_interface(existing, interface) &&
-           !holds_many(table, interface, added.key);
+           !holds_many(table, interface, key);
   };
   if (added.interface_count == 0) {
     return conflict_on(innermost_leaf(added.stored));
   }
   for (std::size_t index = 0; index < added.interface_count; ++index) {
     if (conflict_on(added.interfaces[index].nodes[0].type)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+constexpr bool conflicts(const lookup_table &table,
+                         const binding_descriptor &existing,
+                         const binding_descriptor &added) {
+  if (conflicts_in(table, existing, added, added.key)) {
+    return true;
+  }
+  for (std::size_t index = 0; index < added.alias_count; ++index) {
+    if (conflicts_in(table, existing, added, added.aliases[index])) {
       return true;
     }
   }

@@ -99,6 +99,26 @@ struct type_list_at<Index, type_list<Types...>> {
 template <std::size_t Index, typename List>
 using type_list_at_t = typename type_list_at<Index, List>::type;
 
+template <typename Type, typename List> struct type_list_index;
+
+template <typename Type, typename... Types>
+struct type_list_index<Type, type_list<Types...>> {
+  static constexpr std::size_t find() {
+    constexpr bool same[] = {std::is_same_v<Type, Types>..., false};
+    std::size_t index = 0;
+    while (index < sizeof...(Types) && !same[index]) {
+      ++index;
+    }
+    return index;
+  }
+};
+
+// The position of `Type` in `List`, or the size of the list without it.
+template <typename Type, typename List>
+constexpr std::size_t type_list_index_of() {
+  return type_list_index<Type, List>::find();
+}
+
 // Whether the call is evaluated in a constant expression.
 constexpr bool constant_evaluated() {
 #if defined(__cpp_lib_is_constant_evaluated)

@@ -46,9 +46,15 @@ constexpr bool same_key_domain(const key_descriptor &left,
   return left.type == right.type;
 }
 
+inline constexpr std::size_t max_key_aliases = 4;
+
 struct binding_descriptor {
   shape stored;
   key_descriptor key;
+  // The keys of other domains the binding is also found by, each of a key
+  // type of its own.
+  key_descriptor aliases[max_key_aliases] = {};
+  std::size_t alias_count = 0;
   scope_id scope = scope_id::shared;
   shape interfaces[max_interfaces] = {};
   std::size_t interface_count = 0;
@@ -503,17 +509,34 @@ constexpr bool serves_interface(const binding_descriptor &binding,
 // Whether a request names the binding, up to the value of their keys, which
 // the backend compares: the binding serves its interface with a key of the
 // same domain. spec: lookup_filters.binding_filter
+constexpr bool has_key_domain(const binding_descriptor &binding,
+                              const key_descriptor &key) {
+  if (same_key_domain(binding.key, key)) {
+    return true;
+  }
+  for (std::size_t index = 0; index < binding.alias_count; ++index) {
+    if (same_key_domain(binding.aliases[index], key)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 constexpr bool finds(const binding_descriptor &binding,
                      const request_descriptor &request) {
   return serves_interface(binding, innermost_leaf(request.value)) &&
-         same_key_domain(binding.key, request.key);
+         has_key_domain(binding, request.key);
 }
 
 // Whether two bindings serve a common interface with keys of one domain, so
 // that equal key values make them candidates of the same requests.
 constexpr bool share_domain(const binding_descriptor &left,
                             const binding_descriptor &right) {
-  if (!same_key_domain(left.key, right.key)) {
+  bool shared = has_key_domain(left, right.key);
+  for (std::size_t index = 0; index < right.alias_count; ++index) {
+    shared = shared || has_key_domain(left, right.aliases[index]);
+  }
+  if (!shared) {
     return false;
   }
   if (right.interface_count == 0) {

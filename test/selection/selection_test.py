@@ -155,3 +155,26 @@ def test_a_compile_error_matches_a_rejection_or_not_found():
     assert conform.same_registrations("compile_error", ["ok", "rejected"])
     assert not conform.same_registrations("compile_error", ["ok", "ok"])
     assert not conform.same_registrations("not_expressible", ["ok"])
+
+
+def test_keys_of_an_interface_and_of_other_key_types(model):
+    from spec.reference.selection import Binding, Key, Level, Request
+
+    seven = Key("runtime", "int", 7)
+    nine = Key("runtime", "int", 9)
+    name = Key("runtime", "string", "main")
+    level = Level()
+    binding = Binding(
+        "b",
+        ("processor", "animal"),
+        seven,
+        interface_keys=(("animal", nine),),
+        aliases=(name,),
+    )
+    assert model.register(level, binding)[0]
+    assert model.select(level, Request("processor", seven)).bindings == (binding,)
+    assert model.select(level, Request("animal", nine)).bindings == (binding,)
+    assert model.select(level, Request("animal", seven)).bindings == ()
+    assert model.select(level, Request("animal", name)).bindings == (binding,)
+    clash = Binding("c", ("processor",), Key("runtime", "int", 1), aliases=(name,))
+    assert not model.register(level, clash)[0]

@@ -9,7 +9,10 @@ lookup_filters: tuple[LookupFilter, ...] = (
             "A binding is named by a request when it serves the interface of "
             "the request, the stored leaf or a declared interface, and carries "
             "a key of the same domain that compares equal to the key of the "
-            "request: no key for no key, the same tag, or an equal value."
+            "request: no key for no key, the same tag, or an equal value. A "
+            "binding carries a key of each key type it is registered with, and "
+            "for an interface the value registered for it, or otherwise the "
+            "value registered for every interface."
         ),
         dimensions=(
             FilterDimension.INTERFACE,

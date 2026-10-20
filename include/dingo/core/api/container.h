@@ -100,21 +100,25 @@ public:
   static constexpr bool has_local_static_source = false;
   static constexpr bool has_local_runtime_source = false;
   using parent_type = typename detail::runtime_parent<container, Rest...>::type;
+  // The allocator of container<Traits, Allocator>, or of its traits, which
+  // allocates its bindings.
+  using allocator_type = std::conditional_t<
+      std::is_void_v<typename detail::runtime_allocator<Rest...>::type>,
+      typename detail::traits_allocator<Traits>::type,
+      typename detail::runtime_allocator<Rest...>::type>;
 
   container() : backend_(core::lookup_table_v<Traits>) {}
 
-  // A child of `parent`, which outlives it.
-  explicit container(parent_type *parent)
-      : backend_(core::lookup_table_v<Traits>), parent_(parent) {}
+  explicit container(const allocator_type &allocator)
+      : backend_(core::lookup_table_v<Traits>, allocator) {}
 
-  // A container of `Allocator`, which the next implementation does not use
-  // yet.
-  template <typename Allocator,
-            typename = std::enable_if_t<std::is_same_v<
-                std::decay_t<Allocator>,
-                typename detail::runtime_allocator<Rest...>::type>>>
-  explicit container(Allocator && /*allocator*/, parent_type *parent = nullptr)
-      : backend_(core::lookup_table_v<Traits>), parent_(parent) {}
+  // A child of `parent`, which outlives it.
+  explicit container(parent_type *parent,
+                     const allocator_type &allocator = allocator_type())
+      : backend_(core::lookup_table_v<Traits>, allocator), parent_(parent) {}
+
+  container(const allocator_type &allocator, parent_type *parent)
+      : backend_(core::lookup_table_v<Traits>, allocator), parent_(parent) {}
 
   // Registers a binding declared by scope<>, storage<>, interfaces<>, a key,
   // and a factory. An external binding takes its instance as an argument, a
@@ -134,13 +138,15 @@ public:
   // dependencies of their bindings, and keeps the objects requests construct.
   auto &container_resolver() { return *this; }
   core::retained_objects &retained() { return retained_; }
-  core::runtime_backend<container> &runtime_source() { return backend_; }
+  core::runtime_backend<container, allocator_type> &runtime_source() {
+    return backend_;
+  }
   parent_type *parent() { return parent_; }
   core::transaction_log &transactions() { return backend_.transactions(); }
 
 private:
   core::retained_objects retained_;
-  core::runtime_backend<container> backend_;
+  core::runtime_backend<container, allocator_type> backend_;
   parent_type *parent_ = nullptr;
 };
 
@@ -169,6 +175,8 @@ public:
   static constexpr bool has_local_static_source = false;
   static constexpr bool has_local_runtime_source = false;
   using parent_type = typename parameters::parent;
+  using allocator_type =
+      typename detail::traits_allocator<typename parameters::traits>::type;
 
   template <typename... Instances, bool Orphan = std::is_void_v<parent_type>,
             typename = std::enable_if_t<Orphan>>
@@ -203,14 +211,16 @@ public:
   auto &container_resolver() { return *this; }
   core::retained_objects &retained() { return retained_; }
   static_source_type &static_source() { return static_; }
-  core::runtime_backend<container> &runtime_source() { return runtime_; }
+  core::runtime_backend<container, allocator_type> &runtime_source() {
+    return runtime_;
+  }
   parent_type *parent() { return parent_; }
   core::transaction_log &transactions() { return runtime_.transactions(); }
 
 private:
   core::retained_objects retained_;
   static_source_type static_;
-  core::runtime_backend<container> runtime_;
+  core::runtime_backend<container, allocator_type> runtime_;
   parent_type *parent_ = nullptr;
 };
 

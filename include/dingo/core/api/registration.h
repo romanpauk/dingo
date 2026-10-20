@@ -111,6 +111,26 @@ struct find_runtime_key<Default, First, Rest...> {
                                   runtime_key_of<std::decay_t<First>>,
                                   find_runtime_key<Default, Rest...>>::type;
 };
+
+// The runtime keys of the key values of a registration of types other than
+// `Primary`, each once: the keys of other domains its binding is also found
+// by.
+template <typename Primary, typename Found, typename... Args>
+struct find_key_aliases {
+  using type = Found;
+};
+
+template <typename Primary, typename... Found, typename First, typename... Rest>
+struct find_key_aliases<Primary, type_list<Found...>, First, Rest...> {
+  template <typename Key>
+  static constexpr bool adds =
+      !std::is_same_v<Key, Primary> && (!std::is_same_v<Key, Found> && ...);
+  using key = typename runtime_key_of<std::decay_t<First>>::type;
+  using type = typename std::conditional_t<
+      is_key_value<std::decay_t<First>>::value && adds<key>,
+      find_key_aliases<Primary, type_list<Found..., key>, Rest...>,
+      find_key_aliases<Primary, type_list<Found...>, Rest...>>::type;
+};
 } // namespace detail
 
 template <typename... Parts> struct registration;
@@ -203,6 +223,8 @@ template <typename... Parts> struct registration {
                   "a registration takes its key from a key_type<> or a "
                   "key_value, not both");
     using key = std::conditional_t<std::is_void_v<runtime>, key_part, runtime>;
+    using aliases =
+        typename detail::find_key_aliases<key, type_list<>, Args...>::type;
   };
 
   template <typename... Args>
@@ -212,7 +234,8 @@ template <typename... Parts> struct registration {
           typename storage_part::type, typename interfaces_part::type>::type,
       typename with_arguments<Args...>::factory,
       typename with_arguments<Args...>::key,
-      typename detail::local_bindings_of<locals_part>::type>;
+      typename detail::local_bindings_of<locals_part>::type,
+      typename with_arguments<Args...>::aliases>;
 
   using binding = binding_for<>;
 };

@@ -20,6 +20,7 @@
 #include <dingo/core/engine/execute.h>
 #include <dingo/core/engine/lookup.h>
 #include <dingo/core/engine/request.h>
+#include <dingo/core/primitives/allocation.h>
 #include <dingo/core/primitives/exceptions.h>
 #include <dingo/core/primitives/retained.h>
 #include <dingo/core/primitives/shape.h>
@@ -34,6 +35,7 @@
 #include <cstdint>
 #include <memory>
 #include <new>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -72,9 +74,15 @@ public:
   // The value of the key of the binding, or nullptr for a key without one.
   virtual const void *key_value() const = 0;
 
-  // Whether the key value of the binding equals `value`, a value of the type
-  // of its key domain; a key without a value is always equal.
-  virtual bool key_equals(const void *value) const = 0;
+  // The value of the key of the binding for `interface` in the domain of the
+  // key type `key_type`, or nullptr when it has none there; a registration
+  // may name a value of its own for an interface, and keys of other types.
+  virtual const void *key_value_for(type_id interface,
+                                    type_id key_type) const = 0;
+
+  const void *key_value_for(type_id interface) const {
+    return key_value_for(interface, descriptor_.key.type);
+  }
 
   // Whether the objects the binding borrows keep their addresses: its scope
   // is stable and its slot settled.
@@ -148,13 +156,53 @@ public:
 
   const void *key_value() const override { return key_.value(); }
 
+  const void *key_value_for(type_id interface,
+                            type_id key_type) const override {
+    if (key_type != Binding::key_type::descriptor.type) {
+      return alias_value_for(interface, key_type,
+                             std::make_index_sequence<aliases_type::size>());
+    }
+    if constexpr (has_interface_keys) {
+      const std::size_t index = interface_index(interface);
+      if (index != no_index && interface_keys_[index]) {
+        return &*interface_keys_[index];
+      }
+    }
+    return key_.value();
+  }
+
+  // Names the value of the key of the alias key type `Alias` for the
+  // declared interface `Interface`, or for every interface when it is void.
+  template <typename Alias, typename Interface, typename Value>
+  void set_alias_key(const Value &value) {
+    constexpr std::size_t alias = type_list_index_of<Alias, aliases_type>();
+    auto &keys = std::get<alias>(aliases_);
+    if constexpr (std::is_void_v<Interface>) {
+      keys.shared = value;
+    } else {
+      keys.interfaces[type_list_index_of<Interface,
+                                         typename Binding::interfaces>()] =
+          value;
+    }
+  }
+
+  // Names the key value of the binding for the declared interface
+  // `Interface`.
+  template <typename Interface, typename Value>
+  void set_interface_key(const Value &value) {
+    static_assert(has_interface_keys,
+                  "a key value names an interface of a binding by a runtime "
+                  "key");
+    constexpr std::size_t index =
+        type_list_index_of<Interface, typename Binding::interfaces>();
+    static_assert(index != Binding::descriptor.interface_count,
+                  "a key value names an interface the binding declares");
+    interface_keys_[index] = value;
+  }
+
   // The local bindings of the registration.
   local_bindings<Resolver, typename Binding::locals> &locals() {
     return locals_;
-  }
-
-  bool key_equals(const void *value) const override {
-    return key_store_type::equal(key_.value(), value);
   }
 
   bool settled(Resolver &resolver) const override {
@@ -257,7 +305,76 @@ private:
         resolver, &locals_.statics(), locals_.runtime());
   }
 
+  // The key values of the declared interfaces a registration names its own
+  // for.
+  template <typename Key, typename = void> struct interface_keys_of {
+    struct type {};
+  };
+
+  template <typename Key>
+  struct interface_keys_of<
+      Key, std::enable_if_t<Key::descriptor.kind == key_kind::runtime>> {
+    using type = std::optional<typename Key::value_type>[max_interfaces];
+  };
+
+  static constexpr bool has_interface_keys =
+      Binding::key_type::descriptor.kind == key_kind::runtime;
+
+  static constexpr std::size_t no_index = static_cast<std::size_t>(-1);
+
+  static std::size_t interface_index(type_id interface) {
+    for (std::size_t index = 0; index < Binding::descriptor.interface_count;
+         ++index) {
+      if (Binding::descriptor.interfaces[index].nodes[0].type == interface) {
+        return index;
+      }
+    }
+    return no_index;
+  }
+
+  // The values of the keys of an alias key type, for every interface and for
+  // each.
+  template <typename Alias> struct alias_keys {
+    std::optional<typename Alias::value_type> shared;
+    std::optional<typename Alias::value_type> interfaces[max_interfaces];
+  };
+
+  using aliases_type = typename Binding::key_aliases;
+
+  template <typename List> struct alias_storage;
+
+  template <typename... Aliases> struct alias_storage<type_list<Aliases...>> {
+    using type = std::tuple<alias_keys<Aliases>...>;
+  };
+
+  template <std::size_t... Indices>
+  const void *
+  alias_value_for([[maybe_unused]] type_id interface,
+                  [[maybe_unused]] type_id key_type,
+                  std::index_sequence<Indices...> /*indices*/) const {
+    const void *found = nullptr;
+    (
+        [&] {
+          using alias = type_list_at_t<Indices, aliases_type>;
+          if (found != nullptr || alias::descriptor.type != key_type) {
+            return;
+          }
+          const auto &keys = std::get<Indices>(aliases_);
+          const std::size_t index = interface_index(interface);
+          if (index != no_index && keys.interfaces[index]) {
+            found = &*keys.interfaces[index];
+          } else if (keys.shared) {
+            found = &*keys.shared;
+          }
+        }(),
+        ...);
+    return found;
+  }
+
   key_store_type key_;
+  typename interface_keys_of<typename Binding::key_type>::type
+      interface_keys_{};
+  typename alias_storage<aliases_type>::type aliases_;
   local_bindings<Resolver, typename Binding::locals> locals_;
   binding_slot<Binding> slot_;
 };
@@ -281,11 +398,33 @@ struct casts_to<From, To,
 template <typename From, typename To>
 inline constexpr bool casts_to_v = casts_to<From, To>::value;
 
+template <typename... Args> struct find_primary_key {
+  using type = void;
+};
+
+template <typename First, typename... Rest>
+struct find_primary_key<First, Rest...> {
+  using type =
+      typename std::conditional_t<is_key_value<std::decay_t<First>>::value,
+                                  runtime_key_of<std::decay_t<First>>,
+                                  find_primary_key<Rest...>>::type;
+};
+
 // The positions of the arguments of a registration: the key values and the
 // arguments of the slot.
 template <typename... Args> struct registration_arguments {
   static constexpr bool keys[] = {is_key_value<std::decay_t<Args>>::value...,
                                   false};
+
+  // The runtime key of the first key value, the primary key of the binding.
+  using primary_key = typename find_primary_key<Args...>::type;
+
+  // Whether each argument is a key value of the primary key type.
+  static constexpr bool primary_keys[] = {
+      (is_key_value<std::decay_t<Args>>::value &&
+       std::is_same_v<typename runtime_key_of<std::decay_t<Args>>::type,
+                      primary_key>)...,
+      false};
 
   static constexpr std::size_t key_count() {
     std::size_t count = 0;
@@ -295,12 +434,33 @@ template <typename... Args> struct registration_arguments {
     return count;
   }
 
+  // Whether each argument is a key value of an interface.
+  static constexpr bool interface_keys[] = {
+      !std::is_void_v<
+          typename key_value_interface<std::decay_t<Args>>::type>...,
+      false};
+
+  // The primary key value of every interface without one of its own: the
+  // primary key value that names none, or the first key value.
   static constexpr std::size_t key_index() {
+    for (std::size_t index = 0; index < sizeof...(Args); ++index) {
+      if (primary_keys[index] && !interface_keys[index]) {
+        return index;
+      }
+    }
     std::size_t index = 0;
     while (index < sizeof...(Args) && !keys[index]) {
       ++index;
     }
     return index;
+  }
+
+  static constexpr std::size_t shared_key_count() {
+    std::size_t count = 0;
+    for (std::size_t index = 0; index < sizeof...(Args); ++index) {
+      count += primary_keys[index] && !interface_keys[index] ? 1 : 0;
+    }
+    return count;
   }
 
   // The position of the slot argument `ordinal`.
@@ -321,12 +481,18 @@ template <typename... Args> struct registration_arguments {
 // The runtime bindings of a container, a source of its selection: it counts
 // the bindings a request names, resolves the one it names, and collects them,
 // with `Resolver`, the container, resolving their dependencies.
-template <typename Resolver> class runtime_backend {
+template <typename Resolver, typename Allocator> class runtime_backend {
   using entry = runtime_entry<Resolver>;
+  using bytes_type = byte_allocator_t<Allocator>;
+  using entry_pointer =
+      std::unique_ptr<entry, allocated_deleter<entry, bytes_type>>;
 
 public:
-  // A backend of the lookup declarations of `table`, which outlives it.
-  explicit runtime_backend(const lookup_table &table) : table_(&table) {}
+  // A backend of the lookup declarations of `table`, which outlives it, whose
+  // bindings are allocated from `allocator`.
+  explicit runtime_backend(const lookup_table &table,
+                           const Allocator &allocator = Allocator())
+      : table_(&table), bytes_(allocator) {}
 
   // Adds a binding, whose arguments are the arguments of its slot and the
   // value of its runtime key. A binding whose key value is outside the bound
@@ -345,32 +511,37 @@ public:
     static_assert(Binding::status == registration_status::registered,
                   "a binding cannot be stored by its scope");
     using arguments = detail::registration_arguments<Args...>;
-    static_assert(arguments::key_count() <= 1,
-                  "a registration takes at most one key value");
+    static_assert(arguments::shared_key_count() <= 1,
+                  "a registration takes at most one key value of every "
+                  "interface, and one of each interface");
     auto all = std::forward_as_tuple(std::forward<Args>(args)...);
-    std::unique_ptr<runtime_binding<Binding, Resolver>> added =
-        make_entry<Binding, arguments, std::tuple<std::decay_t<Args>...>>(
-            all, std::make_index_sequence<sizeof...(Args) -
-                                          arguments::key_count()>());
+    entry_pointer added = make_entry<Binding, arguments,
+                                     std::tuple<std::decay_t<Args>...>>(
+        all,
+        std::make_index_sequence<sizeof...(Args) - arguments::key_count()>());
     if constexpr (Binding::key_type::descriptor.kind == key_kind::fixed ||
                   Binding::key_type::descriptor.kind == key_kind::runtime) {
       // A key value outside the bound of a dense array is never stored.
       const std::size_t bound = key_bound(*table_, Binding::descriptor);
-      if (bound != unbounded && !key_store<typename Binding::key_type>::within(
-                                    added->key_value(), bound)) {
-        raise_out_of_range<Binding>();
+      if (bound != unbounded) {
+        for_each_interface(Binding::descriptor, [&](type_id interface) {
+          if (!key_store<typename Binding::key_type>::within(
+                  added->key_value_for(interface), bound)) {
+            raise_out_of_range<Binding>();
+          }
+        });
       }
     }
     if (held(added->key_value())) {
       raise_already_registered<Binding>();
     }
     for (const auto &existing : entries_) {
-      if (conflicts(*table_, existing->descriptor(), Binding::descriptor) &&
-          existing->key_equals(added->key_value())) {
+      if (conflicts_by_value<Binding>(*existing, *added)) {
         raise_already_registered<Binding>();
       }
     }
-    auto &locals = added->locals();
+    auto &locals =
+        static_cast<runtime_binding<Binding, Resolver> &>(*added).locals();
     entries_.push_back(std::move(added));
     ++generation_;
     // A registration during a request is undone when the request fails.
@@ -441,6 +612,64 @@ public:
 private:
   using candidate_type = candidate<entry>;
 
+  // Calls `visit` with every interface a binding serves: its declared ones,
+  // or its leaf.
+  template <typename Visit>
+  static void for_each_interface(const binding_descriptor &binding,
+                                 Visit &&visit) {
+    if (binding.interface_count == 0) {
+      visit(innermost_leaf(binding.stored));
+    }
+    for (std::size_t index = 0; index < binding.interface_count; ++index) {
+      visit(binding.interfaces[index].nodes[0].type);
+    }
+  }
+
+  // Whether `added`, a binding of type `Binding`, conflicts with `existing`:
+  // they serve an interface whose domain holds one binding with equal key
+  // values for it.
+  template <typename Binding>
+  bool conflicts_by_value(const entry &existing, const entry &added) const {
+    if (!conflicts(*table_, existing.descriptor(), Binding::descriptor)) {
+      return false;
+    }
+    return conflicts_in_domain<typename Binding::key_type, Binding>(existing,
+                                                                    added) ||
+           conflicts_in_aliases<Binding>(existing, added,
+                                         typename Binding::key_aliases());
+  }
+
+  template <typename Binding, typename... Aliases>
+  bool conflicts_in_aliases(const entry &existing, const entry &added,
+                            type_list<Aliases...> /*aliases*/) const {
+    return (conflicts_in_domain<Aliases, Binding>(existing, added) || ...);
+  }
+
+  // Whether the bindings hold equal values of the key `Key` for an interface
+  // of a domain that holds one binding.
+  template <typename Key, typename Binding>
+  bool conflicts_in_domain(const entry &existing, const entry &added) const {
+    if (!has_key_domain(existing.descriptor(), Key::descriptor)) {
+      return false;
+    }
+    bool found = false;
+    for_each_interface(Binding::descriptor, [&](type_id interface) {
+      if (found || !serves_interface(existing.descriptor(), interface) ||
+          holds_many(*table_, interface, Key::descriptor)) {
+        return;
+      }
+      const void *left =
+          existing.key_value_for(interface, Key::descriptor.type);
+      const void *right = added.key_value_for(interface, Key::descriptor.type);
+      if (!key_has_value(Key::descriptor)) {
+        found = true;
+      } else if (left != nullptr && right != nullptr) {
+        found = key_store<Key>::equal(left, right);
+      }
+    });
+    return found;
+  }
+
   static void undo_add(void *backend) noexcept {
     auto &self = *static_cast<runtime_backend *>(backend);
     self.entries_.pop_back();
@@ -473,33 +702,74 @@ private:
         request_traits<Request, Key>::descriptor;
     found.clear();
     for (const auto &binding : entries_) {
-      if (finds(binding->descriptor(), request)) {
-        const std::size_t term =
-            select_term(binding->published(), request, binding->exposed());
-        found.add({binding.get(), term, binding->key_value(),
-                   term == no_term ? completion::construct
-                                   : binding->plan(term).kind});
+      if (!finds(binding->descriptor(), request)) {
+        continue;
       }
+      // The value of the key of the domain of the request for its interface;
+      // a binding with none there for the interface is not a candidate.
+      const void *key_value = binding->key_value_for(
+          innermost_leaf(request.value), request.key.type);
+      if (key_has_value(request.key) && key_value == nullptr) {
+        continue;
+      }
+      const std::size_t term =
+          select_term(binding->published(), request, binding->exposed());
+      found.add(
+          {binding.get(), term, key_value,
+           term == no_term ? completion::construct : binding->plan(term).kind});
     }
     found.index(
         declaration_of(*table_, innermost_leaf(request.value), request.key));
     found.generation = generation_;
   }
+
+  // A binding allocated from the allocator of the backend.
   template <typename Binding, typename Arguments, typename Decayed,
             typename All, std::size_t... Slots>
-  static std::unique_ptr<runtime_binding<Binding, Resolver>>
-  make_entry(All &all, std::index_sequence<Slots...> /*slots*/) {
+  entry_pointer make_entry(All &all, std::index_sequence<Slots...> /*slots*/) {
     using arguments = Arguments;
+    using binding = runtime_binding<Binding, Resolver>;
     if constexpr (arguments::key_count() == 0) {
-      return std::make_unique<runtime_binding<Binding, Resolver>>(
-          without_key_value(),
+      return allocate_object<binding, entry>(
+          bytes_, without_key_value(),
           std::get<arguments::slot_index(Slots)>(std::move(all))...);
     } else {
       using value = std::tuple_element_t<arguments::key_index(), Decayed>;
-      return std::make_unique<runtime_binding<Binding, Resolver>>(
-          with_key_value(),
+      entry_pointer made = allocate_object<binding, entry>(
+          bytes_, with_key_value(),
           runtime_key_of<value>::value(std::get<arguments::key_index()>(all)),
           std::get<arguments::slot_index(Slots)>(std::move(all))...);
+      set_keys<arguments, Decayed>(
+          static_cast<binding &>(*made), all,
+          std::make_index_sequence<std::tuple_size_v<Decayed>>());
+      return made;
+    }
+  }
+
+  // Names the key values of the arguments besides the primary one of every
+  // interface: those of an interface, and those of the other key types.
+  template <typename Arguments, typename Decayed, typename Binding,
+            typename All, std::size_t... Indices>
+  static void set_keys(Binding &binding, All &all,
+                       std::index_sequence<Indices...> /*indices*/) {
+    (set_key<Arguments, Indices, std::tuple_element_t<Indices, Decayed>>(
+         binding, std::get<Indices>(all)),
+     ...);
+  }
+
+  template <typename Arguments, std::size_t Index, typename Value,
+            typename Binding, typename Argument>
+  static void set_key(Binding &binding, Argument &argument) {
+    if constexpr (Arguments::keys[Index]) {
+      using interface = typename key_value_interface<Value>::type;
+      if constexpr (Arguments::primary_keys[Index]) {
+        if constexpr (!std::is_void_v<interface>) {
+          binding.template set_interface_key<interface>(argument.value());
+        }
+      } else {
+        binding.template set_alias_key<typename runtime_key_of<Value>::type,
+                                       interface>(argument.value());
+      }
     }
   }
 
@@ -635,7 +905,12 @@ private:
     if constexpr (Layers::valid) {
       using made = decltype(Layers::make(
           std::declval<typename Layers::boundary (&)()>()));
-      if constexpr (detail::casts_to_v<made, Request>) {
+      using value_type = typename request_traits<Request>::value_type;
+      // An rvalue reference refers to a kept object of its qualified type,
+      // made from the object the layers make; any other request converts.
+      if constexpr (std::is_rvalue_reference_v<Request>
+                        ? std::is_constructible_v<value_type, made>
+                        : detail::casts_to_v<made, Request>) {
         return make_with<Request, Layers>(resolver, binding, term);
       }
     }
@@ -645,7 +920,7 @@ private:
   template <typename Request, typename Layers>
   static Request make_with(Resolver &resolver, entry &binding,
                            std::size_t term) {
-    using made_type = typename request_traits<Request>::made_type;
+    using value_type = typename request_traits<Request>::value_type;
     using boundary = typename Layers::boundary;
     if (!binding.template makes<boundary>(term)) {
       throw std::logic_error("the selected term does not complete the request");
@@ -655,7 +930,8 @@ private:
           [&] { return binding.template make<boundary>(term, resolver); });
     };
     if constexpr (std::is_rvalue_reference_v<Request>) {
-      made_type &kept = resolver.retained().template emplace<made_type>(make);
+      value_type &kept = resolver.retained().template emplace<value_type>(
+          [&] { return value_type(make()); });
       resolver.transactions().record(&resolver.retained(),
                                      &retained_objects::undo_last);
       return static_cast<Request>(kept);
@@ -666,7 +942,8 @@ private:
 
   const lookup_table *table_;
   transaction_log transactions_;
-  std::vector<std::unique_ptr<entry>> entries_;
+  bytes_type bytes_;
+  std::vector<entry_pointer> entries_;
   // The memos of the request types by request_id, and the number of
   // registrations they are valid for.
   mutable std::vector<std::unique_ptr<memo_base>> memos_;

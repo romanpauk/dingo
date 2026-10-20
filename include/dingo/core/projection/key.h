@@ -204,6 +204,16 @@ template <typename Type> struct is_key_type : std::false_type {};
 template <typename Type, auto... Values>
 struct is_key_type<::dingo::key_type<Type, Values...>> : std::true_type {};
 
+// The interface a key value names the key of, void for every interface.
+template <typename Type> struct key_value_interface {
+  using type = void;
+};
+
+template <typename Type, typename Interface>
+struct key_value_interface<::dingo::key_value<Type, Interface>> {
+  using type = Interface;
+};
+
 template <typename Type> struct is_key_value : std::false_type {};
 
 template <typename Type, typename Interface>

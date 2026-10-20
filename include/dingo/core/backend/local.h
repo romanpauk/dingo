@@ -28,7 +28,8 @@
 namespace dingo::core {
 
 template <typename LookupTable, typename... Bindings> class static_backend;
-template <typename Resolver> class runtime_backend;
+template <typename Resolver, typename Allocator = std::allocator<char>>
+class runtime_backend;
 
 namespace detail {
 template <typename Locals> struct local_static_backend;

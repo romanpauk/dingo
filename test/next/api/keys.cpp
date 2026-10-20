@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include <cstddef>
+#include <string>
 #include <vector>
 
 namespace {
@@ -171,6 +172,58 @@ TEST(next_keys, a_registration_after_a_request_is_found) {
   ASSERT_EQ(both.size(), 2u);
   EXPECT_EQ(both[0]->id(), 1);
   EXPECT_EQ(both[1]->id(), 2);
+}
+
+} // namespace
+
+namespace {
+
+struct processor {
+  virtual ~processor() = default;
+  virtual int processor_id() const = 0;
+};
+
+struct animal {
+  virtual ~animal() = default;
+  virtual int animal_id() const = 0;
+};
+
+struct processor_animal : processor, animal {
+  int processor_id() const override { return 9; }
+  int animal_id() const override { return 4; }
+};
+
+struct routed_traits : dingo::dynamic_container_traits {
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<int, processor>,
+                     dingo::associative<int, animal>,
+                     dingo::associative<std::string, processor>>;
+};
+
+TEST(next_keys, a_registration_names_the_key_of_an_interface) {
+  dingo::container<routed_traits> container;
+  container.register_type<scope<dingo::shared>, storage<processor_animal>,
+                          dingo::interfaces<processor, animal>>(
+      dingo::key_value<int>{7}, dingo::key_value<int, animal>{9});
+  EXPECT_EQ(container.resolve<processor &>(7).processor_id(), 9);
+  EXPECT_EQ(container.resolve<animal &>(9).animal_id(), 4);
+  EXPECT_THROW(container.resolve<animal &>(7), dingo::type_not_found_exception);
+}
+
+TEST(next_keys, a_binding_is_found_by_keys_of_several_types) {
+  dingo::container<routed_traits> container;
+  container.register_type<scope<dingo::shared>, storage<processor_animal>,
+                          dingo::interfaces<processor>>(
+      dingo::key_value<int>{1}, dingo::key_value<std::string>{"first"});
+  EXPECT_EQ(&container.resolve<processor &>(1),
+            &container.resolve<processor &>(std::string("first")));
+  EXPECT_THROW(
+      (container.register_type<scope<dingo::shared>, storage<processor_animal>,
+                               dingo::interfaces<processor>>(
+          dingo::key_value<int>{2}, dingo::key_value<std::string>{"first"})),
+      dingo::lookup_already_registered_exception);
+  EXPECT_THROW(container.resolve<processor &>(2),
+               dingo::type_not_found_exception);
 }
 
 } // namespace

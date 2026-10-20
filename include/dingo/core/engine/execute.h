@@ -84,12 +84,14 @@ struct no_kept_objects {
 // the static bindings it declares locally, a type_list of binding types.
 template <scope_id Scope, typename Stored, typename Interfaces,
           typename Factory = detected_factory, typename Key = no_key,
-          typename Locals = type_list<>>
+          typename Locals = type_list<>, typename KeyAliases = type_list<>>
 struct binding_type {
   using stored_type = Stored;
   using interfaces = Interfaces;
   using factory_type = Factory;
   using key_type = Key;
+  // The runtime keys of other key types the binding is also found by.
+  using key_aliases = KeyAliases;
   using locals = Locals;
   static constexpr scope_id scope = Scope;
   // Whether a request consumes an object the binding constructs for it.
@@ -106,7 +108,16 @@ struct binding_type {
     binding.scope = Scope;
     binding.declared_factory = !std::is_same_v<Factory, detected_factory>;
     binding.key = Key::descriptor;
+    set_aliases(binding, KeyAliases());
     return interface_shapes<leaf_of_t<Stored>, Interfaces>::apply(binding);
+  }
+
+  template <typename... Aliases>
+  static constexpr void set_aliases(binding_descriptor &binding,
+                                    type_list<Aliases...> /*aliases*/) {
+    static_assert(sizeof...(Aliases) <= max_key_aliases,
+                  "a binding has at most max_key_aliases keys of other types");
+    ((binding.aliases[binding.alias_count++] = Aliases::descriptor), ...);
   }
 
   static constexpr binding_descriptor descriptor = make_descriptor();

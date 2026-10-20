@@ -53,10 +53,31 @@ NO_KEY = Key()
 
 @dataclass(frozen=True, slots=True)
 class Binding:
+    """A binding: `key` is the key of every interface, `interface_keys` the
+    keys registered for one interface, which replace a key of their domain
+    for it, and `aliases` the keys of other key types of every interface."""
+
     name: str
     interfaces: tuple[str, ...]
     key: Key = NO_KEY
     static: bool = False
+    interface_keys: tuple[tuple[str, Key], ...] = ()
+    aliases: tuple[Key, ...] = ()
+
+    def keys_for(self, interface: str) -> list[Key]:
+        """The keys the binding carries for `interface`, one of each domain."""
+        keys = [self.key, *self.aliases]
+        for named, key in self.interface_keys:
+            if named == interface:
+                keys = [key if k.domain() == key.domain() else k for k in keys]
+                if all(k.domain() != key.domain() for k in keys):
+                    keys.append(key)
+        return keys
+
+    def names(self, interface: str, key: Key) -> bool:
+        return interface in self.interfaces and any(
+            carried.names(key) for carried in self.keys_for(interface)
+        )
 
 
 @dataclass
@@ -117,11 +138,12 @@ class Model:
                 if bound is not None and not 0 <= binding.key.value < bound:
                     return False, KEY_OUT_OF_RANGE
         for interface in binding.interfaces:
-            if self.cardinality(level, interface, binding.key) is not Cardinality.ONE:
-                continue
-            for existing in level.bindings:
-                if interface in existing.interfaces and existing.key.names(binding.key):
-                    return False, f"lookup already registered: {interface}"
+            for key in binding.keys_for(interface):
+                if self.cardinality(level, interface, key) is not Cardinality.ONE:
+                    continue
+                for existing in level.bindings:
+                    if existing.names(interface, key):
+                        return False, f"lookup already registered: {interface}"
         level.bindings.append(binding)
         return True, ""
 
@@ -129,9 +151,7 @@ class Model:
         return [
             b
             for b in bindings
-            if b.static == static
-            and request.interface in b.interfaces
-            and b.key.names(request.key)
+            if b.static == static and b.names(request.interface, request.key)
         ]
 
     def source(self, source, request, level, local, mode) -> list:
