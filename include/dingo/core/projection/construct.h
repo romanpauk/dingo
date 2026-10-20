@@ -41,7 +41,7 @@ struct detected_leaf {
 template <typename... Args> struct declared_leaf {
   template <typename Leaf, typename Resolver>
   static Leaf make(Resolver &resolver) {
-    return Leaf{resolver.template resolve<Args>()...};
+    return Leaf{resolver.template argument<Args>()...};
   }
 };
 
@@ -111,7 +111,7 @@ template <typename Stored, typename... Args, typename Function,
           typename Resolver>
 Stored invoke_factory(type_list<Args...> /*arguments*/, Function &function,
                       Resolver &resolver) {
-  return Stored(std::invoke(function, resolver.template resolve<Args>()...));
+  return Stored(std::invoke(function, resolver.template argument<Args>()...));
 }
 
 namespace detail {
@@ -152,6 +152,94 @@ template <typename Class, typename Result, typename... Args>
 struct callable_arguments<Result (Class::*)(Args...) const noexcept> {
   using type = type_list<const Class &, Args...>;
 };
+
+namespace detail {
+// The parameter types of a call operator, without its object.
+template <typename Member> struct operator_arguments;
+
+template <typename Class, typename Result, typename... Args>
+struct operator_arguments<Result (Class::*)(Args...)> {
+  using type = type_list<Args...>;
+};
+
+template <typename Class, typename Result, typename... Args>
+struct operator_arguments<Result (Class::*)(Args...) const> {
+  using type = type_list<Args...>;
+};
+
+template <typename Class, typename Result, typename... Args>
+struct operator_arguments<Result (Class::*)(Args...) &> {
+  using type = type_list<Args...>;
+};
+
+template <typename Class, typename Result, typename... Args>
+struct operator_arguments<Result (Class::*)(Args...) const &> {
+  using type = type_list<Args...>;
+};
+
+template <typename Class, typename Result, typename... Args>
+struct operator_arguments<Result (Class::*)(Args...) &&> {
+  using type = type_list<Args...>;
+};
+
+template <typename Class, typename Result, typename... Args>
+struct operator_arguments<Result (Class::*)(Args...) const &&> {
+  using type = type_list<Args...>;
+};
+
+template <typename Class, typename Result, typename... Args>
+struct operator_arguments<Result (Class::*)(Args...) noexcept> {
+  using type = type_list<Args...>;
+};
+
+template <typename Class, typename Result, typename... Args>
+struct operator_arguments<Result (Class::*)(Args...) const noexcept> {
+  using type = type_list<Args...>;
+};
+
+template <typename Class, typename Result, typename... Args>
+struct operator_arguments<Result (Class::*)(Args...) & noexcept> {
+  using type = type_list<Args...>;
+};
+
+template <typename Class, typename Result, typename... Args>
+struct operator_arguments<Result (Class::*)(Args...) const & noexcept> {
+  using type = type_list<Args...>;
+};
+
+template <typename Class, typename Result, typename... Args>
+struct operator_arguments<Result (Class::*)(Args...) && noexcept> {
+  using type = type_list<Args...>;
+};
+
+template <typename Class, typename Result, typename... Args>
+struct operator_arguments<Result (Class::*)(Args...) const && noexcept> {
+  using type = type_list<Args...>;
+};
+
+template <typename Callable, typename = void>
+struct deduces_function : std::false_type {};
+
+template <typename Callable>
+struct deduces_function<
+    Callable, std::void_t<decltype(std::function{std::declval<Callable>()})>>
+    : std::true_type {};
+
+template <typename Callable, typename = void>
+struct has_call_operator : std::false_type {};
+
+template <typename Callable>
+struct has_call_operator<Callable, std::void_t<decltype(&Callable::operator())>>
+    : std::true_type {};
+} // namespace detail
+
+// A callable whose call operator std::function does not deduce, as it takes
+// its object as an rvalue, has the parameter types of its one call operator.
+template <typename Callable>
+struct callable_arguments<
+    Callable, std::enable_if_t<!detail::deduces_function<Callable>::value &&
+                               detail::has_call_operator<Callable>::value>>
+    : detail::operator_arguments<decltype(&Callable::operator())> {};
 
 template <typename Callable>
 using callable_arguments_t = typename callable_arguments<Callable>::type;

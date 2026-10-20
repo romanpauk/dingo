@@ -141,6 +141,9 @@ template <typename Type> struct wrapper_traits<std::optional<Type>> {
   template <typename Element> using rebind = std::optional<Element>;
 
   static Type &element(std::optional<Type> &value) { return *value; }
+  static const Type &element(const std::optional<Type> &value) {
+    return *value;
+  }
   static Type &&element(std::optional<Type> &&value) {
     return std::move(*value);
   }
@@ -158,6 +161,10 @@ template <typename... Types> struct wrapper_traits<std::variant<Types...>> {
 
   template <std::size_t Index>
   static auto &element(std::variant<Types...> &value) {
+    return std::get<Index>(value);
+  }
+  template <std::size_t Index>
+  static auto &element(const std::variant<Types...> &value) {
     return std::get<Index>(value);
   }
   template <std::size_t Index>

@@ -58,6 +58,23 @@ template <typename Append> struct counting_append {
 
 template <typename Request> struct annotated_request;
 
+// The result of a request: the type a keyed or an annotated request decorates,
+// and otherwise the request.
+template <typename Request> struct resolved {
+  using type = Request;
+};
+
+template <typename Type, typename Key> struct resolved<keyed<Type, Key>> {
+  using type = Type;
+};
+
+template <typename Type, typename Tag>
+struct resolved<::dingo::annotated<Type, Tag>> {
+  using type = Type;
+};
+
+template <typename Request> using resolved_t = typename resolved<Request>::type;
+
 template <typename Type, typename Tag>
 struct annotated_request<::dingo::annotated<Type, Tag>> {
   using type = Type;
@@ -67,16 +84,18 @@ struct annotated_request<::dingo::annotated<Type, Tag>> {
 template <typename Self> class selection {
 public:
   // Resolves a request; a keyed request carries its key.
-  template <typename Request> Request resolve() {
+  // Resolves a request; a keyed or an annotated request names the type it
+  // decorates, which is the result.
+  template <typename Request> resolved_t<Request> resolve() {
     if constexpr (is_annotated<Request>::value) {
       using inner = typename annotated_request<Request>::type;
       using key =
           annotated_key<typename annotated_request<Request>::tag, no_key>;
-      return Request(select<inner, key, true>(nullptr));
+      return select<inner, key, true>(nullptr);
     } else if constexpr (is_keyed<Request>::value) {
       using key = typename Request::key;
-      return Request(
-          select<typename Request::type, key, true>(key_store<key>().value()));
+      return select<typename Request::type, key, true>(
+          key_store<key>().value());
     } else {
       return select<Request, no_key, true>(nullptr);
     }
@@ -84,16 +103,26 @@ public:
 
   // Resolves a request by a key: a key_type object, a key_value, or a value
   // of the key type.
-  template <typename Request, typename Value> Request resolve(Value &&value) {
+  template <typename Request, typename Value>
+  resolved_t<Request> resolve(Value &&value) {
     using key = request_key_of<std::decay_t<Value>>;
     if constexpr (is_annotated<Request>::value) {
-      return Request(
-          select<typename annotated_request<Request>::type,
-                 annotated_key<typename annotated_request<Request>::tag,
-                               typename key::type>,
-                 true>(key::value(value)));
+      return select<typename annotated_request<Request>::type,
+                    annotated_key<typename annotated_request<Request>::tag,
+                                  typename key::type>,
+                    true>(key::value(value));
     } else {
       return select<Request, typename key::type, true>(key::value(value));
+    }
+  }
+
+  // The argument of a parameter of type `Request`: a keyed or an annotated
+  // parameter takes the decorated object.
+  template <typename Request> Request argument() {
+    if constexpr (is_annotated<Request>::value || is_keyed<Request>::value) {
+      return Request(resolve<Request>());
+    } else {
+      return resolve<Request>();
     }
   }
 
@@ -194,7 +223,7 @@ private:
     case step_condition::always:
       return true;
     case step_condition::constructible:
-      return Outermost && unkeyed && auto_constructs<Request>::value;
+      return Outermost && unkeyed && auto_constructs_by<Request, Self>();
     case step_condition::has_factory:
       return Outermost && unkeyed && has_detected_factory<Request>::value;
     }
@@ -526,7 +555,7 @@ private:
   }
 
   template <typename Request, typename Key> Request auto_construct() {
-    if constexpr (auto_constructs<Request>::value &&
+    if constexpr (auto_constructs_by<Request, Self>() &&
                   std::is_same_v<Key, no_key>) {
       using value_type = std::remove_cv_t<std::remove_reference_t<Request>>;
       if constexpr (std::is_reference_v<Request>) {

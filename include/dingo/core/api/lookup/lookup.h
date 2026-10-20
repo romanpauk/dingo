@@ -85,18 +85,23 @@ struct associative_declaration {
 };
 } // namespace detail
 
+// The declarations are class templates, so the arguments of one can be
+// deduced; each is the lookup declaration it derives from.
+
 // The bindings of an interface without a key, one of them.
 template <typename Interface>
-using single = detail::lookup_declaration_t<Interface, core::no_key, one>;
+struct single : detail::lookup_declaration_t<Interface, core::no_key, one> {};
 
 // The bindings of an interface without a key, any number of them.
 template <typename Interface>
-using collection = detail::lookup_declaration_t<Interface, core::no_key, many>;
+struct collection
+    : detail::lookup_declaration_t<Interface, core::no_key, many> {};
 
 // The bindings of an interface by a tag key.
 template <typename Tag, typename Interface, typename Cardinality = one>
-using typed =
-    detail::lookup_declaration_t<Interface, core::tag_key<Tag>, Cardinality>;
+struct typed
+    : detail::lookup_declaration_t<Interface, core::tag_key<Tag>, Cardinality> {
+};
 
 // The bindings of an interface by the value of a key type, fixed or supplied
 // at runtime. A dense array<N> stores the values 0 up to N, excluded, of an
@@ -104,16 +109,17 @@ using typed =
 // rejected, and a request of one finds no binding.
 template <typename Key, typename Interface, typename Cardinality = one,
           typename Backend = ordered>
-using associative =
-    typename detail::associative_declaration<Key, Interface, Cardinality,
-                                             Backend>::type;
+struct associative
+    : detail::associative_declaration<Key, Interface, Cardinality,
+                                      Backend>::type {};
 
 // Every domain no other declaration covers.
 template <typename Cardinality = one, typename Backend = ordered>
-using base = core::lookup_declaration<core::type_list<>, core::no_key,
-                                      std::is_same_v<Cardinality, many>,
-                                      detail::backend_index<Backend>::index,
-                                      detail::backend_index<Backend>::bound>;
+struct base : core::lookup_declaration<core::type_list<>, core::no_key,
+                                       std::is_same_v<Cardinality, many>,
+                                       detail::backend_index<Backend>::index,
+                                       detail::backend_index<Backend>::bound> {
+};
 
 } // namespace dingo
 

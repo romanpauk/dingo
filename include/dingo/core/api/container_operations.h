@@ -80,14 +80,17 @@ public:
     using arguments = typename ::dingo::detail::callable_arguments<
         Signature, std::decay_t<Callable>>::type;
     const auto frame = core::type_frame::of<std::decay_t<Callable>>();
-    return invoke_with(callable, arguments());
+    return invoke_with(std::forward<Callable>(callable), arguments());
   }
 
 private:
+  // Calls the callable in its value category, so a call operator that takes
+  // its object as an rvalue applies.
   template <typename Callable, typename... Args>
-  decltype(auto) invoke_with(Callable &callable,
+  decltype(auto) invoke_with(Callable &&callable,
                              core::type_list<Args...> /*arguments*/) {
-    return std::invoke(callable, self().template resolve<Args>()...);
+    return std::invoke(std::forward<Callable>(callable),
+                       self().template argument<Args>()...);
   }
 
   Self &self() { return static_cast<Self &>(*this); }

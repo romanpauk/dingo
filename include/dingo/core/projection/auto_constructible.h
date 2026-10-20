@@ -17,13 +17,21 @@
 
 namespace dingo {
 
+namespace detail {
 template <typename Type, typename = void>
-struct is_auto_constructible : std::false_type {};
+struct default_auto_constructible : std::false_type {};
 
 template <typename Type>
-struct is_auto_constructible<
+struct default_auto_constructible<
     Type, std::enable_if_t<core::detail::is_complete<Type>::value>>
     : std::bool_constant<std::is_aggregate_v<Type>> {};
+} // namespace detail
+
+// Whether an unregistered type is auto-constructed: a complete aggregate by
+// default. It takes the type alone, so a specialization for a template of
+// types is partial without competing with the default.
+template <typename Type>
+struct is_auto_constructible : detail::default_auto_constructible<Type> {};
 
 } // namespace dingo
 
@@ -48,5 +56,20 @@ struct auto_constructs<
     : std::bool_constant<detected_constructor<std::remove_cv_t<
                              std::remove_reference_t<Request>>>::kind ==
                          constructor_kind::concrete> {};
+
+// Whether a request auto-constructs by the arguments `Resolver` resolves its
+// dependencies with: the detected constructor accepts them as well as the
+// probes it was detected by, which convert unambiguously.
+template <typename Request, typename Resolver>
+constexpr bool auto_constructs_by() {
+  if constexpr (!auto_constructs<Request>::value) {
+    return false;
+  } else {
+    using value_type = std::remove_cv_t<std::remove_reference_t<Request>>;
+    return detail::constructible_with<
+        value_type, constructor_argument<value_type, Resolver>>(
+        std::make_index_sequence<detected_constructor<value_type>::arity>{});
+  }
+}
 
 } // namespace dingo::core

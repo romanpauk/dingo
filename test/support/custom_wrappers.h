@@ -174,6 +174,9 @@ template <typename T> struct wrapper_traits<test_optional<T>> {
   template <typename U> using rebind = test_optional<U>;
 
   static T &element(test_optional<T> &wrapper) { return *wrapper.get(); }
+  static const T &element(const test_optional<T> &wrapper) {
+    return *wrapper.get();
+  }
   static T &&element(test_optional<T> &&wrapper) {
     return std::move(*wrapper.get());
   }

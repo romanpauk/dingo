@@ -305,6 +305,13 @@ constexpr void apply(const binding_descriptor &binding, terms &found,
     return;
   }
   shape value = bound;
+  // The element of a layer that holds it in place, an optional or an
+  // alternative, has the qualifiers of the layer.
+  if (rule.to_layer == layer_kind::leaf &&
+      (rule.from_layer == layer_kind::opt ||
+       rule.from_layer == layer_kind::alt)) {
+    value.nodes[0].qualifiers |= source.nodes[0].qualifiers;
+  }
   if (rule.to_layer != layer_kind::leaf) {
     type_id family = nullptr;
     if (is_wrapper_kind(rule.to_layer)) {

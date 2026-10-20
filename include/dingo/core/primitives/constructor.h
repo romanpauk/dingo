@@ -181,7 +181,7 @@ public:
                                !std::is_same_v<Disabled, std::decay_t<Type>> &&
                                detail::is_complete<std::decay_t<Type>>::value>>
   operator Type() {
-    return resolver_.template resolve<Type>();
+    return resolver_.template argument<Type>();
   }
 
 private:
@@ -200,7 +200,7 @@ decltype(auto) invoke_detected(Resolver &resolver, Sink &&sink,
 template <typename Resolver, typename Sink, typename... Args>
 decltype(auto) invoke_declared(Resolver &resolver, Sink &&sink,
                                type_list<Args...> /*arguments*/) {
-  return std::forward<Sink>(sink)(resolver.template resolve<Args>()...);
+  return std::forward<Sink>(sink)(resolver.template argument<Args>()...);
 }
 } // namespace detail
 

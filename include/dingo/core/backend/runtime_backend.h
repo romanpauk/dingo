@@ -571,25 +571,25 @@ private:
   template <typename Request>
   static Request construct(Resolver &resolver, entry &binding, std::size_t term,
                            const completion_plan &plan) {
-    using value_type = typename request_traits<Request>::value_type;
+    using made_type = typename request_traits<Request>::made_type;
     const rule_id *rules = plan.creating;
     switch (plan.created) {
     case 0:
-      return construct_with<Request, created_layers<value_type>>(resolver,
-                                                                 binding, term);
+      return construct_with<Request, created_layers<made_type>>(resolver,
+                                                                binding, term);
     case 1:
       switch (rules[0]) {
       case rule_id::wrap_optional:
         return construct_with<
-            Request, created_layers<value_type, rule_id::wrap_optional>>(
+            Request, created_layers<made_type, rule_id::wrap_optional>>(
             resolver, binding, term);
       case rule_id::adopt_pointer_owned:
         return construct_with<
-            Request, created_layers<value_type, rule_id::adopt_pointer_owned>>(
+            Request, created_layers<made_type, rule_id::adopt_pointer_owned>>(
             resolver, binding, term);
       case rule_id::adopt_pointer_shared:
         return construct_with<
-            Request, created_layers<value_type, rule_id::adopt_pointer_shared>>(
+            Request, created_layers<made_type, rule_id::adopt_pointer_shared>>(
             resolver, binding, term);
       default:
         break;
@@ -600,12 +600,12 @@ private:
         switch (rules[0]) {
         case rule_id::adopt_pointer_owned:
           return construct_with<
-              Request, created_layers<value_type, rule_id::wrap_optional,
+              Request, created_layers<made_type, rule_id::wrap_optional,
                                       rule_id::adopt_pointer_owned>>(
               resolver, binding, term);
         case rule_id::adopt_pointer_shared:
           return construct_with<
-              Request, created_layers<value_type, rule_id::wrap_optional,
+              Request, created_layers<made_type, rule_id::wrap_optional,
                                       rule_id::adopt_pointer_shared>>(
               resolver, binding, term);
         default:
@@ -637,7 +637,7 @@ private:
   template <typename Request, typename Layers>
   static Request make_with(Resolver &resolver, entry &binding,
                            std::size_t term) {
-    using value_type = typename request_traits<Request>::value_type;
+    using made_type = typename request_traits<Request>::made_type;
     using boundary = typename Layers::boundary;
     if (!binding.template makes<boundary>(term)) {
       throw std::logic_error("the selected term does not complete the request");
@@ -648,7 +648,7 @@ private:
     };
     if constexpr (std::is_rvalue_reference_v<Request>) {
       return static_cast<Request>(
-          resolver.retained().template emplace<value_type>(make));
+          resolver.retained().template emplace<made_type>(make));
     } else {
       return static_cast<Request>(make());
     }

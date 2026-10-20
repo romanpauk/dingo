@@ -96,8 +96,14 @@ void assert_static_parent_child_override() {
   ASSERT_EQ(child.template resolve<child_service>().value, 2);
 }
 
+// The next implementation rejects two static bindings of one key of an
+// interface unless its lookup is declared many, as the behavior change
+// duplicates_rejected_in_both_domains of the spec declares, so the child of
+// this test is not formed there; the selection tables check the rejection, and
+// the ambiguity of a domain declared many.
 template <typename ParentShape, typename ChildShape>
 void assert_static_parent_child_ambiguity() {
+#if !defined(DINGO_IMPLEMENTATION_NEXT)
   using parent_bindings = dingo::bindings<
       dingo::bind<dingo::scope<dingo::shared>, dingo::storage<parent_config>>>;
   using child_bindings = dingo::bindings<
@@ -115,6 +121,7 @@ void assert_static_parent_child_ambiguity() {
 
   ASSERT_THROW(child.template resolve<parent_config &>(),
                dingo::type_ambiguous_exception);
+#endif
 }
 
 template <typename ParentShape, typename ChildShape>

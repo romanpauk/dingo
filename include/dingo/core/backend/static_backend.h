@@ -372,6 +372,7 @@ private:
                   "the next implementation does not provide the route of the "
                   "requested type yet");
     using value_type = typename request_traits<Request>::value_type;
+    using made_type = typename request_traits<Request>::made_type;
     constexpr const completion_plan &plan = plan_v<binding, selected>;
     auto &holder =
         static_cast<detail::static_holder<Index, binding> &>(holders_);
@@ -391,7 +392,7 @@ private:
                          binding::published.items[selected].rule_count>(
             holder.slot.context(), source);
       } else {
-        using layers = planned_layers_t<value_type, binding, selected>;
+        using layers = planned_layers_t<made_type, binding, selected>;
         static_assert(layers::valid &&
                           std::is_same_v<typename layers::boundary,
                                          boundary_t<binding, selected>>,

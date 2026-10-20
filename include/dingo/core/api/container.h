@@ -57,11 +57,7 @@ struct runtime_allocator<Allocator, Rest...> {
   using type = Allocator;
 };
 
-template <typename Type, typename = void> struct is_traits : std::false_type {};
-
-template <typename Type>
-struct is_traits<Type, std::void_t<typename Type::lookup_definition_type>>
-    : std::true_type {};
+template <typename Type> using is_traits = is_traits_type<Type>;
 
 // The traits and the parent of a mixed container: container<bindings<...>>,
 // container<bindings<...>, Traits>, container<bindings<...>, Parent>, or
@@ -92,7 +88,8 @@ struct mixed_parameters<Traits, Parent> {
 template <typename Traits = dynamic_container_traits, typename... Rest>
 class container
     : public core::selection<container<Traits, Rest...>>,
-      public detail::container_operations<container<Traits, Rest...>> {
+      public detail::container_operations<container<Traits, Rest...>>,
+      public detail::container_member_types<Traits> {
   static_assert(sizeof...(Rest) <= 2,
                 "container<Traits, Allocator, Parent> takes at most three "
                 "parameters");
@@ -157,7 +154,9 @@ template <typename... Binds, typename... Rest>
 class container<bindings<Binds...>, Rest...>
     : public core::selection<container<bindings<Binds...>, Rest...>>,
       public detail::container_operations<
-          container<bindings<Binds...>, Rest...>> {
+          container<bindings<Binds...>, Rest...>>,
+      public detail::container_member_types<
+          typename detail::mixed_parameters<Rest...>::traits> {
   using parameters = detail::mixed_parameters<Rest...>;
   using lookups = core::lookup_table_of<typename core::lookup_list<
       typename parameters::traits::lookup_definition_type>::type>;

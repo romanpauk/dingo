@@ -49,8 +49,12 @@ template <typename Request, typename Key = no_key> struct request_traits {
       std::is_lvalue_reference_v<Request>   ? request_kind::lvalue_reference
       : std::is_rvalue_reference_v<Request> ? request_kind::rvalue_reference
                                             : request_kind::value;
-  // The type the request asks for, which a term of its shape provides.
-  using value_type = canonical_t<std::remove_reference_t<Request>>;
+  // The type the request asks for, which a term of its shape provides, with
+  // the qualifiers of the objects it holds or refers to.
+  using value_type = std::remove_cv_t<std::remove_reference_t<Request>>;
+  // The type a binding makes the object of a constructed request as, without
+  // qualifiers, which converts to the request.
+  using made_type = canonical_t<std::remove_reference_t<Request>>;
   static constexpr request_descriptor descriptor{
       kind,
       detail::request_shape<std::remove_reference_t<Request>,

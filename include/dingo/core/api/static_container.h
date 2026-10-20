@@ -28,13 +28,7 @@
 namespace dingo {
 
 namespace detail {
-template <typename Type, typename = void>
-struct is_container_traits : std::false_type {};
-
-template <typename Type>
-struct is_container_traits<Type,
-                           std::void_t<typename Type::lookup_definition_type>>
-    : std::true_type {};
+template <typename Type> using is_container_traits = is_traits_type<Type>;
 
 // The parent of a container, nothing without one.
 template <typename Parent> struct parent_holder {
@@ -57,6 +51,9 @@ class DINGO_EMPTY_BASES static_container<bindings<Binds...>, Second>
     : public core::selection<static_container<bindings<Binds...>, Second>>,
       public detail::container_operations<
           static_container<bindings<Binds...>, Second>>,
+      public detail::container_member_types<
+          std::conditional_t<detail::is_container_traits<Second>::value, Second,
+                             static_container_traits>>,
       private detail::parent_holder<std::conditional_t<
           detail::is_container_traits<Second>::value, void, Second>> {
   using traits = std::conditional_t<detail::is_container_traits<Second>::value,

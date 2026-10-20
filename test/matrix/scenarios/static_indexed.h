@@ -105,11 +105,9 @@ inline void assert_static_indexed_many_resolution() {
       std::vector<static_indexed_processor *>>(
       dingo::key_type<std::size_t, 7>{});
 
-  ASSERT_EQ(
-      (container
-           .template count_collection<std::vector<static_indexed_processor *>,
-                                      dingo::key_type<std::size_t, 7>>()),
-      2U);
+  // count_collection is not part of the public API of the spec; the size of
+  // the constructed collection counts its bindings.
+  ASSERT_EQ(constructed.size(), 2U);
   ASSERT_EQ(processors.size(), 2U);
   ASSERT_EQ(processors[0]->id(), 0);
   ASSERT_EQ(processors[1]->id(), 1);
