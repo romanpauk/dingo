@@ -453,3 +453,10 @@ def test_every_section_is_checked_for_ids():
     expected = [f.name for f in dataclasses.fields(type(sample_spec())) if f.name != "cpp"]
     expected += [f"cpp.{f.name}" for f in dataclasses.fields(type(sample_spec().cpp))]
     assert names == expected
+
+
+def test_transaction_rule_shape():
+    spec = replace_first(sample_spec(), "transaction_rules", undoes=())
+    assert_one_error(spec, "undoes no effect")
+    spec = replace_first(sample_spec(), "transaction_rules", operations=())
+    assert_one_error(spec, "no operations")

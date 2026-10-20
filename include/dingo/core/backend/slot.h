@@ -67,6 +67,10 @@ public:
             std::forward<Factory>(factory)) {}
 
   typename Binding::context_type &context() { return *this; }
+
+  // Forgets the objects the cached rules derived from the object of the slot,
+  // when the object is destroyed.
+  void clear_context() noexcept { context().clear(); }
 };
 
 template <typename Binding, slot Kind = info(Binding::scope).storage_slot>
@@ -86,13 +90,15 @@ public:
   using stored_type = typename Binding::stored_type;
   using binding_context<Binding>::binding_context;
 
-  // Whether the object is constructed, so its address does not change.
-  template <typename Resolver> bool settled(Resolver & /*resolver*/) const {
-    return slot_.constructed();
+  // Whether the object is constructed and kept: no transaction that a
+  // failure would destroy it with is in progress.
+  template <typename Resolver> bool settled(Resolver &resolver) const {
+    return slot_.constructed() && !resolver.transactions().active();
   }
 
-  // The object, constructed on first use; the constructed object is checked
-  // first, so a request of it compares once.
+  // The object, constructed on first use, which the transaction in progress
+  // destroys when it fails; the constructed object is checked first, so a
+  // request of it compares once.
   template <typename Resolver> stored_type &get(Resolver &resolver) {
     if (slot_.constructed()) {
       return slot_.object();
@@ -100,13 +106,22 @@ public:
     if (slot_.constructing()) {
       raise_recursion<leaf_of_t<stored_type>>();
     }
-    return slot_.get_or_construct([this, &resolver](void *where) {
-      const auto frame = type_frame::of<leaf_of_t<stored_type>>();
-      construct_stored<stored_type>(where, this->factory(), resolver);
-    });
+    stored_type &object =
+        slot_.get_or_construct([this, &resolver](void *where) {
+          const auto frame = type_frame::of<leaf_of_t<stored_type>>();
+          construct_stored<stored_type>(where, this->factory(), resolver);
+        });
+    resolver.transactions().record(this, &reset_slot);
+    return object;
   }
 
 private:
+  static void reset_slot(void *slot) noexcept {
+    auto &self = *static_cast<binding_slot *>(slot);
+    self.clear_context();
+    self.slot_.reset();
+  }
+
   lazy_slot<stored_type> slot_;
 };
 
@@ -198,13 +213,15 @@ public:
   // Whether the object is constructed and no publication that a failure
   // would reset it with is in progress.
   template <typename Resolver> bool settled(Resolver &resolver) const {
-    return state_ == state::constructed && !resolver.publications().active();
+    return state_ == state::constructed && !resolver.transactions().active();
   }
 
   template <typename Resolver> stored_type &get(Resolver &resolver) {
     if (state_ == state::empty) {
-      resolver.publications().run(this, &reset_slot,
-                                  [&] { publish(resolver); });
+      // The transaction in progress resets the slot when it fails: an
+      // object constructed during it may refer to the published object.
+      resolver.transactions().record(this, &reset_slot);
+      publish(resolver);
     } else if (state_ == state::publishing && !published_while_constructed) {
       raise_recursion<leaf_of_t<stored_type>>();
     }
@@ -269,6 +286,7 @@ private:
     }
     holds_handle_ = false;
     state_ = state::empty;
+    this->clear_context();
   }
 
   static void reset_slot(void *slot) noexcept {

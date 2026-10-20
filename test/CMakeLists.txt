@@ -220,6 +220,7 @@ add_executable(dingo_next_test
     next/api/mixed.cpp
     next/api/parents.cpp
     next/api/shared_cyclical.cpp
+    next/api/transactions.cpp
     next/api/unique.cpp
     next/backend/memo.cpp
     next/base/mechanics.cpp

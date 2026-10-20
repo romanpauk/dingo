@@ -9,8 +9,11 @@
 
 // Lifetime slots: where a binding keeps its object.
 
+#include <dingo/core/base/mechanics.h>
+
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <new>
 #include <type_traits>
@@ -50,6 +53,14 @@ public:
 
   // The object, which constructed() tells exists.
   Type &object() { return *get(); }
+
+  // Destroys the object, if it exists, so the slot is empty.
+  void reset() noexcept {
+    if (state_ == state::constructed) {
+      destroy_object(get());
+    }
+    state_ = state::empty;
+  }
 
   // Constructs the object in place by `construct(void *)` unless it exists;
   // the caller reports a request while it is being constructed.
@@ -134,48 +145,78 @@ template <typename Type> struct publication_deleter {
   }
 };
 
-// The slots the outermost publication in progress published, each reset when
-// it fails: an object constructed during it may refer to an object whose
-// construction failed.
-class publication_log {
+// The transaction of a container: the effects on the container of its
+// outermost request in progress, and of the requests it makes of the
+// container, each recorded with the function that undoes it. A request that
+// fails undoes them in the reverse order they happened, and one that returns
+// keeps them. spec: transaction_rules
+class transaction_log {
 public:
-  using reset_function = void (*)(void *) noexcept;
+  using undo_function = void (*)(void *) noexcept;
 
-  // Runs `publish`, the publication of `slot`, which `reset` resets.
-  template <typename Publish>
-  void run(void *slot, reset_function reset, Publish &&publish) {
-    entries_.push_back(entry{slot, reset});
-    ++depth_;
+  // Runs `request` as a request of the container.
+  template <typename Request> decltype(auto) run(Request &&request) {
     struct leave {
-      publication_log &log;
-      bool failed = true;
+      transaction_log &log;
       ~leave() {
-        if (--log.depth_ == 0) {
-          if (failed) {
-            for (auto it = log.entries_.rbegin(); it != log.entries_.rend();
-                 ++it) {
-              it->reset(it->slot);
-            }
-          }
-          log.entries_.clear();
+        if (--log.depth_ == 0 && !log.entries_.empty()) {
+          log.finish();
         }
       }
-    } guard{*this};
-    publish();
-    guard.failed = false;
+    };
+    ++depth_;
+    leave guard{*this};
+    return request();
   }
 
-  // Whether a publication is in progress, whose failure resets its slots.
+  // Records an effect on the container, which `undo` undoes, when a request
+  // is in progress; an effect outside one is kept.
+  void record(void *target, undo_function undo) {
+    if (depth_ == 0) {
+      return;
+    }
+    if (entries_.empty()) {
+      // The exceptions in flight when the transaction began, so its own
+      // failure is told from a request made while one unwinds.
+      unwinding_ = std::uncaught_exceptions();
+    }
+    entries_.push_back(entry{target, undo});
+  }
+
+  // Whether a request is in progress, whose failure undoes its effects.
   bool active() const { return depth_ != 0; }
 
 private:
   struct entry {
-    void *slot;
-    reset_function reset;
+    void *target;
+    undo_function undo;
   };
+
+  DINGO_CORE_COLD DINGO_NOINLINE void finish() noexcept {
+    if (std::uncaught_exceptions() > unwinding_) {
+      for (auto it = entries_.rbegin(); it != entries_.rend(); ++it) {
+        it->undo(it->target);
+      }
+    }
+    entries_.clear();
+  }
 
   std::vector<entry> entries_;
   std::size_t depth_ = 0;
+  int unwinding_ = 0;
+};
+
+// The transaction of a container whose bindings construct no object they
+// keep: there is nothing to undo.
+struct no_transaction_log {
+  template <typename Request> decltype(auto) run(Request &&request) {
+    return request();
+  }
+
+  void record(void * /*target*/,
+              transaction_log::undo_function /*undo*/) noexcept {}
+
+  bool active() const { return false; }
 };
 
 } // namespace dingo::core

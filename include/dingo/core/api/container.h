@@ -136,7 +136,7 @@ public:
   core::retained_objects &retained() { return retained_; }
   core::runtime_backend<container> &runtime_source() { return backend_; }
   parent_type *parent() { return parent_; }
-  core::publication_log &publications() { return backend_.publications(); }
+  core::transaction_log &transactions() { return backend_.transactions(); }
 
 private:
   core::retained_objects retained_;
@@ -205,7 +205,7 @@ public:
   static_source_type &static_source() { return static_; }
   core::runtime_backend<container> &runtime_source() { return runtime_; }
   parent_type *parent() { return parent_; }
-  core::publication_log &publications() { return runtime_.publications(); }
+  core::transaction_log &transactions() { return runtime_.transactions(); }
 
 private:
   core::retained_objects retained_;

@@ -43,6 +43,24 @@ public:
     return emplace_keyed<Type>(nullptr, std::forward<Make>(make));
   }
 
+  // Destroys the object kept last, which a failed transaction undoes.
+  static void undo_last(void *objects) noexcept {
+    auto &self = *static_cast<retained_objects *>(objects);
+    if (node *last = self.head_) {
+      self.head_ = last->next;
+      last->destroy(last);
+    }
+  }
+
+  // Destroys every kept object.
+  void clear() noexcept {
+    while (head_ != nullptr) {
+      node *next = head_->next;
+      head_->destroy(head_);
+      head_ = next;
+    }
+  }
+
 protected:
   template <typename Type, typename Make>
   Type &emplace_keyed(const void *key, Make &&make) {
@@ -86,6 +104,8 @@ private:
 // Objects kept under a key, each derived once.
 class kept_objects : private retained_objects {
 public:
+  using retained_objects::clear;
+
   // The object kept under `key`, made by `make()` when there is none. Every
   // object kept under one key has the same type.
   template <typename Type, typename Make>

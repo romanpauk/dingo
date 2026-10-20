@@ -44,9 +44,9 @@ __all__ = [
     "GraphRule",
     "IndexStructure",
     "KeyKind",
-    "LookupDeclaration",
     "LayerKind",
     "LayerTrait",
+    "LookupDeclaration",
     "LookupFilter",
     "PatternForm",
     "Predicate",
@@ -68,6 +68,8 @@ __all__ = [
     "Status",
     "StepCondition",
     "StorageForm",
+    "TransactionEffect",
+    "TransactionRule",
     "ValueCategory",
     "VariantKind",
     "VariantPoint",
@@ -468,6 +470,35 @@ class EdgeTime(Enum):
     RESOLUTION = "resolution"
 
 
+class TransactionEffect(Enum):
+    """An effect on a container that a failed transaction of it undoes."""
+
+    # A binding registered into the container.
+    REGISTRATION = "registration"
+    # An object a binding of the container constructed and keeps.
+    CONSTRUCTION = "construction"
+    # An object the container keeps for a request, such as an auto-constructed
+    # object a reference refers to.
+    RETENTION = "retention"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TransactionRule(Entity):
+    """A request that starts at a container is a transaction of it.
+
+    The outermost request of a container that is in progress, together with
+    the requests it makes of the container, commits when it returns, and when
+    it fails undoes the `undoes` effects it had on the container, in the
+    reverse order they happened. The effects on other containers, a parent or
+    a child, belong to their own transactions. `operations` are the public
+    operations that start one.
+    """
+
+    description: str
+    operations: tuple[str, ...]
+    undoes: tuple["TransactionEffect", ...]
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GraphRule(Entity):
     """A cycle is legal if and only if every node has a scope in `legal_scopes`."""
@@ -718,6 +749,7 @@ class Spec:
     index_structures: tuple[IndexStructure, ...] = ()
     factory_kinds: tuple[FactoryKind, ...] = ()
     selection_rules: tuple[SelectionRule, ...] = ()
+    transaction_rules: tuple[TransactionRule, ...] = ()
     graph_rules: tuple[GraphRule, ...] = ()
     diagnostics: tuple[Diagnostic, ...] = ()
     binding_time_constraints: tuple[BindingTimeConstraint, ...] = ()

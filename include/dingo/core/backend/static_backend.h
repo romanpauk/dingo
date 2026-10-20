@@ -76,20 +76,24 @@ constexpr std::size_t instance_ordinal(std::size_t index) {
 
 template <typename Indices, typename... Bindings> struct static_holders;
 
-// The publications of two-phase slots are logged only by a container with a
-// two-phase binding.
-template <bool Publishes> struct static_publications {
-  publication_log publications;
+// The transaction of a container is logged only when a binding constructs an
+// object it keeps, in a lazy or a two-phase slot.
+template <bool Keeps> struct static_transactions {
+  transaction_log log;
 };
 
-template <> struct static_publications<false> {};
+template <> struct static_transactions<false> {
+  no_transaction_log log;
+};
 
 template <std::size_t... Indices, typename... Bindings>
 struct DINGO_EMPTY_BASES
     static_holders<std::index_sequence<Indices...>, Bindings...>
     : static_holder<Indices, Bindings>...,
-      static_publications<(
-          (info(Bindings::scope).storage_slot == slot::two_phase) || ...)> {
+      static_transactions<(
+          (info(Bindings::scope).storage_slot == slot::two_phase ||
+           info(Bindings::scope).storage_slot == slot::lazy) ||
+          ...)> {
   template <typename Instances>
   explicit static_holders(Instances &instances)
       : static_holder<Indices, Bindings>(
@@ -201,8 +205,8 @@ public:
         "binding, in the order of the bindings");
   }
 
-  // The publications of the two-phase slots in progress.
-  publication_log &publications() { return holders_.publications; }
+  // The transaction of the requests of the container in progress.
+  auto &transactions() { return holders_.log; }
 
   // Whether a static binding holds the key `key_value` of a binding of type
   // `Binding` added at runtime, of a common interface whose domain holds one
@@ -406,9 +410,11 @@ private:
     if constexpr (std::is_rvalue_reference_v<Request> &&
                   binding::published.items[selected].category ==
                       value_category::rvalue) {
-      return static_cast<Request>(
-          resolver.retained().template emplace<value_type>(
-              [&] { return value_type(make()); }));
+      value_type &kept = resolver.retained().template emplace<value_type>(
+          [&] { return value_type(make()); });
+      resolver.transactions().record(&resolver.retained(),
+                                     &retained_objects::undo_last);
+      return static_cast<Request>(kept);
     } else {
       return static_cast<Request>(make());
     }

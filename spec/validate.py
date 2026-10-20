@@ -73,6 +73,7 @@ def validate(spec: Spec) -> list[str]:
     check_routes(spec, errors)
     check_lookups(spec, errors)
     check_selection_rules(spec, errors)
+    check_transaction_rules(spec, errors)
     check_graph_rules(spec, errors)
     check_diagnostics(spec, errors)
     check_binding_time_constraints(spec, errors)
@@ -291,6 +292,17 @@ def check_selection_rules(spec: Spec, errors: list[str]) -> None:
         check_unique(errors, where, "outcome counts", counts)
         if set(counts) != set(Cardinality):
             errors.append(f"{where}: outcomes must cover empty, one, and many")
+
+
+def check_transaction_rules(spec: Spec, errors: list[str]) -> None:
+    for rule in spec.transaction_rules:
+        where = f"transaction_rules.{rule.id}"
+        if not rule.operations:
+            errors.append(f"{where}: no operations")
+        if not rule.undoes:
+            errors.append(f"{where}: undoes no effect")
+        check_unique(errors, where, "operations", rule.operations)
+        check_unique(errors, where, "undoes", rule.undoes)
 
 
 def check_graph_rules(spec: Spec, errors: list[str]) -> None:

@@ -373,11 +373,13 @@ public:
     auto &locals = added->locals();
     entries_.push_back(std::move(added));
     ++generation_;
+    // A registration during a request is undone when the request fails.
+    transactions_.record(this, &undo_add);
     return locals;
   }
 
-  // The publications of the two-phase slots in progress.
-  publication_log &publications() { return publications_; }
+  // The transaction of the requests of the container in progress.
+  transaction_log &transactions() { return transactions_; }
 
   // The number of bindings a request by `Key` names, 0, 1, or 2 for many.
   template <typename Request, typename Key>
@@ -438,6 +440,12 @@ public:
 
 private:
   using candidate_type = candidate<entry>;
+
+  static void undo_add(void *backend) noexcept {
+    auto &self = *static_cast<runtime_backend *>(backend);
+    self.entries_.pop_back();
+    ++self.generation_;
+  }
 
   // The memo of a request by `Key`, made by its first resolution and made
   // again by the first one after a registration.
@@ -647,15 +655,17 @@ private:
           [&] { return binding.template make<boundary>(term, resolver); });
     };
     if constexpr (std::is_rvalue_reference_v<Request>) {
-      return static_cast<Request>(
-          resolver.retained().template emplace<made_type>(make));
+      made_type &kept = resolver.retained().template emplace<made_type>(make);
+      resolver.transactions().record(&resolver.retained(),
+                                     &retained_objects::undo_last);
+      return static_cast<Request>(kept);
     } else {
       return static_cast<Request>(make());
     }
   }
 
   const lookup_table *table_;
-  publication_log publications_;
+  transaction_log transactions_;
   std::vector<std::unique_ptr<entry>> entries_;
   // The memos of the request types by request_id, and the number of
   // registrations they are valid for.

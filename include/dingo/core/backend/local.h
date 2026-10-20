@@ -141,7 +141,7 @@ public:
 
   local_view &container_resolver() { return *this; }
   retained_objects &retained() { return host_.retained(); }
-  publication_log &publications() { return host_.publications(); }
+  auto &transactions() { return host_.transactions(); }
 
 private:
   Host &host_;

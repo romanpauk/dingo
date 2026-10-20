@@ -5,7 +5,8 @@ The matrix test executables are built twice from the same working-tree test
 sources, as described in docs/architecture/spec-driven-design.md under
 Differential Testing:
 
-- current: against the headers in include/
+- current: against the headers in include/, or with --implementation next
+  against the next implementation, which include/next selects
 - baseline: against the include/ directory of the commit pinned in
   test/differential/baseline-commit, extracted to <build-root>/baseline-source
 
@@ -101,7 +102,7 @@ def extract_baseline(build_root, commit):
     return include
 
 
-def configure(args, side, build_dir, include_dir):
+def configure(args, side, build_dir, include_dir, implementation="current"):
     cmake_args = [
         "cmake",
         "-S", PROJECT_ROOT,
@@ -116,6 +117,7 @@ def configure(args, side, build_dir, include_dir):
     ]
     if include_dir is not None:
         cmake_args.append(f"-DDINGO_DIFFERENTIAL_INCLUDE_DIR={include_dir}")
+    cmake_args.append(f"-DDINGO_IMPLEMENTATION={implementation}")
     if args.cxx:
         cmake_args.append(f"-DCMAKE_CXX_COMPILER={args.cxx}")
     if args.generator:
@@ -237,6 +239,12 @@ def main():
     parser.add_argument("--profile", choices=("portable", "full"), default="portable")
     parser.add_argument("--generator", help="CMake generator; Ninja when available")
     parser.add_argument("--cxx", help="C++ compiler for both builds")
+    parser.add_argument(
+        "--implementation",
+        choices=("current", "next"),
+        default="current",
+        help="the implementation the working-tree side is built against",
+    )
     args = parser.parse_args()
     build_root = args.build_root.resolve()
 
@@ -245,7 +253,7 @@ def main():
         baseline_include = extract_baseline(build_root, commit)
 
         build_dirs = {side: build_root / side for side in SIDES}
-        configure(args, "current", build_dirs["current"], None)
+        configure(args, "current", build_dirs["current"], None, args.implementation)
         configure(args, "baseline", build_dirs["baseline"], baseline_include)
 
         targets = {side: read_targets(build_dirs[side]) for side in SIDES}

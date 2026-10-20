@@ -75,7 +75,9 @@ constexpr bool keeps_objects(const terms &published) {
 }
 
 // The context of a binding without cached rules.
-struct no_kept_objects {};
+struct no_kept_objects {
+  void clear() noexcept {}
+};
 
 // A binding of a scope, a stored type, the interfaces it declares, the factory
 // that makes its object, detected_factory unless one is declared, its key, and

@@ -92,7 +92,7 @@ public:
   auto &container_resolver() { return *this; }
   core::retained_objects &retained() { return retained_; }
   static_source_type &static_source() { return backend_; }
-  core::publication_log &publications() { return backend_.publications(); }
+  auto &transactions() { return backend_.transactions(); }
 
   template <typename Parent = parent_type> Parent *parent() {
     if constexpr (std::is_void_v<Parent>) {

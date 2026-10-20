@@ -55,13 +55,16 @@ public:
     if constexpr (std::is_void_v<Factory>) {
       return self().template construct_by_rule<Type>();
     } else {
-      return typename core::factory_of<Factory>::type().template make<Type>(
-          self());
+      return self().transactions().run([&]() -> Type {
+        return typename core::factory_of<Factory>::type().template make<Type>(
+            self());
+      });
     }
   }
 
   template <typename Type, typename Factory> Type construct(Factory &&factory) {
-    return factory.template make<Type>(self());
+    return self().transactions().run(
+        [&]() -> Type { return factory.template make<Type>(self()); });
   }
 
   // Constructs a collection of every binding of its element type, by a key
@@ -80,7 +83,9 @@ public:
     using arguments = typename ::dingo::detail::callable_arguments<
         Signature, std::decay_t<Callable>>::type;
     const auto frame = core::type_frame::of<std::decay_t<Callable>>();
-    return invoke_with(std::forward<Callable>(callable), arguments());
+    return self().transactions().run([&]() -> decltype(auto) {
+      return invoke_with(std::forward<Callable>(callable), arguments());
+    });
   }
 
 private:

@@ -84,21 +84,11 @@ struct annotated_request<::dingo::annotated<Type, Tag>> {
 template <typename Self> class selection {
 public:
   // Resolves a request; a keyed request carries its key.
-  // Resolves a request; a keyed or an annotated request names the type it
-  // decorates, which is the result.
+  // Resolves a request, as a transaction of the container; a keyed or an
+  // annotated request names the type it decorates, which is the result.
   template <typename Request> resolved_t<Request> resolve() {
-    if constexpr (is_annotated<Request>::value) {
-      using inner = typename annotated_request<Request>::type;
-      using key =
-          annotated_key<typename annotated_request<Request>::tag, no_key>;
-      return select<inner, key, true>(nullptr);
-    } else if constexpr (is_keyed<Request>::value) {
-      using key = typename Request::key;
-      return select<typename Request::type, key, true>(
-          key_store<key>().value());
-    } else {
-      return select<Request, no_key, true>(nullptr);
-    }
+    return self().transactions().run(
+        [&]() -> resolved_t<Request> { return resolve_request<Request>(); });
   }
 
   // Resolves a request by a key: a key_type object, a key_value, or a value
@@ -106,14 +96,16 @@ public:
   template <typename Request, typename Value>
   resolved_t<Request> resolve(Value &&value) {
     using key = request_key_of<std::decay_t<Value>>;
-    if constexpr (is_annotated<Request>::value) {
-      return select<typename annotated_request<Request>::type,
-                    annotated_key<typename annotated_request<Request>::tag,
-                                  typename key::type>,
-                    true>(key::value(value));
-    } else {
-      return select<Request, typename key::type, true>(key::value(value));
-    }
+    return self().transactions().run([&]() -> resolved_t<Request> {
+      if constexpr (is_annotated<Request>::value) {
+        return select<typename annotated_request<Request>::type,
+                      annotated_key<typename annotated_request<Request>::tag,
+                                    typename key::type>,
+                      true>(key::value(value));
+      } else {
+        return select<Request, typename key::type, true>(key::value(value));
+      }
+    });
   }
 
   // The argument of a parameter of type `Request`: a keyed or an annotated
@@ -129,17 +121,21 @@ public:
   // Constructs an object of `Type` by the construct rule: a binding of the
   // type answers it, and otherwise its detected factory makes it.
   template <typename Type> Type construct_by_rule() {
-    return select<Type, no_key, true, selection_mode::construct>(nullptr);
+    return self().transactions().run([&]() -> Type {
+      return select<Type, no_key, true, selection_mode::construct>(nullptr);
+    });
   }
 
   // The collection of every binding a request of its element type by `Key`
   // names, by the collection rule, each added by `append`.
   template <typename Collection, typename Key, typename Append>
   Collection collect(const void *key_value, Append &&append) {
-    Collection result;
-    counting_append<std::remove_reference_t<Append>> counted{append};
-    collect_into<Collection, Key>(result, key_value, counted);
-    return result;
+    return self().transactions().run([&]() -> Collection {
+      Collection result;
+      counting_append<std::remove_reference_t<Append>> counted{append};
+      collect_into<Collection, Key>(result, key_value, counted);
+      return result;
+    });
   }
 
   // The number of bindings a request names in this container or its
@@ -153,7 +149,8 @@ public:
   // auto-construction.
   template <typename Request, typename Key>
   Request resolve_inherited(const void *key_value) {
-    return select<Request, Key, false>(key_value);
+    return self().transactions().run(
+        [&]() -> Request { return select<Request, Key, false>(key_value); });
   }
 
   // The number of bindings a request names among the container's own
@@ -209,6 +206,21 @@ public:
   }
 
 private:
+  template <typename Request> resolved_t<Request> resolve_request() {
+    if constexpr (is_annotated<Request>::value) {
+      using inner = typename annotated_request<Request>::type;
+      using key =
+          annotated_key<typename annotated_request<Request>::tag, no_key>;
+      return select<inner, key, true>(nullptr);
+    } else if constexpr (is_keyed<Request>::value) {
+      using key = typename Request::key;
+      return select<typename Request::type, key, true>(
+          key_store<key>().value());
+    } else {
+      return select<Request, no_key, true>(nullptr);
+    }
+  }
+
   static constexpr const selection_rule &singular =
       rule_of(selection_mode::singular);
 
@@ -559,8 +571,11 @@ private:
                   std::is_same_v<Key, no_key>) {
       using value_type = std::remove_cv_t<std::remove_reference_t<Request>>;
       if constexpr (std::is_reference_v<Request>) {
-        return self().retained().template emplace<value_type>(
+        value_type &kept = self().retained().template emplace<value_type>(
             [this] { return detected_factory().make<value_type>(self()); });
+        self().transactions().record(&self().retained(),
+                                     &retained_objects::undo_last);
+        return kept;
       } else {
         return detected_factory().make<value_type>(self());
       }

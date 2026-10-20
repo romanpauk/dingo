@@ -5,6 +5,8 @@ spec with one or more entities of every section and mutate it.
 """
 
 from spec.schema import (
+    TransactionEffect,
+    TransactionRule,
     Access,
     ApiKind,
     BehaviorChange,
@@ -227,6 +229,14 @@ def sample_spec() -> Spec:
                     SelectionOutcome(count=Cardinality.MANY, status=Status.AMBIGUOUS),
                     SelectionOutcome(count=Cardinality.EMPTY, status=Status.NOT_FOUND),
                 ),
+            ),
+        ),
+        transaction_rules=(
+            TransactionRule(
+                id="failed_request",
+                description="A failed request is undone.",
+                operations=("resolve",),
+                undoes=(TransactionEffect.REGISTRATION,),
             ),
         ),
         graph_rules=(

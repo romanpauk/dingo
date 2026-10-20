@@ -1659,6 +1659,17 @@ The matrix follows the spec where the baseline behavior it tested changes:
   object is not borrowed, and a variant of a test of a copy-only alternative is
   made by a factory.
 
+A request that starts at a container is a transaction of it, as the transaction
+rules of the spec describe: when the outermost one fails, the registrations into
+the container, the objects its slots constructed, and the objects it retained
+during it are undone in reverse order, by the transaction log of the container,
+which every public operation of a container runs in. A request a child makes of
+its parent is a transaction of the parent, so the effects on another container
+are its own. The log records only while a request is in progress, and checks for
+a failure only when it recorded an effect, so a memoized request pays an
+increment and a decrement; a lazy slot is settled, and its address kept by a
+memo, only outside a transaction.
+
 Remaining: the matrix sources that do not compile against the next
 implementation yet, among them the user conversions of a leaf by
 `type_conversion_traits`, which the next implementation applies to handles only;

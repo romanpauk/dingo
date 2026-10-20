@@ -89,6 +89,7 @@ def test_spec_sections():
         "index_structures",
         "factory_kinds",
         "selection_rules",
+        "transaction_rules",
         "graph_rules",
         "diagnostics",
         "binding_time_constraints",
