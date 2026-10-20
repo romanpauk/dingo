@@ -49,13 +49,12 @@ template <typename Container, typename Request>
 struct ambiguity_refused<Container, Request,
                          std::enable_if_t<Container::has_static_source>>
     : std::bool_constant<static_count<Container, Request>::value != 1 &&
-                         static_count<Container, Request>::value != 0 &&
-                         !Container::has_runtime_source> {};
+                         static_count<Container, Request>::value != 0> {};
 #endif
 } // namespace detail
 
-// A request several static bindings of a container without runtime bindings
-// name.
+// A request several static bindings of a container name, which a runtime
+// registration cannot make unambiguous.
 template <typename Container, typename Request>
 inline constexpr bool ambiguity_refused_when_compiled_v =
     detail::ambiguity_refused<Container, Request>::value;

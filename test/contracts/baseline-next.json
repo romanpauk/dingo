@@ -259,7 +259,7 @@
     },
     "headers": {
       "dingo/container.h": {
-        "dingo_lines": 6321
+        "dingo_lines": 6359
       },
       "dingo/factory/callable.h": {
         "dingo_lines": 1263
@@ -271,10 +271,10 @@
         "dingo_lines": 1254
       },
       "dingo/runtime_container.h": {
-        "dingo_lines": 6326
+        "dingo_lines": 6364
       },
       "dingo/static_container.h": {
-        "dingo_lines": 5170
+        "dingo_lines": 5208
       },
       "dingo/storage/external.h": {
         "dingo_lines": 2939
@@ -292,75 +292,75 @@
     "instantiations": {
       "chain.mixed.1": {
         "classes": 141,
-        "functions": 190
+        "functions": 192
       },
       "chain.mixed.32": {
         "classes": 2868,
-        "functions": 5181
+        "functions": 5214
       },
       "chain.mixed.8": {
         "classes": 756,
-        "functions": 1317
+        "functions": 1326
       },
       "chain.runtime.1": {
         "classes": 155,
-        "functions": 279
+        "functions": 281
       },
       "chain.runtime.32": {
         "classes": 3042,
-        "functions": 9783
+        "functions": 9940
       },
       "chain.runtime.8": {
         "classes": 810,
-        "functions": 2439
+        "functions": 2476
       },
       "chain.static.1": {
         "classes": 138,
-        "functions": 143
+        "functions": 144
       },
       "chain.static.32": {
         "classes": 2865,
-        "functions": 4050
+        "functions": 4051
       },
       "chain.static.8": {
         "classes": 753,
-        "functions": 1026
+        "functions": 1027
       },
       "flat_resolved.mixed.1": {
         "classes": 141,
-        "functions": 190
+        "functions": 192
       },
       "flat_resolved.mixed.32": {
         "classes": 2837,
-        "functions": 5150
+        "functions": 5183
       },
       "flat_resolved.mixed.8": {
         "classes": 749,
-        "functions": 1310
+        "functions": 1319
       },
       "flat_resolved.runtime.1": {
         "classes": 155,
-        "functions": 279
+        "functions": 281
       },
       "flat_resolved.runtime.32": {
         "classes": 3007,
-        "functions": 7347
+        "functions": 7411
       },
       "flat_resolved.runtime.8": {
         "classes": 799,
-        "functions": 1875
+        "functions": 1891
       },
       "flat_resolved.static.1": {
         "classes": 138,
-        "functions": 143
+        "functions": 144
       },
       "flat_resolved.static.32": {
         "classes": 2834,
-        "functions": 4019
+        "functions": 4020
       },
       "flat_resolved.static.8": {
         "classes": 746,
-        "functions": 1019
+        "functions": 1020
       },
       "flat_unresolved.mixed.1": {
         "classes": 85,
@@ -400,39 +400,39 @@
       },
       "wrapper_resolved.mixed.1": {
         "classes": 153,
-        "functions": 201
+        "functions": 203
       },
       "wrapper_resolved.mixed.32": {
         "classes": 3159,
-        "functions": 5502
+        "functions": 5535
       },
       "wrapper_resolved.mixed.8": {
         "classes": 831,
-        "functions": 1398
+        "functions": 1407
       },
       "wrapper_resolved.runtime.1": {
         "classes": 172,
-        "functions": 318
+        "functions": 320
       },
       "wrapper_resolved.runtime.32": {
         "classes": 3489,
-        "functions": 8595
+        "functions": 8659
       },
       "wrapper_resolved.runtime.8": {
         "classes": 921,
-        "functions": 2187
+        "functions": 2203
       },
       "wrapper_resolved.static.1": {
         "classes": 150,
-        "functions": 154
+        "functions": 155
       },
       "wrapper_resolved.static.32": {
         "classes": 3156,
-        "functions": 4371
+        "functions": 4372
       },
       "wrapper_resolved.static.8": {
         "classes": 828,
-        "functions": 1107
+        "functions": 1108
       }
     },
     "object_size": {
@@ -969,7 +969,7 @@
     },
     "headers": {
       "dingo/container.h": {
-        "dingo_lines": 6323
+        "dingo_lines": 6361
       },
       "dingo/factory/callable.h": {
         "dingo_lines": 1257
@@ -981,10 +981,10 @@
         "dingo_lines": 1248
       },
       "dingo/runtime_container.h": {
-        "dingo_lines": 6328
+        "dingo_lines": 6366
       },
       "dingo/static_container.h": {
-        "dingo_lines": 5172
+        "dingo_lines": 5210
       },
       "dingo/storage/external.h": {
         "dingo_lines": 2933

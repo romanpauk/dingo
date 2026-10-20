@@ -22,6 +22,15 @@ outcome with the reference, and compares:
 
 The selection is compared only when the registration matches.
 
+When an outcome is reported is compared too, for a case the library can
+spell: a compile error of the registrations must be a rejection the reference
+decides when the container is compiled, a static binding rejected by a static one, and a rejection it
+decides so must be a compile error; a failed selection is a compile error if
+and only if the reference decides it when the request is compiled. A
+difference of either is reported as the field registration_time or
+selection_time. A static container takes no runtime registration; the mixed,
+runtime, and parent ones do.
+
 Mapping: the bindings of a static container and the static bindings of a
 mixed one have static=True; a parent case has a child level whose parent
 level holds the parent bindings; the many setting declares every key domain
@@ -125,7 +134,11 @@ def to_reference(case):
     implementation index}, [(level, Binding)] in binding order). The request
     of iface, an abstract interface, has no factory."""
     domain, setting, bindings, mode, key = parse_case_id(case)
-    child = Level(declarations=declarations(domain, setting), bounds=bounds(setting))
+    child = Level(
+        declarations=declarations(domain, setting),
+        bounds=bounds(setting),
+        open=domain != "static",
+    )
     parent = None
     if domain == "parent":
         parent = Level(declarations=declarations(domain, setting), bounds=bounds(setting))
@@ -146,24 +159,30 @@ def to_reference(case):
 
 
 def expected(model, case):
-    """(registrations, selection) of the reference: the registrations as
-    "ok", "rejected", or "out_of_range" in binding order; the selection as an implementation
-    index, a list of them, "ambiguous", or "not_found"."""
+    """(registrations, selection, times) of the reference: the registrations
+    as "ok", "rejected", or "out_of_range" in binding order; the selection as
+    an implementation index, a list of them, "ambiguous", or "not_found"; and
+    whether a rejection and the selection are decided when compiled, as
+    {"registration": bool, "selection": bool}."""
     level, request, mode, impls, placed = to_reference(case)
     collection = mode == "all"
     registrations = []
+    compiled_rejection = False
     for target, binding in placed:
+        _, compiled = model.rejection(target, binding)
         ok, reason = model.register(target, binding)
+        compiled_rejection = compiled_rejection or (not ok and compiled)
         registrations.append(
             "ok" if ok else "out_of_range" if reason == KEY_OUT_OF_RANGE else "rejected"
         )
     selection = model.select(level, request, collection=collection, construct=mode == "make")
+    times = {"registration": compiled_rejection, "selection": selection.compiled}
     if selection.status is Status.AMBIGUOUS:
-        return registrations, "ambiguous"
+        return registrations, "ambiguous", times
     if selection.status is Status.NOT_FOUND:
-        return registrations, "not_found"
+        return registrations, "not_found", times
     indices = [impls[b] for b in selection.bindings]
-    return registrations, indices if collection else indices[0]
+    return registrations, indices if collection else indices[0], times
 
 
 def observed_registrations(row):
@@ -207,7 +226,7 @@ def compare(rows, model):
     differences = []
     for row in rows:
         case = row["id"]
-        want_registrations, want_selection = expected(model, case)
+        want_registrations, want_selection, times = expected(model, case)
         have_registrations = observed_registrations(row)
         if not same_registrations(have_registrations, want_registrations):
             duplicate = isinstance(have_registrations, list) and all(
@@ -229,7 +248,15 @@ def compare(rows, model):
             )
             differences.append((case, field, have_registrations, want_registrations))
             continue
-        if have_registrations in ("compile_error", "not_expressible"):
+        if have_registrations == "not_expressible":
+            continue
+        compiled = have_registrations == "compile_error"
+        if compiled != times["registration"]:
+            differences.append(
+                (case, "registration_time", have_registrations, reported(times["registration"]))
+            )
+            continue
+        if compiled:
             continue
         have_selection = observed_selection(row)
         if not same_selection(have_selection, want_selection):
@@ -241,7 +268,17 @@ def compare(rows, model):
                 else "selection"
             )
             differences.append((case, field, have_selection, want_selection))
+        elif want_selection in ("ambiguous", "not_found") and (
+            have_selection == "compile_error"
+        ) != times["selection"]:
+            differences.append(
+                (case, "selection_time", have_selection, reported(times["selection"]))
+            )
     return sorted(differences, key=lambda d: (d[0], d[1]))
+
+
+def reported(compiled):
+    return "when compiled" if compiled else "when resolved"
 
 
 def outcome_class(value, name="selection"):

@@ -161,3 +161,64 @@ def test_registration_rejects_exactly_the_duplicates_of_a_domain_of_one(model):
             duplicate = any(b.key.names(binding.key) for b in container.bindings)
             constrained = binding.static and binding.key.kind == "runtime"
             assert model.register(container, binding)[0] is not (duplicate or constrained)
+
+
+# Decided when compiled
+
+
+def static_level(model, *bindings, parent=None, many=()):
+    result = level(model, *bindings, parent=parent, many=many)
+    result.open = False
+    return result
+
+
+def test_a_static_container_decides_every_request(model):
+    container = static_level(model, Binding("one", ("iface",), static=True))
+    assert model.select(container, Request("iface")).compiled
+    assert model.select(container, Request("other")).compiled
+    many = static_level(
+        model,
+        Binding("a", ("iface",), static=True),
+        Binding("b", ("iface",), static=True),
+        many=[("iface", NO_KEY)],
+    )
+    assert model.select(many, Request("iface")).compiled
+
+
+def test_a_runtime_registration_may_change_an_open_outcome(model):
+    mixed = level(model, Binding("one", ("iface",), static=True))
+    assert not model.select(mixed, Request("iface")).compiled
+    assert not model.select(mixed, Request("other")).compiled
+    assert not model.select(level(model), Request("iface")).compiled
+
+
+def test_an_ambiguity_among_static_bindings_is_final(model):
+    mixed = level(
+        model,
+        Binding("a", ("iface",), static=True),
+        Binding("b", ("iface",), static=True),
+        many=[("iface", NO_KEY)],
+    )
+    selection = model.select(mixed, Request("iface"))
+    assert selection.status is Status.AMBIGUOUS
+    assert selection.compiled
+
+
+def test_an_open_parent_leaves_the_outcome_open(model):
+    parent = level(model, Binding("parent", ("iface",)))
+    child = static_level(model, parent=parent)
+    assert not model.select(child, Request("iface")).compiled
+    closed = static_level(model, Binding("parent", ("iface",), static=True))
+    assert model.select(static_level(model, parent=closed), Request("iface")).compiled
+
+
+def test_a_rejection_of_a_static_binding_by_a_static_one_is_compiled(model):
+    container = level(model, Binding("first", ("iface",), static=True))
+    assert model.rejection(container, Binding("second", ("iface",), static=True)) == (
+        "lookup already registered: iface",
+        True,
+    )
+    assert model.rejection(container, Binding("runtime", ("iface",))) == (
+        "lookup already registered: iface",
+        False,
+    )

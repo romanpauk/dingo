@@ -1590,10 +1590,32 @@ diagnostic at compile time.
 
 #### M5.4: Compile-Time Detection Rule
 
-Status: not started.
+Status: done.
 
 Derive whether a diagnostic is reported at compile time from the sources that
 remain open.
+
+The spec gives every selection source a time: the static and local bindings,
+auto-construction, and the factory are known when a request is compiled; the
+runtime bindings are open while their container takes runtime registrations; the
+elements of a level are open as its runtime bindings are; and a parent is known
+when its own selection is decided. A request by a runtime key value knows no
+candidate of a static source until it is resolved, unless the source holds no
+binding of the key's domain. The reference implementation derives from them
+whether an outcome is decided when compiled: the steps up to the one that
+answers ask no open source, or the bindings known at that step already make it
+ambiguous, since registrations only add candidates. A rejected registration is
+decided when a static binding rejects a static one.
+
+The selection conformance compares when each failure is reported, and the next
+implementation matches the reference exactly on all 37,350 cases. A mixed
+container now rejects a request that two of its static bindings name when it is
+compiled, as a static container does. The current implementation rejects some
+runtime registrations by a fixed key, and every static request by a runtime key
+value, when they are compiled, which the behavior change
+`keys_in_every_container` declares. Remaining: the next implementation asks a
+parent when a request is resolved, so a request a static parent of a static
+child decides is reported then; no extracted case has a static parent.
 
 #### M5.5: Diagnostics Tests Per Tier
 

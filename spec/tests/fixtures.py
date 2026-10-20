@@ -5,6 +5,8 @@ spec with one or more entities of every section and mutate it.
 """
 
 from spec.schema import (
+    SelectionSourceTime,
+    SourceTime,
     TransactionEffect,
     TransactionRule,
     Access,
@@ -230,6 +232,15 @@ def sample_spec() -> Spec:
                     SelectionOutcome(count=Cardinality.EMPTY, status=Status.NOT_FOUND),
                 ),
             ),
+        ),
+        selection_sources=tuple(
+            SelectionSourceTime(
+                id=source.value,
+                description="A source.",
+                source=source,
+                time=SourceTime.COMPILE,
+            )
+            for source in SelectionSource
         ),
         transaction_rules=(
             TransactionRule(

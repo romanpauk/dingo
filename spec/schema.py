@@ -60,10 +60,12 @@ __all__ = [
     "SelectionOutcome",
     "SelectionRule",
     "SelectionSource",
+    "SelectionSourceTime",
     "SelectionStep",
     "ShapePattern",
     "Slot",
     "SourceAccess",
+    "SourceTime",
     "Spec",
     "Status",
     "StepCondition",
@@ -465,6 +467,31 @@ class SelectionRule(Entity):
     outcomes: tuple[SelectionOutcome, ...]
 
 
+class SourceTime(Enum):
+    """When the bindings a selection source names are known."""
+
+    # Known when the request is compiled.
+    COMPILE = "compile"
+    # Registered at runtime: open while the level takes runtime registrations.
+    RUNTIME = "runtime"
+    # The bindings of the level, static and runtime: open while the level
+    # takes runtime registrations.
+    LEVEL = "level"
+    # The selection of the parent level: known when it is decided when the
+    # request is compiled.
+    PARENT = "parent"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SelectionSourceTime(Entity):
+    """When the bindings of `source` are known. A source that is open may name
+    more bindings after the request is compiled."""
+
+    description: str
+    source: SelectionSource
+    time: SourceTime
+
+
 # Graph rules
 
 
@@ -754,6 +781,7 @@ class Spec:
     index_structures: tuple[IndexStructure, ...] = ()
     factory_kinds: tuple[FactoryKind, ...] = ()
     selection_rules: tuple[SelectionRule, ...] = ()
+    selection_sources: tuple[SelectionSourceTime, ...] = ()
     transaction_rules: tuple[TransactionRule, ...] = ()
     graph_rules: tuple[GraphRule, ...] = ()
     diagnostics: tuple[Diagnostic, ...] = ()

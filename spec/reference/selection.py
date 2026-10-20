@@ -6,16 +6,19 @@ of one container, a container may have a parent level, and the registration
 whose object is being constructed may have local bindings. It computes whether
 a binding can be registered and which bindings a singular, a collection, or a
 construct request selects, the oracle the C++ implementations are compared
-against.
+against, and whether each outcome is decided when the container or the
+request is compiled, by the times of the selection sources.
 """
 
 from dataclasses import dataclass, field
 
 from spec.schema import (
+    BindingTime,
     Cardinality,
     Combine,
     SelectionMode,
     SelectionSource,
+    SourceTime,
     Spec,
     Status,
     StepCondition,
@@ -88,13 +91,15 @@ class Level:
 
     `declarations` maps (interface, key domain) to the declared cardinality,
     and `bounds` a domain of value keys indexed by a dense array to its bound:
-    the key values it stores are 0 up to the bound, excluded.
+    the key values it stores are 0 up to the bound, excluded. A level that is
+    `open` takes runtime registrations; a static container is not.
     """
 
     bindings: list[Binding] = field(default_factory=list)
     declarations: dict = field(default_factory=dict)
     bounds: dict = field(default_factory=dict)
     parent: "Level | None" = None
+    open: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +126,9 @@ class Selection:
     # A request of a collection type is the collection of the elements its
     # level holds.
     collected: bool = False
+    # The outcome is decided when the request is compiled: no runtime
+    # registration can change it.
+    compiled: bool = False
 
 
 class Model:
@@ -129,29 +137,44 @@ class Model:
         default = next(d for d in spec.lookup_declarations if d.default)
         self.default_cardinality = default.default_cardinality
         self.rules = {rule.mode: rule for rule in spec.selection_rules}
+        self.times = {entry.source: entry.time for entry in spec.selection_sources}
+        self.value_times = {kind.id: kind.value_time for kind in spec.key_kinds}
 
     def cardinality(self, level: Level, interface: str, key: Key) -> Cardinality:
         return level.declarations.get((interface, key.domain()), self.default_cardinality)
 
-    def register(self, level: Level, binding: Binding) -> tuple[bool, str]:
-        """Adds the binding unless its key value is outside the bound of its
-        domain, or a domain of cardinality one already holds a binding of its
-        key, among the static and runtime bindings of the level alike. A static binding carries no runtime key value, the
+    def rejection(self, level: Level, binding: Binding) -> tuple[str, bool]:
+        """Why the level rejects the binding, or "", and whether the rejection
+        is decided when the container is compiled: the binding is static, and
+        so is the binding that holds its key. A key value outside the bound of
+        its domain is rejected, and so is a key a domain of cardinality one
+        already holds, among the static and runtime bindings of the level
+        alike. A static binding carries no runtime key value, the
         binding-time constraint static_bindings_carry_no_runtime_key."""
         if binding.static and binding.key.kind == "runtime":
-            return False, "a static binding carries no runtime key value"
+            return "a static binding carries no runtime key value", True
         if binding.key.kind in VALUE_KINDS:
             for interface in binding.interfaces:
                 bound = level.bounds.get((interface, binding.key.domain()))
                 if bound is not None and not 0 <= binding.key.value < bound:
-                    return False, KEY_OUT_OF_RANGE
+                    return KEY_OUT_OF_RANGE, binding.static
         for interface in binding.interfaces:
             for key in binding.keys_for(interface):
                 if self.cardinality(level, interface, key) is not Cardinality.ONE:
                     continue
                 for existing in level.bindings:
                     if existing.names(interface, key):
-                        return False, f"lookup already registered: {interface}"
+                        return (
+                            f"lookup already registered: {interface}",
+                            binding.static and existing.static,
+                        )
+        return "", False
+
+    def register(self, level: Level, binding: Binding) -> tuple[bool, str]:
+        """Adds the binding unless the level rejects it, see rejection()."""
+        reason, _ = self.rejection(level, binding)
+        if reason:
+            return False, reason
         level.bindings.append(binding)
         return True, ""
 
@@ -223,6 +246,76 @@ class Model:
                 found += step_found
         return found
 
+    def known(self, source, request, level, local, mode) -> tuple[list, bool]:
+        """The candidates of a source known when the request is compiled, and
+        whether the source is open: it may name more after."""
+        time = self.times[source]
+        if time is SourceTime.COMPILE and self.value_times[request.key.kind] is BindingTime.RUNTIME:
+            # The value of the key picks the candidates when the request is
+            # resolved, among the bindings of its domain the source holds.
+            return [], bool(self.domain_candidates(source, request, level, local, mode))
+        if time is SourceTime.COMPILE:
+            return self.source(source, request, level, local, mode), False
+        if time is SourceTime.RUNTIME:
+            return [], level.open
+        if time is SourceTime.LEVEL:
+            own = [
+                b
+                for b in (*local, *level.bindings)
+                if b.static and b.names(request.element, request.key)
+            ]
+            return (["elements"] if own else []), level.open
+        if level.parent is None:
+            return [], False
+        return self.decision(level.parent, (), request, mode, outermost=False)
+
+    def domain_candidates(self, source, request, level, local, mode) -> list:
+        """The candidates of a source for any value of the key of the
+        request: its bindings that hold a key of the domain of the key."""
+        bindings = {
+            SelectionSource.LOCAL_STATIC: [b for b in local if b.static],
+            SelectionSource.LOCAL_RUNTIME: [b for b in local if not b.static],
+            SelectionSource.CONTAINER_STATIC: [b for b in level.bindings if b.static],
+        }.get(source)
+        if bindings is None:
+            return self.source(source, request, level, local, mode)
+        domain = request.key.domain()
+        return [
+            b
+            for b in bindings
+            if request.interface in b.interfaces
+            and any(k.domain() == domain for k in b.keys_for(request.interface))
+        ]
+
+    def decision(self, level, local, request, mode, outermost=True) -> tuple[list, bool]:
+        """The candidates known when the request is compiled, by the rule of
+        gather(), and whether the outcome is still open. A step that knows two
+        candidates is decided, as more only add to them; one that knows one
+        is decided unless an open source of it may add another."""
+        rule = self.rules[mode]
+        found: list = []
+        undecided = False
+        for step in rule.steps:
+            if step.when is not None and not self.meets(step.when, request):
+                continue
+            if step.when in OUTERMOST_CONDITIONS and not outermost:
+                continue
+            step_found: list = []
+            step_open = False
+            for source in step.sources:
+                known, open_ = self.known(source, request, level, local, mode)
+                step_found += known
+                step_open = step_open or open_
+            if rule.combine is Combine.FIRST_NON_EMPTY:
+                if len(step_found) > 1 or (step_found and not step_open):
+                    return step_found, False
+                if step_open:
+                    return step_found, True
+            else:
+                found += step_found
+                undecided = undecided or step_open
+        return found, undecided
+
     def select(
         self, level: Level, request: Request, local=(), collection=False, construct=False
     ) -> Selection:
@@ -242,10 +335,14 @@ class Model:
             else Cardinality.MANY
         )
         status = next(o.status for o in self.rules[mode].outcomes if o.count is count)
+        _, undecided = self.decision(level, tuple(local), request, mode)
+        compiled = not undecided
         if found == ["auto"]:
-            return Selection(status, (), auto_constructed=True)
+            return Selection(status, (), auto_constructed=True, compiled=compiled)
         if found == ["factory"]:
-            return Selection(status, (), made=True)
+            return Selection(status, (), made=True, compiled=compiled)
         if found == ["elements"]:
-            return Selection(status, (), collected=True)
-        return Selection(status, tuple(found) if status is Status.OK else ())
+            return Selection(status, (), collected=True, compiled=compiled)
+        return Selection(
+            status, tuple(found) if status is Status.OK else (), compiled=compiled
+        )

@@ -391,6 +391,12 @@ behavior_changes: tuple[BehaviorChange, ...] = (
             "selection:mixed/default/*#registration",
             "selection:static/*/one:runtime[78]#selection",
             "selection:static/*/all:runtime[78]#collection",
+            # The registrations and the requests the baseline rejects when
+            # they are compiled.
+            "selection:runtime/*#registration_time",
+            "selection:parent/*#registration_time",
+            "selection:mixed/default/*#registration_time",
+            "selection:static/*/one:runtime[78]#selection_time",
         ),
         baseline=(
             "A fixed key in a runtime registration and a value key in a mixed "

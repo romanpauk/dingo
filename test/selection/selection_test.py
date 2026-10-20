@@ -97,22 +97,22 @@ def test_mapping_marks_static_bindings_and_parent_levels():
 def test_reference_outcomes(model):
     # A fixed and a runtime key of one value are one key of one domain.
     case = "mixed/default/impl_0:fixed7:static+impl_1:runtime7:runtime/one:runtime7"
-    assert conform.expected(model, case) == (["ok", "rejected"], 0)
+    assert conform.expected(model, case)[:2] == (["ok", "rejected"], 0)
     many = "runtime/many/impl_0:runtime7+impl_1:fixed7/all:fixed7"
-    assert conform.expected(model, many) == (["ok", "ok"], [0, 1])
-    assert conform.expected(model, "runtime/many/impl_0:none+impl_1:none/one:none") == (
+    assert conform.expected(model, many)[:2] == (["ok", "ok"], [0, 1])
+    assert conform.expected(model, "runtime/many/impl_0:none+impl_1:none/one:none")[:2] == (
         ["ok", "ok"],
         "ambiguous",
     )
     shadowed = "parent/default/impl_0:none:parent+impl_1:none:child/one:none"
-    assert conform.expected(model, shadowed) == (["ok", "ok"], 1)
+    assert conform.expected(model, shadowed)[:2] == (["ok", "ok"], 1)
 
 
 def test_a_key_outside_the_bound_is_never_stored(model):
     # The dense array of the bounded setting stores the key 7 and not 8, of a
     # fixed or a runtime key alike.
     case = "runtime/bounded/impl_0:runtime7+impl_1:fixed8/one:runtime8"
-    assert conform.expected(model, case) == (["ok", "out_of_range"], "not_found")
+    assert conform.expected(model, case)[:2] == (["ok", "out_of_range"], "not_found")
     assert conform.observed_registrations(
         {
             "registration": "throws:type_index_out_of_range_exception",
@@ -140,12 +140,12 @@ def test_construct_resolves_a_binding_of_its_type(model):
     # construct names the binding as a singular request does; the abstract
     # interface has no factory, so without a binding it is not found.
     inherited = "parent/default/impl_0:none:parent/make:none"
-    assert conform.expected(model, inherited) == (["ok"], 0)
-    assert conform.expected(model, "runtime/default/empty/make:none") == ([], "not_found")
+    assert conform.expected(model, inherited)[:2] == (["ok"], 0)
+    assert conform.expected(model, "runtime/default/empty/make:none")[:2] == ([], "not_found")
     ambiguous = "runtime/many/impl_0:none+impl_1:none/make:none"
-    assert conform.expected(model, ambiguous) == (["ok", "ok"], "ambiguous")
+    assert conform.expected(model, ambiguous)[:2] == (["ok", "ok"], "ambiguous")
     keyed = "runtime/default/impl_0:tag_a/make:none"
-    assert conform.expected(model, keyed) == (["ok"], "not_found")
+    assert conform.expected(model, keyed)[:2] == (["ok"], "not_found")
 
 
 def test_a_compile_error_matches_a_rejection_or_not_found():
@@ -194,3 +194,16 @@ def test_a_collection_of_the_elements_of_a_level_precedes_the_parent(model):
     assert model.select(child, request).collected
     # Without elements of its own, the child asks the parent.
     assert model.select(Level(parent=parent), request).bindings == (stored,)
+
+
+def test_the_reference_decides_failures_of_static_containers_when_compiled(model):
+    _, selection, times = conform.expected(model, "static/default/empty/one:none")
+    assert selection == "not_found"
+    assert times["selection"]
+    _, _, times = conform.expected(model, "mixed/default/empty/one:none")
+    assert not times["selection"]
+    registrations, _, times = conform.expected(
+        model, "static/default/impl_0:none+impl_1:none/one:none"
+    )
+    assert registrations == ["ok", "rejected"]
+    assert times["registration"]

@@ -73,6 +73,7 @@ def validate(spec: Spec) -> list[str]:
     check_routes(spec, errors)
     check_lookups(spec, errors)
     check_selection_rules(spec, errors)
+    check_selection_sources(spec, errors)
     check_transaction_rules(spec, errors)
     check_graph_rules(spec, errors)
     check_diagnostics(spec, errors)
@@ -300,6 +301,14 @@ def check_selection_rules(spec: Spec, errors: list[str]) -> None:
         check_unique(errors, where, "outcome counts", counts)
         if set(counts) != set(Cardinality):
             errors.append(f"{where}: outcomes must cover empty, one, and many")
+
+
+def check_selection_sources(spec: Spec, errors: list[str]) -> None:
+    sources = [entry.source for entry in spec.selection_sources]
+    check_unique(errors, "selection_sources", "sources", sources)
+    for source in SelectionSource:
+        if source not in sources:
+            errors.append(f"selection_sources: no time of {source.value}")
 
 
 def check_transaction_rules(spec: Spec, errors: list[str]) -> None:

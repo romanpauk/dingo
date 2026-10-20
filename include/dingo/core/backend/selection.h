@@ -307,10 +307,9 @@ private:
     if constexpr (Source == selection_source::container_static) {
       if constexpr (!Self::has_static_source) {
         return 0;
-      } else if constexpr (Key::descriptor.kind == key_kind::runtime) {
-        return unknown_count;
       } else {
-        return Self::static_source_type::template fixed_count<Request, Key>();
+        return value_count<Key>(
+            Self::static_source_type::template fixed_count<Request, Key>());
       }
     } else if constexpr (Source == selection_source::container_runtime) {
       return Self::has_runtime_source ? unknown_count : 0;
@@ -331,14 +330,59 @@ private:
     } else if constexpr (Source == selection_source::local_static) {
       if constexpr (!Self::has_local_static_source) {
         return 0;
-      } else if constexpr (Key::descriptor.kind == key_kind::runtime) {
-        return unknown_count;
       } else {
-        return Self::local_static_source_type::template fixed_count<Request,
-                                                                    Key>();
+        return value_count<Key>(
+            Self::local_static_source_type::template fixed_count<Request,
+                                                                 Key>());
       }
     } else {
       return Self::has_local_runtime_source ? unknown_count : 0;
+    }
+  }
+
+  // The count of static bindings by `Key`: a runtime key value picks among
+  // the bindings of its domain when it is resolved, so their number is not
+  // the count unless there are none.
+  template <typename Key>
+  static constexpr std::size_t value_count(std::size_t domain_count) {
+    if constexpr (Key::descriptor.kind == key_kind::runtime) {
+      return domain_count == 0 ? 0 : unknown_count;
+    } else {
+      return domain_count;
+    }
+  }
+
+  // The bindings the sources of step `Step` known when the request is
+  // compiled name, at least.
+  template <typename Request, typename Key, selection_mode Mode,
+            std::size_t Step, std::size_t... Sources>
+  static constexpr std::size_t
+  known_step_least(std::index_sequence<Sources...> /*sources*/) {
+    constexpr std::size_t counts[] = {
+        known_count<Request, Key,
+                    rule_of(Mode).steps[Step].sources[Sources]>()...,
+        0};
+    std::size_t total = 0;
+    for (std::size_t index = 0; index < sizeof...(Sources); ++index) {
+      total += counts[index] == unknown_count ? 0 : counts[index];
+    }
+    return total;
+  }
+
+  // Whether a step that names two bindings when the request is compiled
+  // decides its ambiguity: every step before it is known to name none, so
+  // only registrations at it remain, which add candidates.
+  template <typename Request, typename Key, bool Outermost, selection_mode Mode,
+            std::size_t Step, std::size_t Before = 0>
+  static constexpr bool closed_before() {
+    if constexpr (Before == Step) {
+      return true;
+    } else if constexpr (!meets<Request, Key, Outermost>(
+                             rule_of(Mode).steps[Before].when)) {
+      return closed_before<Request, Key, Outermost, Mode, Step, Before + 1>();
+    } else {
+      return known_step_count<Request, Key, Mode, Before>() == 0 &&
+             closed_before<Request, Key, Outermost, Mode, Step, Before + 1>();
     }
   }
 
@@ -724,11 +768,19 @@ private:
         return select<Request, Key, Outermost, Mode, Step + 1>(key_value);
       } else if constexpr (known == 1) {
         return resolve_step<Request, Key, Mode, Step>(key_value);
-      } else if constexpr (known != unknown_count) {
-        static_assert(dependent_false<Request> ||
-                          !decided_when_compiled<Request, Key, Mode>(),
-                      "static_container cannot resolve an ambiguously bound "
-                      "type");
+      } else if constexpr (known != unknown_count ||
+                           known_step_least<Request, Key, Mode, Step>(
+                               std::make_index_sequence<
+                                   rule_of(Mode).steps[Step].source_count>()) >
+                               1) {
+        // Two bindings known when the request is compiled make it ambiguous
+        // whatever is registered later; it is decided when the steps before
+        // are known to name none, and the request is the outermost.
+        static_assert(
+            dependent_false<Request> ||
+                !(Outermost &&
+                  closed_before<Request, Key, Outermost, Mode, Step>()),
+            "static_container cannot resolve an ambiguously bound type");
         raise_ambiguous<Request>();
       } else if constexpr (possible_sources<Request, Key, Mode, Step>() == 1 &&
                            is_runtime_source(
