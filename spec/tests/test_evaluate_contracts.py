@@ -223,13 +223,14 @@ def test_other_inlining_bounds_are_not_interpreted(kind):
     assert f"the {kind.value} bound is not interpreted" in result.reason
 
 
-def test_recorded_is_not_interpreted():
+def test_recorded_values_are_the_limits():
     result = verdict(
         contract(BoundKind.RECORDED, ContractDimension.CODE_SIZE),
         probe("codegen/*"),
         {"codegen/a": 1},
     )
-    assert result.status == evaluate.UNOBSERVABLE
+    assert result.status == evaluate.HOLDS
+    assert "probe.py check" in result.reason
 
 
 # Unobservable

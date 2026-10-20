@@ -11,6 +11,8 @@
 // rvalue reference refers to when the request constructs them, and the
 // objects a binding derives once so they can be referred to.
 
+#include <dingo/core/base/config.h>
+
 #include <utility>
 
 namespace dingo::core {
@@ -30,30 +32,33 @@ public:
     return *this;
   }
 
-  ~retained_objects() {
-    while (head_ != nullptr) {
-      node *next = head_->next;
-      head_->destroy(head_);
-      head_ = next;
-    }
-  }
+  DINGO_ALWAYS_INLINE ~retained_objects() { clear(); }
 
   // Keeps the object `make()` returns, constructed in place.
   template <typename Type, typename Make> Type &emplace(Make &&make) {
     return emplace_keyed<Type>(nullptr, std::forward<Make>(make));
   }
 
-  // Destroys the object kept last, which a failed transaction undoes.
-  static void undo_last(void *objects) noexcept {
+  // Records in `log` that the objects kept from now on are destroyed when
+  // the transaction in progress fails, once per transaction, with the object
+  // kept last before it.
+  template <typename Log> void enter(Log &log) {
+    log.record_once(this, &undo_to_mark, head_);
+  }
+
+  // Destroys the objects kept after `mark`, which a failed transaction
+  // undoes.
+  static void undo_to_mark(void *objects, void *mark) noexcept {
     auto &self = *static_cast<retained_objects *>(objects);
-    if (node *last = self.head_) {
+    while (self.head_ != static_cast<node *>(mark)) {
+      node *last = self.head_;
       self.head_ = last->next;
       last->destroy(last);
     }
   }
 
   // Destroys every kept object.
-  void clear() noexcept {
+  DINGO_ALWAYS_INLINE void clear() noexcept {
     while (head_ != nullptr) {
       node *next = head_->next;
       head_->destroy(head_);

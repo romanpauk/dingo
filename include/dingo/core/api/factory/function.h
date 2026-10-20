@@ -10,7 +10,6 @@
 // dingo/factory/function.h of the next implementation: the function factory,
 // which calls a function whose result is the stored object.
 
-#include <dingo/core/api/registration.h>
 #include <dingo/core/projection/construct.h>
 
 namespace dingo {

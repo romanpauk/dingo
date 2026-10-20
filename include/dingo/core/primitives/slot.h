@@ -13,18 +13,16 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <exception>
 #include <memory>
 #include <new>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 namespace dingo::core {
 
 // Destroys an object, element by element for an array, which std::destroy_at
 // handles only since C++20.
-template <typename Type> void destroy_object(Type *object) {
+template <typename Type> DINGO_ALWAYS_INLINE void destroy_object(Type *object) {
   if constexpr (std::is_array_v<Type>) {
     for (auto &element : *object) {
       destroy_object(std::addressof(element));
@@ -42,7 +40,7 @@ public:
   lazy_slot(const lazy_slot &) = delete;
   lazy_slot &operator=(const lazy_slot &) = delete;
 
-  ~lazy_slot() {
+  DINGO_ALWAYS_INLINE ~lazy_slot() {
     if (state_ == state::constructed) {
       destroy_object(get());
     }
@@ -145,66 +143,150 @@ template <typename Type> struct publication_deleter {
   }
 };
 
+// An effect of a transaction on its container, with the function that undoes
+// it, which takes the target and the context recorded with it.
+struct transaction_entry {
+  void *target;
+  void (*undo)(void *, void *) noexcept;
+  void *context;
+};
+
+// Undoes `entries` in the reverse order they happened.
+inline void undo_entries(transaction_entry *begin,
+                         transaction_entry *end) noexcept {
+  while (end != begin) {
+    --end;
+    end->undo(end->target, end->context);
+  }
+}
+
 // The transaction of a container: the effects on the container of its
 // outermost request in progress, and of the requests it makes of the
 // container, each recorded with the function that undoes it. A request that
 // fails undoes them in the reverse order they happened, and one that returns
 // keeps them. spec: transaction_rules
-class transaction_log {
+//
+// The effects are recorded in the frame of the outermost request, `Inline` of
+// them without allocating, so the container holds only a pointer to them. The
+// outermost request catches its own failure, so one made while another
+// exception unwinds is told apart, and a request that returns checks nothing.
+// Every request calls itself from one place, so a compiler inlines it. A log
+// that never `Grows` records at most `Inline` effects, which its container
+// proves.
+template <std::size_t Inline, bool Grows = true> class basic_transaction_log {
 public:
-  using undo_function = void (*)(void *) noexcept;
+  using undo_function = void (*)(void *, void *) noexcept;
+
+  // A container moves between its requests, when its log holds nothing.
+  basic_transaction_log() = default;
+  basic_transaction_log(basic_transaction_log && /*other*/) noexcept {}
+  basic_transaction_log &
+  operator=(basic_transaction_log && /*other*/) noexcept {
+    return *this;
+  }
 
   // Runs `request` as a request of the container.
-  template <typename Request> decltype(auto) run(Request &&request) {
+  template <typename Request>
+  DINGO_ALWAYS_INLINE decltype(auto) run(Request &&request) {
+    journal frame;
+    const bool outermost = journal_ == nullptr;
+    if (outermost) {
+      frame.entries = frame.inline_entries;
+      frame.count = 0;
+      frame.capacity = Inline;
+      // The guard below forgets the frame before it ends.
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 12
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
+      journal_ = &frame;
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 12
+#pragma GCC diagnostic pop
+#endif
+    }
     struct leave {
-      transaction_log &log;
+      basic_transaction_log &log;
+      journal &frame;
+      bool outermost;
       ~leave() {
-        if (--log.depth_ == 0 && !log.entries_.empty()) {
-          log.finish();
+        if (outermost) {
+          log.journal_ = nullptr;
+          if (frame.entries != frame.inline_entries) {
+            release(frame);
+          }
         }
       }
-    };
-    ++depth_;
-    leave guard{*this};
-    return request();
+    } guard{*this, frame, outermost};
+    try {
+      return request();
+    } catch (...) {
+      if (outermost) {
+        undo_entries(frame.entries, frame.entries + frame.count);
+      }
+      throw;
+    }
   }
 
   // Records an effect on the container, which `undo` undoes, when a request
   // is in progress; an effect outside one is kept.
-  void record(void *target, undo_function undo) {
-    if (depth_ == 0) {
+  void record(void *target, undo_function undo, void *context = nullptr) {
+    if (journal_ != nullptr) {
+      if constexpr (Grows) {
+        if (journal_->count == journal_->capacity) {
+          grow(*journal_);
+        }
+      }
+      journal_->entries[journal_->count++] =
+          transaction_entry{target, undo, context};
+    }
+  }
+
+  // Records an effect unless the transaction in progress recorded it.
+  void record_once(void *target, undo_function undo, void *context = nullptr) {
+    if (journal_ == nullptr) {
       return;
     }
-    if (entries_.empty()) {
-      // The exceptions in flight when the transaction began, so its own
-      // failure is told from a request made while one unwinds.
-      unwinding_ = std::uncaught_exceptions();
+    for (std::size_t index = 0; index < journal_->count; ++index) {
+      if (journal_->entries[index].target == target &&
+          journal_->entries[index].undo == undo) {
+        return;
+      }
     }
-    entries_.push_back(entry{target, undo});
+    record(target, undo, context);
   }
 
   // Whether a request is in progress, whose failure undoes its effects.
-  bool active() const { return depth_ != 0; }
+  bool active() const { return journal_ != nullptr; }
 
 private:
-  struct entry {
-    void *target;
-    undo_function undo;
+  struct journal {
+    transaction_entry *entries;
+    std::size_t count;
+    std::size_t capacity;
+    transaction_entry inline_entries[Inline];
   };
 
-  DINGO_CORE_COLD DINGO_NOINLINE void finish() noexcept {
-    if (std::uncaught_exceptions() > unwinding_) {
-      for (auto it = entries_.rbegin(); it != entries_.rend(); ++it) {
-        it->undo(it->target);
-      }
+  DINGO_CORE_COLD DINGO_NOINLINE static void grow(journal &frame) {
+    auto *grown = new transaction_entry[frame.capacity * 2];
+    for (std::size_t index = 0; index < frame.count; ++index) {
+      grown[index] = frame.entries[index];
     }
-    entries_.clear();
+    release(frame);
+    frame.entries = grown;
+    frame.capacity *= 2;
   }
 
-  std::vector<entry> entries_;
-  std::size_t depth_ = 0;
-  int unwinding_ = 0;
+  static void release(journal &frame) noexcept {
+    if (frame.entries != frame.inline_entries) {
+      delete[] frame.entries;
+    }
+  }
+
+  journal *journal_ = nullptr;
 };
+
+// The transaction of a container of runtime bindings.
+using transaction_log = basic_transaction_log<8>;
 
 // The transaction of a container whose bindings construct no object they
 // keep: there is nothing to undo.
@@ -213,8 +295,12 @@ struct no_transaction_log {
     return request();
   }
 
-  void record(void * /*target*/,
-              transaction_log::undo_function /*undo*/) noexcept {}
+  void record(void * /*target*/, void (* /*undo*/)(void *, void *) noexcept,
+              void * /*context*/ = nullptr) noexcept {}
+
+  void record_once(void * /*target*/,
+                   void (* /*undo*/)(void *, void *) noexcept,
+                   void * /*context*/ = nullptr) noexcept {}
 
   bool active() const { return false; }
 };

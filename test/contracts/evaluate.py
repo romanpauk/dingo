@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Reports which contracts of the spec the current implementation satisfies.
+"""Reports which contracts of the spec an implementation satisfies.
 
-The contracts come from spec/content/contracts.py and the metrics from the
-baseline recorded by probe.py. The C++ contract probes of the spec map each
+The contracts come from spec/content/contracts.py and the metrics from a
+baseline recorded by probe.py: baseline.json of the current implementation by
+default, or baseline-next.json of the next one. The C++ contract probes of the spec map each
 contract to the metric paths that observe it, or state why it cannot be
 observed. For every recorded toolchain the report classifies each contract:
 
@@ -12,10 +13,12 @@ observed. For every recorded toolchain the report classifies each contract:
 
 A series is the metrics of one scenario over the measured sizes. LINEAR object
 sizes must fit a line exactly, LINEAR instantiations must grow at most
-linearly (each step is no steeper than the one before), and CONSTANT metrics
+linearly (each step is no steeper than the one before, within the 5% that a
+template instantiated once for a size apart moves it), and CONSTANT metrics
 must be equal across sizes. AT_MOST and EXACTLY compare the values. An ALWAYS
 inlining contract holds when the observed probes make no Dingo calls. The
-other bounds are not interpreted.
+values of a RECORDED contract are its limits, which probe.py check enforces.
+The other bounds are not interpreted.
 
 This is a report. The exit status is 0 unless the spec or the baseline cannot
 be read.
@@ -40,6 +43,9 @@ UNOBSERVABLE = "unobservable"
 # The last numeric dotted component of a metric path is the size of its series.
 SIZE_RE = re.compile(r"^(.*\.)(\d+)((?:/.*)?)$")
 SHOWN_VIOLATIONS = 3
+# How much steeper than the step before a step of a linear series may be: a
+# quadratic series of the measured sizes is four times steeper.
+SLOPE_TOLERANCE = Fraction(105, 100)
 
 
 @dataclass(frozen=True)
@@ -144,7 +150,9 @@ def check_linear(contract, metrics, paths):
         values = ", ".join(f"{n}: {v}" for n, v in points)
         if exact and len(set(steps)) > 1:
             failures.append(f"{key} is not a line ({values})")
-        elif not exact and any(later > earlier for earlier, later in zip(steps, steps[1:])):
+        elif not exact and any(
+            later > earlier * SLOPE_TOLERANCE for earlier, later in zip(steps, steps[1:])
+        ):
             failures.append(
                 f"{key} grows faster than linear, slopes "
                 + " then ".join(f"{float(step):.1f}" for step in steps)
@@ -178,6 +186,10 @@ def evaluate_contract(contract, probe, metrics):
         return check_constant(metrics, paths)
     if kind == "linear":
         return check_linear(contract, metrics, paths)
+    if kind == "recorded":
+        return Verdict(
+            HOLDS, "the recorded values are the limits that probe.py check enforces", len(paths)
+        )
     return Verdict(UNOBSERVABLE, f"the {kind} bound is not interpreted from metrics")
 
 

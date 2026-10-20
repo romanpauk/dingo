@@ -1,9 +1,14 @@
 """Content of the C++ contract probes section.
 
 Each entry links a contract to the metrics of test/contracts/probe.py that
-observe it on the current implementation, or states why the current probes
-cannot. Metric patterns are fnmatch patterns over the metric paths of
-test/contracts/baseline.json, such as `object_size/flat_resolved.static.32`.
+observe it, or states why the probes cannot. Metric patterns are fnmatch
+patterns over the metric paths of test/contracts/baseline.json and
+baseline-next.json, such as `object_size/flat_resolved.static.32`.
+
+The runtime cost of a resolution is the cost of the cheapest path through a
+probe function that resolves a request resolved before. It is a lower bound of
+every path, and the memoized path where that is the cheapest: the probes of a
+reference to an object of a stable binding, whose names end in _reference.
 """
 
 from spec.schema import CppContractProbe
@@ -11,11 +16,6 @@ from spec.schema import CppContractProbe
 NO_CONSTRUCTS = (
     "The current implementation has no such construct, and the recorded "
     "instantiation counts cover all Dingo templates together."
-)
-
-NO_PER_RESOLVE_COUNT = (
-    "The codegen probe functions include container construction and "
-    "registration, so a per-resolve count of {what} is not isolated."
 )
 
 
@@ -69,30 +69,31 @@ cpp_contract_probes: tuple[CppContractProbe, ...] = (
     ),
     observed("compile_instantiations_chain_depth", "instantiations/chain.*"),
     # Runtime cost
-    unobserved(
+    observed(
         "runtime_static_resolve_indirect_calls",
-        NO_PER_RESOLVE_COUNT.format(what="indirect calls"),
+        "runtime_cost/paths/probe_resolve_static_*/indirect_calls",
     ),
-    unobserved(
+    observed(
         "runtime_static_resolve_allocations",
-        "No probe counts allocations; the conformance tests need a counting allocator.",
+        "runtime_cost/allocations/static_*",
     ),
     unobserved(
         "runtime_runtime_resolve_lookups",
-        "No probe counts lookups, and the codegen probes resolve once, so a memoized lookup is not isolated.",
+        "No probe counts lookups; a lookup makes no call, so the paths of the "
+        "probes do not tell them apart.",
     ),
-    unobserved(
+    observed(
         "runtime_runtime_resolve_indirect_calls",
-        NO_PER_RESOLVE_COUNT.format(what="indirect calls"),
+        "runtime_cost/paths/probe_resolve_runtime_*_reference/indirect_calls",
     ),
-    unobserved(
+    observed(
         "runtime_runtime_resolve_allocations",
-        "No probe counts allocations; the conformance tests need a counting allocator.",
+        "runtime_cost/allocations/runtime_*.memoized",
     ),
     # Code size
-    unobserved(
+    observed(
         "code_size_static_resolve_per_probe",
-        "baseline.json records calls, not code size; the limits are in test/lit/check_codegen_probe_sizes.py.",
+        "codegen/probes/probe_static_resolution_*/bytes",
     ),
     # Inlining
     observed(
@@ -103,9 +104,9 @@ cpp_contract_probes: tuple[CppContractProbe, ...] = (
             "codegen/probes/*.cold/*",
         ),
     ),
-    unobserved(
+    observed(
         "inline_runtime_resolve_memoized",
-        "The codegen probes resolve once, so the first resolution is in every runtime probe and a memoized resolution is not isolated.",
+        "runtime_cost/paths/probe_resolve_runtime_*_reference/dingo_calls",
     ),
     unobserved(
         "inline_runtime_resolve_first_resolution",

@@ -48,6 +48,9 @@ struct DINGO_EMPTY_BASES static_holder
   template <typename Instances, std::size_t Ordinal>
   static_holder(Instances & /*instances*/,
                 std::integral_constant<std::size_t, Ordinal> /*ordinal*/) {}
+  static_holder(static_holder &&) = default;
+  static_holder &operator=(static_holder &&) = default;
+  DINGO_ALWAYS_INLINE ~static_holder() = default;
 
   binding_slot<Binding> slot;
 };
@@ -59,6 +62,9 @@ struct DINGO_EMPTY_BASES static_holder<Index, Binding, true>
   static_holder(Instances &instances,
                 std::integral_constant<std::size_t, Ordinal> /*ordinal*/)
       : slot(std::get<Ordinal>(std::move(instances))) {}
+  static_holder(static_holder &&) = default;
+  static_holder &operator=(static_holder &&) = default;
+  DINGO_ALWAYS_INLINE ~static_holder() = default;
 
   binding_slot<Binding> slot;
 };
@@ -78,12 +84,19 @@ template <typename Indices, typename... Bindings> struct static_holders;
 
 // The transaction of a container is logged only when a binding constructs an
 // object it keeps, in a lazy or a two-phase slot.
-template <bool Keeps> struct static_transactions {
-  transaction_log log;
+// The transaction of a static container, whose `Slots` slots that construct
+// an object are each recorded once in a transaction, and its retained objects
+// once: a transaction of a few slots records them in its frame and never
+// grows.
+template <std::size_t Slots> struct static_transactions {
+  static constexpr std::size_t bound = Slots + 1;
+  basic_transaction_log<(bound < 8 ? bound : 8), (bound > 8)> log;
 };
 
-template <> struct static_transactions<false> {
-  no_transaction_log log;
+// A container of no slot that constructs an object keeps nothing to undo, and
+// its empty log adds nothing to its size.
+template <> struct static_transactions<0> {
+  static inline no_transaction_log log;
 };
 
 template <std::size_t... Indices, typename... Bindings>
@@ -91,15 +104,20 @@ struct DINGO_EMPTY_BASES
     static_holders<std::index_sequence<Indices...>, Bindings...>
     : static_holder<Indices, Bindings>...,
       static_transactions<(
-          (info(Bindings::scope).storage_slot == slot::two_phase ||
-           info(Bindings::scope).storage_slot == slot::lazy) ||
-          ...)> {
+          std::size_t(0) + ... +
+          std::size_t(info(Bindings::scope).storage_slot == slot::two_phase ||
+                      info(Bindings::scope).storage_slot == slot::lazy))> {
   template <typename Instances>
   explicit static_holders(Instances &instances)
       : static_holder<Indices, Bindings>(
             instances,
             std::integral_constant<std::size_t, instance_ordinal<Bindings...>(
                                                     Indices)>())... {}
+  static_holders(static_holders &&) = default;
+  static_holders &operator=(static_holders &&) = default;
+  // The holders are destroyed with the requests that unwind, so every
+  // destructor of the container is inlined.
+  DINGO_ALWAYS_INLINE ~static_holders() = default;
 };
 
 inline constexpr std::size_t not_found = static_cast<std::size_t>(-1);
@@ -205,6 +223,10 @@ public:
         "binding, in the order of the bindings");
   }
 
+  static_backend(static_backend &&) = default;
+  static_backend &operator=(static_backend &&) = default;
+  DINGO_ALWAYS_INLINE ~static_backend() = default;
+
   // The transaction of the requests of the container in progress.
   auto &transactions() { return holders_.log; }
 
@@ -240,6 +262,22 @@ public:
     return found < 2 ? found : 2;
   }
 
+  // Whether the one binding a request by a key known when the request is
+  // compiled names serves it, a term of it the request accepts.
+  template <typename Request, typename Key>
+  static constexpr bool serves_named() {
+    constexpr std::size_t index = detail::find_binding<Key, Bindings...>(
+        request_traits<Request, Key>::descriptor);
+    if constexpr (index == detail::not_found || index == detail::ambiguous) {
+      return false;
+    } else {
+      using binding = pack_at_t<index, Bindings...>;
+      return select_term(binding::published,
+                         request_traits<Request, Key>::descriptor,
+                         binding::exposed) != no_term;
+    }
+  }
+
   // The number of bindings a request by `Key` names, whose value a runtime
   // key compares when it is resolved: 0, 1, or 2 for many.
   template <typename Request, typename Key>
@@ -256,7 +294,8 @@ public:
 
   // Resolves a request from the one binding it names.
   template <typename Request, typename Key, typename Resolver>
-  Request resolve_named(Resolver &resolver, const void *key_value) {
+  DINGO_ALWAYS_INLINE Request resolve_named(Resolver &resolver,
+                                            const void *key_value) {
     if constexpr (Key::descriptor.kind != key_kind::runtime) {
       constexpr std::size_t index = detail::find_binding<Key, Bindings...>(
           request_traits<Request, Key>::descriptor);
@@ -364,7 +403,7 @@ private:
   // carries the annotation of an annotated request.
   template <typename Request, typename Key, std::size_t Index,
             typename Resolver>
-  Request resolve_from(Resolver &resolver) {
+  DINGO_ALWAYS_INLINE Request resolve_from(Resolver &resolver) {
     using binding = pack_at_t<Index, Bindings...>;
     constexpr std::size_t selected =
         select_term(binding::published,
@@ -380,7 +419,7 @@ private:
     constexpr const completion_plan &plan = plan_v<binding, selected>;
     auto &holder =
         static_cast<detail::static_holder<Index, binding> &>(holders_);
-    auto source = [&]() -> decltype(auto) {
+    auto source = [&]() DINGO_INLINE_LAMBDA -> decltype(auto) {
       if constexpr (std::is_same_v<typename binding::locals, type_list<>>) {
         return holder.slot.get(resolver);
       } else {
@@ -390,7 +429,7 @@ private:
         return holder.slot.get(view);
       }
     };
-    auto make = [&]() -> decltype(auto) {
+    auto make = [&]() DINGO_INLINE_LAMBDA -> decltype(auto) {
       if constexpr (plan.created == 0) {
         return walk_from<binding, selected,
                          binding::published.items[selected].rule_count>(
@@ -401,7 +440,7 @@ private:
                           std::is_same_v<typename layers::boundary,
                                          boundary_t<binding, selected>>,
                       "the requested wrapper cannot be created by the route");
-        return layers::make([&]() -> decltype(auto) {
+        return layers::make([&]() DINGO_INLINE_LAMBDA -> decltype(auto) {
           return walk_to_boundary<binding, selected>(holder.slot.context(),
                                                      source);
         });
@@ -410,10 +449,9 @@ private:
     if constexpr (std::is_rvalue_reference_v<Request> &&
                   binding::published.items[selected].category ==
                       value_category::rvalue) {
+      resolver.retained().enter(resolver.transactions());
       value_type &kept = resolver.retained().template emplace<value_type>(
           [&] { return value_type(make()); });
-      resolver.transactions().record(&resolver.retained(),
-                                     &retained_objects::undo_last);
       return static_cast<Request>(kept);
     } else {
       return static_cast<Request>(make());

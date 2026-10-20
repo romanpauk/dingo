@@ -1080,12 +1080,8 @@ The spec records 38 contracts across object size, compile cost, runtime cost,
 code size, inlining, and header cost, each linked to the baseline metrics that
 observe it or marked as not observable with the reason.
 [Contract Evaluation](../development.md#contract-evaluation) reports which hold
-on the current implementation. On the recorded baselines, 14 hold on both
-toolchains. Two are violated on Clang 22: two static resolution probes still
-call Dingo functions, and chain instantiations grow slightly faster than
-linearly. The others, including every contract on a construct of the new
-implementation and every runtime cost contract, are not observable by the
-current probes.
+on each implementation; [M7](#m7-contract-enforcement) describes the current
+results.
 
 #### M1.5: Shapes And Scopes
 
@@ -1614,11 +1610,47 @@ declared as a behavior change against the baseline.
 
 ### M7: Contract Enforcement
 
-Status: not started.
+Status: in progress.
 
 Generate the instantiation, object size, runtime cost, code size, inlining, and
 header cost probes from the contracts, replace the hand-written code size
 limits, and gate CI on them.
+
+The probes measure the next implementation against its own baseline,
+`test/contracts/baseline-next.json`, which the lit test
+`next-contract-baseline.t` checks. The runtime cost probes of
+`test/contracts/runtime_probes.cpp` count the allocations of a first and of a
+repeated resolution, and the calls on the cheapest path through a function that
+resolves a request resolved before, which is the memoized resolution of a
+reference to an object of a stable binding. The size of every codegen probe is
+recorded, so the baseline is the code size limit of each toolchain.
+
+On the recorded baselines, every contract the probes observe holds on the next
+implementation: 22 on Clang 22 and 20 on GCC 16, which records no
+instantiations. A static resolution compiles to the code of its route, with no
+Dingo call; a memoized runtime resolution of a stable reference reads the memo
+and the address it keeps, with no call; and no memoized resolution allocates. On
+the current implementation, a memoized runtime resolution calls Dingo functions,
+and two static resolution probes do on Clang 22.
+
+To inline a resolution, the transaction of a request records its effects in the
+frame of its outermost request, with a fixed capacity a static container proves,
+and catches its own failure instead of checking the exceptions in flight. The
+request path is annotated `DINGO_ALWAYS_INLINE` from the public entry points to
+the slots, and so are the destructors a request that unwinds runs, while the
+first resolution of a runtime request and its fallbacks stay out of line.
+
+Remaining:
+
+- the probes are written by hand, not generated from the contracts
+- the compile cost contracts on the constructs of the next implementation, the
+  lookups of a memoized resolution, the unused features of a static container,
+  and the placement of the diagnostic throws are not observed
+- a static request of a handle to an interface keeps the converted handle in a
+  heap node of its binding, which the current implementation does not, so those
+  probes and the collection probes are larger than its limits; the runtime
+  probes are larger too, as they inline the memoized path
+- CI does not run the checks yet
 
 ### M8: Language Tiers
 

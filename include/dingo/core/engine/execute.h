@@ -444,7 +444,8 @@ decltype(auto) walk_step(Context &context, Value &&value) {
 // constructed object returns a value, which outlives the object.
 template <typename Binding, std::size_t Term, std::size_t Steps,
           typename Context, typename Source>
-decltype(auto) walk_from(Context &context, Source &&source) {
+DINGO_ALWAYS_INLINE decltype(auto) walk_from(Context &context,
+                                             Source &&source) {
   if constexpr (std::is_lvalue_reference_v<decltype(source())>) {
     return walk<Binding, Term, Steps>(context, source());
   } else if constexpr (Steps == 0) {
@@ -458,7 +459,8 @@ decltype(auto) walk_from(Context &context, Source &&source) {
 
 // The object the binding hands over at the boundary of term `Term`.
 template <typename Binding, std::size_t Term, typename Context, typename Source>
-decltype(auto) walk_to_boundary(Context &context, Source &&source) {
+DINGO_ALWAYS_INLINE decltype(auto) walk_to_boundary(Context &context,
+                                                    Source &&source) {
   constexpr const completion_plan &plan = plan_v<Binding, Term>;
   if constexpr (plan.upcast) {
     using interface = interface_object_t<

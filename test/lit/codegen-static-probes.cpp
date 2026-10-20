@@ -9,6 +9,7 @@
 #include <dingo/static_container.h>
 
 #include <dingo/factory/function.h>
+#include <dingo/lookup/lookup.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
@@ -65,6 +66,27 @@ using static_collection_source =
                   interfaces<iface>>,
              bind<scope<shared>, storage<std::shared_ptr<iface_impl<5>>>,
                   interfaces<iface>>>;
+
+// The containers of the collection probes. The next implementation rejects a
+// second binding of an interface unless its lookup is declared many, and its
+// mixed container takes traits.
+#if defined(DINGO_IMPLEMENTATION_NEXT)
+struct collection_probe_traits : dynamic_container_traits {
+  using lookup_definition_type = lookups<collection<iface>>;
+};
+struct static_collection_probe_traits : static_container_traits {
+  using lookup_definition_type = lookups<collection<iface>>;
+};
+using static_collection_container =
+    static_container<static_collection_source, static_collection_probe_traits>;
+using runtime_collection_container = container<collection_probe_traits>;
+using mixed_collection_container =
+    container<static_collection_source, collection_probe_traits>;
+#else
+using static_collection_container = static_container<static_collection_source>;
+using runtime_collection_container = container<>;
+using mixed_collection_container = container<static_collection_source>;
+#endif
 
 struct external_config {
   int value;
@@ -129,6 +151,9 @@ void register_runtime_external_wrapper_binding(
       std::move(config));
 }
 
+// The binding model of the current implementation serves no rvalue request
+// of a shared binding; the next implementation states it in its route table.
+#if !defined(DINGO_IMPLEMENTATION_NEXT)
 using shared_config_static_source =
     static_bindings_source_t<static_wrapper_source>;
 using shared_config_selection = detail::static_binding_t<
@@ -140,6 +165,7 @@ static_assert(
     !detail::binding_supports_request_v<config &&, shared_config_binding>);
 static_assert(!detail::binding_supports_request_v<std::shared_ptr<config> &&,
                                                   shared_config_binding>);
+#endif
 
 } // namespace
 
@@ -352,13 +378,13 @@ probe_runtime_resolution_mixed_container_external_wrapper_storage() {
 }
 
 extern "C" [[gnu::noinline]] int probe_static_resolution_collection_sum() {
-  static_container<static_collection_source> container;
+  static_collection_container container;
   auto values = container.resolve<std::vector<std::shared_ptr<iface>>>();
   return values[0]->read() + values[1]->read();
 }
 
 extern "C" [[gnu::noinline]] int probe_runtime_resolution_collection_sum() {
-  container<> runtime;
+  runtime_collection_container runtime;
   register_runtime_collection_bindings(runtime);
   auto values = runtime.resolve<std::vector<std::shared_ptr<iface>>>();
   return values[0]->read() + values[1]->read();
@@ -366,7 +392,7 @@ extern "C" [[gnu::noinline]] int probe_runtime_resolution_collection_sum() {
 
 extern "C" [[gnu::noinline]] int
 probe_static_resolution_mixed_container_collection_sum() {
-  container<static_collection_source> mixed_container;
+  mixed_collection_container mixed_container;
   auto values = mixed_container.resolve<std::vector<std::shared_ptr<iface>>>();
   return values[0]->read() + values[1]->read();
 }

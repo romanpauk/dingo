@@ -79,12 +79,13 @@ the target API; the lit test `next-public-api.t` runs it.
 ### Contract Evaluation
 
 [`test/contracts/evaluate.py`](../test/contracts/evaluate.py) reports, per
-toolchain of the contract baseline, which contracts of the spec the current
-implementation satisfies, which it violates, and which no current probe
-observes. It is a report and does not fail on a violation.
+toolchain of a contract baseline, which contracts of the spec the implementation
+satisfies, which it violates, and which no probe observes. It is a report and
+does not fail on a violation.
 
 ```bash
 python3 test/contracts/evaluate.py
+python3 test/contracts/evaluate.py --baseline test/contracts/baseline-next.json
 ```
 
 ### Route Conformance
@@ -236,29 +237,38 @@ ctest --test-dir build --output-on-failure -R dingo_lit_tests
 [`test/contracts/probe.py`](../test/contracts/probe.py) measures the contract
 dimensions described in
 [Spec-Driven Design](architecture/spec-driven-design.md#contracts) on the
-current implementation:
+current implementation, or with `--implementation next` on the next one:
 
 - `instantiations`: Dingo class and function template instantiations of
   generated scaling programs with 1, 8, and 32 bindings in static, mixed, and
   runtime containers, counted from Clang's `-ftime-trace` output; Clang only
 - `object_size`: `sizeof` of containers holding growing numbers of bindings
-- `codegen`: calls, indirect calls, and calls to Dingo functions made by each
-  probe function of
+- `codegen`: the size, calls, indirect calls, calls to Dingo functions, and
+  calls to the Dingo functions that throw a diagnostic of each probe function of
   [`test/lit/codegen-static-probes.cpp`](../test/lit/codegen-static-probes.cpp),
   and the number of out-of-line Dingo functions in its object file
+- `runtime_cost`: for each probe function of
+  [`test/contracts/runtime_probes.cpp`](../test/contracts/runtime_probes.cpp),
+  which resolves a request resolved before, the calls on its cheapest path to a
+  return, which [`test/contracts/paths.py`](../test/contracts/paths.py) finds in
+  its disassembly, and the allocations of a first and of a repeated resolution
 - `headers`: preprocessed lines that come from Dingo headers, per public header
 
 The values are deterministic for a toolchain. They are recorded in
-[`test/contracts/baseline.json`](../test/contracts/baseline.json), keyed by
-compiler family, major version, architecture, and C++ standard. The lit test
-`contract-baseline.t` runs `probe.py check`, which fails when a value exceeds
-its baseline and reports values that improved. A toolchain without a baseline
-prints its measured values and passes.
+[`test/contracts/baseline.json`](../test/contracts/baseline.json), and those of
+the next implementation in
+[`test/contracts/baseline-next.json`](../test/contracts/baseline-next.json),
+keyed by compiler family, major version, architecture, and C++ standard. The lit
+tests `contract-baseline.t` and `next-contract-baseline.t` run `probe.py check`,
+which fails when a value exceeds its baseline and reports values that improved.
+A toolchain without a baseline prints its measured values and passes.
 
 Record the baseline for a toolchain after an intended change:
 
 ```bash
 CXX=clang++ python3 test/contracts/probe.py update --work-dir build/contracts
+CXX=clang++ python3 test/contracts/probe.py update --implementation next \
+    --work-dir build/contracts-next
 ```
 
 List the most instantiated Dingo templates of one scaling program:

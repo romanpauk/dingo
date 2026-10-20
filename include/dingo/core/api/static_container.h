@@ -87,6 +87,12 @@ public:
     this->parent_pointer = parent;
   }
 
+  // The destructor is inlined with the requests, which destroy the container
+  // when they unwind.
+  static_container(static_container &&) = default;
+  static_container &operator=(static_container &&) = default;
+  DINGO_ALWAYS_INLINE ~static_container() = default;
+
   // The sources of the selection of the container, which resolves the
   // dependencies of their bindings, and keeps the objects requests construct.
   auto &container_resolver() { return *this; }

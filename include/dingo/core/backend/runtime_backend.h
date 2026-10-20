@@ -563,7 +563,8 @@ public:
 
   // Resolves a request from the one binding it names.
   template <typename Request, typename Key>
-  Request resolve_named(Resolver &resolver, const void *key_value) {
+  DINGO_ALWAYS_INLINE Request resolve_named(Resolver &resolver,
+                                            const void *key_value) {
     const candidate_type *named = nullptr;
     memo<Request, Key>().visit(key_value, [&](const candidate_type &found) {
       named = &found;
@@ -579,8 +580,9 @@ public:
   // memo: it raises the ambiguity of two, and returns `otherwise()` when it
   // names none.
   template <typename Request, typename Key, typename Otherwise>
-  Request select_named(Resolver &resolver, const void *key_value,
-                       Otherwise &&otherwise) {
+  DINGO_ALWAYS_INLINE Request select_named(Resolver &resolver,
+                                           const void *key_value,
+                                           Otherwise &&otherwise) {
     const candidate_type *named = nullptr;
     bool many = false;
     memo<Request, Key>().visit(key_value, [&](const candidate_type &found) {
@@ -592,9 +594,16 @@ public:
       raise_ambiguous<Request>();
     }
     if (named == nullptr) {
-      return otherwise();
+      return otherwise_of<Request>(otherwise);
     }
     return resolve_from<Request>(resolver, *named);
+  }
+
+  // The rest of a selection whose step names nothing, out of line of the
+  // memoized resolution.
+  template <typename Request, typename Otherwise>
+  DINGO_NOINLINE static Request otherwise_of(Otherwise &otherwise) {
+    return otherwise();
   }
 
   // Adds every binding a request of the element type of `Collection` by
@@ -670,18 +679,30 @@ private:
     return found;
   }
 
-  static void undo_add(void *backend) noexcept {
+  static void undo_add(void *backend, void * /*context*/) noexcept {
     auto &self = *static_cast<runtime_backend *>(backend);
     self.entries_.pop_back();
     ++self.generation_;
   }
 
   // The memo of a request by `Key`, made by its first resolution and made
-  // again by the first one after a registration.
+  // again by the first one after a registration. A memo that is current is
+  // read inline, and making one stays out of line.
   template <typename Request, typename Key>
-  const request_memo<entry, Key> &memo() const {
-    using memo_type = request_memo<entry, Key>;
+  DINGO_ALWAYS_INLINE const request_memo<entry, Key> &memo() const {
     const std::size_t id = request_id<Request, Key>();
+    if (id < memos_.size()) {
+      const memo_base *held = memos_[id].get();
+      if (held != nullptr && held->generation == generation_) {
+        return static_cast<const request_memo<entry, Key> &>(*held);
+      }
+    }
+    return refresh<Request, Key>(id);
+  }
+
+  template <typename Request, typename Key>
+  DINGO_NOINLINE const request_memo<entry, Key> &refresh(std::size_t id) const {
+    using memo_type = request_memo<entry, Key>;
     if (id >= memos_.size()) {
       memos_.resize(id + 1);
     }
@@ -773,8 +794,24 @@ private:
     }
   }
 
+  // A reference to an object whose address is kept is returned inline, with
+  // no call; any other completion stays out of line.
   template <typename Request>
-  static Request resolve_from(Resolver &resolver, const candidate_type &found) {
+  DINGO_ALWAYS_INLINE static Request resolve_from(Resolver &resolver,
+                                                  const candidate_type &found) {
+    if constexpr (std::is_lvalue_reference_v<Request>) {
+      // Only the term of a lvalue reference request keeps its address.
+      using value_type = typename request_traits<Request>::value_type;
+      if (found.resolved != nullptr) {
+        return static_cast<Request>(*static_cast<value_type *>(found.resolved));
+      }
+    }
+    return resolve_completing<Request>(resolver, found);
+  }
+
+  template <typename Request>
+  DINGO_NOINLINE static Request
+  resolve_completing(Resolver &resolver, const candidate_type &found) {
     if (found.term == no_term) {
       raise_not_convertible<Request>(*found.binding);
     }
@@ -970,10 +1007,9 @@ private:
           [&] { return binding.template make<boundary>(term, resolver); });
     };
     if constexpr (std::is_rvalue_reference_v<Request>) {
+      resolver.retained().enter(resolver.transactions());
       value_type &kept = resolver.retained().template emplace<value_type>(
           [&] { return value_type(make()); });
-      resolver.transactions().record(&resolver.retained(),
-                                     &retained_objects::undo_last);
       return static_cast<Request>(kept);
     } else {
       return static_cast<Request>(make());

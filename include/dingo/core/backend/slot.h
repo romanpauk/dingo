@@ -29,7 +29,8 @@ namespace dingo::core {
 
 // Reports a request of an object while it is being constructed: the path of
 // the types being constructed, ending with the repeated one.
-template <typename Type> [[noreturn]] void raise_recursion() {
+template <typename Type>
+[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE void raise_recursion() {
   std::string path;
   if (type_frame::active()) {
     type_frame::append_path(path);
@@ -89,6 +90,9 @@ class binding_slot<Binding, slot::lazy> : public binding_context<Binding> {
 public:
   using stored_type = typename Binding::stored_type;
   using binding_context<Binding>::binding_context;
+  binding_slot(binding_slot &&) = default;
+  binding_slot &operator=(binding_slot &&) = default;
+  DINGO_ALWAYS_INLINE ~binding_slot() = default;
 
   // Whether the object is constructed and kept: no transaction that a
   // failure would destroy it with is in progress.
@@ -99,7 +103,8 @@ public:
   // The object, constructed on first use, which the transaction in progress
   // destroys when it fails; the constructed object is checked first, so a
   // request of it compares once.
-  template <typename Resolver> stored_type &get(Resolver &resolver) {
+  template <typename Resolver>
+  DINGO_ALWAYS_INLINE stored_type &get(Resolver &resolver) {
     if (slot_.constructed()) {
       return slot_.object();
     }
@@ -108,19 +113,20 @@ public:
     }
     // The construction is a transaction of the container, which destroys
     // the object when a construction it is part of fails.
-    return resolver.transactions().run([&]() -> stored_type & {
-      stored_type &object =
-          slot_.get_or_construct([this, &resolver](void *where) {
-            const auto frame = type_frame::of<leaf_of_t<stored_type>>();
-            construct_stored<stored_type>(where, this->factory(), resolver);
-          });
-      resolver.transactions().record(this, &reset_slot);
-      return object;
-    });
+    return resolver.transactions().run(
+        [&]() DINGO_INLINE_LAMBDA -> stored_type & {
+          stored_type &object =
+              slot_.get_or_construct([this, &resolver](void *where) {
+                const auto frame = type_frame::of<leaf_of_t<stored_type>>();
+                construct_stored<stored_type>(where, this->factory(), resolver);
+              });
+          resolver.transactions().record(this, &reset_slot);
+          return object;
+        });
   }
 
 private:
-  static void reset_slot(void *slot) noexcept {
+  static void reset_slot(void *slot, void * /*context*/) noexcept {
     auto &self = *static_cast<binding_slot *>(slot);
     self.clear_context();
     self.slot_.reset();
@@ -215,7 +221,7 @@ public:
   using binding_context<Binding>::binding_context;
   binding_slot(const binding_slot &) = delete;
   binding_slot &operator=(const binding_slot &) = delete;
-  ~binding_slot() { reset(); }
+  DINGO_ALWAYS_INLINE ~binding_slot() { reset(); }
 
   // Whether the object is constructed and no publication that a failure
   // would reset it with is in progress.
@@ -227,8 +233,9 @@ public:
     if (state_ == state::empty) {
       // The transaction resets the slot when it fails: an object constructed
       // during it may refer to the published object.
-      resolver.transactions().run([&] {
-        resolver.transactions().record(this, &reset_slot);
+      resolver.transactions().run([&]() DINGO_INLINE_LAMBDA {
+        // A publication that failed and is retried records its slot once.
+        resolver.transactions().record_once(this, &reset_slot);
         publish(resolver);
       });
     } else if (state_ == state::publishing && !published_while_constructed) {
@@ -298,7 +305,7 @@ private:
     this->clear_context();
   }
 
-  static void reset_slot(void *slot) noexcept {
+  static void reset_slot(void *slot, void * /*context*/) noexcept {
     static_cast<binding_slot *>(slot)->reset();
   }
 

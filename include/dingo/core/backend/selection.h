@@ -83,18 +83,19 @@ struct annotated_request<::dingo::annotated<Type, Tag>> {
 
 template <typename Self> class selection {
 public:
-  // Resolves a request; a keyed request carries its key.
   // Resolves a request; a keyed or an annotated request names the type it
   // decorates, which is the result. The constructions of a request are the
-  // transactions of their containers.
-  template <typename Request> resolved_t<Request> resolve() {
+  // transactions of their containers. The entry points of a request are
+  // inlined, so a static resolution compiles to the code of its route.
+  template <typename Request>
+  DINGO_ALWAYS_INLINE resolved_t<Request> resolve() {
     return resolve_request<Request>();
   }
 
   // Resolves a request by a key: a key_type object, a key_value, or a value
   // of the key type.
   template <typename Request, typename Value>
-  resolved_t<Request> resolve(Value &&value) {
+  DINGO_ALWAYS_INLINE resolved_t<Request> resolve(Value &&value) {
     using key = request_key_of<std::decay_t<Value>>;
     if constexpr (is_annotated<Request>::value) {
       return select<typename annotated_request<Request>::type,
@@ -108,7 +109,7 @@ public:
 
   // The argument of a parameter of type `Request`: a keyed or an annotated
   // parameter takes the decorated object.
-  template <typename Request> Request argument() {
+  template <typename Request> DINGO_ALWAYS_INLINE Request argument() {
     if constexpr (is_annotated<Request>::value || is_keyed<Request>::value) {
       return Request(resolve<Request>());
     } else {
@@ -117,9 +118,24 @@ public:
   }
 
   // Constructs an object of `Type` by the construct rule: a binding of the
-  // type answers it, and otherwise its detected factory makes it.
-  template <typename Type> Type construct_by_rule() {
-    return select<Type, no_key, true, selection_mode::construct>(nullptr);
+  // type answers it, and otherwise its detected factory makes it. A wrapper
+  // of an element whose binding answers the request but cannot serve the
+  // wrapper is made from a copy of the bound element.
+  template <typename Type> DINGO_ALWAYS_INLINE Type construct_by_rule() {
+    if constexpr (wraps_element<Type>()) {
+      using element = leaf_of_t<Type>;
+      if constexpr (static_binding_refuses<Type>()) {
+        return wrap_element<Type>(construct_by_rule<element>());
+      } else {
+        try {
+          return select<Type, no_key, true, selection_mode::construct>(nullptr);
+        } catch (const ::dingo::type_not_convertible_exception &) {
+          return wrap_element<Type>(construct_by_rule<element>());
+        }
+      }
+    } else {
+      return select<Type, no_key, true, selection_mode::construct>(nullptr);
+    }
   }
 
   // The collection of every binding a request of its element type by `Key`
@@ -201,7 +217,45 @@ public:
   }
 
 private:
-  template <typename Request> resolved_t<Request> resolve_request() {
+  // Whether `Type` is a value of a wrapper whose element is a copyable leaf
+  // the wrapper is made from.
+  template <typename Type> static constexpr bool wraps_element() {
+    if constexpr (std::is_reference_v<Type> || std::is_pointer_v<Type>) {
+      return false;
+    } else {
+      using traits = layer_traits<std::remove_cv_t<Type>>;
+      if constexpr (traits::kind == layer_kind::opt ||
+                    traits::kind == layer_kind::own ||
+                    traits::kind == layer_kind::share) {
+        using element = type_list_at_t<0, typename traits::arguments>;
+        return layer_traits<element>::kind == layer_kind::leaf &&
+               std::is_copy_constructible_v<element>;
+      } else {
+        return false;
+      }
+    }
+  }
+
+  // Whether a static binding of the element of `Type` names the request of
+  // `Type` and cannot serve it, which is decided when it is compiled.
+  template <typename Type> static constexpr bool static_binding_refuses() {
+    if constexpr (Self::has_static_source) {
+      return Self::static_source_type::template fixed_count<Type, no_key>() ==
+                 1 &&
+             !Self::static_source_type::template serves_named<Type, no_key>();
+    } else {
+      return false;
+    }
+  }
+
+  template <typename Type, typename Element>
+  static Type wrap_element(Element &&element) {
+    return layer_traits<std::remove_cv_t<Type>>::make(
+        std::forward<Element>(element));
+  }
+
+  template <typename Request>
+  DINGO_ALWAYS_INLINE resolved_t<Request> resolve_request() {
     if constexpr (is_annotated<Request>::value) {
       using inner = typename annotated_request<Request>::type;
       using key =
@@ -506,7 +560,7 @@ private:
   // one visit of the backend; a step that names nothing goes on to the next.
   template <typename Request, typename Key, bool Outermost, selection_mode Mode,
             std::size_t Step>
-  Request select_sole(const void *key_value) {
+  DINGO_ALWAYS_INLINE Request select_sole(const void *key_value) {
     auto otherwise = [&]() -> Request {
       return select<Request, Key, Outermost, Mode, Step + 1>(key_value);
     };
@@ -530,7 +584,7 @@ private:
   // instantiated.
   template <typename Request, typename Key, selection_mode Mode,
             std::size_t Step, std::size_t Source = 0>
-  Request resolve_step(const void *key_value) {
+  DINGO_ALWAYS_INLINE Request resolve_step(const void *key_value) {
     constexpr const selection_step &step = rule_of(Mode).steps[Step];
     if constexpr (Source == step.source_count) {
       raise_not_found<Request, Key>();
@@ -554,7 +608,7 @@ private:
   }
 
   template <typename Request, typename Key, selection_source Source>
-  Request resolve_source(const void *key_value) {
+  DINGO_ALWAYS_INLINE Request resolve_source(const void *key_value) {
     if constexpr (Source == selection_source::container_static) {
       return self().static_source().template resolve_named<Request, Key>(
           self().container_resolver(), key_value);
@@ -637,11 +691,9 @@ private:
       if constexpr (std::is_reference_v<Request>) {
         // The construction is a transaction of the container.
         return self().transactions().run([this]() -> value_type & {
-          value_type &kept = self().retained().template emplace<value_type>(
+          self().retained().enter(self().transactions());
+          return self().retained().template emplace<value_type>(
               [this] { return detected_factory().make<value_type>(self()); });
-          self().transactions().record(&self().retained(),
-                                       &retained_objects::undo_last);
-          return kept;
         });
       } else {
         return self().transactions().run([this]() -> value_type {
@@ -659,7 +711,7 @@ private:
   template <typename Request, typename Key, bool Outermost,
             selection_mode Mode = selection_mode::singular,
             std::size_t Step = 0>
-  Request select(const void *key_value) {
+  DINGO_ALWAYS_INLINE Request select(const void *key_value) {
     if constexpr (Step == rule_of(Mode).step_count) {
       return nothing_selected<Request, Key, Outermost, Mode>(key_value);
     } else if constexpr (!meets<Request, Key, Outermost>(

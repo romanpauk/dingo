@@ -2,15 +2,19 @@
 """Measures the contract baseline of the library.
 
 The measurements cover the contract dimensions described in
-docs/architecture/spec-driven-design.md that can be observed on the current
-implementation:
+docs/architecture/spec-driven-design.md that can be observed, on the current
+implementation or, with --implementation next, on the next one:
 
 - instantiations: Dingo class and function template instantiations of
   synthetic scaling programs, counted from Clang's -ftime-trace output
 - object_size: sizeof of containers holding growing numbers of bindings
-- codegen: calls, indirect calls, and calls to Dingo functions made by each
-  probe function of test/lit/codegen-static-probes.cpp, and the number of
-  out-of-line Dingo functions in its object file
+- codegen: the size, calls, indirect calls, calls to Dingo functions, and
+  calls to the Dingo functions that throw a diagnostic of each probe function
+  of test/lit/codegen-static-probes.cpp, and the number of out-of-line Dingo
+  functions in its object file
+- runtime_cost: the calls on the cheapest path of each probe function of
+  test/contracts/runtime_probes.cpp, which test/contracts/paths.py finds, and
+  the allocations of a first and of a repeated resolution of each probe
 - headers: preprocessed lines that come from Dingo headers, per public header
 
 Every value is deterministic for a given toolchain. Baselines are keyed by
@@ -31,9 +35,18 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import paths  # noqa: E402
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 INCLUDE_ROOT = PROJECT_ROOT / "include" / "dingo"
+NEXT_INCLUDE_ROOT = PROJECT_ROOT / "include" / "next"
+DEFAULT_NEXT_BASELINE = Path(__file__).resolve().parent / "baseline-next.json"
+# The header trees whose lines count as Dingo lines; --implementation next
+# adds the include paths of the next implementation.
+DINGO_ROOTS = [INCLUDE_ROOT]
 CODEGEN_PROBES = PROJECT_ROOT / "test" / "lit" / "codegen-static-probes.cpp"
+RUNTIME_PROBES = Path(__file__).resolve().parent / "runtime_probes.cpp"
 DEFAULT_BASELINE = Path(__file__).resolve().parent / "baseline.json"
 
 SIZES = (1, 8, 32)
@@ -324,7 +337,9 @@ def parse_probe_calls(disassembly):
         if pending is not None:
             probe, target = pending
             if target is not None and "dingo::" in target:
-                probes[probe]["dingo_calls"] += 1
+                name = strip_template_arguments(target).split("(", 1)[0]
+                kind = "dingo_throws" if paths.DIAGNOSTIC_RE.search(name) else "dingo_calls"
+                probes[probe][kind] += 1
             pending = None
 
     for line in disassembly.splitlines():
@@ -334,7 +349,12 @@ def parse_probe_calls(disassembly):
             name = symbol.group(1)
             current = name if name.startswith("probe_") else None
             if current is not None:
-                probes[current] = {"calls": 0, "indirect_calls": 0, "dingo_calls": 0}
+                probes[current] = {
+                    "calls": 0,
+                    "indirect_calls": 0,
+                    "dingo_calls": 0,
+                    "dingo_throws": 0,
+                }
             continue
         if current is None:
             continue
@@ -389,6 +409,52 @@ def measure_codegen(toolchain, work_dir):
         and line.split(maxsplit=2)[1] in "tTwW"
         and "dingo::" in line.split(maxsplit=2)[2]
     )
+    sizes = subprocess.run(
+        ["nm", "-S", "--defined-only", str(obj)],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    for line in sizes.splitlines():
+        fields = line.split()
+        if len(fields) == 4 and fields[3] in result["probes"]:
+            result["probes"][fields[3]]["bytes"] = int(fields[1], 16)
+    return result
+
+
+def measure_runtime_cost(toolchain, work_dir):
+    obj = work_dir / "runtime-probes.o"
+    executable = work_dir / "runtime-probes"
+    # Without jump tables an indirect jump is a tail call, which the path
+    # analysis counts.
+    toolchain.compile(["-O2", "-fno-jump-tables", "-c", str(RUNTIME_PROBES), "-o", str(obj)])
+    toolchain.compile([str(obj), "-o", str(executable)])
+    disassembly = demangle(
+        subprocess.run(
+            ["objdump", "-dr", "--no-show-raw-insn", str(obj)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    analysis = paths.Paths(disassembly)
+    result = {"paths": {}, "allocations": {}}
+    for name in sorted(analysis.functions):
+        if name.startswith("probe_resolve_") and "." not in name:
+            cost = analysis.cheapest(name)
+            if cost is None:
+                raise RuntimeError(f"{name} has no path to a return")
+            result["paths"][name] = {
+                "calls": cost.calls,
+                "indirect_calls": cost.indirect_calls,
+                "dingo_calls": cost.dingo_calls,
+            }
+    output = subprocess.run(
+        [str(executable)], check=True, capture_output=True, text=True
+    ).stdout
+    for line in output.splitlines():
+        key, value = line.split()
+        result["allocations"][key] = int(value)
     return result
 
 
@@ -407,7 +473,10 @@ def measure_header(toolchain, header):
         if marker is not None:
             name = marker.group(2)
             if name not in dingo_files:
-                dingo_files[name] = Path(name).resolve().is_relative_to(INCLUDE_ROOT)
+                resolved = Path(name).resolve()
+                dingo_files[name] = any(
+                    resolved.is_relative_to(root) for root in DINGO_ROOTS
+                )
             in_dingo = dingo_files[name]
         elif in_dingo and line.strip():
             dingo_lines += 1
@@ -425,6 +494,7 @@ def measure(toolchain, work_dir, jobs):
     result = {
         "object_size": measure_object_sizes(toolchain, work_dir),
         "codegen": measure_codegen(toolchain, work_dir),
+        "runtime_cost": measure_runtime_cost(toolchain, work_dir),
         "headers": measure_headers(toolchain, jobs),
     }
     instantiations = measure_instantiations(toolchain, work_dir, jobs)
@@ -487,7 +557,18 @@ def main():
         default=os.environ.get("CXX", "c++") + f" -std=c++20 -I{PROJECT_ROOT / 'include'}",
         help="compiler command including the standard and include flags",
     )
-    parser.add_argument("--baseline", type=Path, default=DEFAULT_BASELINE)
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        help="the baseline file, baseline.json or baseline-next.json by default",
+    )
+    parser.add_argument(
+        "--implementation",
+        choices=("current", "next"),
+        default="current",
+        help="next measures the next implementation, compiled with include/next "
+        "first and DINGO_IMPLEMENTATION_NEXT, against its own baseline",
+    )
     parser.add_argument(
         "--work-dir",
         type=Path,
@@ -501,7 +582,21 @@ def main():
     parser.add_argument("--top", type=int, default=30)
     args = parser.parse_args()
 
-    toolchain = Toolchain(args.cxx_command)
+    command = args.cxx_command
+    if args.implementation == "next":
+        command += f" -DDINGO_IMPLEMENTATION_NEXT=1 -I{NEXT_INCLUDE_ROOT}"
+        # The next include paths precede the current ones.
+        parts = shlex.split(command)
+        includes = [p for p in parts if p.startswith("-I")]
+        others = [p for p in parts if not p.startswith("-I")]
+        nexts = [p for p in includes if p == f"-I{NEXT_INCLUDE_ROOT}"]
+        command = shlex.join(others + nexts + [p for p in includes if p not in nexts])
+        DINGO_ROOTS.append(NEXT_INCLUDE_ROOT)
+    if args.baseline is None:
+        args.baseline = (
+            DEFAULT_NEXT_BASELINE if args.implementation == "next" else DEFAULT_BASELINE
+        )
+    toolchain = Toolchain(command)
     if args.command == "report":
         if toolchain.family != "clang":
             print("report requires Clang", file=sys.stderr)

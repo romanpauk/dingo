@@ -48,9 +48,6 @@ template <typename... Types> struct dependencies {};
 
 namespace dingo::core {
 
-// The factory of the next implementation that a public factory declares.
-template <typename Factory> struct factory_of;
-
 namespace detail {
 template <template <typename...> typename Part, typename Type>
 struct is_part : std::false_type {};

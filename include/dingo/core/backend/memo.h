@@ -62,8 +62,10 @@ struct no_index {};
 } // namespace detail
 
 // The process-wide identity of a request type by a key, which indexes the
-// memos of a backend.
-template <typename Request, typename Key> std::size_t request_id() {
+// memos of a backend. It is a function-local static, so a request made while
+// the program initializes has its identity.
+template <typename Request, typename Key>
+DINGO_ALWAYS_INLINE std::size_t request_id() {
   static const std::size_t id = detail::next_request_id();
   return id;
 }

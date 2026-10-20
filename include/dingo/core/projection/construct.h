@@ -244,6 +244,9 @@ struct callable_arguments<
 template <typename Callable>
 using callable_arguments_t = typename callable_arguments<Callable>::type;
 
+// The factory of the next implementation that a public factory declares.
+template <typename Factory> struct factory_of;
+
 // A factory that calls a function, whose result is the stored object.
 template <auto Function> struct function_factory {
   template <typename Stored, typename Resolver>
