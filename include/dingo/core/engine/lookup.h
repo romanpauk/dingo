@@ -25,15 +25,14 @@ namespace dingo::core {
 inline constexpr std::size_t unbounded = static_cast<std::size_t>(-1);
 
 // A declaration of the domain of an interface and a key, or with a null
-// interface the default of every domain no other declaration covers. The key
-// values of a domain are indexed by `index`; a domain indexed by a dense
-// array stores the values 0 up to `bound`, excluded.
+// interface the default of every domain no other declaration covers. A domain
+// whose index is a dense array stores the key values 0 up to `bound`,
+// excluded; the index itself is a type of the declaration.
 struct lookup_descriptor {
   type_id interface = nullptr;
   key_descriptor domain;
   bool many = false;
   std::size_t bound = unbounded;
-  index_structure index = index_structure::ordered;
 };
 
 struct lookup_table {
@@ -146,26 +145,76 @@ constexpr std::size_t key_bound(const lookup_table &table,
 
 // A lookup declaration of the domains of the interfaces `Interfaces`, a
 // type_list, and `Key`, a key of the domain, with `Many` bindings, whose key
-// values `Index` indexes, a dense array of `Bound` unless it is unbounded; an
-// empty list declares the default of every other domain.
+// values the index of `Indexing` indexes, a type with a member template
+// index<Value, Candidate> or void for the default, and whose key values are
+// 0 up to `Bound`, excluded, unless it is unbounded; an empty list declares
+// the default of every other domain.
 template <typename Interfaces, typename Key, bool Many,
-          index_structure Index = index_structure::ordered,
-          std::size_t Bound = unbounded>
+          typename Indexing = void, std::size_t Bound = unbounded>
 struct lookup_declaration;
 
-template <typename... Interfaces, typename Key, bool Many,
-          index_structure Index, std::size_t Bound>
-struct lookup_declaration<type_list<Interfaces...>, Key, Many, Index, Bound> {
+template <typename... Interfaces, typename Key, bool Many, typename Indexing,
+          std::size_t Bound>
+struct lookup_declaration<type_list<Interfaces...>, Key, Many, Indexing,
+                          Bound> {
+  using indexing = Indexing;
   static constexpr std::size_t size = sizeof...(Interfaces);
   static constexpr lookup_descriptor items[] = {
-      {type_id_v<Interfaces>, Key::descriptor, Many, Bound, Index}...};
+      {type_id_v<Interfaces>, Key::descriptor, Many, Bound}...};
 };
 
-template <typename Key, bool Many, index_structure Index, std::size_t Bound>
-struct lookup_declaration<type_list<>, Key, Many, Index, Bound> {
+template <typename Key, bool Many, typename Indexing, std::size_t Bound>
+struct lookup_declaration<type_list<>, Key, Many, Indexing, Bound> {
+  using indexing = Indexing;
   static constexpr std::size_t size = 1;
-  static constexpr lookup_descriptor items[] = {
-      {nullptr, {}, Many, Bound, Index}};
+  static constexpr lookup_descriptor items[] = {{nullptr, {}, Many, Bound}};
+};
+
+// The position in `Declarations` of the declaration of the domain of
+// `interface` and `key`, as declaration_of() finds it: its own, or the last
+// default declaration, or the size of the list.
+template <typename... Declarations>
+constexpr std::size_t declaration_position(type_id interface,
+                                           const key_descriptor &key) {
+  constexpr std::size_t count = sizeof...(Declarations);
+  constexpr std::size_t sizes[] = {Declarations::size..., 0};
+  constexpr const lookup_descriptor *items[] = {Declarations::items...,
+                                                nullptr};
+  std::size_t found = count;
+  for (std::size_t position = 0; position < count; ++position) {
+    for (std::size_t index = 0; index < sizes[position]; ++index) {
+      const lookup_descriptor &declaration = items[position][index];
+      if (declaration.interface == nullptr) {
+        found = position;
+      } else if (declaration.interface == interface &&
+                 same_key_domain(declaration.domain, key)) {
+        return position;
+      }
+    }
+  }
+  return found;
+}
+
+// The lookup declarations `Declarations`, a type_list: the position of the
+// declaration of a domain, and the indexing of the declaration at a position,
+// void past the end, where the default indexes the key values.
+template <typename Declarations> struct declaration_list;
+
+template <typename... Declarations>
+struct declaration_list<type_list<Declarations...>> {
+  static constexpr std::size_t position(type_id interface,
+                                        const key_descriptor &key) {
+    return declaration_position<Declarations...>(interface, key);
+  }
+
+  template <std::size_t Position, bool = (Position < sizeof...(Declarations))>
+  struct at {
+    using indexing = typename pack_at_t<Position, Declarations...>::indexing;
+  };
+
+  template <std::size_t Position> struct at<Position, false> {
+    using indexing = void;
+  };
 };
 
 template <typename Declarations> struct lookup_table_of;

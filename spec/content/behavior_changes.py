@@ -519,4 +519,23 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         ),
         decision=DECISION,
     ),
+    BehaviorChange(
+        id="index_extension_point",
+        description=(
+            "A lookup backend names its own index of the key values of a "
+            "domain, a member template index<Value, Candidate>, which takes "
+            "dingo::index_item values; the built-in backends name theirs."
+        ),
+        cases=("api:lookup_index", "api:index_item"),
+        baseline=(
+            "A lookup backend names only a map as its storage, and the index "
+            "structures are fixed by the implementation."
+        ),
+        now=(
+            "A backend names an index or a map; the index of a request is the "
+            "one of the declaration of its domain, chosen when the request is "
+            "compiled."
+        ),
+        decision=DECISION,
+    ),
 )

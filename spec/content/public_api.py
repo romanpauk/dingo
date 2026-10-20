@@ -253,6 +253,19 @@ public_api: tuple[PublicApiEntry, ...] = (
         "binding and constructs its stored object.",
     ),
     entry(
+        "lookup_index",
+        EXTENSION,
+        "A lookup backend that names its own index of the key values of a "
+        "domain, which visits the candidates of a key in the order of "
+        "registration.",
+    ),
+    entry(
+        "index_item",
+        NAME,
+        "A candidate of a request with the key value it is found by, which an "
+        "index of a lookup backend takes.",
+    ),
+    entry(
         "lookup_backend",
         EXTENSION,
         "A user-defined storage backend of a runtime-keyed lookup.",

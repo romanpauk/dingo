@@ -1,7 +1,7 @@
 {
   "clang22-x86_64-c++20": {
     "codegen": {
-      "out_of_line_dingo_functions": 493,
+      "out_of_line_dingo_functions": 497,
       "probes": {
         "probe_runtime_resolution_collection_sum": {
           "bytes": 1946,
@@ -259,179 +259,179 @@
     },
     "headers": {
       "dingo/container.h": {
-        "dingo_lines": 7005
+        "dingo_lines": 7139
       },
       "dingo/factory/callable.h": {
-        "dingo_lines": 1640
+        "dingo_lines": 1633
       },
       "dingo/factory/constructor.h": {
-        "dingo_lines": 3347
+        "dingo_lines": 3340
       },
       "dingo/factory/function.h": {
-        "dingo_lines": 1631
+        "dingo_lines": 1624
       },
       "dingo/runtime_container.h": {
-        "dingo_lines": 7010
+        "dingo_lines": 7144
       },
       "dingo/static_container.h": {
-        "dingo_lines": 5863
+        "dingo_lines": 6119
       },
       "dingo/storage/external.h": {
-        "dingo_lines": 3331
+        "dingo_lines": 3324
       },
       "dingo/storage/shared.h": {
-        "dingo_lines": 3331
+        "dingo_lines": 3324
       },
       "dingo/storage/shared_cyclical.h": {
-        "dingo_lines": 3331
+        "dingo_lines": 3324
       },
       "dingo/storage/unique.h": {
-        "dingo_lines": 3331
+        "dingo_lines": 3324
       }
     },
     "instantiations": {
       "chain.mixed.1": {
-        "classes": 145,
-        "functions": 210
+        "classes": 154,
+        "functions": 212
       },
       "chain.mixed.32": {
-        "classes": 2965,
-        "functions": 5573
+        "classes": 3005,
+        "functions": 5575
       },
       "chain.mixed.8": {
-        "classes": 781,
-        "functions": 1421
+        "classes": 797,
+        "functions": 1423
       },
       "chain.runtime.1": {
-        "classes": 157,
-        "functions": 300
+        "classes": 166,
+        "functions": 302
       },
       "chain.runtime.32": {
-        "classes": 3075,
-        "functions": 10331
+        "classes": 3147,
+        "functions": 10333
       },
       "chain.runtime.8": {
-        "classes": 819,
-        "functions": 2579
+        "classes": 843,
+        "functions": 2581
       },
       "chain.static.1": {
-        "classes": 142,
+        "classes": 146,
         "functions": 162
       },
       "chain.static.32": {
-        "classes": 2962,
+        "classes": 2966,
         "functions": 4410
       },
       "chain.static.8": {
-        "classes": 778,
+        "classes": 782,
         "functions": 1122
       },
       "flat_resolved.mixed.1": {
-        "classes": 145,
-        "functions": 210
+        "classes": 154,
+        "functions": 212
       },
       "flat_resolved.mixed.32": {
-        "classes": 2934,
-        "functions": 5542
+        "classes": 2974,
+        "functions": 5544
       },
       "flat_resolved.mixed.8": {
-        "classes": 774,
-        "functions": 1414
+        "classes": 790,
+        "functions": 1416
       },
       "flat_resolved.runtime.1": {
-        "classes": 157,
-        "functions": 300
+        "classes": 166,
+        "functions": 302
       },
       "flat_resolved.runtime.32": {
-        "classes": 3040,
-        "functions": 7802
+        "classes": 3080,
+        "functions": 7804
       },
       "flat_resolved.runtime.8": {
-        "classes": 808,
-        "functions": 1994
+        "classes": 824,
+        "functions": 1996
       },
       "flat_resolved.static.1": {
-        "classes": 142,
+        "classes": 146,
         "functions": 162
       },
       "flat_resolved.static.32": {
-        "classes": 2931,
+        "classes": 2935,
         "functions": 4379
       },
       "flat_resolved.static.8": {
-        "classes": 771,
+        "classes": 775,
         "functions": 1115
       },
       "flat_unresolved.mixed.1": {
-        "classes": 90,
+        "classes": 94,
         "functions": 38
       },
       "flat_unresolved.mixed.32": {
-        "classes": 1360,
+        "classes": 1364,
         "functions": 658
       },
       "flat_unresolved.mixed.8": {
-        "classes": 376,
+        "classes": 380,
         "functions": 178
       },
       "flat_unresolved.runtime.1": {
-        "classes": 142,
+        "classes": 146,
         "functions": 192
       },
       "flat_unresolved.runtime.32": {
-        "classes": 2653,
+        "classes": 2657,
         "functions": 4780
       },
       "flat_unresolved.runtime.8": {
-        "classes": 709,
+        "classes": 713,
         "functions": 1228
       },
       "flat_unresolved.static.1": {
-        "classes": 90,
+        "classes": 94,
         "functions": 36
       },
       "flat_unresolved.static.32": {
-        "classes": 1360,
+        "classes": 1364,
         "functions": 656
       },
       "flat_unresolved.static.8": {
-        "classes": 376,
+        "classes": 380,
         "functions": 176
       },
       "wrapper_resolved.mixed.1": {
-        "classes": 157,
-        "functions": 221
+        "classes": 166,
+        "functions": 223
       },
       "wrapper_resolved.mixed.32": {
-        "classes": 3256,
-        "functions": 5894
+        "classes": 3296,
+        "functions": 5896
       },
       "wrapper_resolved.mixed.8": {
-        "classes": 856,
-        "functions": 1502
+        "classes": 872,
+        "functions": 1504
       },
       "wrapper_resolved.runtime.1": {
-        "classes": 174,
-        "functions": 339
+        "classes": 183,
+        "functions": 341
       },
       "wrapper_resolved.runtime.32": {
-        "classes": 3522,
-        "functions": 9050
+        "classes": 3562,
+        "functions": 9052
       },
       "wrapper_resolved.runtime.8": {
-        "classes": 930,
-        "functions": 2306
+        "classes": 946,
+        "functions": 2308
       },
       "wrapper_resolved.static.1": {
-        "classes": 154,
+        "classes": 158,
         "functions": 173
       },
       "wrapper_resolved.static.32": {
-        "classes": 3253,
+        "classes": 3257,
         "functions": 4731
       },
       "wrapper_resolved.static.8": {
-        "classes": 853,
+        "classes": 857,
         "functions": 1203
       }
     },
@@ -508,7 +508,7 @@
   },
   "gcc16-x86_64-c++20": {
     "codegen": {
-      "out_of_line_dingo_functions": 677,
+      "out_of_line_dingo_functions": 683,
       "probes": {
         "probe_runtime_resolution_collection_sum": {
           "bytes": 3091,
@@ -969,34 +969,34 @@
     },
     "headers": {
       "dingo/container.h": {
-        "dingo_lines": 7051
+        "dingo_lines": 7185
       },
       "dingo/factory/callable.h": {
-        "dingo_lines": 1678
+        "dingo_lines": 1671
       },
       "dingo/factory/constructor.h": {
-        "dingo_lines": 3385
+        "dingo_lines": 3378
       },
       "dingo/factory/function.h": {
-        "dingo_lines": 1669
+        "dingo_lines": 1662
       },
       "dingo/runtime_container.h": {
-        "dingo_lines": 7056
+        "dingo_lines": 7190
       },
       "dingo/static_container.h": {
-        "dingo_lines": 5909
+        "dingo_lines": 6165
       },
       "dingo/storage/external.h": {
-        "dingo_lines": 3369
+        "dingo_lines": 3362
       },
       "dingo/storage/shared.h": {
-        "dingo_lines": 3369
+        "dingo_lines": 3362
       },
       "dingo/storage/shared_cyclical.h": {
-        "dingo_lines": 3369
+        "dingo_lines": 3362
       },
       "dingo/storage/unique.h": {
-        "dingo_lines": 3369
+        "dingo_lines": 3362
       }
     },
     "object_size": {

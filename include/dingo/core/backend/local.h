@@ -130,6 +130,7 @@ public:
   using local_static_source_type = local_static_backend_t<Locals>;
   using local_runtime_source_type = runtime_backend<local_view>;
   using parent_type = typename Host::parent_type;
+  using lookup_definition_type = typename Host::lookup_definition_type;
 
   local_view(Host &host, local_static_source_type *statics,
              local_runtime_source_type *runtime)

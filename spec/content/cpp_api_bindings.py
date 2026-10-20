@@ -1220,6 +1220,55 @@ struct api_lookup_backend {
 """,
     ),
     name(
+        "lookup_index",
+        "index",
+        LOOKUP,
+        """\
+struct traits : dingo::dynamic_container_traits {
+  using lookup_definition_type = dingo::lookups<
+      dingo::associative<std::size_t, @P@processor, dingo::many, @P@backend>>;
+};
+dingo::container<traits> container;
+container.register_type<dingo::scope<dingo::shared>, dingo::storage<@P@processor_impl>,
+                        dingo::interfaces<@P@processor>>(
+    dingo::key_value{std::size_t(1)});
+auto all = container.resolve<std::vector<@P@processor *>>(std::size_t(1));
+(void)all;
+""",
+        declarations=LOOKUP_TYPES
+        + """\
+struct @P@backend {
+  template <typename Value, typename Candidate> class {name} {
+  public:
+    void build(const dingo::index_item<Value, Candidate> *items, std::size_t count) {
+      items_ = items;
+      count_ = count;
+    }
+    template <typename Visit> void visit(const Value &key, Visit &&visit) const {
+      for (std::size_t at = 0; at < count_; ++at) {
+        if (items_[at].key == key && !visit(items_[at].candidate)) {
+          return;
+        }
+      }
+    }
+
+  private:
+    const dingo::index_item<Value, Candidate> *items_ = nullptr;
+    std::size_t count_ = 0;
+  };
+};
+""",
+    ),
+    name(
+        "index_item",
+        "dingo::index_item",
+        LOOKUP,
+        """\
+{name}<int, char> item{1, 'a'};
+(void)item;
+""",
+    ),
+    name(
         "scope_traits",
         "dingo::scope_traits",
         CONTAINER,

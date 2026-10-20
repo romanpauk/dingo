@@ -1828,10 +1828,24 @@ slot, not shared_cyclical by name.
 
 #### M10.2: Index Structures
 
+Status: done.
+
 A lookup declaration's backend is a type that provides the index of its domain.
 The memo of a request takes the index type of the declaration that answers it,
 decided when the request is compiled, instead of switching over a closed list of
 index structures.
+
+A backend names a member template `index<Value, Candidate>`, which builds from
+the candidates in the order of registration, as `dingo::index_item` values, and
+visits the candidates of a key in that order; or a map as its `storage`, which
+the public API of the baseline records, through which the key values are indexed
+with the candidates of a key chained in the order of registration. The built-in
+backends `ordered`, `unordered`, and `array<N>` name the built-in indexes, each
+of which falls back to one the key type can serve. The generated list of index
+structures is gone, and the memo test checks every built-in index and two maps
+of the user against a linear scan. Keyed lookups are faster for it, 3.6 ns for
+64 ordered keys and 1.0 ns for a dense array, still behind the 2.1 ns and 0.7 ns
+of the baseline.
 
 #### M10.3: Layer Kinds And Routes
 

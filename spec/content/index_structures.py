@@ -4,6 +4,11 @@ An index structure accelerates the binding filter for the domains a lookup
 declaration covers and returns exactly what the filter returns, in the order
 of registration for bindings of equal keys; the choice never changes which
 bindings a request names.
+
+The index structures are open: these are the built-in ones, and a lookup
+backend of the user names an index of its own, or a map by which the key
+values are indexed. A declaration names its backend, and the index of a
+request is the one of the declaration of its domain.
 """
 
 from spec.schema import IndexStructure

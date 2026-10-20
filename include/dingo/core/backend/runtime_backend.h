@@ -482,6 +482,29 @@ template <typename... Args> struct registration_arguments {
 // The runtime bindings of a container, a source of its selection: it counts
 // the bindings a request names, resolves the one it names, and collects them,
 // with `Resolver`, the container, resolving their dependencies.
+namespace detail {
+// The lookup declarations of the traits of a resolver, a list of them.
+template <typename Definition> struct declarations_in {
+  using type = type_list<>;
+};
+
+template <template <typename...> typename List, typename... Declarations>
+struct declarations_in<List<Declarations...>> {
+  using type = type_list<Declarations...>;
+};
+
+template <typename Resolver, typename = void> struct resolver_declarations {
+  using type = type_list<>;
+};
+
+template <typename Resolver>
+struct resolver_declarations<
+    Resolver, std::void_t<typename Resolver::lookup_definition_type>> {
+  using type =
+      typename declarations_in<typename Resolver::lookup_definition_type>::type;
+};
+} // namespace detail
+
 template <typename Resolver, typename Allocator> class runtime_backend {
   using entry = runtime_entry<Resolver>;
   using bytes_type = byte_allocator_t<Allocator>;
@@ -685,24 +708,41 @@ private:
     ++self.generation_;
   }
 
+  // The memo of a request by `Key`, which indexes its candidates by the index
+  // of the lookup declaration of its domain, decided when it is compiled.
+  template <typename Request, typename Key> struct indexed_memo {
+    using declarations = declaration_list<
+        typename detail::resolver_declarations<Resolver>::type>;
+    static constexpr request_descriptor request =
+        request_traits<Request, Key>::descriptor;
+    using declared = typename declarations::template at<declarations::position(
+        innermost_leaf(request.value), request.key)>::indexing;
+    using type = request_memo<entry, Key,
+                              std::conditional_t<std::is_void_v<declared>,
+                                                 default_indexing, declared>>;
+  };
+
+  template <typename Request, typename Key>
+  using memo_of = typename indexed_memo<Request, Key>::type;
+
   // The memo of a request by `Key`, made by its first resolution and made
   // again by the first one after a registration. A memo that is current is
   // read inline, and making one stays out of line.
   template <typename Request, typename Key>
-  DINGO_ALWAYS_INLINE const request_memo<entry, Key> &memo() const {
+  DINGO_ALWAYS_INLINE const memo_of<Request, Key> &memo() const {
     const std::size_t id = request_id<Request, Key>();
     if (id < memos_.size()) {
       const memo_base *held = memos_[id].get();
       if (held != nullptr && held->generation == generation_) {
-        return static_cast<const request_memo<entry, Key> &>(*held);
+        return static_cast<const memo_of<Request, Key> &>(*held);
       }
     }
     return refresh<Request, Key>(id);
   }
 
   template <typename Request, typename Key>
-  DINGO_NOINLINE const request_memo<entry, Key> &refresh(std::size_t id) const {
-    using memo_type = request_memo<entry, Key>;
+  DINGO_NOINLINE const memo_of<Request, Key> &refresh(std::size_t id) const {
+    using memo_type = memo_of<Request, Key>;
     if (id >= memos_.size()) {
       memos_.resize(id + 1);
     }
@@ -718,7 +758,7 @@ private:
   }
 
   template <typename Request, typename Key>
-  DINGO_NOINLINE void remember(request_memo<entry, Key> &found) const {
+  DINGO_NOINLINE void remember(memo_of<Request, Key> &found) const {
     constexpr request_descriptor request =
         request_traits<Request, Key>::descriptor;
     found.clear();
@@ -739,8 +779,7 @@ private:
           {binding.get(), term, key_value,
            term == no_term ? completion::construct : binding->plan(term).kind});
     }
-    found.index(
-        declaration_of(*table_, innermost_leaf(request.value), request.key));
+    found.index();
     found.generation = generation_;
   }
 

@@ -272,7 +272,6 @@ def vocabulary(spec):
         ],
         selection_sources=[source.value for source in SelectionSource],
         selection_modes=[mode.value for mode in SelectionMode],
-        index_structures=[index.id for index in spec.index_structures],
         step_conditions=["always", *(condition.value for condition in StepCondition)],
         selection_rules=[selection_fields(rule) for rule in spec.selection_rules],
         max_selection_steps=max((len(r.steps) for r in spec.selection_rules), default=1),
