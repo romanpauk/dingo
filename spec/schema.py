@@ -271,7 +271,9 @@ class Via(Enum):
     """The operation a route performs when it is not a structural rewrite.
 
     UPCAST replaces the leaf `L` of the derived shape with each interface the
-    binding declares for it.
+    binding declares for it. CONVERT does so for each declared interface the
+    leaf declares a conversion to, a user conversion that makes the interface
+    object from the leaf.
     """
 
     CONVERT = "convert"

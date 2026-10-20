@@ -242,10 +242,12 @@ enum class rule_id : std::uint8_t {
   upcast_owned,
   upcast_shared,
   upcast_copied_shared,
+  convert_borrowed,
+  convert_consumed,
   retain_shared_upcast,
 };
 
-inline constexpr std::size_t rule_count = 25;
+inline constexpr std::size_t rule_count = 27;
 
 // Requirements of a rule on its pattern variable, as bits.
 enum class requirement : std::uint8_t {
@@ -271,6 +273,9 @@ struct route_rule {
   std::uint8_t exposure;
   std::uint8_t requires_;
   bool upcast;
+  // Whether the rule makes an object of each declared interface the leaf
+  // declares a user conversion to.
+  bool converts;
   // Whether the derived object is kept by the binding, so it can be referred
   // to: the conversion cache.
   bool cached;
@@ -280,102 +285,110 @@ inline constexpr route_rule route_rules[] = {
     // spec: routes.borrow_optional
     {rule_id::borrow_optional, layer_kind::opt, value_category::lvalue,
      layer_kind::leaf, value_category::lvalue, access::inherit, 0, 0, false,
-     false},
+     false, false},
     // spec: routes.borrow_owned
     {rule_id::borrow_owned, layer_kind::own, value_category::lvalue,
      layer_kind::leaf, value_category::lvalue, access::inherit, 0, 0, false,
-     false},
+     false, false},
     // spec: routes.borrow_shared
     {rule_id::borrow_shared, layer_kind::share, value_category::lvalue,
      layer_kind::leaf, value_category::lvalue, access::inherit, 0, 0, false,
-     false},
+     false, false},
     // spec: routes.deref_pointer
     {rule_id::deref_pointer, layer_kind::ptr, value_category::lvalue,
      layer_kind::leaf, value_category::lvalue, access::inherit, 0, 0, false,
-     false},
+     false, false},
     // spec: routes.deref_reference
     {rule_id::deref_reference, layer_kind::ref, value_category::lvalue,
      layer_kind::leaf, value_category::lvalue, access::inherit, 0, 0, false,
-     false},
+     false, false},
     // spec: routes.select_alternative
     {rule_id::select_alternative, layer_kind::alt, value_category::lvalue,
      layer_kind::leaf, value_category::lvalue, access::inherit, 0, 0, false,
-     false},
+     false, false},
     // spec: routes.copy
     {rule_id::copy, layer_kind::leaf, value_category::lvalue, layer_kind::leaf,
-     value_category::prvalue, access::borrow, 1, 1, false, false},
+     value_category::prvalue, access::borrow, 1, 1, false, false, false},
     // spec: routes.address_of
     {rule_id::address_of, layer_kind::leaf, value_category::lvalue,
      layer_kind::ptr, value_category::prvalue, access::borrow, 8, 4, false,
-     false},
+     false, false},
     // spec: routes.decay_array
     {rule_id::decay_array, layer_kind::array, value_category::lvalue,
      layer_kind::ptr, value_category::prvalue, access::borrow, 8, 0, false,
-     false},
+     false, false},
     // spec: routes.decay_unbounded_array
     {rule_id::decay_unbounded_array, layer_kind::array_unbounded,
      value_category::lvalue, layer_kind::ptr, value_category::prvalue,
-     access::borrow, 8, 0, false, false},
+     access::borrow, 8, 0, false, false, false},
     // spec: routes.take_alternative
     {rule_id::take_alternative, layer_kind::alt, value_category::rvalue,
      layer_kind::leaf, value_category::rvalue, access::consume, 4, 0, false,
-     false},
+     false, false},
     // spec: routes.take_optional
     {rule_id::take_optional, layer_kind::opt, value_category::rvalue,
      layer_kind::leaf, value_category::rvalue, access::consume, 4, 0, false,
-     false},
+     false, false},
     // spec: routes.wrap_optional
     {rule_id::wrap_optional, layer_kind::leaf, value_category::rvalue,
      layer_kind::opt, value_category::rvalue, access::consume, 4, 0, false,
-     false},
+     false, false},
     // spec: routes.share_owned
     {rule_id::share_owned, layer_kind::own, value_category::rvalue,
      layer_kind::share, value_category::rvalue, access::consume, 4, 0, false,
-     false},
+     false, false},
     // spec: routes.adopt_pointer_owned
     {rule_id::adopt_pointer_owned, layer_kind::ptr, value_category::rvalue,
      layer_kind::own, value_category::rvalue, access::consume, 4, 0, false,
-     false},
+     false, false},
     // spec: routes.adopt_pointer_shared
     {rule_id::adopt_pointer_shared, layer_kind::ptr, value_category::rvalue,
      layer_kind::share, value_category::rvalue, access::consume, 4, 0, false,
-     false},
+     false, false},
     // spec: routes.release_array
     {rule_id::release_array, layer_kind::array, value_category::rvalue,
      layer_kind::ptr, value_category::prvalue, access::consume, 8, 0, false,
-     false},
+     false, false},
     // spec: routes.release_whole_array
     {rule_id::release_whole_array, layer_kind::leaf, value_category::rvalue,
      layer_kind::ptr, value_category::prvalue, access::consume, 8, 2, false,
-     false},
+     false, false},
     // spec: routes.upcast_reference
     {rule_id::upcast_reference, layer_kind::leaf, value_category::lvalue,
      layer_kind::leaf, value_category::lvalue, access::inherit, 0, 8, true,
-     false},
+     false, false},
     // spec: routes.upcast_pointer
     {rule_id::upcast_pointer, layer_kind::ptr, value_category::prvalue,
      layer_kind::ptr, value_category::prvalue, access::inherit, 0, 8, true,
-     false},
+     false, false},
     // spec: routes.upcast_consumed_pointer
     {rule_id::upcast_consumed_pointer, layer_kind::ptr, value_category::rvalue,
      layer_kind::ptr, value_category::rvalue, access::inherit, 0, 8, true,
-     false},
+     false, false},
     // spec: routes.upcast_owned
     {rule_id::upcast_owned, layer_kind::own, value_category::rvalue,
      layer_kind::own, value_category::rvalue, access::inherit, 0, 8, true,
-     false},
+     false, false},
     // spec: routes.upcast_shared
     {rule_id::upcast_shared, layer_kind::share, value_category::rvalue,
      layer_kind::share, value_category::rvalue, access::inherit, 0, 8, true,
-     false},
+     false, false},
     // spec: routes.upcast_copied_shared
     {rule_id::upcast_copied_shared, layer_kind::share, value_category::prvalue,
      layer_kind::share, value_category::prvalue, access::inherit, 0, 8, true,
-     false},
+     false, false},
+    // spec: routes.convert_borrowed
+    {rule_id::convert_borrowed, layer_kind::leaf, value_category::lvalue,
+     layer_kind::leaf, value_category::prvalue, access::borrow, 1, 8, false,
+     true, false},
+    // spec: routes.convert_consumed
+    {rule_id::convert_consumed, layer_kind::leaf, value_category::rvalue,
+     layer_kind::leaf, value_category::prvalue, access::consume, 0, 8, false,
+     true, false},
     // spec: routes.retain_shared_upcast
     {rule_id::retain_shared_upcast, layer_kind::share, value_category::lvalue,
      layer_kind::share, value_category::lvalue, access::borrow, 0, 8, true,
-     true},
+     false, true},
 };
 
 // spec: index_structures

@@ -273,18 +273,26 @@ template <typename Type> constexpr shape make_shape() {
     node.copyable = std::is_copy_constructible_v<value_type>;
   }
   node.constructible = !std::is_abstract_v<value_type>;
+  node.qualifiers = static_cast<std::uint8_t>(
+      (std::is_const_v<Type> ? const_qualified : 0) |
+      (std::is_volatile_v<Type> ? volatile_qualified : 0));
   result.size = 1;
   if constexpr (traits::kind != layer_kind::leaf) {
     node.family = layer_family<traits>::value;
     node.extent = layer_extent<traits>::value;
     node.arity = static_cast<std::uint8_t>(traits::arguments::size);
     argument_shapes<typename traits::arguments>::append(result);
+    // The elements of an array have the qualifiers of the array.
+    if constexpr (traits::kind == layer_kind::array ||
+                  traits::kind == layer_kind::array_unbounded) {
+      result.nodes[1].qualifiers |= node.qualifiers;
+    }
   }
   return result;
 }
 } // namespace detail
 
-// The shape of a C++ type; cv-qualification is not part of a shape.
+// The shape of a C++ type, with the cv-qualifiers of its objects.
 template <typename Type>
 inline constexpr shape shape_v = detail::make_shape<Type>();
 

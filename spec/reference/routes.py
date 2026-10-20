@@ -42,13 +42,15 @@ WRAPPER_KINDS = ("alt", "opt", "own", "share")
 class Leaf:
     """A leaf type and the properties route rules depend on.
 
-    `bases` names the interfaces the leaf implements.
+    `bases` names the interfaces the leaf implements, and `converts` the ones
+    it declares a user conversion to.
     """
 
     name: str
     copyable: bool = True
     constructible: bool = True
     bases: tuple[str, ...] = ()
+    converts: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -365,12 +367,13 @@ def derived_shapes(rule, bindings: dict, source: Shape, interfaces: tuple[Leaf, 
         rule.from_shape.form is PatternForm.LAYER and rule.to_shape.form is PatternForm.LAYER
     )
     shape = instantiate(rule.to_shape, bindings, source.family if keeps_family else None)
-    if rule.via is not Via.UPCAST:
+    if rule.via is None:
         yield shape
         return
     stored_leaf = bindings["L"].leaf
+    targets = stored_leaf.bases if rule.via is Via.UPCAST else stored_leaf.converts
     for interface in interfaces:
-        if interface.name in stored_leaf.bases:
+        if interface.name in targets:
             yield upcast_leaf(shape, interface)
 
 

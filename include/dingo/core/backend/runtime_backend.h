@@ -181,8 +181,10 @@ private:
       auto &object = walk_to_boundary<Binding, Term>(
           self.slot_.context(),
           [&]() -> decltype(auto) { return self.slot_.get(view); });
+      // The address of a const or volatile object is erased too; the request
+      // restores the qualifiers of the type it names.
       return const_cast<void *>(
-          static_cast<const void *>(std::addressof(object)));
+          static_cast<const volatile void *>(std::addressof(object)));
     }
   }
 
@@ -261,6 +263,24 @@ private:
 };
 
 namespace detail {
+// A prvalue of `Type`, in an unevaluated operand: a cast of it needs no move
+// constructor, as a cast of the completions' prvalues does not.
+template <typename Type> Type prvalue_of();
+
+template <typename From, typename To, typename = void>
+struct casts_to : std::false_type {};
+
+template <typename From, typename To>
+struct casts_to<From, To,
+                std::void_t<decltype(static_cast<To>(prvalue_of<From>()))>>
+    : std::true_type {};
+
+// Whether a static_cast converts a From value to To: no route of a request
+// whose type it does not convert to completes it, so its completion is not
+// instantiated.
+template <typename From, typename To>
+inline constexpr bool casts_to_v = casts_to<From, To>::value;
+
 // The positions of the arguments of a registration: the key values and the
 // arguments of the slot.
 template <typename... Args> struct registration_arguments {
@@ -522,13 +542,15 @@ private:
       break;
     case completion::copy:
       if constexpr (!std::is_reference_v<Request> &&
-                    std::is_copy_constructible_v<value_type>) {
+                    std::is_copy_constructible_v<value_type> &&
+                    detail::casts_to_v<value_type, Request>) {
         return static_cast<Request>(value_type(
             *static_cast<const value_type *>(borrowed(resolver, found))));
       }
       break;
     case completion::address:
-      if constexpr (std::is_pointer_v<value_type>) {
+      if constexpr (std::is_pointer_v<value_type> &&
+                    detail::casts_to_v<value_type, Request>) {
         return static_cast<Request>(
             static_cast<value_type>(borrowed(resolver, found)));
       }
@@ -597,26 +619,39 @@ private:
     throw std::logic_error("the selected term does not complete the request");
   }
 
+  // Makes the request by the created layers `Layers` from the boundary object
+  // of the term; the layers a request cannot be made of are not instantiated.
   template <typename Request, typename Layers>
   static Request construct_with(Resolver &resolver, entry &binding,
                                 std::size_t term) {
-    using value_type = typename request_traits<Request>::value_type;
-    using boundary = typename Layers::boundary;
     if constexpr (Layers::valid) {
-      if (binding.template makes<boundary>(term)) {
-        auto make = [&] {
-          return Layers::make(
-              [&] { return binding.template make<boundary>(term, resolver); });
-        };
-        if constexpr (std::is_rvalue_reference_v<Request>) {
-          return static_cast<Request>(
-              resolver.retained().template emplace<value_type>(make));
-        } else {
-          return static_cast<Request>(make());
-        }
+      using made = decltype(Layers::make(
+          std::declval<typename Layers::boundary (&)()>()));
+      if constexpr (detail::casts_to_v<made, Request>) {
+        return make_with<Request, Layers>(resolver, binding, term);
       }
     }
     throw std::logic_error("the selected term does not complete the request");
+  }
+
+  template <typename Request, typename Layers>
+  static Request make_with(Resolver &resolver, entry &binding,
+                           std::size_t term) {
+    using value_type = typename request_traits<Request>::value_type;
+    using boundary = typename Layers::boundary;
+    if (!binding.template makes<boundary>(term)) {
+      throw std::logic_error("the selected term does not complete the request");
+    }
+    auto make = [&] {
+      return Layers::make(
+          [&] { return binding.template make<boundary>(term, resolver); });
+    };
+    if constexpr (std::is_rvalue_reference_v<Request>) {
+      return static_cast<Request>(
+          resolver.retained().template emplace<value_type>(make));
+    } else {
+      return static_cast<Request>(make());
+    }
   }
 
   const lookup_table *table_;

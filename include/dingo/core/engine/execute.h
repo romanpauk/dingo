@@ -37,14 +37,26 @@
 
 namespace dingo::core {
 
-template <typename List> struct interface_shapes;
+// The shapes of the declared interfaces of a binding of the stored leaf
+// `Leaf`, and the ones the leaf declares a user conversion to.
+template <typename Leaf, typename List> struct interface_shapes;
 
-template <typename... Interfaces>
-struct interface_shapes<type_list<Interfaces...>> {
+template <typename Leaf, typename... Interfaces>
+struct interface_shapes<Leaf, type_list<Interfaces...>> {
+  static_assert(sizeof...(Interfaces) <= max_interfaces,
+                "a binding declares at most max_interfaces interfaces");
+
   static constexpr binding_descriptor apply(binding_descriptor binding) {
     std::size_t index = 0;
     ((binding.interfaces[index++] = interface_shape_v<Interfaces>), ...);
     binding.interface_count = sizeof...(Interfaces);
+    index = 0;
+    ((binding.converted |=
+      (declares_conversion<interface_object_t<Interfaces>, Leaf>::value
+           ? 1u << index
+           : 0u),
+      ++index),
+     ...);
     return binding;
   }
 };
@@ -92,7 +104,7 @@ struct binding_type {
     binding.scope = Scope;
     binding.declared_factory = !std::is_same_v<Factory, detected_factory>;
     binding.key = Key::descriptor;
-    return interface_shapes<Interfaces>::apply(binding);
+    return interface_shapes<leaf_of_t<Stored>, Interfaces>::apply(binding);
   }
 
   static constexpr binding_descriptor descriptor = make_descriptor();
@@ -321,6 +333,22 @@ decltype(auto) upcast_step(Context &context, Value &&value) {
   }
 }
 
+// The leaf makes an object of an interface by the user conversion it declares
+// to it, with the access the conversion needs: a borrowed leaf converts when
+// the conversion borrows.
+template <typename Binding, typename Step, typename Context, typename Value>
+decltype(auto) convert_step(Context &context, Value &&value) {
+  using target = interface_t<Step, Binding>;
+  using source = remove_cvref_t<Value>;
+  if constexpr (converts<target, source, Value &&>()) {
+    return Step::yield(context, [&] {
+      return convert_to<target>(std::forward<Value>(value));
+    });
+  } else {
+    return unsupported_route{};
+  }
+}
+
 // A consumed object moves out of a layer, a sole-owner handle shares its
 // element, or an array hands out its first element or its address.
 template <typename Step, typename Context, typename Value>
@@ -385,6 +413,8 @@ decltype(auto) walk_step(Context &context, Value &&value) {
   constexpr const route_rule &rule = current::rule;
   if constexpr (rule.cached) {
     return keep_step<Binding, current>(context, value);
+  } else if constexpr (rule.converts) {
+    return convert_step<Binding, current>(context, std::forward<Value>(value));
   } else if constexpr (rule.upcast) {
     return upcast_step<Binding, current>(context, std::forward<Value>(value));
   } else if constexpr (rule.from_category == value_category::rvalue) {

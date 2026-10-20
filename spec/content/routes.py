@@ -22,7 +22,8 @@ A derived shape is at most one layer larger than the stored shape, so a
 binding can publish every term it serves before any request is known.
 
 A binding that declares interfaces is found only by requests whose leaf is one
-of them; the upcast rules convert the stored leaf to each. A layer a rule
+of them; the upcast rules convert the stored leaf to each, and the conversion
+rules make an object of each the leaf declares a user conversion to. A layer a rule
 rebuilds from a layer of the same kind keeps its wrapper family, and a layer a
 rule creates may be of any family whose wrapper provides that layer kind.
 """
@@ -77,13 +78,22 @@ def leaf_variable(category):
     return variable("L", category)
 
 
-def upcast(rule_id, description, from_shape, to_shape, access=Access.INHERIT, via=Via.UPCAST):
+def upcast(
+    rule_id,
+    description,
+    from_shape,
+    to_shape,
+    access=Access.INHERIT,
+    via=Via.UPCAST,
+    exposure=None,
+):
     return Route(
         id=rule_id,
         description=description,
         from_shape=from_shape,
         to_shape=to_shape,
         access=access,
+        exposure=exposure,
         requires=(Requirement(predicate=Predicate.LEAF, subject="L"),),
         via=via,
     )
@@ -228,6 +238,27 @@ routes: tuple[Route, ...] = (
         "Converts a copied sharing handle of a leaf to one of an interface.",
         layer("share", leaf_variable(None), category=PRVALUE),
         layer("share", leaf_variable(None), category=PRVALUE),
+    ),
+    # A declared interface the leaf declares a user conversion to is made from
+    # the leaf.
+    upcast(
+        "convert_borrowed",
+        "Makes an object of an interface from a borrowed leaf by the conversion "
+        "the leaf declares to it.",
+        leaf_variable(LVALUE),
+        leaf_variable(PRVALUE),
+        access=Access.BORROW,
+        via=Via.CONVERT,
+        exposure=RequestCategory.VALUE,
+    ),
+    upcast(
+        "convert_consumed",
+        "Makes an object of an interface from a consumed leaf by the conversion "
+        "the leaf declares to it.",
+        leaf_variable(RVALUE),
+        leaf_variable(PRVALUE),
+        access=Access.CONSUME,
+        via=Via.CONVERT,
     ),
     Route(
         id="retain_shared_upcast",

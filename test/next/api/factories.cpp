@@ -184,3 +184,52 @@ TEST(next_factories, invokes_a_callable_with_resolved_arguments) {
 }
 
 } // namespace
+
+namespace {
+
+struct converted_target {
+  explicit converted_target(int initial) : value(initial) {}
+  converted_target(const converted_target &) = delete;
+  converted_target(converted_target &&) = default;
+  int value;
+};
+
+struct converted_source : converted_target {
+  converted_source() : converted_target(5) {}
+};
+
+} // namespace
+
+namespace dingo {
+template <> struct type_conversion_traits<converted_target, converted_source> {
+  template <typename> using required_access = borrow;
+
+  static converted_target convert(const converted_source &source) {
+    return converted_target(source.value * 10);
+  }
+};
+} // namespace dingo
+
+namespace {
+
+TEST(next_factories, a_leaf_converts_to_an_interface_by_its_traits) {
+  converted_source external;
+  dingo::container<> container;
+  container.register_type<scope<dingo::external>, storage<converted_source *>,
+                          dingo::interfaces<converted_target>>(&external);
+  EXPECT_EQ(container.resolve<converted_target>().value, 50);
+  EXPECT_EQ(&container.resolve<converted_target &>(), &external);
+
+  dingo::container<> shared;
+  shared.register_type<scope<dingo::shared>, storage<converted_source>,
+                       dingo::interfaces<converted_target>>();
+  EXPECT_EQ(shared.resolve<converted_target>().value, 50);
+
+  using bindings = dingo::bindings<
+      dingo::bind<scope<dingo::shared>, storage<converted_source>,
+                  dingo::interfaces<converted_target>>>;
+  dingo::static_container<bindings> fixed;
+  EXPECT_EQ(fixed.resolve<converted_target>().value, 50);
+}
+
+} // namespace

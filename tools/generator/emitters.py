@@ -198,6 +198,7 @@ def route_fields(rule):
         "exposure": REQUEST_CATEGORY_BITS[rule.exposure.value] if rule.exposure else 0,
         "requires": sum(REQUIREMENT_BITS[r.predicate.value] for r in rule.requires),
         "upcast": rule.via is not None and rule.via.value == "upcast",
+        "converts": rule.via is not None and rule.via.value == "convert",
         "cached": rule.cache is not None,
     }
 

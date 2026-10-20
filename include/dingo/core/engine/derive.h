@@ -55,6 +55,8 @@ struct binding_descriptor {
   // Whether the binding declares its factory, so its leaf need not be
   // constructible.
   bool declared_factory = false;
+  // The interfaces, by bit, the stored leaf declares a user conversion to.
+  std::uint32_t converted = 0;
 };
 
 enum class request_kind : std::uint8_t {
@@ -259,6 +261,8 @@ constexpr void add(terms &found, const term &from, const route_rule &rule,
   if (rule.id == rule_id::copy) {
     derived.copied = true;
     derived.copied_leaves = leaves_held_by_value(bound);
+    // A copy is a new object, without the qualifiers of its source.
+    derived.value.nodes[0].qualifiers = 0;
   }
   derived.consumed = from.consumed || rule.rule_access == access::consume;
   found.items[found.size++] = derived;
@@ -275,18 +279,27 @@ constexpr void apply(const binding_descriptor &binding, terms &found,
     return;
   }
   const shape &source = from.value;
-  if (rule.upcast) {
-    // Only the stored leaf converts to the declared interfaces.
+  if (rule.upcast || rule.converts) {
+    // Only the stored leaf converts to the declared interfaces, and a user
+    // conversion only to the ones it declares one to.
     if (bound.nodes[0].type != innermost_leaf(binding.stored)) {
       return;
     }
     for (std::size_t index = 0; index < binding.interface_count; ++index) {
+      if (rule.converts && (binding.converted & (1u << index)) == 0) {
+        continue;
+      }
+      // An upcast keeps the qualifiers of the leaf; a conversion makes a new
+      // object.
+      shape interface = binding.interfaces[index];
+      interface.nodes[0].qualifiers =
+          rule.converts ? std::uint8_t(0) : bound.nodes[0].qualifiers;
       shape value =
           rule.to_layer == layer_kind::leaf
-              ? binding.interfaces[index]
+              ? interface
               : wrap(static_cast<std::uint8_t>(rule.to_layer),
                      source.nodes[0].family, source.nodes[0].copyable,
-                     binding.interfaces[index], source.nodes[0].extent);
+                     interface, source.nodes[0].extent);
       add(found, from, rule, value, bound, index);
     }
     return;
@@ -360,9 +373,58 @@ constexpr terms derive(const binding_descriptor &binding) {
 
 // Service
 
+// Whether a request of the qualifiers of `requested` may refer to the objects
+// of `derived`, by the qualification conversions of C++: each object a
+// reference or a pointer refers to is a level, whose qualifiers the request
+// may add to but not remove, and adds to only below levels that are all
+// const. A request by value copies its top-level object, whose qualifiers do
+// not count. An array has the qualifiers of its elements, and the arguments of
+// a wrapper are part of its type.
+constexpr bool qualifies(const shape &derived, const shape &requested,
+                         bool refers) {
+  std::size_t index = 0;
+  bool level = refers;
+  bool above_const = true;
+  for (;;) {
+    const shape_node &d = derived.nodes[index];
+    const shape_node &r = requested.nodes[index];
+    const layer_kind kind = static_cast<layer_kind>(d.kind);
+    if (kind == layer_kind::array || kind == layer_kind::array_unbounded) {
+      ++index;
+      continue;
+    }
+    if (level) {
+      if ((r.qualifiers & d.qualifiers) != d.qualifiers) {
+        return false;
+      }
+      if (r.qualifiers != d.qualifiers && !above_const) {
+        return false;
+      }
+      above_const = above_const && (r.qualifiers & const_qualified) != 0;
+    }
+    if (kind == layer_kind::ptr) {
+      ++index;
+      level = true;
+      continue;
+    }
+    if (kind != layer_kind::leaf) {
+      const std::size_t end = index + subtree_size(derived, index);
+      for (std::size_t inner = index + 1; inner < end; ++inner) {
+        if (derived.nodes[inner].qualifiers !=
+            requested.nodes[inner].qualifiers) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+}
+
 constexpr bool accepts(const request_descriptor &request, const term &candidate,
                        std::uint8_t exposed) {
-  if (!shapes_match(candidate.value, request.value)) {
+  if (!shapes_match(candidate.value, request.value) ||
+      !qualifies(candidate.value, request.value,
+                 request.kind != request_kind::value)) {
     return false;
   }
   if (request.kind == request_kind::lvalue_reference) {

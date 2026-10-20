@@ -97,7 +97,13 @@ struct shape_node {
   bool copyable = false;
   // Whether a leaf can be constructed by a factory: it is not abstract.
   bool constructible = true;
+  // The cv-qualifiers of the object of the node, const_qualified and
+  // volatile_qualified; an array has those of its elements.
+  std::uint8_t qualifiers = 0;
 };
+
+inline constexpr std::uint8_t const_qualified = 1;
+inline constexpr std::uint8_t volatile_qualified = 2;
 
 struct shape {
   shape_node nodes[shape_capacity] = {};
@@ -165,7 +171,7 @@ constexpr bool operator==(const shape &left, const shape &right) {
     const shape_node &r = right.nodes[index];
     if (l.kind != r.kind || l.arity != r.arity || l.extent != r.extent ||
         l.family != r.family || l.type != r.type || l.copyable != r.copyable ||
-        l.constructible != r.constructible) {
+        l.constructible != r.constructible || l.qualifiers != r.qualifiers) {
       return false;
     }
   }
@@ -182,7 +188,7 @@ constexpr shape wrap(std::uint8_t kind, type_id family, bool copyable,
   shape result;
   result.size = argument.size + 1;
   result.nodes[0] =
-      shape_node{kind, 1, extent, family, nullptr, copyable, true};
+      shape_node{kind, 1, extent, family, nullptr, copyable, true, 0};
   for (std::size_t index = 0; index < argument.size; ++index) {
     result.nodes[index + 1] = argument.nodes[index];
   }
