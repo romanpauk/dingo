@@ -145,8 +145,9 @@ public:
       constexpr std::size_t index = detail::find_binding<Bindings...>(request);
       static_assert(index != detail::not_found,
                     "static_container cannot resolve an unbound type");
-      static_assert(index != detail::ambiguous,
-                    "static_container resolves an ambiguous type");
+      static_assert(
+          index != detail::ambiguous,
+          "static_container cannot resolve an ambiguously bound type");
       return resolve_from<Request, index>();
     }
   }
@@ -158,7 +159,8 @@ private:
         select_term(binding::published, request_traits<Request>::descriptor,
                     binding::exposed);
     static_assert(selected != no_term,
-                  "the binding cannot serve the requested type");
+                  "static resolution cannot satisfy a request the storage "
+                  "does not publish");
     static_assert(walk_supported_v<binding, selected>,
                   "the next implementation does not provide the route of the "
                   "requested type yet");
