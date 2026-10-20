@@ -41,11 +41,24 @@ namespace dingo::core {
 
 inline constexpr std::size_t unknown_count = static_cast<std::size_t>(-1);
 
+template <typename Request> struct annotated_request;
+
+template <typename Type, typename Tag>
+struct annotated_request<::dingo::annotated<Type, Tag>> {
+  using type = Type;
+  using tag = Tag;
+};
+
 template <typename Self> class selection {
 public:
   // Resolves a request; a keyed request carries its key.
   template <typename Request> Request resolve() {
-    if constexpr (is_keyed<Request>::value) {
+    if constexpr (is_annotated<Request>::value) {
+      using inner = typename annotated_request<Request>::type;
+      using key =
+          annotated_key<typename annotated_request<Request>::tag, no_key>;
+      return Request(select<inner, key, true>(nullptr));
+    } else if constexpr (is_keyed<Request>::value) {
       using key = typename Request::key;
       return Request(
           select<typename Request::type, key, true>(key_store<key>().value()));
@@ -58,7 +71,15 @@ public:
   // of the key type.
   template <typename Request, typename Value> Request resolve(Value &&value) {
     using key = request_key_of<std::decay_t<Value>>;
-    return select<Request, typename key::type, true>(key::value(value));
+    if constexpr (is_annotated<Request>::value) {
+      return Request(
+          select<typename annotated_request<Request>::type,
+                 annotated_key<typename annotated_request<Request>::tag,
+                               typename key::type>,
+                 true>(key::value(value)));
+    } else {
+      return select<Request, typename key::type, true>(key::value(value));
+    }
   }
 
   // The collection of every binding a request of its element type by `Key`

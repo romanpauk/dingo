@@ -23,6 +23,7 @@
 #include <dingo/core/engine/derive.h>
 #include <dingo/core/primitives/retained.h>
 #include <dingo/core/primitives/shape.h>
+#include <dingo/core/projection/annotated.h>
 #include <dingo/core/projection/construct.h>
 #include <dingo/core/projection/layer_traits.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
@@ -41,7 +42,7 @@ template <typename... Interfaces>
 struct interface_shapes<type_list<Interfaces...>> {
   static constexpr binding_descriptor apply(binding_descriptor binding) {
     std::size_t index = 0;
-    ((binding.interfaces[index++] = shape_v<Interfaces>), ...);
+    ((binding.interfaces[index++] = interface_shape_v<Interfaces>), ...);
     binding.interface_count = sizeof...(Interfaces);
     return binding;
   }
@@ -276,8 +277,8 @@ struct step {
 };
 
 template <typename Step, typename Binding>
-using interface_t =
-    type_list_at_t<Step::argument, typename Binding::interfaces>;
+using interface_t = interface_object_t<
+    type_list_at_t<Step::argument, typename Binding::interfaces>>;
 
 // A borrowed handle converts to the handle of the interface, which the binding
 // keeps in the context, so the request can refer to it.
@@ -413,8 +414,8 @@ template <typename Binding, std::size_t Term, typename Context, typename Source>
 decltype(auto) walk_to_boundary(Context &context, Source &&source) {
   constexpr const completion_plan &plan = plan_v<Binding, Term>;
   if constexpr (plan.upcast) {
-    using interface =
-        type_list_at_t<plan.upcast_argument, typename Binding::interfaces>;
+    using interface = interface_object_t<
+        type_list_at_t<plan.upcast_argument, typename Binding::interfaces>>;
     return static_cast<interface *>(
         walk_from<Binding, Term, plan.binding_steps>(context, source));
   } else {
@@ -440,8 +441,8 @@ struct boundary<Binding, Term, true> {
       std::is_same_v<typename boundary<Binding, Term, false>::type,
                      unsupported_route>,
       unsupported_route,
-      type_list_at_t<plan_v<Binding, Term>.upcast_argument,
-                     typename Binding::interfaces> *>;
+      interface_object_t<type_list_at_t<plan_v<Binding, Term>.upcast_argument,
+                                        typename Binding::interfaces>> *>;
 };
 } // namespace detail
 

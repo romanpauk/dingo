@@ -1448,6 +1448,12 @@ requests and extend them for collections, and a nested registration sees the
 local bindings of the registration that encloses it. A `dependencies<...>` part
 declares the argument types of the constructor.
 
+An interface `annotated<Interface, Tag>` has the identity of the annotated
+interface and the objects of `Interface`, so bindings of one type serve distinct
+annotated interfaces; a request `annotated<T, Tag>`, a constructor parameter or
+a top-level one, with or without a key, names it by carrying the annotation in
+its key.
+
 #### M4.4: Static Backend
 
 Status: in progress.

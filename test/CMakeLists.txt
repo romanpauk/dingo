@@ -212,6 +212,7 @@ add_executable(dingo_next_test
     next/api/construction.cpp
     next/api/container.cpp
     next/api/diagnostics.cpp
+    next/api/annotated.cpp
     next/api/collections.cpp
     next/api/factories.cpp
     next/api/keys.cpp
