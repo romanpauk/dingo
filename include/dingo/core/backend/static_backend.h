@@ -12,6 +12,7 @@
 // time, and the term is walked and completed directly.
 
 #include <dingo/core/backend/diagnose.h>
+#include <dingo/core/backend/local.h>
 #include <dingo/core/backend/slot.h>
 #include <dingo/core/base/config.h>
 #include <dingo/core/base/mechanics.h>
@@ -31,11 +32,19 @@
 namespace dingo::core {
 
 namespace detail {
+// The local static bindings of a binding, nothing without any.
+template <typename Locals> struct static_locals {
+  local_static_backend_t<Locals> locals;
+};
+
+template <> struct static_locals<type_list<>> {};
+
 // The slot of a binding. A binding whose scope needs an instance takes the
 // instance at its position among such bindings, `Ordinal`.
 template <std::size_t Index, typename Binding,
           bool Instance = info(Binding::scope).needs_instance>
-struct static_holder {
+struct DINGO_EMPTY_BASES static_holder
+    : static_locals<typename Binding::locals> {
   template <typename Instances, std::size_t Ordinal>
   static_holder(Instances & /*instances*/,
                 std::integral_constant<std::size_t, Ordinal> /*ordinal*/) {}
@@ -44,7 +53,8 @@ struct static_holder {
 };
 
 template <std::size_t Index, typename Binding>
-struct static_holder<Index, Binding, true> {
+struct DINGO_EMPTY_BASES static_holder<Index, Binding, true>
+    : static_locals<typename Binding::locals> {
   template <typename Instances, std::size_t Ordinal>
   static_holder(Instances &instances,
                 std::integral_constant<std::size_t, Ordinal> /*ordinal*/)
@@ -180,7 +190,14 @@ public:
   // `Binding` added at runtime, of a common interface whose domain holds one
   // binding.
   template <typename Binding> static bool holds_key_of(const void *key_value) {
-    return holds_key_of_at<Binding>(key_value,
+    return holds_key_of_in<Binding>(LookupTable::value, key_value);
+  }
+
+  // As holds_key_of, by the lookup declarations of `table`.
+  template <typename Binding>
+  static bool holds_key_of_in(const lookup_table &table,
+                              const void *key_value) {
+    return holds_key_of_at<Binding>(table, key_value,
                                     std::index_sequence_for<Bindings...>());
   }
 
@@ -249,17 +266,21 @@ public:
 
 private:
   template <typename Binding, std::size_t... Indices>
-  static bool holds_key_of_at([[maybe_unused]] const void *key_value,
+  static bool holds_key_of_at([[maybe_unused]] const lookup_table &table,
+                              [[maybe_unused]] const void *key_value,
                               std::index_sequence<Indices...> /*indices*/) {
     bool held = false;
     (
         [&] {
           using binding = pack_at_t<Indices, Bindings...>;
           using key_type = typename binding::key_type;
-          if constexpr (conflicts(LookupTable::value, binding::descriptor,
-                                  Binding::descriptor)) {
-            held = held || key_store<key_type>::equal(
-                               key_store<key_type>().value(), key_value);
+          if constexpr (same_key_domain(binding::descriptor.key,
+                                        Binding::descriptor.key)) {
+            held =
+                held ||
+                (conflicts(table, binding::descriptor, Binding::descriptor) &&
+                 key_store<key_type>::equal(key_store<key_type>().value(),
+                                            key_value));
           }
         }(),
         ...);
@@ -333,7 +354,16 @@ private:
     constexpr const completion_plan &plan = plan_v<binding, selected>;
     auto &holder =
         static_cast<detail::static_holder<Index, binding> &>(holders_);
-    auto source = [&]() -> decltype(auto) { return holder.slot.get(resolver); };
+    auto source = [&]() -> decltype(auto) {
+      if constexpr (std::is_same_v<typename binding::locals, type_list<>>) {
+        return holder.slot.get(resolver);
+      } else {
+        // The object resolves its dependencies through its local bindings.
+        local_view<Resolver, typename binding::locals> view(
+            resolver, &holder.locals, nullptr);
+        return holder.slot.get(view);
+      }
+    };
     auto make = [&]() -> decltype(auto) {
       if constexpr (plan.created == 0) {
         return walk_from<binding, selected,

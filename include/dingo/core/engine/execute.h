@@ -64,14 +64,17 @@ constexpr bool keeps_objects(const terms &published) {
 struct no_kept_objects {};
 
 // A binding of a scope, a stored type, the interfaces it declares, the factory
-// that makes its object, detected_factory unless one is declared, and its key.
+// that makes its object, detected_factory unless one is declared, its key, and
+// the static bindings it declares locally, a type_list of binding types.
 template <scope_id Scope, typename Stored, typename Interfaces,
-          typename Factory = detected_factory, typename Key = no_key>
+          typename Factory = detected_factory, typename Key = no_key,
+          typename Locals = type_list<>>
 struct binding_type {
   using stored_type = Stored;
   using interfaces = Interfaces;
   using factory_type = Factory;
   using key_type = Key;
+  using locals = Locals;
   static constexpr scope_id scope = Scope;
   // Whether a request consumes an object the binding constructs for it.
   static constexpr bool consumes = info(Scope).consumes;

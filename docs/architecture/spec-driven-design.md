@@ -1435,7 +1435,18 @@ whose sources all know what they name when the request is compiled is decided
 then, and reported at compile time when nothing at runtime can change it; any
 other step is decided when the request is resolved. A container is the resolver
 of the dependencies of its bindings, so a binding a parent serves resolves its
-dependencies in the parent. Remaining: local bindings.
+dependencies in the parent.
+
+A registration may declare local static bindings with `bindings<...>`, and
+register local runtime bindings through the proxy `register_type` returns, which
+are created by the first such registration and follow the lookup declarations of
+the container. The object of the registration resolves its dependencies through
+a view whose local sources are those bindings, whose container source is the own
+bindings of the host, its local and container bindings without its parent, and
+whose parent is the host's parent: local bindings shadow the host's for singular
+requests and extend them for collections, and a nested registration sees the
+local bindings of the registration that encloses it. A `dependencies<...>` part
+declares the argument types of the constructor.
 
 #### M4.4: Static Backend
 
@@ -1451,7 +1462,8 @@ rejected when the container type is formed, unless the lookup declarations of
 the traits of the container declare its domain many. A collection request
 gathers the bindings of its element type in the order of the bindings, by its
 key, also when no binding matches. A static container with a parent falls back
-to it, and auto-constructs an eligible type. Remaining: local bindings.
+to it, and auto-constructs an eligible type, and a static binding may declare
+local static bindings.
 
 #### M4.5: Runtime Backend
 

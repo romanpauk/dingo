@@ -13,6 +13,7 @@
 // functions as the static backend.
 
 #include <dingo/core/backend/diagnose.h>
+#include <dingo/core/backend/local.h>
 #include <dingo/core/backend/slot.h>
 #include <dingo/core/engine/derive.h>
 #include <dingo/core/engine/execute.h>
@@ -142,6 +143,11 @@ public:
 
   const void *key_value() const override { return key_.value(); }
 
+  // The local bindings of the registration.
+  local_bindings<Resolver, typename Binding::locals> &locals() {
+    return locals_;
+  }
+
   bool key_equals(const void *value) const override {
     return key_store_type::equal(key_.value(), value);
   }
@@ -158,9 +164,10 @@ private:
           "the next implementation does not provide this route yet");
     } else {
       auto &self = static_cast<runtime_binding &>(binding);
+      auto view = self.view(resolver);
       auto &object = walk_to_boundary<Binding, Term>(
           self.slot_.context(),
-          [&]() -> decltype(auto) { return self.slot_.get(resolver); });
+          [&]() -> decltype(auto) { return self.slot_.get(view); });
       return const_cast<void *>(
           static_cast<const void *>(std::addressof(object)));
     }
@@ -170,9 +177,10 @@ private:
   static boundary_t<Binding, Term> make_term(entry &binding,
                                              Resolver &resolver) {
     auto &self = static_cast<runtime_binding &>(binding);
+    auto view = self.view(resolver);
     return walk_to_boundary<Binding, Term>(
         self.slot_.context(),
-        [&]() -> decltype(auto) { return self.slot_.get(resolver); });
+        [&]() -> decltype(auto) { return self.slot_.get(view); });
   }
 
   // Whether the binding constructs a boundary object for a term; an array is
@@ -227,7 +235,15 @@ private:
     return table;
   }
 
+  // The resolver of the object of the binding: a view of its local bindings
+  // over the container.
+  local_view<Resolver, typename Binding::locals> view(Resolver &resolver) {
+    return local_view<Resolver, typename Binding::locals>(
+        resolver, &locals_.statics(), locals_.runtime());
+  }
+
   key_store_type key_;
+  local_bindings<Resolver, typename Binding::locals> locals_;
   binding_slot<Binding> slot_;
 };
 
@@ -283,20 +299,21 @@ public:
   // value of its runtime key. A binding whose key a binding of a common
   // interface already holds is rejected, unless its domain holds many; `held`
   // tells whether another source of the container holds its key.
-  template <typename Binding, typename... Args> void add(Args &&...args) {
-    add_unless<Binding>([](const void * /*key_value*/) { return false; },
-                        std::forward<Args>(args)...);
+  // Returns the local bindings of the added binding.
+  template <typename Binding, typename... Args> auto &add(Args &&...args) {
+    return add_unless<Binding>([](const void * /*key_value*/) { return false; },
+                               std::forward<Args>(args)...);
   }
 
   template <typename Binding, typename Held, typename... Args>
-  void add_unless(Held &&held, Args &&...args) {
+  auto &add_unless(Held &&held, Args &&...args) {
     static_assert(Binding::status == registration_status::registered,
                   "a binding cannot be stored by its scope");
     using arguments = detail::registration_arguments<Args...>;
     static_assert(arguments::key_count() <= 1,
                   "a registration takes at most one key value");
     auto all = std::forward_as_tuple(std::forward<Args>(args)...);
-    std::unique_ptr<entry> added =
+    std::unique_ptr<runtime_binding<Binding, Resolver>> added =
         make_entry<Binding, arguments, std::tuple<std::decay_t<Args>...>>(
             all, std::make_index_sequence<sizeof...(Args) -
                                           arguments::key_count()>());
@@ -309,7 +326,9 @@ public:
         raise_already_registered<Binding>();
       }
     }
+    auto &locals = added->locals();
     entries_.push_back(std::move(added));
+    return locals;
   }
 
   // The publications of the two-phase slots in progress.
@@ -365,7 +384,7 @@ public:
 private:
   template <typename Binding, typename Arguments, typename Decayed,
             typename All, std::size_t... Slots>
-  static std::unique_ptr<entry>
+  static std::unique_ptr<runtime_binding<Binding, Resolver>>
   make_entry(All &all, std::index_sequence<Slots...> /*slots*/) {
     using arguments = Arguments;
     if constexpr (arguments::key_count() == 0) {

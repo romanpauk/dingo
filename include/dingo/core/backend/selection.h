@@ -16,8 +16,12 @@
 //
 // `Self` derives from selection<Self> and declares its sources:
 // `has_static_source` with static_source(), `has_runtime_source` with
-// runtime_source(), and `parent_type`, void without a parent, with parent(),
-// which may be null.
+// runtime_source(), `parent_type`, void without a parent, with parent(),
+// which may be null, and the local bindings of a registration,
+// `has_local_static_source` with local_static_source() and
+// `has_local_runtime_source` with local_runtime_source(), which may be null.
+// Its container sources resolve with container_resolver(), and it keeps the
+// objects requests construct in retained().
 
 #include <dingo/core/backend/diagnose.h>
 #include <dingo/core/base/mechanics.h>
@@ -80,6 +84,36 @@ public:
     return select<Request, Key, false>(key_value);
   }
 
+  // The number of bindings a request names among the container's own
+  // bindings, its local and container sources without its parent: 0, 1, or 2.
+  template <typename Request, typename Key>
+  std::size_t own_count(const void *key_value) {
+    return own_count_at<Request, Key, 0>(key_value);
+  }
+
+  // Resolves a request from the container's own bindings.
+  template <typename Request, typename Key>
+  Request resolve_own(const void *key_value) {
+    return resolve_own_at<Request, Key, 0>(key_value);
+  }
+
+  // Adds the container's own bindings a collection request names to
+  // `collection`, in the order of the sources of the collection rule.
+  template <typename Collection, typename Key, typename Append>
+  void collect_own(Collection &collection, const void *key_value,
+                   Append &append) {
+    constexpr const selection_rule &rule = rule_of(selection_mode::collection);
+    for (std::size_t step = 0; step < rule.step_count; ++step) {
+      for (std::size_t source = 0; source < rule.steps[step].source_count;
+           ++source) {
+        if (rule.steps[step].sources[source] != selection_source::parent) {
+          collect_source<Collection, Key>(rule.steps[step].sources[source],
+                                          collection, key_value, append);
+        }
+      }
+    }
+  }
+
   // Adds the bindings a collection request names by the collection rule to
   // `collection`, and returns whether it added any.
   template <typename Collection, typename Key, typename Append>
@@ -103,11 +137,6 @@ public:
     }
     return added;
   }
-
-  // The objects a request constructs and the container keeps: an rvalue
-  // reference of a consumed object, and a const reference of an
-  // auto-constructed one.
-  retained_objects &retained() { return retained_; }
 
 private:
   static constexpr const selection_rule &singular =
@@ -133,9 +162,17 @@ private:
       return std::is_void_v<typename Self::parent_type> ? 0 : unknown_count;
     } else if constexpr (Source == selection_source::auto_construct) {
       return 1;
+    } else if constexpr (Source == selection_source::local_static) {
+      if constexpr (!Self::has_local_static_source) {
+        return 0;
+      } else if constexpr (Key::descriptor.kind == key_kind::runtime) {
+        return unknown_count;
+      } else {
+        return Self::local_static_source_type::template fixed_count<Request,
+                                                                    Key>();
+      }
     } else {
-      // The local bindings of a registration are not provided yet.
-      return 0;
+      return Self::has_local_runtime_source ? unknown_count : 0;
     }
   }
 
@@ -196,9 +233,22 @@ private:
       return 0;
     case selection_source::auto_construct:
       return 1;
-    default:
+    case selection_source::local_static:
+      if constexpr (Self::has_local_static_source) {
+        return self().local_static_source().template count<Request, Key>(
+            key_value);
+      }
+      return 0;
+    case selection_source::local_runtime:
+      if constexpr (Self::has_local_runtime_source) {
+        if (self().local_runtime_source() != nullptr) {
+          return self().local_runtime_source()->template count<Request, Key>(
+              key_value);
+        }
+      }
       return 0;
     }
+    return 0;
   }
 
   template <typename Request, typename Key, std::size_t Step>
@@ -222,6 +272,49 @@ private:
       const std::size_t count = step_count<Request, Key, Step>(key_value);
       return count != 0 ? count
                         : inherited_count_at<Request, Key, Step + 1>(key_value);
+    }
+  }
+
+  // Whether a step of the singular rule names only bindings of the container
+  // itself, from its local and container sources.
+  static constexpr bool is_own_step(const selection_step &step) {
+    for (std::size_t source = 0; source < step.source_count; ++source) {
+      if (step.sources[source] == selection_source::parent ||
+          step.sources[source] == selection_source::auto_construct) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  template <typename Request, typename Key, std::size_t Step>
+  std::size_t own_count_at(const void *key_value) {
+    if constexpr (Step == singular.step_count) {
+      return 0;
+    } else if constexpr (!is_own_step(singular.steps[Step])) {
+      return own_count_at<Request, Key, Step + 1>(key_value);
+    } else {
+      const std::size_t count = step_count<Request, Key, Step>(key_value);
+      return count != 0 ? count
+                        : own_count_at<Request, Key, Step + 1>(key_value);
+    }
+  }
+
+  template <typename Request, typename Key, std::size_t Step>
+  Request resolve_own_at(const void *key_value) {
+    if constexpr (Step == singular.step_count) {
+      raise_not_found<Request, Key>();
+    } else if constexpr (!is_own_step(singular.steps[Step])) {
+      return resolve_own_at<Request, Key, Step + 1>(key_value);
+    } else {
+      const std::size_t count = step_count<Request, Key, Step>(key_value);
+      if (count == 0) {
+        return resolve_own_at<Request, Key, Step + 1>(key_value);
+      }
+      if (count > 1) {
+        raise_ambiguous<Request>();
+      }
+      return resolve_step<Request, Key, Step>(key_value);
     }
   }
 
@@ -250,14 +343,32 @@ private:
                         1) {
         if (source == selection_source::container_static) {
           return self().static_source().template resolve_named<Request, Key>(
-              self(), key_value);
+              self().container_resolver(), key_value);
         }
       }
     }
     if constexpr (Self::has_runtime_source) {
       if (source == selection_source::container_runtime) {
         return self().runtime_source().template resolve_named<Request, Key>(
-            self(), key_value);
+            self().container_resolver(), key_value);
+      }
+    }
+    if constexpr (Self::has_local_static_source) {
+      if constexpr (Key::descriptor.kind == key_kind::runtime ||
+                    Self::local_static_source_type::template fixed_count<
+                        Request, Key>() == 1) {
+        if (source == selection_source::local_static) {
+          return self()
+              .local_static_source()
+              .template resolve_named<Request, Key>(self(), key_value);
+        }
+      }
+    }
+    if constexpr (Self::has_local_runtime_source) {
+      if (source == selection_source::local_runtime) {
+        return self()
+            .local_runtime_source()
+            ->template resolve_named<Request, Key>(self(), key_value);
       }
     }
     if constexpr (!std::is_void_v<typename Self::parent_type>) {
@@ -274,7 +385,7 @@ private:
                   std::is_same_v<Key, no_key>) {
       using value_type = std::remove_cv_t<std::remove_reference_t<Request>>;
       if constexpr (std::is_reference_v<Request>) {
-        return retained_.template emplace<value_type>(
+        return self().retained().template emplace<value_type>(
             [this] { return detected_factory().make<value_type>(self()); });
       } else {
         return detected_factory().make<value_type>(self());
@@ -341,12 +452,25 @@ private:
     if constexpr (Self::has_static_source) {
       if (source == selection_source::container_static) {
         self().static_source().template collect<Collection, Key>(
-            self(), collection, key_value, append);
+            self().container_resolver(), collection, key_value, append);
       }
     }
     if constexpr (Self::has_runtime_source) {
       if (source == selection_source::container_runtime) {
         self().runtime_source().template collect<Collection, Key>(
+            self().container_resolver(), collection, key_value, append);
+      }
+    }
+    if constexpr (Self::has_local_static_source) {
+      if (source == selection_source::local_static) {
+        self().local_static_source().template collect<Collection, Key>(
+            self(), collection, key_value, append);
+      }
+    }
+    if constexpr (Self::has_local_runtime_source) {
+      if (source == selection_source::local_runtime &&
+          self().local_runtime_source() != nullptr) {
+        self().local_runtime_source()->template collect<Collection, Key>(
             self(), collection, key_value, append);
       }
     }
@@ -357,8 +481,6 @@ private:
       }
     }
   }
-
-  retained_objects retained_;
 };
 
 } // namespace dingo::core

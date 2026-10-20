@@ -66,6 +66,8 @@ public:
       typename core::bind_registration<Binds>::type::binding...>;
   static constexpr bool has_static_source = true;
   static constexpr bool has_runtime_source = false;
+  static constexpr bool has_local_static_source = false;
+  static constexpr bool has_local_runtime_source = false;
   using parent_type =
       std::conditional_t<detail::is_container_traits<Second>::value, void,
                          Second>;
@@ -104,7 +106,10 @@ public:
                                         std::forward<Arguments>(arguments)...);
   }
 
-  // The sources of the selection of the container.
+  // The sources of the selection of the container, which resolves the
+  // dependencies of their bindings, and keeps the objects requests construct.
+  auto &container_resolver() { return *this; }
+  core::retained_objects &retained() { return retained_; }
   static_source_type &static_source() { return backend_; }
   core::publication_log &publications() { return backend_.publications(); }
 
@@ -117,6 +122,7 @@ public:
   }
 
 private:
+  core::retained_objects retained_;
   static_source_type backend_;
 };
 

@@ -41,6 +41,9 @@ template <typename... Parts> struct bind {};
 
 template <typename... Binds> struct bindings {};
 
+// The dependencies of a binding: the argument types of its constructor.
+template <typename... Types> struct dependencies {};
+
 } // namespace dingo
 
 namespace dingo::core {
@@ -110,6 +113,32 @@ struct find_runtime_key<Default, First, Rest...> {
 };
 } // namespace detail
 
+template <typename... Parts> struct registration;
+
+template <typename Bind> struct bind_registration;
+
+namespace detail {
+template <typename Bindings> struct local_bindings_of;
+
+template <typename... Binds>
+struct local_bindings_of<::dingo::bindings<Binds...>> {
+  using type = type_list<typename bind_registration<Binds>::type::binding...>;
+};
+
+template <typename Dependencies> struct declared_dependencies {
+  using type = void;
+};
+
+template <typename... Types>
+struct declared_dependencies<::dingo::dependencies<Types...>> {
+  using type = constructor_factory<declared_leaf<Types...>>;
+};
+} // namespace detail
+
+template <typename... Parts> struct bind_registration<::dingo::bind<Parts...>> {
+  using type = registration<Parts...>;
+};
+
 // The binding type a registration declares. A registration whose only
 // argument is a callable factory makes its object by it.
 template <typename... Parts> struct registration {
@@ -130,10 +159,21 @@ template <typename... Parts> struct registration {
   using factory_part =
       typename detail::find_part<::dingo::factory, detail::missing_part,
                                  Parts...>::type;
+  using dependencies_part =
+      typename detail::find_part<::dingo::dependencies, detail::missing_part,
+                                 Parts...>::type;
+  // The factory a factory<> part declares, or the constructor of the types a
+  // dependencies<> part declares, or the detected constructor.
   using declared_factory = typename std::conditional_t<
       std::is_same_v<factory_part, detail::missing_part>,
-      std::enable_if<true, detected_factory>,
+      std::conditional_t<
+          std::is_same_v<dependencies_part, detail::missing_part>,
+          std::enable_if<true, detected_factory>,
+          detail::declared_dependencies<dependencies_part>>,
       factory_of<typename factory_part::type>>::type;
+  using locals_part =
+      typename detail::find_part<::dingo::bindings, ::dingo::bindings<>,
+                                 Parts...>::type;
 
   using key_part = typename detail::find_key_part<Parts...>::type;
 
@@ -154,15 +194,10 @@ template <typename... Parts> struct registration {
       binding_type<scope_of_v<typename scope_part::type>,
                    typename storage_part::type, typename interfaces_part::type,
                    typename with_arguments<Args...>::factory,
-                   typename with_arguments<Args...>::key>;
+                   typename with_arguments<Args...>::key,
+                   typename detail::local_bindings_of<locals_part>::type>;
 
   using binding = binding_for<>;
-};
-
-template <typename Bind> struct bind_registration;
-
-template <typename... Parts> struct bind_registration<::dingo::bind<Parts...>> {
-  using type = registration<Parts...>;
 };
 
 } // namespace dingo::core

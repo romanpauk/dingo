@@ -17,6 +17,7 @@
 #include <dingo/core/api/key.h>                 // IWYU pragma: export
 #include <dingo/core/api/lookup/lookup.h>
 #include <dingo/core/api/registration.h>
+#include <dingo/core/api/registration_proxy.h>
 #include <dingo/core/backend/runtime_backend.h>
 #include <dingo/core/backend/selection.h>
 #include <dingo/core/backend/static_backend.h>
@@ -130,6 +131,8 @@ class container
 public:
   static constexpr bool has_static_source = false;
   static constexpr bool has_runtime_source = true;
+  static constexpr bool has_local_static_source = false;
+  static constexpr bool has_local_runtime_source = false;
   using parent_type = typename detail::runtime_parent<Rest...>::type;
 
   container() : backend_(core::lookup_table_v<Traits>) {}
@@ -144,19 +147,26 @@ public:
   // and a factory. An external binding takes its instance as an argument, a
   // binding of a runtime key its key_value, and a binding of a callable
   // factory the factory.
+  // Returns the proxy that registers bindings local to the registration.
   template <typename... Parts, typename... Args>
-  void register_type(Args &&...args) {
+  auto register_type(Args &&...args) {
     using binding =
         typename core::registration<Parts...>::template binding_for<Args...>;
-    backend_.template add<binding>(std::forward<Args>(args)...);
+    auto &locals = backend_.template add<binding>(std::forward<Args>(args)...);
+    return core::registration_proxy<std::remove_reference_t<decltype(locals)>>(
+        locals, core::lookup_table_v<Traits>);
   }
 
-  // The sources of the selection of the container.
+  // The sources of the selection of the container, which resolves the
+  // dependencies of their bindings, and keeps the objects requests construct.
+  auto &container_resolver() { return *this; }
+  core::retained_objects &retained() { return retained_; }
   core::runtime_backend<container> &runtime_source() { return backend_; }
   parent_type *parent() { return parent_; }
   core::publication_log &publications() { return backend_.publications(); }
 
 private:
+  core::retained_objects retained_;
   core::runtime_backend<container> backend_;
   parent_type *parent_ = nullptr;
 };
@@ -181,6 +191,8 @@ public:
       lookups, typename core::bind_registration<Binds>::type::binding...>;
   static constexpr bool has_static_source = true;
   static constexpr bool has_runtime_source = true;
+  static constexpr bool has_local_static_source = false;
+  static constexpr bool has_local_runtime_source = false;
   using parent_type = typename parameters::parent;
 
   template <typename... Instances, bool Orphan = std::is_void_v<parent_type>,
@@ -199,23 +211,29 @@ public:
 
   // Registers a runtime binding, as container<Traits> does.
   template <typename... Parts, typename... Args>
-  void register_type(Args &&...args) {
+  auto register_type(Args &&...args) {
     using binding =
         typename core::registration<Parts...>::template binding_for<Args...>;
-    runtime_.template add_unless<binding>(
+    auto &locals = runtime_.template add_unless<binding>(
         [](const void *key_value) {
           return static_source_type::template holds_key_of<binding>(key_value);
         },
         std::forward<Args>(args)...);
+    return core::registration_proxy<std::remove_reference_t<decltype(locals)>>(
+        locals, lookups::value);
   }
 
-  // The sources of the selection of the container.
+  // The sources of the selection of the container, which resolves the
+  // dependencies of their bindings, and keeps the objects requests construct.
+  auto &container_resolver() { return *this; }
+  core::retained_objects &retained() { return retained_; }
   static_source_type &static_source() { return static_; }
   core::runtime_backend<container> &runtime_source() { return runtime_; }
   parent_type *parent() { return parent_; }
   core::publication_log &publications() { return runtime_.publications(); }
 
 private:
+  core::retained_objects retained_;
   static_source_type static_;
   core::runtime_backend<container> runtime_;
   parent_type *parent_ = nullptr;
