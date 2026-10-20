@@ -28,6 +28,36 @@ diagnostics: tuple[Diagnostic, ...] = (
         fallback_carrier="type_not_found_carrier",
     ),
     Diagnostic(
+        id="type_not_found_keyed",
+        condition="No binding is named by a request with a key, whose type is `key`.",
+        exception="type_not_found_exception",
+        message="type not found: {request} (index type: {key})",
+        placeholders=("request", "key"),
+        fallback_carrier="type_not_found_carrier",
+    ),
+    Diagnostic(
+        id="type_not_found_keyed_required_by",
+        condition=(
+            "No binding is named by a request with a key of a dependency of an "
+            "object being constructed."
+        ),
+        exception="type_not_found_exception",
+        message="type not found: {request} (index type: {key}) (required by {path})",
+        placeholders=("request", "key", "path"),
+        fallback_carrier="type_not_found_carrier",
+    ),
+    Diagnostic(
+        id="lookup_already_registered",
+        condition=(
+            "A binding is registered with a key that a binding of a common "
+            "interface already holds, in a domain declared with cardinality one."
+        ),
+        exception="lookup_already_registered_exception",
+        message="lookup already registered: interface {interface}, storage {stored}, key type {key}",
+        placeholders=("interface", "stored", "key"),
+        fallback_carrier="lookup_already_registered_carrier",
+    ),
+    Diagnostic(
         id="type_ambiguous",
         condition="More than one binding is named by the request.",
         exception="type_ambiguous_exception",

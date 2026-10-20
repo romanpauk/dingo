@@ -71,6 +71,41 @@ struct find_part<Part, Default, First, Rest...> {
 struct missing_part {
   using type = void;
 };
+
+template <typename... Parts> struct find_key_part {
+  using type = no_key;
+};
+
+template <typename First, typename... Rest>
+struct find_key_part<First, Rest...> {
+  using type =
+      typename std::conditional_t<is_key_type<First>::value, key_of<First>,
+                                  find_key_part<Rest...>>::type;
+};
+
+template <typename Default, typename... Args> struct find_callable_factory {
+  using type = Default;
+};
+
+template <typename Default, typename First, typename... Rest>
+struct find_callable_factory<Default, First, Rest...> {
+  using type = typename std::conditional_t<
+      is_callable_factory<std::decay_t<First>>::value,
+      std::enable_if<true, std::decay_t<First>>,
+      find_callable_factory<Default, Rest...>>::type;
+};
+
+template <typename Default, typename... Args> struct find_runtime_key {
+  using type = Default;
+};
+
+template <typename Default, typename First, typename... Rest>
+struct find_runtime_key<Default, First, Rest...> {
+  using type =
+      typename std::conditional_t<is_key_value<std::decay_t<First>>::value,
+                                  runtime_key_of<std::decay_t<First>>,
+                                  find_runtime_key<Default, Rest...>>::type;
+};
 } // namespace detail
 
 // The binding type a registration declares. A registration whose only
@@ -98,21 +133,26 @@ template <typename... Parts> struct registration {
       std::enable_if<true, detected_factory>,
       factory_of<typename factory_part::type>>::type;
 
-  template <typename... Args> struct with_arguments {
-    using factory = declared_factory;
-  };
+  using key_part = typename detail::find_key_part<Parts...>::type;
 
-  template <typename Arg> struct with_arguments<Arg> {
+  // The factory and the key a registration takes from its arguments: a
+  // callable factory, and a key value, which a key part must not also name.
+  template <typename... Args> struct with_arguments {
     using factory =
-        std::conditional_t<is_callable_factory<std::decay_t<Arg>>::value,
-                           std::decay_t<Arg>, declared_factory>;
+        typename detail::find_callable_factory<declared_factory, Args...>::type;
+    using runtime = typename detail::find_runtime_key<void, Args...>::type;
+    static_assert(std::is_void_v<runtime> || std::is_same_v<key_part, no_key>,
+                  "a registration takes its key from a key_type<> or a "
+                  "key_value, not both");
+    using key = std::conditional_t<std::is_void_v<runtime>, key_part, runtime>;
   };
 
   template <typename... Args>
   using binding_for =
       binding_type<scope_of_v<typename scope_part::type>,
                    typename storage_part::type, typename interfaces_part::type,
-                   typename with_arguments<Args...>::factory>;
+                   typename with_arguments<Args...>::factory,
+                   typename with_arguments<Args...>::key>;
 
   using binding = binding_for<>;
 };

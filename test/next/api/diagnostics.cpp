@@ -73,14 +73,25 @@ TEST(next_diagnostics, names_the_request_that_is_not_convertible) {
                 " from " + type_name_of<dependency>());
 }
 
-TEST(next_diagnostics, names_the_request_that_is_ambiguous) {
+TEST(next_diagnostics, names_the_binding_that_is_already_registered) {
   dingo::container<> container;
   container.register_type<scope<dingo::shared>, storage<dependency>>();
-  container.register_type<scope<dingo::shared>,
-                          storage<std::shared_ptr<dependency>>>();
-  EXPECT_EQ(message_of<dingo::type_ambiguous_exception>(
-                [&] { (void)container.resolve<dependency &>(); }),
-            "type resolution is ambiguous: " + type_name_of<dependency &>());
+  EXPECT_EQ(message_of<dingo::lookup_already_registered_exception>([&] {
+              container.register_type<scope<dingo::shared>,
+                                      storage<std::shared_ptr<dependency>>>();
+            }),
+            "lookup already registered: interface " +
+                type_name_of<dependency>() + ", storage " +
+                type_name_of<std::shared_ptr<dependency>>() + ", key type " +
+                type_name_of<dingo::none_t>());
+}
+
+TEST(next_diagnostics, names_the_key_of_a_request_that_is_not_found) {
+  dingo::container<> container;
+  EXPECT_EQ(message_of<dingo::type_not_found_exception>(
+                [&] { (void)container.resolve<dependency &>(7); }),
+            "type not found: " + type_name_of<dependency &>() +
+                " (index type: int)");
 }
 
 struct second;

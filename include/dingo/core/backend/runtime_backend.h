@@ -12,6 +12,7 @@
 // request finds its binding and selects its term with the same engine
 // functions as the static backend.
 
+#include <dingo/core/backend/diagnose.h>
 #include <dingo/core/backend/slot.h>
 #include <dingo/core/engine/derive.h>
 #include <dingo/core/engine/execute.h>
@@ -63,6 +64,13 @@ public:
 
   virtual ~runtime_entry() = default;
 
+  // The value of the key of the binding, or nullptr for a key without one.
+  virtual const void *key_value() const = 0;
+
+  // Whether the key value of the binding equals `value`, a value of the type
+  // of its key domain; a key without a value is always equal.
+  virtual bool key_equals(const void *value) const = 0;
+
   const binding_descriptor &descriptor() const { return descriptor_; }
   const terms &published() const { return published_; }
   std::uint8_t exposed() const { return exposed_; }
@@ -99,17 +107,37 @@ private:
   const void *const *makers_;
 };
 
+// Marks the constructor arguments of a binding that begin with the value of
+// its runtime key.
+struct with_key_value {};
+struct without_key_value {};
+
 template <typename Binding> class runtime_binding final : public runtime_entry {
   using terms_sequence = std::make_index_sequence<Binding::published.size>;
+  using key_store_type = key_store<typename Binding::key_type>;
 
 public:
   template <typename... Args>
-  explicit runtime_binding(Args &&...args)
+  explicit runtime_binding(without_key_value /*key*/, Args &&...args)
       : runtime_entry(Binding::descriptor, Binding::published, Binding::exposed,
                       plans(terms_sequence()), boundaries(terms_sequence()),
                       thunks(terms_sequence()), makers(terms_sequence()),
                       &append_type_name<typename Binding::stored_type>),
         slot_(std::forward<Args>(args)...) {}
+
+  template <typename Key, typename... Args>
+  runtime_binding(with_key_value /*key*/, const Key &key, Args &&...args)
+      : runtime_entry(Binding::descriptor, Binding::published, Binding::exposed,
+                      plans(terms_sequence()), boundaries(terms_sequence()),
+                      thunks(terms_sequence()), makers(terms_sequence()),
+                      &append_type_name<typename Binding::stored_type>),
+        key_(key), slot_(std::forward<Args>(args)...) {}
+
+  const void *key_value() const override { return key_.value(); }
+
+  bool key_equals(const void *value) const override {
+    return key_store_type::equal(key_.value(), value);
+  }
 
 private:
   template <std::size_t Term>
@@ -192,27 +220,121 @@ private:
     return table;
   }
 
+  key_store_type key_;
   binding_slot<Binding> slot_;
 };
 
+namespace detail {
+// The positions of the arguments of a registration: the key values and the
+// arguments of the slot.
+template <typename... Args> struct registration_arguments {
+  static constexpr bool keys[] = {is_key_value<std::decay_t<Args>>::value...,
+                                  false};
+
+  static constexpr std::size_t key_count() {
+    std::size_t count = 0;
+    for (std::size_t index = 0; index < sizeof...(Args); ++index) {
+      count += keys[index] ? 1 : 0;
+    }
+    return count;
+  }
+
+  static constexpr std::size_t key_index() {
+    std::size_t index = 0;
+    while (index < sizeof...(Args) && !keys[index]) {
+      ++index;
+    }
+    return index;
+  }
+
+  // The position of the slot argument `ordinal`.
+  static constexpr std::size_t slot_index(std::size_t ordinal) {
+    std::size_t index = 0;
+    for (;; ++index) {
+      if (!keys[index]) {
+        if (ordinal == 0) {
+          return index;
+        }
+        --ordinal;
+      }
+    }
+  }
+};
+} // namespace detail
+
 class runtime_backend {
 public:
+  // Adds a binding, whose arguments are the arguments of its slot and the
+  // value of its runtime key. A binding whose key a binding of a common
+  // interface already holds is rejected.
   template <typename Binding, typename... Args> void add(Args &&...args) {
     static_assert(Binding::status == registration_status::registered,
                   "a binding cannot be stored by its scope");
-    entries_.push_back(std::make_unique<runtime_binding<Binding>>(
-        std::forward<Args>(args)...));
+    using arguments = detail::registration_arguments<Args...>;
+    static_assert(arguments::key_count() <= 1,
+                  "a registration takes at most one key value");
+    auto all = std::forward_as_tuple(std::forward<Args>(args)...);
+    std::unique_ptr<runtime_entry> entry =
+        make_entry<Binding, arguments, std::tuple<std::decay_t<Args>...>>(
+            all, std::make_index_sequence<sizeof...(Args) -
+                                          arguments::key_count()>());
+    for (const auto &existing : entries_) {
+      if (share_domain(existing->descriptor(), Binding::descriptor) &&
+          existing->key_equals(entry->key_value())) {
+        raise_already_registered<Binding>();
+      }
+    }
+    entries_.push_back(std::move(entry));
   }
 
   // The publications of the two-phase slots in progress.
   publication_log &publications() { return publications_; }
 
+  // Resolves a request; a keyed request carries its key.
   template <typename Request> Request resolve() {
-    using traits = request_traits<Request>;
+    if constexpr (is_keyed<Request>::value) {
+      using key = typename Request::key;
+      return Request(
+          resolve_by<typename Request::type, key>(key_store<key>().value()));
+    } else {
+      return resolve_by<Request, no_key>(nullptr);
+    }
+  }
+
+  // Resolves a request by a key value supplied at runtime: a key_value, or a
+  // value of the key type.
+  template <typename Request, typename Value> Request resolve(Value &&value) {
+    using runtime = runtime_key_of<std::decay_t<Value>>;
+    const auto &key = runtime::value(value);
+    return resolve_by<Request, typename runtime::type>(&key);
+  }
+
+private:
+  template <typename Binding, typename Arguments, typename Decayed,
+            typename All, std::size_t... Slots>
+  static std::unique_ptr<runtime_entry>
+  make_entry(All &all, std::index_sequence<Slots...> /*slots*/) {
+    using arguments = Arguments;
+    if constexpr (arguments::key_count() == 0) {
+      return std::make_unique<runtime_binding<Binding>>(
+          without_key_value(),
+          std::get<arguments::slot_index(Slots)>(std::move(all))...);
+    } else {
+      using value = std::tuple_element_t<arguments::key_index(), Decayed>;
+      return std::make_unique<runtime_binding<Binding>>(
+          with_key_value(),
+          runtime_key_of<value>::value(std::get<arguments::key_index()>(all)),
+          std::get<arguments::slot_index(Slots)>(std::move(all))...);
+    }
+  }
+
+  template <typename Request, typename Key>
+  Request resolve_by(const void *key_value) {
+    using traits = request_traits<Request, Key>;
     constexpr request_descriptor request = traits::descriptor;
     runtime_entry *found = nullptr;
     for (const auto &entry : entries_) {
-      if (finds(entry->descriptor(), request)) {
+      if (finds(entry->descriptor(), request) && entry->key_equals(key_value)) {
         if (found != nullptr) {
           raise_ambiguous<Request>();
         }
@@ -220,7 +342,7 @@ public:
       }
     }
     if (found == nullptr) {
-      raise_not_found<Request>();
+      raise_not_found<Request, Key>();
     }
     std::size_t term =
         select_term(found->published(), request, found->exposed());
@@ -228,29 +350,6 @@ public:
       raise_not_convertible<Request>(*found);
     }
     return complete<Request>(*found, term);
-  }
-
-private:
-  template <typename Request>
-  [[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE static void raise_not_found() {
-    const std::string request = type_name_of<Request>();
-    if (type_frame::active()) {
-      std::string path;
-      type_frame::append_path(path);
-      raise_type_not_found_required_by(request, path);
-    }
-    raise_type_not_found(request);
-  }
-
-  template <typename Request>
-  [[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE static void raise_ambiguous() {
-    const std::string request = type_name_of<Request>();
-    if (type_frame::active()) {
-      std::string type;
-      type_frame::append_innermost(type);
-      raise_type_ambiguous_required_by(request, type);
-    }
-    raise_type_ambiguous(request);
   }
 
   template <typename Request>

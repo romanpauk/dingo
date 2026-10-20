@@ -11,6 +11,7 @@
 // formed, the engine selects the binding and the term of a request at compile
 // time, and the term is walked and completed directly.
 
+#include <dingo/core/backend/diagnose.h>
 #include <dingo/core/backend/slot.h>
 #include <dingo/core/base/config.h>
 #include <dingo/core/base/mechanics.h>
@@ -97,13 +98,52 @@ struct DINGO_EMPTY_BASES
 inline constexpr std::size_t not_found = static_cast<std::size_t>(-1);
 inline constexpr std::size_t ambiguous = static_cast<std::size_t>(-2);
 
-// The index of the only binding a request finds, not_found, or ambiguous.
-template <typename... Bindings>
+// Whether two keys known at compile time have equal values: keys without a
+// value are equal within their domain, and fixed keys compare their values.
+template <typename Left, typename Right> constexpr bool same_fixed_key() {
+  if constexpr (has_value(Left::descriptor.kind) &&
+                has_value(Right::descriptor.kind)) {
+    if constexpr (std::is_same_v<typename Left::value_type,
+                                 typename Right::value_type>) {
+      return Left::value() == Right::value();
+    } else {
+      return false;
+    }
+  } else {
+    return true;
+  }
+}
+
+// Whether two bindings hold a key of a common interface, so that a container
+// of both is rejected.
+template <typename... Bindings> struct duplicates {
+  template <std::size_t... Indices>
+  static constexpr bool any(std::index_sequence<Indices...> /*indices*/) {
+    return (row<Indices>(std::index_sequence_for<Bindings...>()) || ...);
+  }
+
+  template <std::size_t Index, std::size_t... Others>
+  static constexpr bool row(std::index_sequence<Others...> /*others*/) {
+    return (
+        (Others > Index &&
+         share_domain(pack_at_t<Index, Bindings...>::descriptor,
+                      pack_at_t<Others, Bindings...>::descriptor) &&
+         same_fixed_key<typename pack_at_t<Index, Bindings...>::key_type,
+                        typename pack_at_t<Others, Bindings...>::key_type>()) ||
+        ...);
+  }
+};
+
+// The index of the only binding a request by a key known at compile time
+// finds, not_found, or ambiguous.
+template <typename Key, typename... Bindings>
 constexpr std::size_t find_binding(const request_descriptor &request) {
   constexpr binding_descriptor descriptors[] = {Bindings::descriptor...};
+  constexpr bool values[] = {
+      same_fixed_key<typename Bindings::key_type, Key>()...};
   std::size_t found = not_found;
   for (std::size_t index = 0; index < sizeof...(Bindings); ++index) {
-    if (finds(descriptors[index], request)) {
+    if (finds(descriptors[index], request) && values[index]) {
       if (found != not_found) {
         return ambiguous;
       }
@@ -117,6 +157,10 @@ constexpr std::size_t find_binding(const request_descriptor &request) {
 template <typename... Bindings> class static_backend {
   static_assert(((Bindings::status == registration_status::registered) && ...),
                 "a binding cannot be stored by its scope");
+  static_assert(!detail::duplicates<Bindings...>::any(
+                    std::index_sequence_for<Bindings...>()),
+                "a static container holds one binding of a key of an "
+                "interface: lookup already registered");
 
 public:
   // Takes the instance of every binding whose scope needs one, in the order of
@@ -135,14 +179,35 @@ public:
   // The publications of the two-phase slots in progress.
   publication_log &publications() { return holders_.publications; }
 
+  // Resolves a request; a keyed request carries its key, which is known at
+  // compile time.
   template <typename Request> Request resolve() {
+    if constexpr (is_keyed<Request>::value) {
+      return Request(
+          resolve_by<typename Request::type, typename Request::key>());
+    } else {
+      return resolve_by<Request, no_key>();
+    }
+  }
+
+  // Resolves a request by a key value supplied at runtime, compared with the
+  // fixed keys of the bindings of its domain when it is resolved.
+  template <typename Request, typename Value> Request resolve(Value &&value) {
+    using runtime = runtime_key_of<std::decay_t<Value>>;
+    return resolve_by_value<Request, typename runtime::type>(
+        runtime::value(value), std::index_sequence_for<Bindings...>());
+  }
+
+private:
+  template <typename Request, typename Key> Request resolve_by() {
     if constexpr (sizeof...(Bindings) == 0) {
       static_assert(dependent_false<Request>,
                     "static_container cannot resolve an unbound type");
     } else {
       constexpr request_descriptor request =
-          request_traits<Request>::descriptor;
-      constexpr std::size_t index = detail::find_binding<Bindings...>(request);
+          request_traits<Request, Key>::descriptor;
+      constexpr std::size_t index =
+          detail::find_binding<Key, Bindings...>(request);
       static_assert(index != detail::not_found,
                     "static_container cannot resolve an unbound type");
       static_assert(
@@ -152,7 +217,53 @@ public:
     }
   }
 
-private:
+  template <typename Request, typename Key, typename Value,
+            std::size_t... Indices>
+  Request resolve_by_value(const Value &value,
+                           std::index_sequence<Indices...> /*indices*/) {
+    constexpr request_descriptor request =
+        request_traits<Request, Key>::descriptor;
+    std::size_t found = detail::not_found;
+    std::size_t count = 0;
+    (
+        [&] {
+          using binding = pack_at_t<Indices, Bindings...>;
+          if constexpr (finds(binding::descriptor, request)) {
+            if (key_store<typename binding::key_type>::equal(
+                    key_store<typename binding::key_type>().value(), &value)) {
+              found = Indices;
+              ++count;
+            }
+          }
+        }(),
+        ...);
+    if (count == 0) {
+      raise_not_found<Request, Key>();
+    }
+    if (count > 1) {
+      raise_ambiguous<Request>();
+    }
+    return resolve_at<Request, Key>(found);
+  }
+
+  // Resolves the request from the binding at the runtime index `index`, one
+  // the request finds.
+  template <typename Request, typename Key, std::size_t Index = 0>
+  Request resolve_at(std::size_t index) {
+    using binding = pack_at_t<Index, Bindings...>;
+    if constexpr (finds(binding::descriptor,
+                        request_traits<Request, Key>::descriptor)) {
+      if (index == Index) {
+        return resolve_from<Request, Index>();
+      }
+    }
+    if constexpr (Index + 1 < sizeof...(Bindings)) {
+      return resolve_at<Request, Key, Index + 1>(index);
+    } else {
+      raise_not_found<Request, Key>();
+    }
+  }
+
   template <typename Request, std::size_t Index> Request resolve_from() {
     using binding = pack_at_t<Index, Bindings...>;
     constexpr std::size_t selected =

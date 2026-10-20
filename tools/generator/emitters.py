@@ -241,12 +241,16 @@ def vocabulary(spec):
         scopes=[scope_fields(scope, form_ids) for scope in sorted(spec.scopes, key=lambda s: s.id)],
         requirements=[{"name": name, "bit": bit} for name, bit in REQUIREMENT_BITS.items()],
         routes=[route_fields(rule) for rule in spec.routes],
+        key_kinds=[
+            {"id": kind.id, "has_value": kind.value_time is not None}
+            for kind in spec.key_kinds
+        ],
     )
     return [
         GeneratedFile(
             path="include/dingo/core/vocabulary/vocabulary.gen.h",
             content=content,
-            spec_ids=("layer_kinds", "routes", "scopes", "storage_forms"),
+            spec_ids=("key_kinds", "layer_kinds", "routes", "scopes", "storage_forms"),
         )
     ]
 

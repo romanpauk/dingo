@@ -67,8 +67,12 @@ TEST(next_container, reports_requests_it_cannot_serve) {
   EXPECT_THROW(container.resolve<std::unique_ptr<counted>>(),
                dingo::type_not_convertible_exception);
   EXPECT_THROW(container.resolve<other &>(), dingo::type_not_found_exception);
-  container.register_type<scope<dingo::shared>, storage<counted *>>();
-  EXPECT_THROW(container.resolve<counted &>(), dingo::type_ambiguous_exception);
+  // A second binding of the leaf without a declared lookup of many is
+  // rejected.
+  EXPECT_THROW(
+      (container.register_type<scope<dingo::shared>, storage<counted *>>()),
+      dingo::lookup_already_registered_exception);
+  EXPECT_NO_THROW(container.resolve<counted &>());
 }
 
 TEST(next_container, borrows_through_layers) {

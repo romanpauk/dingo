@@ -20,6 +20,18 @@
 
 namespace dingo::core {
 
+// spec: diagnostics.lookup_already_registered
+// A binding is registered with a key that a binding of a common interface
+// already holds, in a domain declared with cardinality one.
+[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+raise_lookup_already_registered(std::string_view interface,
+                                std::string_view stored, std::string_view key) {
+  throw ::dingo::lookup_already_registered_exception(format_message(
+      "lookup already registered: interface {interface}, storage {stored}, key "
+      "type {key}",
+      {{"interface", interface}, {"stored", stored}, {"key", key}}));
+}
+
 // spec: diagnostics.type_ambiguous
 // More than one binding is named by the request.
 [[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
@@ -66,6 +78,27 @@ raise_type_not_convertible_required_by(std::string_view request,
 raise_type_not_found(std::string_view request) {
   throw ::dingo::type_not_found_exception(
       format_message("type not found: {request}", {{"request", request}}));
+}
+
+// spec: diagnostics.type_not_found_keyed
+// No binding is named by a request with a key, whose type is `key`.
+[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+raise_type_not_found_keyed(std::string_view request, std::string_view key) {
+  throw ::dingo::type_not_found_exception(
+      format_message("type not found: {request} (index type: {key})",
+                     {{"request", request}, {"key", key}}));
+}
+
+// spec: diagnostics.type_not_found_keyed_required_by
+// No binding is named by a request with a key of a dependency of an object
+// being constructed.
+[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+raise_type_not_found_keyed_required_by(std::string_view request,
+                                       std::string_view key,
+                                       std::string_view path) {
+  throw ::dingo::type_not_found_exception(format_message(
+      "type not found: {request} (index type: {key}) (required by {path})",
+      {{"request", request}, {"key", key}, {"path", path}}));
 }
 
 // spec: diagnostics.type_not_found_required_by

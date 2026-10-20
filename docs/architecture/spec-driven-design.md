@@ -1425,15 +1425,28 @@ interpreter of generated selection rule tables rather than generated code.
 
 #### M4.4: Static Backend
 
-Status: not started.
+Status: in progress.
 
 Implement static and local static resolution on the engine.
 
+A static binding carries no key, a tag key, or a fixed key, and the engine
+compares the key domain of a request in its descriptor. Fixed keys are compared
+when the request is compiled, and a runtime key value against the fixed keys of
+its domain when it is resolved. A second binding of a key of an interface is
+rejected when the container type is formed. Remaining: lookup declarations,
+collections, local bindings, parents, and auto-construction.
+
 #### M4.5: Runtime Backend
 
-Status: not started.
+Status: in progress.
 
 Implement runtime resolution on the engine, memoized per request type.
+
+A runtime binding keeps the value of its key, a runtime key value or the value
+of a fixed key, and a request compares it after the key domain; a second binding
+of a key of an interface is rejected at registration with the message of the
+baseline. Remaining: lookup declarations and the index structures, collections,
+parents, auto-construction, and memoization.
 
 #### M4.6: Mixed Backend
 

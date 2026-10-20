@@ -14,6 +14,7 @@
 // containers at registration, so both serve a request by the same derivation.
 
 #include <dingo/core/primitives/shape.h>
+#include <dingo/core/projection/key.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
 #include <cstddef>
@@ -31,8 +32,23 @@ constexpr layer_kind kind_of(const shape &value, std::size_t index = 0) {
 
 // A binding as the engine sees it: the stored shape, the scope, and the leaf
 // shapes of the declared interfaces.
+// Whether two keys are of one domain: keys without a value of the same kind,
+// or keys with a value of the same type, whether fixed or supplied at
+// runtime.
+constexpr bool same_key_domain(const key_descriptor &left,
+                               const key_descriptor &right) {
+  if (has_value(left.kind) != has_value(right.kind)) {
+    return false;
+  }
+  if (!has_value(left.kind) && left.kind != right.kind) {
+    return false;
+  }
+  return left.type == right.type;
+}
+
 struct binding_descriptor {
   shape stored;
+  key_descriptor key;
   scope_id scope = scope_id::shared;
   shape interfaces[max_interfaces] = {};
   std::size_t interface_count = 0;
@@ -50,6 +66,7 @@ enum class request_kind : std::uint8_t {
 struct request_descriptor {
   request_kind kind = request_kind::value;
   shape value;
+  key_descriptor key;
 };
 
 // A derived term and how it was reached.
@@ -399,14 +416,42 @@ constexpr std::size_t select_term(const terms &found,
 
 // Whether the request names the binding: its leaf is a declared interface, or
 // the stored leaf when no interface is declared.
-constexpr bool finds(const binding_descriptor &binding,
-                     const request_descriptor &request) {
-  type_id requested = innermost_leaf(request.value);
+// Whether a binding serves the interface a request names: its declared
+// interfaces, or its stored leaf without them.
+constexpr bool serves_interface(const binding_descriptor &binding,
+                                type_id requested) {
   if (binding.interface_count == 0) {
     return requested == innermost_leaf(binding.stored);
   }
   for (std::size_t index = 0; index < binding.interface_count; ++index) {
     if (binding.interfaces[index].nodes[0].type == requested) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Whether a request names the binding, up to the value of their keys, which
+// the backend compares: the binding serves its interface with a key of the
+// same domain. spec: lookup_filters.binding_filter
+constexpr bool finds(const binding_descriptor &binding,
+                     const request_descriptor &request) {
+  return serves_interface(binding, innermost_leaf(request.value)) &&
+         same_key_domain(binding.key, request.key);
+}
+
+// Whether two bindings serve a common interface with keys of one domain, so
+// that equal key values make them candidates of the same requests.
+constexpr bool share_domain(const binding_descriptor &left,
+                            const binding_descriptor &right) {
+  if (!same_key_domain(left.key, right.key)) {
+    return false;
+  }
+  if (right.interface_count == 0) {
+    return serves_interface(left, innermost_leaf(right.stored));
+  }
+  for (std::size_t index = 0; index < right.interface_count; ++index) {
+    if (serves_interface(left, right.interfaces[index].nodes[0].type)) {
       return true;
     }
   }
@@ -452,14 +497,19 @@ register_status(const binding_descriptor &binding) {
     for (std::size_t index = 0; index < binding.interface_count; ++index) {
       const shape &interface = binding.interfaces[index];
       request_descriptor probes[] = {
-          {request_kind::lvalue_reference, interface},
-          {request_kind::value, wrap(static_cast<std::uint8_t>(layer_kind::ptr),
-                                     nullptr, true, interface)},
-          {request_kind::value, wrap(static_cast<std::uint8_t>(layer_kind::own),
-                                     any_family, false, interface)},
+          {request_kind::lvalue_reference, interface, binding.key},
+          {request_kind::value,
+           wrap(static_cast<std::uint8_t>(layer_kind::ptr), nullptr, true,
+                interface),
+           binding.key},
+          {request_kind::value,
+           wrap(static_cast<std::uint8_t>(layer_kind::own), any_family, false,
+                interface),
+           binding.key},
           {request_kind::value,
            wrap(static_cast<std::uint8_t>(layer_kind::share), any_family, true,
-                interface)},
+                interface),
+           binding.key},
       };
       for (const request_descriptor &probe : probes) {
         if (select_term(found, probe, exposed) != no_term) {

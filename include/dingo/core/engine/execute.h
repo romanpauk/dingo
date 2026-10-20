@@ -63,14 +63,15 @@ constexpr bool keeps_objects(const terms &published) {
 // The context of a binding without cached rules.
 struct no_kept_objects {};
 
-// A binding of a scope, a stored type, the interfaces it declares, and the
-// factory that makes its object, detected_factory unless one is declared.
+// A binding of a scope, a stored type, the interfaces it declares, the factory
+// that makes its object, detected_factory unless one is declared, and its key.
 template <scope_id Scope, typename Stored, typename Interfaces,
-          typename Factory = detected_factory>
+          typename Factory = detected_factory, typename Key = no_key>
 struct binding_type {
   using stored_type = Stored;
   using interfaces = Interfaces;
   using factory_type = Factory;
+  using key_type = Key;
   static constexpr scope_id scope = Scope;
   // Whether a request consumes an object the binding constructs for it.
   static constexpr bool consumes = info(Scope).consumes;
@@ -85,6 +86,7 @@ struct binding_type {
     binding.stored = shape_v<Stored>;
     binding.scope = Scope;
     binding.declared_factory = !std::is_same_v<Factory, detected_factory>;
+    binding.key = Key::descriptor;
     return interface_shapes<Interfaces>::apply(binding);
   }
 
@@ -96,6 +98,24 @@ struct binding_type {
   static constexpr bool keeps = keeps_objects(published);
   using context_type = std::conditional_t<keeps, kept_objects, no_kept_objects>;
 };
+
+namespace detail {
+template <typename Binding, typename Interfaces> struct first_interface {
+  using type = leaf_of_t<typename Binding::stored_type>;
+};
+
+template <typename Binding, typename First, typename... Rest>
+struct first_interface<Binding, type_list<First, Rest...>> {
+  using type = First;
+};
+} // namespace detail
+
+// The interface a binding serves first, which diagnostics name: its first
+// declared interface, or its stored leaf.
+template <typename Binding>
+using first_interface_t =
+    typename detail::first_interface<Binding,
+                                     typename Binding::interfaces>::type;
 
 // The result of walking a route whose operation the next implementation does
 // not implement yet.

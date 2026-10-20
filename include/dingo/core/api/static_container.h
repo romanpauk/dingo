@@ -12,6 +12,7 @@
 #include <dingo/core/api/factory/callable.h>    // IWYU pragma: export
 #include <dingo/core/api/factory/constructor.h> // IWYU pragma: export
 #include <dingo/core/api/factory/function.h>    // IWYU pragma: export
+#include <dingo/core/api/key.h>                 // IWYU pragma: export
 #include <dingo/core/api/registration.h>
 #include <dingo/core/backend/static_backend.h>
 #include <dingo/core/primitives/exceptions.h> // IWYU pragma: export
@@ -32,6 +33,12 @@ public:
 
   template <typename Request> Request resolve() {
     return backend_.template resolve<Request>();
+  }
+
+  // Resolves a request by a key value: a key_value, or a value of the key
+  // type.
+  template <typename Request, typename Value> Request resolve(Value &&value) {
+    return backend_.template resolve<Request>(std::forward<Value>(value));
   }
 
   // Constructs an object of `Type` that no binding stores, by its detected
