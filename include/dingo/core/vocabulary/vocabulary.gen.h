@@ -31,6 +31,16 @@ enum class layer_kind : std::uint8_t {
 
 inline constexpr std::size_t layer_kind_count = 9;
 
+// The properties of a layer kind, as bits.
+inline constexpr std::uint8_t layer_owning = 1;
+inline constexpr std::uint8_t layer_sharing = 2;
+inline constexpr std::uint8_t layer_nullable = 4;
+inline constexpr std::uint8_t layer_borrowable = 8;
+inline constexpr std::uint8_t layer_in_place = 16;
+inline constexpr std::uint8_t layer_unsized = 32;
+inline constexpr std::uint8_t layer_variadic = 64;
+inline constexpr std::uint8_t layer_extent = 128;
+
 struct layer_kind_info {
   layer_kind kind;
   bool owning;
@@ -39,18 +49,19 @@ struct layer_kind_info {
   bool borrowable;
   bool variadic;
   bool has_extent;
+  std::uint8_t properties;
 };
 
 inline constexpr layer_kind_info layer_kinds[] = {
-    {layer_kind::leaf, false, false, false, false, false, false},
-    {layer_kind::alt, true, false, false, false, true, false},
-    {layer_kind::array, true, false, false, false, false, true},
-    {layer_kind::array_unbounded, false, false, false, false, false, false},
-    {layer_kind::opt, true, false, true, true, false, false},
-    {layer_kind::own, true, false, true, true, false, false},
-    {layer_kind::ptr, false, false, true, true, false, false},
-    {layer_kind::ref, false, false, false, true, false, false},
-    {layer_kind::share, true, true, true, true, false, false},
+    {layer_kind::leaf, false, false, false, false, false, false, 0},
+    {layer_kind::alt, true, false, false, false, true, false, 81},
+    {layer_kind::array, true, false, false, false, false, true, 145},
+    {layer_kind::array_unbounded, false, false, false, false, false, false, 32},
+    {layer_kind::opt, true, false, true, true, false, false, 29},
+    {layer_kind::own, true, false, true, true, false, false, 13},
+    {layer_kind::ptr, false, false, true, true, false, false, 12},
+    {layer_kind::ref, false, false, false, true, false, false, 8},
+    {layer_kind::share, true, true, true, true, false, false, 15},
 };
 
 constexpr const layer_kind_info &info(layer_kind kind) {
@@ -101,27 +112,33 @@ inline constexpr std::size_t storage_form_count = 11;
 
 // A storage form matches the outer layer of a stored shape and, when `inner`
 // is not leaf, the layer directly under it.
+// A class of layers: the property bits a layer has, and those it lacks.
+struct layer_class {
+  bool any;
+  std::uint8_t has;
+  std::uint8_t lacks;
+};
+
+// A storage form: the class of the outer layer of a stored shape, and of the
+// layer of its element; a form of no outer class is the plain one.
 struct storage_form_info {
   storage_form form;
-  layer_kind outer;
-  layer_kind inner;
+  layer_class outer;
+  layer_class inner;
 };
 
 inline constexpr storage_form_info storage_forms[] = {
-    {storage_form::alternative, layer_kind::alt, layer_kind::leaf},
-    {storage_form::bounded_array, layer_kind::array, layer_kind::leaf},
-    {storage_form::optional, layer_kind::opt, layer_kind::leaf},
-    {storage_form::plain, layer_kind::leaf, layer_kind::leaf},
-    {storage_form::pointer, layer_kind::ptr, layer_kind::leaf},
-    {storage_form::reference, layer_kind::ref, layer_kind::leaf},
-    {storage_form::shared_array_handle, layer_kind::share,
-     layer_kind::array_unbounded},
-    {storage_form::shared_handle, layer_kind::share, layer_kind::leaf},
-    {storage_form::unbounded_array, layer_kind::array_unbounded,
-     layer_kind::leaf},
-    {storage_form::unique_array_handle, layer_kind::own,
-     layer_kind::array_unbounded},
-    {storage_form::unique_handle, layer_kind::own, layer_kind::leaf},
+    {storage_form::alternative, {true, 64, 0}, {false, 0, 0}},
+    {storage_form::bounded_array, {true, 128, 0}, {false, 0, 0}},
+    {storage_form::optional, {true, 20, 0}, {false, 0, 0}},
+    {storage_form::plain, {false, 0, 0}, {false, 0, 0}},
+    {storage_form::pointer, {true, 4, 1}, {false, 0, 0}},
+    {storage_form::reference, {true, 8, 5}, {false, 0, 0}},
+    {storage_form::shared_array_handle, {true, 2, 0}, {true, 32, 0}},
+    {storage_form::shared_handle, {true, 2, 0}, {false, 0, 0}},
+    {storage_form::unbounded_array, {true, 32, 0}, {false, 0, 0}},
+    {storage_form::unique_array_handle, {true, 1, 50}, {true, 32, 0}},
+    {storage_form::unique_handle, {true, 1, 50}, {false, 0, 0}},
 };
 
 // spec: scopes

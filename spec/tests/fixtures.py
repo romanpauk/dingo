@@ -6,6 +6,7 @@ spec with one or more entities of every section and mutate it.
 
 from spec.content.route_forms import route_forms as ROUTE_FORMS
 from spec.schema import (
+    LayerClass,
     SelectionSourceTime,
     SourceTime,
     TransactionEffect,
@@ -89,11 +90,11 @@ def sample_spec() -> Spec:
             LayerKind(id="array", description="A sized array.", parameters=1, has_extent=True),
         ),
         storage_forms=(
-            StorageForm(id="plain", description="The leaf.", pattern=variable("T")),
+            StorageForm(id="plain", description="The leaf."),
             StorageForm(
                 id="unique_handle",
                 description="An owning handle.",
-                pattern=layer("own", variable("T")),
+                outer=LayerClass(has=(LayerTrait.OWNING,)),
             ),
         ),
         scopes=(

@@ -102,19 +102,32 @@ struct terms {
 
 // Storage forms
 
+// Whether the layer at `index` is of a layer class, by the properties of its
+// kind.
+constexpr bool of_class(const shape &value, std::size_t index,
+                        const layer_class &of) {
+  if (kind_of(value, index) == layer_kind::leaf) {
+    return false;
+  }
+  const std::uint8_t properties = info(kind_of(value, index)).properties;
+  return (properties & of.has) == of.has && (properties & of.lacks) == 0;
+}
+
+// The most specific storage form of a stored shape, by the classes of its
+// outer layers.
 constexpr storage_form storage_form_of(const shape &stored) {
   storage_form best = storage_form::plain;
   int depth = 0;
   for (const storage_form_info &form : storage_forms) {
-    if (form.outer == layer_kind::leaf || kind_of(stored) != form.outer) {
+    if (!form.outer.any || !of_class(stored, 0, form.outer)) {
       continue;
     }
-    if (form.inner == layer_kind::leaf) {
+    if (!form.inner.any) {
       if (depth < 1) {
         best = form.form;
         depth = 1;
       }
-    } else if (stored.nodes[0].arity == 1 && kind_of(stored, 1) == form.inner) {
+    } else if (stored.nodes[0].arity == 1 && of_class(stored, 1, form.inner)) {
       best = form.form;
       depth = 2;
     }

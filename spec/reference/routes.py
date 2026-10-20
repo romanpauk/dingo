@@ -248,16 +248,32 @@ def upcast_leaf(shape: Shape, base: Leaf) -> Shape:
 # Registration
 
 
+def layer_class_holds(model: Model, layer_class, shape: Shape) -> bool:
+    """Whether the outer layer of a shape is of a layer class."""
+    if shape.layer is None:
+        return False
+    kind = model.layers[shape.layer]
+    traits = set(kind.traits)
+    return (
+        all(trait in traits for trait in layer_class.has)
+        and not any(trait in traits for trait in layer_class.lacks)
+        and layer_class.variadic in (None, kind.variadic)
+        and layer_class.extent in (None, kind.has_extent)
+    )
+
+
 def storage_form(model: Model, shape: Shape) -> str:
-    """The most specific storage form whose pattern matches the shape."""
+    """The most specific storage form the shape is of, by the properties of
+    the kinds of its outer layers."""
     best, depth = "plain", 0
     for form in model.spec.storage_forms:
-        if form.pattern.form is PatternForm.VARIABLE:
+        if form.outer is None or not layer_class_holds(model, form.outer, shape):
             continue
-        if match(form.pattern, shape, {}):
-            size = pattern_size(form.pattern)
-            if size > depth:
-                best, depth = form.id, size
+        if form.inner is None:
+            if depth < 1:
+                best, depth = form.id, 1
+        elif len(shape.args) == 1 and layer_class_holds(model, form.inner, shape.args[0]):
+            best, depth = form.id, 2
     return best
 
 

@@ -115,17 +115,52 @@ def check_unique(errors: list[str], where: str, what: str, values: Iterable) -> 
         errors.append(f"{where}: {what} has duplicates")
 
 
+def layer_class_holds(layer_class, kind) -> bool:
+    """Whether a layer kind is of a layer class."""
+    traits = set(kind.traits)
+    return (
+        all(trait in traits for trait in layer_class.has)
+        and not any(trait in traits for trait in layer_class.lacks)
+        and layer_class.variadic in (None, kind.variadic)
+        and layer_class.extent in (None, kind.has_extent)
+    )
+
+
 def check_storage_forms(spec: Spec, errors: list[str]) -> None:
-    layers = {kind.id: kind for kind in spec.layer_kinds}
-    for storage_form in spec.storage_forms:
-        where = f"storage_forms.{storage_form.id}"
-        check_pattern(storage_form.pattern, where, layers, errors)
     check_unique(
         errors,
         "storage_forms",
-        "patterns",
-        (storage_form.pattern for storage_form in spec.storage_forms),
+        "classes",
+        ((form.outer, form.inner) for form in spec.storage_forms),
     )
+    if sum(form.outer is None for form in spec.storage_forms) != 1:
+        errors.append("storage_forms: one form, the plain one, has no class")
+    # A layer of a kind, and of a kind over one, is of one form at each depth.
+    for outer in spec.layer_kinds:
+        single = [
+            form.id
+            for form in spec.storage_forms
+            if form.outer is not None
+            and form.inner is None
+            and layer_class_holds(form.outer, outer)
+        ]
+        if len(single) > 1:
+            errors.append(
+                f"layer_kinds.{outer.id}: is of the storage forms {', '.join(single)}"
+            )
+        for inner in spec.layer_kinds:
+            double = [
+                form.id
+                for form in spec.storage_forms
+                if form.inner is not None
+                and layer_class_holds(form.outer, outer)
+                and layer_class_holds(form.inner, inner)
+            ]
+            if len(double) > 1:
+                errors.append(
+                    f"layer_kinds.{outer.id} of {inner.id}: is of the storage "
+                    f"forms {', '.join(double)}"
+                )
 
 
 def check_scopes(spec: Spec, errors: list[str]) -> None:

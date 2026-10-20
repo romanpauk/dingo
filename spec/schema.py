@@ -46,6 +46,7 @@ __all__ = [
     "IndexStructure",
     "KeyKind",
     "KindForm",
+    "LayerClass",
     "LayerKind",
     "LayerTrait",
     "LookupDeclaration",
@@ -103,6 +104,8 @@ class LayerTrait(Enum):
     # Holds its element in its own storage, as an optional or an array does,
     # rather than by a handle.
     IN_PLACE = "in_place"
+    # Holds elements whose number is known only at runtime.
+    UNSIZED = "unsized"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -156,15 +159,29 @@ class SourceAccess(Enum):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class LayerClass:
+    """A class of layers by the properties of their kinds: the traits a kind
+    has and lacks, and whether it is variadic or has an extent, None for
+    either."""
+
+    has: tuple["LayerTrait", ...] = ()
+    lacks: tuple["LayerTrait", ...] = ()
+    variadic: bool | None = None
+    extent: bool | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class StorageForm(Entity):
     """A class of stored shapes that storage exposure distinguishes.
 
-    `pattern` matches the outer layers of a stored shape. The plain form, whose
-    pattern is a variable, matches a shape no other form matches.
+    `outer` classifies the outer layer of a stored shape and `inner`, when
+    given, the layer of its element; the most specific form a shape is of
+    applies. The plain form, without a class, is a shape no other form is.
     """
 
     description: str
-    pattern: "ShapePattern"
+    outer: LayerClass | None = None
+    inner: LayerClass | None = None
 
 
 class RequestCategory(Enum):

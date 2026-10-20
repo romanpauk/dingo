@@ -18,6 +18,16 @@ enum class layer_kind : std::uint8_t {
 
 inline constexpr std::size_t layer_kind_count = {{ layer_kinds | length + 1 }};
 
+// The properties of a layer kind, as bits.
+inline constexpr std::uint8_t layer_owning = 1;
+inline constexpr std::uint8_t layer_sharing = 2;
+inline constexpr std::uint8_t layer_nullable = 4;
+inline constexpr std::uint8_t layer_borrowable = 8;
+inline constexpr std::uint8_t layer_in_place = 16;
+inline constexpr std::uint8_t layer_unsized = 32;
+inline constexpr std::uint8_t layer_variadic = 64;
+inline constexpr std::uint8_t layer_extent = 128;
+
 struct layer_kind_info {
   layer_kind kind;
   bool owning;
@@ -26,12 +36,13 @@ struct layer_kind_info {
   bool borrowable;
   bool variadic;
   bool has_extent;
+  std::uint8_t properties;
 };
 
 inline constexpr layer_kind_info layer_kinds[] = {
-    {layer_kind::leaf, false, false, false, false, false, false},
+    {layer_kind::leaf, false, false, false, false, false, false, 0},
 {% for kind in layer_kinds %}
-    {layer_kind::{{ kind.id }}, {{ kind.owning | lower }}, {{ kind.sharing | lower }}, {{ kind.nullable | lower }}, {{ kind.borrowable | lower }}, {{ kind.variadic | lower }}, {{ kind.has_extent | lower }}},
+    {layer_kind::{{ kind.id }}, {{ kind.owning | lower }}, {{ kind.sharing | lower }}, {{ kind.nullable | lower }}, {{ kind.borrowable | lower }}, {{ kind.variadic | lower }}, {{ kind.has_extent | lower }}, {{ kind.properties }}},
 {% endfor %}
 };
 
@@ -74,15 +85,24 @@ inline constexpr std::size_t storage_form_count = {{ storage_forms | length }};
 
 // A storage form matches the outer layer of a stored shape and, when `inner`
 // is not leaf, the layer directly under it.
+// A class of layers: the property bits a layer has, and those it lacks.
+struct layer_class {
+  bool any;
+  std::uint8_t has;
+  std::uint8_t lacks;
+};
+
+// A storage form: the class of the outer layer of a stored shape, and of the
+// layer of its element; a form of no outer class is the plain one.
 struct storage_form_info {
   storage_form form;
-  layer_kind outer;
-  layer_kind inner;
+  layer_class outer;
+  layer_class inner;
 };
 
 inline constexpr storage_form_info storage_forms[] = {
 {% for form in storage_forms %}
-    {storage_form::{{ form.id }}, layer_kind::{{ form.outer }}, layer_kind::{{ form.inner }}},
+    {storage_form::{{ form.id }}, {% if form.outer %}{true, {{ form.outer.has }}, {{ form.outer.lacks }}}{% else %}{false, 0, 0}{% endif %}, {% if form.inner %}{true, {{ form.inner.has }}, {{ form.inner.lacks }}}{% else %}{false, 0, 0}{% endif %}},
 {% endfor %}
 };
 

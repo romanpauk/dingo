@@ -146,16 +146,48 @@ def pattern_layer(pattern, where):
     return pattern.name
 
 
+LAYER_PROPERTY_BITS = {
+    "owning": 1,
+    "sharing": 2,
+    "nullable": 4,
+    "borrowable": 8,
+    "in_place": 16,
+    "unsized": 32,
+    "variadic": 64,
+    "extent": 128,
+}
+
+
+def layer_class_fields(layer_class):
+    """A layer class as the property bits a layer has, and those it lacks."""
+    if layer_class is None:
+        return None
+    has = sum(LAYER_PROPERTY_BITS[t.value] for t in layer_class.has)
+    lacks = sum(LAYER_PROPERTY_BITS[t.value] for t in layer_class.lacks)
+    for name, value in (("variadic", layer_class.variadic), ("extent", layer_class.extent)):
+        if value is True:
+            has |= LAYER_PROPERTY_BITS[name]
+        elif value is False:
+            lacks |= LAYER_PROPERTY_BITS[name]
+    return {"has": has, "lacks": lacks}
+
+
 def storage_form_fields(form):
-    where = f"storage_forms.{form.id}"
-    pattern = form.pattern
-    if pattern.form.value == "variable":
-        return {"id": form.id, "outer": "leaf", "inner": "leaf"}
-    outer = pattern_layer(pattern, where)
-    inner = pattern.args[0]
-    if inner.form.value == "variable":
-        return {"id": form.id, "outer": outer, "inner": "leaf"}
-    return {"id": form.id, "outer": outer, "inner": pattern_layer(inner, where)}
+    return {
+        "id": form.id,
+        "outer": layer_class_fields(form.outer),
+        "inner": layer_class_fields(form.inner),
+    }
+
+
+def layer_properties(kind):
+    """The property bits of a layer kind."""
+    names = {trait.value for trait in kind.traits}
+    if kind.variadic:
+        names.add("variadic")
+    if kind.has_extent:
+        names.add("extent")
+    return sum(LAYER_PROPERTY_BITS[name] for name in names)
 
 
 REQUEST_CATEGORY_BITS = {"value": 1, "lvalue": 2, "rvalue": 4, "pointer": 8}
@@ -247,6 +279,7 @@ def vocabulary(spec):
             "borrowable": "borrowable" in {t.value for t in kind.traits},
             "variadic": kind.variadic,
             "has_extent": kind.has_extent,
+            "properties": layer_properties(kind),
         }
         for kind in sorted(spec.layer_kinds, key=lambda k: k.id)
     ]

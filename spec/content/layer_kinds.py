@@ -61,6 +61,7 @@ layer_kinds: tuple[LayerKind, ...] = (
             "an owning or sharing handle can hold it."
         ),
         parameters=1,
+        traits=(LayerTrait.UNSIZED,),
         forms=(
             form(
                 "decay_unbounded_array",
