@@ -191,8 +191,25 @@ def test_index_structure_references():
     assert_one_error(spec, "key kind 'missing' does not exist")
     spec = replace_first(sample_spec(), "index_structures", key_kinds=())
     assert_one_error(spec, "no key kinds")
-    spec = replace_first(sample_spec(), "index_structures", declarations=("Ordered",))
-    assert_one_error(spec, "declaration 'Ordered' is not snake_case")
+    spec = replace_first(sample_spec(), "index_structures", declarations=("missing",))
+    assert_one_error(spec, "declaration 'missing' does not exist")
+
+
+def test_lookup_declarations_are_checked():
+    spec = replace_first(sample_spec(), "lookup_declarations", default=False)
+    assert_one_error(spec, "exactly one is the default")
+    spec = replace_first(sample_spec(), "lookup_declarations", key_kinds=("missing",))
+    assert_one_error(spec, "key kind 'missing' does not exist")
+    spec = replace_first(
+        sample_spec(), "lookup_declarations", cardinalities=(Cardinality.MANY,)
+    )
+    assert_one_error(spec, "the default cardinality is not allowed")
+    spec = replace_first(
+        sample_spec(),
+        "lookup_declarations",
+        cardinalities=(Cardinality.EMPTY, Cardinality.ONE),
+    )
+    assert_one_error(spec, "cardinalities are one or many")
 
 
 def test_selection_rule_shape():

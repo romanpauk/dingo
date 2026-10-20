@@ -85,6 +85,7 @@ def test_spec_sections():
         "key_kinds",
         "decorations",
         "lookup_filters",
+        "lookup_declarations",
         "index_structures",
         "factory_kinds",
         "selection_rules",

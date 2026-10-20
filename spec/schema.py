@@ -44,6 +44,7 @@ __all__ = [
     "GraphRule",
     "IndexStructure",
     "KeyKind",
+    "LookupDeclaration",
     "LayerKind",
     "LayerTrait",
     "LookupFilter",
@@ -339,6 +340,24 @@ class LookupFilter(Entity):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class LookupDeclaration(Entity):
+    """What a container declares about the bindings of an interface and a key
+    domain: the key kinds the declaration covers and the cardinality it allows.
+
+    A domain declared with cardinality one holds at most one binding, so a
+    second registration is rejected; a domain declared many holds any number.
+    A domain without a declaration has `default_cardinality` of the declaration
+    that is the default (`default` is True).
+    """
+
+    description: str
+    key_kinds: tuple[str, ...]  # key kind ids
+    cardinalities: tuple["Cardinality", ...]
+    default_cardinality: "Cardinality"
+    default: bool = False
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class IndexStructure(Entity):
     """An acceleration that must return what its `filter` returns.
 
@@ -349,7 +368,7 @@ class IndexStructure(Entity):
     description: str
     filter: str  # lookup filter id
     key_kinds: tuple[str, ...]  # key kind ids
-    declarations: tuple[str, ...] = ()
+    declarations: tuple[str, ...] = ()  # lookup declaration ids
 
 
 # Bindings and factories
@@ -684,6 +703,7 @@ class Spec:
     key_kinds: tuple[KeyKind, ...] = ()
     decorations: tuple[Decoration, ...] = ()
     lookup_filters: tuple[LookupFilter, ...] = ()
+    lookup_declarations: tuple[LookupDeclaration, ...] = ()
     index_structures: tuple[IndexStructure, ...] = ()
     factory_kinds: tuple[FactoryKind, ...] = ()
     selection_rules: tuple[SelectionRule, ...] = ()

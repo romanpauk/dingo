@@ -30,6 +30,7 @@ from spec.schema import (
     BoundKind,
     Capability,
     Cardinality,
+    Combine,
     ContractDimension,
     CppProjection,
     SelectionMode,
@@ -225,6 +226,7 @@ def check_routes(spec: Spec, errors: list[str]) -> None:
 def check_lookups(spec: Spec, errors: list[str]) -> None:
     filter_ids = ids(spec.lookup_filters)
     key_ids = ids(spec.key_kinds)
+    declaration_ids = ids(spec.lookup_declarations)
     for lookup_filter in spec.lookup_filters:
         where = f"lookup_filters.{lookup_filter.id}"
         if not lookup_filter.dimensions:
@@ -240,15 +242,25 @@ def check_lookups(spec: Spec, errors: list[str]) -> None:
             require_ref(errors, where, "key kind", key, key_ids)
         check_unique(errors, where, "declarations", index.declarations)
         for declaration in index.declarations:
-            if not SNAKE_CASE.match(declaration):
-                errors.append(f"{where}: declaration {declaration!r} is not snake_case")
+            require_ref(errors, where, "declaration", declaration, declaration_ids)
+    defaults = [d.id for d in spec.lookup_declarations if d.default]
+    if spec.lookup_declarations and len(defaults) != 1:
+        errors.append(f"lookup_declarations: exactly one is the default, not {defaults}")
+    for declaration in spec.lookup_declarations:
+        where = f"lookup_declarations.{declaration.id}"
+        if not declaration.key_kinds:
+            errors.append(f"{where}: no key kinds")
+        check_unique(errors, where, "key_kinds", declaration.key_kinds)
+        for key in declaration.key_kinds:
+            require_ref(errors, where, "key kind", key, key_ids)
+        check_unique(errors, where, "cardinalities", declaration.cardinalities)
+        if Cardinality.EMPTY in declaration.cardinalities or not declaration.cardinalities:
+            errors.append(f"{where}: cardinalities are one or many")
+        if declaration.default_cardinality not in declaration.cardinalities:
+            errors.append(f"{where}: the default cardinality is not allowed")
 
 
 def check_selection_rules(spec: Spec, errors: list[str]) -> None:
-    combine_of_mode = {
-        SelectionMode.SINGULAR: "first_non_empty",
-        SelectionMode.COLLECTION: "concat",
-    }
     for rule in spec.selection_rules:
         where = f"selection_rules.{rule.id}"
         if not rule.steps:
@@ -256,10 +268,8 @@ def check_selection_rules(spec: Spec, errors: list[str]) -> None:
         for step in rule.steps:
             if not step.sources:
                 errors.append(f"{where}: a step has no sources")
-        if rule.combine.value != combine_of_mode[rule.mode]:
-            errors.append(
-                f"{where}: {rule.mode.value} requests combine with {combine_of_mode[rule.mode]}"
-            )
+        if rule.mode is SelectionMode.SINGULAR and rule.combine is not Combine.FIRST_NON_EMPTY:
+            errors.append(f"{where}: singular requests combine with first_non_empty")
         counts = [outcome.count for outcome in rule.outcomes]
         check_unique(errors, where, "outcome counts", counts)
         if set(counts) != set(Cardinality):

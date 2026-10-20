@@ -31,6 +31,7 @@ from spec.schema import (
     GraphRule,
     IndexStructure,
     KeyKind,
+    LookupDeclaration,
     LayerKind,
     LayerTrait,
     LookupFilter,
@@ -174,6 +175,16 @@ def sample_spec() -> Spec:
                     FilterDimension.KEY_KIND,
                     FilterDimension.KEY_VALUE,
                 ),
+            ),
+        ),
+        lookup_declarations=(
+            LookupDeclaration(
+                id="ordered",
+                description="Bindings by key value.",
+                key_kinds=("typed", "runtime"),
+                cardinalities=(Cardinality.ONE, Cardinality.MANY),
+                default_cardinality=Cardinality.ONE,
+                default=True,
             ),
         ),
         index_structures=(

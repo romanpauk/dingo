@@ -307,7 +307,10 @@ singular(req) = first non-empty of:
     auto_construct(req)            # if constructible
   then: |c| == 1 -> ok, |c| > 1 -> ambiguous, empty -> not_found
 
-collection(req) = concat(local, container, merge_parent ? parent : empty)
+collection(req) = first non-empty of:
+    container.runtime, container.static, local.runtime, local.static
+    parent.collection(req)
+  then: empty, one, or many bindings; an empty collection is valid
   empty -> as declared by the lookup
 ```
 
@@ -883,13 +886,23 @@ records the decision when it is made.
   instance of every external binding as a constructor argument, in the order of
   the bindings. "Static storage must be default constructible" is an
   implementation limit, not a binding-time constraint.
-- Runtime key values against a static table. Proposal: selection over key values
-  runs at runtime even when the table is static. Decision: open.
-- Duplicate registrations. Either reject them at registration in both domains or
-  accept them in both. Decision: open.
-- Empty collections. One rule for both domains. Decision: open.
-- Auto-construction on a miss in `static_container`. Decision: open.
-- Fixed keys in runtime registration. Decision: open.
+- Runtime key values against a static table. Decision: selection over key values
+  runs at runtime even when the table is static, so a runtime key value is
+  matched against static bindings.
+- Duplicate registrations. Decision: rejected in both domains unless the lookup
+  of their key is declared `many`: at registration in a runtime container, and
+  when the container type is formed in `static_container`. A `many` lookup
+  accepts them; a singular request is then ambiguous, and a collection gathers
+  them.
+- Empty collections. Decision: a collection request is a query over the
+  bindings, so no match yields an empty collection in every container, with or
+  without a lookup declaration.
+- Auto-construction on a miss in `static_container`. Decision: both domains use
+  one selection rule, which auto-constructs an eligible type after the parent;
+  `static_container` decides it at compile time.
+- Fixed keys in runtime registration. Decision: accepted; a fixed key
+  `key_type<K, V>` is stored as its value `K{V}`, so every key kind works in
+  every container.
 - Movability of static containers. Decision: open.
 - Spec location and format. Decision: a typed Python package under `spec/`
   exporting JSON, see M1.1.
@@ -1342,7 +1355,7 @@ engine to compute the same registration, lookup, service, and rules.
 
 #### M3.3: Storage Construct
 
-Status: not started.
+Status: done.
 
 Implement the one storage construct that selects its slot primitive and
 materialization from the scope descriptor.
@@ -1350,9 +1363,13 @@ materialization from the scope descriptor.
 Done when adding a scope with an existing slot primitive requires only a spec
 entry.
 
+`core/backend/slot.h` selects the slot of a binding by the slot kind of its
+scope descriptor, and its materialization, borrowed or consumed, follows from
+the descriptor too; the scope tags are generated from the spec.
+
 #### M3.4: Route Conformance
 
-Status: not started.
+Status: in progress.
 
 Generate route conformance tests across runtime, static, and mixed containers
 from the reference implementation, and run the route cases differentially
@@ -1362,17 +1379,31 @@ Done when the tests pass and every difference from the baseline is either fixed
 or listed in [Open Decisions](#open-decisions).
 
 The baseline side exists: the route extractor and the conformance check of M1.7.
-Remaining: extracting the same table from the new implementation and requiring
-it to match the reference implementation exactly.
+The same table extracted from the new implementation in runtime and static
+containers matches the reference implementation exactly, see M2.5, and the
+exception messages match the baseline. Remaining: the mixed containers, which
+wait for M4.6.
 
 ### M4: Lookup And Selection
 
 #### M4.1: Lookup And Selection Spec
 
-Status: not started.
+Status: in progress.
 
 Specify the lookup filter, the index structures, and the selection rules, and
 extend the reference implementation with them.
+
+The spec records the key kinds, the request decorations, one binding filter, the
+lookup declarations with the cardinality of the domains they cover, the index
+structures that accelerate them, and the singular and collection selection
+rules, with the four decisions of [Open Decisions](#open-decisions) on
+duplicates, empty collections, auto-construction, and keys across domains.
+`spec/reference/selection.py` interprets the selection rules of the spec over
+containers of static and runtime bindings with parents and local bindings, and
+decides registration by the declared cardinality; property tests check it over
+every container of up to three bindings of every key kind. Remaining: extracting
+the selection behavior of the baseline and comparing it with the reference, with
+the decided differences declared as behavior changes.
 
 #### M4.2: Lookup Filter
 
@@ -1421,10 +1452,14 @@ one rule for compile-time and runtime detection.
 
 #### M5.2: Diagnostics Catalog
 
-Status: not started.
+Status: in progress.
 
 Specify every diagnostic with its condition, exception type, and message
 template.
+
+The runtime diagnostics of lookup, conversion, and recursion are specified with
+the messages of the baseline, see M2.5. Remaining: the diagnostics of keys,
+collections, and registration, and the compile-time ones.
 
 #### M5.3: Generated Diagnostics
 
@@ -1620,3 +1655,9 @@ capability tags.
   the detected constructor unless a constructor, a function, or a callable
   object is declared. A declared factory lifts the check that the stored leaf is
   constructible, in the reference implementation as in the C++ one.
+
+- 2026-10-20: Duplicate registrations are rejected in both domains unless their
+  lookup is declared `many`, an empty collection is a valid result everywhere,
+  `static_container` auto-constructs on a miss as the runtime container does,
+  and every key kind works in every container: a runtime key value against a
+  static table, and a fixed key in a runtime registration.
