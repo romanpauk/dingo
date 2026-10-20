@@ -139,6 +139,22 @@ template <typename... Parts> struct bind_registration<::dingo::bind<Parts...>> {
   using type = registration<Parts...>;
 };
 
+namespace detail {
+// The interfaces a registration declares, without the stored type: declaring
+// only the stored type, its references and qualifiers removed, names the
+// binding by its own type, as declaring no interface does.
+template <typename Stored, typename Interfaces> struct declared_interfaces {
+  using type = Interfaces;
+};
+
+template <typename Stored, typename Interface>
+struct declared_interfaces<Stored, type_list<Interface>> {
+  using type =
+      std::conditional_t<std::is_same_v<remove_cvref_t<Stored>, Interface>,
+                         type_list<>, type_list<Interface>>;
+};
+} // namespace detail
+
 // The binding type a registration declares. A registration whose only
 // argument is a callable factory makes its object by it.
 template <typename... Parts> struct registration {
@@ -190,12 +206,13 @@ template <typename... Parts> struct registration {
   };
 
   template <typename... Args>
-  using binding_for =
-      binding_type<scope_of_v<typename scope_part::type>,
-                   typename storage_part::type, typename interfaces_part::type,
-                   typename with_arguments<Args...>::factory,
-                   typename with_arguments<Args...>::key,
-                   typename detail::local_bindings_of<locals_part>::type>;
+  using binding_for = binding_type<
+      scope_of_v<typename scope_part::type>, typename storage_part::type,
+      typename detail::declared_interfaces<
+          typename storage_part::type, typename interfaces_part::type>::type,
+      typename with_arguments<Args...>::factory,
+      typename with_arguments<Args...>::key,
+      typename detail::local_bindings_of<locals_part>::type>;
 
   using binding = binding_for<>;
 };

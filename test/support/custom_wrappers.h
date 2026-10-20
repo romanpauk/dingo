@@ -7,10 +7,19 @@
 
 #pragma once
 
+// The wrappers are layers by dingo::wrapper_traits in the next
+// implementation, and by dingo::type_traits and the per-scope
+// dingo::storage_traits in the current one; the behavior change
+// wrapper_extension_point of the spec declares the difference.
+#if defined(DINGO_IMPLEMENTATION_NEXT)
+#include <dingo/type/type_conversion_traits.h>
+#include <dingo/type/type_traits.h>
+#else
 #include <dingo/base/exceptions.h>
 #include <dingo/storage/type_storage_traits.h>
 #include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_traits.h>
+#endif
 
 #include <memory>
 #include <optional>
@@ -108,6 +117,76 @@ private:
   std::optional<T> value_;
 };
 
+#if defined(DINGO_IMPLEMENTATION_NEXT)
+// The family of the test handles: a test_unique shares its element as a
+// test_shared.
+struct test_wrapper_family {};
+
+template <typename T> struct wrapper_traits<test_shared<T>> {
+  static constexpr layer_kind kind = layer_kind::share;
+  using family = test_wrapper_family;
+  using arguments = type_list<T>;
+  template <typename U> using rebind = test_shared<U>;
+
+  static T &element(const test_shared<T> &wrapper) { return *wrapper.get(); }
+
+  template <typename... Args> static test_shared<T> make(Args &&...args) {
+    return test_shared<T>(
+        std::shared_ptr<T>(new T{std::forward<Args>(args)...}));
+  }
+
+  static test_shared<T> adopt(T *element) {
+    return test_shared<T>(std::shared_ptr<T>(element));
+  }
+
+  template <typename Deleter>
+  static test_shared<T> adopt(T *element, Deleter deleter) {
+    return test_shared<T>(std::shared_ptr<T>(element, std::move(deleter)));
+  }
+};
+
+template <typename T> struct wrapper_traits<test_unique<T>> {
+  static constexpr layer_kind kind = layer_kind::own;
+  using family = test_wrapper_family;
+  using arguments = type_list<T>;
+  template <typename U> using rebind = test_unique<U>;
+
+  static T &element(const test_unique<T> &wrapper) { return *wrapper.get(); }
+
+  template <typename... Args> static test_unique<T> make(Args &&...args) {
+    return test_unique<T>(
+        std::unique_ptr<T>(new T{std::forward<Args>(args)...}));
+  }
+
+  static test_unique<T> adopt(T *element) {
+    return test_unique<T>(std::unique_ptr<T>(element));
+  }
+
+  static test_shared<T> share(test_unique<T> &&wrapper) {
+    return test_shared<T>(std::move(wrapper));
+  }
+};
+
+template <typename T> struct wrapper_traits<test_optional<T>> {
+  static constexpr layer_kind kind = layer_kind::opt;
+  using family = test_wrapper_family;
+  using arguments = type_list<T>;
+  template <typename U> using rebind = test_optional<U>;
+
+  static T &element(test_optional<T> &wrapper) { return *wrapper.get(); }
+  static T &&element(test_optional<T> &&wrapper) {
+    return std::move(*wrapper.get());
+  }
+
+  template <typename... Args> static test_optional<T> make(Args &&...args) {
+    if constexpr (std::is_constructible_v<T, Args...>) {
+      return test_optional<T>(T(std::forward<Args>(args)...));
+    } else {
+      return test_optional<T>(T{std::forward<Args>(args)...});
+    }
+  }
+};
+#else
 template <typename T> struct type_traits<test_shared<T>> {
   static constexpr bool enabled = true;
   static constexpr bool is_pointer_like = true;
@@ -349,6 +428,18 @@ struct storage_traits<external, test_optional<T>, U> {
   using rvalue_reference_types = type_list<>;
   using pointer_types = type_list<U *, exact_lookup<test_optional<T>> *>;
 };
+
+#endif
+
+// A test wrapper made by the traits that declare it a layer.
+template <typename Wrapper, typename... Args>
+Wrapper make_test_wrapper(Args &&...args) {
+#if defined(DINGO_IMPLEMENTATION_NEXT)
+  return wrapper_traits<Wrapper>::make(std::forward<Args>(args)...);
+#else
+  return type_traits<Wrapper>::make(std::forward<Args>(args)...);
+#endif
+}
 
 template <typename T, typename U>
 struct type_conversion_traits<

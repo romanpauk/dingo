@@ -177,7 +177,7 @@ STORED_TYPES = (
         provides=frozenset({"stored_custom_shared"}),
         supported_modes=frozenset({"runtime"}),
         runtime_setup=(
-            "auto external_value = dingo::type_traits<dingo::test_shared<value_type>>::make();",
+            "auto external_value = dingo::make_test_wrapper<dingo::test_shared<value_type>>();",
         ),
         runtime_argument="std::move(external_value)",
         headers=CUSTOM_WRAPPER_HEADERS,
@@ -191,7 +191,7 @@ STORED_TYPES = (
         provides=frozenset({"stored_custom_shared"}),
         supported_modes=frozenset({"runtime"}),
         runtime_setup=(
-            "auto external_value = dingo::type_traits<dingo::test_shared<value_type>>::make();",
+            "auto external_value = dingo::make_test_wrapper<dingo::test_shared<value_type>>();",
         ),
         runtime_argument="external_value",
         headers=CUSTOM_WRAPPER_HEADERS,
@@ -238,7 +238,7 @@ STORED_TYPES = (
         provides=frozenset({"stored_custom_optional"}),
         supported_modes=frozenset({"runtime"}),
         runtime_setup=(
-            "auto external_value = dingo::type_traits<dingo::test_optional<value_type>>::make();",
+            "auto external_value = dingo::make_test_wrapper<dingo::test_optional<value_type>>();",
         ),
         runtime_argument="std::move(external_value)",
         headers=CUSTOM_WRAPPER_HEADERS,
@@ -252,7 +252,7 @@ STORED_TYPES = (
         provides=frozenset({"stored_custom_optional"}),
         supported_modes=frozenset({"runtime"}),
         runtime_setup=(
-            "auto external_value = dingo::type_traits<dingo::test_optional<value_type>>::make();",
+            "auto external_value = dingo::make_test_wrapper<dingo::test_optional<value_type>>();",
         ),
         runtime_argument="external_value",
         headers=CUSTOM_WRAPPER_HEADERS,
@@ -522,7 +522,7 @@ STORED_TYPES = (
         provides=frozenset({"stored_leaf_copy"}),
         supported_modes=frozenset({"runtime"}),
         runtime_setup=(
-            "auto external_value = std::make_shared<dingo::test_optional<value_type>>(dingo::type_traits<dingo::test_optional<value_type>>::make());",
+            "auto external_value = std::make_shared<dingo::test_optional<value_type>>(dingo::make_test_wrapper<dingo::test_optional<value_type>>());",
         ),
         runtime_argument="external_value",
         headers=NESTED_WRAPPER_HEADERS,

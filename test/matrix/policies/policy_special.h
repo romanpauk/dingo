@@ -9,7 +9,7 @@
 
 #include "matrix/policies/policy_core.h"
 
-#include <dingo/base/exceptions.h>
+#include <dingo/container.h>
 
 #include <type_traits>
 

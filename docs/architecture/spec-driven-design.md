@@ -1632,10 +1632,23 @@ tier.
 
 #### M9.1: Full Conformance
 
-Status: not started.
+Status: in progress.
 
 The new implementation passes the conformance suite, the differential tests with
 only declared behavior changes, and the contract probes on every CI job.
+
+The generated matrix builds against the next implementation with
+`-DDINGO_IMPLEMENTATION=next`. Its sources include public headers only; the name
+of a type in a message comes from `test/matrix/common/type_name.h`, and the test
+wrappers of `test/support/custom_wrappers.h` are layers by
+`dingo::wrapper_traits` in the next implementation, as the behavior change
+`wrapper_extension_point` declares, and made by `make_test_wrapper`. A
+registration that declares only its stored type as its interface names the
+binding by its own type, as one that declares none. Remaining: 31 of the matrix
+sources do not compile against the next implementation, among them tests of
+behavior the spec changes, such as static bindings of one key, which need the
+spec cases instead of the baseline ones, and the differential runner does not
+build the next implementation yet.
 
 #### M9.2: Switch And Removal
 

@@ -16,6 +16,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <stdexcept>
 
 #include <memory>
@@ -289,6 +290,22 @@ TEST(next_container, a_failed_construction_keeps_no_address) {
   EXPECT_EQ(&container.resolve<fails_once &>(), &constructed);
   EXPECT_EQ(container.resolve<fails_once *>(), &constructed);
   EXPECT_EQ(fails_once::attempts, 2);
+}
+
+} // namespace
+
+namespace {
+
+TEST(next_container, an_interface_of_the_stored_type_names_the_binding) {
+  using stored = std::variant<std::array<int, 2>, double>;
+  stored value;
+  dingo::container<> container;
+  container.register_type<scope<dingo::external>, storage<stored &>,
+                          dingo::interfaces<stored>>(value);
+  EXPECT_EQ(&container.resolve<stored &>(), &value);
+  dingo::container<> plain;
+  plain.register_type<scope<dingo::external>, storage<stored &>>(value);
+  EXPECT_EQ(&plain.resolve<stored &>(), &value);
 }
 
 } // namespace

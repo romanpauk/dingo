@@ -96,7 +96,7 @@ inline shared_const_value_type make_shared_const_value() {
 
 inline shared_custom_optional_value_type make_shared_custom_optional_value() {
   return std::make_shared<test_optional<value_type>>(
-      type_traits<test_optional<value_type>>::make());
+      make_test_wrapper<test_optional<value_type>>());
 }
 
 inline value_type *make_value_pointer() { return new value_type; }

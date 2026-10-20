@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <dingo/type/dependency.h>
+#include <dingo/container.h>
 
 #include <cstddef>
 #include <functional>

@@ -9,7 +9,7 @@
 
 #include "matrix/scenarios/parent/common.h"
 
-#include <dingo/base/type_name.h>
+#include "matrix/common/type_name.h"
 
 #include <cstddef>
 #include <stdexcept>
@@ -116,12 +116,15 @@ void assert_parent_keyed_diagnostics() {
     FAIL();
   } catch (const dingo::type_not_found_exception &error) {
     const std::string message = error.what();
-    ASSERT_NE(message.find(dingo::type_name<parent_diagnostic_dependency>()),
+    ASSERT_NE(
+        message.find(dingo::matrix::type_name<parent_diagnostic_dependency>()),
+        std::string::npos);
+    ASSERT_NE(message.find(
+                  dingo::matrix::type_name<dingo::key_type<std::size_t, 7>>()),
               std::string::npos);
-    ASSERT_NE(message.find(dingo::type_name<dingo::key_type<std::size_t, 7>>()),
-              std::string::npos);
-    ASSERT_NE(message.find(dingo::type_name<parent_diagnostic_consumer>()),
-              std::string::npos);
+    ASSERT_NE(
+        message.find(dingo::matrix::type_name<parent_diagnostic_consumer>()),
+        std::string::npos);
   }
 }
 
