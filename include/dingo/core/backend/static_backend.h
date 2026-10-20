@@ -20,6 +20,7 @@
 #include <dingo/core/engine/execute.h>
 #include <dingo/core/engine/lookup.h>
 #include <dingo/core/engine/request.h>
+#include <dingo/core/primitives/diagnostic_message.h>
 #include <dingo/core/primitives/retained.h>
 #include <dingo/core/projection/collection.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
@@ -217,6 +218,142 @@ constexpr std::size_t find_binding(const request_descriptor &request) {
 } // namespace detail
 
 namespace detail {
+// The request and the key an argument of a factory is resolved by, as a
+// container resolves it.
+template <typename Argument> struct argument_request {
+  using type = Argument;
+  using key = no_key;
+};
+
+template <typename Type, typename Key>
+struct argument_request<keyed<Type, Key>> {
+  using type = Type;
+  using key = Key;
+};
+
+template <typename Type, typename Tag>
+struct argument_request<::dingo::annotated<Type, Tag>> {
+  using type = Type;
+  using key = annotated_key<Tag, no_key>;
+};
+
+// The dependencies of static bindings that their factories declare: an edge
+// from a binding to the one each argument of its factory resolves. A binding
+// with local bindings, which may answer its arguments, and an argument by a
+// runtime key, whose value picks the binding, add none.
+template <typename... Bindings> struct dependency_graph {
+  static constexpr std::size_t count = sizeof...(Bindings);
+
+  struct edges {
+    bool from_to[count * count + 1];
+  };
+
+  // The path of a cycle, its first binding last again; empty without one.
+  struct cycle {
+    std::size_t length;
+    std::size_t nodes[count + 1];
+  };
+
+  template <typename Argument> static constexpr std::size_t target() {
+    using request = argument_request<Argument>;
+    using key = typename request::key;
+    if constexpr (key::descriptor.kind == key_kind::runtime) {
+      return count;
+    } else {
+      constexpr std::size_t found = find_binding<key, Bindings...>(
+          request_traits<typename request::type, key>::descriptor);
+      return found < count ? found : count;
+    }
+  }
+
+  template <std::size_t Index, typename... Arguments>
+  static constexpr void add(edges &graph, type_list<Arguments...> /*args*/) {
+    ((graph.from_to[target<Arguments>() == count
+                        ? count * count
+                        : Index * count + target<Arguments>()] = true),
+     ...);
+  }
+
+  template <std::size_t Index> static constexpr bool declares() {
+    using binding = pack_at_t<Index, Bindings...>;
+    return !std::is_void_v<typename declared_arguments<
+               typename binding::factory_type,
+               leaf_of_t<typename binding::stored_type>>::type> &&
+           std::is_same_v<typename binding::locals, type_list<>>;
+  }
+
+  template <std::size_t... Indices>
+  static constexpr bool any(std::index_sequence<Indices...> /*indices*/) {
+    return (declares<Indices>() || ...);
+  }
+
+  template <std::size_t... Indices>
+  static constexpr edges make(std::index_sequence<Indices...> /*indices*/) {
+    edges graph{};
+    (
+        [&graph] {
+          if constexpr (declares<Indices>()) {
+            using binding = pack_at_t<Indices, Bindings...>;
+            add<Indices>(graph,
+                         typename declared_arguments<
+                             typename binding::factory_type,
+                             leaf_of_t<typename binding::stored_type>>::type());
+          }
+        }(),
+        ...);
+    return graph;
+  }
+
+  // The shortest cycle through the first binding that is not shared_cyclical
+  // and reaches itself. spec: graph_rules.cycle
+  static constexpr cycle find() {
+    constexpr edges graph = make(std::index_sequence_for<Bindings...>());
+    constexpr bool legal[] = {(Bindings::scope == scope_id::shared_cyclical)...,
+                              false};
+    cycle found{};
+    for (std::size_t start = 0; start < count; ++start) {
+      if (legal[start]) {
+        continue;
+      }
+      std::size_t parent[count + 1] = {};
+      bool seen[count + 1] = {};
+      std::size_t queue[count + 1] = {};
+      std::size_t head = 0;
+      std::size_t tail = 0;
+      std::size_t node = start;
+      do {
+        for (std::size_t next = 0; next < count; ++next) {
+          if (graph.from_to[node * count + next] && !seen[next]) {
+            seen[next] = true;
+            parent[next] = node;
+            queue[tail++] = next;
+          }
+        }
+        if (seen[start]) {
+          std::size_t reversed[count + 1] = {};
+          std::size_t length = 0;
+          std::size_t at = start;
+          do {
+            reversed[length++] = at;
+            at = parent[at];
+          } while (at != start);
+          reversed[length++] = start;
+          found.length = length;
+          for (std::size_t index = 0; index < length; ++index) {
+            found.nodes[index] = reversed[length - 1 - index];
+          }
+          return found;
+        }
+        node = head < tail ? queue[head] : count;
+        ++head;
+      } while (head <= tail);
+    }
+    return found;
+  }
+};
+} // namespace detail
+
+namespace detail {
 // Whether the fixed key of a static binding, if any, is within the bound of
 // the dense array of its domain.
 template <const lookup_table &Table, typename Binding>
@@ -273,6 +410,28 @@ template <typename LookupTable, typename... Bindings> class static_backend {
   }
   static_assert(
       within<(detail::within_bound<LookupTable::value, Bindings>() && ...)>());
+
+  // Reports a cycle of the dependencies the static bindings declare through a
+  // binding that is not shared_cyclical, decided when the container is
+  // compiled. spec: graph_rules.cycle
+  using graph = detail::dependency_graph<Bindings...>;
+  template <std::size_t... Steps>
+  static constexpr void report_cycle(std::index_sequence<Steps...> /*steps*/) {
+    constexpr typename graph::cycle found = graph::find();
+    fail<diag::type_recursion,
+         dependency_path<leaf_of_t<typename pack_at_t<
+             found.nodes[Steps], Bindings...>::stored_type>...>>();
+  }
+  template <bool Declares> static constexpr bool acyclic() {
+    if constexpr (Declares) {
+      constexpr typename graph::cycle found = graph::find();
+      if constexpr (found.length != 0) {
+        report_cycle(std::make_index_sequence<found.length>());
+      }
+    }
+    return true;
+  }
+  static_assert(acyclic<graph::any(std::index_sequence_for<Bindings...>())>());
 
 public:
   // Takes the instance of every binding whose scope needs one, in the order of

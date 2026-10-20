@@ -63,6 +63,20 @@ TEST(next_shared_cyclical, resolves_a_cycle_statically) {
   check_cycle(container);
 }
 
+// A cycle of declared dependencies is legal when every binding in it is
+// shared_cyclical; next-static-container-rejects-a-declared-cycle.cpp checks
+// one that is not.
+TEST(next_shared_cyclical, resolves_a_declared_cycle_statically) {
+  using bindings = dingo::bindings<
+      dingo::bind<scope<dingo::shared_cyclical>,
+                  storage<std::shared_ptr<first>>,
+                  dingo::dependencies<second &>>,
+      dingo::bind<scope<dingo::shared_cyclical>, storage<second>,
+                  dingo::dependencies<first &, std::shared_ptr<first>>>>;
+  dingo::static_container<bindings> container;
+  check_cycle(container);
+}
+
 TEST(next_shared_cyclical, a_shared_cycle_is_a_recursion) {
   dingo::container<> container;
   container.register_type<scope<dingo::shared>, storage<first>>();

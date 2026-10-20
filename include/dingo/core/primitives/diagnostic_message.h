@@ -35,10 +35,35 @@ constexpr std::size_t write_text(char *out, std::size_t at,
 }
 } // namespace detail
 
+// The path of the types whose objects are being constructed, outermost first,
+// as a subject of a diagnostic: spelled as the names of `Types` separated by
+// " -> ", as a diagnostic reported at runtime spells the path.
+template <typename... Types> struct dependency_path {};
+
+template <typename Type>
+constexpr std::size_t write_type_name(char *out, std::size_t at);
+
+namespace detail {
+template <typename Type> struct is_dependency_path : std::false_type {};
+
+template <typename... Types>
+struct is_dependency_path<dependency_path<Types...>> : std::true_type {};
+
+template <typename First, typename... Rest>
+constexpr std::size_t write_path(char *out, std::size_t at,
+                                 dependency_path<First, Rest...> /*path*/) {
+  at = write_type_name<First>(out, at);
+  ((at = write_type_name<Rest>(out, write_text(out, at, " -> "))), ...);
+  return at;
+}
+} // namespace detail
+
 // Writes the name of `Type` as type_name_of spells it, as write_text writes.
 template <typename Type>
 constexpr std::size_t write_type_name(char *out, std::size_t at) {
-  if constexpr (std::is_lvalue_reference_v<Type>) {
+  if constexpr (detail::is_dependency_path<Type>::value) {
+    return detail::write_path(out, at, Type());
+  } else if constexpr (std::is_lvalue_reference_v<Type>) {
     at = write_type_name<std::remove_reference_t<Type>>(out, at);
     return detail::write_text(out, at, "&");
   } else if constexpr (std::is_rvalue_reference_v<Type>) {

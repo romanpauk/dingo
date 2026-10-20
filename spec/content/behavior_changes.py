@@ -310,6 +310,7 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         cases=(
             "selection:*#duplicate",
             "selection:static/many/*#registration",
+            "selection:static_parent/many/*#registration",
             "matrix:dingo_matrix_test_static_parent_container/*",
         ),
         baseline=(
@@ -370,7 +371,10 @@ behavior_changes: tuple[BehaviorChange, ...] = (
             "A collection request in a child container that names none of its "
             "bindings yields the collection of its parent."
         ),
-        cases=("selection:parent/*/all:*#collection",),
+        cases=(
+            "selection:parent/*/all:*#collection",
+            "selection:static_parent/*/all:*#collection",
+        ),
         baseline=(
             "A child container never gathers the bindings of its parent into a "
             "collection; only a collection the parent registers whole is found."
@@ -397,6 +401,8 @@ behavior_changes: tuple[BehaviorChange, ...] = (
             "selection:parent/*#registration_time",
             "selection:mixed/default/*#registration_time",
             "selection:static/*/one:runtime[78]#selection_time",
+            "selection:static_parent/*/one:runtime[78]#selection",
+            "selection:static_parent/*/one:runtime[78]#selection_time",
         ),
         baseline=(
             "A fixed key in a runtime registration and a value key in a mixed "
@@ -478,5 +484,19 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         ),
         now="The binding is found by its key for every interface.",
         decision=LOOKUP_DECISION,
+    ),
+    BehaviorChange(
+        id="static_construct_requests_ask_the_parent",
+        description=(
+            "A construct request of a static child asks its parent when the "
+            "child names no binding, as a resolve request does."
+        ),
+        cases=("selection:static_parent/*/make:none#selection",),
+        baseline=(
+            "A static child does not ask its parent for a construct request, "
+            "which does not compile when only the parent names a binding."
+        ),
+        now="The child constructs the request from the binding of its parent.",
+        decision=DECISION,
     ),
 )

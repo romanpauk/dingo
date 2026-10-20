@@ -63,6 +63,7 @@ template <typename... Subjects> struct type_ambiguous_carrier {};
 template <typename... Subjects> struct type_index_out_of_range_carrier {};
 template <typename... Subjects> struct type_not_convertible_carrier {};
 template <typename... Subjects> struct type_not_found_carrier {};
+template <typename... Subjects> struct type_recursion_carrier {};
 
 } // namespace dingo
 
@@ -96,12 +97,13 @@ enum class diag : std::uint8_t {
   type_not_convertible,
   type_not_found,
   type_not_found_keyed,
+  type_recursion,
 };
 
 // The number of subjects of each diagnostic, one per placeholder.
 inline constexpr std::uint8_t diag_subjects[] = {0, 1, 1, 2, 2, 1, 1, 2, 1,
                                                  2, 1, 3, 1, 1, 1, 1, 0, 0,
-                                                 1, 1, 0, 1, 1, 2, 1, 2};
+                                                 1, 1, 0, 1, 1, 2, 1, 2, 1};
 
 #if DINGO_HAS_STATIC_ASSERT_MESSAGE
 // The text of a diagnostic around its placeholders, and its carrier.
@@ -318,6 +320,14 @@ template <> struct diag_text<diag::type_not_found_keyed> {
   using carrier = ::dingo::type_not_found_carrier<Subjects...>;
   static constexpr std::string_view pieces[] = {
       "type not found: ", " (index type: ", ")"};
+};
+
+// spec: diagnostics.type_recursion
+template <> struct diag_text<diag::type_recursion> {
+  template <typename... Subjects>
+  using carrier = ::dingo::type_recursion_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "recursive dependency detected: ", ""};
 };
 
 // The report of a diagnostic about `Subjects`: its message formatted with
@@ -600,6 +610,15 @@ struct diag_report<diag::type_not_found_keyed, Subjects...> {
   static constexpr void fail() {
     static_assert(dependent_false<::dingo::type_not_found_carrier<Subjects...>>,
                   "type not found: {request} (index type: {key})");
+  }
+};
+
+// spec: diagnostics.type_recursion
+template <typename... Subjects>
+struct diag_report<diag::type_recursion, Subjects...> {
+  static constexpr void fail() {
+    static_assert(dependent_false<::dingo::type_recursion_carrier<Subjects...>>,
+                  "recursive dependency detected: {path}");
   }
 };
 #endif

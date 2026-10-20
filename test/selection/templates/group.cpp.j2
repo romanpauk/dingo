@@ -44,13 +44,16 @@ dingo::associative<{{ declaration.key }}, iface, dingo::{{ declaration.cardinali
   dingo::static_container<source, traits> c;
 {% elif group.domain == "mixed" %}
     dingo::container<source{{ ", traits" if group.traits else "" }}> c;
+{% elif group.domain == "static_parent" %}
+  parent_type parent;
+  dingo::static_container<child_source, parent_type> c(&parent);
 {% else %}
   dingo::container<traits> parent;
   dingo::container<traits, traits::allocator_type, dingo::container<traits>> c(
       &parent);
 {% endif %}
 {% for binding in group.bindings %}
-{% if binding.place == "static" %}
+{% if binding.static %}
   regs.fixed();
 {% else %}
   regs.attempt([&] {
@@ -72,13 +75,20 @@ struct traits : dingo::{{ group.traits.base }} {
 };
 
 {% endif %}
-{% if group.domain in ("static", "mixed") %}
-using source = dingo::bindings<
-{% for binding in group.bindings if binding.place == "static" %}
+{% macro static_bindings(name, place) %}
+using {{ name }} = dingo::bindings<
+{% for binding in group.bindings if binding.place == place %}
     dingo::bind<dingo::scope<dingo::shared>, dingo::storage<{{ binding.impl }}>,
                 dingo::interfaces<iface>{{ key_parameter(binding.key) }}>{{ "," if not loop.last }}
 {% endfor %}
     >;
+{% endmacro %}
+{% if group.domain in ("static", "mixed") %}
+{{ static_bindings("source", "static") }}
+{% elif group.domain == "static_parent" %}
+{{ static_bindings("parent_source", "parent") }}
+{{ static_bindings("child_source", "child") }}
+using parent_type = dingo::static_container<parent_source, traits>;
 
 {% endif %}
 // The registrations alone, run with argv[1] == -1.

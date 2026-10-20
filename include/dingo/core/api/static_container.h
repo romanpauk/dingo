@@ -36,6 +36,24 @@ template <typename Parent> struct parent_holder {
 };
 
 template <> struct parent_holder<void> {};
+
+// The traits of a static container whose second argument is `Second`: the
+// traits it names, the traits of the parent it names, as the baseline takes
+// them, or the default traits of a static container.
+template <typename Second, typename = void> struct parent_traits {
+  using type = static_container_traits;
+};
+
+template <typename Second>
+struct parent_traits<Second, std::void_t<typename Second::traits_type>> {
+  using type = typename Second::traits_type;
+};
+
+template <typename Second>
+using static_traits_t =
+    typename std::conditional_t<is_container_traits<Second>::value,
+                                std::enable_if<true, Second>,
+                                parent_traits<Second>>::type;
 } // namespace detail
 
 template <typename Bindings, typename Second = static_container_traits>
@@ -44,20 +62,18 @@ class static_container;
 // A container of the bindings of its type: static_container<bindings<...>>,
 // with the lookup declarations of traits static_container<bindings<...>,
 // Traits>, or a child of a parent container static_container<bindings<...>,
-// Parent>. It takes the parent, when it has one, and the instance of every
-// external binding as constructor arguments, in the order of the bindings.
+// Parent>, which has the traits of its parent. It takes the parent, when it
+// has one, and the instance of every external binding as constructor
+// arguments, in the order of the bindings.
 template <typename... Binds, typename Second>
 class DINGO_EMPTY_BASES static_container<bindings<Binds...>, Second>
     : public core::selection<static_container<bindings<Binds...>, Second>>,
       public detail::container_operations<
           static_container<bindings<Binds...>, Second>>,
-      public detail::container_member_types<
-          std::conditional_t<detail::is_container_traits<Second>::value, Second,
-                             static_container_traits>>,
+      public detail::container_member_types<detail::static_traits_t<Second>>,
       private detail::parent_holder<std::conditional_t<
           detail::is_container_traits<Second>::value, void, Second>> {
-  using traits = std::conditional_t<detail::is_container_traits<Second>::value,
-                                    Second, static_container_traits>;
+  using traits = detail::static_traits_t<Second>;
 
 public:
   using static_source_type = core::static_backend<

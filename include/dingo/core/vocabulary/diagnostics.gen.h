@@ -125,7 +125,8 @@ raise_type_not_found_required_by(std::string_view request,
 
 // spec: diagnostics.type_recursion
 // An object is requested while it is being constructed, by a scope that guards
-// the recursion.
+// the recursion, or the dependencies static bindings declare form a cycle the
+// graph rule does not allow, whose path ends with the binding it starts with.
 [[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
 raise_type_recursion(std::string_view path) {
   throw ::dingo::type_recursion_exception(format_message(

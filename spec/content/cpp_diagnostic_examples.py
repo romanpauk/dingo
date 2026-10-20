@@ -145,6 +145,36 @@ int main() {
         "dingo::key_type<int, 2>",
     ),
     example(
+        "type_recursion",
+        STATIC,
+        """
+struct left;
+struct right;
+
+struct left {
+  explicit left(right &);
+};
+
+struct right {
+  explicit right(left &);
+};
+
+left::left(right &) {}
+right::right(left &) {}
+
+int main() {
+  using bindings = dingo::bindings<
+      dingo::bind<dingo::scope<dingo::shared>, dingo::storage<left>,
+                  dingo::dependencies<right &>>,
+      dingo::bind<dingo::scope<dingo::shared>, dingo::storage<right>,
+                  dingo::dependencies<left &>>>;
+  dingo::static_container<bindings> container;
+  (void)container;
+}
+""",
+        "left -> right -> left",
+    ),
+    example(
         "registration_without_scope",
         SHARED,
         CONFIG

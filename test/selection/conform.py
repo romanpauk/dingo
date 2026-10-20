@@ -134,14 +134,19 @@ def to_reference(case):
     implementation index}, [(level, Binding)] in binding order). The request
     of iface, an abstract interface, has no factory."""
     domain, setting, bindings, mode, key = parse_case_id(case)
+    static = domain in ("static", "static_parent")
     child = Level(
         declarations=declarations(domain, setting),
         bounds=bounds(setting),
-        open=domain != "static",
+        open=not static,
     )
     parent = None
-    if domain == "parent":
-        parent = Level(declarations=declarations(domain, setting), bounds=bounds(setting))
+    if domain in ("parent", "static_parent"):
+        parent = Level(
+            declarations=declarations(domain, setting),
+            bounds=bounds(setting),
+            open=not static,
+        )
         child.parent = parent
     placed = []
     impls = {}
@@ -150,7 +155,7 @@ def to_reference(case):
             f"b{position}",
             (INTERFACE,),
             KEYS[binding.key],
-            static=binding.place == "static",
+            static=static or binding.place == "static",
         )
         impls[reference] = impl_index(binding.impl)
         placed.append((parent if binding.place == "parent" else child, reference))
@@ -308,7 +313,7 @@ def named_places(case, model):
 
 def place_label(domain, binding):
     kind = KEYS[binding.key].kind
-    return f"{kind}@{binding.place}" if domain in ("mixed", "parent") else kind
+    return f"{kind}@{binding.place}" if domain in ("mixed", "parent", "static_parent") else kind
 
 
 class Patterns:
@@ -354,7 +359,7 @@ class Patterns:
     def selection(self, case):
         domain, _, _, mode, key = parse_case_id(case)
         places = named_places(case, self.model)
-        named = "+".join(places) if domain in ("mixed", "parent") else str(len(places))
+        named = "+".join(places) if domain in ("mixed", "parent", "static_parent") else str(len(places))
         return f"{mode}:{KEYS[key].kind} names {named or 'none'}"
 
     def __call__(self, difference):

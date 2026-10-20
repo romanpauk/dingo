@@ -17,6 +17,7 @@
 
 #include <gtest/gtest.h>
 
+#include <type_traits>
 #include <vector>
 
 namespace {
@@ -116,6 +117,31 @@ TEST(next_parents, a_static_child_falls_back_to_its_parent) {
   dingo::static_container<bindings, parent_container> child(&parent);
   EXPECT_EQ(child.resolve<iface &>().id(), 5);
   EXPECT_EQ(child.resolve<service &>().value(), 3);
+}
+
+struct static_many_traits : dingo::static_container_traits {
+  using lookup_definition_type = dingo::lookups<dingo::collection<iface>>;
+};
+
+TEST(next_parents, a_static_child_of_a_static_parent_has_its_traits) {
+  using parent_bindings =
+      dingo::bindings<dingo::bind<scope<dingo::shared>, storage<impl<1>>,
+                                  dingo::interfaces<iface>>,
+                      dingo::bind<scope<dingo::shared>, storage<impl<2>>,
+                                  dingo::interfaces<iface>>>;
+  using static_parent =
+      dingo::static_container<parent_bindings, static_many_traits>;
+  using child_bindings =
+      dingo::bindings<dingo::bind<scope<dingo::shared>, storage<impl<3>>,
+                                  dingo::interfaces<iface>>>;
+  using static_child = dingo::static_container<child_bindings, static_parent>;
+  static_assert(std::is_same_v<static_child::lookup_definition_type,
+                               static_many_traits::lookup_definition_type>);
+  static_parent parent;
+  static_child child(&parent);
+  EXPECT_EQ(child.resolve<iface &>().id(), 3);
+  EXPECT_EQ(ids(parent.resolve<std::vector<iface *>>()),
+            (std::vector<int>{1, 2}));
 }
 
 TEST(next_parents, a_static_container_auto_constructs) {

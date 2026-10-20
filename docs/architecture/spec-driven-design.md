@@ -29,6 +29,13 @@ starting point the new implementation has to evolve from.
   without changing which programs compile or how they behave.
 - The public API is defined in the spec and preserved: include paths, names,
   extension points, and configuration macros.
+- Users can extend almost everything: scopes and their storage, lookup index
+  structures, wrappers and their routes, selection sources, factories, key
+  types, RTTI, collections, and conversions. The spec describes each such
+  concept as an open schema whose built-in members are instances, and the
+  library reaches every member through a type the user can provide, never
+  through a closed list of ids. Only the vocabulary of the algebra itself, such
+  as value categories and binding times, is closed.
 - No behavior changes unintentionally. The new implementation is tested
   differentially against a pinned baseline of the current library, and every
   intended change is declared and justified.
@@ -1564,10 +1571,20 @@ declarations among them, equal to the reference implementation.
 
 #### M5.1: Graph Rules
 
-Status: not started.
+Status: done.
 
 Specify and generate cycle and missing-dependency checks on descriptors, with
 one rule for compile-time and runtime detection.
+
+The cycle rule allows a cycle of dependencies only through shared_cyclical
+bindings. The dependencies a factory declares, by `dependencies<>`, a declared
+constructor, or the signature of a function or a callable, are known when a
+static container is compiled: the static backend builds their graph and reports
+the shortest illegal cycle as `type_recursion` with its path,
+`left -> right -> left`, as the runtime spells it. The dependencies of a
+detected constructor are known when the object is constructed, which reports a
+cycle then. The reference implementation of the rule finds the same cycle. A
+missing dependency is the `type_not_found` of its request, decided by M5.4.
 
 #### M5.2: Diagnostics Catalog
 
@@ -1632,9 +1649,10 @@ container now rejects a request that two of its static bindings name when it is
 compiled, as a static container does. The current implementation rejects some
 runtime registrations by a fixed key, and every static request by a runtime key
 value, when they are compiled, which the behavior change
-`keys_in_every_container` declares. Remaining: the next implementation asks a
-parent when a request is resolved, so a request a static parent of a static
-child decides is reported then; no extracted case has a static parent.
+`keys_in_every_container` declares. A static child of a static parent decides
+what its parent decides when the request is compiled; the extraction covers it
+as the static_parent domain, 13,905 of the 51,255 cases, and a static child has
+the traits of its parent, as in the baseline.
 
 #### M5.5: Diagnostics Tests Per Tier
 
@@ -1780,7 +1798,45 @@ Status: not started.
 Make the generated matrix consume the spec and retire its hand-curated
 capability tags.
 
+### M10: Open Extension Points
+
+Status: in progress.
+
+Replace every closed list of a user-extensible concept with a type the user
+provides, which carries the data of its spec schema.
+
+#### M10.1: Scopes
+
+A scope is a type whose `scope_of` specialization carries its descriptor, the
+fields of the spec's `Scope` schema, instead of an id into a generated table.
+Bindings carry the descriptor, so scopes need no registry. The built-in scopes
+are generated specializations; a user scope combines one of the built-in slot
+mechanisms with its descriptor, or names a slot class of its own. Rules that
+name scopes become rules on descriptor properties.
+
+#### M10.2: Index Structures
+
+A lookup declaration's backend is a type that provides the index of its domain.
+The memo of a request takes the index type of the declaration that answers it,
+decided when the request is compiled, instead of switching over a closed list of
+index structures.
+
+#### M10.3: Layer Kinds And Routes
+
+Wrappers map onto the built-in layer kinds through `layer_traits`. A new kind of
+layer brings its own route rules, which the engine merges into the route table
+when it is compiled.
+
+#### M10.4: Selection Sources
+
+A container's traits may add selection sources, a type per source with the time
+its bindings are known, which the selection rule asks at a declared step.
+
 ## Decision Log
+
+- 2026-10-20: Users can extend almost everything. A user-extensible concept is
+  an open schema in the spec, and the library reaches its members through types
+  the user can provide, not through closed lists of ids; see M10.
 
 - 2026-10-19: Use one decision engine over descriptors, evaluated at compile
   time or at runtime, instead of generating separate runtime and static

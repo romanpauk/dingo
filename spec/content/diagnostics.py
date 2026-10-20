@@ -126,12 +126,15 @@ diagnostics: tuple[Diagnostic, ...] = (
         id="type_recursion",
         condition=(
             "An object is requested while it is being constructed, by a scope "
-            "that guards the recursion."
+            "that guards the recursion, or the dependencies static bindings "
+            "declare form a cycle the graph rule does not allow, whose path "
+            "ends with the binding it starts with."
         ),
         exception="type_recursion_exception",
         message="recursive dependency detected: {path}",
         placeholders=("path",),
         fallback_carrier="type_recursion_carrier",
+        reported=BOTH,
     ),
 
     # Reported when the program is compiled

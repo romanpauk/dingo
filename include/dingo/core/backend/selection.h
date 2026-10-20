@@ -157,6 +157,32 @@ public:
     return inherited_count_at<Request, Key, 0>(key_value);
   }
 
+  // The count inherited_count() returns when it is known when the request is
+  // compiled, else unknown_count: the first step that names a binding, or two
+  // the sources known then name, decides it.
+  template <typename Request, typename Key, std::size_t Step = 0>
+  static constexpr std::size_t inherited_known() {
+    if constexpr (Step == singular.step_count) {
+      return 0;
+    } else if constexpr (singular.steps[Step].when != step_condition::always) {
+      return inherited_known<Request, Key, Step + 1>();
+    } else {
+      constexpr std::size_t known =
+          known_step_count<Request, Key, selection_mode::singular, Step>();
+      if constexpr (known == unknown_count) {
+        return known_step_least<Request, Key, selection_mode::singular, Step>(
+                   std::make_index_sequence<
+                       singular.steps[Step].source_count>()) > 1
+                   ? 2
+                   : unknown_count;
+      } else if constexpr (known != 0) {
+        return known < 2 ? known : 2;
+      } else {
+        return inherited_known<Request, Key, Step + 1>();
+      }
+    }
+  }
+
   // Resolves a request from this container or its ancestors, without
   // auto-construction.
   template <typename Request, typename Key>
@@ -314,7 +340,12 @@ private:
     } else if constexpr (Source == selection_source::container_runtime) {
       return Self::has_runtime_source ? unknown_count : 0;
     } else if constexpr (Source == selection_source::parent) {
-      return std::is_void_v<typename Self::parent_type> ? 0 : unknown_count;
+      // A parent decides when the request is compiled what it decides then.
+      if constexpr (std::is_void_v<typename Self::parent_type>) {
+        return 0;
+      } else {
+        return Self::parent_type::template inherited_known<Request, Key>();
+      }
     } else if constexpr (Source == selection_source::auto_construct ||
                          Source == selection_source::factory) {
       return 1;

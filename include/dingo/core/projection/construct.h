@@ -285,6 +285,45 @@ private:
   Callable callable_;
 };
 
+// The argument types `Factory` declares for the leaf `Leaf` it makes, or void
+// when they are the arguments of a detected constructor, which are known only
+// when the object is constructed.
+template <typename Factory, typename Leaf> struct declared_arguments {
+  using type = void;
+};
+
+template <typename... Args, typename Made, typename Leaf>
+struct declared_arguments<constructor_factory<declared_leaf<Args...>, Made>,
+                          Leaf> {
+  using type = type_list<Args...>;
+};
+
+namespace detail {
+template <typename Type, bool = declared_constructor<Type>::declared>
+struct constructor_arguments {
+  using type = void;
+};
+
+template <typename Type> struct constructor_arguments<Type, true> {
+  using type = typename declared_constructor<Type>::arguments;
+};
+} // namespace detail
+
+template <typename Made, typename Leaf>
+struct declared_arguments<constructor_factory<detected_leaf, Made>, Leaf>
+    : detail::constructor_arguments<
+          std::conditional_t<std::is_void_v<Made>, Leaf, Made>> {};
+
+template <auto Function, typename Leaf>
+struct declared_arguments<function_factory<Function>, Leaf> {
+  using type = callable_arguments_t<decltype(Function)>;
+};
+
+template <typename Arguments, typename Callable, typename Leaf>
+struct declared_arguments<callable_factory<Arguments, Callable>, Leaf> {
+  using type = Arguments;
+};
+
 template <typename Type> struct is_callable_factory : std::false_type {};
 
 template <typename Arguments, typename Callable>

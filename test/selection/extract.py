@@ -30,7 +30,10 @@ Universe:
   dingo::static_container<dingo::bindings<...>, traits>; "mixed" is
   dingo::container<dingo::bindings<...>> with runtime registrations added
   (its traits are fixed); "parent" is a runtime child container whose parent
-  is a runtime container, the request made of the child.
+  is a runtime container, the request made of the child; "static_parent" is
+  dingo::static_container<child bindings, Parent> whose parent is a
+  dingo::static_container<parent bindings, traits>, whose traits the child
+  has.
 - bindings: up to two. A binding of a mixed container is static or runtime, of
   a parent case in the parent or in the child. The order of a static and a
   runtime binding, and of a parent and a child binding, is not observable, so
@@ -115,7 +118,7 @@ TEMPLATES = Path(__file__).resolve().parent / "templates"
 # The universe.
 # ---------------------------------------------------------------------------
 
-DOMAINS = ("runtime", "static", "mixed", "parent")
+DOMAINS = ("runtime", "static", "mixed", "parent", "static_parent")
 SETTINGS = ("default", "many", "bounded")
 
 # Key names of case ids and their C++ data: kind, type, value.
@@ -140,7 +143,11 @@ PLACES = {
     "static": ("static",),
     "mixed": ("static", "runtime"),
     "parent": ("parent", "child"),
+    "static_parent": ("parent", "child"),
 }
+
+# The domains whose bindings are all static.
+STATIC_DOMAINS = ("static", "static_parent")
 
 # The implementation of the first binding, and the choices for the second.
 FIRST_IMPL = "impl_0"
@@ -163,6 +170,7 @@ TRAITS_BASE = {
     "runtime": "dynamic_container_traits",
     "parent": "dynamic_container_traits",
     "static": "static_container_traits",
+    "static_parent": "static_container_traits",
 }
 
 # Whether the mixed container takes traits, container<bindings<...>,
@@ -256,6 +264,8 @@ class Group:
     def expressible(self):
         if self.domain == "mixed" and self.setting != "default" and not MIXED_TRAITS:
             return False
+        if self.domain in STATIC_DOMAINS:
+            return all(KEYS[b.key]["kind"] != "runtime" for b in self.bindings)
         return all(b.expressible for b in self.bindings)
 
     @property
@@ -308,7 +318,12 @@ def group_data(group):
         "domain": group.domain,
         "traits": traits,
         "bindings": [
-            {"impl": b.impl, "key": KEYS[b.key], "place": b.place}
+            {
+                "impl": b.impl,
+                "key": KEYS[b.key],
+                "place": b.place,
+                "static": b.place == "static" or group.domain in STATIC_DOMAINS,
+            }
             for b in group.bindings
         ],
         "requests": [
