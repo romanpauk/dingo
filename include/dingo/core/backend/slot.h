@@ -106,13 +106,17 @@ public:
     if (slot_.constructing()) {
       raise_recursion<leaf_of_t<stored_type>>();
     }
-    stored_type &object =
-        slot_.get_or_construct([this, &resolver](void *where) {
-          const auto frame = type_frame::of<leaf_of_t<stored_type>>();
-          construct_stored<stored_type>(where, this->factory(), resolver);
-        });
-    resolver.transactions().record(this, &reset_slot);
-    return object;
+    // The construction is a transaction of the container, which destroys
+    // the object when a construction it is part of fails.
+    return resolver.transactions().run([&]() -> stored_type & {
+      stored_type &object =
+          slot_.get_or_construct([this, &resolver](void *where) {
+            const auto frame = type_frame::of<leaf_of_t<stored_type>>();
+            construct_stored<stored_type>(where, this->factory(), resolver);
+          });
+      resolver.transactions().record(this, &reset_slot);
+      return object;
+    });
   }
 
 private:
@@ -158,7 +162,10 @@ public:
       element *first = new element[std::extent_v<stored_type>]();
       return *reinterpret_cast<stored_type *>(first);
     } else {
-      return this->factory().template make<stored_type>(resolver);
+      // The construction is a transaction of the container.
+      return resolver.transactions().run([&]() -> stored_type {
+        return this->factory().template make<stored_type>(resolver);
+      });
     }
   }
 
@@ -218,10 +225,12 @@ public:
 
   template <typename Resolver> stored_type &get(Resolver &resolver) {
     if (state_ == state::empty) {
-      // The transaction in progress resets the slot when it fails: an
-      // object constructed during it may refer to the published object.
-      resolver.transactions().record(this, &reset_slot);
-      publish(resolver);
+      // The transaction resets the slot when it fails: an object constructed
+      // during it may refer to the published object.
+      resolver.transactions().run([&] {
+        resolver.transactions().record(this, &reset_slot);
+        publish(resolver);
+      });
     } else if (state_ == state::publishing && !published_while_constructed) {
       raise_recursion<leaf_of_t<stored_type>>();
     }

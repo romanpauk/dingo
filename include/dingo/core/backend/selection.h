@@ -84,11 +84,11 @@ struct annotated_request<::dingo::annotated<Type, Tag>> {
 template <typename Self> class selection {
 public:
   // Resolves a request; a keyed request carries its key.
-  // Resolves a request, as a transaction of the container; a keyed or an
-  // annotated request names the type it decorates, which is the result.
+  // Resolves a request; a keyed or an annotated request names the type it
+  // decorates, which is the result. The constructions of a request are the
+  // transactions of their containers.
   template <typename Request> resolved_t<Request> resolve() {
-    return self().transactions().run(
-        [&]() -> resolved_t<Request> { return resolve_request<Request>(); });
+    return resolve_request<Request>();
   }
 
   // Resolves a request by a key: a key_type object, a key_value, or a value
@@ -96,16 +96,14 @@ public:
   template <typename Request, typename Value>
   resolved_t<Request> resolve(Value &&value) {
     using key = request_key_of<std::decay_t<Value>>;
-    return self().transactions().run([&]() -> resolved_t<Request> {
-      if constexpr (is_annotated<Request>::value) {
-        return select<typename annotated_request<Request>::type,
-                      annotated_key<typename annotated_request<Request>::tag,
-                                    typename key::type>,
-                      true>(key::value(value));
-      } else {
-        return select<Request, typename key::type, true>(key::value(value));
-      }
-    });
+    if constexpr (is_annotated<Request>::value) {
+      return select<typename annotated_request<Request>::type,
+                    annotated_key<typename annotated_request<Request>::tag,
+                                  typename key::type>,
+                    true>(key::value(value));
+    } else {
+      return select<Request, typename key::type, true>(key::value(value));
+    }
   }
 
   // The argument of a parameter of type `Request`: a keyed or an annotated
@@ -121,9 +119,7 @@ public:
   // Constructs an object of `Type` by the construct rule: a binding of the
   // type answers it, and otherwise its detected factory makes it.
   template <typename Type> Type construct_by_rule() {
-    return self().transactions().run([&]() -> Type {
-      return select<Type, no_key, true, selection_mode::construct>(nullptr);
-    });
+    return select<Type, no_key, true, selection_mode::construct>(nullptr);
   }
 
   // The collection of every binding a request of its element type by `Key`
@@ -149,8 +145,7 @@ public:
   // auto-construction.
   template <typename Request, typename Key>
   Request resolve_inherited(const void *key_value) {
-    return self().transactions().run(
-        [&]() -> Request { return select<Request, Key, false>(key_value); });
+    return select<Request, Key, false>(key_value);
   }
 
   // The number of bindings a request names among the container's own
@@ -548,8 +543,13 @@ private:
           .local_runtime_source()
           ->template resolve_named<Request, Key>(self(), key_value);
     } else if constexpr (Source == selection_source::parent) {
-      return self().parent()->template resolve_inherited<Request, Key>(
-          key_value);
+      // A request of the parent is part of the transaction of the container,
+      // so a construction of the parent that registers into the container is
+      // undone with it.
+      return self().transactions().run([&]() -> Request {
+        return self().parent()->template resolve_inherited<Request, Key>(
+            key_value);
+      });
     } else if constexpr (Source == selection_source::factory) {
       return make_by_factory<Request, Key>();
     } else {
@@ -571,13 +571,18 @@ private:
                   std::is_same_v<Key, no_key>) {
       using value_type = std::remove_cv_t<std::remove_reference_t<Request>>;
       if constexpr (std::is_reference_v<Request>) {
-        value_type &kept = self().retained().template emplace<value_type>(
-            [this] { return detected_factory().make<value_type>(self()); });
-        self().transactions().record(&self().retained(),
-                                     &retained_objects::undo_last);
-        return kept;
+        // The construction is a transaction of the container.
+        return self().transactions().run([this]() -> value_type & {
+          value_type &kept = self().retained().template emplace<value_type>(
+              [this] { return detected_factory().make<value_type>(self()); });
+          self().transactions().record(&self().retained(),
+                                       &retained_objects::undo_last);
+          return kept;
+        });
       } else {
-        return detected_factory().make<value_type>(self());
+        return self().transactions().run([this]() -> value_type {
+          return detected_factory().make<value_type>(self());
+        });
       }
     } else {
       raise_not_found<Request, Key>();
