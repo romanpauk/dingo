@@ -33,13 +33,11 @@
 #endif
 
 // Inlines a lambda into every call, as DINGO_ALWAYS_INLINE does a function:
-// written after its parameters.
-#if !defined(DINGO_INLINE_LAMBDA)
+// written after its parameters. It is internal, not a configuration macro.
 #if defined(__GNUC__) || defined(__clang__)
 #define DINGO_INLINE_LAMBDA __attribute__((always_inline))
 #else
 #define DINGO_INLINE_LAMBDA
-#endif
 #endif
 
 #if !defined(DINGO_NOINLINE)

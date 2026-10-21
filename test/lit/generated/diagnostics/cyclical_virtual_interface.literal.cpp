@@ -7,11 +7,11 @@
 //
 
 // clang-format off
-// The program of an example of diagnostics.cyclical_virtual_interface, which the next
-// implementation rejects when it is compiled, with the message
+// The program of an example of diagnostics.cyclical_virtual_interface, which the library
+// rejects when it is compiled, with the message
 // literal where the compiler formats none.
 // REQUIRES: literal-static-assert
-// RUN: not %dingo_next_cxx_literal -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx_literal -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: shared_cyclical cannot publish {stored} as {interface}, which it inherits virtually: the conversion reads the object, which is not constructed yet
 
 #include <dingo/container.h>

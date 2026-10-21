@@ -2,7 +2,7 @@
 // conversion needs, so a conversion through one that declares no
 // required_access is rejected when it is compiled.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: declares no required_access
 
 #include <dingo/container.h>

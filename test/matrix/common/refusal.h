@@ -25,7 +25,7 @@ namespace detail {
 template <typename Container, typename Request, typename = void>
 struct static_count : std::integral_constant<std::size_t, 0> {};
 
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+#if !defined(DINGO_MATRIX_BASELINE)
 template <typename Container, typename Request>
 struct static_count<Container, Request,
                     std::enable_if_t<Container::has_static_source>>
@@ -44,7 +44,7 @@ namespace detail {
 template <typename Container, typename Request, typename = void>
 struct ambiguity_refused : std::false_type {};
 
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+#if !defined(DINGO_MATRIX_BASELINE)
 template <typename Container, typename Request>
 struct ambiguity_refused<Container, Request,
                          std::enable_if_t<Container::has_static_source>>

@@ -430,10 +430,7 @@ def main():
             print(f"{'; '.join(case.labels)}\n    {group.scope} {label} {group.stored} -> {case.request}")
         return 0
 
-    include = (
-        f"-I{(PROJECT_ROOT / 'include' / 'next').resolve()} "
-        f"-I{(PROJECT_ROOT / 'include').resolve()}"
-    )
+    include = f"-I{(PROJECT_ROOT / 'include').resolve()}"
     command = args.cxx_command or (os.environ.get("CXX", "c++") + f" -std=c++20 {include}")
     run = Run(extract.Toolchain(command), args.work_dir.resolve(), args.jobs)
     rows = [row for domain in extract.DOMAINS for row in run.domain(domain, witnesses)]

@@ -1,7 +1,7 @@
 // Overriding the compiler variant selects the named type identity, so it is
 // compiled and run on compilers without the defect.
 // REQUIRES: linux, can-run-built-executables
-// RUN: %dingo_next_cxx -DDINGO_VARIANT_NAMED_TYPE_ID=1 %s -o %t
+// RUN: %dingo_cxx -DDINGO_VARIANT_NAMED_TYPE_ID=1 %s -o %t
 // RUN: %t
 
 #include <dingo/container.h>

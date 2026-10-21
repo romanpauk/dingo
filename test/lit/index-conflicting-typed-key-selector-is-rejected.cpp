@@ -2,7 +2,7 @@
 // key once, so a typed domain declared both one and many is rejected when the
 // container is compiled.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: the lookup of
 // CHECK-SAME: is declared twice
 

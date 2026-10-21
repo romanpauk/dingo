@@ -26,13 +26,13 @@ using dingo::storage;
 struct second;
 
 struct first {
-  explicit first(second &next) : next(next) {}
+  explicit first(second &init_next) : next(init_next) {}
   second &next;
 };
 
 struct second {
-  second(first &previous, std::shared_ptr<first> handle)
-      : previous(previous), handle(std::move(handle)) {}
+  second(first &init_previous, std::shared_ptr<first> init_handle)
+      : previous(init_previous), handle(std::move(init_handle)) {}
   first &previous;
   std::shared_ptr<first> handle;
 };
@@ -94,7 +94,8 @@ struct counted {
 struct failing;
 
 struct holder {
-  holder(counted &object, failing &other) : object(object), other(other) {}
+  holder(counted &init_object, failing &init_other)
+      : object(init_object), other(init_other) {}
   counted &object;
   failing &other;
 };

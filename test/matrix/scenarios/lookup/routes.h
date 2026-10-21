@@ -127,7 +127,7 @@ void exercise_single_lookup_route() {
   ASSERT_EQ(std::addressof(before), std::addressof(again));
   ASSERT_EQ(before.id(), 1);
   ASSERT_EQ(first_type::constructions, 1);
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+#if !defined(DINGO_MATRIX_BASELINE)
   // A collection of a domain declared one is a query over its bindings, which
   // yields the binding the domain holds, as the behavior change
   // collections_of_a_domain_of_one of the spec declares; the baseline throws

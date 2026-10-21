@@ -1,7 +1,7 @@
 // An array of unknown bound has no size to construct it with, so a binding
 // that stores one without a factory is rejected when it is compiled.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: has no default factory; the binding needs a factory<>
 
 #include <dingo/container.h>

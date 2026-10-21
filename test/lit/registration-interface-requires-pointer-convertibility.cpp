@@ -2,7 +2,7 @@
 // binding that declares an unrelated interface is rejected when it is
 // registered.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: no interface the binding of {{.*}} declares can be served
 
 #include <dingo/container.h>

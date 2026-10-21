@@ -7,11 +7,11 @@
 //
 
 // clang-format off
-// The program of an example of diagnostics.interface_in_array, which the next
-// implementation rejects when it is compiled, with the message
+// The program of an example of diagnostics.interface_in_array, which the library
+// rejects when it is compiled, with the message
 // formatted with the names of its subjects.
 // REQUIRES: static-assert-message
-// RUN: not %dingo_next_cxx_formatted -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx_formatted -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: an element of the array implementation<1>{{ ?\[}}2] cannot be exposed as an interface
 
 #include <dingo/container.h>

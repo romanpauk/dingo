@@ -25,7 +25,7 @@ namespace dingo::matrix::resolution {
 template <std::size_t CopyMinimum, std::size_t CopyMaximum,
           std::size_t MoveMinimum, std::size_t MoveMaximum>
 struct lifetime_bounds {
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+#if !defined(DINGO_MATRIX_BASELINE)
   static constexpr std::size_t copy_minimum = CopyMinimum;
   static constexpr std::size_t copy_maximum = CopyMinimum;
   static constexpr std::size_t move_minimum = 0;

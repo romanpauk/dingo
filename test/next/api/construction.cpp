@@ -36,16 +36,16 @@ struct logger {
 };
 
 struct database {
-  database(config &settings, const logger &log)
-      : settings(settings), log(log) {}
+  database(config &init_settings, const logger &init_log)
+      : settings(init_settings), log(init_log) {}
   config &settings;
   const logger &log;
 };
 
 // Neither copyable nor movable, so it is constructed only in place.
 struct service {
-  service(database &db, std::shared_ptr<logger> log, config copy)
-      : db(db), log(std::move(log)), copy(copy) {}
+  service(database &init_db, std::shared_ptr<logger> init_log, config init_copy)
+      : db(init_db), log(std::move(init_log)), copy(init_copy) {}
   service(const service &) = delete;
   service &operator=(const service &) = delete;
   database &db;
@@ -117,12 +117,12 @@ TEST(next_construction, initializes_an_aggregate) {
 struct second;
 
 struct first {
-  explicit first(second &next) : next(next) {}
+  explicit first(second &init_next) : next(init_next) {}
   second &next;
 };
 
 struct second {
-  explicit second(first &previous) : previous(previous) {}
+  explicit second(first &init_previous) : previous(init_previous) {}
   first &previous;
 };
 

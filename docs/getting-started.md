@@ -35,11 +35,12 @@ way after the container is configured.
 Dingo exposes focused runtime/static containers plus a convenience `container`
 facade:
 
-- `runtime_container<>`: runtime-only registration with `register_type<...>()`
+- `container<>`: the common runtime-only spelling, with registrations added by
+  `register_type<...>()`
+- `runtime_container<>`: an alias of `container<>` for explicitly runtime-only
+  code
 - `static_container<bindings<...>>`: compile-time registration only, with no
   runtime registration API
-- `container<>`: the common runtime-only spelling, backed by the runtime
-  container implementation
 - `container<bindings<...>>`: the mixed form, with compile-time registrations
   plus optional runtime registrations in the same container
 

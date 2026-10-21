@@ -21,7 +21,7 @@
 
 namespace dingo::matrix {
 
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+#if !defined(DINGO_MATRIX_BASELINE)
 struct many_container_traits : dingo::dynamic_container_traits {
   using lookup_definition_type = dingo::lookups<dingo::base<dingo::many>>;
 };

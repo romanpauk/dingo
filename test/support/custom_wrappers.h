@@ -11,7 +11,7 @@
 // implementation, and by dingo::type_traits and the per-scope
 // dingo::storage_traits in the current one; the behavior change
 // wrapper_extension_point of the spec declares the difference.
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+#if !defined(DINGO_MATRIX_BASELINE)
 #include <dingo/type/type_conversion_traits.h>
 #include <dingo/type/type_traits.h>
 #else
@@ -117,7 +117,7 @@ private:
   std::optional<T> value_;
 };
 
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+#if !defined(DINGO_MATRIX_BASELINE)
 // The family of the test handles: a test_unique shares its element as a
 // test_shared.
 struct test_wrapper_family {};
@@ -437,7 +437,7 @@ struct storage_traits<external, test_optional<T>, U> {
 // A test wrapper made by the traits that declare it a layer.
 template <typename Wrapper, typename... Args>
 Wrapper make_test_wrapper(Args &&...args) {
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+#if !defined(DINGO_MATRIX_BASELINE)
   return wrapper_traits<Wrapper>::make(std::forward<Args>(args)...);
 #else
   return type_traits<Wrapper>::make(std::forward<Args>(args)...);

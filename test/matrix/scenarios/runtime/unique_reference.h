@@ -22,7 +22,7 @@ struct runtime_unique_reference_regression_scenario {
     container.template register_type<
         dingo::scope<dingo::unique>, dingo::storage<unique_reference_value>,
         dingo::factory<dingo::constructor<unique_reference_value()>>>();
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+#if !defined(DINGO_MATRIX_BASELINE)
     // A consuming scope never serves an lvalue reference to the object it
     // consumed, as the behavior change consumed_objects_are_never_borrowed of
     // the spec declares: the dependency is refused, and the shared object is
@@ -59,7 +59,7 @@ struct runtime_unique_reference_regression_scenario {
     container.template register_type<
         dingo::scope<dingo::shared>,
         dingo::storage<shared_unique_reference_exception_value>>();
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+#if !defined(DINGO_MATRIX_BASELINE)
     // The same refusal: the unique object is not constructed, so nothing is
     // destroyed, where the baseline destroys it once when the constructor of
     // its consumer throws.

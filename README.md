@@ -144,9 +144,10 @@ When working from a checkout, the top-level CMake project also supports
   `invoke()`.
 - [Core Concepts](docs/core-concepts.md): registration modes, scopes, storage,
   arrays, variants, factories, interfaces, and multibindings.
-- [Advanced Topics](docs/advanced-topics.md): indexed resolution, annotations,
-  runtime and compile-time registration modes, nesting, RTTI, allocation, and
-  runtime notes.
+- [Advanced Topics](docs/advanced-topics.md): indexed resolution and lookup
+  backends, annotations, custom wrappers and scopes, runtime and compile-time
+  registration modes, template depth, nesting, moving containers, RTTI,
+  allocation, and runtime notes.
 - [Architecture](docs/architecture/README.md): registration flow, lookup shape,
   extension traits, and conversion rules.
 - [Examples](docs/examples.md): a guided index of runnable examples in
@@ -168,7 +169,9 @@ When working from a checkout, the top-level CMake project also supports
 - Array support for raw arrays and smart-pointer-backed arrays
 - Explicit variant construction plus whole-variant or held-alternative
   resolution
-- Custom RTTI and allocator hooks
+- Custom allocator hooks, with no dependency on RTTI
+- Extension points for wrappers, layer kinds, scopes, conversions, and lookup
+  indexes
 - Extensive generated matrix tests across features, registration modes, scopes,
   stored types, resolved types, and containers. See the
   [generated matrix test model](test/matrix/README.md).

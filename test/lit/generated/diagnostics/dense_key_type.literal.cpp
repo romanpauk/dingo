@@ -7,11 +7,11 @@
 //
 
 // clang-format off
-// The program of an example of diagnostics.dense_key_type, which the next
-// implementation rejects when it is compiled, with the message
+// The program of an example of diagnostics.dense_key_type, which the library
+// rejects when it is compiled, with the message
 // literal where the compiler formats none.
 // REQUIRES: literal-static-assert
-// RUN: not %dingo_next_cxx_literal -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx_literal -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: an associative lookup of {interface} indexed by dingo::array<N> takes an integral or enum key, not {key}
 
 #include <dingo/container.h>

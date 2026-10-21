@@ -1,9 +1,39 @@
 # Handles, Leaf Types, And Lookup
 
-Much of Dingo's architecture depends on separating the outer request shape from
-the underlying type that is actually being matched.
+Much of Dingo's architecture depends on separating the outer shape of a request
+or a stored type from the underlying type that is actually being matched.
 
 ## Terms
+
+### Shape
+
+A shape is a leaf wrapped in layers. `core::shape_v<T>`, of
+[core/projection/layer_traits.h](../../include/dingo/core/projection/layer_traits.h),
+describes the shape of `T` as a `constexpr` value: an array of nodes in
+preorder, defined in
+[core/primitives/shape.h](../../include/dingo/core/primitives/shape.h), so a
+layer is followed by the shapes of its arguments. A node of a layer holds the
+descriptor of its layer kind, the family of its wrapper, and its cv-qualifiers;
+a node of a leaf holds the identity of the leaf type, the address of a per-type
+tag.
+
+### Layer
+
+A layer is of a layer kind, a tag type whose `layer_kind_traits` declare its
+properties and forms. The kinds of the library are declared so in
+[core/vocabulary/layer_kinds.gen.h](../../include/dingo/core/vocabulary/layer_kinds.gen.h),
+and the engine knows a kind only by its properties and forms:
+
+- `T*` is a layer of `pointer_kind`, `T&` of `reference_kind`, `T[N]` of
+  `array_kind`, and `T[]` of `unsized_array_kind`
+- `std::unique_ptr<T>` is a layer of `unique_kind`, `std::shared_ptr<T>` of
+  `shared_kind`, `std::optional<T>` of `optional_kind`, and `std::variant<T...>`
+  of `alternative_kind`, by their `wrapper_traits`
+- a custom wrapper is a layer of the kind its `wrapper_traits` name
+
+The language layers are classified by `core::layer_traits`, and every wrapper by
+its `wrapper_traits`; no wrapper gets other treatment. A type that is not a
+layer is a leaf.
 
 ### Handle
 
@@ -14,17 +44,20 @@ A handle is the outer form of a request or stored type:
 - `T*`
 - `std::unique_ptr<T>`
 - `std::shared_ptr<T>`
-- a custom wrapper with `type_traits`
+- a custom wrapper with `wrapper_traits`
 
-Handles can carry ownership and borrowing semantics.
+Handles carry ownership and borrowing semantics through the properties of their
+kinds: owning, sharing, nullable, and borrowable among them.
 
 ### Leaf Type
 
-The leaf type is the underlying type after wrappers, references, and pointer
-shape are stripped according to Dingo's wrapper rules.
+The leaf type is the underlying type after references, cv-qualifiers, and layers
+are stripped, through the first argument of every layer. A layer of a variadic
+kind, such as a variant, holds several leaves and is its own leaf.
 
-The core operation is `leaf_type_t<T>` in
-[include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h).
+The public operation is `leaf_type_t<T>` in
+[include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h),
+which is `core::leaf_of_t<T>`.
 
 Examples:
 
@@ -33,79 +66,80 @@ Examples:
 - `std::shared_ptr<A>` -> `A`
 - `test_shared<A>` -> `A`
 - `std::shared_ptr<A[4]>` -> `A`
+- `std::variant<A, B>` -> `std::variant<A, B>`
 
 ### Rebinding
 
-Rebinding means keeping the outer handle shape while swapping the leaf type.
+Rebinding means keeping the outer layers while swapping the leaf type.
 
-The main operations are:
+`rebind_type_t<T, U>` in
+[include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
+replaces the leaf of `T` with `U` through the first argument of every layer, by
+the `rebind` of each layer's traits: `std::shared_ptr<A>` becomes
+`std::shared_ptr<U>`, and `A*` becomes `U*`.
 
-- `rebind_type_t<T, U>`: replace the wrapped type with `U`
-- `rebind_leaf_t<T, U>`: replace only the leaf while preserving the outer shape
+## Lookup
 
-This is what lets Dingo talk about "the same handle shape over another leaf
-type" without hardcoding every wrapper combination.
+A request is matched in two steps, both in
+[core/engine/derive.h](../../include/dingo/core/engine/derive.h).
 
-## Lookup Type
+First, the lookup filter names the bindings of a request: a binding is named
+when it serves the interface of the request, the leaf of its shape, with a key
+of the same domain, and the backend compares the key values. A binding serves
+its declared interfaces, or, without declared interfaces, the leaves its stored
+shape names. An annotated request names the leaf with the identity of the
+annotated interface.
 
-Dingo usually does not look up factories by the exact requested type spelling.
-Instead it converts the request into a lookup form that replaces the leaf with
-`runtime_type`.
+Second, the route selection takes the term of the named binding that serves the
+shape of the request: a term whose shape and value category the request accepts,
+or one from which the request makes up to two layers of its own, by the forms of
+its kinds that create a layer. Of several, it prefers the one with fewer rules,
+then one without a copy, then the one whose forms come first in the order of the
+algebra.
 
-That operation is `lookup_type_t<T>` in
-[include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h).
-
-The point of this step is to match requests by shape:
-
-- `A&` -> `runtime_type&`
-- `A*` -> `runtime_type*`
-- `std::shared_ptr<A>` -> `std::shared_ptr<runtime_type>`
-- `test_unique<A>` -> `test_unique<runtime_type>`
-
-This is how the factory layer can decide whether the request is asking for a
-value, borrowed reference, pointer, or wrapper-shaped handle without knowing the
-concrete leaf in advance.
+The lookup filter is the same for every key kind and every container: no key, a
+tag key, a fixed key, and a runtime key value. The indexes of the lookup
+backends only accelerate the comparison of key values; see
+[Lookup Indexes](extending-dingo.md#lookup-indexes).
 
 ## Exact Lookup
 
-`exact_lookup<T>` is the escape hatch when wrapper shape matters and the normal
-leaf-based lookup would be too permissive.
-
-It is defined in
-[include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h) and
-enforced by the matching logic in
-[include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h).
-
-Use it when the caller must request a specific wrapper spelling instead of "any
-request with this leaf type."
+`exact_lookup<T>` is defined in
+[include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h) as a
+marker whose `type` is `T`. It remains part of the public API. The route
+selection matches every request by its whole shape, so a request of a specific
+wrapper spelling is served only by a route that reaches that shape, and the
+engine does not read the marker.
 
 ## Request Type
 
-`request_type<T, RemoveRvalueReferences>` is the type-request counterpart to a
-normalized lookup key. It records the caller's original spelling as `user_type`,
-chooses the registry-facing `lookup_type`, unwraps annotated and selected
-requests into `interface_type`/`result_type`, keeps the normalized value form as
-`value_type`, and exposes the cv/ref-free interface as `exact_type`.
+`core::request_traits<Request, Key>` in
+[core/engine/request.h](../../include/dingo/core/engine/request.h) is the
+descriptor of a request: its kind, value, lvalue reference, or rvalue reference;
+`value_type`, the type it asks for without references; `made_type`, the type a
+binding makes the object of a constructed request as; and `descriptor`, its
+kind, shape, and key, which the engine reads.
 
 This keeps request normalization at the public boundary. Runtime, static, local,
-and parent resolution paths then pass one descriptor through selection and
-activation instead of rebuilding the same derived type vocabulary.
+and parent sources then pass one descriptor through the selection.
 
 ## Why This Exists
 
-Without leaf extraction and rebinding, every conversion rule would have to
-special-case every supported wrapper combination. Dingo instead factors the
-problem into:
+Without shapes and layer kinds, every conversion rule would have to special-case
+every supported wrapper combination. Dingo instead factors the problem into:
 
-- wrapper semantics in `type_traits`
-- storage exposure in `storage_traits`
-- the operation carried by the matched `resolution`
+- the layer a wrapper is, in `wrapper_traits`
+- the properties and forms of a layer kind, in `layer_kind_traits`
+- the routes, derived from the forms of the kinds of a shape and the rules of a
+  leaf
 
-The rebinding utilities are what allow those three layers to compose.
+The shape algebra is what allows those three parts to compose.
 
 ## Good Source Companions
 
 - [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
-- [include/dingo/type/dependency_traits.h](../../include/dingo/type/dependency_traits.h)
-- [include/dingo/runtime/runtime_binding.h](../../include/dingo/runtime/runtime_binding.h)
+- [include/dingo/core/projection/layer_traits.h](../../include/dingo/core/projection/layer_traits.h)
+- [include/dingo/core/primitives/shape.h](../../include/dingo/core/primitives/shape.h)
+- [include/dingo/core/engine/derive.h](../../include/dingo/core/engine/derive.h)
+- [include/dingo/core/engine/request.h](../../include/dingo/core/engine/request.h)

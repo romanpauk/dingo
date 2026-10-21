@@ -3,7 +3,7 @@
 // it and compares type identities by name in constant evaluation, so a static
 // container compiles.
 // REQUIRES: linux, gcc
-// RUN: %dingo_next_cxx -fsyntax-only -fsanitize=null %s
+// RUN: %dingo_cxx -fsyntax-only -fsanitize=null %s
 
 #include <dingo/static_container.h>
 #include <dingo/storage/shared.h>

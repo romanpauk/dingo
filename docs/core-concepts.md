@@ -20,8 +20,9 @@ Common registration policies:
 - `interfaces<...>` exposes the registration through one or more interface types
 - `factory<...>` overrides construction when constructor deduction is not enough
 
-Many registrations stay short because Dingo can infer the missing policy from
-the rest.
+A registration names its scope and its storage. The interfaces default to the
+leaf of the stored type and the factory to the detected constructor, so many
+registrations stay short.
 
 The same policies are used by both registration modes:
 
@@ -63,7 +64,7 @@ container.register_type<scope<unique>, storage<std::unique_ptr<A>>>();
 
 See:
 
-- [include/dingo/registration/type_registration.h](../include/dingo/registration/type_registration.h)
+- [include/dingo/core/api/registration.h](../include/dingo/core/api/registration.h)
 
 ## Scopes And Storage
 
@@ -194,6 +195,10 @@ assert(b.aptr_ == &a);
 
 <!-- } -->
 
+The tags of the built-in scopes are declared wherever a container is, so a
+registration with one needs no header of its scope. The scope headers declare
+the tags for code that names them without a container.
+
 See:
 
 - [include/dingo/storage/external.h](../include/dingo/storage/external.h)
@@ -216,9 +221,12 @@ In practice:
 The main constraints are:
 
 - `resolve<T[N]>()` is not supported because arrays are not returned by value
-- unique array storage can hand out owning handles such as
+- a raw array is served as itself, its rows, and its elements; no route adopts
+  it into an owning handle of an array of runtime size, such as
   `std::unique_ptr<T[]>`
-- shared array storage can hand out stable borrowed views and shared handles
+- storage of `std::unique_ptr<T[]>` or `std::shared_ptr<T[]>` hands out the
+  handle and the elements it owns
+- shared array storage hands out stable borrowed views
 
 <!-- { include("../examples/storage/array.cpp", scope="////") -->
 
@@ -279,7 +287,8 @@ The current rules are narrow on purpose:
 - uniquely occurring alternatives are also resolvable from variant storage
 - if a requested alternative is available but the current instance holds a
   different alternative, resolution fails as `type_not_convertible_exception`
-- duplicate alternative types are rejected at compile time for direct resolution
+- a stored variant that names an alternative twice is rejected when the
+  registration is compiled
 - unique variant storage resolves the whole variant as a value or rvalue, and a
   held alternative as a value or rvalue
 - shared and external variant storage resolve the whole variant as values,
@@ -368,35 +377,39 @@ Factory styles in the repo:
 
 The default registration path uses `constructor<T>` from
 [include/dingo/factory/constructor.h](../include/dingo/factory/constructor.h).
-That public shorthand delegates to the lower-level `constructor_detection<T>`
-machinery in
-[include/dingo/factory/constructor_detection.h](../include/dingo/factory/constructor_detection.h).
+That public shorthand delegates to the constructor detection of
+[include/dingo/core/primitives/constructor_detection.h](../include/dingo/core/primitives/constructor_detection.h)
+and
+[include/dingo/core/primitives/constructor.h](../include/dingo/core/primitives/constructor.h).
 When a type is registered without an explicit `factory<...>`, Dingo tries to
 pick a constructor automatically.
 
 In practice, the default path is:
 
 - try constructor deduction for registered types
-- use the highest-arity constructor shape that Dingo can prove is constructible
-- resolve the detected arguments from the container
+- use the highest-arity constructor shape that Dingo can prove is constructible,
+  ignoring the copy constructor
+- resolve the detected arguments from the container, each as the type its
+  parameter asks for
 
 `construct<T>()` uses the same deduction machinery for unmanaged objects.
 
 Constructor detection has two result forms:
 
 - shape detection reports whether the selected constructor is concrete, generic,
-  or invalid, together with its arity; this is the default used for normal
-  container construction
+  or invalid, together with its arity; this is the detection the containers use
 - signature detection starts from that same selected shape and additionally
-  recovers its parameter types as a `type_list`; construction then uses the
-  recovered list, so reported dependencies and injected dependencies cannot
-  diverge
+  recovers its parameter types as a `type_list`
 
-The lower-level detection result exposes `kind` and `arity`. A concrete
-signature result also exposes `arguments`; zero-argument construction produces
-`type_list<>`, while an unavailable signature produces `void`. Explicit
-constructor declarations already contain their argument list and therefore do
-not require signature recovery.
+The detection result, `core::constructor_detection`, exposes `kind` and `arity`.
+A concrete signature result also exposes `arguments`; zero-argument construction
+produces `type_list<>`, while an unavailable signature produces `void`. The
+containers call a detected constructor with arguments that resolve the type each
+parameter asks for when the object is constructed, so the dependencies of a
+detected constructor are known only then. Explicit constructor declarations, by
+`factory<constructor<T(Args...)>>`, `dependencies<...>`, or `DINGO_CONSTRUCTOR`,
+contain their argument list, which a static container checks when it is
+compiled.
 
 ### Constructor-Deduction Limits
 
@@ -411,21 +424,20 @@ Constructor deduction is intentionally useful, not magical. The main limits are:
 - ambiguous or unsupported cases should be resolved explicitly with
   `factory<constructor<...>>`, `factory<function<...>>`, `callable(...)`, or
   `callable<Signature>(...)`
-- `construct<T>()` uses constructor deduction directly, but unregistered
-  `resolve<T>()` only auto-constructs plain types when they are aggregates or
-  explicitly opted in through `is_auto_constructible<T>`
+- `construct<T>()` uses a binding of `T` when one exists and constructor
+  deduction otherwise, but unregistered `resolve<T>()` only auto-constructs
+  plain types when they are aggregates or explicitly opted in through
+  `is_auto_constructible<T>`, and only for a request of a value or a const
+  lvalue reference
 - opting a type into auto-construction does not bypass ambiguity checks
 - auto-construction requires `T` to be complete
 - borrowed requests such as `resolve<T&>()` and `resolve<T*>()` can use a
   forward-declared `T` as long as the type is already registered
 - constructing another type can still depend on a forward-declared `T&` or `T*`;
   the dependency is looked up, not auto-constructed
-- reference-style wrapper values only participate in the reference-based
-  deduction path when the wrapper opts in through
-  `type_traits<T>::is_reference_resolvable`
-- automatic detection does not perform structural signature recovery when nested
-  wrapper or alternative conversions make a constructor probe ambiguous; provide
-  the exact signature with `factory<constructor<T(Args...)>>`
+- detection probes each parameter with an argument that converts to any type;
+  when a parameter makes that probe ambiguous, provide the exact signature with
+  `factory<constructor<T(Args...)>>`
 - constructor arity is bounded by `DINGO_CONSTRUCTOR_DETECTION_ARGS`
 
 That makes constructor deduction a good default for ordinary classes and
@@ -557,7 +569,7 @@ See:
 
 - [test/next/primitives/constructor.cpp](../test/next/primitives/constructor.cpp)
 - [test/matrix/README.md](../test/matrix/README.md)
-- [include/dingo/factory/constructor_detection.h](../include/dingo/factory/constructor_detection.h)
+- [include/dingo/core/primitives/constructor_detection.h](../include/dingo/core/primitives/constructor_detection.h)
 - [include/dingo/factory/constructor.h](../include/dingo/factory/constructor.h)
 - [include/dingo/factory/function.h](../include/dingo/factory/function.h)
 - [include/dingo/factory/callable.h](../include/dingo/factory/callable.h)
@@ -720,21 +732,24 @@ See:
 
 Dingo supports both runtime registrations and compile-time bindings. Runtime
 registration keeps cross-module usage practical, but wiring errors on that path
-surface as exceptions during resolution. Compile-time bindings move the declared
-graph into the type system, so missing static dependencies and unsupported
-static cycles can be diagnosed at compile time.
+surface as exceptions: a registration that collides with a binding of its key
+throws when it is registered, and a missing or ambiguous dependency throws
+during resolution. Compile-time bindings move the declared graph into the type
+system, so duplicate keys, missing declared dependencies, ambiguities among
+static bindings, and unsupported static cycles are diagnosed at compile time.
 
-Container changes are atomic. If a registration or resolution operation throws,
-the container is restored to the state it had when the operation began. An
-operation therefore either succeeds completely or leaves the container
-unmodified; partially installed registrations, cached resolutions, lookup
-entries, and container-owned objects are rolled back.
+A rejected registration adds nothing to the container. A request that starts at
+a container, `resolve`, `construct`, `construct_collection`, or `invoke`, is a
+transaction of it: if the request throws, the bindings registered into the
+container during it, the objects its bindings constructed, and the objects it
+kept for the request are undone in reverse order, also when a request that made
+it catches the failure. A request therefore either succeeds completely or leaves
+the container as it was.
 
-Across a container hierarchy, each container with runtime state is its own
-atomic boundary. Parent fallback runs as a parent operation: a successful parent
-resolution remains committed if later child construction fails, while a failure
-inside the parent operation rolls the parent back before the exception
-propagates.
+Across a container hierarchy, each container is its own transaction boundary. A
+parent keeps an object that a failed request of its child constructed by the
+parent's bindings, and a child keeps a binding registered into it while a
+request of its parent failed.
 
 This guarantee covers state managed by the container. Dingo cannot undo external
 side effects performed by user constructors, factories, callbacks, or

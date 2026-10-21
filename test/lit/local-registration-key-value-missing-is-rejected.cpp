@@ -2,7 +2,7 @@
 // a runtime key that the traits of the container declare, when it takes one
 // for any, as a registration into the container does.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: the registration of
 
 #include <dingo/container.h>

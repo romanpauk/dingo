@@ -7,11 +7,11 @@
 //
 
 // clang-format off
-// The program of an example of diagnostics.dense_key_type, which the next
-// implementation rejects when it is compiled, with the message
+// The program of an example of diagnostics.dense_key_type, which the library
+// rejects when it is compiled, with the message
 // formatted with the names of its subjects.
 // REQUIRES: static-assert-message
-// RUN: not %dingo_next_cxx_formatted -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx_formatted -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: an associative lookup of service indexed by dingo::array<N> takes an integral or enum key, not double
 
 #include <dingo/container.h>

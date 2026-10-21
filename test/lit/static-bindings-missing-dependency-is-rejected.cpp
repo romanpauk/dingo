@@ -2,7 +2,7 @@
 // compiled, so a container whose binding declares a dependency no binding
 // serves is rejected when it is formed, whether or not it is requested.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: type not found:
 
 #include <dingo/static_container.h>

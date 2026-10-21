@@ -1,7 +1,7 @@
 // The local static bindings of a runtime registration are known when the
 // registration is compiled, so a cycle among them is rejected then.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: recursive dependency detected:
 
 #include <dingo/container.h>

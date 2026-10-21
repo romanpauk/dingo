@@ -2,7 +2,7 @@
 // a mixed container registers at runtime, so the request is rejected when it
 // is compiled.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 
 #include <dingo/container.h>
 #include <dingo/lookup/lookup.h>

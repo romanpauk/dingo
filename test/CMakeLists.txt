@@ -172,12 +172,12 @@ set_tests_properties(dingo_routes_conform_test PROPERTIES
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
 
-# The witnesses of the algebra, compiled against the next implementation.
+# The witnesses of the algebra, compiled against the library.
 add_test(NAME dingo_routes_witness_test
     COMMAND ${DINGO_UV_RUN_COMMAND} python
         ${CMAKE_CURRENT_SOURCE_DIR}/routes/witness.py
         --work-dir ${CMAKE_CURRENT_BINARY_DIR}/routes-witness
-        --cxx-command "${CMAKE_CXX_COMPILER} -std=c++20 -I${PROJECT_SOURCE_DIR}/include/next -I${PROJECT_SOURCE_DIR}/include")
+        --cxx-command "${CMAKE_CXX_COMPILER} -std=c++20 -I${PROJECT_SOURCE_DIR}/include")
 set_tests_properties(dingo_routes_witness_test PROPERTIES
     LABELS "next;routes"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
@@ -199,8 +199,7 @@ set_tests_properties(dingo_differential_compare_test PROPERTIES
     ENVIRONMENT
         "PYTHONDONTWRITEBYTECODE=1;DINGO_DIFFERENTIAL_TEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/differential-test")
 
-# The tests of the next implementation of the spec-driven design, built against
-# the dingo_next target in every development build.
+# The tests of the next implementation of the spec-driven design, the library.
 # The engine cases are generated from the reference implementation of the spec.
 set(DINGO_NEXT_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/next")
 file(GLOB_RECURSE DINGO_NEXT_SPEC_SOURCES CONFIGURE_DEPENDS
@@ -278,7 +277,7 @@ add_executable(dingo_next_test
 )
 target_include_directories(dingo_next_test PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/next")
-target_link_libraries(dingo_next_test PRIVATE dingo::next gtest_main)
+target_link_libraries(dingo_next_test PRIVATE dingo::dingo gtest_main)
 add_test(NAME dingo_next_test COMMAND dingo_next_test)
 set_tests_properties(dingo_next_test PROPERTIES LABELS "unit;next")
 
@@ -297,6 +296,12 @@ function(dingo_configure_matrix_compile_target DINGO_MATRIX_TARGET)
     if(DINGO_MATRIX_RECORD)
         target_compile_definitions(${DINGO_MATRIX_TARGET} PRIVATE
             DINGO_MATRIX_RECORD=1)
+    endif()
+    # A differential build of the baseline asserts what the baseline does where
+    # a behavior change of the spec declares a difference.
+    if(DINGO_DIFFERENTIAL_INCLUDE_DIR)
+        target_compile_definitions(${DINGO_MATRIX_TARGET} PRIVATE
+            DINGO_MATRIX_BASELINE=1)
     endif()
 endfunction()
 

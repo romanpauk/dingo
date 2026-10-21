@@ -243,7 +243,7 @@ template <typename Family> void exercise_indexed_and_normal_routing() {
       dingo::key_value<int>{7});
   ASSERT_EQ(container.template resolve<routing_processor &>(7).processor_id(),
             9);
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+#if !defined(DINGO_MATRIX_BASELINE)
   // The key value of a registration is the key of every interface the binding
   // declares, whether or not the lookups declare its domain, as the behavior
   // change keys_apply_to_every_interface of the spec declares; the baseline

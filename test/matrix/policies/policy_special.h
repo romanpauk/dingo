@@ -32,7 +32,7 @@ template <typename Type, int Expected> struct local_value_ref {
 // change local_bindings_shadow_collections of the spec declares, so the
 // collection holds element 0 alone; the baseline gathers both.
 struct local_collection_expectation {
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+#if !defined(DINGO_MATRIX_BASELINE)
   static constexpr std::size_t count = 1;
   static constexpr int sum = 0;
 #else

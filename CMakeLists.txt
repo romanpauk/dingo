@@ -35,27 +35,6 @@ target_include_directories(dingo INTERFACE
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
 
-# The next implementation of the spec-driven design. include/next holds the
-# public include paths of the next implementation, generated from the spec,
-# which the dingo target of a development build selects; a differential build
-# of the baseline builds against the include directory of the baseline alone.
-# The dingo_next target selects them in every development build. See
-# docs/architecture/spec-driven-design.md, M9.2.
-if(DINGO_DEVELOPMENT_MODE)
-    add_library(dingo_next INTERFACE)
-    add_library(dingo::next ALIAS dingo_next)
-    target_include_directories(dingo_next INTERFACE
-        "${PROJECT_SOURCE_DIR}/include/next"
-        "${PROJECT_SOURCE_DIR}/include"
-    )
-    target_compile_definitions(dingo_next INTERFACE DINGO_IMPLEMENTATION_NEXT=1)
-    if(NOT DINGO_DIFFERENTIAL_INCLUDE_DIR)
-        target_include_directories(dingo BEFORE INTERFACE
-            "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/next>")
-        target_compile_definitions(dingo INTERFACE DINGO_IMPLEMENTATION_NEXT=1)
-    endif()
-endif()
-
 if(NOT CMAKE_SKIP_INSTALL_RULES AND DINGO_INSTALL)
     include(GNUInstallDirs)
 
@@ -119,91 +98,9 @@ if(DINGO_DEVELOPMENT_MODE)
         $<$<BOOL:${DINGO_TREAT_WARNINGS_AS_ERRORS}>:/WX>
     )
 
-    set(DINGO_SOURCE_FILES
-        base/config.h
-        static/graph.h
-        static/registry.h
-        container.h
-        type/auto_constructible.h
-        binding/binding_model.h
-        binding/binding_resolution.h
-        binding/binding_resolution_policy.h
-        binding/binding_selection.h
-        type/dependency.h
-        factory/factory_traits.h
-        type/key.h
-        base/none.h
-        static/activation_set.h
-        static/container_traits.h
-        base/exceptions.h
-        factory/callable.h
-        factory/detail/constructor_arity.hpp
-        factory/detail/constructor_arity_msvc.hpp
-        factory/detail/constructor_detection.hpp
-        factory/detail/constructor_detection_msvc.hpp
-        factory/detail/constructor_signature.hpp
-        factory/detail/constructor_signature_msvc.hpp
-        factory/constructor_traits.h
-        factory/constructor_detection.h
-        factory/constructor_typedef.h
-        factory/constructor.h
-        factory/function.h
-        factory/invoke.h
-        memory/aligned_storage.h
-        memory/allocator.h
-        memory/arena_allocator.h
-        memory/object_store.h
-        memory/object_lifetime.h
-        type/access.h
-        type/annotated.h
-        type/collection_traits.h
-        registration/constructor.h
-        registration/type_registration.h
-        runtime_container.h
-        runtime/container_traits.h
-        runtime/registration_api.h
-        runtime/lookup_index.h
-        runtime/registry.h
-        runtime/transaction.h
-        static_container.h
-        lookup/array.h
-        lookup/base.h
-        lookup/collection.h
-        lookup/lookup.h
-        lookup/operations.h
-        lookup/ordered.h
-        lookup/storage.h
-        lookup/tags.h
-        lookup/unordered.h
-        resolution/cache.h
-        resolution/conversion_cache.h
-        resolution/conversion_resolution.h
-        binding/runtime_binding_interface.h
-        runtime/runtime_binding.h
-        storage/interface_storage_traits.h
-        context/context_base.h
-        runtime/context.h
-        static/context.h
-        rtti/static_provider.h
-        rtti/rtti.h
-        rtti/typeid_provider.h
-        storage/external.h
-        resolution/materialized_source.h
-        storage/shared_cyclical.h
-        storage/shared.h
-        storage/storage.h
-        storage/storage_scope_policy.h
-        storage/type_storage_traits.h
-        storage/unique.h
-        type/normalized_type.h
-        type/rebind_type.h
-        type/type_conversion_traits.h
-        base/type_descriptor.h
-        base/type_list.h
-        base/type_name.h
-        type/type_traits.h
-        resolution/resolution_operation.h
-    )
+    file(GLOB_RECURSE DINGO_SOURCE_FILES
+        RELATIVE "${PROJECT_SOURCE_DIR}/include/dingo"
+        "${PROJECT_SOURCE_DIR}/include/dingo/*.h")
 
     set(DINGO_INTERFACE_SOURCES "")
     foreach(FILE ${DINGO_SOURCE_FILES})

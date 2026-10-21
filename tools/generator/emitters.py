@@ -102,11 +102,10 @@ def variants(spec):
     ]
 
 
-def next_overlay(spec):
-    """include/next/<path> for every public include path of the spec.
+def public_headers(spec):
+    """include/<path> for every public include path of the spec.
 
-    Each forwards to the facade of the next implementation under
-    include/dingo/core/api, or reports that it is not provided yet.
+    Each forwards to its facade in the API layer, include/dingo/core/api.
     """
     include_paths = {
         entry.id for entry in spec.public_api if entry.kind.value == "include_path"
@@ -123,9 +122,9 @@ def next_overlay(spec):
         facade = "dingo/core/api/" + include_path[len("dingo/") :]
         files.append(
             GeneratedFile(
-                path=f"include/next/{include_path}",
+                path=f"include/{include_path}",
                 content=render(
-                    "next_overlay.h.j2", include_path=include_path, facade=facade
+                    "public_header.h.j2", include_path=include_path, facade=facade
                 ),
                 spec_ids=(f"public_api.{binding.api}",),
             )
@@ -549,5 +548,5 @@ EMITTERS = (
     scope_tags,
     diagnostics,
     diagnostic_tests,
-    next_overlay,
+    public_headers,
 )

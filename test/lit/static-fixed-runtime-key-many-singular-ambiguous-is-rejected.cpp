@@ -2,7 +2,7 @@
 // singular request by that key ambiguous, and it is rejected when it is
 // compiled.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: type resolution is ambiguous:
 
 #include <dingo/static_container.h>

@@ -65,7 +65,7 @@ TEST(engine, computes_what_the_reference_computes) {
       binding.interfaces[i] = *expected.interfaces[i];
     }
     binding.interface_count = expected.interface_count;
-    core::request_descriptor request{expected.kind, *expected.request};
+    core::request_descriptor request{expected.kind, *expected.request, {}};
 
     bool registered =
         core::register_status(binding) == core::registration_status::registered;

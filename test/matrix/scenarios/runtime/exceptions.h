@@ -47,7 +47,7 @@ struct runtime_exception_regression_scenario {
       ASSERT_STREQ(exception.what(), expected.c_str());
     }
 
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+#if !defined(DINGO_MATRIX_BASELINE)
     // A collection request that names no binding is a query that yields an
     // empty collection, as the behavior change empty_collections_are_valid of
     // the spec declares; the baseline throws type_not_found_exception.

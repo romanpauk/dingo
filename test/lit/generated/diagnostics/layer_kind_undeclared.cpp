@@ -7,11 +7,11 @@
 //
 
 // clang-format off
-// The program of an example of diagnostics.layer_kind_undeclared, which the next
-// implementation rejects when it is compiled, with the message
+// The program of an example of diagnostics.layer_kind_undeclared, which the library
+// rejects when it is compiled, with the message
 // formatted with the names of its subjects.
 // REQUIRES: static-assert-message
-// RUN: not %dingo_next_cxx_formatted -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx_formatted -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: handle_kind is not a layer kind: no layer_kind_traits declares its properties and forms
 
 #include <dingo/container.h>

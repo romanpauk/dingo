@@ -89,8 +89,8 @@ has the keys
 
 Every case uses a fresh container: the first resolve is a cold resolve.
 <exception> is the most specific dingo exception type caught (they are caught
-in the order of include/dingo/base/exceptions.h; "exception" is the common
-base), else "std" or "unknown".
+in the order of include/dingo/core/primitives/exceptions.h; "exception" is the
+common base), else "std" or "unknown".
 
 Method: per (domain, leaf, scope, stored) one generated program contains one
 function per request. A registration-only compile decides the registration
@@ -904,10 +904,7 @@ def main():
             parser.error("--implementation baseline needs --include-dir")
         include = f"-I{args.include_dir.resolve()}"
     else:
-        include = (
-            f"-I{(PROJECT_ROOT / 'include' / 'next').resolve()} "
-            f"-I{(PROJECT_ROOT / 'include').resolve()}"
-        )
+        include = f"-I{(PROJECT_ROOT / 'include').resolve()}"
     command = args.cxx_command or (os.environ.get("CXX", "c++") + f" -std=c++20 {include}")
     toolchain = Toolchain(command)
     started = time.time()

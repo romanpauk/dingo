@@ -2,7 +2,7 @@
 // constructor the container can detect, so constructing it is rejected when
 // it is compiled.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: no constructor of {{.*}} is detected
 
 #include <dingo/container.h>

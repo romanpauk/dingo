@@ -67,10 +67,9 @@ using static_collection_source =
              bind<scope<shared>, storage<std::shared_ptr<iface_impl<5>>>,
                   interfaces<iface>>>;
 
-// The containers of the collection probes. The next implementation rejects a
-// second binding of an interface unless its lookup is declared many, and its
-// mixed container takes traits.
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+// The containers of the collection probes. A second binding of an interface
+// is rejected unless its lookup is declared many, and a mixed container takes
+// traits.
 struct collection_probe_traits : dynamic_container_traits {
   using lookup_definition_type = lookups<collection<iface>>;
 };
@@ -82,11 +81,6 @@ using static_collection_container =
 using runtime_collection_container = container<collection_probe_traits>;
 using mixed_collection_container =
     container<static_collection_source, collection_probe_traits>;
-#else
-using static_collection_container = static_container<static_collection_source>;
-using runtime_collection_container = container<>;
-using mixed_collection_container = container<static_collection_source>;
-#endif
 
 struct external_config {
   int value;
@@ -150,22 +144,6 @@ void register_runtime_external_wrapper_binding(
                                    storage<std::shared_ptr<external_config>>>(
       std::move(config));
 }
-
-// The binding model of the current implementation serves no rvalue request
-// of a shared binding; the next implementation states it in its route table.
-#if !defined(DINGO_IMPLEMENTATION_NEXT)
-using shared_config_static_source =
-    static_bindings_source_t<static_wrapper_source>;
-using shared_config_selection = detail::static_binding_t<
-    typename shared_config_static_source::template bindings<
-        config, detail::no_lookup_key_t>>;
-using shared_config_binding = typename shared_config_selection::binding_type;
-
-static_assert(
-    !detail::binding_supports_request_v<config &&, shared_config_binding>);
-static_assert(!detail::binding_supports_request_v<std::shared_ptr<config> &&,
-                                                  shared_config_binding>);
-#endif
 
 } // namespace
 

@@ -115,12 +115,12 @@ TEST(next_diagnostics, names_the_key_of_a_request_that_is_not_found) {
 struct second;
 
 struct first {
-  explicit first(second &next) : next(next) {}
+  explicit first(second &init_next) : next(init_next) {}
   second &next;
 };
 
 struct second {
-  explicit second(first &previous) : previous(previous) {}
+  explicit second(first &init_previous) : previous(init_previous) {}
   first &previous;
 };
 

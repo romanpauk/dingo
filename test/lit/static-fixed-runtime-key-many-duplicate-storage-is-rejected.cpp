@@ -4,7 +4,7 @@
 // (behavior change duplicates_rejected_in_both_domains; the baseline rejected
 // two bindings of one implementation and key)
 // REQUIRES: linux, can-run-built-executables
-// RUN: %dingo_next_cxx %s -o %t && %t
+// RUN: %dingo_cxx %s -o %t && %t
 
 #include <dingo/static_container.h>
 #include <dingo/storage/shared.h>

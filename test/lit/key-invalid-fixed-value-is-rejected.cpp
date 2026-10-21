@@ -2,7 +2,7 @@
 // by a fixed key whose value does not construct one is rejected when it is
 // compiled.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: the value of a dingo::key_type does not construct its key type
 
 #include <dingo/container.h>

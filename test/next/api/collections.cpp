@@ -89,7 +89,7 @@ TEST(next_collections, a_collection_of_a_domain_of_one_holds_its_binding) {
 }
 
 struct consumer {
-  explicit consumer(std::vector<iface *> all) : all(std::move(all)) {}
+  explicit consumer(std::vector<iface *> init_all) : all(std::move(init_all)) {}
   std::vector<iface *> all;
 };
 
@@ -177,7 +177,8 @@ namespace {
 using move_only_map = std::map<int, std::unique_ptr<iface>>;
 
 struct move_only_consumer {
-  explicit move_only_consumer(move_only_map &&all) : all(std::move(all)) {}
+  explicit move_only_consumer(move_only_map &&init_all)
+      : all(std::move(init_all)) {}
   move_only_consumer(const move_only_consumer &) = delete;
   move_only_consumer(move_only_consumer &&) = default;
   move_only_map all;

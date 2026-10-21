@@ -7,11 +7,11 @@
 //
 
 // clang-format off
-// The program of an example of diagnostics.static_instances, which the next
-// implementation rejects when it is compiled, with the message
+// The program of an example of diagnostics.static_instances, which the library
+// rejects when it is compiled, with the message
 // literal where the compiler formats none.
 // REQUIRES: literal-static-assert
-// RUN: not %dingo_next_cxx_literal -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx_literal -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: a static container takes the instance of every external binding, in the order of the bindings
 
 #include <dingo/static_container.h>

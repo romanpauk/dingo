@@ -1,14 +1,14 @@
 // clang-format off
-// The program of an example of diagnostics.{{ diagnostic }}, which the next
-// implementation rejects when it is compiled, with the message
+// The program of an example of diagnostics.{{ diagnostic }}, which the library
+// rejects when it is compiled, with the message
 {% if tier == "formatted" %}
 // formatted with the names of its subjects.
 // REQUIRES: static-assert-message
-// RUN: not %dingo_next_cxx_formatted -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx_formatted -fsyntax-only %s 2>&1 | %filecheck %s
 {% else %}
 // literal where the compiler formats none.
 // REQUIRES: literal-static-assert
-// RUN: not %dingo_next_cxx_literal -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx_literal -fsyntax-only %s 2>&1 | %filecheck %s
 {% endif %}
 // CHECK: {{ message }}
 

@@ -83,10 +83,7 @@ class Failure:
 
 
 def default_cxx_command():
-    return os.environ.get("CXX", "c++") + (
-        f" -std=c++17 -DDINGO_IMPLEMENTATION_NEXT=1"
-        f" -I{PROJECT_ROOT / 'include' / 'next'} -I{PROJECT_ROOT / 'include'}"
-    )
+    return os.environ.get("CXX", "c++") + f" -std=c++17 -I{PROJECT_ROOT / 'include'}"
 
 
 def syntax_only_flags(command):

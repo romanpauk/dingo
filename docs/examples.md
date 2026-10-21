@@ -76,6 +76,8 @@ the relevant feature and start there.
 
 - [examples/index/index.cpp](../examples/index/index.cpp): resolve by interface
   and runtime key
+- [examples/index/static_fixed.cpp](../examples/index/static_fixed.cpp): select
+  static bindings by fixed keys in a static container
 - [examples/container/nesting.cpp](../examples/container/nesting.cpp): override
   registrations in a parent-child container chain
 

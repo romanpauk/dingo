@@ -1,7 +1,7 @@
 // One key value of a registration is the key of every interface the binding
 // declares, so it is accepted for a binding of two keyed interfaces.
 // REQUIRES: linux
-// RUN: %dingo_next_cxx -c %s -o %t.o
+// RUN: %dingo_cxx -c %s -o %t.o
 
 #include <dingo/container.h>
 #include <dingo/storage/shared.h>

@@ -77,7 +77,7 @@ struct with_factory {
   int value;
 
 private:
-  explicit with_factory(int value) : value(value) {}
+  explicit with_factory(int init_value) : value(init_value) {}
 };
 
 std::unique_ptr<iface> make_iface() { return std::make_unique<impl>(); }
@@ -141,7 +141,7 @@ TEST(next_factories, constructs_by_the_annotated_constructor) {
 }
 
 struct unbound {
-  explicit unbound(int &value) : value(value) {}
+  explicit unbound(int &init_value) : value(init_value) {}
   int &value;
 };
 

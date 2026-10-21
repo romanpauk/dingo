@@ -133,8 +133,8 @@ struct wheel {
 };
 
 struct car {
-  car(std::unique_ptr<engine> motor, wheel spare)
-      : motor(std::move(motor)), spare(spare) {}
+  car(std::unique_ptr<engine> init_motor, wheel init_spare)
+      : motor(std::move(init_motor)), spare(init_spare) {}
   std::unique_ptr<engine> motor;
   wheel spare;
 };

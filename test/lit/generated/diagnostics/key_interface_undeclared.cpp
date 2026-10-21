@@ -7,11 +7,11 @@
 //
 
 // clang-format off
-// The program of an example of diagnostics.key_interface_undeclared, which the next
-// implementation rejects when it is compiled, with the message
+// The program of an example of diagnostics.key_interface_undeclared, which the library
+// rejects when it is compiled, with the message
 // formatted with the names of its subjects.
 // REQUIRES: static-assert-message
-// RUN: not %dingo_next_cxx_formatted -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx_formatted -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: a key value names other, which the binding of implementation<1> does not declare
 
 #include <dingo/container.h>

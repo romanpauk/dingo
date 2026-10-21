@@ -1,7 +1,7 @@
 // A static request by a fixed key that no binding has, though another key of
 // the domain is bound, is not found, and it is rejected when it is compiled.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: type not found: {{.*}} (index type:
 
 #include <dingo/static_container.h>

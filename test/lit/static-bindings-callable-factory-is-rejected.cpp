@@ -2,7 +2,7 @@
 // factory, which is an object, is rejected in static bindings when the
 // container type is formed.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: declares no factory; a callable factory is the argument of a
 // registration
 

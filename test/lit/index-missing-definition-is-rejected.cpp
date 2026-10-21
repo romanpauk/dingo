@@ -3,7 +3,7 @@
 // interface without a declaration is accepted and finds the binding.
 // (behavior change keys_apply_to_every_interface; the baseline rejected it)
 // REQUIRES: linux, can-run-built-executables
-// RUN: %dingo_next_cxx %s -o %t && %t
+// RUN: %dingo_cxx %s -o %t && %t
 
 #include <dingo/container.h>
 #include <dingo/storage/shared.h>

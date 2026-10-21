@@ -39,10 +39,9 @@ import paths  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 INCLUDE_ROOT = PROJECT_ROOT / "include" / "dingo"
-NEXT_INCLUDE_ROOT = PROJECT_ROOT / "include" / "next"
 # The header trees whose lines count as Dingo lines: the public include paths
 # of the next implementation, and the headers they include.
-DINGO_ROOTS = [INCLUDE_ROOT, NEXT_INCLUDE_ROOT]
+DINGO_ROOTS = [INCLUDE_ROOT]
 CODEGEN_PROBES = PROJECT_ROOT / "test" / "lit" / "codegen-static-probes.cpp"
 RUNTIME_PROBES = Path(__file__).resolve().parent / "runtime_probes.cpp"
 DEFAULT_BASELINE = Path(__file__).resolve().parent / "baseline.json"
@@ -578,14 +577,7 @@ def main():
     parser.add_argument("--top", type=int, default=30)
     args = parser.parse_args()
 
-    # The public include paths of the next implementation precede the rest.
-    command = args.cxx_command + f" -DDINGO_IMPLEMENTATION_NEXT=1 -I{NEXT_INCLUDE_ROOT}"
-    parts = shlex.split(command)
-    includes = [p for p in parts if p.startswith("-I")]
-    others = [p for p in parts if not p.startswith("-I")]
-    nexts = [p for p in includes if p == f"-I{NEXT_INCLUDE_ROOT}"]
-    command = shlex.join(others + nexts + [p for p in includes if p not in nexts])
-    toolchain = Toolchain(command)
+    toolchain = Toolchain(args.cxx_command)
     if args.command == "report":
         if toolchain.family != "clang":
             print("report requires Clang", file=sys.stderr)

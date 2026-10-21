@@ -5,8 +5,8 @@ registration and resolution flow is already in place.
 
 ## Lookup Resolution
 
-Container traits can define one or more lookups so that a registration is
-resolved by interface, key domain, and cardinality.
+Container traits can declare lookups so that a registration is resolved by
+interface, key domain, and cardinality.
 
 Use lookups when:
 
@@ -14,13 +14,18 @@ Use lookups when:
 - the caller chooses the implementation by name or numeric ID
 - the binding should remain separate from unkeyed resolution
 
-Lookup definitions are scoped to the interface they serve. Every keyed
-registration or runtime request requires a matching lookup definition.
+A domain is an interface with a kind of key: no key, a tag key `key_type<Tag>`,
+or the values of a key type, fixed by `key_type<Key, Value>` or supplied at
+runtime. A lookup declaration says whether a domain holds one binding of a key
+or many, and which backend indexes the key values of a domain of a key type. A
+domain no declaration names holds one binding of a key, and its key values are
+indexed by `ordered`. A keyed registration needs no declaration.
 
-Unkeyed runtime registrations without an explicit lookup are treated as
-`none_t`/`one`: a second registration for the same interface is rejected,
-regardless of storage type. Declare `collection<I>` when an interface is meant
-to have multiple unkeyed implementations:
+A second registration of a key of a domain of one is rejected with
+`lookup_already_registered_exception`, regardless of storage type; a static
+container rejects a second static binding when the container type is formed.
+Declare `collection<I>` when an interface is meant to have multiple unkeyed
+implementations:
 
 ```c++
 struct container_traits : dynamic_container_traits {
@@ -31,7 +36,23 @@ struct container_traits : dynamic_container_traits {
 `collection<I>` makes unkeyed collection membership explicit:
 `resolve<std::vector<I *>>()` enumerates the registrations in registration
 order, while singular `resolve<I &>()` succeeds only when exactly one
-registration matches.
+registration matches. A collection request of a domain declared one holds the
+binding the domain has, and a collection request that names no binding is an
+empty collection, in every container.
+
+The declarations are:
+
+- `single<I>`: the bindings of `I` without a key, one of them
+- `collection<I>`: the bindings of `I` without a key, any number of them
+- `typed<Tag, I, Cardinality = one>`: the bindings of `I` by the tag key
+  `key_type<Tag>`
+- `associative<Key, I, Cardinality = one, Backend = ordered>`: the bindings of
+  `I` by a value of `Key`, fixed or supplied at runtime
+- `base<Cardinality = one, Backend = ordered>`: every domain no other
+  declaration covers
+
+`I` may also be `interfaces<I...>`, which declares the domains of several
+interfaces at once.
 
 Runtime-keyed lookups use `associative<K, I>` for unique bindings and
 `associative<K, I, many>` for keyed collections:
@@ -44,14 +65,22 @@ struct container_traits : dynamic_container_traits {
 };
 ```
 
-`associative<K, I>` uses the `ordered` backend by default:
-`associative<Key, Interface, Cardinality = one, Backend = ordered>`. The
-built-in backend tags are:
+The built-in backends are:
 
-- `ordered`: map-like lookup by runtime key, `O(log N)` plus rows for the key.
-- `unordered`: hash-map-like lookup by runtime key, average `O(1)` plus rows for
-  the key.
-- `array<N>`: direct indexed lookup for dense integral or enum keys in `[0, N)`.
+- `ordered`: the sorted key values, searched in `O(log N)`, for a key type with
+  `<`
+- `unordered`: a hash table of the key values, average `O(1)`, for a key type
+  with `std::hash`
+- `array<N>`: a dense array of the key values `0` up to `N`, excluded, of an
+  integral or enumeration key type
+
+A backend falls back to an index the key type can serve: `ordered` to a hash
+table, `unordered` to the sorted key values, and either to a linear scan, which
+needs only `==`. A registration of a key value outside the bound of `array<N>`
+raises `type_index_out_of_range_exception`, a static binding of one is rejected
+when the container type is formed, and a request of one finds no binding. Every
+index visits the bindings of a key in the order of registration, so a keyed
+collection is in registration order whatever the backend.
 
 For example:
 
@@ -63,21 +92,74 @@ struct container_traits : dynamic_container_traits {
 };
 ```
 
-Custom backends can be used as `associative<MyKey, IService, many, my_backend>`.
-A backend tag provides
-`Backend::template storage<Key, Value, Cardinality, Allocator>`, where Dingo
-chooses `Value` for its internal lookup entry pointer. The storage is
-constructed with the container allocator and should expose an STL-like mapped
-container API. For `one`, Dingo uses `find(key)`, `end()`,
-`try_emplace(key, mapped)`, and `erase(iterator)`. For `many`, Dingo uses
-`equal_range(key)`, `emplace(key, mapped)`, and `erase(iterator)`. Collection
-iteration order is defined by the backend; `many` backends are not required to
-preserve registration order.
+A backend indexes key values only: a request without a key, or by a tag key,
+visits the bindings of its domain in the order of registration.
 
-Registration-created child containers use a root-owned dense table of lookup
-scopes. A child indexes that table by scope ID, then performs the lookup in its
-own state with the declared backend, cardinality, and logical key. Lookup state
-is allocated lazily when a child first registers a local binding.
+### Custom Lookup Backends
+
+A custom backend is used as `associative<MyKey, IService, many, my_backend>`, or
+as `base<Cardinality, my_backend>` for the domains no other declaration covers.
+A backend is a type that names a member template `index<Value, Candidate>`. The
+container builds the index from the candidates of a request, each a
+`dingo::index_item<Value, Candidate>` with its `key` and its `candidate`, in the
+order of registration, and asks it to visit the candidates of a key. An index
+must visit the candidates a linear scan visits, in the same order, so it never
+changes which bindings a request names; it only accelerates the search. A
+backend that names no index is rejected when it is declared.
+
+```c++
+#include <dingo/lookup/lookup.h>
+
+#include <cstddef>
+#include <map>
+#include <string>
+#include <vector>
+
+// A lookup backend that indexes the key values in a std::map.
+struct map_backend {
+  template <typename Value, typename Candidate> class index {
+  public:
+    // Takes the candidates in the order of registration.
+    void build(const dingo::index_item<Value, Candidate> *items,
+               std::size_t count) {
+      groups_.clear();
+      for (std::size_t at = 0; at < count; ++at) {
+        groups_[items[at].key].push_back(items[at].candidate);
+      }
+    }
+
+    // Visits the candidates of `key` in the order of registration until
+    // `visit` returns false.
+    template <typename Visit>
+    void visit(const Value &key, Visit &&visit) const {
+      const auto found = groups_.find(key);
+      if (found == groups_.end()) {
+        return;
+      }
+      for (const Candidate &candidate : found->second) {
+        if (!visit(candidate)) {
+          return;
+        }
+      }
+    }
+
+  private:
+    std::map<Value, std::vector<Candidate>> groups_;
+  };
+};
+
+struct container_traits : dingo::dynamic_container_traits {
+  using lookup_definition_type = dingo::lookups<
+      dingo::associative<std::string, IService, dingo::many, map_backend>>;
+};
+```
+
+A backend may also name `bound`, the size of a dense array of its key values, as
+`array<N>` does. The backends of the library name their indexes the same way;
+see [Lookup Indexes](architecture/extending-dingo.md#lookup-indexes).
+
+The local runtime bindings of a registration follow the lookup declarations of
+the container.
 
 Typed-key registrations can also use explicit lookups:
 
@@ -95,12 +177,9 @@ registration order. A singular typed-key resolve succeeds only when the matching
 `many` lookup contains exactly one registration.
 
 When no explicit typed-key lookup is declared, `key_type<K>` registrations still
-use implicit `key_type<K>`/`one`: a second registration for the same interface
-and key type is rejected, regardless of storage type. Use `typed<K, I, many>`
-when one typed key should hold multiple implementations.
-
-No-key and typed-key lookups use the library's internal row storage; only
-runtime-keyed `associative` lookups have configurable storage backends.
+form a domain of one: a second registration for the same interface and key type
+is rejected, regardless of storage type. Use `typed<K, I, many>` when one typed
+key should hold multiple implementations.
 
 Constructor dependencies can also bind to a fixed request key:
 
@@ -114,26 +193,27 @@ struct Pipeline {
 `dependency<IProcessor&, key_type<std::size_t, 1>>` resolves the same object as
 `container.resolve<IProcessor&>(std::size_t{1})`; the configured
 `associative<std::size_t, IProcessor>` lookup determines the key domain and
-cardinality, while the lookup storage remains an implementation detail.
+cardinality.
 
 The value in `key_type<T, Value>` must be a valid non-type template parameter
 and must be usable as `T{Value}`. Class-type values such as
 `key_type<MyKey, MyKey{1}>` require C++20 structural non-type template parameter
 support.
 
-Static containers can use the same `associative<K, I>` lookups when the key
-value is fixed in the type:
+Every kind of key works in every container:
 
-- `key_type<K>` remains a typed key and maps to `typed<K, I, ...>`.
-- `key_type<K, Value>` maps to `associative<K, I, ...>` when `associative<K, I>`
-  or `associative<K, I, many>` is declared.
-- Static dependency selection is type-encoded: use
+- `key_type<K>` is a tag key of the domain of `typed<K, I, ...>`.
+- `key_type<K, Value>` is a fixed key of the domain of `associative<K, I, ...>`.
+  A runtime registration stores it as its value.
+- A request by a runtime key value, `resolve<I &>(K{...})`, is compared with the
+  fixed keys of the static bindings when it is resolved, in `static_container`
+  as in `container<bindings<...>>`.
+- A static container decides a request by a fixed key,
   `dependency<I &, key_type<K, Value>>` or
-  `resolve<Collection>(key_type<K, Value>{})`; `resolve<I &>(K{...})` is runtime
-  key lookup and is not supported by `static_container`.
-- Static fixed runtime-key bindings require `static_container` with traits that
-  declare the lookup. `container<bindings<...>>` rejects them because that mixed
-  form cannot carry custom lookup traits.
+  `resolve<Collection>(key_type<K, Value>{})`, when the request is compiled.
+- `container<bindings<...>, Traits>` declares lookups in its traits as the
+  runtime container does, and rejects a runtime registration whose key a static
+  binding holds.
 
 <!-- { include("../examples/index/static_fixed.cpp", scope="////") -->
 
@@ -311,6 +391,9 @@ auto pipeline = container.construct<Pipeline>();
 See:
 
 - [include/dingo/lookup/lookup.h](../include/dingo/lookup/lookup.h)
+- [include/dingo/core/api/lookup/indexes.h](../include/dingo/core/api/lookup/indexes.h)
+- [include/dingo/core/backend/index.h](../include/dingo/core/backend/index.h)
+- [test/next/api/lookups.cpp](../test/next/api/lookups.cpp)
 
 ## Annotated Types
 
@@ -364,6 +447,49 @@ See:
 - [test/matrix/README.md](../test/matrix/README.md)
 - [include/dingo/type/annotated.h](../include/dingo/type/annotated.h)
 
+## Custom Wrappers, Layer Kinds, And Scopes
+
+A wrapper of the user becomes a layer of the shape algebra through
+`dingo::wrapper_traits`, which names its layer kind, its family, and its element
+types, and tells how to rebind it, reach its element, and make it. The standard
+wrappers specialize it the same way, so a user wrapper serves the same requests
+in every scope as the standard wrapper of its kind. A wrapper that no kind of
+the library describes declares a kind of its own with
+`dingo::layer_kind_traits`: its properties and its route forms.
+
+A scope is a tag type whose `dingo::scope_traits` hold its
+`dingo::scope_descriptor`. A user scope may copy the descriptor of a built-in
+scope, and may name a slot class of its own derived from `dingo::scope_slot`:
+
+```c++
+#include <dingo/container.h>
+#include <dingo/storage/shared.h>
+
+// A scope that keeps one object per container, as shared does.
+struct per_container {};
+
+template <> struct dingo::scope_traits<per_container> {
+  static constexpr dingo::scope_descriptor descriptor =
+      dingo::scope_traits<dingo::shared>::descriptor;
+};
+```
+
+```c++
+dingo::container<> container;
+container.register_type<dingo::scope<per_container>, dingo::storage<service>>();
+assert(&container.resolve<service &>() == &container.resolve<service &>());
+```
+
+[Extending Dingo](architecture/extending-dingo.md) describes every extension
+point with complete examples.
+
+See:
+
+- [include/dingo/type/type_traits.h](../include/dingo/type/type_traits.h)
+- [include/dingo/core/vocabulary/layer_kinds.gen.h](../include/dingo/core/vocabulary/layer_kinds.gen.h)
+- [include/dingo/core/vocabulary/scope_tags.gen.h](../include/dingo/core/vocabulary/scope_tags.gen.h)
+- [test/next/api/scopes.cpp](../test/next/api/scopes.cpp)
+
 ## Runtime And Compile-Time Registration
 
 Dingo has two registration modes with different tradeoffs.
@@ -402,53 +528,62 @@ See:
 
 ## Template Depth Of Compile-Time Bindings
 
-A compile-time container resolves a binding with code generated for that
-binding, and that code resolves the binding's dependencies with code generated
-for them in turn. The compiler instantiates the generated functions nested
+A compile-time container resolves a binding with code instantiated for that
+binding, and that code resolves the binding's dependencies with code
+instantiated for them in turn. The compiler instantiates these functions nested
 inside each other, so a chain of dependencies, where each type depends on one
-other type that depends on one other type, nests one set of function
-instantiations per link. The depth of the nesting is bounded by
-`-ftemplate-depth` (1024 by default in Clang, 900 in GCC). The depth follows the
-longest dependency chain, not the number of bindings: bindings that do not
-depend on each other, or that all depend on the same type, do not nest.
+other type that depends on one other type, nests one set of instantiations per
+link. The depth of the nesting is bounded by `-ftemplate-depth`, 1024 by default
+in Clang and 900 in GCC. The depth follows the longest dependency chain, not the
+number of bindings: bindings that do not depend on each other, or that all
+depend on the same type, do not nest.
 
-Measured with Clang, the `-ftemplate-depth` that a chain needs is
-`links * per link + 15`:
+The longest chain that compiles at the default depth, measured with C++17 in
+`container<bindings<...>>` for a chain whose links each take the previous link;
+`static_container` compiles the same 69 and 52 links of the first row:
 
-| Binding in the chain | Levels per link | Longest chain at the default depth |
-| ----------------------------------------- | --------------- |
----------------------------------- | | shared, constructor detected | 7 | 144 |
-| shared, `factory<constructor<T(...)>>` | 6 | 168 | | shared,
-`factory<function<...>>` | 6 | 168 | | unique, constructor detected | 8 | 126 |
+```text
+binding of a link                          Clang 18   GCC 13
+shared, constructor detected, by reference       69       52
+shared, factory<constructor<T(Args...)>>         72       64
+unique, constructor detected, by value           75       52
+```
 
-A chain of 100 links with detected constructors therefore needs about
-`-ftemplate-depth=720`, and each additional 100 links need 700 more. GCC counts
-about 17 levels per link and reaches 52 links at its default depth. When a
-longer chain does not compile, raise `-ftemplate-depth`, or register the chain
-through `container<>` or `runtime_container`: runtime registration resolves
-through type-erased bindings and its depth does not depend on the length of the
-chain.
+A shared link with a detected constructor costs about 14 levels in Clang and
+about 17 in GCC: at twice the default depth, Clang 18 compiles 142 links and GCC
+13 compiles 105.
+[test/next/api/dependency_chain.cpp](../test/next/api/dependency_chain.cpp)
+resolves a chain of 64 links on Clang and 48 on GCC, in a static and in a
+runtime container.
 
-The levels per link are the function templates of one resolution that Clang
-instantiates one inside the other: the storage, the factory, the constructor
-argument, the context, and the container lookup. Functions that are declared
-with a deduced return type (`auto`, `decltype(auto)`) are instantiated at the
-point of the call and are not nested, which is why the placement `construct`
-overloads of the storages and factories return `auto`. Keep an explicit return
-type on a function that is part of a dependency cycle, such as the constructor
-argument conversion, as a function with a deduced return type cannot be used
-while its own return type is being deduced.
+The declared dependencies of a static container are also checked for cycles when
+it is compiled, by a search from every binding whose cost, for a chain, grows
+with the cube of its length. With `-ftemplate-depth=4096`, Clang 18 compiles a
+chain of up to 86 links with `factory<constructor<T(Args...)>>`, and a longer
+one exceeds the default limit of constant evaluation, `-fconstexpr-steps`.
+
+When a longer chain does not compile, raise `-ftemplate-depth`, or register the
+chain through `container<>` or `runtime_container`. A runtime registration
+instantiates the construction of its binding when it is registered, and a
+dependency resolves through the binding the container holds, so the depth of a
+runtime chain does not depend on its length: a runtime chain of 200 links
+compiles at the default depth with Clang 18 and GCC 13.
 
 ## Container Nesting
 
 Containers can form a parent-child hierarchy. Resolution walks from the child
 toward the parent chain, which allows local overrides on top of broader shared
-configuration. Runtime-only containers use `container<> child(&parent)`. Mixed
-static/runtime containers use `container<bindings<...>, Parent>` and construct
-the child with `child(&parent)`. Purely static containers use
-`static_container<bindings<...>, Parent>` the same way. Static bindings in the
-child can resolve missing dependencies from the parent's static or runtime
-graph.
+configuration. Runtime-only containers use `container<> child(&parent)` for a
+parent of their own type, or `container<Traits, Allocator, Parent>` for another.
+Mixed static/runtime containers use `container<bindings<...>, Parent>` and
+construct the child with `child(&parent)`. Purely static containers use
+`static_container<bindings<...>, Parent>` the same way, and have the traits of
+their parent. Static bindings in the child can resolve missing dependencies from
+the parent's static or runtime graph.
+
+A child shadows its parent for collection requests as for singular ones: a
+collection request that names no binding of the child is the collection of its
+parent. A binding the parent serves resolves its dependencies in the parent.
 
 Nesting is most useful for:
 
@@ -495,30 +630,44 @@ assert(nested_container.resolve<B>().value == 1);
 See:
 
 - [test/matrix/README.md](../test/matrix/README.md)
+- [test/next/api/parents.cpp](../test/next/api/parents.cpp)
+- [test/next/api/static_parents.cpp](../test/next/api/static_parents.cpp)
 
 ## Moving Containers
 
-Runtime-only containers, `container<>` and `runtime_container`, are movable but
-not copyable. They keep their state in a single allocation made through the
-container allocator, and moving transfers it. Registrations, resolved instances,
-the registration containers returned by `register_type<...>()`, and child
-containers created with `child(&parent)` therefore stay valid when the container
-moves. This supports builder-style setup that registers types and then hands the
+Runtime-only containers, `container<>` and `runtime_container`, and a mixed
+container without static bindings, `container<bindings<>>`, are movable but not
+copyable. They keep their state in one allocation made through the container
+allocator, and moving transfers it. Registrations, resolved instances, the
+registration proxies returned by `register_type<...>()`, and child containers
+created with `child(&parent)` therefore stay valid when the container moves.
+This supports builder-style setup that registers types and then hands the
 container over. A moved-from container can only be destroyed or assigned to.
 
-Containers with compile-time bindings, `container<bindings<...>>` and
-`static_container<bindings<...>>`, store their instances inline and are neither
-movable nor copyable.
+Containers with compile-time bindings, `static_container<bindings<...>>` and a
+`container<bindings<...>>` with static bindings, keep their bindings and
+instances in place and are neither movable nor copyable. A `static_container`
+does not move even without bindings.
+
+A child refers to the state of its parent, not to the parent object, so a child
+of a movable parent follows the parent when it moves and finds the parent's
+bindings at its new address.
+
+See:
+
+- [test/next/api/container_move.cpp](../test/next/api/container_move.cpp)
 
 ## Custom RTTI
 
-If standard RTTI is unavailable or undesirable, the container can be
-parameterized with a custom RTTI provider.
+The container identifies a type by a tag of its own and names a type in a
+message by the compiler's spelling of it, so it needs no RTTI. Container traits
+may name an RTTI provider, `rtti_type = dingo::rtti<Provider>`:
 
-Two providers ship in-tree:
+- `typeid_provider`, the provider of the language type information
+- `static_provider`, the provider that needs no language type information
+- a provider of the user, a specialization of `dingo::rtti`
 
-- a dynamic RTTI provider based on `typeid`
-- a static RTTI provider based on template specializations
+The provider does not change what the container does.
 
 See:
 
@@ -527,8 +676,16 @@ See:
 
 ## Custom Allocation
 
-The container can take a user-supplied allocator for its own internal data
-structures.
+The container can take a user-supplied allocator, as the second argument of
+`container<Traits, Allocator>` or as the `allocator_type` of its traits.
+
+A runtime container allocates its state and its bindings through the allocator,
+with the key values the bindings hold and the objects their slots keep in place,
+and frees every binding it allocated, also when a failed request undoes a
+registration. The memos of requests, the indexes of their key values, the local
+runtime bindings of a registration, and the objects a container keeps for
+requests use the global allocator. The allocator need not align what it
+allocates: an allocation is padded for the alignment of its object.
 
 This affects container bookkeeping, not the ownership model of every resolved
 object. A resolved object may still be externally owned or stored in a standard
@@ -550,16 +707,23 @@ container<dingo::dynamic_container_traits, std::allocator<char>>
 
 See:
 
-- [include/dingo/memory/allocator.h](../include/dingo/memory/allocator.h)
-- [include/dingo/memory/arena_allocator.h](../include/dingo/memory/arena_allocator.h)
+- [include/dingo/core/primitives/allocation.h](../include/dingo/core/primitives/allocation.h)
+- [include/dingo/core/api/container_traits.h](../include/dingo/core/api/container_traits.h)
+- [test/next/api/allocator.cpp](../test/next/api/allocator.cpp)
 
 ## Runtime Notes
 
 Some resolution details are easy to miss:
 
-- runtime registration errors surface as exceptions during resolution, while
-  compile-time bindings can diagnose declared graph errors during compilation
-- shared resolutions can act as a cache for already-built objects
+- a runtime registration that collides with a binding of its key throws when it
+  is registered, and a missing dependency of a runtime binding throws during
+  resolution, while compile-time bindings diagnose duplicate keys, declared
+  graph errors, and ambiguities among static bindings during compilation
+- shared resolutions act as a cache for already-built objects: once the slot of
+  a stable binding is settled, a runtime container keeps the address of its
+  object in the memo of the request, and a later resolution makes no call
+- a request is a transaction of its container: when it fails, the container is
+  left as it was before the request
 - `shared_cyclical` supports runtime and static cycles through two-phase
   construction and should be treated as a constrained escape hatch rather than
   the default model

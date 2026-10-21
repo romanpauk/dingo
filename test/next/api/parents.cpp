@@ -94,7 +94,7 @@ struct service {
 };
 
 struct engine {
-  explicit engine(service settings) : settings(settings) {}
+  explicit engine(service init_settings) : settings(init_settings) {}
   service settings;
 };
 

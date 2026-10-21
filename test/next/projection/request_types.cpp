@@ -206,9 +206,9 @@ TEST(next_request_types, an_annotated_value_copies_a_copy_only_value) {
   annotated<copy_only, tag> request(value);
   EXPECT_EQ(static_cast<copy_only>(request).value, 17);
   EXPECT_EQ(static_cast<copy_only>(std::move(request)).value, 17);
-  keyed<copy_only, dingo::core::tag_key<tag>> keyed_request(value);
-  EXPECT_EQ(static_cast<copy_only>(keyed_request).value, 17);
-  EXPECT_EQ(static_cast<copy_only>(std::move(keyed_request)).value, 17);
+  keyed<copy_only, dingo::core::tag_key<tag>> keyed_value(value);
+  EXPECT_EQ(static_cast<copy_only>(keyed_value).value, 17);
+  EXPECT_EQ(static_cast<copy_only>(std::move(keyed_value)).value, 17);
 }
 
 } // namespace

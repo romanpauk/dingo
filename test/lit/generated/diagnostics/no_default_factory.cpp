@@ -7,11 +7,11 @@
 //
 
 // clang-format off
-// The program of an example of diagnostics.no_default_factory, which the next
-// implementation rejects when it is compiled, with the message
+// The program of an example of diagnostics.no_default_factory, which the library
+// rejects when it is compiled, with the message
 // formatted with the names of its subjects.
 // REQUIRES: static-assert-message
-// RUN: not %dingo_next_cxx_formatted -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx_formatted -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: service has no default factory; the binding needs a factory<>
 
 #include <dingo/container.h>

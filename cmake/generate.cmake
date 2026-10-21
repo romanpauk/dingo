@@ -34,9 +34,6 @@ function(configure_generate_targets out_check_targets)
     # generate. Configure with -DDINGO_GENERATE_ON_BUILD=OFF to verify the
     # committed tree as it is, as CI does.
     add_dependencies(dingo generate)
-    if(TARGET dingo_next)
-      add_dependencies(dingo_next generate)
-    endif()
     add_dependencies(generate-check generate)
   endif()
 

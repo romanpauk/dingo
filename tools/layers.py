@@ -1,8 +1,11 @@
-"""Verifies that the public headers form a layered hierarchy.
+"""Verifies that the headers form a layered hierarchy.
 
-A header may include headers of the layers below its own and headers of its
-own module. Modules that share a layer are independent of each other. The
-headers directly under include/dingo form the topmost layer.
+The library is under include/dingo/core, whose modules are the directories
+under core, layered as LAYERS lists them: a header may include headers of the
+layers below its own and headers of its own module, and modules that share a
+layer are independent of each other. The public include paths, every other
+header under include/dingo, form the topmost layer: each includes the facade
+it forwards to in the API layer, and core never includes one.
 """
 
 import argparse
@@ -10,24 +13,9 @@ from pathlib import Path
 import re
 import sys
 
+# The modules of the library, from the lowest layer to the highest. See
+# docs/architecture/overview.md, Header Layers.
 LAYERS = [
-    ("base",),
-    ("memory", "rtti", "type"),
-    ("resolution", "lookup"),
-    ("factory",),
-    ("context",),
-    ("storage",),
-    ("registration",),
-    ("binding",),
-    ("runtime", "static"),
-    (".",),
-]
-
-# core hosts the new implementation of the spec-driven design, see
-# docs/architecture/spec-driven-design.md. Its modules are the directories under
-# core, layered on their own: core includes only core, and the current
-# implementation never includes core.
-CORE_LAYERS = [
     ("core/base",),
     ("core/primitives",),
     ("core/vocabulary",),
@@ -37,6 +25,8 @@ CORE_LAYERS = [
     ("core/api",),
 ]
 
+API = "core/api"
+
 INCLUDE = re.compile(r"^\s*#\s*include\s*<dingo/([^>]+)>")
 
 
@@ -44,16 +34,11 @@ def module_of(path):
     parts = Path(path).parts
     if parts[0] == "core":
         return "/".join(parts[:2]) if len(parts) > 2 else "core"
-    return parts[0] if len(parts) > 1 else "."
-
-
-def is_core(module):
-    return module == "core" or module.startswith("core/")
+    return "public"
 
 
 def layer_of(module):
-    layers = CORE_LAYERS if is_core(module) else LAYERS
-    for index, modules in enumerate(layers):
+    for index, modules in enumerate(LAYERS):
         if module in modules:
             return index
     return None
@@ -68,7 +53,7 @@ def check(include_directory):
         source = header.relative_to(root)
         source_module = module_of(source)
         source_layer = layer_of(source_module)
-        if source_layer is None:
+        if source_module != "public" and source_layer is None:
             violations.append(f"{source}: module '{source_module}' has no layer")
             continue
         for number, line in enumerate(header.read_text().splitlines(), 1):
@@ -77,13 +62,20 @@ def check(include_directory):
                 continue
             target = match.group(1)
             target_module = module_of(target)
-            target_layer = layer_of(target_module)
-            if is_core(source_module) != is_core(target_module):
+            if source_module == "public":
+                if target_module != API:
+                    violations.append(
+                        f"{source}:{number}: the public include path must not "
+                        f"include {target}: it forwards to the API layer"
+                    )
+                continue
+            if target_module == "public":
                 violations.append(
-                    f"{source}:{number}: {source_module} must not include {target}: "
-                    "the current and the next implementation are independent"
+                    f"{source}:{number}: {source_module} must not include the "
+                    f"public include path {target}"
                 )
                 continue
+            target_layer = layer_of(target_module)
             if target_layer is None:
                 violations.append(
                     f"{source}:{number}: includes {target} of module "

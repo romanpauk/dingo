@@ -614,10 +614,7 @@ def main():
             parser.error("--implementation baseline needs --include-dir")
         include = f"-I{args.include_dir.resolve()}"
     else:
-        include = (
-            f"-I{(PROJECT_ROOT / 'include' / 'next').resolve()} "
-            f"-I{(PROJECT_ROOT / 'include').resolve()}"
-        )
+        include = f"-I{(PROJECT_ROOT / 'include').resolve()}"
     command = args.cxx_command or (os.environ.get("CXX", "c++") + f" -std=c++20 {include}")
     toolchain = Toolchain(command)
     started = time.time()

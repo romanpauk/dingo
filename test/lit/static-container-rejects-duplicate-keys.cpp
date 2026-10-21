@@ -2,7 +2,7 @@
 // lookup is declared many, so a second binding of one key is rejected when the
 // container type is formed.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: lookup already registered: interface
 
 #include <dingo/static_container.h>

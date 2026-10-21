@@ -7,11 +7,11 @@
 //
 
 // clang-format off
-// The program of an example of diagnostics.no_default_factory, which the next
-// implementation rejects when it is compiled, with the message
+// The program of an example of diagnostics.no_default_factory, which the library
+// rejects when it is compiled, with the message
 // literal where the compiler formats none.
 // REQUIRES: literal-static-assert
-// RUN: not %dingo_next_cxx_literal -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx_literal -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: {stored} has no default factory; the binding needs a factory<>
 
 #include <dingo/container.h>

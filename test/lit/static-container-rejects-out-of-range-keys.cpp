@@ -1,7 +1,7 @@
 // A dense array never stores a key value outside its bound, so a static
 // binding of one is rejected when the container type is formed.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 
 #include <dingo/lookup/lookup.h>
 #include <dingo/static_container.h>

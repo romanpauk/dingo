@@ -97,10 +97,11 @@ The ledger leaves these open:
     the spelling `dingo::key_type<int, 3>` of a fixed key in "index type: ...".
     The spec says only "whose type is `key`", and the baseline cannot be
     compared, as it rejects a fixed key in a runtime registration.
-- **Documentation of the current implementation.** `docs/advanced-topics.md`
-  describes the storage contract of a lookup backend of the current
-  implementation (`try_emplace`, `equal_range`, `erase`), which
-  `index_extension_point` replaces.
+- **A long chain of declared constructors exceeds the constexpr steps of Clang
+  18.** The cycle search of the static dependency graph
+  (`dependency_graph::find` in `core/backend/static_backend.h`) grows with the
+  cube of the length of a chain, so with `-ftemplate-depth=4096` Clang 18 fails
+  a chain of more than 86 links by `-fconstexpr-steps`, not by its depth.
 
 ## Group A: container and factory
 
@@ -2331,14 +2332,15 @@ into one executable per feature or suite, `dingo_matrix_test_<name>`. They link
 the `dingo` target, so they build against the next implementation, and the
 differential tests build them against the baseline too. Where a behavior change
 declares a difference from the baseline, the matrix asserts the behavior of the
-next implementation under `DINGO_IMPLEMENTATION_NEXT` and keeps the assertion of
-the baseline for the baseline side, as M9.1 describes: `lifetime_counts`
-(`stored_objects_are_constructed_in_place`, `consuming_moves_minimally`),
-`local_bindings` (`local_bindings_shadow_collections`),
-`lookup_route_regressions` (`collections_of_a_domain_of_one`),
-`runtime_exception_regressions` (`empty_collections_are_valid`),
-`runtime_lookup_routing_regressions` (`keys_apply_to_every_interface`), and
-`runtime_unique_reference_regressions` (`consumed_objects_are_never_borrowed`).
+next implementation, and that of the baseline under `DINGO_MATRIX_BASELINE`,
+which a differential build of the baseline defines, as M9.2 describes:
+`lifetime_counts` (`stored_objects_are_constructed_in_place`,
+`consuming_moves_minimally`), `local_bindings`
+(`local_bindings_shadow_collections`), `lookup_route_regressions`
+(`collections_of_a_domain_of_one`), `runtime_exception_regressions`
+(`empty_collections_are_valid`), `runtime_lookup_routing_regressions`
+(`keys_apply_to_every_interface`), and `runtime_unique_reference_regressions`
+(`consumed_objects_are_never_borrowed`).
 
 - registration family (`resolve_concrete`, `resolve_interface`,
   `resolve_wrapper`, `resolve_unique_wrapper`, `custom_wrappers`,

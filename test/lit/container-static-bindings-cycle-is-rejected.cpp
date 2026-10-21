@@ -2,7 +2,7 @@
 // is formed, so a cycle among them is rejected then, whatever the container
 // registers at runtime.
 // REQUIRES: linux
-// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_cxx -fsyntax-only %s 2>&1 | %filecheck %s
 // CHECK: recursive dependency detected:
 
 #include <dingo/container.h>

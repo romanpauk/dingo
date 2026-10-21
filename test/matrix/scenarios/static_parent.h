@@ -103,7 +103,7 @@ void assert_static_parent_child_override() {
 // the ambiguity of a domain declared many.
 template <typename ParentShape, typename ChildShape>
 void assert_static_parent_child_ambiguity() {
-#if !defined(DINGO_IMPLEMENTATION_NEXT)
+#if defined(DINGO_MATRIX_BASELINE)
   using parent_bindings = dingo::bindings<
       dingo::bind<dingo::scope<dingo::shared>, dingo::storage<parent_config>>>;
   using child_bindings = dingo::bindings<

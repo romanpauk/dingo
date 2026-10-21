@@ -85,15 +85,10 @@ if compiler_full_version:
 config.substitutions.append(('%python', python))
 if platform.system() == 'Windows':
     config.substitutions.append(
-        ('%dingo_cxx', f'"{cxx}" /std:c++20 /DDINGO_IMPLEMENTATION_NEXT=1 '
-                       f'/I"{os.path.join(project_root, "include", "next")}" '
-                       f'/I"{os.path.join(project_root, "include")}"')
+        ('%dingo_cxx', f'"{cxx}" /std:c++20 /I"{os.path.join(project_root, "include")}"')
     )
 else:
-    next_includes = (
-        f'-I"{os.path.join(project_root, "include", "next")}" '
-        f'-I"{os.path.join(project_root, "include")}"'
-    )
+    includes = f'-I"{os.path.join(project_root, "include")}"'
 
     def static_assert_message(standard):
         """Whether the compiler formats a user-generated static_assert
@@ -111,25 +106,22 @@ else:
         except OSError:
             return None
 
-    # The diagnostics of the next implementation per language tier: the
+    # The diagnostics of the library per language tier: the
     # newest standard formats its messages, and C++17 prints the literal one
     # on a compiler that formats none there.
     formatted = next((std for std in ('c++26', 'c++2c') if static_assert_message(std)), None)
     if formatted:
         config.available_features.add('static-assert-message')
         config.substitutions.append(
-            ('%dingo_next_cxx_formatted', f'{cxx} -std={formatted} {next_includes}')
+            ('%dingo_cxx_formatted', f'{cxx} -std={formatted} {includes}')
         )
     if static_assert_message('c++17') is False:
         config.available_features.add('literal-static-assert')
         config.substitutions.append(
-            ('%dingo_next_cxx_literal', f'{cxx} -std=c++17 {next_includes}')
+            ('%dingo_cxx_literal', f'{cxx} -std=c++17 {includes}')
         )
     config.substitutions.append(
-        ('%dingo_next_cxx', f'{cxx} -std=c++20 {next_includes}')
-    )
-    config.substitutions.append(
-        ('%dingo_cxx', f'{cxx} -std=c++20 -DDINGO_IMPLEMENTATION_NEXT=1 {next_includes}')
+        ('%dingo_cxx', f'{cxx} -std=c++20 {includes}')
     )
 config.substitutions.append(('%dingo_project_root', project_root))
 config.substitutions.append(('%dingo_lit_root', config.test_source_root))

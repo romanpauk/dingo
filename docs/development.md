@@ -6,10 +6,10 @@ header-only for consumers.
 ## Development Build
 
 Development builds enable tests, benchmarks, and runnable examples through
-`DINGO_DEVELOPMENT_MODE=ON`. They build against the next implementation, whose
-public include paths `include/next` holds, as described in
-[Spec-Driven Design](architecture/spec-driven-design.md#m92-switch-and-removal);
-the current implementation is the baseline of the differential tests, the
+`DINGO_DEVELOPMENT_MODE=ON`. The implementation the library replaced, as
+described in
+[Spec-Driven Design](architecture/spec-driven-design.md#m92-switch-and-removal),
+is the baseline of the differential tests and of the conformance tools: the
 library of the commit in `test/differential/baseline-commit`.
 
 ```bash
@@ -321,8 +321,11 @@ baseline of the library, as described in
 [`test/differential/baseline-commit`](../test/differential/baseline-commit) and
 builds the generated matrix twice from the working-tree test sources: once
 against the library, and once against the extracted baseline through the
-development-only `DINGO_DIFFERENTIAL_INCLUDE_DIR` cache variable. Both builds
-enable `DINGO_MATRIX_RECORD`, which makes every matrix assertion record what it
+development-only `DINGO_DIFFERENTIAL_INCLUDE_DIR` cache variable, which defines
+`DINGO_MATRIX_BASELINE` for the matrix: where a behavior change declares a
+difference, the matrix asserts the behavior of the library, and under
+`DINGO_MATRIX_BASELINE` that of the baseline. Both builds enable
+`DINGO_MATRIX_RECORD`, which makes every matrix assertion record what it
 observed: the expression, its result, and printable operand values such as
 counts and messages. Each executable writes its records to the file named by
 `DINGO_MATRIX_RECORD_FILE`.

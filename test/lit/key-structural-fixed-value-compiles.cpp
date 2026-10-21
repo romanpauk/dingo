@@ -1,7 +1,7 @@
 // A fixed key may be a value of a structural class type, which selects the
 // binding of an equal key in a runtime and in a static container.
 // REQUIRES: linux, can-run-built-executables
-// RUN: %dingo_next_cxx %s -o %t && %t
+// RUN: %dingo_cxx %s -o %t && %t
 
 #include <dingo/container.h>
 #include <dingo/static_container.h>

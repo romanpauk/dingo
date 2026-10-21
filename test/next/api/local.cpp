@@ -98,7 +98,7 @@ TEST(next_local, composes_static_runtime_and_container_bindings) {
 
 struct value {
   value() {}
-  explicit value(int number) : number(number) {}
+  explicit value(int init_number) : number(init_number) {}
   int number = 0;
 };
 

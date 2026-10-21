@@ -63,18 +63,18 @@ code nevertheless implements most decisions twice.
 Shared today:
 
 - registration normalization in
-  [binding_model.h](../../include/dingo/binding/binding_model.h)
+  [binding_model.h](https://github.com/romanpauk/dingo/blob/ced676073a362cf0aa58fe511b61be6ce832a3ce/include/dingo/binding/binding_model.h)
 - the storage classes and `storage_materialization_traits`
 - the conversion operations in
-  [resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
+  [resolution_operation.h](https://github.com/romanpauk/dingo/blob/ced676073a362cf0aa58fe511b61be6ce832a3ce/include/dingo/resolution/resolution_operation.h)
 
 Implemented twice:
 
 - Request-to-route matching: `is_resolution_request_v` in
-  [resolution.h](../../include/dingo/resolution/resolution.h) for static
-  requests, `matches_resolution_request` over `type_descriptor` in
-  [binding_resolution.h](../../include/dingo/binding/binding_resolution.h) for
-  runtime requests.
+  [resolution.h](https://github.com/romanpauk/dingo/blob/ced676073a362cf0aa58fe511b61be6ce832a3ce/include/dingo/resolution/resolution.h)
+  for static requests, `matches_resolution_request` over `type_descriptor` in
+  [binding_resolution.h](https://github.com/romanpauk/dingo/blob/ced676073a362cf0aa58fe511b61be6ce832a3ce/include/dingo/binding/binding_resolution.h)
+  for runtime requests.
 - Lookup: type-list filtering and an overload-set index for static bindings; the
   base index and the array, ordered, and unordered backends under
   `include/dingo/lookup/` for runtime bindings.
@@ -82,20 +82,21 @@ Implemented twice:
   `equal_range` over lookup indexes in the runtime registry.
 - Cross-source conflicts, local-binding precedence, parent fallback, collection
   merging, and auto-construction on a miss, hand-coded separately in
-  [container.h](../../include/dingo/container.h),
-  [static_container.h](../../include/dingo/static_container.h),
-  [registry.h](../../include/dingo/runtime/registry.h), and
-  [activation_set.h](../../include/dingo/static/activation_set.h).
+  [container.h](https://github.com/romanpauk/dingo/blob/ced676073a362cf0aa58fe511b61be6ce832a3ce/include/dingo/container.h),
+  [static_container.h](https://github.com/romanpauk/dingo/blob/ced676073a362cf0aa58fe511b61be6ce832a3ce/include/dingo/static_container.h),
+  [registry.h](https://github.com/romanpauk/dingo/blob/ced676073a362cf0aa58fe511b61be6ce832a3ce/include/dingo/runtime/registry.h),
+  and
+  [activation_set.h](https://github.com/romanpauk/dingo/blob/ced676073a362cf0aa58fe511b61be6ce832a3ce/include/dingo/static/activation_set.h).
 - Route lists: static value requests use separate value routes, while the
   runtime list publishes one shared address route.
 - Conversion-cache types: per interface at runtime, per registration statically.
 - Cycle detection: a compile-time DFS in
-  [graph.h](../../include/dingo/static/graph.h), and `recursion_guard` keyed by
-  binding address at runtime.
+  [graph.h](https://github.com/romanpauk/dingo/blob/ced676073a362cf0aa58fe511b61be6ce832a3ce/include/dingo/static/graph.h),
+  and `recursion_guard` keyed by binding address at runtime.
 
 Shared helpers that would remove some of this duplication exist but are unused:
 `construct_binding_collection` and `count_binding_collection` in
-[binding_collection.h](../../include/dingo/binding/binding_collection.h),
+[binding_collection.h](https://github.com/romanpauk/dingo/blob/ced676073a362cf0aa58fe511b61be6ce832a3ce/include/dingo/binding/binding_collection.h),
 `make_runtime_selection`, and the `prefer_primary` resolution policy.
 
 Behavioral asymmetries:
@@ -126,7 +127,7 @@ The [generated matrix](../../test/matrix/README.md) keeps its own hand-curated
 approximation of the conversion table: capability tags such as
 `stable_concrete_storage`, `supported_modes` sets, and per-provisioning case
 tuples. It can drift from
-[storage_scope_policy.h](../../include/dingo/storage/storage_scope_policy.h).
+[storage_scope_policy.h](https://github.com/romanpauk/dingo/blob/ced676073a362cf0aa58fe511b61be6ce832a3ce/include/dingo/storage/storage_scope_policy.h).
 Identity and behavior expectations live in C++ policies, not in the model.
 
 ## One Semantics, Three Binding Times
@@ -239,7 +240,8 @@ must keep. The C++ projection lists it explicitly:
   resolution functions, and the exception types
 - the extension points users specialize, as documented in
   [Extending Dingo](extending-dingo.md), and `DINGO_CONSTRUCTOR`
-- the configuration macros in [config.h](../../include/dingo/base/config.h)
+- the configuration macros in
+  [config.h](https://github.com/romanpauk/dingo/blob/ced676073a362cf0aa58fe511b61be6ce832a3ce/include/dingo/base/config.h)
 
 Everything not listed is internal. A change to the public API is a behavior
 change and is declared like one.
@@ -473,9 +475,10 @@ The library detects language capabilities, not standard versions. It replaces
 - C++23 `if consteval` replaces `std::is_constant_evaluated`.
 - C++26 reflection (P2996) and expansion statements, as compilers ship them,
   replace constructor detection in `factory/detail/`,
-  [type_name.h](../../include/dingo/base/type_name.h), tag-based type ids, and
-  type-list algorithms. A `std::meta::info` is a value the engine can operate on
-  in `consteval` code before splicing the result back into a type.
+  [type_name.h](https://github.com/romanpauk/dingo/blob/ced676073a362cf0aa58fe511b61be6ce832a3ce/include/dingo/base/type_name.h),
+  tag-based type ids, and type-list algorithms. A `std::meta::info` is a value
+  the engine can operate on in `consteval` code before splicing the result back
+  into a type.
 
 All conditional compilation lives in one mechanics header at layer 0. Every
 header above it, generated or hand-written, calls tier-agnostic primitives:
@@ -806,7 +809,8 @@ directories, next to the current one. A development option,
 implementation. A CI job builds with the option from the first milestone on and
 runs the cases the new implementation supports so far, together with the
 differential tests and the contract probes. Consumers keep the current
-implementation until the switch.
+implementation until the switch, M9.2, which removes it and the option: the
+public include paths are then the facades of the new implementation.
 
 The switch happens when the new implementation passes the conformance suite, the
 differential tests with only declared behavior changes, and the contract probes
@@ -1795,7 +1799,7 @@ by its detected constructor, which no matrix case observes.
 
 #### M9.2: Switch And Removal
 
-Status: in progress.
+Status: done.
 
 Make the new implementation the only one, delete the current internals and the
 development option, and move the baseline.
@@ -1817,8 +1821,13 @@ the one of the next implementation, and the codegen probes record the sizes of
 the next implementation where Clang 18 and GCC 13 do not fold its static
 requests as later versions do.
 
-Remaining: delete the internals of the current implementation, make the facades
-of `include/next` the public headers, and remove `DINGO_IMPLEMENTATION_NEXT`.
+The internals of the current implementation are deleted. The generator emits
+every public include path of the spec as `include/dingo/<path>`, which forwards
+to its facade under `include/dingo/core/api/`, and `include/next`, the
+`dingo_next` target, and `DINGO_IMPLEMENTATION_NEXT` are gone. A public header
+includes only the API layer, which `layers-check` verifies. The matrix asserts
+the behavior of the baseline where a behavior change declares a difference under
+`DINGO_MATRIX_BASELINE`, which a differential build of the baseline defines.
 
 #### M9.3: Matrix Migration
 

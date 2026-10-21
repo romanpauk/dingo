@@ -12,7 +12,7 @@
 
 #include <string>
 
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+#if !defined(DINGO_MATRIX_BASELINE)
 #include <dingo/core/primitives/type_name.h>
 #else
 #include <dingo/base/type_name.h>
@@ -21,7 +21,7 @@
 namespace dingo::matrix {
 
 template <typename Type> std::string type_name() {
-#if defined(DINGO_IMPLEMENTATION_NEXT)
+#if !defined(DINGO_MATRIX_BASELINE)
   return ::dingo::core::type_name_of<Type>();
 #else
   return ::dingo::type_name<Type>();

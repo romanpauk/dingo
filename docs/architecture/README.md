@@ -1,62 +1,66 @@
 # Architecture
 
-This section documents Dingo's internal model: how registrations are reduced to
-factories, how requests are matched to stored types, and where custom wrappers
-and conversions plug in.
+This section documents Dingo's internal model: how a registration becomes a
+binding, how a request selects a binding and a route, and where custom wrappers,
+layer kinds, scopes, conversions, and lookup indexes plug in.
 
 Read these pages in order for the full picture:
 
-- [Containers](containers.md): the public entry points, include layout, and how
-  combined, runtime-only, and static-only containers relate.
-- [Overview](overview.md): the main data flow and the key owners.
+- [Containers](containers.md): the public entry points, and how the combined,
+  runtime-only, and static-only containers relate.
+- [Overview](overview.md): the header layers, the main data flow, and the key
+  owners.
 - [Registration And Resolution](registration-and-resolution.md): runtime and
-  compile-time registration, and the shared path to `resolve<T>()`.
-- [Handles, Leaf Types, And Lookup](handles-leaf-types-and-lookup.md): wrapper
-  algebra, `leaf_type_t`, `rebind_leaf_t`, `lookup_type_t`, and
-  `exact_lookup<T>`.
+  compile-time registration, selection, and the path of `resolve<T>()`.
+- [Handles, Leaf Types, And Lookup](handles-leaf-types-and-lookup.md): shapes,
+  layers and leaves, `leaf_type_t`, `rebind_type_t`, and how a request finds its
+  bindings.
 - [Extending Dingo](extending-dingo.md): which trait to specialize for a new
-  wrapper, storage exposure policy, or conversion.
-- [Conversion Model](conversion-model.md): how Dingo chooses value, reference,
-  pointer, and wrapper conversions at resolution time.
+  wrapper, layer kind, scope, conversion, or lookup index.
+- [Conversion Model](conversion-model.md): how Dingo derives the value,
+  reference, pointer, and wrapper routes a binding serves.
 
 The target architecture, and the tracking of its implementation, is described in
-[Spec-Driven Design](spec-driven-design.md).
+[Spec-Driven Design](spec-driven-design.md). The
+[Test Migration Ledger](test-migration.md) records where each test of the
+replaced implementation is tested now.
 
 The public API is centered on three container entry points:
 
 ```text
 include/dingo/container.h          -> combined public container
-include/dingo/runtime_container.h  -> runtime-only facade
-include/dingo/static_container.h   -> static-only facade
+include/dingo/runtime_container.h  -> runtime-only spelling of the container
+include/dingo/static_container.h   -> static-only container
 ```
 
-Below those headers, the architecture is centered on one resolution flow fed by
-two registration modes:
+These and the other public include paths under `include/dingo/` are generated
+forwarders to the facades under `include/dingo/core/api/`. The library itself is
+`include/dingo/core/`, in the layers described in
+[Header Layers](overview.md#header-layers).
+
+Both registration modes reduce to one binding type, and both backends serve a
+request through the same engine:
 
 ```text
-register_type / bindings -> type_registration -> storage/factory record
-resolve<T> -> lookup type -> factory traits -> resolver -> conversion -> T
+register_type<...>() / bind<...> -> registration -> binding_type -> derived terms
+resolve<T>() -> request -> selection -> backend -> term -> walk -> T
 ```
 
-The shared binding and resolution kernel for that flow lives under
-`include/dingo/binding/`.
+A binding type derives the terms it serves when it is compiled. The static
+backend selects the binding and the term of a request when the request is
+compiled, and the runtime backend when it is resolved, by the same engine
+functions.
 
-Runtime and static implementation code sits under:
+The main owners are:
 
-- `include/dingo/runtime/` for runtime registry internals
-- `include/dingo/static/` for static registry and graph internals
-
-The main owners for the current architecture are:
-
-- [include/dingo/container.h](../../include/dingo/container.h)
-- [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h)
-- [include/dingo/static_container.h](../../include/dingo/static_container.h)
-- [include/dingo/binding/binding_model.h](../../include/dingo/binding/binding_model.h)
-- [include/dingo/binding/binding_resolution.h](../../include/dingo/binding/binding_resolution.h)
-- [include/dingo/factory/factory_traits.h](../../include/dingo/factory/factory_traits.h)
-- [include/dingo/runtime/registry.h](../../include/dingo/runtime/registry.h)
-- [include/dingo/static/registry.h](../../include/dingo/static/registry.h)
-- [include/dingo/static/graph.h](../../include/dingo/static/graph.h)
-- [include/dingo/registration/type_registration.h](../../include/dingo/registration/type_registration.h)
-- [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
-- [include/dingo/resolution/resolution_operation.h](../../include/dingo/resolution/resolution_operation.h)
+- [include/dingo/core/api/container.h](../../include/dingo/core/api/container.h)
+- [include/dingo/core/api/runtime_container.h](../../include/dingo/core/api/runtime_container.h)
+- [include/dingo/core/api/static_container.h](../../include/dingo/core/api/static_container.h)
+- [include/dingo/core/api/registration.h](../../include/dingo/core/api/registration.h)
+- [include/dingo/core/engine/derive.h](../../include/dingo/core/engine/derive.h)
+- [include/dingo/core/engine/execute.h](../../include/dingo/core/engine/execute.h)
+- [include/dingo/core/backend/selection.h](../../include/dingo/core/backend/selection.h)
+- [include/dingo/core/backend/static_backend.h](../../include/dingo/core/backend/static_backend.h)
+- [include/dingo/core/backend/runtime_backend.h](../../include/dingo/core/backend/runtime_backend.h)
+- [include/dingo/core/backend/slot.h](../../include/dingo/core/backend/slot.h)
+- [include/dingo/core/projection/layer_traits.h](../../include/dingo/core/projection/layer_traits.h)
