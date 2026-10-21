@@ -475,9 +475,86 @@ decltype(auto) borrow_step(Context &context, Value &value) {
   }
 }
 
+// The sibling of term `Term` that takes alternative `Alternative` at its step
+// `Step`, or no_term.
+template <typename Binding, std::size_t Term, std::size_t Step,
+          std::size_t Alternative>
+inline constexpr std::size_t sibling_v = [] {
+  const terms &published = Binding::published;
+  for (std::size_t index = 0; index < published.size; ++index) {
+    const term &item = published.items[index];
+    if (item.sibling && item.primary == Term && item.branch == Step &&
+        item.arguments[Step] == Alternative) {
+      return index;
+    }
+  }
+  return no_term;
+}();
+
+// Whether term `Term` has a sibling that parts from it at its step `Step`.
+template <typename Binding, std::size_t Term, std::size_t Step>
+inline constexpr bool branches_v = [] {
+  const terms &published = Binding::published;
+  for (std::size_t index = 0; index < published.size; ++index) {
+    const term &item = published.items[index];
+    if (item.sibling && item.primary == Term && item.branch == Step) {
+      return true;
+    }
+  }
+  return false;
+}();
+
+template <typename Binding, std::size_t Term, std::size_t Steps,
+          std::size_t Step, typename Context, typename Value>
+decltype(auto) take_step(Context &context, Value &&value);
+
+// Continues the walk of term `Term` at its step `Step`, into a variadic layer
+// whose object holds the alternative `held`, along the sibling that takes it
+// from there, as many steps short of its end as the walk of `Term` is; or
+// along `Term`, which reports that the object holds another alternative.
+template <typename Binding, std::size_t Term, std::size_t Steps,
+          std::size_t Step, std::size_t Alternative, typename Context,
+          typename Value>
+decltype(auto) branch(std::size_t held, Context &context, Value &&value) {
+  using arguments = typename layer_traits<remove_cvref_t<Value>>::arguments;
+  if constexpr (Alternative == arguments::size) {
+    return take_step<Binding, Term, Steps, Step>(context,
+                                                 std::forward<Value>(value));
+  } else {
+    constexpr std::size_t sibling = sibling_v<Binding, Term, Step, Alternative>;
+    if constexpr (sibling != no_term) {
+      if (held == Alternative) {
+        constexpr std::size_t short_of =
+            Binding::published.items[Term].rule_count - Steps;
+        return walk_step<
+            Binding, sibling,
+            Binding::published.items[sibling].rule_count - short_of, Step>(
+            context, std::forward<Value>(value));
+      }
+    }
+    return branch<Binding, Term, Steps, Step, Alternative + 1>(
+        held, context, std::forward<Value>(value));
+  }
+}
+
 template <typename Binding, std::size_t Term, std::size_t Steps,
           std::size_t Step, typename Context, typename Value>
 decltype(auto) walk_step(Context &context, Value &&value) {
+  if constexpr (branches_v<Binding, Term, Step>) {
+    using traits = layer_traits<remove_cvref_t<Value>>;
+    const std::size_t held = traits::index(std::as_const(value));
+    if (held != step<Binding, Term, Steps, Step>::argument) {
+      return branch<Binding, Term, Steps, Step, 0>(held, context,
+                                                   std::forward<Value>(value));
+    }
+  }
+  return take_step<Binding, Term, Steps, Step>(context,
+                                               std::forward<Value>(value));
+}
+
+template <typename Binding, std::size_t Term, std::size_t Steps,
+          std::size_t Step, typename Context, typename Value>
+decltype(auto) take_step(Context &context, Value &&value) {
   using current = step<Binding, Term, Steps, Step>;
   constexpr const route_form_info &rule = current::rule;
   if constexpr (rule.cached) {

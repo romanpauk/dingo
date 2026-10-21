@@ -143,6 +143,12 @@ class Derivation:
     arguments: tuple[int, ...] = ()
     copied: Shape | None = None  # the shape the copy rule copied
     consumed: bool = False
+    # The routes to the same term through other alternatives of a variadic
+    # layer: each takes the route of the term up to the step `branch` of it,
+    # there another alternative, and reaches the term on its own. A walk
+    # continues from the object of the step along the one the object holds.
+    siblings: list = field(default_factory=list)
+    branch: int | None = None
 
 
 @dataclass
@@ -167,6 +173,10 @@ class Model:
         self.layers = {kind.id: kind for kind in kinds}
         self.scopes = {scope.id: scope for scope in self.spec.scopes}
         self.routes = routes_of(kinds) if self.kinds else self.spec.routes
+        self.routes_by_id = {route.id: route for route in self.routes}
+
+    def route(self, route_id: str):
+        return self.routes_by_id[route_id]
 
 
 # Shape properties
@@ -422,7 +432,7 @@ def derive(
     form = storage_form(model, stored)
     exposed = set(exposed_categories(model, scope_id, form))
     start = Derivation(stored, scope.materializes, consumed=scope.materializes is RVALUE)
-    seen = {(stored, scope.materializes)}
+    primaries = {(stored, scope.materializes): start}
     queue = [start]
     results = [start]
     while queue:
@@ -439,9 +449,8 @@ def derive(
                     continue
                 for shape in derived_shapes(model, rule, bindings, term.shape, interfaces):
                     category = rule.to_shape.category or term.category
-                    if shape.size() > bound or (shape, category) in seen:
+                    if shape.size() > bound:
                         continue
-                    seen.add((shape, category))
                     derived = Derivation(
                         shape,
                         category,
@@ -450,9 +459,73 @@ def derive(
                         copied=bindings.get("X") if rule.id == "copy" else term.copied,
                         consumed=term.consumed or rule.access is Access.CONSUME,
                     )
+                    primary = primaries.get((shape, category))
+                    if primary is not None:
+                        add_sibling(model, primary, derived)
+                        continue
+                    primaries[(shape, category)] = derived
                     results.append(derived)
                     queue.append(derived)
     return results
+
+
+def variadic_route(model: Model, rule_id: str) -> bool:
+    """Whether a route reaches into a layer of a variadic kind."""
+    source = model.route(rule_id).from_shape
+    return source.form is PatternForm.LAYER and model.layers[source.name].variadic
+
+
+def completion_class(model: Model, term: Derivation) -> str:
+    """How a request completes a term: by copying, decaying, or neither."""
+    if not term.rules:
+        return "none"
+    last = model.route(term.rules[-1])
+    if last.id == "copy":
+        return "copy"
+    return "decay" if last.form is RouteForm.DECAY else "other"
+
+
+def add_sibling(model: Model, primary: Derivation, derived: Derivation) -> None:
+    """Keeps `derived` as a sibling of `primary`, the term of its shape and
+    category derived first, when their routes part at a step into a variadic
+    layer, by its alternatives, and are completed alike; one per step and
+    alternative."""
+    steps = zip(zip(primary.rules, primary.arguments), zip(derived.rules, derived.arguments))
+    for position, (taken, other) in enumerate(steps):
+        if taken == other:
+            continue
+        if taken[0] != other[0] or not variadic_route(model, taken[0]):
+            return
+        if completion_class(model, primary) != completion_class(model, derived):
+            return
+        for sibling in primary.siblings:
+            if sibling.branch == position and sibling.arguments[position] == other[1]:
+                return
+        derived.branch = position
+        primary.siblings.append(derived)
+        return
+
+
+def walked(model: Model, term: Derivation) -> Derivation | None:
+    """The route a walk of the term takes by the alternatives the objects of
+    its variadic layers hold: the term's, or at the first step into an object
+    that holds another alternative, the sibling that takes it; or None when
+    none does, or the route reaches an object holding another later on."""
+    for position, (rule_id, argument) in enumerate(zip(term.rules, term.arguments)):
+        if argument == HELD_ALTERNATIVE or not variadic_route(model, rule_id):
+            continue
+        sibling = next(
+            (
+                s
+                for s in term.siblings
+                if s.branch == position and s.arguments[position] == HELD_ALTERNATIVE
+            ),
+            None,
+        )
+        if sibling is None or not holds_alternatives(model, sibling):
+            return None
+        return sibling
+    return term
 
 
 def derived_shapes(model: "Model", rule, bindings: dict, source: Shape, interfaces: tuple[Leaf, ...]):
@@ -571,6 +644,18 @@ def created(model: "Model", scope, terms, goal: Shape, exposed: set, bound: int,
                             rule.to_shape.category or term.category,
                             rules=(*term.rules, rule.id),
                             arguments=(*term.arguments, 0),
+                            siblings=[
+                                replace(
+                                    sibling,
+                                    shape=shape,
+                                    category=rule.to_shape.category or term.category,
+                                    rules=(*sibling.rules, rule.id),
+                                    arguments=(*sibling.arguments, 0),
+                                    consumed=sibling.consumed or rule.access is Access.CONSUME,
+                                    siblings=[],
+                                )
+                                for sibling in term.siblings
+                            ],
                             copied=term.copied,
                             consumed=term.consumed or rule.access is Access.CONSUME,
                         )
@@ -604,13 +689,10 @@ def serve(model: "Model", scope_id, stored, request, interfaces) -> Derivation |
 def holds_alternatives(model: Model, term: Derivation) -> bool:
     """Whether the objects of the variadic layers a route reaches into hold
     the alternatives it takes."""
-    for rule_id, argument in zip(term.rules, term.arguments):
-        rule = next(r for r in model.routes if r.id == rule_id)
-        source = rule.from_shape
-        if source.form is PatternForm.LAYER and model.layers[source.name].variadic:
-            if argument != HELD_ALTERNATIVE:
-                return False
-    return True
+    return all(
+        argument == HELD_ALTERNATIVE or not variadic_route(model, rule_id)
+        for rule_id, argument in zip(term.rules, term.arguments)
+    )
 
 
 def leaf_location(model: "Model", term: Derivation) -> str:
@@ -636,7 +718,8 @@ def resolve(
     term = serve(model, scope_id, stored, request, interfaces)
     if term is None:
         return Outcome(registered=True, found=True)
-    if not holds_alternatives(model, term):
+    term = walked(model, term)
+    if term is None:
         return Outcome(registered=True, found=True, reason=ALTERNATIVE_NOT_HELD)
 
     scope = model.scopes[scope_id]

@@ -361,6 +361,23 @@ KIND_SHAPES = (
             ("std::unique_ptr<{I}>", False, True),
         ),
     ),
+    # A variant whose shortest route to the leaf takes the second
+    # alternative while it holds the first: the route through the first, a
+    # sibling of it, serves the request.
+    Shape(
+        name="kind_variant_held_unique",
+        spelling="kind_variant<std::unique_ptr<{T}>, {T}>",
+        external=(
+            "kind_variant<std::unique_ptr<{T}>, {T}>(std::in_place_index<0>, "
+            "std::make_unique<{T}>())"
+        ),
+        bases=(
+            ("{T}", False, False),
+            ("{I}", True, True),
+            ("kind_variant<std::unique_ptr<{T}>, {T}>", False, False),
+            ("std::unique_ptr<{T}>", False, False),
+        ),
+    ),
     Shape("kinds_value", "{T}", "{T}{{}}", bases=created_bases()),
     Shape(
         "kinds_pointer",

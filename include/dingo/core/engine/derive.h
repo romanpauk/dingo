@@ -184,6 +184,20 @@ struct term {
   // The leaves the copy rule of the route copied.
   std::uint32_t copied_leaves = 0;
   bool consumed = false;
+  // Whether the term is a sibling of the term `primary`, the term of its value
+  // and category derived first: it takes the route of the primary up to the
+  // step `branch`, there another alternative of a variadic layer, and reaches
+  // the value on its own. A sibling is neither derived from nor selected; a
+  // walk of the primary continues along it from the object of the step when
+  // the object holds its alternative.
+  bool sibling = false;
+  std::uint8_t primary = 0;
+  std::uint8_t branch = 0;
+  // The layer the last rule started from: its kind, qualifiers, and extent,
+  // which a request that copies or decays the term borrows.
+  const kind_descriptor *source_kind = &leaf_kind;
+  std::uint8_t source_qualifiers = 0;
+  std::uint32_t source_extent = 0;
 };
 
 struct terms {
@@ -351,15 +365,74 @@ constexpr bool requirements_hold(const binding_descriptor &binding,
 // Derivation
 
 namespace detail {
-constexpr bool seen(const terms &found, const shape &value,
-                    value_category category) {
+// The term of a value and category that is no sibling, or max_terms.
+constexpr std::size_t primary_of(const terms &found, const shape &value,
+                                 value_category category) {
   for (std::size_t index = 0; index < found.size; ++index) {
-    if (found.items[index].category == category &&
-        found.items[index].value == value) {
-      return true;
+    const term &item = found.items[index];
+    if (!item.sibling && item.category == category && item.value == value) {
+      return index;
     }
   }
-  return false;
+  return max_terms;
+}
+
+// How a request completes a term: by copying, decaying, or neither.
+constexpr int completion_class(const term &route) {
+  if (route.rule_count == 0) {
+    return 0;
+  }
+  const route_form last = route.rules[route.rule_count - 1].form;
+  return last == route_form::copy ? 1 : last == route_form::decay ? 2 : 3;
+}
+
+// Whether two terms a request completes by copying or decaying borrow alike:
+// the layers their last rules start from are of one kind, qualifiers, and
+// extent, so a walk to them yields one type.
+constexpr bool borrow_alike(const term &left, const term &right) {
+  return same_kind(left.source_kind, right.source_kind) &&
+         left.source_qualifiers == right.source_qualifiers &&
+         left.source_extent == right.source_extent;
+}
+
+// Keeps `derived` as a sibling of the term `primary` when their routes part at
+// a step into a variadic layer, by its alternatives, and they are completed
+// alike; one per step and alternative.
+constexpr void add_sibling(terms &found, std::size_t primary, term derived) {
+  const term &first = found.items[primary];
+  const std::size_t common = first.rule_count < derived.rule_count
+                                 ? first.rule_count
+                                 : derived.rule_count;
+  for (std::size_t position = 0; position < common; ++position) {
+    const route_step &taken = first.rules[position];
+    const route_step &other = derived.rules[position];
+    const bool same =
+        taken.form == other.form && same_kind(taken.kind, other.kind);
+    if (same && first.arguments[position] == derived.arguments[position]) {
+      continue;
+    }
+    if (!same || !has_properties(from_kind(taken), layer_property::variadic) ||
+        completion_class(first) != completion_class(derived) ||
+        (completion_class(first) != 3 && !borrow_alike(first, derived))) {
+      return;
+    }
+    for (std::size_t index = 0; index < found.size; ++index) {
+      const term &item = found.items[index];
+      if (item.sibling && item.primary == primary && item.branch == position &&
+          item.arguments[position] == derived.arguments[position]) {
+        return;
+      }
+    }
+    if (found.size == max_terms) {
+      found.overflow = true;
+      return;
+    }
+    derived.sibling = true;
+    derived.primary = static_cast<std::uint8_t>(primary);
+    derived.branch = static_cast<std::uint8_t>(position);
+    found.items[found.size++] = derived;
+    return;
+  }
 }
 
 // The term `step` derives from `from`, of the value `value`, with the pattern
@@ -369,6 +442,9 @@ constexpr term extend(const term &from, const route_step &step,
                       std::size_t argument) {
   const route_form_info &rule = info(step.form);
   term derived = from;
+  derived.source_kind = from.value.nodes[0].kind;
+  derived.source_qualifiers = from.value.nodes[0].qualifiers;
+  derived.source_extent = from.value.nodes[0].extent;
   derived.value = value;
   derived.category = rule.to_category;
   derived.arguments[derived.rule_count] = static_cast<std::uint8_t>(argument);
@@ -384,7 +460,10 @@ constexpr term extend(const term &from, const route_step &step,
 }
 
 constexpr void add(terms &found, const term &derived) {
-  if (seen(found, derived.value, derived.category)) {
+  const std::size_t primary =
+      primary_of(found, derived.value, derived.category);
+  if (primary != max_terms) {
+    add_sibling(found, primary, derived);
     return;
   }
   if (found.size == max_terms) {
@@ -533,7 +612,9 @@ constexpr terms derive(const binding_descriptor &binding) {
   std::uint8_t exposed = exposed_categories(binding);
   std::size_t limit = derivation_bound(binding);
   for (std::size_t next = 0; next < found.size; ++next) {
-    detail::derive_from(binding, found, next, exposed, limit);
+    if (!found.items[next].sibling) {
+      detail::derive_from(binding, found, next, exposed, limit);
+    }
   }
   return found;
 }
@@ -701,7 +782,9 @@ constexpr route_choice select_route(const binding_descriptor &binding,
     }
   };
   for (std::size_t index = 0; index < found.size; ++index) {
-    consider(found.items[index], route_choice{index, {}, 0});
+    if (!found.items[index].sibling) {
+      consider(found.items[index], route_choice{index, {}, 0});
+    }
   }
   const kind_descriptor *outer = kind_of(request.value);
   for (const route_form_info &rule : route_forms) {
@@ -711,7 +794,8 @@ constexpr route_choice select_route(const binding_descriptor &binding,
     const route_step step{rule.form, outer};
     term made;
     for (std::size_t index = 0; index < found.size; ++index) {
-      if (detail::create(binding, found.items[index], step, exposed, made)) {
+      if (!found.items[index].sibling &&
+          detail::create(binding, found.items[index], step, exposed, made)) {
         consider(made, route_choice{index, {step}, 1});
       }
     }
@@ -724,7 +808,8 @@ constexpr route_choice select_route(const binding_descriptor &binding,
       const route_step inner_step{inner_rule.form, inner};
       term middle;
       for (std::size_t index = 0; index < found.size; ++index) {
-        if (detail::create(binding, found.items[index], inner_step, exposed,
+        if (!found.items[index].sibling &&
+            detail::create(binding, found.items[index], inner_step, exposed,
                            middle) &&
             detail::create(binding, middle, step, exposed, made)) {
           consider(made, route_choice{index, {inner_step, step}, 2});

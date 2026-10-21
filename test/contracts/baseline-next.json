@@ -259,34 +259,34 @@
     },
     "headers": {
       "dingo/container.h": {
-        "dingo_lines": 7582
+        "dingo_lines": 7713
       },
       "dingo/factory/callable.h": {
         "dingo_lines": 1699
       },
       "dingo/factory/constructor.h": {
-        "dingo_lines": 3896
+        "dingo_lines": 4027
       },
       "dingo/factory/function.h": {
         "dingo_lines": 1690
       },
       "dingo/runtime_container.h": {
-        "dingo_lines": 7587
+        "dingo_lines": 7718
       },
       "dingo/static_container.h": {
-        "dingo_lines": 6562
+        "dingo_lines": 6693
       },
       "dingo/storage/external.h": {
-        "dingo_lines": 3880
+        "dingo_lines": 4011
       },
       "dingo/storage/shared.h": {
-        "dingo_lines": 3880
+        "dingo_lines": 4011
       },
       "dingo/storage/shared_cyclical.h": {
-        "dingo_lines": 3880
+        "dingo_lines": 4011
       },
       "dingo/storage/unique.h": {
-        "dingo_lines": 3880
+        "dingo_lines": 4011
       }
     },
     "instantiations": {
@@ -400,39 +400,39 @@
       },
       "wrapper_resolved.mixed.1": {
         "classes": 186,
-        "functions": 251
+        "functions": 252
       },
       "wrapper_resolved.mixed.32": {
         "classes": 3347,
-        "functions": 5955
+        "functions": 5987
       },
       "wrapper_resolved.mixed.8": {
         "classes": 899,
-        "functions": 1539
+        "functions": 1547
       },
       "wrapper_resolved.runtime.1": {
         "classes": 199,
-        "functions": 355
+        "functions": 357
       },
       "wrapper_resolved.runtime.32": {
         "classes": 3485,
-        "functions": 8663
+        "functions": 8727
       },
       "wrapper_resolved.runtime.8": {
         "classes": 941,
-        "functions": 2231
+        "functions": 2247
       },
       "wrapper_resolved.static.1": {
         "classes": 178,
-        "functions": 201
+        "functions": 202
       },
       "wrapper_resolved.static.32": {
         "classes": 3308,
-        "functions": 4790
+        "functions": 4822
       },
       "wrapper_resolved.static.8": {
         "classes": 884,
-        "functions": 1238
+        "functions": 1246
       }
     },
     "object_size": {
@@ -508,18 +508,18 @@
   },
   "gcc16-x86_64-c++20": {
     "codegen": {
-      "out_of_line_dingo_functions": 653,
+      "out_of_line_dingo_functions": 654,
       "probes": {
         "probe_runtime_resolution_collection_sum": {
-          "bytes": 2187,
-          "calls": 27,
-          "dingo_calls": 4,
+          "bytes": 3053,
+          "calls": 32,
+          "dingo_calls": 5,
           "dingo_throws": 0,
-          "indirect_calls": 11
+          "indirect_calls": 14
         },
         "probe_runtime_resolution_collection_sum.cold": {
-          "bytes": 222,
-          "calls": 10,
+          "bytes": 234,
+          "calls": 11,
           "dingo_calls": 0,
           "dingo_throws": 1,
           "indirect_calls": 4
@@ -969,34 +969,34 @@
     },
     "headers": {
       "dingo/container.h": {
-        "dingo_lines": 7645
+        "dingo_lines": 7776
       },
       "dingo/factory/callable.h": {
         "dingo_lines": 1754
       },
       "dingo/factory/constructor.h": {
-        "dingo_lines": 3956
+        "dingo_lines": 4087
       },
       "dingo/factory/function.h": {
         "dingo_lines": 1745
       },
       "dingo/runtime_container.h": {
-        "dingo_lines": 7650
+        "dingo_lines": 7781
       },
       "dingo/static_container.h": {
-        "dingo_lines": 6625
+        "dingo_lines": 6756
       },
       "dingo/storage/external.h": {
-        "dingo_lines": 3940
+        "dingo_lines": 4071
       },
       "dingo/storage/shared.h": {
-        "dingo_lines": 3940
+        "dingo_lines": 4071
       },
       "dingo/storage/shared_cyclical.h": {
-        "dingo_lines": 3940
+        "dingo_lines": 4071
       },
       "dingo/storage/unique.h": {
-        "dingo_lines": 3940
+        "dingo_lines": 4071
       }
     },
     "object_size": {
