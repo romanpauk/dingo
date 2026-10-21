@@ -46,6 +46,8 @@ class UserKind:
     instance: str = ""
     # Whether a request creates a layer of the kind, wrapping or adopting.
     created: bool = False
+    # The kind of the probes a mutation differs from by one form or property.
+    mutates: str | None = None
 
 
 def like(kind_id, library_id, targets=None, without=(), traits=None, lacks=()):
@@ -71,7 +73,7 @@ def like(kind_id, library_id, targets=None, without=(), traits=None, lacks=()):
     )
 
 
-def kinded(kind, template, arguments="", extent=None, instance=""):
+def kinded(kind, template, arguments="", extent=None, instance="", mutates=None):
     creates = any(f.form in (RouteForm.WRAP, RouteForm.ADOPT) for f in kind.forms)
     return UserKind(
         kind=kind,
@@ -82,6 +84,7 @@ def kinded(kind, template, arguments="", extent=None, instance=""):
         extent=extent,
         instance=instance,
         created=creates,
+        mutates=mutates,
     )
 
 
@@ -130,21 +133,25 @@ user_kinds = (
         like("kind_unique_unshared", "own", without=(RouteForm.SHARE,)),
         "kinded_unique",
         instance=UNIQUE,
+        mutates="kind_unique",
     ),
     kinded(
         like("kind_unique_unadopting", "own", {"share": "kind_shared"}, without=(RouteForm.ADOPT,)),
         "kinded_unique",
         instance=UNIQUE,
+        mutates="kind_unique",
     ),
     kinded(
         like("kind_optional_unwrapping", "opt", without=(RouteForm.WRAP,)),
         "kinded_optional",
         instance=OPTIONAL,
+        mutates="kind_optional",
     ),
     kinded(
         like("kind_optional_unborrowing", "opt", without=(RouteForm.BORROW,)),
         "kinded_optional",
         instance=OPTIONAL,
+        mutates="kind_optional",
     ),
     kinded(
         like(
@@ -155,11 +162,13 @@ user_kinds = (
         ),
         "kinded_shared",
         instance=SHARED,
+        mutates="kind_shared",
     ),
     kinded(
         like("kind_shared_unretaining", "share", without=(RouteForm.RETAIN,)),
         "kinded_shared",
         instance=SHARED,
+        mutates="kind_shared",
     ),
 )
 

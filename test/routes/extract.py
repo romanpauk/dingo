@@ -304,10 +304,17 @@ def holds_interface(user):
     return LayerTrait.IN_PLACE not in user.kind.traits
 
 
+def mutated(user):
+    """The kind probe a mutation differs from, or the kind itself."""
+    return next((other for other in kind_probes if other.wrapper == user.mutates), user)
+
+
 def kind_bases(user):
+    """The requests of a wrapper of a kind probe: of the kinds its forms lead
+    to, or those of the kind it mutates, which it may no longer reach."""
     targets = [
         other
-        for form in user.kind.forms
+        for form in mutated(user).kind.forms
         if form.target is not None
         for other in kind_probes
         if other.kind.id == form.target
@@ -323,7 +330,7 @@ def kind_bases(user):
 def created_bases():
     bases = []
     for user in kind_probes:
-        if user.created:
+        if user.created or mutated(user).created:
             bases.append((kind_spelling(user, "{T}"), False, False))
             if holds_interface(user):
                 bases.append((kind_spelling(user, "{I}"), False, True))

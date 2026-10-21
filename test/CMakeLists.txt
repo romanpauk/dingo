@@ -172,6 +172,17 @@ set_tests_properties(dingo_routes_conform_test PROPERTIES
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
 
+# The witnesses of the algebra, compiled against the next implementation.
+add_test(NAME dingo_routes_witness_test
+    COMMAND ${DINGO_UV_RUN_COMMAND} python
+        ${CMAKE_CURRENT_SOURCE_DIR}/routes/witness.py
+        --work-dir ${CMAKE_CURRENT_BINARY_DIR}/routes-witness
+        --cxx-command "${CMAKE_CXX_COMPILER} -std=c++20 -I${PROJECT_SOURCE_DIR}/include/next -I${PROJECT_SOURCE_DIR}/include")
+set_tests_properties(dingo_routes_witness_test PROPERTIES
+    LABELS "next;routes"
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
+
 add_test(NAME dingo_selection_conform_test
     COMMAND ${DINGO_UV_RUN_COMMAND} pytest -q -p no:cacheprovider
         ${CMAKE_CURRENT_SOURCE_DIR}/selection/selection_test.py)

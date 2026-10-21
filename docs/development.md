@@ -119,6 +119,22 @@ The route tools compare what the library does with the route rules of the spec,
   `spec/content/diagnostics.py`.
 - [`test/routes/summarize.py`](../test/routes/summarize.py) lists where the
   runtime, static, and mixed containers differ from each other.
+- The next implementation is also probed with layer kinds of the user, declared
+  once in [`test/routes/user_kinds.py`](../test/routes/user_kinds.py): kinds of
+  the properties and forms of library kinds, a variant, an array that moves, and
+  mutations that differ from a library kind by one form or property. The
+  extractor generates their C++ declarations, over the wrappers of
+  `templates/kinded_wrappers_next.h`.
+- [`test/routes/witness.py`](../test/routes/witness.py) runs the witnesses of
+  the algebra against the next implementation: of the cases of the extractor,
+  the smallest that takes each route, that a scope refuses for each reason, that
+  a mutation refuses where the kind it differs from serves, and that each
+  condition of a route refuses, which the reference implementation finds by
+  relaxing the condition. It compiles one program per container and compares as
+  `conform.py --exact` does, in about half a minute, and fails on a route or a
+  condition without a witness unless it declares why none can have one. The
+  ctest entry `dingo_routes_witness_test` runs it; `--list` prints the
+  witnesses.
 
 Extract the table of the pinned baseline and check it:
 

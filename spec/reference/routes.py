@@ -142,6 +142,12 @@ class Model:
 
     spec: Spec
     kinds: tuple = ()
+    # The conditions of routes the model ignores, as (route id, condition):
+    # a predicate a route requires, "exposure" for the request category it
+    # needs a scope to expose, or "handle_copies" for the copy rule's need of
+    # a sharing handle in a scope that copies handles. A test relaxes the
+    # algebra so to find the cases a condition decides.
+    relaxed: frozenset = frozenset()
     layers: dict = field(init=False)
     scopes: dict = field(init=False)
     routes: tuple = field(init=False)
@@ -411,7 +417,7 @@ def derive(
                 continue
             if rule.from_shape.category not in (None, term.category):
                 continue
-            if rule.exposure is not None and rule.exposure not in exposed:
+            if exposure_refuses(model, rule, exposed):
                 continue
             for bindings in match(model, rule.from_shape, term.shape, {}):
                 if not requirements_hold(model, scope, rule, bindings):
@@ -448,8 +454,17 @@ def derived_shapes(model: "Model", rule, bindings: dict, source: Shape, interfac
             yield upcast_leaf(shape, interface)
 
 
+def exposure_refuses(model: Model, rule, exposed: set) -> bool:
+    """Whether the scope does not expose the request category a route needs."""
+    if (rule.id, "exposure") in model.relaxed:
+        return False
+    return rule.exposure is not None and rule.exposure not in exposed
+
+
 def requirements_hold(model: Model, scope, rule, bindings: dict) -> bool:
     for requirement in rule.requires:
+        if (rule.id, requirement.predicate.value) in model.relaxed:
+            continue
         subject = bindings[requirement.subject]
         if requirement.predicate is Predicate.COPYABLE and not copyable(model, subject):
             return False
@@ -461,7 +476,11 @@ def requirements_hold(model: Model, scope, rule, bindings: dict) -> bool:
             return False
         if requirement.predicate is Predicate.LEAF and subject.layer is not None:
             return False
-    if rule.id == "copy" and scope.exposure_rule is ExposureRule.HANDLE_COPIES:
+    if (
+        rule.id == "copy"
+        and scope.exposure_rule is ExposureRule.HANDLE_COPIES
+        and (rule.id, "handle_copies") not in model.relaxed
+    ):
         if not has_trait(model, bindings["X"], LayerTrait.SHARING):
             return False
     return True
@@ -515,7 +534,7 @@ def created(model: "Model", scope, terms, goal: Shape, exposed: set, bound: int,
     for rule in model.routes:
         if not creates(model, rule) or rule.to_shape.name != goal.layer:
             continue
-        if rule.exposure is not None and rule.exposure not in exposed:
+        if exposure_refuses(model, rule, exposed):
             continue
         # The element the form creates the layer of, as the request names it,
         # which a binding term or a layer the request creates under it is.

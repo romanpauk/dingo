@@ -1,0 +1,53 @@
+// The witnesses of the algebra in one program: each case registers its binding
+// in a fresh container and resolves its request, as a group of the route
+// probes does. With guarded, every case is compiled only when ONLY is
+// undefined or its index, and its request only without REGISTRATION_ONLY.
+#include "prelude.h"
+
+{% for case in cases %}
+{%- set scope = "dingo::scope<dingo::" ~ case.scope ~ ">" -%}
+{%- set interfaces = (", dingo::interfaces<" ~ case.interfaces | join(", ") ~ ">") if case.interfaces else "" %}
+// {{ case.labels | join("; ") }}
+{% if guarded %}
+#if !defined(ONLY) || ONLY == {{ case.index }}
+{% endif %}
+{% if case.domain != "runtime" %}
+using source_{{ case.index }} = dingo::bindings<dingo::bind<{{ scope }}, dingo::storage<{{ case.stored }}>{{ interfaces }}>>;
+{% endif %}
+void run_case_{{ case.index }}() {
+{% for declaration in case.declarations %}
+  {{ declaration }}
+{% endfor %}
+  std::string registration = "ok";
+{% if case.domain == "runtime" %}
+  dingo::container<> c;
+  try {
+    c.register_type<{{ scope }}, dingo::storage<{{ case.stored }}>{{ interfaces }}>({{ case.external_argument }});
+  } catch (...) { registration = probe::classify(); }
+{% else %}
+  {{ "dingo::static_container" if case.domain == "static" else "dingo::container" }}<source_{{ case.index }}> c{{ ("(" ~ case.external_argument ~ ")") if case.external_argument else "" }};
+{% endif %}
+#if defined(REGISTRATION_ONLY)
+  (void)c;
+#else
+  probe::run<{{ case.request }}>({{ case.index }}, c, registration);
+#endif
+}
+{% if guarded %}
+#endif
+{% endif %}
+
+{% endfor %}
+int main(int argc, char **argv) {
+  int from = argc > 1 ? std::atoi(argv[1]) : 0;
+{% for case in cases %}
+{% if guarded %}
+#if !defined(ONLY) || ONLY == {{ case.index }}
+{% endif %}
+  if (from <= {{ case.index }}) run_case_{{ case.index }}();
+{% if guarded %}
+#endif
+{% endif %}
+{% endfor %}
+  return 0;
+}
