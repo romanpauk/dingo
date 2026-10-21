@@ -143,6 +143,130 @@ struct local_bindings_of<::dingo::bindings<Binds...>> {
   using type = type_list<typename bind_registration<Binds>::type::binding...>;
 };
 
+template <typename... Types> constexpr bool distinct_types() {
+  constexpr type_id ids[] = {type_id_v<Types>..., nullptr};
+  for (std::size_t first = 0; first < sizeof...(Types); ++first) {
+    for (std::size_t later = first + 1; later < sizeof...(Types); ++later) {
+      if (ids[first] == ids[later]) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+// The first variadic layer of a stored shape that names an alternative
+// twice, or void.
+template <typename Type, typename = void> struct repeated_alternatives {
+  using type = void;
+};
+
+template <typename... Types> struct first_repeated;
+
+template <> struct first_repeated<> {
+  using type = void;
+};
+
+template <typename First, typename... Rest>
+struct first_repeated<First, Rest...> {
+  using type = std::conditional_t<
+      std::is_void_v<typename repeated_alternatives<First>::type>,
+      typename first_repeated<Rest...>::type,
+      typename repeated_alternatives<First>::type>;
+};
+
+template <typename List> struct first_repeated_in;
+
+template <typename... Types> struct first_repeated_in<type_list<Types...>> {
+  using type = typename first_repeated<Types...>::type;
+  static constexpr bool distinct = distinct_types<Types...>();
+};
+
+template <typename Type>
+struct repeated_alternatives<
+    Type, std::enable_if_t<
+              is_layer_v<std::remove_cv_t<std::remove_reference_t<Type>>>>> {
+  using layer = std::remove_cv_t<std::remove_reference_t<Type>>;
+  using arguments = first_repeated_in<typename layer_traits<layer>::arguments>;
+  using type = std::conditional_t<
+      has_layer_properties_v<layer, layer_property::variadic> &&
+          !arguments::distinct,
+      layer, typename arguments::type>;
+};
+
+// Whether the arguments of a registration take a key value of the runtime key
+// `Key` for `Interface`: one that names no interface, or names it.
+template <typename Interface, typename Key, typename... Args>
+constexpr bool takes_key_value() {
+  return (
+      (is_key_value<std::decay_t<Args>>::value &&
+       std::is_same_v<typename runtime_key_of<std::decay_t<Args>>::type, Key> &&
+       (std::is_void_v<
+            typename key_value_interface<std::decay_t<Args>>::type> ||
+        std::is_same_v<typename key_value_interface<std::decay_t<Args>>::type,
+                       Interface>)) ||
+      ...);
+}
+
+// Whether `Declaration` declares a lookup of `Interface` by a runtime key.
+template <typename Interface, typename Declaration>
+constexpr bool declares_runtime_lookup() {
+  return Declaration::key_type::descriptor.kind == key_kind::runtime &&
+         type_list_index_of<Interface,
+                            typename Declaration::interface_list>() !=
+             Declaration::interface_list::size;
+}
+
+// Reports a registration that takes a key value of `Interface` for one of the
+// lookups of it by a runtime key the declarations declare and none for
+// another. spec: diagnostics.registration_key_value_missing
+template <typename Stored, typename Interface, typename... Declarations>
+struct interface_key_values {
+  template <typename... Args> static constexpr bool complete() {
+    constexpr bool takes_any =
+        ((declares_runtime_lookup<Interface, Declarations>() &&
+          takes_key_value<Interface, typename Declarations::key_type,
+                          Args...>()) ||
+         ...);
+    if constexpr (takes_any) {
+      (missing<Declarations, Args...>(), ...);
+    }
+    return true;
+  }
+
+  template <typename Declaration, typename... Args>
+  static constexpr void missing() {
+    if constexpr (declares_runtime_lookup<Interface, Declaration>() &&
+                  !takes_key_value<Interface, typename Declaration::key_type,
+                                   Args...>()) {
+      fail<diag::registration_key_value_missing, Stored,
+           typename Declaration::key_type::value_type, Interface>();
+    }
+  }
+};
+
+template <typename Stored, typename Interfaces, typename Declarations>
+struct key_values_of;
+
+template <typename Stored, typename... Interfaces, typename... Declarations>
+struct key_values_of<Stored, type_list<Interfaces...>,
+                     type_list<Declarations...>> {
+  template <typename... Args> static constexpr bool complete() {
+    return (
+        interface_key_values<Stored, Interfaces,
+                             Declarations...>::template complete<Args...>() &&
+        ...);
+  }
+};
+
+template <typename Scope, typename = void>
+struct has_scope_traits : std::false_type {};
+
+template <typename Scope>
+struct has_scope_traits<
+    Scope, std::void_t<decltype(::dingo::scope_traits<Scope>::descriptor)>>
+    : std::true_type {};
+
 template <typename Dependencies> struct declared_dependencies {
   using type = void;
 };
@@ -190,6 +314,16 @@ template <typename... Parts> struct registration {
   static_assert(
       core::require<!std::is_same_v<storage_part, detail::missing_part>,
                     core::diag::registration_without_storage>());
+  static_assert(core::require<
+                std::is_same_v<scope_part, detail::missing_part> ||
+                    detail::has_scope_traits<typename scope_part::type>::value,
+                core::diag::scope_undeclared, typename scope_part::type>());
+
+  using repeated_layer =
+      typename detail::repeated_alternatives<typename storage_part::type>::type;
+  static_assert(
+      core::require<std::is_void_v<repeated_layer>,
+                    core::diag::alternatives_repeated, repeated_layer>());
 
   using factory_part =
       typename detail::find_part<::dingo::factory, detail::missing_part,

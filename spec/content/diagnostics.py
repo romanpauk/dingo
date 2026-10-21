@@ -228,6 +228,98 @@ diagnostics: tuple[Diagnostic, ...] = (
         reported=COMPILE,
     ),
     Diagnostic(
+        id="lookup_declared_twice",
+        condition=(
+            "The lookups of container traits declare the domain of an "
+            "interface and a key twice."
+        ),
+        exception=None,
+        message="the lookup of {interface} by {key} is declared twice",
+        placeholders=("interface", "key"),
+        fallback_carrier="lookup_declared_twice_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="registration_key_value_missing",
+        condition=(
+            "A registration takes a key value of an interface for a declared "
+            "lookup of it by a runtime key, and none for another declared "
+            "lookup of it by a runtime key, whose type is `key`."
+        ),
+        exception=None,
+        message="the registration of {stored} takes no key value of {key} for {interface}, whose lookup by it is declared",
+        placeholders=("stored", "key", "interface"),
+        fallback_carrier="registration_key_value_missing_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="alternatives_repeated",
+        condition="A variadic layer of a stored shape names an alternative twice.",
+        exception=None,
+        message="{layer} names an alternative twice",
+        placeholders=("layer",),
+        fallback_carrier="alternatives_repeated_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="collection_traits_missing",
+        condition=(
+            "A collection is constructed, or a binding stores one, of a type "
+            "that no dingo::collection_traits make a collection."
+        ),
+        exception=None,
+        message="{type} is not a collection: it has no dingo::collection_traits",
+        placeholders=("type",),
+        fallback_carrier="collection_traits_missing_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="key_value_not_of_key_type",
+        condition=(
+            "A fixed key names a value from which its key type, `key`, is not "
+            "constructed."
+        ),
+        exception=None,
+        message="the value of a dingo::key_type does not construct its key type {key}",
+        placeholders=("key",),
+        fallback_carrier="key_value_not_of_key_type_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="factory_not_declared",
+        condition=(
+            "A factory<> part of a registration names a type that declares no "
+            "factory, such as a callable factory, which a registration takes as "
+            "its argument and a static binding cannot hold."
+        ),
+        exception=None,
+        message="factory<{factory}> declares no factory; a callable factory is the argument of a registration",
+        placeholders=("factory",),
+        fallback_carrier="factory_not_declared_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="conversion_access_undeclared",
+        condition=(
+            "A dingo::type_conversion_traits of a target and a source declares "
+            "a conversion and no required_access."
+        ),
+        exception=None,
+        message="dingo::type_conversion_traits<{target}, {source}> declares no required_access",
+        placeholders=("target", "source"),
+        fallback_carrier="conversion_access_undeclared_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="scope_undeclared",
+        condition="A registration names a scope tag that has no dingo::scope_traits.",
+        exception=None,
+        message="{scope} is not a scope: it has no dingo::scope_traits",
+        placeholders=("scope",),
+        fallback_carrier="scope_undeclared_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
         id="dense_key_type",
         condition=(
             "An associative lookup indexed by a dense array takes a key that "

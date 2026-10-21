@@ -12,6 +12,8 @@
 // Target object, and declares the access it needs, to borrow the source or
 // consume it. Without one, a wrapper converts by its converting constructor.
 
+#include <dingo/core/vocabulary/compile_diagnostics.gen.h>
+
 #include <type_traits>
 #include <utility>
 
@@ -49,12 +51,26 @@ struct declares_conversion
           detail::converts_from<Target, Source, Source &>::value ||
           detail::converts_from<Target, Source, Source &&>::value> {};
 
+namespace detail {
+template <typename Target, typename Source, typename = void>
+struct declares_access : std::false_type {};
+
+template <typename Target, typename Source>
+struct declares_access<Target, Source,
+                       std::void_t<typename ::dingo::type_conversion_traits<
+                           Target, Source>::template required_access<Source &>>>
+    : std::true_type {};
+} // namespace detail
+
 // Whether a `From` reference to a Source object, an lvalue or an rvalue,
 // converts to Target: by the declared conversion, whose access the reference
 // allows, or by the converting constructor.
 template <typename Target, typename Source, typename From>
 constexpr bool converts() {
   if constexpr (declares_conversion<Target, Source>::value) {
+    static_assert(
+        require<detail::declares_access<Target, Source>::value,
+                diag::conversion_access_undeclared, Target, Source>());
     using required = typename ::dingo::type_conversion_traits<
         Target, Source>::template required_access<From>;
     return std::is_same_v<required, ::dingo::borrow> ||

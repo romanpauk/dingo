@@ -300,6 +300,149 @@ int main() {
         "map_backend",
     ),
     example(
+        "lookup_declared_twice",
+        SHARED,
+        SERVICE
+        + """
+#include <dingo/lookup/lookup.h>
+
+struct traits : dingo::dynamic_container_traits {
+  using lookup_definition_type =
+      dingo::lookups<dingo::single<service>, dingo::collection<service>>;
+};
+
+int main() {
+  dingo::container<traits> container;
+  container.register_type<dingo::scope<dingo::shared>,
+                          dingo::storage<implementation<1>>,
+                          dingo::interfaces<service>>();
+}
+""",
+        "service",
+        "dingo::none_t",
+    ),
+    example(
+        "registration_key_value_missing",
+        SHARED,
+        SERVICE
+        + """
+#include <dingo/lookup/lookup.h>
+
+struct traits : dingo::dynamic_container_traits {
+  using lookup_definition_type =
+      dingo::lookups<dingo::associative<int, service>,
+                     dingo::associative<long, service>>;
+};
+
+int main() {
+  dingo::container<traits> container;
+  container.register_type<dingo::scope<dingo::shared>,
+                          dingo::storage<implementation<1>>,
+                          dingo::interfaces<service>>(dingo::key_value{7});
+}
+""",
+        "implementation<1>",
+        "long",
+        "service",
+    ),
+    example(
+        "alternatives_repeated",
+        SHARED,
+        """
+#include <variant>
+
+int main() {
+  dingo::container<> container;
+  container.register_type<dingo::scope<dingo::shared>,
+                          dingo::storage<std::variant<int, int>>>();
+}
+""",
+        "std::variant<int, int>",
+    ),
+    example(
+        "collection_traits_missing",
+        CONTAINER,
+        """
+int main() {
+  dingo::container<> container;
+  (void)container.construct_collection<int>();
+}
+""",
+        "int",
+    ),
+    example(
+        "key_value_not_of_key_type",
+        SHARED,
+        """
+struct key {
+  key() = default;
+  key(int) = delete;
+};
+
+int main() { return sizeof(dingo::key_type<key, 1>); }
+""",
+        "key",
+    ),
+    example(
+        "factory_not_declared",
+        ("dingo/static_container.h", "dingo/storage/unique.h"),
+        """
+struct maker {
+  int operator()() const { return 7; }
+};
+
+int main() {
+  using bindings = dingo::bindings<dingo::bind<
+      dingo::scope<dingo::unique>, dingo::storage<int>, dingo::factory<maker>>>;
+  dingo::static_container<bindings> container;
+  (void)container;
+}
+""",
+        "maker",
+    ),
+    example(
+        "conversion_access_undeclared",
+        SHARED,
+        """
+#include <dingo/type/type_conversion_traits.h>
+
+struct target {
+  explicit target(int initial) : value(initial) {}
+  int value;
+};
+
+struct source : target {
+  source() : target(5) {}
+};
+
+template <> struct dingo::type_conversion_traits<target, source> {
+  static target convert(const source &from) { return target(from.value); }
+};
+
+int main() {
+  dingo::container<> container;
+  container.register_type<dingo::scope<dingo::shared>, dingo::storage<source>,
+                          dingo::interfaces<target>>();
+  return container.resolve<target>().value;
+}
+""",
+        "target",
+        "source",
+    ),
+    example(
+        "scope_undeclared",
+        CONTAINER,
+        """
+struct undeclared_scope;
+
+int main() {
+  dingo::container<> container;
+  container.register_type<dingo::scope<undeclared_scope>, dingo::storage<int>>();
+}
+""",
+        "undeclared_scope",
+    ),
+    example(
         "registration_without_scope",
         SHARED,
         CONFIG

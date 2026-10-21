@@ -204,8 +204,11 @@ TEST(next_keys, a_registration_names_the_key_of_an_interface) {
   dingo::container<routed_traits> container;
   container.register_type<scope<dingo::shared>, storage<processor_animal>,
                           dingo::interfaces<processor, animal>>(
-      dingo::key_value<int>{7}, dingo::key_value<int, animal>{9});
+      dingo::key_value<int>{7}, dingo::key_value<int, animal>{9},
+      dingo::key_value<std::string, processor>{"seven"});
   EXPECT_EQ(container.resolve<processor &>(7).processor_id(), 9);
+  EXPECT_EQ(&container.resolve<processor &>(std::string("seven")),
+            &container.resolve<processor &>(7));
   EXPECT_EQ(container.resolve<animal &>(9).animal_id(), 4);
   EXPECT_THROW(container.resolve<animal &>(7), dingo::type_not_found_exception);
 }

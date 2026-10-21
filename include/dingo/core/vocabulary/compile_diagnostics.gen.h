@@ -38,17 +38,22 @@
 namespace dingo {
 
 // The carriers of the subjects of the diagnostics reported when compiled.
+template <typename... Subjects> struct alternatives_repeated_carrier {};
 template <typename... Subjects> struct collection_arguments_carrier {};
+template <typename... Subjects> struct collection_traits_missing_carrier {};
 template <typename... Subjects> struct constructor_generic_carrier {};
 template <typename... Subjects> struct constructor_not_detected_carrier {};
+template <typename... Subjects> struct conversion_access_undeclared_carrier {};
 template <typename... Subjects> struct cyclical_virtual_interface_carrier {};
 template <typename... Subjects> struct dense_key_type_carrier {};
+template <typename... Subjects> struct factory_not_declared_carrier {};
 template <typename... Subjects> struct interface_in_array_carrier {};
 template <typename... Subjects> struct interface_limit_carrier {};
 template <typename... Subjects> struct interface_not_derived_carrier {};
 template <typename... Subjects> struct key_alias_limit_carrier {};
 template <typename... Subjects> struct key_interface_undeclared_carrier {};
 template <typename... Subjects> struct key_type_values_carrier {};
+template <typename... Subjects> struct key_value_not_of_key_type_carrier {};
 template <typename... Subjects> struct kind_form_needs_property_carrier {};
 template <typename... Subjects> struct kind_form_needs_target_carrier {};
 template <typename... Subjects> struct kind_form_of_leaf_carrier {};
@@ -59,16 +64,20 @@ template <typename... Subjects> struct kind_property_unknown_carrier {};
 template <typename... Subjects> struct layer_kind_undeclared_carrier {};
 template <typename... Subjects> struct lookup_already_registered_carrier {};
 template <typename... Subjects> struct lookup_backend_without_index_carrier {};
+template <typename... Subjects> struct lookup_declared_twice_carrier {};
 template <typename... Subjects> struct no_default_factory_carrier {};
 template <typename... Subjects> struct no_interface_served_carrier {};
 template <typename... Subjects>
 struct registration_dependencies_twice_carrier {};
 template <typename... Subjects> struct registration_key_twice_carrier {};
+template <typename... Subjects>
+struct registration_key_value_missing_carrier {};
 template <typename... Subjects> struct registration_key_values_carrier {};
 template <typename... Subjects> struct registration_without_scope_carrier {};
 template <typename... Subjects> struct registration_without_storage_carrier {};
 template <typename... Subjects> struct scope_form_not_stored_carrier {};
 template <typename... Subjects> struct scope_nested_layers_carrier {};
+template <typename... Subjects> struct scope_undeclared_carrier {};
 template <typename... Subjects> struct static_instances_carrier {};
 template <typename... Subjects> struct type_ambiguous_carrier {};
 template <typename... Subjects> struct type_index_out_of_range_carrier {};
@@ -82,17 +91,22 @@ namespace dingo::core {
 
 // The diagnostics reported when the program is compiled.
 enum class diag : std::uint8_t {
+  alternatives_repeated,
   collection_arguments,
+  collection_traits_missing,
   constructor_generic,
   constructor_not_detected,
+  conversion_access_undeclared,
   cyclical_virtual_interface,
   dense_key_type,
+  factory_not_declared,
   interface_in_array,
   interface_limit,
   interface_not_derived,
   key_alias_limit,
   key_interface_undeclared,
   key_type_values,
+  key_value_not_of_key_type,
   kind_form_needs_property,
   kind_form_needs_target,
   kind_form_of_leaf,
@@ -103,15 +117,18 @@ enum class diag : std::uint8_t {
   layer_kind_undeclared,
   lookup_already_registered,
   lookup_backend_without_index,
+  lookup_declared_twice,
   no_default_factory,
   no_interface_served,
   registration_dependencies_twice,
   registration_key_twice,
+  registration_key_value_missing,
   registration_key_values,
   registration_without_scope,
   registration_without_storage,
   scope_form_not_stored,
   scope_nested_layers,
+  scope_undeclared,
   static_instances,
   type_ambiguous,
   type_index_out_of_range,
@@ -124,12 +141,20 @@ enum class diag : std::uint8_t {
 
 // The number of subjects of each diagnostic, one per placeholder.
 inline constexpr std::uint8_t diag_subjects[] = {
-    0, 1, 1, 2, 2, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    3, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 1, 2, 1, 2, 2, 1};
+    1, 0, 1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 3, 1, 2, 1, 1, 1, 1, 3, 1, 0, 0, 1, 1, 1, 0, 1, 1, 2, 1, 2, 2, 1};
 
 #if DINGO_HAS_STATIC_ASSERT_MESSAGE
 // The text of a diagnostic around its placeholders, and its carrier.
 template <diag Code> struct diag_text;
+
+// spec: diagnostics.alternatives_repeated
+template <> struct diag_text<diag::alternatives_repeated> {
+  template <typename... Subjects>
+  using carrier = ::dingo::alternatives_repeated_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {"",
+                                                " names an alternative twice"};
+};
 
 // spec: diagnostics.collection_arguments
 template <> struct diag_text<diag::collection_arguments> {
@@ -137,6 +162,14 @@ template <> struct diag_text<diag::collection_arguments> {
   using carrier = ::dingo::collection_arguments_carrier<Subjects...>;
   static constexpr std::string_view pieces[] = {
       "a collection takes at most one key or append function"};
+};
+
+// spec: diagnostics.collection_traits_missing
+template <> struct diag_text<diag::collection_traits_missing> {
+  template <typename... Subjects>
+  using carrier = ::dingo::collection_traits_missing_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "", " is not a collection: it has no dingo::collection_traits"};
 };
 
 // spec: diagnostics.constructor_generic
@@ -153,6 +186,14 @@ template <> struct diag_text<diag::constructor_not_detected> {
   using carrier = ::dingo::constructor_not_detected_carrier<Subjects...>;
   static constexpr std::string_view pieces[] = {"no constructor of ",
                                                 " is detected"};
+};
+
+// spec: diagnostics.conversion_access_undeclared
+template <> struct diag_text<diag::conversion_access_undeclared> {
+  template <typename... Subjects>
+  using carrier = ::dingo::conversion_access_undeclared_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "dingo::type_conversion_traits<", ", ", "> declares no required_access"};
 };
 
 // spec: diagnostics.cyclical_virtual_interface
@@ -172,6 +213,15 @@ template <> struct diag_text<diag::dense_key_type> {
   static constexpr std::string_view pieces[] = {
       "an associative lookup of ",
       " indexed by dingo::array<N> takes an integral or enum key, not ", ""};
+};
+
+// spec: diagnostics.factory_not_declared
+template <> struct diag_text<diag::factory_not_declared> {
+  template <typename... Subjects>
+  using carrier = ::dingo::factory_not_declared_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "factory<", "> declares no factory; a callable factory is the argument "
+                  "of a registration"};
 };
 
 // spec: diagnostics.interface_in_array
@@ -220,6 +270,14 @@ template <> struct diag_text<diag::key_type_values> {
   using carrier = ::dingo::key_type_values_carrier<Subjects...>;
   static constexpr std::string_view pieces[] = {"dingo::key_type of ",
                                                 " accepts at most one value"};
+};
+
+// spec: diagnostics.key_value_not_of_key_type
+template <> struct diag_text<diag::key_value_not_of_key_type> {
+  template <typename... Subjects>
+  using carrier = ::dingo::key_value_not_of_key_type_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "the value of a dingo::key_type does not construct its key type ", ""};
 };
 
 // spec: diagnostics.kind_form_needs_property
@@ -306,6 +364,14 @@ template <> struct diag_text<diag::lookup_backend_without_index> {
       "the lookup backend ", " names no index<Value, Candidate>"};
 };
 
+// spec: diagnostics.lookup_declared_twice
+template <> struct diag_text<diag::lookup_declared_twice> {
+  template <typename... Subjects>
+  using carrier = ::dingo::lookup_declared_twice_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {"the lookup of ", " by ",
+                                                " is declared twice"};
+};
+
 // spec: diagnostics.no_default_factory
 template <> struct diag_text<diag::no_default_factory> {
   template <typename... Subjects>
@@ -338,6 +404,15 @@ template <> struct diag_text<diag::registration_key_twice> {
   static constexpr std::string_view pieces[] = {
       "the registration of ",
       " takes its key from a key_type<> or a key_value, not both"};
+};
+
+// spec: diagnostics.registration_key_value_missing
+template <> struct diag_text<diag::registration_key_value_missing> {
+  template <typename... Subjects>
+  using carrier = ::dingo::registration_key_value_missing_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "the registration of ", " takes no key value of ", " for ",
+      ", whose lookup by it is declared"};
 };
 
 // spec: diagnostics.registration_key_values
@@ -379,6 +454,14 @@ template <> struct diag_text<diag::scope_nested_layers> {
   using carrier = ::dingo::scope_nested_layers_carrier<Subjects...>;
   static constexpr std::string_view pieces[] = {
       "the scope of the binding does not store the nested layers of ", ""};
+};
+
+// spec: diagnostics.scope_undeclared
+template <> struct diag_text<diag::scope_undeclared> {
+  template <typename... Subjects>
+  using carrier = ::dingo::scope_undeclared_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "", " is not a scope: it has no dingo::scope_traits"};
 };
 
 // spec: diagnostics.static_instances
@@ -461,6 +544,16 @@ template <diag Code, typename... Subjects> struct diag_report {
 // carrier of the subjects.
 template <diag Code, typename... Subjects> struct diag_report;
 
+// spec: diagnostics.alternatives_repeated
+template <typename... Subjects>
+struct diag_report<diag::alternatives_repeated, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<::dingo::alternatives_repeated_carrier<Subjects...>>,
+        "{layer} names an alternative twice");
+  }
+};
+
 // spec: diagnostics.collection_arguments
 template <typename... Subjects>
 struct diag_report<diag::collection_arguments, Subjects...> {
@@ -468,6 +561,17 @@ struct diag_report<diag::collection_arguments, Subjects...> {
     static_assert(
         dependent_false<::dingo::collection_arguments_carrier<Subjects...>>,
         "a collection takes at most one key or append function");
+  }
+};
+
+// spec: diagnostics.collection_traits_missing
+template <typename... Subjects>
+struct diag_report<diag::collection_traits_missing, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<
+            ::dingo::collection_traits_missing_carrier<Subjects...>>,
+        "{type} is not a collection: it has no dingo::collection_traits");
   }
 };
 
@@ -491,6 +595,18 @@ struct diag_report<diag::constructor_not_detected, Subjects...> {
   }
 };
 
+// spec: diagnostics.conversion_access_undeclared
+template <typename... Subjects>
+struct diag_report<diag::conversion_access_undeclared, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<
+            ::dingo::conversion_access_undeclared_carrier<Subjects...>>,
+        "dingo::type_conversion_traits<{target}, {source}> declares no "
+        "required_access");
+  }
+};
+
 // spec: diagnostics.cyclical_virtual_interface
 template <typename... Subjects>
 struct diag_report<diag::cyclical_virtual_interface, Subjects...> {
@@ -510,6 +626,17 @@ struct diag_report<diag::dense_key_type, Subjects...> {
     static_assert(dependent_false<::dingo::dense_key_type_carrier<Subjects...>>,
                   "an associative lookup of {interface} indexed by "
                   "dingo::array<N> takes an integral or enum key, not {key}");
+  }
+};
+
+// spec: diagnostics.factory_not_declared
+template <typename... Subjects>
+struct diag_report<diag::factory_not_declared, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<::dingo::factory_not_declared_carrier<Subjects...>>,
+        "factory<{factory}> declares no factory; a callable factory is the "
+        "argument of a registration");
   }
 };
 
@@ -572,6 +699,17 @@ struct diag_report<diag::key_type_values, Subjects...> {
     static_assert(
         dependent_false<::dingo::key_type_values_carrier<Subjects...>>,
         "dingo::key_type of {key} accepts at most one value");
+  }
+};
+
+// spec: diagnostics.key_value_not_of_key_type
+template <typename... Subjects>
+struct diag_report<diag::key_value_not_of_key_type, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<
+            ::dingo::key_value_not_of_key_type_carrier<Subjects...>>,
+        "the value of a dingo::key_type does not construct its key type {key}");
   }
 };
 
@@ -682,6 +820,16 @@ struct diag_report<diag::lookup_backend_without_index, Subjects...> {
   }
 };
 
+// spec: diagnostics.lookup_declared_twice
+template <typename... Subjects>
+struct diag_report<diag::lookup_declared_twice, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<::dingo::lookup_declared_twice_carrier<Subjects...>>,
+        "the lookup of {interface} by {key} is declared twice");
+  }
+};
+
 // spec: diagnostics.no_default_factory
 template <typename... Subjects>
 struct diag_report<diag::no_default_factory, Subjects...> {
@@ -722,6 +870,18 @@ struct diag_report<diag::registration_key_twice, Subjects...> {
         dependent_false<::dingo::registration_key_twice_carrier<Subjects...>>,
         "the registration of {stored} takes its key from a key_type<> or a "
         "key_value, not both");
+  }
+};
+
+// spec: diagnostics.registration_key_value_missing
+template <typename... Subjects>
+struct diag_report<diag::registration_key_value_missing, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<
+            ::dingo::registration_key_value_missing_carrier<Subjects...>>,
+        "the registration of {stored} takes no key value of {key} for "
+        "{interface}, whose lookup by it is declared");
   }
 };
 
@@ -775,6 +935,16 @@ struct diag_report<diag::scope_nested_layers, Subjects...> {
         dependent_false<::dingo::scope_nested_layers_carrier<Subjects...>>,
         "the scope of the binding does not store the nested layers of "
         "{stored}");
+  }
+};
+
+// spec: diagnostics.scope_undeclared
+template <typename... Subjects>
+struct diag_report<diag::scope_undeclared, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<::dingo::scope_undeclared_carrier<Subjects...>>,
+        "{scope} is not a scope: it has no dingo::scope_traits");
   }
 };
 

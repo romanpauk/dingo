@@ -242,6 +242,7 @@ add_executable(dingo_next_test
     next/api/parents.cpp
     next/api/recursion.cpp
     next/api/runtime_registration.cpp
+    next/api/scope_headers.cpp
     next/api/scopes.cpp
     next/api/shared_cyclical.cpp
     next/api/static_bindings.cpp

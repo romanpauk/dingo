@@ -24,11 +24,24 @@ namespace dingo {
 
 struct none_t;
 
+namespace detail {
+// Whether `Type{Value}` constructs the key of a fixed key from its value.
+template <typename Type, auto Value, typename = void>
+struct constructs_from_value : std::false_type {};
+
+template <typename Type, auto Value>
+struct constructs_from_value<Type, Value, std::void_t<decltype(Type{Value})>>
+    : std::true_type {};
+} // namespace detail
+
 // key_type<Tag> is a tag key, key_type<Key, Value> a fixed key of the value
 // Key{Value}, and key_type<none_t> no key.
 template <typename Type, auto... Values> struct key_type {
   static_assert(core::require<sizeof...(Values) <= 1,
                               core::diag::key_type_values, Type>());
+  static_assert(
+      core::require<(detail::constructs_from_value<Type, Values>::value && ...),
+                    core::diag::key_value_not_of_key_type, Type>());
   using type = Type;
 };
 

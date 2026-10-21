@@ -13,6 +13,7 @@
 
 #include <dingo/core/projection/collection.h>
 #include <dingo/core/projection/key.h>
+#include <dingo/core/vocabulary/compile_diagnostics.gen.h>
 
 #include <type_traits>
 #include <utility>
@@ -37,13 +38,19 @@ Collection collect_by(Backend &backend, Arguments &&...arguments);
 
 template <typename Collection, typename Backend>
 Collection collect_by(Backend &backend) {
+  static_assert(require<::dingo::collection_traits<Collection>::is_collection,
+                        diag::collection_traits_missing, Collection>());
   return backend.template collect<Collection, no_key>(nullptr,
                                                       collection_append());
 }
 
 template <typename Collection, typename Backend, typename Argument>
 Collection collect_by(Backend &backend, Argument &&argument) {
-  if constexpr (is_collection_key_v<Collection, Argument>) {
+  static_assert(require<::dingo::collection_traits<Collection>::is_collection,
+                        diag::collection_traits_missing, Collection>());
+  if constexpr (!::dingo::collection_traits<Collection>::is_collection) {
+    return Collection();
+  } else if constexpr (is_collection_key_v<Collection, Argument>) {
     using key = request_key_of<std::decay_t<Argument>>;
     return backend.template collect<Collection, typename key::type>(
         key::value(argument), collection_append());

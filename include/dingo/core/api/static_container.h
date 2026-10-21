@@ -94,7 +94,7 @@ public:
           Orphan && !detail::is_self<static_container, Instances...>::value>>
   explicit static_container(Instances &&...instances)
       : backend_(std::forward<Instances>(instances)...) {
-    static_assert(this->declared_dependencies_named(
+    static_assert(static_container::declared_dependencies_named(
         typename static_source_type::binding_list()));
   }
 
@@ -105,7 +105,7 @@ public:
       std::conditional_t<Child, parent_type, static_container> *parent,
       Instances &&...instances)
       : backend_(std::forward<Instances>(instances)...) {
-    static_assert(this->declared_dependencies_named(
+    static_assert(static_container::declared_dependencies_named(
         typename static_source_type::binding_list()));
     this->parent_pointer = detail::parent_link<parent_type>(parent);
   }

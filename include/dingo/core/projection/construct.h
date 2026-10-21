@@ -286,8 +286,14 @@ struct callable_arguments<
 template <typename Callable>
 using callable_arguments_t = typename callable_arguments<Callable>::type;
 
-// The factory of the next implementation that a public factory declares.
-template <typename Factory> struct factory_of;
+// The factory of the next implementation that a public factory declares; a
+// type that declares none, such as a callable factory, which a registration
+// takes as its argument, is rejected.
+template <typename Factory> struct factory_of {
+  static_assert(
+      require<dependent_false<Factory>, diag::factory_not_declared, Factory>());
+  using type = void;
+};
 
 // A factory that calls a function, whose result is the stored object.
 template <auto Function> struct function_factory {

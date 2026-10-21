@@ -110,6 +110,22 @@ struct mixed_state {
   void *owner = nullptr;
 };
 
+// Whether a registration of `Binding` into a container of `Traits` by `Args`
+// takes a key value for every lookup of an interface by a runtime key its
+// traits declare, when it takes one for any.
+template <typename Traits, typename Binding, typename... Args>
+constexpr bool key_values_complete() {
+  using interfaces = std::conditional_t<
+      Binding::interfaces::size == 0,
+      core::type_list<core::leaf_of_t<typename Binding::stored_type>>,
+      typename Binding::interfaces>;
+  using declarations =
+      typename core::lookup_list<typename Traits::lookup_definition_type>::type;
+  return core::detail::key_values_of<
+      typename Binding::stored_type, interfaces,
+      declarations>::template complete<Args...>();
+}
+
 template <typename Traits, typename Allocator, typename Parent>
 struct runtime_parameters {
   using container = ::dingo::container<Traits, Allocator, Parent>;
@@ -193,6 +209,7 @@ public:
   auto register_type(Args &&...args) {
     using binding =
         typename core::registration<Parts...>::template binding_for<Args...>;
+    static_assert(detail::key_values_complete<Traits, binding, Args...>());
     auto &locals = this->state()->backend.template add<binding>(
         std::forward<Args>(args)...);
     return core::registration_proxy<std::remove_reference_t<decltype(locals)>>(
@@ -265,6 +282,9 @@ public:
   auto register_type(Args &&...args) {
     using binding =
         typename core::registration<Parts...>::template binding_for<Args...>;
+    static_assert(detail::key_values_complete<
+                  typename detail::mixed_parameters<Second, Third>::traits,
+                  binding, Args...>());
     auto &locals = this->state()->runtime.template add_unless<binding>(
         [](const void *key_value) {
           return static_source_type::template holds_key_of<binding>(key_value);

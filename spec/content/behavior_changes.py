@@ -669,6 +669,24 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         decision=SWITCH_DECISION,
     ),
     BehaviorChange(
+        id="scope_tags_need_no_header",
+        description=(
+            "The tags of the scopes of the library are complete wherever the "
+            "container is, so a registration with one needs no header of the "
+            "scope."
+        ),
+        cases=(
+            "test:next_scope_headers."
+            "the_container_declares_the_scopes_of_the_library",
+        ),
+        baseline=(
+            "A registration with a scope whose header, such as "
+            "dingo/storage/unique.h, is not included does not compile."
+        ),
+        now="The registration compiles.",
+        decision=SWITCH_DECISION,
+    ),
+    BehaviorChange(
         id="local_bindings_shadow_collections",
         description=(
             "The local bindings of a request shadow the bindings of the "
