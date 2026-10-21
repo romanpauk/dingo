@@ -113,17 +113,14 @@ struct mixed_state {
 // Whether a registration of `Binding` into a container of `Traits` by `Args`
 // takes a key value for every lookup of an interface by a runtime key its
 // traits declare, when it takes one for any.
+template <typename Traits>
+using declarations_of =
+    typename core::lookup_list<typename Traits::lookup_definition_type>::type;
+
 template <typename Traits, typename Binding, typename... Args>
 constexpr bool key_values_complete() {
-  using interfaces = std::conditional_t<
-      Binding::interfaces::size == 0,
-      core::type_list<core::leaf_of_t<typename Binding::stored_type>>,
-      typename Binding::interfaces>;
-  using declarations =
-      typename core::lookup_list<typename Traits::lookup_definition_type>::type;
-  return core::detail::key_values_of<
-      typename Binding::stored_type, interfaces,
-      declarations>::template complete<Args...>();
+  return core::detail::key_values_complete<declarations_of<Traits>, Binding,
+                                           Args...>();
 }
 
 template <typename Traits, typename Allocator, typename Parent>
@@ -212,7 +209,8 @@ public:
     static_assert(detail::key_values_complete<Traits, binding, Args...>());
     auto &locals = this->state()->backend.template add<binding>(
         std::forward<Args>(args)...);
-    return core::registration_proxy<std::remove_reference_t<decltype(locals)>>(
+    return core::registration_proxy<std::remove_reference_t<decltype(locals)>,
+                                    detail::declarations_of<Traits>>(
         locals, core::lookup_table_v<Traits>);
   }
 
@@ -290,7 +288,10 @@ public:
           return static_source_type::template holds_key_of<binding>(key_value);
         },
         std::forward<Args>(args)...);
-    return core::registration_proxy<std::remove_reference_t<decltype(locals)>>(
+    return core::registration_proxy<
+        std::remove_reference_t<decltype(locals)>,
+        detail::declarations_of<
+            typename detail::mixed_parameters<Second, Third>::traits>>(
         locals, lookups::value);
   }
 

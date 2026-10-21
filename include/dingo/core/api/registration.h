@@ -259,6 +259,19 @@ struct key_values_of<Stored, type_list<Interfaces...>,
   }
 };
 
+// Whether a registration of `Binding` by `Args` takes a key value for every
+// lookup of an interface by a runtime key that `Declarations`, a type_list of
+// lookup declarations, declare, when it takes one for any.
+template <typename Declarations, typename Binding, typename... Args>
+constexpr bool key_values_complete() {
+  using interfaces =
+      std::conditional_t<Binding::interfaces::size == 0,
+                         type_list<leaf_of_t<typename Binding::stored_type>>,
+                         typename Binding::interfaces>;
+  return key_values_of<typename Binding::stored_type, interfaces,
+                       Declarations>::template complete<Args...>();
+}
+
 template <typename Scope, typename = void>
 struct has_scope_traits : std::false_type {};
 
