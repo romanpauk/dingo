@@ -57,7 +57,7 @@ TEST(next_construct, constructs_a_named_alternative_inside_layers) {
 }
 
 // A pointer to a variant points to a variant that holds the named alternative.
-TEST(next_construct, DISABLED_constructs_a_named_alternative_behind_a_pointer) {
+TEST(next_construct, constructs_a_named_alternative_behind_a_pointer) {
   using alternative =
       std::variant<selected_alternative, unselected_alternative>;
 

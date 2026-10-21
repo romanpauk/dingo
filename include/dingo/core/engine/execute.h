@@ -337,12 +337,31 @@ template <typename Step, typename Binding>
 using interface_t = interface_object_t<
     type_list_at_t<Step::argument, typename Binding::interfaces>>;
 
+// `Type` with the cv-qualifiers of `From`.
+template <typename From, typename Type>
+using copy_cv_t = std::conditional_t<
+    std::is_const_v<From>,
+    std::conditional_t<std::is_volatile_v<From>, const volatile Type,
+                       const Type>,
+    std::conditional_t<std::is_volatile_v<From>, volatile Type, Type>>;
+
+// The interface of the step in place of the element of a layer, or of the
+// object an address points to, with its qualifiers: a const object serves its
+// interfaces as const ones.
+template <typename Step, typename Binding, typename Element>
+using qualified_interface_t = copy_cv_t<Element, interface_t<Step, Binding>>;
+
+template <typename Layer>
+using layer_element_t =
+    type_list_at_t<0, typename layer_traits<Layer>::arguments>;
+
 // A borrowed handle converts to the handle of the interface, which the binding
 // keeps in the context, so the request can refer to it.
 template <typename Binding, typename Step, typename Context, typename Value>
 decltype(auto) keep_step(Context &context, Value &value) {
-  using target = typename layer_traits<remove_cvref_t<Value>>::template rebind<
-      interface_t<Step, Binding>>;
+  using layer = remove_cvref_t<Value>;
+  using target = typename layer_traits<layer>::template rebind<
+      qualified_interface_t<Step, Binding, layer_element_t<layer>>>;
   if constexpr (converts<target, remove_cvref_t<Value>, const Value &>()) {
     return Step::reach(
         context,
@@ -368,13 +387,18 @@ decltype(auto) upcast_step(Context &context, Value &&value) {
                           typename Binding::stored_type, interface>());
   }
   if constexpr (!is_layer(Step::to)) {
-    return Step::reach(context, static_cast<interface &>(value));
+    using target =
+        qualified_interface_t<Step, Binding, std::remove_reference_t<Value>>;
+    return Step::reach(context, static_cast<target &>(value));
   } else if constexpr (to_address) {
-    return Step::yield(context,
-                       [&] { return static_cast<interface *>(value); });
+    using target =
+        qualified_interface_t<Step, Binding,
+                              std::remove_pointer_t<remove_cvref_t<Value>>>;
+    return Step::yield(context, [&] { return static_cast<target *>(value); });
   } else {
-    using target = typename layer_traits<
-        remove_cvref_t<Value>>::template rebind<interface>;
+    using layer = remove_cvref_t<Value>;
+    using target = typename layer_traits<layer>::template rebind<
+        qualified_interface_t<Step, Binding, layer_element_t<layer>>>;
     if constexpr (converts<target, remove_cvref_t<Value>, Value &&>()) {
       return Step::yield(context, [&] {
         return convert_to<target>(std::forward<Value>(value));
@@ -422,6 +446,24 @@ template <typename Step, typename Value>
 inline constexpr bool is_step_layer_v =
     is_layer_v<Value> && same_kind(layer_kind_v<Value>, Step::current.kind);
 
+template <typename Traits, typename Value, typename = void>
+inline constexpr bool has_element_check_v = false;
+
+template <typename Traits, typename Value>
+inline constexpr bool
+    has_element_check_v<Traits, Value,
+                        std::void_t<decltype(bool(Traits::has_element(
+                            std::declval<const Value &>())))>> = true;
+
+// Whether a step into the element of a layer checks that the object holds
+// one: a nullable layer that holds its element in place has no element to
+// refer to when it holds none.
+template <typename Step, typename Traits, typename Value>
+inline constexpr bool checks_element_v =
+    has_properties(Step::current.kind, layer_property::nullable) &&
+    has_properties(Step::current.kind, layer_property::in_place) &&
+    has_element_check_v<Traits, Value>;
+
 // A consumed object moves out of a layer, a handle shares its element, or an
 // array hands out its first element or its address.
 template <typename Step, typename Context, typename Value>
@@ -430,6 +472,11 @@ decltype(auto) consume_step(Context &context, Value &&value) {
   using traits = layer_traits<value_type>;
   if constexpr (Step::form == route_form::take) {
     if constexpr (is_step_layer_v<Step, value_type>) {
+      if constexpr (checks_element_v<Step, traits, value_type>) {
+        if (!traits::has_element(std::as_const(value))) {
+          raise_element_not_held(type_name_of<value_type>());
+        }
+      }
       return Step::reach(context, std::move(element_of<Step, traits>(value)));
     } else {
       return Step::reach(context, std::forward<Value>(value));
@@ -460,6 +507,11 @@ decltype(auto) borrow_step(Context &context, Value &value) {
   using traits = layer_traits<value_type>;
   if constexpr (Step::form == route_form::borrow) {
     if constexpr (is_step_layer_v<Step, value_type>) {
+      if constexpr (checks_element_v<Step, traits, value_type>) {
+        if (!traits::has_element(std::as_const(value))) {
+          raise_element_not_held(type_name_of<value_type>());
+        }
+      }
       return Step::reach(context, element_of<Step, traits>(value));
     } else {
       return Step::reach(context, value);
@@ -587,6 +639,60 @@ DINGO_ALWAYS_INLINE decltype(auto) walk_from(Context &context,
     using result = detail::remove_cvref_t<decltype(walk<Binding, Term, Steps>(
         context, source()))>;
     return result(walk<Binding, Term, Steps>(context, source()));
+  }
+}
+
+namespace detail {
+// Whether the last of the first `Steps` rules of term `Term` borrows the
+// element of a nullable layer that holds it in place, which may hold none.
+template <typename Binding, std::size_t Term, std::size_t Steps>
+constexpr bool reaches_held_element() {
+  if constexpr (Steps == 0) {
+    return false;
+  } else {
+    const route_step &last = Binding::published.items[Term].rules[Steps - 1];
+    return last.form == route_form::borrow &&
+           has_properties(last.kind, layer_property::nullable) &&
+           has_properties(last.kind, layer_property::in_place);
+  }
+}
+} // namespace detail
+
+// The address of the object the first `Steps` rules of term `Term` reach from
+// the stored object `source()` yields, which they borrow. When the last rule
+// reaches the element of a layer that holds none, the address is null if
+// `null_allowed`, and the request is refused otherwise.
+template <typename Binding, std::size_t Term, std::size_t Steps,
+          typename Context, typename Source>
+DINGO_ALWAYS_INLINE auto address_from(Context &context, Source &&source,
+                                      bool null_allowed) {
+  using pointer = decltype(std::addressof(
+      walk_from<Binding, Term, Steps>(context, source)));
+  if constexpr (detail::reaches_held_element<Binding, Term, Steps>()) {
+    using current = detail::step<Binding, Term, Steps, Steps - 1>;
+    using layer =
+        decltype(walk_from<Binding, Term, Steps - 1>(context, source));
+    using value_type = detail::remove_cvref_t<layer>;
+    using traits = layer_traits<value_type>;
+    if constexpr (std::is_lvalue_reference_v<layer> &&
+                  detail::is_step_layer_v<current, value_type> &&
+                  detail::checks_element_v<current, traits, value_type>) {
+      auto &object = walk_from<Binding, Term, Steps - 1>(context, source);
+      if (!traits::has_element(std::as_const(object))) {
+        if (null_allowed) {
+          return pointer(nullptr);
+        }
+        raise_element_not_held(type_name_of<value_type>());
+      }
+      return pointer(
+          std::addressof(detail::element_of<current, traits>(object)));
+    } else {
+      return pointer(
+          std::addressof(walk_from<Binding, Term, Steps>(context, source)));
+    }
+  } else {
+    return pointer(
+        std::addressof(walk_from<Binding, Term, Steps>(context, source)));
   }
 }
 

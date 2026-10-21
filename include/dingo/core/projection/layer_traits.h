@@ -23,6 +23,7 @@
 // sole-owner handle hands its element to the sharing handle of its family.
 
 #include <dingo/core/base/mechanics.h>
+#include <dingo/core/primitives/constructor.h>
 #include <dingo/core/primitives/shape.h>
 #include <dingo/core/vocabulary/compile_diagnostics.gen.h>
 #include <dingo/core/vocabulary/layer_kinds.gen.h>
@@ -53,6 +54,9 @@ namespace dingo {
 //              element<Index>, the alternative `Index` of it
 //   index      for a variadic kind: the alternative a wrapper object holds,
 //              which a route through another does not reach
+//   has_element  for a nullable kind that holds its element in place: whether
+//              a wrapper object holds one; a request of an address through
+//              one that holds none is null, and any other is refused
 //   make       a wrapper object made from the arguments of its element
 //   adopt      for a kind of the adopt form: a wrapper object that takes the
 //              ownership
@@ -148,6 +152,10 @@ template <typename Type> struct wrapper_traits<std::optional<Type>> {
   using family = standard_family;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = std::optional<Element>;
+
+  static bool has_element(const std::optional<Type> &value) {
+    return value.has_value();
+  }
 
   static Type &element(std::optional<Type> &value) { return *value; }
   static const Type &element(const std::optional<Type> &value) {
@@ -314,6 +322,10 @@ template <typename Type> struct layer_traits<Type *> {
   template <typename... Args> static Type *make(Args &&...args) {
     return new Type(std::forward<Args>(args)...);
   }
+
+  // A slot that keeps a pointer owns the element it points to, which its
+  // factory made.
+  static void dispose(Type *value) noexcept { delete value; }
 };
 
 template <typename Type> struct layer_traits<Type &> {
@@ -363,6 +375,16 @@ using layer_kind_t = typename layer_traits<std::remove_cv_t<Type>>::kind;
 // Whether a type is a layer rather than a leaf.
 template <typename Type>
 inline constexpr bool is_layer_v = !std::is_void_v<layer_kind_t<Type>>;
+
+// Whether the layer traits of `Type` release what an object of it owns beyond
+// itself when the slot that keeps it destroys it.
+template <typename Type, typename = void>
+inline constexpr bool has_dispose_v = false;
+
+template <typename Type>
+inline constexpr bool
+    has_dispose_v<Type, std::void_t<decltype(layer_traits<Type>::dispose(
+                            std::declval<Type &>()))>> = true;
 
 // The descriptor of the layer kind of a type, or the leaf kind.
 template <typename Type>
@@ -449,11 +471,20 @@ template <typename Type> constexpr shape make_shape() {
   if constexpr (!is_layer_v<value_type>) {
     node.type = type_id_v<value_type>;
   }
-  // A leaf is copyable as its type is; a layer as its kind declares.
-  if constexpr (!is_layer_v<value_type>) {
-    node.copyable = std::is_copy_constructible_v<value_type>;
+  // A leaf is copyable as its type is; a layer as its kind declares. A leaf
+  // that is incomplete where it is requested is neither copied nor
+  // constructed there, as only a reference or a pointer to it is requested.
+  if constexpr (!is_layer_v<value_type> &&
+                !core::detail::is_complete<value_type>::value &&
+                !std::is_void_v<value_type>) {
+    node.copyable = false;
+    node.constructible = false;
+  } else {
+    if constexpr (!is_layer_v<value_type>) {
+      node.copyable = std::is_copy_constructible_v<value_type>;
+    }
+    node.constructible = !std::is_abstract_v<value_type>;
   }
-  node.constructible = !std::is_abstract_v<value_type>;
   node.qualifiers = static_cast<std::uint8_t>(
       (std::is_const_v<Type> ? const_qualified : 0) |
       (std::is_volatile_v<Type> ? volatile_qualified : 0));

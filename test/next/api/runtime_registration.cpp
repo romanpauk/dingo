@@ -16,6 +16,7 @@
 #include <dingo/lookup/lookup.h>
 #include <dingo/rtti/static_provider.h>
 #include <dingo/rtti/typeid_provider.h>
+#include <dingo/static_container.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/shared_cyclical.h>
@@ -327,16 +328,20 @@ TEST(next_runtime_registration, constructs_a_copy_only_object) {
   EXPECT_EQ(value.value, 31);
 }
 
-// Finding: the request selects the term of the binding and then throws
-// std::logic_error, "the selected term does not complete the request", as the
-// object the container keeps is constructed only from an object it could
-// move.
+// The object a request of an rvalue reference refers to is the one the
+// binding constructs, kept by the container, so it need not be movable.
 TEST(next_runtime_registration,
-     DISABLED_refers_to_a_kept_copy_only_object_by_rvalue_reference) {
+     refers_to_a_kept_copy_only_object_by_rvalue_reference) {
   dingo::container<> container;
   container.register_type<scope<dingo::unique>, storage<copy_only>>();
   copy_only &&reference = container.resolve<copy_only &&>();
   EXPECT_EQ(reference.value, 31);
+
+  dingo::static_container<
+      dingo::bindings<dingo::bind<scope<dingo::unique>, storage<copy_only>>>>
+      static_container;
+  copy_only &&static_reference = static_container.resolve<copy_only &&>();
+  EXPECT_EQ(static_reference.value, 31);
 }
 
 // A shared object that failed is constructed again by the next request, and a

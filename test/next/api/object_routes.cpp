@@ -12,6 +12,7 @@
 
 #include <dingo/container.h>
 #include <dingo/factory/callable.h>
+#include <dingo/static_container.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/type/type_conversion_traits.h>
@@ -20,6 +21,7 @@
 
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <utility>
 #include <variant>
 
@@ -175,9 +177,6 @@ TEST(next_object_routes, a_shared_pointer_serves_a_copy_of_its_pointee) {
   const copy_counted copy = container.resolve<copy_counted>();
   EXPECT_EQ(copy.copies, 1);
   EXPECT_NE(&copy, &object);
-  // The binding does not delete the pointee, unlike the baseline; see the
-  // notes of the coverage ledger.
-  delete &object;
 }
 
 TEST(next_object_routes,
@@ -190,7 +189,6 @@ TEST(next_object_routes,
   EXPECT_EQ(container.resolve<move_only_object *>(), &object);
   EXPECT_THROW(container.resolve<move_only_object>(),
                dingo::type_not_convertible_exception);
-  delete &object;
 }
 
 struct destroy_counted {
@@ -198,12 +196,15 @@ struct destroy_counted {
   static inline int destructions = 0;
 };
 
-// The baseline destroys the object the factory of a shared pointer returns
-// with the container, and the next implementation leaves it alive, a
-// difference no behavior change declares; see the notes of the coverage
-// ledger (build/ledger/fragments/routes_resolution.md).
-TEST(next_object_routes,
-     DISABLED_a_shared_pointer_owns_the_object_its_factory_returns) {
+struct throws_on_pointer {
+  explicit throws_on_pointer(destroy_counted *) {
+    throw std::runtime_error("throws_on_pointer");
+  }
+};
+
+// A shared binding of a pointer owns the object it points to, made by its
+// factory or by the detected constructor, and destroys it with the container.
+TEST(next_object_routes, a_shared_pointer_owns_the_object_its_factory_returns) {
   destroy_counted::destructions = 0;
   {
     dingo::container<> container;
@@ -212,6 +213,36 @@ TEST(next_object_routes,
     (void)container.resolve<destroy_counted &>();
     EXPECT_EQ(destroy_counted::destructions, 0);
   }
+  EXPECT_EQ(destroy_counted::destructions, 1);
+}
+
+TEST(next_object_routes, a_shared_pointer_owns_the_object_it_constructs) {
+  destroy_counted::destructions = 0;
+  {
+    dingo::container<> container;
+    container.register_type<scope<dingo::shared>, storage<destroy_counted *>>();
+    (void)container.resolve<destroy_counted *>();
+    EXPECT_EQ(destroy_counted::destructions, 0);
+  }
+  EXPECT_EQ(destroy_counted::destructions, 1);
+  {
+    dingo::static_container<dingo::bindings<
+        dingo::bind<scope<dingo::shared>, storage<destroy_counted *>>>>
+        container;
+    (void)container.resolve<destroy_counted &>();
+    EXPECT_EQ(destroy_counted::destructions, 1);
+  }
+  EXPECT_EQ(destroy_counted::destructions, 2);
+}
+
+// The object a pointer of a failed construction points to is destroyed when
+// the transaction is undone.
+TEST(next_object_routes, a_shared_pointer_of_a_failed_request_is_destroyed) {
+  destroy_counted::destructions = 0;
+  dingo::container<> container;
+  container.register_type<scope<dingo::shared>, storage<destroy_counted *>>();
+  container.register_type<scope<dingo::shared>, storage<throws_on_pointer>>();
+  EXPECT_THROW(container.resolve<throws_on_pointer &>(), std::runtime_error);
   EXPECT_EQ(destroy_counted::destructions, 1);
 }
 

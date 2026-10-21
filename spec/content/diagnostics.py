@@ -437,4 +437,17 @@ diagnostics: tuple[Diagnostic, ...] = (
         fallback_carrier="alternative_not_held_carrier",
         reported=(BindingTime.RUNTIME,),
     ),
+    Diagnostic(
+        id="element_not_held",
+        condition=(
+            "A request other than of an address is served by a route through "
+            "the element of a nullable layer that holds it in place, whose "
+            "object holds no element."
+        ),
+        exception="type_not_convertible_exception",
+        message="{type} holds no element",
+        placeholders=("type",),
+        fallback_carrier="element_not_held_carrier",
+        reported=(BindingTime.RUNTIME,),
+    ),
 )

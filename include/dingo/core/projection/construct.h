@@ -88,18 +88,47 @@ Stored make_stored(Resolver &resolver) {
   }
 }
 
+namespace detail {
+// Converts to the object of `Type`, made by `factory` at the conversion.
+template <typename Type, typename Factory, typename Resolver>
+class factory_element {
+public:
+  factory_element(const Factory &factory, Resolver &resolver)
+      : factory_(factory), resolver_(resolver) {}
+
+  operator Type() const { return factory_.template make<Type>(resolver_); }
+
+private:
+  const Factory &factory_;
+  Resolver &resolver_;
+};
+} // namespace detail
+
 // A factory that constructs a leaf of type `Leaf`, or of the stored leaf when
 // it is void, by `LeafMaker` inside the layers of the stored shape. A shape of
-// another leaf converts to the stored one.
+// another leaf converts to the stored one, such as a handle of a leaf to one
+// of its interface; when it does not, every layer of the stored shape down to
+// a variadic one is made by its layer traits from its element, and the
+// variadic layer, or the stored leaf, converts from the leaf made.
 template <typename LeafMaker, typename Leaf = void> struct constructor_factory {
   template <typename Stored, typename Resolver>
   Stored make(Resolver &resolver) const {
     if constexpr (std::is_void_v<Leaf> ||
                   std::is_same_v<Leaf, leaf_of_t<Stored>>) {
       return make_stored<Stored, LeafMaker>(resolver);
+    } else if constexpr (std::is_convertible_v<replace_leaf_t<Stored, Leaf>,
+                                               Stored>) {
+      return make_stored<replace_leaf_t<Stored, Leaf>, LeafMaker>(resolver);
+    } else if constexpr (is_layer_v<Stored> &&
+                         !has_layer_properties_v<Stored,
+                                                 layer_property::variadic>) {
+      using element =
+          type_list_at_t<0, typename layer_traits<Stored>::arguments>;
+      return layer_traits<Stored>::make(
+          detail::factory_element<element, constructor_factory, Resolver>(
+              *this, resolver));
     } else {
-      return Stored(
-          make_stored<replace_leaf_t<Stored, Leaf>, LeafMaker>(resolver));
+      return Stored(make_stored<Leaf, LeafMaker>(resolver));
     }
   }
 };
@@ -108,13 +137,15 @@ template <typename LeafMaker, typename Leaf = void> struct constructor_factory {
 using detected_factory = constructor_factory<detected_leaf>;
 
 // Whether the detected factory makes a request of `Type`: a value, neither a
-// reference nor a pointer, of a leaf that is an object type and not abstract.
+// reference nor a pointer, of a leaf that is an object type and not abstract;
+// the leaf of a reference or a pointer may be incomplete, so it is not asked.
 template <typename Type>
 struct has_detected_factory
-    : std::bool_constant<!std::is_reference_v<Type> &&
-                         !std::is_pointer_v<Type> && !std::is_array_v<Type> &&
-                         std::is_object_v<leaf_of_t<Type>> &&
-                         !std::is_abstract_v<leaf_of_t<Type>>> {};
+    : std::conjunction<std::negation<std::is_reference<Type>>,
+                       std::negation<std::is_pointer<Type>>,
+                       std::negation<std::is_array<Type>>,
+                       std::is_object<leaf_of_t<Type>>,
+                       std::negation<std::is_abstract<leaf_of_t<Type>>>> {};
 
 // Calls `function` with its arguments, `Args`, each resolved as the type it
 // names; the result constructs the stored object.

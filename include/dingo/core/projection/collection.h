@@ -90,6 +90,24 @@ struct collection_traits
 namespace dingo::core {
 
 // Adds an element to a collection by its collection traits.
+template <typename Collection, typename = void>
+inline constexpr bool has_reserve_v = false;
+
+template <typename Collection>
+inline constexpr bool has_reserve_v<
+    Collection,
+    std::void_t<decltype(::dingo::collection_traits<Collection>::reserve(
+        std::declval<Collection &>(), std::size_t()))>> = true;
+
+// Reserves room for `size` elements in `collection` by its collection
+// traits, when they reserve.
+template <typename Collection>
+void reserve_collection(Collection &collection, std::size_t size) {
+  if constexpr (has_reserve_v<Collection>) {
+    ::dingo::collection_traits<Collection>::reserve(collection, size);
+  }
+}
+
 struct collection_append {
   template <typename Collection, typename Element>
   void operator()(Collection &collection, Element &&element) const {

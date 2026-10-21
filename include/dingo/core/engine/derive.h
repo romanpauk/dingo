@@ -892,6 +892,46 @@ enum class registration_status : std::uint8_t {
   no_interface_served
 };
 
+// Whether a binding serves one of its interfaces: by reference, or by value
+// of a handle of any kind, a nullable layer that refers to its element. The
+// handles of its kinds and the address of the language stand for them all: a
+// handle that adopts its element adopts an address the binding serves. A const
+// leaf serves its interfaces as const ones.
+constexpr bool serves_an_interface(const binding_descriptor &binding,
+                                   const terms &found, std::uint8_t exposed) {
+  kind_set kinds = kinds_of(binding.stored);
+  kinds.add(address_kind_v);
+  constexpr layer_class handle{true, layer_property::nullable,
+                               layer_property::in_place};
+  for (std::size_t index = 0; index < binding.interface_count; ++index) {
+    for (const std::uint8_t qualifiers : {std::uint8_t(0), const_qualified}) {
+      shape interface = binding.interfaces[index];
+      interface.nodes[0].qualifiers |= qualifiers;
+      if (select_route(binding, found,
+                       {request_kind::lvalue_reference, interface, binding.key},
+                       exposed)
+              .term != no_term) {
+        return true;
+      }
+      for (std::size_t kind = 0; kind < kinds.size; ++kind) {
+        const kind_descriptor *of = kinds.items[kind];
+        if (!of_class(of, handle)) {
+          continue;
+        }
+        const request_descriptor probe{
+            request_kind::value,
+            wrap(of, is_wrapper(of) ? any_family : nullptr,
+                 created_copyable(of, interface), interface),
+            binding.key};
+        if (select_route(binding, found, probe, exposed).term != no_term) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 constexpr registration_status
 register_status(const binding_descriptor &binding) {
   const scope_info &scope = binding.scope;
@@ -918,37 +958,8 @@ register_status(const binding_descriptor &binding) {
     }
     terms found = derive(binding);
     std::uint8_t exposed = exposed_categories(binding);
-    // A binding serves an interface it is requested by reference, or by value
-    // of a handle of any kind: a nullable layer that refers to its element.
-    // The handles of its kinds and the address of the language stand for
-    // them all: a handle that adopts its element adopts an address the
-    // binding serves.
-    kind_set kinds = kinds_of(binding.stored);
-    kinds.add(address_kind_v);
-    constexpr layer_class handle{true, layer_property::nullable,
-                                 layer_property::in_place};
-    for (std::size_t index = 0; index < binding.interface_count; ++index) {
-      const shape &interface = binding.interfaces[index];
-      if (select_route(binding, found,
-                       {request_kind::lvalue_reference, interface, binding.key},
-                       exposed)
-              .term != no_term) {
-        return registration_status::registered;
-      }
-      for (std::size_t kind = 0; kind < kinds.size; ++kind) {
-        const kind_descriptor *of = kinds.items[kind];
-        if (!of_class(of, handle)) {
-          continue;
-        }
-        const request_descriptor probe{
-            request_kind::value,
-            wrap(of, is_wrapper(of) ? any_family : nullptr,
-                 created_copyable(of, interface), interface),
-            binding.key};
-        if (select_route(binding, found, probe, exposed).term != no_term) {
-          return registration_status::registered;
-        }
-      }
+    if (serves_an_interface(binding, found, exposed)) {
+      return registration_status::registered;
     }
     return registration_status::no_interface_served;
   }

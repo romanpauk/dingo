@@ -27,9 +27,23 @@ namespace detail {
 template <typename Type, bool = std::is_abstract_v<Type>>
 class annotated_value {
 public:
-  annotated_value(Type value) : value_(std::move(value)) {}
+  // A value that cannot be moved is copied.
+  template <
+      typename Value = Type,
+      std::enable_if_t<std::is_constructible_v<Value, const Value &>, int> = 0>
+  annotated_value(const Type &value) : value_(value) {}
 
-  operator Type() && { return std::move(value_); }
+  template <typename Value = Type,
+            std::enable_if_t<std::is_constructible_v<Value, Value &&>, int> = 0>
+  annotated_value(Type &&value) : value_(std::move(value)) {}
+
+  operator Type() && {
+    if constexpr (std::is_move_constructible_v<Type>) {
+      return std::move(value_);
+    } else {
+      return value_;
+    }
+  }
   operator Type() const & { return value_; }
 
 private:

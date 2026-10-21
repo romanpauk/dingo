@@ -84,7 +84,8 @@ TEST(next_allocator, a_container_allocates_its_bindings_from_its_allocator) {
     counted_container container;
     container.register_type<scope<dingo::shared>, storage<service<1>>>();
     container.register_type<scope<dingo::unique>, storage<service<2>>>();
-    EXPECT_EQ(allocation_counts::allocations, 2u);
+    // The state of the container, and each binding.
+    EXPECT_EQ(allocation_counts::allocations, 3u);
     EXPECT_EQ(allocation_counts::deallocations, 0u);
     EXPECT_EQ(container.resolve<service<1> &>().id, 1);
     EXPECT_EQ(container.resolve<service<2>>().id, 2);
@@ -102,9 +103,10 @@ TEST(next_allocator, a_failed_request_frees_the_binding_it_registered) {
         container.register_type<scope<dingo::shared>, storage<service<3>>>();
         throw std::runtime_error("failed");
       }));
-  ASSERT_EQ(allocation_counts::allocations, 1u);
+  // The state of the container, and the binding.
+  ASSERT_EQ(allocation_counts::allocations, 2u);
   EXPECT_THROW(container.resolve<failure &>(), std::runtime_error);
-  EXPECT_EQ(allocation_counts::allocations, 2u);
+  EXPECT_EQ(allocation_counts::allocations, 3u);
   EXPECT_EQ(allocation_counts::deallocations, 1u);
   EXPECT_THROW(container.resolve<service<3> &>(),
                dingo::type_not_found_exception);

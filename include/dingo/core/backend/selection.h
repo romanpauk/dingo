@@ -42,17 +42,25 @@ namespace dingo::core {
 
 inline constexpr std::size_t unknown_count = static_cast<std::size_t>(-1);
 
-// Adds an element by `append` and records that it added one. One is made by
-// the outermost collection request and passed to every level, so a level of
-// any depth instantiates the same functions.
+// Adds an element by `append` and records that it added one, and how many
+// it added. One is made by the outermost collection request and passed to
+// every level, so a level of any depth instantiates the same functions.
 template <typename Append> struct counting_append {
   Append &append;
   bool added = false;
+  std::size_t appended = 0;
 
   template <typename Collection, typename Element>
   void operator()(Collection &collection, Element &&element) {
     added = true;
+    ++appended;
     append(collection, std::forward<Element>(element));
+  }
+
+  // Reserves room for `count` more elements than it added.
+  template <typename Collection>
+  void reserve(Collection &collection, std::size_t count) const {
+    reserve_collection(collection, appended + count);
   }
 };
 

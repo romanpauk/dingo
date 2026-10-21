@@ -225,9 +225,8 @@ TEST(next_lookups, a_second_binding_of_a_key_of_a_domain_of_one_is_rejected) {
   EXPECT_EQ(counted::constructions, 2);
 }
 
-// The baseline reserves a collection for the bindings it gathers, which the
-// next implementation does not do; see the ledger finding.
-TEST(next_lookups, DISABLED_a_collection_is_reserved_for_its_bindings) {
+// A collection is reserved for the bindings each source adds to it.
+TEST(next_lookups, a_collection_is_reserved_for_its_bindings) {
   struct traits : dingo::dynamic_container_traits {
     using lookup_definition_type =
         dingo::lookups<dingo::typed<processor_key, processor, dingo::many>>;
@@ -243,6 +242,20 @@ TEST(next_lookups, DISABLED_a_collection_is_reserved_for_its_bindings) {
       dingo::key_type<processor_key>());
   EXPECT_EQ(collected.reserved, 2u);
   EXPECT_EQ(ids(collected.values), (std::vector<int>{1, 2}));
+
+  // A static and a runtime source each reserve room for theirs.
+  dingo::container<dingo::bindings<dingo::bind<scope<shared>, storage<impl<1>>,
+                                               interfaces<processor>,
+                                               dingo::key_type<processor_key>>>,
+                   traits>
+      mixed;
+  mixed.register_type<scope<shared>, storage<impl<2>>, interfaces<processor>,
+                      dingo::key_type<processor_key>>();
+  auto mixed_collected = mixed.resolve<tracked_collection<processor *>>(
+      dingo::key_type<processor_key>());
+  EXPECT_EQ(mixed_collected.reserved, 2u);
+  // In the order of the sources of the collection rule.
+  EXPECT_EQ(ids(mixed_collected.values), (std::vector<int>{2, 1}));
 }
 
 TEST(next_lookups, a_typed_domain_of_many_fills_a_collection_of_the_user) {

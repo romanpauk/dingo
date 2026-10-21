@@ -791,8 +791,10 @@ class BehaviorChange(Entity):
     check, `matrix:<executable>/<Suite>.<Name>` for the differential tests of
     the generated matrix, `api:<public API entry id>` for the public API
     check, `messages:<case id>` for the exception messages of the route
-    cases, and `selection:<case id>#<field>` for the selection conformance
-    check.
+    cases, `selection:<case id>#<field>` for the selection conformance
+    check, `test:<Suite>.<Name>` for a test of the next implementation that
+    asserts a behavior no table observes, and `diagnostic:<id>` for the
+    generated test of a diagnostic of such a behavior.
     """
 
     description: str

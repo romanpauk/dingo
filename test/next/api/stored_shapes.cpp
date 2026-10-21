@@ -14,6 +14,7 @@
 #include <dingo/container.h>
 #include <dingo/factory/callable.h>
 #include <dingo/factory/function.h>
+#include <dingo/static_container.h>
 #include <dingo/storage/external.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
@@ -317,16 +318,33 @@ TEST(next_stored_shapes,
   EXPECT_EQ(custom_converted.get()->value, 19);
 }
 
-// Finding of the ledger: the current implementation serves a pointer request
-// of the element of an empty optional as a null pointer; the next
-// implementation returns the address of the element the optional does not
-// hold, and no behavior change declares it.
-TEST(next_stored_shapes, DISABLED_the_element_of_an_empty_optional_is_null) {
-  const std::optional<int> empty;
+std::optional<int> no_element() { return std::nullopt; }
+
+// The element of an empty optional is a null address, and is refused to any
+// other request, which has nothing to refer to or copy; once the optional
+// holds an element, the requests are served by it.
+TEST(next_stored_shapes, the_element_of_an_empty_optional_is_null) {
+  std::optional<int> optional;
   dingo::container<> container;
-  container.register_type<scope<dingo::external>,
-                          storage<const std::optional<int> &>>(empty);
+  container
+      .register_type<scope<dingo::external>, storage<std::optional<int> &>>(
+          optional);
   EXPECT_EQ(container.resolve<const int *>(), nullptr);
+  EXPECT_EQ(container.resolve<int *>(), nullptr);
+  EXPECT_THROW(container.resolve<const int &>(),
+               dingo::type_not_convertible_exception);
+  EXPECT_THROW(container.resolve<int>(), dingo::type_not_convertible_exception);
+  optional = 5;
+  EXPECT_EQ(container.resolve<int *>(), &*optional);
+  EXPECT_EQ(container.resolve<int>(), 5);
+
+  dingo::static_container<dingo::bindings<
+      dingo::bind<scope<dingo::shared>, storage<std::optional<int>>,
+                  dingo::factory<dingo::function<&no_element>>>>>
+      static_container;
+  EXPECT_EQ(static_container.resolve<int *>(), nullptr);
+  EXPECT_THROW(static_container.resolve<int &>(),
+               dingo::type_not_convertible_exception);
 }
 
 TEST(next_stored_shapes, const_storage_serves_only_const_access) {
@@ -463,18 +481,10 @@ TEST(next_stored_shapes, a_handle_of_a_const_object_serves_only_const_access) {
                dingo::type_not_convertible_exception);
 }
 
-// Finding of the ledger: the next implementation rejects a binding of a const
-// leaf that declares an interface, "no interface the binding of {stored}
-// declares can be served", because register_status() probes the interface by
-// a request without qualifiers, and upcast_step() casts the const leaf to an
-// interface reference without const. The current implementation serves the
-// const interface. Define DINGO_NEXT_TEST_CONST_INTERFACES to compile the
-// test.
+// A const object serves its declared interfaces as const ones, through a
+// handle, a reference, or an address.
 TEST(next_stored_shapes,
-     DISABLED_a_handle_of_a_const_object_serves_only_const_interfaces) {
-#if !defined(DINGO_NEXT_TEST_CONST_INTERFACES)
-  GTEST_SKIP() << "a const leaf with declared interfaces does not compile";
-#else
+     a_handle_of_a_const_object_serves_only_const_interfaces) {
   const std::shared_ptr<const polymorphic_service> shared =
       std::make_shared<const polymorphic_service>(31);
   dingo::container<> container;
@@ -508,6 +518,19 @@ TEST(next_stored_shapes,
   EXPECT_THROW(unique_container.resolve<polymorphic_interface *>(),
                dingo::type_not_convertible_exception);
 
+  const polymorphic_service object(41);
+  dingo::container<> reference_container;
+  reference_container.register_type<scope<dingo::external>,
+                                    storage<const polymorphic_service &>,
+                                    dingo::interfaces<polymorphic_interface>>(
+      object);
+  EXPECT_EQ(&reference_container.resolve<const polymorphic_interface &>(),
+            &object);
+  EXPECT_EQ(reference_container.resolve<const polymorphic_interface *>(),
+            &object);
+  EXPECT_THROW(reference_container.resolve<polymorphic_interface &>(),
+               dingo::type_not_convertible_exception);
+
   // The interface of a const alternative, which the current implementation
   // declares as interfaces<int>.
   using alternatives = std::variant<int, float>;
@@ -519,7 +542,6 @@ TEST(next_stored_shapes,
   EXPECT_EQ(variant_container.resolve<int>(), 13);
   EXPECT_EQ(&variant_container.resolve<const int &>(), &std::get<int>(value));
   EXPECT_EQ(variant_container.resolve<const int *>(), &std::get<int>(value));
-#endif
 }
 
 TEST(next_stored_shapes, an_array_of_arrays_serves_its_rows_and_itself) {

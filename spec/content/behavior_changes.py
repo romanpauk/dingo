@@ -3,7 +3,10 @@
 Every intended difference between the target semantics of the spec and the
 baseline library. A change lists the case paths of the checks that observe it,
 see `BehaviorChange` in spec/schema.py. The route changes are observed by
-test/routes/conform.py, the scope changes by test/spec/scopes_check.py.
+test/routes/conform.py, the scope changes by test/spec/scopes_check.py. A
+change no table observes names the test of the next implementation that
+asserts it, `test:<Suite>.<Name>`, or the diagnostic whose generated test
+rejects it, `diagnostic:<id>`.
 """
 
 from spec.schema import BehaviorChange
@@ -16,6 +19,10 @@ LOOKUP_DECISION = (
 COLLECTION_DECISION = (
     "docs/architecture/spec-driven-design.md, Decision Log, collections and "
     "mixed traits, 2026-10-20"
+)
+SWITCH_DECISION = (
+    "docs/architecture/spec-driven-design.md, Decision Log, the coverage "
+    "ledger of the switch, 2026-10-21"
 )
 
 
@@ -559,5 +566,53 @@ behavior_changes: tuple[BehaviorChange, ...] = (
             "compiled."
         ),
         decision=DECISION,
+    ),
+    BehaviorChange(
+        id="empty_elements_are_refused",
+        description=(
+            "A request through the element of a nullable layer that holds it "
+            "in place, whose object holds none, is a null address when the "
+            "request is of an address, and is refused otherwise."
+        ),
+        cases=("test:next_stored_shapes.the_element_of_an_empty_optional_is_null",),
+        baseline=(
+            "A request of a reference or a value through an empty std::optional "
+            "throws std::bad_optional_access."
+        ),
+        now=(
+            "It throws type_not_convertible_exception, the diagnostic "
+            "element_not_held; a request of an address is null, as before."
+        ),
+        decision=SWITCH_DECISION,
+    ),
+    BehaviorChange(
+        id="mixed_containers_without_static_bindings_move",
+        description=(
+            "A mixed container without static bindings keeps its state apart "
+            "from itself, as a runtime container does, and moves; its children "
+            "follow it."
+        ),
+        cases=(
+            "test:next_container_move_untyped."
+            "a_mixed_container_without_static_bindings_moves",
+        ),
+        baseline="container<bindings<>> is neither movable nor copyable.",
+        now="container<bindings<>> is movable and not copyable.",
+        decision=SWITCH_DECISION,
+    ),
+    BehaviorChange(
+        id="rvalue_references_to_copy_only_objects",
+        description=(
+            "A request of an rvalue reference to an object a binding constructs "
+            "refers to the object the container keeps, constructed in place, "
+            "so the object need not be movable."
+        ),
+        cases=(
+            "test:next_runtime_registration."
+            "refers_to_a_kept_copy_only_object_by_rvalue_reference",
+        ),
+        baseline="The request of an object that cannot be moved does not compile.",
+        now="The request is served.",
+        decision=SWITCH_DECISION,
     ),
 )

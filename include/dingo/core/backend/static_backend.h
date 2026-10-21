@@ -565,6 +565,12 @@ public:
   void collect(Resolver &resolver, Collection &collection,
                const void *key_value, Append &append) {
     using element = typename collection_traits<Collection>::resolve_type;
+    std::size_t count = 0;
+    each_named<element, Key>(key_value, [&count](auto /*index*/) { ++count; });
+    if (count == 0) {
+      return;
+    }
+    append.reserve(collection, count);
     each_named<element, Key>(key_value, [&](auto index) {
       append(collection,
              resolve_from<element, Key, decltype(index)::value>(resolver));
@@ -676,11 +682,11 @@ private:
     auto make = [&]() DINGO_INLINE_LAMBDA -> decltype(auto) {
       if constexpr (route::choice.created_count != 0 &&
                     plan.kind == completion::address) {
-        // The request takes the address of the object the binding refers to.
-        return std::addressof(
-            walk_from<binding, selected,
-                      binding::published.items[selected].rule_count>(
-                holder.slot.context(), source));
+        // The request takes the address of the object the binding refers to,
+        // null for the element of a layer that holds none.
+        return address_from<binding, selected,
+                            binding::published.items[selected].rule_count>(
+            holder.slot.context(), source, true);
       } else if constexpr (plan.created == 0) {
         return walk_from<binding, selected,
                          binding::published.items[selected].rule_count>(

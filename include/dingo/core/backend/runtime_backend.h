@@ -56,8 +56,9 @@ template <typename Boundary, typename Resolver> struct boundary_maker {
 template <typename Resolver> class runtime_entry {
 public:
   // Walks a term to its boundary and returns the address of the borrowed
-  // object.
-  using thunk = void *(*)(runtime_entry &, Resolver &);
+  // object, or null for the element of a layer that holds none when the
+  // request takes its address, `null_allowed`.
+  using thunk = void *(*)(runtime_entry &, Resolver &, bool);
 
   using name_function = void (*)(std::string &);
 
@@ -96,8 +97,9 @@ public:
   // Appends the name of the stored type, for diagnostics.
   void append_stored_name(std::string &text) const { stored_name_(text); }
 
-  void *borrow(std::size_t term, Resolver &resolver) {
-    return thunks_[term](*this, resolver);
+  void *borrow(std::size_t term, Resolver &resolver,
+               bool null_allowed = false) {
+    return thunks_[term](*this, resolver, null_allowed);
   }
 
   // Whether the binding constructs a boundary object of type `Boundary` for
@@ -225,20 +227,22 @@ private:
                      layer_property::immovable);
 
   template <std::size_t Term>
-  static void *borrow_term(entry &binding, Resolver &resolver) {
+  static void *borrow_term(entry &binding, Resolver &resolver,
+                           bool null_allowed) {
     if constexpr (!walk_supported_v<Binding, Term> || !borrows<Term>) {
       throw std::logic_error(
           "the next implementation does not provide this route yet");
     } else {
       auto &self = static_cast<runtime_binding &>(binding);
       auto view = self.view(resolver);
-      auto &object = walk_to_boundary<Binding, Term>(
-          self.slot_.context(),
-          [&]() -> decltype(auto) { return self.slot_.get(view); });
+      const auto address =
+          address_from<Binding, Term, plan_v<Binding, Term>.binding_steps>(
+              self.slot_.context(),
+              [&]() -> decltype(auto) { return self.slot_.get(view); },
+              null_allowed);
       // The address of a const or volatile object is erased too; the request
       // restores the qualifiers of the type it names.
-      return const_cast<void *>(
-          static_cast<const volatile void *>(std::addressof(object)));
+      return const_cast<void *>(static_cast<const volatile void *>(address));
     }
   }
 
@@ -642,6 +646,15 @@ public:
   void collect(Resolver &resolver, Collection &collection,
                const void *key_value, Append &append) {
     using element = typename collection_traits<Collection>::resolve_type;
+    std::size_t count = 0;
+    memo<element, Key>().visit(key_value, [&](const candidate_type &) {
+      ++count;
+      return true;
+    });
+    if (count == 0) {
+      return;
+    }
+    append.reserve(collection, count);
     memo<element, Key>().visit(key_value, [&](const candidate_type &found) {
       append(collection, resolve_from<element>(resolver, found));
       return true;
@@ -868,11 +881,12 @@ private:
 
   // The address the term of `found` borrows, kept once its binding is
   // settled.
-  static void *borrowed(Resolver &resolver, const candidate_type &found) {
+  static void *borrowed(Resolver &resolver, const candidate_type &found,
+                        bool null_allowed = false) {
     if (found.resolved != nullptr) {
       return found.resolved;
     }
-    void *address = found.binding->borrow(found.term, resolver);
+    void *address = found.binding->borrow(found.term, resolver, null_allowed);
     if (found.binding->settled(resolver) &&
         !found.binding->plan(found.term).rechecked) {
       found.resolved = address;
@@ -905,8 +919,10 @@ private:
       }
       break;
     case completion::copy:
-      if constexpr (!std::is_reference_v<Request> &&
-                    std::is_copy_constructible_v<value_type> &&
+      // The value of a reference may be incomplete, so it is not asked.
+      if constexpr (std::conjunction_v<
+                        std::negation<std::is_reference<Request>>,
+                        std::is_copy_constructible<value_type>> &&
                     detail::casts_to_v<value_type, Request>) {
         return static_cast<Request>(value_type(
             *static_cast<const value_type *>(borrowed(resolver, found))));
@@ -916,7 +932,7 @@ private:
       if constexpr (std::is_pointer_v<value_type> &&
                     detail::casts_to_v<value_type, Request>) {
         return static_cast<Request>(
-            static_cast<value_type>(borrowed(resolver, found)));
+            static_cast<value_type>(borrowed(resolver, found, true)));
       }
       break;
     case completion::construct:
@@ -1032,9 +1048,12 @@ private:
           std::declval<typename Layers::boundary (&)()>()));
       using value_type = typename request_traits<Request>::value_type;
       // An rvalue reference refers to a kept object of its qualified type,
-      // made from the object the layers make; any other request converts.
+      // made from the object the layers make, or the object itself, which is
+      // constructed in place; any other request converts.
       if constexpr (std::is_rvalue_reference_v<Request>
-                        ? std::is_constructible_v<value_type, made>
+                        ? std::is_same_v<std::remove_cv_t<made>,
+                                         std::remove_cv_t<value_type>> ||
+                              std::is_constructible_v<value_type, made>
                         : detail::casts_to_v<made, Request>) {
         return make_with<Request, Layers>(resolver, binding, term);
       }

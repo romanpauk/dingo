@@ -33,6 +33,15 @@ raise_alternative_not_held(std::string_view type) {
                      {{"type", type}}));
 }
 
+// spec: diagnostics.element_not_held
+// A request other than of an address is served by a route through the element
+// of a nullable layer that holds it in place, whose object holds no element.
+[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+raise_element_not_held(std::string_view type) {
+  throw ::dingo::type_not_convertible_exception(
+      format_message("{type} holds no element", {{"type", type}}));
+}
+
 // spec: diagnostics.lookup_already_registered
 // A binding is registered with a key that a binding of a common interface
 // already holds, in a domain declared with cardinality one.

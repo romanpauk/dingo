@@ -94,7 +94,7 @@ public:
   using binding_context<Binding>::binding_context;
   binding_slot(binding_slot &&) = default;
   binding_slot &operator=(binding_slot &&) = default;
-  DINGO_ALWAYS_INLINE ~binding_slot() = default;
+  DINGO_ALWAYS_INLINE ~binding_slot() { dispose(); }
 
   // Whether the object is constructed and kept: no transaction that a
   // failure would destroy it with is in progress.
@@ -128,9 +128,20 @@ public:
   }
 
 private:
+  // Releases what the object owns beyond itself: the element a pointer made
+  // by its layer traits points to.
+  DINGO_ALWAYS_INLINE void dispose() noexcept {
+    if constexpr (has_dispose_v<stored_type>) {
+      if (slot_.constructed()) {
+        layer_traits<stored_type>::dispose(slot_.object());
+      }
+    }
+  }
+
   static void reset_slot(void *slot, void * /*context*/) noexcept {
     auto &self = *static_cast<binding_slot *>(slot);
     self.clear_context();
+    self.dispose();
     self.slot_.reset();
   }
 

@@ -350,7 +350,7 @@ TYPED_TEST_SUITE(next_container_move_parent, move_child_container_types, );
 // Disabled: a child keeps the address of its parent, so it does not follow the
 // parent when it moves, and finds the container constructed at the old
 // address instead.
-TYPED_TEST(next_container_move_parent, DISABLED_child_follows_moved_parent) {
+TYPED_TEST(next_container_move_parent, child_follows_moved_parent) {
   std::optional<move_parent_container> source(std::in_place);
   source->register_type<dingo::scope<dingo::shared>,
                         dingo::storage<move_dependency>>();
@@ -370,12 +370,9 @@ TYPED_TEST(next_container_move_parent, DISABLED_child_follows_moved_parent) {
   EXPECT_EQ(std::addressof(service.dependency), std::addressof(dependency));
 }
 
-// Disabled: the static and the mixed container declare a defaulted move
-// constructor, so the traits report them movable, but moving one does not
-// compile: the constructor that takes the instances of the external bindings
-// takes the moved container as an instance.
+// A container of static bindings keeps them in place, so it does not move.
 TEST(next_container_move_untyped,
-     DISABLED_compile_time_binding_containers_are_not_movable) {
+     compile_time_binding_containers_are_not_movable) {
   using bindings =
       dingo::bindings<dingo::bind<dingo::scope<dingo::shared>,
                                   dingo::storage<move_dependency>>>;
@@ -390,6 +387,33 @@ TEST(next_container_move_untyped,
   EXPECT_FALSE(std::is_move_assignable_v<static_container_type>);
   EXPECT_FALSE(std::is_copy_constructible_v<static_container_type>);
   EXPECT_FALSE(std::is_copy_assignable_v<static_container_type>);
+}
+
+// A mixed container without static bindings keeps its state apart, as a
+// runtime container does: it moves, and its child follows it.
+TEST(next_container_move_untyped,
+     a_mixed_container_without_static_bindings_moves) {
+  using container_type = dingo::container<dingo::bindings<>>;
+  static_assert(std::is_move_constructible_v<container_type>);
+  static_assert(std::is_move_assignable_v<container_type>);
+  static_assert(!std::is_copy_constructible_v<container_type>);
+  static_assert(!std::is_move_constructible_v<
+                dingo::static_container<dingo::bindings<>>>);
+
+  std::optional<container_type> source(std::in_place);
+  source->register_type<dingo::scope<dingo::shared>,
+                        dingo::storage<move_dependency>>();
+  auto &dependency = source->resolve<move_dependency &>();
+  dingo::container<dingo::dynamic_container_traits, std::allocator<char>,
+                   container_type>
+      child(std::addressof(*source));
+  child.register_type<dingo::scope<dingo::shared>,
+                      dingo::storage<move_service>>();
+
+  container_type target(std::move(*source));
+  source.reset();
+  EXPECT_EQ(&target.resolve<move_dependency &>(), &dependency);
+  EXPECT_EQ(&child.resolve<move_service &>().dependency, &dependency);
 }
 
 } // namespace

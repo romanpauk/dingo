@@ -332,13 +332,9 @@ struct ordered_element {
   static inline std::vector<int> *order = nullptr;
 };
 
-// The baseline destroys the elements of a shared array in the reverse order
-// of their construction, as the language does, and the next implementation in
-// the order of their construction, a difference no behavior change declares;
-// see the notes of the coverage ledger
-// (build/ledger/fragments/routes_resolution.md).
-TEST(next_slot,
-     DISABLED_a_shared_array_destroys_its_elements_in_reverse_order) {
+// A shared array destroys its elements in the reverse order of their
+// construction, as the language does.
+TEST(next_slot, a_shared_array_destroys_its_elements_in_reverse_order) {
   std::vector<int> order;
   ordered_element::next = 0;
   ordered_element::order = &order;

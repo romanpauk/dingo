@@ -200,19 +200,15 @@ static_assert(!std::is_move_constructible_v<copy_only>);
 static_assert(
     std::is_constructible_v<annotated<copy_only, tag>, const copy_only &>);
 
-// Disabled, and compiled only on request: the annotated (and keyed) value
-// moves the value it is constructed from into its member, so a value that is
-// copyable but not movable does not compile, though the old implementation
-// copies it. Finding of the ledger; define
-// DINGO_TEST_ANNOTATED_COPY_ONLY to see the error.
-TEST(next_request_types, DISABLED_an_annotated_value_copies_a_copy_only_value) {
-#if defined(DINGO_TEST_ANNOTATED_COPY_ONLY)
+// An annotated or keyed value copies a value that cannot be moved.
+TEST(next_request_types, an_annotated_value_copies_a_copy_only_value) {
   const copy_only value(17);
   annotated<copy_only, tag> request(value);
   EXPECT_EQ(static_cast<copy_only>(request).value, 17);
+  EXPECT_EQ(static_cast<copy_only>(std::move(request)).value, 17);
   keyed<copy_only, dingo::core::tag_key<tag>> keyed_request(value);
   EXPECT_EQ(static_cast<copy_only>(keyed_request).value, 17);
-#endif
+  EXPECT_EQ(static_cast<copy_only>(std::move(keyed_request)).value, 17);
 }
 
 } // namespace

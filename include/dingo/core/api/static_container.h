@@ -32,7 +32,7 @@ template <typename Type> using is_container_traits = is_traits_type<Type>;
 
 // The parent of a container, nothing without one.
 template <typename Parent> struct parent_holder {
-  Parent *parent_pointer = nullptr;
+  parent_link<Parent> parent_pointer;
 };
 
 template <> struct parent_holder<void> {};
@@ -88,8 +88,10 @@ public:
       std::conditional_t<detail::is_container_traits<Second>::value, void,
                          Second>;
 
-  template <typename... Instances, bool Orphan = std::is_void_v<parent_type>,
-            typename = std::enable_if_t<Orphan>>
+  template <
+      typename... Instances, bool Orphan = std::is_void_v<parent_type>,
+      typename = std::enable_if_t<
+          Orphan && !detail::is_self<static_container, Instances...>::value>>
   explicit static_container(Instances &&...instances)
       : backend_(std::forward<Instances>(instances)...) {}
 
@@ -100,13 +102,13 @@ public:
       std::conditional_t<Child, parent_type, static_container> *parent,
       Instances &&...instances)
       : backend_(std::forward<Instances>(instances)...) {
-    this->parent_pointer = parent;
+    this->parent_pointer = detail::parent_link<parent_type>(parent);
   }
 
-  // The destructor is inlined with the requests, which destroy the container
-  // when they unwind.
-  static_container(static_container &&) = default;
-  static_container &operator=(static_container &&) = default;
+  // Its bindings are kept in place, so it does not move. The destructor is
+  // inlined with the requests, which destroy the container when they unwind.
+  static_container(const static_container &) = delete;
+  static_container &operator=(const static_container &) = delete;
   DINGO_ALWAYS_INLINE ~static_container() = default;
 
   // The sources of the selection of the container, which resolves the
@@ -120,7 +122,7 @@ public:
     if constexpr (std::is_void_v<Parent>) {
       return nullptr;
     } else {
-      return this->parent_pointer;
+      return this->parent_pointer.get();
     }
   }
 

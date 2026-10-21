@@ -20,12 +20,13 @@
 
 namespace dingo::core {
 
-// Destroys an object, element by element for an array, which std::destroy_at
-// handles only since C++20.
+// Destroys an object, element by element for an array, in reverse order of
+// construction as the language does, which std::destroy_at handles only since
+// C++20.
 template <typename Type> DINGO_ALWAYS_INLINE void destroy_object(Type *object) {
   if constexpr (std::is_array_v<Type>) {
-    for (auto &element : *object) {
-      destroy_object(std::addressof(element));
+    for (std::size_t index = std::extent_v<Type>; index != 0; --index) {
+      destroy_object(std::addressof((*object)[index - 1]));
     }
   } else {
     object->~Type();
