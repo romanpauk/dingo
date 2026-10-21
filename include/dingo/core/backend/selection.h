@@ -421,11 +421,17 @@ private:
     return false;
   }
 
-  // Whether a request is of a collection type, by value.
+  // Whether a request is of a collection type, by value, whose collection
+  // traits add an element of its element type: only such a collection is
+  // collected from the bindings of its element type.
   template <typename Request> static constexpr bool is_collection_request() {
-    return !std::is_reference_v<Request> &&
-           collection_traits<
-               typename request_traits<Request>::value_type>::is_collection;
+    using value_type = typename request_traits<Request>::value_type;
+    if constexpr (std::is_reference_v<Request> ||
+                  !collection_traits<value_type>::is_collection) {
+      return false;
+    } else {
+      return appends_elements_v<value_type>;
+    }
   }
 
   // The number of bindings a source names when the request is compiled, or
@@ -971,8 +977,7 @@ private:
   Request nothing_selected(const void *key_value) {
     using value_type = typename request_traits<Request>::value_type;
     if constexpr (Outermost && Mode == selection_mode::singular &&
-                  collection_traits<value_type>::is_collection &&
-                  !std::is_reference_v<Request>) {
+                  is_collection_request<Request>()) {
       // A collection no binding stores is the collection of the bindings of
       // its element type.
       return collect<value_type, Key>(key_value, collection_append());

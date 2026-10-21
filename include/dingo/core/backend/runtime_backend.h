@@ -923,7 +923,7 @@ private:
       // The value of a reference may be incomplete, so it is not asked.
       if constexpr (std::conjunction_v<
                         std::negation<std::is_reference<Request>>,
-                        std::is_copy_constructible<value_type>> &&
+                        is_copied<value_type>> &&
                     detail::casts_to_v<value_type, Request>) {
         return static_cast<Request>(value_type(
             *static_cast<const value_type *>(borrowed(resolver, found))));

@@ -18,6 +18,9 @@
 
 #include <gtest/gtest.h>
 
+#include <map>
+#include <memory>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -165,6 +168,55 @@ TEST(next_collections, registers_a_collection_of_a_key) {
   std::vector<iface *> keyed = container.resolve<std::vector<iface *>>();
   ASSERT_EQ(keyed.size(), 1u);
   EXPECT_EQ(keyed[0]->id(), 1);
+}
+
+} // namespace
+
+namespace {
+
+using move_only_map = std::map<int, std::unique_ptr<iface>>;
+
+struct move_only_consumer {
+  explicit move_only_consumer(move_only_map &&all) : all(std::move(all)) {}
+  move_only_consumer(const move_only_consumer &) = delete;
+  move_only_consumer(move_only_consumer &&) = default;
+  move_only_map all;
+};
+
+struct move_only_traits : dingo::dynamic_container_traits {
+  using lookup_definition_type = dingo::lookups<dingo::collection<iface>>;
+};
+
+TEST(next_collections,
+     constructs_from_a_registered_collection_of_move_only_elements) {
+  dingo::container<move_only_traits> container;
+  container
+      .register_type<scope<dingo::unique>, storage<std::unique_ptr<impl<1>>>,
+                     dingo::interfaces<iface>>();
+  container
+      .register_type<scope<dingo::unique>, storage<std::unique_ptr<impl<2>>>,
+                     dingo::interfaces<iface>>();
+  container
+      .register_type_collection<scope<dingo::unique>, storage<move_only_map>>(
+          [](auto &collection, auto &&element) {
+            const int id = element->id();
+            collection.emplace(id, std::forward<decltype(element)>(element));
+          });
+  move_only_consumer consumer = container.construct<move_only_consumer>();
+  ASSERT_EQ(consumer.all.size(), 2u);
+  EXPECT_EQ(consumer.all.at(1)->id(), 1);
+  EXPECT_EQ(consumer.all.at(2)->id(), 2);
+}
+
+TEST(next_collections, collects_move_only_elements_no_binding_stores) {
+  dingo::container<move_only_traits> container;
+  container
+      .register_type<scope<dingo::unique>, storage<std::unique_ptr<impl<3>>>,
+                     dingo::interfaces<iface>>();
+  std::vector<std::unique_ptr<iface>> all =
+      container.resolve<std::vector<std::unique_ptr<iface>>>();
+  ASSERT_EQ(all.size(), 1u);
+  EXPECT_EQ(all[0]->id(), 3);
 }
 
 } // namespace

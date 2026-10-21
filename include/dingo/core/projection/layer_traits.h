@@ -25,6 +25,7 @@
 #include <dingo/core/base/mechanics.h>
 #include <dingo/core/primitives/constructor.h>
 #include <dingo/core/primitives/shape.h>
+#include <dingo/core/projection/collection.h>
 #include <dingo/core/vocabulary/compile_diagnostics.gen.h>
 #include <dingo/core/vocabulary/layer_kinds.gen.h>
 #include <dingo/core/vocabulary/route_forms.gen.h>
@@ -481,7 +482,7 @@ template <typename Type> constexpr shape make_shape() {
     node.constructible = false;
   } else {
     if constexpr (!is_layer_v<value_type>) {
-      node.copyable = std::is_copy_constructible_v<value_type>;
+      node.copyable = is_copied_v<value_type>;
     }
     node.constructible = !std::is_abstract_v<value_type>;
   }
