@@ -1,0 +1,91 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+
+// The shape algebra of the spec as constexpr data: the value categories, the
+// properties of layer kinds, and the route forms with the rules of a leaf. The
+// layer kinds themselves are declarations, see layer_kinds.gen.h.
+
+namespace dingo::core {
+
+// The properties of a layer kind, as bits of the properties a
+// dingo::layer_kind_traits declares. spec: layer_kinds
+struct layer_property {
+{% for property in layer_properties %}
+  static constexpr std::uint16_t {{ property.name }} = {{ property.bit }};
+{% endfor %}
+  // Every property bit.
+  static constexpr std::uint16_t all = {{ layer_properties | sum(attribute="bit") }};
+};
+
+enum class value_category : std::uint8_t {
+{% for category in value_categories %}
+  {{ category }},
+{% endfor %}
+};
+
+enum class access : std::uint8_t {
+{% for value in accesses %}
+  {{ value }},
+{% endfor %}
+};
+
+// spec: route_forms, routes
+// The forms of the routes in the order of the algebra, with the rules of a
+// leaf among them: a derivation prefers, of two routes of as many rules, the
+// one whose forms come first.
+enum class route_form : std::uint8_t {
+{% for form in route_forms %}
+  {{ form.id }},
+{% endfor %}
+};
+
+inline constexpr std::size_t route_form_count = {{ route_forms | length }};
+
+// Requirements of a form on its pattern variable, as bits.
+enum class requirement : std::uint8_t {
+  none = 0,
+{% for value in requirements %}
+  {{ value.name }} = {{ value.bit }},
+{% endfor %}
+};
+
+// Where a pattern of a form is: the element, a variable; the layer of the
+// kind that has the form; or the layer of the kind the form leads to.
+enum class form_layer : std::uint8_t { element, kind, target };
+
+// A route form derives the term (to_layer(X), to_category) from the term
+// (from_layer(X), from_category). A rule of a leaf is a form of no kind,
+// between elements.
+struct route_form_info {
+  route_form form;
+  bool of_kind;
+  form_layer from_layer;
+  value_category from_category;
+  form_layer to_layer;
+  value_category to_category;
+  access rule_access;
+  // A request category bit the scope must expose for the stored form, or 0.
+  std::uint8_t exposure;
+  std::uint8_t requires_;
+  bool upcast;
+  // Whether the form makes an object of each declared interface the leaf
+  // declares a user conversion to.
+  bool converts;
+  // Whether the derived object is kept by the binding, so it can be referred
+  // to: the conversion cache.
+  bool cached;
+};
+
+inline constexpr route_form_info route_forms[] = {
+{% for form in route_forms %}
+    {route_form::{{ form.id }}, {{ form.of_kind | lower }}, form_layer::{{ form.from_layer }}, value_category::{{ form.from_category }}, form_layer::{{ form.to_layer }}, value_category::{{ form.to_category }}, access::{{ form.access }}, {{ form.exposure }}, {{ form.requires }}, {{ form.upcast | lower }}, {{ form.converts | lower }}, {{ form.cached | lower }}},
+{% endfor %}
+};
+
+constexpr const route_form_info &info(route_form form) {
+  return route_forms[static_cast<std::size_t>(form)];
+}
+
+} // namespace dingo::core

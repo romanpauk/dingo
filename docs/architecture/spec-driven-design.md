@@ -1262,6 +1262,9 @@ Generate the vocabulary enums, the public tag types, the descriptor structs, and
 value and request categories, the storage forms, the scope descriptors with
 their exposure tables, and the route rules as constexpr data, generated from the
 spec. `shape_v<T>` is the descriptor of a type. Remaining: the public tag types.
+Since M10.3, `route_forms.gen.h` holds the shape algebra, the value categories,
+the layer properties, and the route forms, apart from the tables of the other
+sections, and `layer_kinds.gen.h` declares the kinds of the library.
 
 #### M2.5: Walking Skeleton
 
@@ -1340,7 +1343,9 @@ Generate the per-layer route table as `constexpr` data.
 
 The route rules are part of `vocabulary.gen.h`. A rule is a layer kind and value
 category it starts from and a layer kind and value category it derives, which
-every rule of the spec is; the generator rejects any other.
+every rule of the spec is; the generator rejects any other. Since M10.3 the
+generated data is the route forms of `route_forms.gen.h`, from which the routes
+of a kind follow.
 
 #### M3.2: Request Matcher
 

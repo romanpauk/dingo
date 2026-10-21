@@ -31,6 +31,63 @@ struct config {
 """
 
 
+# A user wrapper of the layer kind `handle_kind`, whose layer_kind_traits each
+# example declares wrongly in its own way.
+HANDLE = """\
+#include <cstdint>
+#include <memory>
+#include <utility>
+
+struct service {};
+
+template <typename T> struct handle {
+  std::shared_ptr<T> pointer;
+};
+
+struct handle_kind {};
+
+template <typename T> struct dingo::wrapper_traits<handle<T>> {
+  using kind = handle_kind;
+  using arguments = dingo::type_list<T>;
+  template <typename U> using rebind = handle<U>;
+  static T &element(const handle<T> &value) { return *value.pointer; }
+  template <typename... Args> static handle<T> make(Args &&...args) {
+    return handle<T>{std::make_shared<T>(std::forward<Args>(args)...)};
+  }
+};
+"""
+
+REGISTER_HANDLE = """
+int main() {
+  dingo::container<> container;
+  container.register_type<dingo::scope<dingo::shared>,
+                          dingo::storage<handle<service>>>();
+}
+"""
+
+
+def kind_example(diagnostic, traits, subject="handle_kind"):
+    """A program whose handle kind has the layer_kind_traits `traits`."""
+    return example(diagnostic, SHARED, HANDLE + traits + REGISTER_HANDLE, subject)
+
+
+HANDLE_PROPERTIES = (
+    "dingo::layer_property::owning | dingo::layer_property::sharing |\n"
+    "      dingo::layer_property::nullable | dingo::layer_property::borrowable |\n"
+    "      dingo::layer_property::constructible | dingo::layer_property::copyable |\n"
+    "      dingo::layer_property::wrapper"
+)
+
+
+def kind_traits(forms, properties=HANDLE_PROPERTIES):
+    return f"""
+template <> struct dingo::layer_kind_traits<handle_kind> {{
+  static constexpr std::uint16_t properties = {properties};
+  using forms = {forms};
+}};
+"""
+
+
 def example(diagnostic, includes, program, *subjects):
     return CppDiagnosticExample(
         id=diagnostic,
@@ -480,5 +537,39 @@ int main() {
       dingo::key_type<tag>{}, [](std::vector<service *> &, service *) {});
 }
 """,
+    ),
+    kind_example("layer_kind_undeclared", ""),
+    kind_example(
+        "kind_forms_malformed",
+        kind_traits("dingo::kind_form<dingo::route_form::borrow>"),
+    ),
+    kind_example(
+        "kind_form_of_leaf",
+        kind_traits("dingo::type_list<dingo::kind_form<dingo::route_form::copy>>"),
+    ),
+    kind_example(
+        "kind_form_needs_target",
+        kind_traits("dingo::type_list<dingo::kind_form<dingo::route_form::share>>"),
+    ),
+    kind_example(
+        "kind_form_takes_no_target",
+        kind_traits(
+            "dingo::type_list<\n"
+            "      dingo::kind_form<dingo::route_form::borrow, dingo::shared_kind>>"
+        ),
+    ),
+    kind_example(
+        "kind_form_repeated",
+        kind_traits(
+            "dingo::type_list<dingo::kind_form<dingo::route_form::borrow>,\n"
+            "                                 dingo::kind_form<dingo::route_form::borrow>>"
+        ),
+    ),
+    kind_example(
+        "kind_property_unknown",
+        kind_traits(
+            "dingo::type_list<dingo::kind_form<dingo::route_form::borrow>>",
+            properties=HANDLE_PROPERTIES + " |\n      std::uint16_t(1) << 15",
+        ),
     ),
 )

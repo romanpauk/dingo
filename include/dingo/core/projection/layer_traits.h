@@ -24,8 +24,9 @@
 
 #include <dingo/core/base/mechanics.h>
 #include <dingo/core/primitives/shape.h>
+#include <dingo/core/vocabulary/compile_diagnostics.gen.h>
 #include <dingo/core/vocabulary/layer_kinds.gen.h>
-#include <dingo/core/vocabulary/vocabulary.gen.h>
+#include <dingo/core/vocabulary/route_forms.gen.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -197,10 +198,36 @@ template <typename Kind>
 inline constexpr kind_descriptor kind_v = detail::make_kind<Kind>();
 
 namespace detail {
-template <typename Form> struct kind_form_of;
+// Whether a type declares a layer kind: its layer_kind_traits give its
+// properties and its forms.
+template <typename Kind, typename = void>
+struct declares_kind : std::false_type {};
 
-template <route_form Form, typename Target>
-struct kind_form_of<::dingo::kind_form<Form, Target>> {
+template <typename Kind>
+struct declares_kind<
+    Kind, std::void_t<decltype(::dingo::layer_kind_traits<Kind>::properties),
+                      typename ::dingo::layer_kind_traits<Kind>::forms>>
+    : std::true_type {};
+
+// Whether a form leads to another kind, which a kind of it names.
+constexpr bool leads_to_kind(route_form form) {
+  return info(form).from_layer == form_layer::target ||
+         info(form).to_layer == form_layer::target;
+}
+
+template <route_form... Forms> constexpr bool distinct_forms() {
+  constexpr route_form forms[] = {Forms..., route_form{}};
+  for (std::size_t left = 0; left < sizeof...(Forms); ++left) {
+    for (std::size_t right = left + 1; right < sizeof...(Forms); ++right) {
+      if (forms[left] == forms[right]) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+template <route_form Form, typename Target> struct kind_form_of {
   static constexpr void add(kind_descriptor &kind) {
     kind.forms |= std::uint32_t(1) << static_cast<unsigned>(Form);
     if constexpr (!std::is_void_v<Target>) {
@@ -210,22 +237,46 @@ struct kind_form_of<::dingo::kind_form<Form, Target>> {
   }
 };
 
-template <typename List> struct kind_forms_of;
+// The forms of the kind `Kind`, a type_list of kind_form, which are forms of a
+// kind, each named once, with a kind exactly when the form leads to one.
+template <typename Kind, typename List> struct kind_forms_of {
+  static_assert(
+      require<dependent_false<List>, diag::kind_forms_malformed, Kind>());
+  static constexpr void add(kind_descriptor & /*kind*/) {}
+};
 
-template <typename... Forms> struct kind_forms_of<type_list<Forms...>> {
+template <typename Kind, route_form... Forms, typename... Targets>
+struct kind_forms_of<Kind, type_list<::dingo::kind_form<Forms, Targets>...>> {
+  static_assert(
+      require<(info(Forms).of_kind && ...), diag::kind_form_of_leaf, Kind>());
+  static_assert(
+      require<((!leads_to_kind(Forms) || !std::is_void_v<Targets>) && ...),
+              diag::kind_form_needs_target, Kind>());
+  static_assert(
+      require<((leads_to_kind(Forms) || std::is_void_v<Targets>) && ...),
+              diag::kind_form_takes_no_target, Kind>());
+  static_assert(
+      require<distinct_forms<Forms...>(), diag::kind_form_repeated, Kind>());
+
   static constexpr void add(kind_descriptor &kind) {
-    (kind_form_of<Forms>::add(kind), ...);
+    (kind_form_of<Forms, Targets>::add(kind), ...);
   }
 };
 
 template <typename Kind> constexpr kind_descriptor make_kind() {
-  using traits = ::dingo::layer_kind_traits<Kind>;
   static_assert(route_form_count <= max_kind_forms);
+  static_assert(
+      require<declares_kind<Kind>::value, diag::layer_kind_undeclared, Kind>());
   kind_descriptor kind;
-  kind.id = type_id_v<Kind>;
-  kind.layer = true;
-  kind.properties = traits::properties;
-  kind_forms_of<typename traits::forms>::add(kind);
+  if constexpr (declares_kind<Kind>::value) {
+    using traits = ::dingo::layer_kind_traits<Kind>;
+    static_assert(require<(traits::properties & ~layer_property::all) == 0,
+                          diag::kind_property_unknown, Kind>());
+    kind.id = type_id_v<Kind>;
+    kind.layer = true;
+    kind.properties = traits::properties;
+    kind_forms_of<Kind, typename traits::forms>::add(kind);
+  }
   return kind;
 }
 } // namespace detail

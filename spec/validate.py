@@ -370,6 +370,9 @@ def check_kind_forms(spec: Spec, errors: list[str]) -> None:
             errors.append(f"route_forms: no template of the form {form.value}")
     kinds = ids(spec.layer_kinds)
     for kind in spec.layer_kinds:
+        check_unique(
+            errors, f"layer_kinds.{kind.id}", "forms", (f.form for f in kind.forms)
+        )
         for kind_form in kind.forms:
             where = f"layer_kinds.{kind.id}.{kind_form.id}"
             template = templates.get(kind_form.form)

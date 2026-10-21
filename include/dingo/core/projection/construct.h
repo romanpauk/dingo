@@ -18,7 +18,6 @@
 #include <dingo/core/primitives/constructor.h>
 #include <dingo/core/projection/layer_traits.h>
 #include <dingo/core/vocabulary/compile_diagnostics.gen.h>
-#include <dingo/core/vocabulary/vocabulary.gen.h>
 
 #include <functional>
 #include <new>

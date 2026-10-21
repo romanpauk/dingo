@@ -338,19 +338,27 @@ def vocabulary(spec):
             default=1,
         ),
     )
+    algebra = render(
+        "route_forms.gen.h.j2",
+        layer_properties=[
+            {"name": name, "bit": bit} for name, bit in LAYER_PROPERTY_BITS.items()
+        ],
+        value_categories=[c.value for c in ValueCategory],
+        accesses=[a.value for a in Access],
+        requirements=[{"name": name, "bit": bit} for name, bit in REQUIREMENT_BITS.items()],
+        route_forms=route_form_entries(spec),
+    )
     return [
+        GeneratedFile(
+            path="include/dingo/core/vocabulary/route_forms.gen.h",
+            content=algebra,
+            spec_ids=("layer_kinds", "route_forms", "routes"),
+        ),
         GeneratedFile(
             path="include/dingo/core/vocabulary/vocabulary.gen.h",
             content=content,
-            spec_ids=(
-                "key_kinds",
-                "route_forms",
-                "routes",
-                "scopes",
-                "selection_rules",
-                "storage_forms",
-            ),
-        )
+            spec_ids=("key_kinds", "scopes", "selection_rules", "storage_forms"),
+        ),
     ]
 
 

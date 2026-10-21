@@ -9,7 +9,7 @@
 #pragma once
 
 #include <dingo/core/base/mechanics.h>
-#include <dingo/core/vocabulary/vocabulary.gen.h>
+#include <dingo/core/vocabulary/route_forms.gen.h>
 
 #include <cstdint>
 
