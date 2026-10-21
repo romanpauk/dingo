@@ -347,9 +347,9 @@ constexpr bool registers_service<
 
 TYPED_TEST_SUITE(next_container_move_parent, move_child_container_types, );
 
-// Disabled: a child keeps the address of its parent, so it does not follow the
-// parent when it moves, and finds the container constructed at the old
-// address instead.
+// A child refers to the state of its parent, which the parent takes along
+// when it moves, so the child follows the parent and does not find the
+// container constructed at the old address.
 TYPED_TEST(next_container_move_parent, child_follows_moved_parent) {
   std::optional<move_parent_container> source(std::in_place);
   source->register_type<dingo::scope<dingo::shared>,

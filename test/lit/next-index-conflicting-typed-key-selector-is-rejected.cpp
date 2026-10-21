@@ -1,0 +1,30 @@
+// The lookups of container traits declare the domain of an interface and a
+// key once, so a typed domain declared both one and many is rejected when the
+// container is compiled.
+// REQUIRES: linux
+// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// CHECK: the lookup of
+// CHECK-SAME: is declared twice
+
+#include <dingo/container.h>
+#include <dingo/storage/shared.h>
+
+#include <cstddef>
+
+struct animal {
+  virtual ~animal() = default;
+};
+
+struct dog : animal {};
+
+struct traits : dingo::dynamic_container_traits {
+  using lookup_definition_type =
+      dingo::lookups<dingo::typed<std::size_t, animal, dingo::one>,
+                     dingo::typed<std::size_t, animal, dingo::many>>;
+};
+
+int main() {
+  dingo::container<traits> container;
+  container.register_type<dingo::scope<dingo::shared>, dingo::storage<dog>,
+                          dingo::interfaces<animal>>();
+}
