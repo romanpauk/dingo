@@ -526,7 +526,7 @@ Implementation variants are alternative standard C++ implementations of one
 primitive, such as the portable and MSVC constructor-detection backends or the
 two placement constructions of `std::array`. Each variant is named in the spec.
 The compiler selects the default variant, and a macro such as
-`DINGO_VARIANT_CONSTRUCTOR_DETECTION=msvc` overrides it. Every variant that is
+`DINGO_VARIANT_CONSTRUCTOR_DETECTION_MSVC=0` overrides it. Every variant that is
 standard C++ is compiled and tested on every compiler that accepts it, so the
 MSVC variants run in Linux CI. The constructor-detection matrix already does
 this for its MSVC backend; the spec makes it the rule.
@@ -1241,14 +1241,17 @@ its object is being constructed and is empty again after a failed construction.
 `core/primitives/constructor.h` detects the constructor of a type and calls it
 with arguments that resolve their parameter types, the `detected_constructor`
 factory kind of the spec, or by the constructor a type declares with
-`DINGO_CONSTRUCTOR`. `core/projection/construct.h` holds the other factory
-kinds: a declared constructor, which list-initializes the leaf from its declared
-argument types inside the layers of the stored shape, and a function or callable
-object, whose result is the stored object. A slot keeps the factory of its
-binding, empty unless it holds a callable object, and a declared factory lifts
-the check that the stored leaf is constructible. The containers construct an
-object no binding stores with `construct`. Remaining: the compiler variant of
-constructor detection for MSVC, conversion primitives, index structures, the
+`DINGO_CONSTRUCTOR`. Its detection is the shape mode of
+`core/primitives/constructor_detection.h`, which has a portable and an msvc
+backend, selected by the compiler variant `constructor_detection_msvc`, and a
+signature mode that recovers the argument types of the detected constructor.
+`core/projection/construct.h` holds the other factory kinds: a declared
+constructor, which list-initializes the leaf from its declared argument types
+inside the layers of the stored shape, and a function or callable object, whose
+result is the stored object. A slot keeps the factory of its binding, empty
+unless it holds a callable object, and a declared factory lifts the check that
+the stored leaf is constructible. The containers construct an object no binding
+stores with `construct`. Remaining: conversion primitives, index structures, the
 arena, and the thunk shape.
 
 #### M2.4: Vocabulary And Descriptors

@@ -53,7 +53,7 @@ CONSTRUCTOR_ARGUMENT_CATEGORIES = (
         ),
         limitation_disposition=LimitationDisposition.COMPILER_LIMITATION,
         limitation_guard=(
-            "defined(_MSC_VER) && DINGO_CXX_STANDARD <= 17"
+            "defined(_MSC_VER) && _MSVC_LANG <= 201703L"
         ),
     ),
     ConstructorArgumentCategory(
@@ -104,11 +104,11 @@ CONSTRUCTOR_DETECTION_BACKENDS = (
 CONSTRUCTOR_DETECTION_MODES = (
     ConstructorDetectionMode(
         name="shape",
-        type_name="dingo::detail::constructor_shape",
+        type_name="dingo::core::constructor_shape",
     ),
     ConstructorDetectionMode(
         name="signature",
-        type_name="dingo::detail::constructor_signature",
+        type_name="dingo::core::constructor_signature",
     ),
 )
 
@@ -147,9 +147,9 @@ def _dependency_shape(form: DependencyForm) -> ConstructorShape:
     return ConstructorShape(
         name=f"dependency_{form.name}",
         target_type=f"constructor_dependency<{request}>",
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity=1,
-        signature_arguments=f"dingo::type_list<{signature_request}>",
+        signature_arguments=f"dingo::core::type_list<{signature_request}>",
         dependency_forms=frozenset({form.name}),
         constructor_detection_limitations=tuple(
             capability.limitation
@@ -173,9 +173,9 @@ WRAPPED_DEPENDENCY_CONSTRUCTOR_SHAPES = tuple(
     ConstructorShape(
         name=composition.name,
         target_type=f"constructor_dependency<{type_name}>",
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity=1,
-        signature_arguments=f"dingo::type_list<{type_name}>",
+        signature_arguments=f"dingo::core::type_list<{type_name}>",
         detector_only=True,
         constructor_detection_limitations=(
             WRAPPER_SIGNATURE_RECOVERY_LIMITATION,
@@ -192,18 +192,18 @@ CONSTRUCTOR_SHAPES = (
     ConstructorShape(
         name="two_values",
         target_type="constructor_two_values",
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity=2,
-        signature_arguments="dingo::type_list<int, float>",
+        signature_arguments="dingo::core::type_list<int, float>",
         dependency_forms=frozenset({"value"}),
     ),
     ConstructorShape(
         name="std_array_aggregate_move_only",
         target_type="std::array<constructor_move_only_config, 2>",
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity=2,
         signature_arguments=(
-            "dingo::type_list<constructor_move_only_config, "
+            "dingo::core::type_list<constructor_move_only_config, "
             "constructor_move_only_config>"
         ),
         detector_only=True,
@@ -213,10 +213,10 @@ CONSTRUCTOR_SHAPES = (
         target_type=(
             "std::array<std::array<constructor_move_only_config, 2>, 2>"
         ),
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity=2,
         signature_arguments=(
-            "dingo::type_list<"
+            "dingo::core::type_list<"
             "std::array<constructor_move_only_config, 2>, "
             "std::array<constructor_move_only_config, 2>>"
         ),
@@ -225,10 +225,10 @@ CONSTRUCTOR_SHAPES = (
     ConstructorShape(
         name="mixed_wrappers",
         target_type="constructor_mixed_wrappers",
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity=4,
         signature_arguments=(
-            "dingo::type_list<int, "
+            "dingo::core::type_list<int, "
             "constructor_test_wrapper<constructor_config>, "
             "std::optional<constructor_config>, "
             "std::variant<constructor_config, "
@@ -243,10 +243,10 @@ CONSTRUCTOR_SHAPES = (
     ConstructorShape(
         name="nested_forwarding_wrapper",
         target_type="constructor_nested_forwarding_wrapper",
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity=1,
         signature_arguments=(
-            "dingo::type_list<constructor_nested_forwarding_dependency>"
+            "dingo::core::type_list<constructor_nested_forwarding_dependency>"
         ),
         detector_only=True,
         constructor_detection_limitations=(
@@ -258,10 +258,10 @@ CONSTRUCTOR_SHAPES = (
     ConstructorShape(
         name="unconstrained_forwarding_wrapper",
         target_type="constructor_unconstrained_forwarding_wrapper_consumer",
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity=1,
         signature_arguments=(
-            "dingo::type_list<"
+            "dingo::core::type_list<"
             "constructor_unconstrained_forwarding_dependency>"
         ),
         detector_only=True,
@@ -272,59 +272,59 @@ CONSTRUCTOR_SHAPES = (
     ConstructorShape(
         name="copy_only_value",
         target_type="constructor_copy_only_value",
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity=1,
-        signature_arguments="dingo::type_list<constructor_copy_only_config>",
+        signature_arguments="dingo::core::type_list<constructor_copy_only_config>",
         dependency_forms=frozenset({"value"}),
     ),
     ConstructorShape(
         name="move_only_value",
         target_type="constructor_move_only_value",
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity=1,
-        signature_arguments="dingo::type_list<constructor_move_only_config>",
+        signature_arguments="dingo::core::type_list<constructor_move_only_config>",
         dependency_forms=frozenset({"value"}),
     ),
     ConstructorShape(
         name="incomplete_reference",
         target_type="constructor_incomplete_reference",
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity=1,
-        signature_arguments="dingo::type_list<constructor_incomplete_config &>",
+        signature_arguments="dingo::core::type_list<constructor_incomplete_config &>",
         dependency_forms=frozenset({"lvalue_reference"}),
     ),
     ConstructorShape(
         name="selected_incomplete_reference",
         target_type="constructor_selected_incomplete_reference",
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity=1,
         signature_arguments=(
-            "dingo::type_list<dingo::detail::selected<"
+            "dingo::core::type_list<dingo::dependency<"
             "constructor_incomplete_config &, "
-            "dingo::detail::type_selector<constructor_selector>>>"
+            "dingo::key_type<constructor_selector>>>"
         ),
         dependency_forms=frozenset({"selected_lvalue_reference"}),
     ),
     ConstructorShape(
         name="aggregate",
         target_type="constructor_aggregate",
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity=2,
-        signature_arguments="dingo::type_list<int, constructor_config &>",
+        signature_arguments="dingo::core::type_list<int, constructor_config &>",
         dependency_forms=frozenset({"value", "lvalue_reference"}),
     ),
     ConstructorShape(
         name="defaulted",
         target_type="constructor_defaulted",
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity=0,
-        signature_arguments="dingo::type_list<>",
+        signature_arguments="dingo::core::type_list<>",
         detector_only=True,
     ),
     ConstructorShape(
         name="generic",
         target_type="constructor_generic",
-        expected_kind="dingo::detail::constructor_kind::generic",
+        expected_kind="dingo::core::constructor_kind::generic",
         expected_arity="DINGO_CONSTRUCTOR_DETECTION_ARGS",
         signature_arguments="void",
         detector_only=True,
@@ -332,7 +332,7 @@ CONSTRUCTOR_SHAPES = (
     ConstructorShape(
         name="ambiguous",
         target_type="constructor_ambiguous",
-        expected_kind="dingo::detail::constructor_kind::invalid",
+        expected_kind="dingo::core::constructor_kind::invalid",
         expected_arity=0,
         signature_arguments="void",
         detector_only=True,
@@ -340,15 +340,15 @@ CONSTRUCTOR_SHAPES = (
     ConstructorShape(
         name="explicit",
         target_type="constructor_explicit",
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity=1,
-        signature_arguments="dingo::type_list<int>",
+        signature_arguments="dingo::core::type_list<int>",
         dependency_forms=frozenset({"value"}),
     ),
     ConstructorShape(
         name="initializer_list",
         target_type="constructor_initializer_list",
-        expected_kind="dingo::detail::constructor_kind::concrete",
+        expected_kind="dingo::core::constructor_kind::concrete",
         expected_arity="DINGO_CONSTRUCTOR_DETECTION_ARGS",
         signature_arguments="constructor_repeated_int_arguments",
         detector_only=True,
@@ -356,7 +356,7 @@ CONSTRUCTOR_SHAPES = (
     ConstructorShape(
         name="same_arity_overload",
         target_type="constructor_same_arity_overload",
-        expected_kind="dingo::detail::constructor_kind::invalid",
+        expected_kind="dingo::core::constructor_kind::invalid",
         expected_arity=0,
         signature_arguments="void",
         detector_only=True,

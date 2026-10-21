@@ -34,8 +34,9 @@ COMPARE = DIFFERENTIAL_ROOT / "compare.py"
 
 SIDES = ("current", "baseline")
 
-# Targets that cannot take part. The constructor-detection family tests
-# internal names that the new implementation does not preserve.
+# Targets that cannot take part. The constructor-detection family tests the
+# detection of the core implementation by its core names, which the baseline
+# does not have.
 EXCLUDED_TARGETS = frozenset({"dingo_matrix_test_constructor_detection"})
 
 TARGETS_RE = re.compile(r"set\(\s*DINGO_MATRIX_TEST_TARGETS\b(.*?)\)", re.DOTALL)

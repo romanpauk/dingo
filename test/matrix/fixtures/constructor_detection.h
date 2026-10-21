@@ -9,12 +9,12 @@
 
 #include "matrix/fixtures/dependency_shapes.h"
 
-#include <dingo/factory/constructor.h>
-#include <dingo/factory/detail/constructor_detection_msvc.hpp>
-#include <dingo/registration/constructor.h>
-#include <dingo/type/auto_constructible.h>
+#include <dingo/container.h>
+#include <dingo/core/primitives/constructor_detection.h>
+#include <dingo/type/annotated.h>
 
 #include <array>
+#include <cstddef>
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -95,8 +95,8 @@ struct constructor_incomplete_reference {
 
 struct constructor_selected_incomplete_reference {
   explicit constructor_selected_incomplete_reference(
-      detail::selected<constructor_incomplete_config &,
-                       detail::type_selector<constructor_selector>>) {}
+      dependency<constructor_incomplete_config &,
+                 key_type<constructor_selector>>) {}
 };
 
 struct constructor_aggregate {
@@ -128,95 +128,31 @@ struct constructor_same_arity_overload {
   constructor_same_arity_overload(float, int) {}
 };
 
+template <typename T, std::size_t> using constructor_repeated_type = T;
+
 template <typename T, typename Sequence> struct constructor_repeated_arguments;
 
-template <typename T, size_t... Is>
+template <typename T, std::size_t... Is>
 struct constructor_repeated_arguments<T, std::index_sequence<Is...>> {
-  using type = type_list<detail::repeated_type<T, Is>...>;
+  using type = core::type_list<constructor_repeated_type<T, Is>...>;
 };
 
 using constructor_repeated_int_arguments =
     typename constructor_repeated_arguments<
         int, std::make_index_sequence<DINGO_CONSTRUCTOR_DETECTION_ARGS>>::type;
 
-struct constructor_trait_limited {
-  constructor_trait_limited(int, float) {}
-  constructor_trait_limited(int, float, double) {}
-};
-
-struct constructor_typedef_selected {
-  DINGO_CONSTRUCTOR(constructor_typedef_selected(double, const char *)) {}
-};
-
-struct constructor_public_selected_dependency {
-  DINGO_CONSTRUCTOR(constructor_public_selected_dependency()) : value(1) {}
-  explicit constructor_public_selected_dependency(int) : value(2) {}
-
-  int value;
-};
-
-struct constructor_public_selected_consumer {
-  explicit constructor_public_selected_consumer(
-      constructor_public_selected_dependency dependency)
-      : value(dependency.value) {}
-
-  int value;
-};
-
-#if !defined(_MSC_VER)
 struct constructor_detection_portable_backend {
   template <typename T, typename DetectionMode>
   using detection =
-      detail::constructor_detection<T, DetectionMode,
-                                    detail::list_initialization,
-                                    DINGO_CONSTRUCTOR_DETECTION_ARGS>;
+      core::constructor_detection<T, DetectionMode,
+                                  core::portable_constructor_detection>;
 };
-#endif
 
 struct constructor_detection_msvc_backend {
   template <typename T, typename DetectionMode>
   using detection =
-      detail::constructor_detection_msvc<T, DetectionMode,
-                                         detail::list_initialization,
-                                         DINGO_CONSTRUCTOR_DETECTION_ARGS>;
-};
-
-struct constructor_detection_context {
-  template <typename T>
-  T resolve(construction_scope, constructor_detection_context &) {
-    static_assert(std::is_same_v<T, int> || std::is_same_v<T, float>);
-    if constexpr (std::is_same_v<T, int>) {
-      ++integer_resolutions;
-      return 42;
-    } else {
-      ++float_resolutions;
-      return 2.5f;
-    }
-  }
-
-  int integer_resolutions = 0;
-  int float_resolutions = 0;
-};
-
-struct constructor_copy_only_context {
-  template <typename T>
-  T resolve(construction_scope, constructor_copy_only_context &) {
-    static_assert(std::is_same_v<T, constructor_copy_only_config>);
-    return {};
-  }
+      core::constructor_detection<T, DetectionMode,
+                                  core::msvc_constructor_detection>;
 };
 
 } // namespace dingo::matrix
-
-namespace dingo {
-
-template <>
-struct constructor_detection_traits<matrix::constructor_trait_limited> {
-  static constexpr size_t max_arity = 2;
-};
-
-template <>
-struct is_auto_constructible<matrix::constructor_public_selected_dependency>
-    : std::true_type {};
-
-} // namespace dingo

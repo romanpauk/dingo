@@ -27,6 +27,29 @@
 #define DINGO_CORE_COLD
 #endif
 
+// Brackets the friend declarations by which constructor signature recovery
+// records an argument type, which GCC warns declare a non-template function.
+#if defined(__GNUC__) && !defined(__clang__)
+#define DINGO_CORE_RECORDING_FRIENDS_BEGIN                                     \
+  _Pragma("GCC diagnostic push")                                               \
+      _Pragma("GCC diagnostic ignored \"-Wnon-template-friend\"")
+#define DINGO_CORE_RECORDING_FRIENDS_END _Pragma("GCC diagnostic pop")
+#else
+#define DINGO_CORE_RECORDING_FRIENDS_BEGIN
+#define DINGO_CORE_RECORDING_FRIENDS_END
+#endif
+
+// spec: variant_points.constructor_detection_msvc
+// The portable signature recovery records an argument type through the
+// exception specification of the one conversion that overload resolution
+// selects. MSVC instantiates the exception specifications of the competing
+// conversions too, so it recovers a signature only with the msvc backend.
+#if defined(_MSC_VER)
+#define DINGO_CORE_PORTABLE_CONSTRUCTOR_SIGNATURE 0
+#else
+#define DINGO_CORE_PORTABLE_CONSTRUCTOR_SIGNATURE 1
+#endif
+
 namespace dingo::core {
 
 template <typename... Types> struct type_list {
@@ -160,6 +183,16 @@ struct compares_addresses<First, Second,
                                              &type_tag<Second>::value)>{}))>
     : std::true_type {};
 } // namespace detail
+
+// spec: variant_points.constructor_detection_msvc
+#if defined(DINGO_VARIANT_CONSTRUCTOR_DETECTION_MSVC)
+inline constexpr bool msvc_constructor_detection_variant =
+    DINGO_VARIANT_CONSTRUCTOR_DETECTION_MSVC;
+#elif defined(_MSC_VER)
+inline constexpr bool msvc_constructor_detection_variant = true;
+#else
+inline constexpr bool msvc_constructor_detection_variant = false;
+#endif
 
 // spec: variant_points.named_type_id
 #if defined(DINGO_VARIANT_NAMED_TYPE_ID)

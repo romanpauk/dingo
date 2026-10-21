@@ -339,15 +339,24 @@ directed dependency edges.
 
 ### Constructor Detection Backend
 
-- `portable`: the generic detector used by GCC and Clang. This backend is not
-  instantiated when the test suite itself is compiled by MSVC.
-- `msvc`: the category-based MSVC detector. It is also instantiated by GCC and
-  Clang so both algorithms are covered on those hosts.
+The family tests `core::constructor_detection` of
+[`include/dingo/core/primitives/constructor_detection.h`](../../include/dingo/core/primitives/constructor_detection.h)
+with each backend:
+
+- `portable`: `core::portable_constructor_detection`, the default on GCC and
+  Clang. This backend is not instantiated when the test suite itself is
+  compiled by MSVC.
+- `msvc`: `core::msvc_constructor_detection`, the class-based and
+  category-based detector that MSVC selects through the variant point
+  `constructor_detection_msvc`. It is also instantiated by GCC and Clang so both
+  algorithms are covered on those hosts.
 
 ### Constructor Detection Mode
 
-- `shape`: reports constructor kind and arity without retaining argument types.
-- `signature`: reports kind and arity and recovers the selected argument types.
+- `shape`: `core::constructor_shape`, reports constructor kind and arity
+  without retaining argument types.
+- `signature`: `core::constructor_signature`, reports kind and arity and
+  recovers the selected argument types.
 
 The constructor-shape axis covers values, pointers, lvalue and rvalue
 references, copy-only and move-only values, selected and annotated dependencies,
@@ -362,9 +371,12 @@ must declare at least one shared dependency form.
 
 The constructor argument-conversion sub-matrix crosses unique and shared
 argument storage with value, lvalue-reference, const-lvalue-reference,
-rvalue-reference, and pointer conversion categories. The pointer category only
-applies to unique storage, matching the supported constructor-probe shapes. Each
-conversion category references the same shared dependency-form catalog.
+rvalue-reference, and pointer conversion categories. Each row constructs a
+consumer through `core::invoke_constructor` and checks the request of the
+injected `core::constructor_argument`: a reference is resolved as that
+reference, and a value, an rvalue reference, and a pointer take a value. The
+pointer category only applies to unique storage. Each conversion category
+references the same shared dependency-form catalog.
 The runtime lifetime scenarios additionally construct a shared object from a
 unique-scoped dependency through `const T&`. This proves that the transient
 reference remains valid for the constructor call without making direct

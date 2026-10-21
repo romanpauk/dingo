@@ -57,10 +57,10 @@ class ConstructorDetectionRow:
             return self.constructor_shape.signature_arguments
         if (
             self.constructor_shape.expected_kind
-            == "dingo::detail::constructor_kind::concrete"
+            == "dingo::core::constructor_kind::concrete"
             and self.constructor_shape.expected_arity == 0
         ):
-            return "dingo::type_list<>"
+            return "dingo::core::type_list<>"
         return "void"
 
     @property

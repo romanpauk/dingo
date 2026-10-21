@@ -30,6 +30,20 @@ variant_points: tuple[VariantPoint, ...] = (
         ),
     ),
     VariantPoint(
+        id="constructor_detection_msvc",
+        kind=VariantKind.COMPILER_VARIANT,
+        justification=(
+            "Detects constructors with the msvc backend, for MSVC, which\n"
+            "instantiates a recursive primary template before a zero-arity\n"
+            "specialization, applies no brace elision while probing a\n"
+            "std::array, and instantiates the exception specifications of\n"
+            "competing conversions. The backend probes each arity with a class,\n"
+            "takes the arity of a std::array from its size, and recovers a\n"
+            "signature by one probe per argument and conversion category. It is\n"
+            "standard C++ and is tested on every compiler; MSVC selects it."
+        ),
+    ),
+    VariantPoint(
         id="pack_at_indexing",
         kind=VariantKind.LANGUAGE_TIER,
         justification=(

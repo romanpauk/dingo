@@ -10,23 +10,41 @@
 // invocation with an argument resolved for every parameter.
 
 #include <dingo/core/primitives/constructor.h>
+#include <dingo/core/primitives/constructor_detection.h>
+#include <dingo/core/primitives/type_name.h>
 #include <dingo/registration/constructor.h>
+#include <dingo/type/annotated.h>
 
 #include <gtest/gtest.h>
 
 #include <array>
+#include <initializer_list>
 #include <memory>
+#include <optional>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <utility>
+#include <variant>
+
+// Types of external linkage, as the functions a signature probe declares for
+// them would otherwise be internal and never defined.
+namespace unrecorded {
+struct two_values {
+  two_values(int, float) {}
+};
+struct probe {};
+} // namespace unrecorded
 
 namespace {
 
+using dingo::core::constructor_detection;
 using dingo::core::constructor_kind;
 using dingo::core::declared_constructor;
 using dingo::core::detected_constructor;
 using dingo::core::invoke_constructor;
 using dingo::core::type_list;
+using dingo::core::type_name_of;
 
 struct two_values {
   two_values(int init_integer, float init_real)
@@ -75,6 +93,121 @@ TEST(next_constructor, detects_the_constructor_of_the_largest_arity) {
   // The copy constructor is never detected.
   static_assert(detected_constructor<copyable_only>::arity == 0);
 }
+
+struct generic {
+  template <typename... Args> generic(Args &&...) {}
+};
+
+struct one_of_two_types {
+  explicit one_of_two_types(int) {}
+  explicit one_of_two_types(float) {}
+};
+
+struct two_orders {
+  two_orders(int, float) {}
+  two_orders(float, int) {}
+};
+
+struct explicit_value {
+  explicit explicit_value(int) {}
+};
+
+struct initializer_list_values {
+  initializer_list_values(std::initializer_list<int>) {}
+};
+
+TEST(next_constructor, a_constructor_template_is_generic) {
+  static_assert(detected_constructor<generic>::kind ==
+                constructor_kind::generic);
+}
+
+TEST(next_constructor, constructors_of_the_same_arity_are_not_detected) {
+  static_assert(detected_constructor<one_of_two_types>::kind ==
+                constructor_kind::invalid);
+  static_assert(detected_constructor<one_of_two_types>::arity == 0);
+  static_assert(detected_constructor<two_orders>::kind ==
+                constructor_kind::invalid);
+  static_assert(detected_constructor<two_orders>::arity == 0);
+}
+
+TEST(next_constructor, detects_an_explicit_constructor) {
+  static_assert(detected_constructor<explicit_value>::kind ==
+                constructor_kind::concrete);
+  static_assert(detected_constructor<explicit_value>::arity == 1);
+}
+
+TEST(next_constructor,
+     an_initializer_list_constructor_takes_the_largest_arity_searched) {
+  static_assert(detected_constructor<initializer_list_values>::kind ==
+                constructor_kind::concrete);
+  static_assert(detected_constructor<initializer_list_values>::arity ==
+                DINGO_CONSTRUCTOR_DETECTION_ARGS);
+}
+
+template <typename Type, typename Backend> constexpr bool detects_as_default() {
+  using detection =
+      constructor_detection<Type, dingo::core::constructor_shape, Backend>;
+  return detection::kind == detected_constructor<Type>::kind &&
+         detection::arity == detected_constructor<Type>::arity;
+}
+
+// The detection that the engine uses is the shape detection of the backend
+// that variant_points.constructor_detection_msvc selects, and both backends
+// agree on it. The matrix family constructor_detection crosses the backends and
+// modes with the constructor shapes.
+TEST(next_constructor, the_engine_detects_by_the_selected_backend) {
+  using dingo::core::msvc_constructor_detection;
+  using dingo::core::portable_constructor_detection;
+  static_assert(
+      std::is_same_v<
+          dingo::core::default_constructor_detection,
+          std::conditional_t<dingo::core::msvc_constructor_detection_variant,
+                             msvc_constructor_detection,
+                             portable_constructor_detection>>);
+  static_assert(detects_as_default<two_values, msvc_constructor_detection>());
+  static_assert(detects_as_default<generic, msvc_constructor_detection>());
+  static_assert(
+      detects_as_default<one_of_two_types, msvc_constructor_detection>());
+  static_assert(detects_as_default<int, msvc_constructor_detection>());
+  static_assert(
+      detects_as_default<two_values, portable_constructor_detection>());
+  static_assert(detects_as_default<generic, portable_constructor_detection>());
+  static_assert(
+      detects_as_default<one_of_two_types, portable_constructor_detection>());
+  static_assert(detects_as_default<int, portable_constructor_detection>());
+}
+
+// The signature mode recovers the argument types of the detected constructor;
+// the shape mode reports them only for a constructor without arguments.
+TEST(next_constructor, the_signature_mode_recovers_the_argument_types) {
+  using dingo::core::constructor_shape;
+  using dingo::core::constructor_signature;
+  static_assert(
+      std::is_same_v<
+          constructor_detection<two_values, constructor_signature>::arguments,
+          type_list<int, float>>);
+  static_assert(std::is_same_v<
+                constructor_detection<two_values, constructor_shape>::arguments,
+                void>);
+  static_assert(std::is_same_v<
+                constructor_detection<defaulted, constructor_shape>::arguments,
+                type_list<>>);
+  static_assert(
+      std::is_same_v<
+          constructor_detection<generic, constructor_signature>::arguments,
+          void>);
+}
+
+#if !defined(_MSC_VER)
+// An argument whose category no probe recorded is not recovered, so neither is
+// the signature.
+TEST(next_constructor, an_unrecorded_argument_category_is_not_recovered) {
+  static_assert(
+      std::is_void_v<typename dingo::core::detail::signature_arguments<
+          unrecorded::two_values, unrecorded::probe,
+          std::make_index_sequence<2>>::type>);
+}
+#endif
 
 TEST(next_constructor, value_initializes_a_scalar) {
   static_assert(detected_constructor<int>::arity == 0);
@@ -176,6 +309,147 @@ TEST(next_constructor, resolves_every_move_only_element_of_a_nested_array) {
   EXPECT_EQ(values[1][0].value, 7);
   EXPECT_EQ(values[1][1].value, 7);
   EXPECT_EQ(resolver.resolutions, 4);
+}
+
+// A type whose only constructor takes one argument of type `Parameter`.
+template <typename Parameter> struct consumer {
+  explicit consumer(Parameter) {}
+};
+
+struct regular {};
+
+// A copy-only and a move-only type: the argument of either is constructed
+// from the prvalue that the resolver returns.
+struct copy_only {
+  copy_only() = default;
+  copy_only(const copy_only &) = default;
+  copy_only(copy_only &&) = delete;
+};
+
+struct move_only_value {
+  move_only_value() = default;
+  move_only_value(const move_only_value &) = delete;
+  move_only_value(move_only_value &&) = default;
+};
+
+struct tag {};
+
+// Records how the argument of a constructor is requested: a value through
+// `argument`, or a reference through `resolve`.
+struct recording_resolver {
+  template <typename Type> Type argument() {
+    request = "argument " + type_name_of<Type>();
+    if constexpr (std::is_default_constructible_v<Type>) {
+      return Type{};
+    } else {
+      // An annotated value or reference is made from what it annotates.
+      return Type(stored<std::remove_reference_t<
+                      typename dingo::annotated_traits<Type>::type>>());
+    }
+  }
+
+  template <typename Request> Request resolve() {
+    request = "resolve " + type_name_of<Request>();
+    return stored<std::remove_cv_t<std::remove_reference_t<Request>>>();
+  }
+
+  template <typename Type> static Type &stored() {
+    static Type object{};
+    return object;
+  }
+
+  std::string request;
+};
+
+// The request for the argument of the detected constructor of
+// `consumer<Parameter>`.
+template <typename Parameter> std::string constructor_request() {
+  using type = consumer<Parameter>;
+  static_assert(detected_constructor<type>::kind == constructor_kind::concrete);
+  static_assert(detected_constructor<type>::arity == 1);
+  recording_resolver resolver;
+  (void)invoke_constructor<type>(resolver, [](auto &&...args) {
+    return type{std::forward<decltype(args)>(args)...};
+  });
+  return resolver.request;
+}
+
+template <typename Type> std::string argument_request() {
+  return "argument " + type_name_of<Type>();
+}
+
+template <typename Request> std::string reference_request() {
+  return "resolve " + type_name_of<Request>();
+}
+
+// A value and an rvalue reference take a value, a pointer takes a value of
+// its pointer type, and an lvalue reference is resolved as a reference.
+template <typename Handle> void expect_category_requests() {
+  EXPECT_EQ(constructor_request<Handle>(), argument_request<Handle>());
+  EXPECT_EQ(constructor_request<Handle &>(), reference_request<Handle &>());
+  EXPECT_EQ(constructor_request<const Handle &>(),
+            reference_request<const Handle &>());
+  EXPECT_EQ(constructor_request<Handle &&>(), argument_request<Handle>());
+  EXPECT_EQ(constructor_request<Handle *>(), argument_request<Handle *>());
+  EXPECT_EQ(constructor_request<const Handle *>(),
+            argument_request<const Handle *>());
+}
+
+TEST(next_constructor, requests_an_argument_by_the_category_of_its_parameter) {
+  expect_category_requests<std::unique_ptr<int>>();
+  expect_category_requests<std::shared_ptr<int>>();
+  expect_category_requests<regular>();
+}
+
+// A wrapper is requested whole, not as the value it converts from.
+TEST(next_constructor, requests_a_wrapper_parameter_as_a_whole) {
+  using regular_array = regular[2];
+  using regular_or_copy_only = std::variant<regular, copy_only>;
+  using shared_unique =
+      std::variant<std::shared_ptr<regular>, std::unique_ptr<regular>>;
+  using move_only_array = std::array<move_only_value, 2>;
+  EXPECT_EQ(constructor_request<std::shared_ptr<regular>>(),
+            argument_request<std::shared_ptr<regular>>());
+  EXPECT_EQ(constructor_request<std::shared_ptr<regular> &>(),
+            reference_request<std::shared_ptr<regular> &>());
+  EXPECT_EQ(constructor_request<std::shared_ptr<const regular>>(),
+            argument_request<std::shared_ptr<const regular>>());
+  EXPECT_EQ(constructor_request<std::unique_ptr<const regular>>(),
+            argument_request<std::unique_ptr<const regular>>());
+  EXPECT_EQ(constructor_request<std::optional<regular> &>(),
+            reference_request<std::optional<regular> &>());
+  EXPECT_EQ(constructor_request<regular_array &>(),
+            reference_request<regular_array &>());
+  EXPECT_EQ(constructor_request<regular_or_copy_only>(),
+            argument_request<regular_or_copy_only>());
+  EXPECT_EQ(constructor_request<shared_unique>(),
+            argument_request<shared_unique>());
+  EXPECT_EQ(constructor_request<std::shared_ptr<regular_array>>(),
+            argument_request<std::shared_ptr<regular_array>>());
+  EXPECT_EQ(constructor_request<move_only_array>(),
+            argument_request<move_only_array>());
+}
+
+TEST(next_constructor, requests_a_copy_only_or_move_only_value) {
+  EXPECT_EQ(constructor_request<copy_only>(), argument_request<copy_only>());
+  EXPECT_EQ(constructor_request<move_only_value>(),
+            argument_request<move_only_value>());
+}
+
+TEST(next_constructor, requests_an_annotated_parameter_as_a_whole) {
+  using annotated_reference = dingo::annotated<regular &, tag>;
+  using annotated_pointer = dingo::annotated<regular *, tag>;
+  using annotated_shared = dingo::annotated<std::shared_ptr<regular>, tag>;
+  using annotated_shared_reference =
+      dingo::annotated<std::shared_ptr<regular> &, tag>;
+  EXPECT_EQ(constructor_request<annotated_reference>(),
+            argument_request<annotated_reference>());
+  EXPECT_EQ(constructor_request<annotated_pointer>(),
+            argument_request<annotated_pointer>());
+  EXPECT_EQ(constructor_request<annotated_shared>(),
+            argument_request<annotated_shared>());
+  EXPECT_EQ(constructor_request<annotated_shared_reference>(),
+            argument_request<annotated_shared_reference>());
 }
 
 } // namespace

@@ -17,97 +17,20 @@
 // with a `dingo_constructor_type` naming its signature, is constructed by it,
 // and a scalar is value-initialized.
 //
-// The technique is the one of the current implementation in
-// dingo/factory/detail/constructor_detection.hpp, without its request
-// decorations.
+// The detection, with its backends and its signature mode, is in
+// constructor_detection.h; this header holds what the engine uses.
 
 #include <dingo/core/base/config.h>
 #include <dingo/core/base/mechanics.h>
+#include <dingo/core/primitives/constructor_arity.h>
+#include <dingo/core/primitives/constructor_arity_msvc.h>
+#include <dingo/core/primitives/constructor_probe.h>
 
 #include <cstddef>
-#include <cstdint>
 #include <type_traits>
 #include <utility>
 
 namespace dingo::core {
-
-enum class constructor_kind : std::uint8_t { concrete, generic, invalid };
-
-namespace detail {
-template <typename Type, typename = void>
-struct is_complete : std::false_type {};
-
-template <typename Type>
-struct is_complete<Type, std::void_t<decltype(sizeof(Type))>> : std::true_type {
-};
-
-// Converts to any parameter type except `Disabled`, the constructed type.
-template <typename Disabled> struct probe_argument {
-  // Non-scalar wrappers may use constrained converting constructors that
-  // require an xvalue source.
-  template <typename Type, typename = std::enable_if_t<
-                               !std::is_same_v<Disabled, std::decay_t<Type>> &&
-                               !std::is_scalar_v<Type> &&
-                               is_complete<std::decay_t<Type>>::value>>
-  operator Type &&() const;
-
-  // Reference probes stay available for incomplete types, which a lookup can
-  // borrow without constructing them.
-  template <typename Type, typename = std::enable_if_t<
-                               !std::is_same_v<Disabled, std::decay_t<Type>>>>
-  operator const Type &() const;
-
-  template <typename Type, typename = std::enable_if_t<
-                               !std::is_same_v<Disabled, std::decay_t<Type>>>>
-  operator Type &() const;
-
-  // A prvalue covers both value and rvalue reference parameters.
-  template <typename Type, typename = std::enable_if_t<
-                               !std::is_same_v<Disabled, std::decay_t<Type>> &&
-                               is_complete<std::decay_t<Type>>::value>>
-  operator Type();
-};
-
-// Converts to nothing; a type constructible from it accepts any argument.
-struct opaque_argument {};
-
-template <typename Type, typename... Args>
-using list_initialization_t = decltype(Type{std::declval<Args>()...});
-
-template <typename Type, typename = void, typename... Args>
-struct is_list_initializable_impl : std::false_type {};
-
-template <typename Type, typename... Args>
-struct is_list_initializable_impl<
-    Type, std::void_t<list_initialization_t<Type, Args...>>, Args...>
-    : std::bool_constant<sizeof...(Args) != 1 ||
-                         (!std::is_same_v<Type, std::decay_t<Args>> && ...)> {};
-
-template <typename Type, typename... Args>
-inline constexpr bool is_list_initializable_v =
-    is_list_initializable_impl<Type, void, Args...>::value;
-
-template <typename Argument, std::size_t> using repeated = Argument;
-
-template <typename Type, typename Argument, std::size_t... Indices>
-constexpr bool constructible_with(std::index_sequence<Indices...>) {
-  return is_list_initializable_v<Type, repeated<Argument, Indices>...>;
-}
-
-inline constexpr std::size_t invalid_arity = static_cast<std::size_t>(-1);
-
-// The largest arity in [0, Arity] that constructs `Type`.
-template <typename Type, std::size_t Arity> constexpr std::size_t find_arity() {
-  if constexpr (constructible_with<Type, probe_argument<Type>>(
-                    std::make_index_sequence<Arity>{})) {
-    return Arity;
-  } else if constexpr (Arity == 0) {
-    return invalid_arity;
-  } else {
-    return find_arity<Type, Arity - 1>();
-  }
-}
-} // namespace detail
 
 namespace detail {
 template <typename Signature> struct declared_signature {};
@@ -131,32 +54,17 @@ struct declared_constructor<Type,
   static constexpr bool declared = true;
 };
 
-// The constructor a factory calls for `Type`.
+// The constructor a factory calls for `Type`, as the default backend detects
+// it in the shape mode of constructor_detection.h.
 template <typename Type> struct detected_constructor {
 private:
-  static constexpr std::size_t found = [] {
-    if constexpr (std::is_scalar_v<Type>) {
-      return std::size_t(0);
-    } else {
-      return detail::find_arity<Type, DINGO_CONSTRUCTOR_DETECTION_ARGS>();
-    }
-  }();
-  static constexpr bool generic = [] {
-    if constexpr (found == detail::invalid_arity || found == 0) {
-      return false;
-    } else {
-      return detail::constructible_with<Type, detail::opaque_argument>(
-          std::make_index_sequence<found>{});
-    }
-  }();
+  using search =
+      detail::constructor_search_t<Type, default_constructor_detection,
+                                   DINGO_CONSTRUCTOR_DETECTION_ARGS>;
 
 public:
-  static constexpr constructor_kind kind =
-      found == detail::invalid_arity ? constructor_kind::invalid
-      : generic                      ? constructor_kind::generic
-                                     : constructor_kind::concrete;
-  static constexpr std::size_t arity =
-      found == detail::invalid_arity ? 0 : found;
+  static constexpr constructor_kind kind = detail::search_kind<search>;
+  static constexpr std::size_t arity = detail::search_arity<search>;
 };
 
 // An argument that resolves the type its parameter asks for through

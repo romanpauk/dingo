@@ -10,6 +10,18 @@
 
 #include <dingo/core/base/capabilities.gen.h>
 
+// spec: variant_points.constructor_detection_msvc
+// Detects constructors with the msvc backend, for MSVC, which
+// instantiates a recursive primary template before a zero-arity
+// specialization, applies no brace elision while probing a
+// std::array, and instantiates the exception specifications of
+// competing conversions. The backend probes each arity with a class,
+// takes the arity of a std::array from its size, and recovers a
+// signature by one probe per argument and conversion category. It is
+// standard C++ and is tested on every compiler; MSVC selects it.
+// Selected by detecting the defect unless
+// DINGO_VARIANT_CONSTRUCTOR_DETECTION_MSVC is defined to 0 or 1.
+
 // spec: variant_points.named_type_id
 // Compares type identities by type name in constant evaluation, for a
 // compiler that rejects comparing the addresses of distinct objects in

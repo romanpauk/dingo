@@ -155,8 +155,8 @@ DEPENDENCY_DECORATIONS = (
     DependencyDecoration(
         name="selected",
         request_expression=(
-            "dingo::detail::selected<{carrier}, "
-            "dingo::detail::type_selector<{selector}>>"
+            "dingo::dependency<{carrier}, "
+            "dingo::key_type<{selector}>>"
         ),
         supported_shape_carriers=frozenset(
             {
