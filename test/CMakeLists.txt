@@ -220,25 +220,58 @@ add_custom_command(
     VERBATIM)
 
 add_executable(dingo_next_test
-    next/api/construction.cpp
-    next/api/container.cpp
-    next/api/diagnostics.cpp
+    next/api/allocator.cpp
     next/api/annotated.cpp
     next/api/collections.cpp
+    next/api/construct.cpp
+    next/api/construction.cpp
+    next/api/container.cpp
+    next/api/container_move.cpp
+    next/api/dependency_chain.cpp
+    next/api/diagnostics.cpp
     next/api/factories.cpp
+    next/api/incomplete_resolve.cpp
+    next/api/incomplete_resolve_fixture.cpp
+    next/api/keyed_diagnostics.cpp
     next/api/keys.cpp
     next/api/local.cpp
+    next/api/lookups.cpp
     next/api/mixed.cpp
+    next/api/nested_requests.cpp
+    next/api/object_routes.cpp
     next/api/parents.cpp
+    next/api/recursion.cpp
+    next/api/runtime_registration.cpp
     next/api/scopes.cpp
     next/api/shared_cyclical.cpp
+    next/api/static_bindings.cpp
+    next/api/static_parents.cpp
+    next/api/stored_shapes.cpp
     next/api/transactions.cpp
     next/api/unique.cpp
     next/api/variants.cpp
+    next/backend/index.cpp
+    next/backend/local.cpp
     next/backend/memo.cpp
+    next/backend/object_sizes.cpp
+    next/backend/slot.cpp
+    next/backend/static_graph.cpp
     next/base/mechanics.cpp
+    next/base/type_identity.cpp
+    next/base/type_identity_fixture.cpp
+    next/base/type_list.cpp
     next/engine/engine_conformance.cpp
+    next/engine/execute.cpp
+    next/engine/registration.cpp
+    next/engine/routes.cpp
+    next/primitives/allocation.cpp
+    next/primitives/constructor.cpp
     next/primitives/diagnostic_message.cpp
+    next/primitives/retained.cpp
+    next/primitives/transaction_log.cpp
+    next/primitives/transactions.cpp
+    next/primitives/type_name.cpp
+    next/projection/request_types.cpp
     next/projection/shape.cpp
     "${DINGO_NEXT_GENERATED_DIR}/engine_cases.cpp"
 )
