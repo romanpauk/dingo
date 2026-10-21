@@ -74,12 +74,14 @@ TEST(engine, computes_what_the_reference_computes) {
     if (found) {
       core::terms terms = core::derive(binding);
       ASSERT_FALSE(terms.overflow) << expected.name;
-      std::size_t selected =
-          core::select_term(terms, request, core::exposed_categories(binding));
-      served = selected != core::no_term;
+      const core::route_choice choice = core::select_route(
+          binding, terms, request, core::exposed_categories(binding));
+      served = choice.term != core::no_term;
       if (served) {
-        rules = rules_of(terms.items[selected].rules,
-                         terms.items[selected].rule_count);
+        // The rules of the term, then the layers the request creates.
+        rules = rules_of(terms.items[choice.term].rules,
+                         terms.items[choice.term].rule_count) +
+                rules_of(choice.created, choice.created_count);
       }
     }
     std::string expected_rules = rules_of(expected.rules, expected.rule_count);

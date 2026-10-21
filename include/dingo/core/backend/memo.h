@@ -50,14 +50,14 @@ DINGO_ALWAYS_INLINE std::size_t request_id() {
 inline constexpr std::size_t no_generation = static_cast<std::size_t>(-1);
 
 // A binding a memo holds: the entry, the term that serves the request, or
-// no_term, and the value of its key. `kind` is the completion of the term,
-// and `resolved` the address the term borrows once the binding is settled, so
-// a resolution after it makes no call.
+// no_term, and the value of its key. `plan` is how the request completes the
+// term, and `resolved` the address the term borrows once the binding is
+// settled, so a resolution after it makes no call.
 template <typename Entry> struct candidate {
   Entry *binding;
   std::size_t term;
   const void *key_value;
-  completion kind = completion::construct;
+  request_plan plan = {};
   mutable void *resolved = nullptr;
 };
 

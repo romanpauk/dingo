@@ -366,6 +366,20 @@ def register(
 # Derivation
 
 
+def creates(model: Model, rule) -> bool:
+    """Whether a route creates a layer of its kind, from an element or from a
+    layer of the kind it leads from: wrapping, adopting, or taking an address.
+    A creating form applies at the request, which names the kind it creates."""
+    if rule.form is None:
+        return False
+    template = next(t for t in model.spec.route_forms if t.form is rule.form)
+    to_kind = template.to_shape.form is PatternForm.LAYER and template.to_shape.name == "K"
+    from_kind = (
+        template.from_shape.form is PatternForm.LAYER and template.from_shape.name == "K"
+    )
+    return to_kind and not from_kind
+
+
 def derive(
     model: Model,
     scope_id: str,
@@ -373,6 +387,7 @@ def derive(
     interfaces: tuple[Leaf, ...],
     bound: int,
 ) -> list[Derivation]:
+    """The terms a binding derives by the routes that do not create a layer."""
     scope = model.scopes[scope_id]
     form = storage_form(model, stored)
     exposed = set(exposed_categories(model, scope_id, form))
@@ -383,6 +398,8 @@ def derive(
     while queue:
         term = queue.pop(0)
         for rule in model.spec.routes:
+            if creates(model, rule):
+                continue
             if rule.from_shape.category not in (None, term.category):
                 continue
             if rule.exposure is not None and rule.exposure not in exposed:
@@ -473,14 +490,54 @@ def derivation_bound(stored: Shape) -> int:
     return stored.size() + 1
 
 
+# The layers a request creates at most, each by a creating form of its kind.
+MAX_CREATED_LAYERS = 2
+
+
+def created(model, scope, terms, goal: Shape, exposed: set, bound: int, depth: int):
+    """The terms a request of the shape `goal` creates from the terms of a
+    binding, by the creating forms of the kind of its outer layer, and of the
+    layers it creates under it."""
+    if goal.layer is None or depth == 0 or not goal.args:
+        return []
+    results = []
+    for rule in model.spec.routes:
+        if not creates(model, rule) or rule.to_shape.name != goal.layer:
+            continue
+        if rule.exposure is not None and rule.exposure not in exposed:
+            continue
+        # The element the form creates the layer of, as the request names it,
+        # which a binding term or a layer the request creates under it is.
+        inner_goal = instantiate(rule.from_shape, {"X": goal.args[0], "A": goal.args[0]}, None)
+        sources = [*terms, *created(model, scope, terms, inner_goal, exposed, bound, depth - 1)]
+        for term in sources:
+            if rule.from_shape.category not in (None, term.category):
+                continue
+            for bindings in match(rule.from_shape, term.shape, {}):
+                if not requirements_hold(model, scope, rule, bindings):
+                    continue
+                for shape in derived_shapes(rule, bindings, term.shape, ()):
+                    if shape.size() > bound:
+                        continue
+                    results.append(
+                        Derivation(
+                            shape,
+                            rule.to_shape.category or term.category,
+                            rules=(*term.rules, rule.id),
+                            copied=term.copied,
+                            consumed=term.consumed or rule.access is Access.CONSUME,
+                        )
+                    )
+    return results
+
+
 def serve(model, scope_id, stored, request, interfaces) -> Derivation | None:
     exposed = set(exposed_categories(model, scope_id, storage_form(model, stored)))
     bound = derivation_bound(stored)
-    candidates = [
-        term
-        for term in derive(model, scope_id, stored, interfaces, bound)
-        if accepts(request, term, exposed)
-    ]
+    terms = derive(model, scope_id, stored, interfaces, bound)
+    scope = model.scopes[scope_id]
+    made = created(model, scope, terms, request.shape, exposed, bound, MAX_CREATED_LAYERS)
+    candidates = [term for term in (*terms, *made) if accepts(request, term, exposed)]
     if not candidates:
         return None
     # Prefer the derivation with the fewest rules, then without a copy, then the

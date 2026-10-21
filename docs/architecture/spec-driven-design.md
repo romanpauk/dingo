@@ -1878,9 +1878,16 @@ binding cannot know every kind requested of it, so a request of a layer whose
 kind wraps or adopts resolves its element and makes the layer of it. A form that
 reaches into a layer or converts it applies at the binding.
 
-Steps 1 and 2 are done. Until step 3, a binding derives the creating forms of
-the kinds of the library and of the kinds of its stored shape, which is the one
-place the engine still has a list of kinds.
+Steps 1 to 3 are done. A binding derives its terms by the forms that do not
+create a layer, so it needs no kind but those of its stored shape and the ones
+their forms lead to. A request takes a term, or makes one by up to two layers of
+its own kinds, each by a creating form, from a term of the binding: the route of
+`[adopt_pointer_owned, upcast_owned]` became
+`[upcast_consumed_pointer, adopt_pointer_owned]`, which no observation tells
+apart. Registration asks whether a binding serves an interface by reference or
+by value of a handle of any kind; the handles of the kinds of the binding and
+the address of the language stand for every kind, as a handle that adopts its
+element adopts an address the binding serves.
 
 Steps, each checked against the route table, which must not change:
 

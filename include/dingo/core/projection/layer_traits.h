@@ -306,6 +306,9 @@ template <typename Type>
 inline constexpr const kind_descriptor *layer_kind_v =
     detail::kind_of_type<layer_kind_t<Type>>::value;
 
+// The kind of the addresses of the language.
+inline constexpr const kind_descriptor *address_kind_v = layer_kind_v<char *>;
+
 // Whether a type is a layer of a kind of all of the layer_property bits
 // `Properties`.
 template <typename Type, std::uint16_t Properties>

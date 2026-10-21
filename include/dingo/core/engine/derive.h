@@ -89,8 +89,7 @@ constexpr const kind_descriptor *to_kind(const route_step &step) {
   return kind_at(step, info(step.form).to_layer);
 }
 
-// The kinds a binding derives with: the layer kinds of the library, then
-// those of the stored shape and the ones their forms lead to.
+// A set of layer kinds, each with the kinds its forms lead to.
 struct kind_set {
   const kind_descriptor *items[max_kinds] = {};
   std::size_t size = 0;
@@ -115,23 +114,9 @@ struct kind_set {
   }
 };
 
-namespace detail {
-template <typename List> struct library_kind_set;
-
-template <typename... Kinds> struct library_kind_set<type_list<Kinds...>> {
-  static constexpr kind_set make() {
-    kind_set kinds;
-    (kinds.add(&kind_v<Kinds>), ...);
-    return kinds;
-  }
-};
-} // namespace detail
-
-inline constexpr kind_set library_kind_set_v =
-    detail::library_kind_set<library_kinds>::make();
-
+// The kinds of a stored shape and the ones their forms lead to.
 constexpr kind_set kinds_of(const shape &stored) {
-  kind_set kinds = library_kind_set_v;
+  kind_set kinds;
   for (std::size_t index = 0; index < stored.size; ++index) {
     kinds.add(stored.nodes[index].kind);
   }
@@ -375,17 +360,12 @@ constexpr bool seen(const terms &found, const shape &value,
   return false;
 }
 
-constexpr void add(terms &found, const term &from, const route_step &step,
-                   const shape &value, const shape &bound,
-                   std::size_t argument) {
+// The term `step` derives from `from`, of the value `value`, with the pattern
+// variable bound to `bound`.
+constexpr term extend(const term &from, const route_step &step,
+                      const shape &value, const shape &bound,
+                      std::size_t argument) {
   const route_form_info &rule = info(step.form);
-  if (seen(found, value, rule.to_category)) {
-    return;
-  }
-  if (found.size == max_terms) {
-    found.overflow = true;
-    return;
-  }
   term derived = from;
   derived.value = value;
   derived.category = rule.to_category;
@@ -398,7 +378,43 @@ constexpr void add(terms &found, const term &from, const route_step &step,
     derived.value.nodes[0].qualifiers = 0;
   }
   derived.consumed = from.consumed || rule.rule_access == access::consume;
+  return derived;
+}
+
+constexpr void add(terms &found, const term &derived) {
+  if (seen(found, derived.value, derived.category)) {
+    return;
+  }
+  if (found.size == max_terms) {
+    found.overflow = true;
+    return;
+  }
   found.items[found.size++] = derived;
+}
+
+// The value a step that is no upcast or conversion derives from `from` with
+// the pattern variable bound to `bound`, or false when it is larger than
+// `limit`.
+constexpr bool step_value(const term &from, const route_step &step,
+                          const shape &bound, std::size_t limit, shape &value) {
+  const shape &source = from.value;
+  const kind_descriptor *to = to_kind(step);
+  const kind_descriptor *of = from_kind(step);
+  value = bound;
+  // The element of a layer that holds it in place, an optional or an
+  // alternative, has the qualifiers of the layer.
+  if (!is_layer(to) && has_properties(of, layer_property::in_place)) {
+    value.nodes[0].qualifiers |= source.nodes[0].qualifiers;
+  }
+  if (is_layer(to)) {
+    type_id family = nullptr;
+    if (is_wrapper(to)) {
+      bool keeps = is_layer(of) && source.nodes[0].family != nullptr;
+      family = keeps ? source.nodes[0].family : any_family;
+    }
+    value = wrap(to, family, created_copyable(to, bound), bound);
+  }
+  return value.size <= limit;
 }
 
 // Applies `step` to `from` with the pattern variable bound to `bound`, the
@@ -434,29 +450,14 @@ constexpr void apply(const binding_descriptor &binding, terms &found,
                         : wrap(to, source.nodes[0].family,
                                source.nodes[0].copyable, interface,
                                source.nodes[0].extent);
-      add(found, from, step, value, bound, index);
+      add(found, extend(from, step, value, bound, index));
     }
     return;
   }
-  shape value = bound;
-  const kind_descriptor *of = from_kind(step);
-  // The element of a layer that holds it in place, an optional or an
-  // alternative, has the qualifiers of the layer.
-  if (!is_layer(to) && has_properties(of, layer_property::in_place)) {
-    value.nodes[0].qualifiers |= source.nodes[0].qualifiers;
+  shape value;
+  if (step_value(from, step, bound, limit, value)) {
+    add(found, extend(from, step, value, bound, argument));
   }
-  if (is_layer(to)) {
-    type_id family = nullptr;
-    if (is_wrapper(to)) {
-      bool keeps = is_layer(of) && source.nodes[0].family != nullptr;
-      family = keeps ? source.nodes[0].family : any_family;
-    }
-    value = wrap(to, family, created_copyable(to, bound), bound);
-  }
-  if (value.size > limit) {
-    return;
-  }
-  add(found, from, step, value, bound, argument);
 }
 
 // Applies `step`, which starts from the layer `from` is, to each argument of
@@ -475,13 +476,19 @@ constexpr void apply_to_arguments(const binding_descriptor &binding,
 }
 } // namespace detail
 
+// Whether a form creates a layer of its kind, from an element or from a layer
+// of the kind it leads from: wrapping, adopting, or taking an address. A
+// creating form applies at the request, which names the kind it creates.
+constexpr bool creates(const route_form_info &rule) {
+  return rule.of_kind && rule.to_layer == form_layer::kind &&
+         rule.from_layer != form_layer::kind;
+}
+
 namespace detail {
-// Applies every form to the term at `next` of `found`, in the order of the
-// algebra: a rule of a leaf to the term, a form of the kind of its layer, and
-// a form that creates a layer of a kind of `kinds`, from the term or from a
-// layer of the kind it leads to.
-constexpr void derive_from(const binding_descriptor &binding,
-                           const kind_set &kinds, terms &found,
+// Applies every form that does not create a layer to the term at `next` of
+// `found`, in the order of the algebra: a rule of a leaf to the term, and a
+// form of the kind of its layer.
+constexpr void derive_from(const binding_descriptor &binding, terms &found,
                            std::size_t next, std::uint8_t exposed,
                            std::size_t limit) {
   term from = found.items[next];
@@ -497,28 +504,22 @@ constexpr void derive_from(const binding_descriptor &binding,
     if (!rule.of_kind) {
       apply(binding, found, from, route_step{rule.form, &leaf_kind}, from.value,
             0, limit);
-    } else if (rule.from_layer == form_layer::kind) {
-      if (has_form(kind, rule.form)) {
-        apply_to_arguments(binding, found, from, route_step{rule.form, kind},
-                           limit);
-      }
-    } else {
-      for (std::size_t index = 0; index < kinds.size; ++index) {
-        const route_step step{rule.form, kinds.items[index]};
-        if (!has_form(step.kind, rule.form)) {
-          continue;
-        }
-        if (rule.from_layer == form_layer::element) {
-          apply(binding, found, from, step, from.value, 0, limit);
-        } else if (is_layer(kind) && same_kind(from_kind(step), kind)) {
-          apply_to_arguments(binding, found, from, step, limit);
-        }
-      }
+    } else if (rule.from_layer == form_layer::kind &&
+               has_form(kind, rule.form)) {
+      apply_to_arguments(binding, found, from, route_step{rule.form, kind},
+                         limit);
     }
   }
 }
 } // namespace detail
 
+// Routes derive shapes at most one layer larger than the stored shape, so a
+// binding can publish every term it serves before any request is known.
+constexpr std::size_t derivation_bound(const binding_descriptor &binding) {
+  return binding.stored.size + 1;
+}
+
+// The terms a binding derives by the forms that do not create a layer.
 constexpr terms derive(const binding_descriptor &binding) {
   const scope_info &scope = binding.scope;
   terms found;
@@ -528,10 +529,9 @@ constexpr terms derive(const binding_descriptor &binding) {
   start.consumed = scope.materializes == value_category::rvalue;
   found.items[found.size++] = start;
   std::uint8_t exposed = exposed_categories(binding);
-  std::size_t limit = binding.stored.size + 1;
-  const kind_set kinds = kinds_of(binding.stored);
+  std::size_t limit = derivation_bound(binding);
   for (std::size_t next = 0; next < found.size; ++next) {
-    detail::derive_from(binding, kinds, found, next, exposed, limit);
+    detail::derive_from(binding, found, next, exposed, limit);
   }
   return found;
 }
@@ -627,16 +627,107 @@ constexpr bool preferred(const term &left, const term &right) {
 }
 
 inline constexpr std::size_t no_term = static_cast<std::size_t>(-1);
+inline constexpr std::size_t max_created_layers = 2;
 
-// The term of `found` that serves the request, or no_term.
-constexpr std::size_t select_term(const terms &found,
-                                  const request_descriptor &request,
-                                  std::uint8_t exposed) {
-  std::size_t best = no_term;
+// The route a request takes: a term of the binding, or no_term, and the
+// layers the request creates of its object, innermost first, each by a
+// creating form of the kind of a layer of the request.
+struct route_choice {
+  std::size_t term = no_term;
+  route_step created[max_created_layers] = {};
+  std::size_t created_count = 0;
+};
+
+namespace detail {
+// The term the creating form `step` derives from `from`, into `made`; false
+// when it derives none.
+constexpr bool create(const binding_descriptor &binding, const term &from,
+                      const route_step &step, std::uint8_t exposed,
+                      term &made) {
+  const route_form_info &rule = info(step.form);
+  if (from.rule_count == max_rules_per_route ||
+      rule.from_category != from.category ||
+      (rule.exposure != 0 && (exposed & rule.exposure) == 0)) {
+    return false;
+  }
+  shape bound = from.value;
+  if (rule.from_layer == form_layer::target) {
+    // A layer of the kind the form leads from, whose element is the one of
+    // the created layer.
+    if (!same_kind(from_kind(step), kind_of(from.value)) ||
+        from.value.nodes[0].arity != 1) {
+      return false;
+    }
+    bound = subtree(from.value, 1);
+  }
+  if (!requirements_hold(binding, rule, bound)) {
+    return false;
+  }
+  shape value;
+  if (!step_value(from, step, bound, derivation_bound(binding), value)) {
+    return false;
+  }
+  made = extend(from, step, value, bound, 0);
+  return true;
+}
+
+// The kind of the layer a creating form of `step` makes its layer of: the
+// kind it leads from, or that of the element of the request at `request`.
+constexpr const kind_descriptor *created_inner(const route_step &step,
+                                               const shape &request) {
+  if (info(step.form).from_layer == form_layer::target) {
+    return from_kind(step);
+  }
+  return request.size > 1 ? kind_of(request, 1) : &leaf_kind;
+}
+} // namespace detail
+
+// The route that serves the request, of the terms `found` of `binding`: a
+// term the request accepts, or one the request makes by creating up to
+// max_created_layers layers, the preferred one; or none.
+constexpr route_choice select_route(const binding_descriptor &binding,
+                                    const terms &found,
+                                    const request_descriptor &request,
+                                    std::uint8_t exposed) {
+  route_choice best;
+  term best_route;
+  auto consider = [&](const term &candidate, const route_choice &choice) {
+    if (accepts(request, candidate, exposed) &&
+        (best.term == no_term || preferred(candidate, best_route))) {
+      best = choice;
+      best_route = candidate;
+    }
+  };
   for (std::size_t index = 0; index < found.size; ++index) {
-    if (accepts(request, found.items[index], exposed) &&
-        (best == no_term || preferred(found.items[index], found.items[best]))) {
-      best = index;
+    consider(found.items[index], route_choice{index, {}, 0});
+  }
+  const kind_descriptor *outer = kind_of(request.value);
+  for (const route_form_info &rule : route_forms) {
+    if (!creates(rule) || !has_form(outer, rule.form)) {
+      continue;
+    }
+    const route_step step{rule.form, outer};
+    term made;
+    for (std::size_t index = 0; index < found.size; ++index) {
+      if (detail::create(binding, found.items[index], step, exposed, made)) {
+        consider(made, route_choice{index, {step}, 1});
+      }
+    }
+    // The layer the outer one is made of is created too.
+    const kind_descriptor *inner = detail::created_inner(step, request.value);
+    for (const route_form_info &inner_rule : route_forms) {
+      if (!creates(inner_rule) || !has_form(inner, inner_rule.form)) {
+        continue;
+      }
+      const route_step inner_step{inner_rule.form, inner};
+      term middle;
+      for (std::size_t index = 0; index < found.size; ++index) {
+        if (detail::create(binding, found.items[index], inner_step, exposed,
+                           middle) &&
+            detail::create(binding, middle, step, exposed, made)) {
+          consider(made, route_choice{index, {inner_step, step}, 2});
+        }
+      }
     }
   }
   return best;
@@ -740,16 +831,21 @@ register_status(const binding_descriptor &binding) {
     }
     terms found = derive(binding);
     std::uint8_t exposed = exposed_categories(binding);
-    const kind_set kinds = kinds_of(binding.stored);
     // A binding serves an interface it is requested by reference, or by value
     // of a handle of any kind: a nullable layer that refers to its element.
+    // The handles of its kinds and the address of the language stand for
+    // them all: a handle that adopts its element adopts an address the
+    // binding serves.
+    kind_set kinds = kinds_of(binding.stored);
+    kinds.add(address_kind_v);
     constexpr layer_class handle{true, layer_property::nullable,
                                  layer_property::in_place};
     for (std::size_t index = 0; index < binding.interface_count; ++index) {
       const shape &interface = binding.interfaces[index];
-      if (select_term(found,
-                      {request_kind::lvalue_reference, interface, binding.key},
-                      exposed) != no_term) {
+      if (select_route(binding, found,
+                       {request_kind::lvalue_reference, interface, binding.key},
+                       exposed)
+              .term != no_term) {
         return registration_status::registered;
       }
       for (std::size_t kind = 0; kind < kinds.size; ++kind) {
@@ -762,7 +858,7 @@ register_status(const binding_descriptor &binding) {
             wrap(of, is_wrapper(of) ? any_family : nullptr,
                  created_copyable(of, interface), interface),
             binding.key};
-        if (select_term(found, probe, exposed) != no_term) {
+        if (select_route(binding, found, probe, exposed).term != no_term) {
           return registration_status::registered;
         }
       }

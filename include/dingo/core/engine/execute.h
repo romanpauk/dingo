@@ -174,40 +174,24 @@ template <typename Binding> constexpr bool registers() {
 // not implement yet.
 struct unsupported_route {};
 
-// Whether a step creates a wrapper layer from an element or a language layer:
-// the layer may be of any family, so the request names its wrapper type.
-constexpr bool creates_wrapper(const route_step &step) {
-  const kind_descriptor *from = from_kind(step);
-  return is_wrapper(to_kind(step)) && !is_wrapper(from);
-}
-
 // How the request completes a term the binding walked to its boundary: it
 // refers to the borrowed object, copies it, takes its address or decays it;
 // or the binding constructs the boundary object and the request makes the
 // requested object from it.
 enum class completion : std::uint8_t { refer, copy, address, construct };
 
-inline constexpr std::size_t max_created_layers = 2;
-
+// How the binding walks a term: the completion of the term, and the rules it
+// applies before the request completes it.
 struct completion_plan {
   completion kind = completion::construct;
   std::size_t binding_steps = 0;
-  // The creating forms the request applies, innermost first.
-  route_form creating[max_created_layers] = {};
-  std::size_t created = 0;
-  // Whether the binding converts the pointer it hands over to the interface
-  // `upcast_argument`, for an upcast of a handle the request creates.
-  bool upcast = false;
-  std::size_t upcast_argument = 0;
-  // Whether the rules after the boundary are ones the request applies.
-  bool supported = true;
 };
 
 constexpr completion_plan plan_completion(const term &route) {
   completion_plan plan;
+  plan.binding_steps = route.rule_count;
   if (route.category == value_category::lvalue) {
     plan.kind = completion::refer;
-    plan.binding_steps = route.rule_count;
     return plan;
   }
   if (route.rule_count > 0) {
@@ -216,7 +200,6 @@ constexpr completion_plan plan_completion(const term &route) {
       plan.kind = completion::copy;
       plan.binding_steps = route.rule_count - 1;
       return plan;
-    case route_form::address:
     case route_form::decay:
       plan.kind = completion::address;
       plan.binding_steps = route.rule_count - 1;
@@ -225,22 +208,35 @@ constexpr completion_plan plan_completion(const term &route) {
       break;
     }
   }
-  std::size_t step = 0;
-  while (step < route.rule_count && !creates_wrapper(route.rules[step])) {
-    ++step;
+  return plan;
+}
+
+// How a request completes the route it takes: by the completion of the term,
+// or by taking the address of the object the binding refers to, or by making
+// the layers it creates, innermost first, of the object the binding
+// constructs.
+struct request_plan {
+  completion kind = completion::construct;
+  route_form creating[max_created_layers] = {};
+  std::size_t created = 0;
+};
+
+constexpr request_plan plan_request(const completion_plan &term,
+                                    const route_choice &choice) {
+  request_plan plan;
+  plan.kind = term.kind;
+  if (choice.created_count == 0) {
+    return plan;
   }
-  plan.binding_steps = step;
-  for (; step < route.rule_count; ++step) {
-    const route_step &current = route.rules[step];
-    if (info(current.form).upcast && plan.created > 0 &&
-        plan.creating[plan.created - 1] != route_form::wrap) {
-      plan.upcast = true;
-      plan.upcast_argument = route.arguments[step];
-    } else if (creates_wrapper(current) && plan.created < max_created_layers) {
-      plan.creating[plan.created++] = current.form;
-    } else {
-      plan.supported = false;
-    }
+  const route_form innermost = choice.created[0].form;
+  if (innermost == route_form::address ||
+      innermost == route_form::release_whole) {
+    plan.kind = completion::address;
+    return plan;
+  }
+  plan.kind = completion::construct;
+  for (std::size_t index = 0; index < choice.created_count; ++index) {
+    plan.creating[plan.created++] = choice.created[index].form;
   }
   return plan;
 }
@@ -507,37 +503,18 @@ DINGO_ALWAYS_INLINE decltype(auto) walk_from(Context &context,
 template <typename Binding, std::size_t Term, typename Context, typename Source>
 DINGO_ALWAYS_INLINE decltype(auto) walk_to_boundary(Context &context,
                                                     Source &&source) {
-  constexpr const completion_plan &plan = plan_v<Binding, Term>;
-  if constexpr (plan.upcast) {
-    using interface = interface_object_t<
-        type_list_at_t<plan.upcast_argument, typename Binding::interfaces>>;
-    return static_cast<interface *>(
-        walk_from<Binding, Term, plan.binding_steps>(context, source));
-  } else {
-    return walk_from<Binding, Term, plan.binding_steps>(context, source);
-  }
+  return walk_from<Binding, Term, plan_v<Binding, Term>.binding_steps>(context,
+                                                                       source);
 }
 
 namespace detail {
 // The type of the boundary object, computed from the walk instantiations that
 // walk_to_boundary uses, so it instantiates no other function.
-template <typename Binding, std::size_t Term,
-          bool Upcast = plan_v<Binding, Term>.upcast>
-struct boundary {
+template <typename Binding, std::size_t Term> struct boundary {
   using type = remove_cvref_t<
       decltype(walk<Binding, Term, plan_v<Binding, Term>.binding_steps>(
           std::declval<typename Binding::context_type &>(),
           std::declval<typename Binding::yielded_type>()))>;
-};
-
-template <typename Binding, std::size_t Term>
-struct boundary<Binding, Term, true> {
-  using type = std::conditional_t<
-      std::is_same_v<typename boundary<Binding, Term, false>::type,
-                     unsupported_route>,
-      unsupported_route,
-      interface_object_t<type_list_at_t<plan_v<Binding, Term>.upcast_argument,
-                                        typename Binding::interfaces>> *>;
 };
 } // namespace detail
 
@@ -547,7 +524,6 @@ using boundary_t = typename detail::boundary<Binding, Term>::type;
 // Whether the binding walks term `Term` to its boundary.
 template <typename Binding, std::size_t Term>
 inline constexpr bool walk_supported_v =
-    plan_v<Binding, Term>.supported &&
     !std::is_same_v<boundary_t<Binding, Term>, unsupported_route>;
 
 namespace detail {
@@ -630,16 +606,16 @@ public:
 };
 
 namespace detail {
-template <typename Target, typename Binding, std::size_t Term,
-          std::size_t... Indices>
-created_layers<
-    Target, plan_v<Binding, Term>.creating[sizeof...(Indices) - 1 - Indices]...>
+template <typename Target, typename Plan, std::size_t... Indices>
+created_layers<Target,
+               Plan::value.creating[sizeof...(Indices) - 1 - Indices]...>
     plan_layers(std::index_sequence<Indices...>);
 } // namespace detail
 
-// The creating rules of term `Term` applied to make `Target`.
-template <typename Target, typename Binding, std::size_t Term>
-using planned_layers_t = decltype(detail::plan_layers<Target, Binding, Term>(
-    std::make_index_sequence<plan_v<Binding, Term>.created>()));
+// The creating forms of the request_plan `Plan::value` applied to make
+// `Target`.
+template <typename Target, typename Plan>
+using planned_layers_t = decltype(detail::plan_layers<Target, Plan>(
+    std::make_index_sequence<Plan::value.created>()));
 
 } // namespace dingo::core

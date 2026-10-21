@@ -33,6 +33,26 @@
 namespace dingo::core {
 
 namespace detail {
+// The route a request of `Request` by `Key` takes of `Binding`, decided when
+// it is compiled, the plan by which the request completes it, and the value
+// category of the object the route ends in.
+template <typename Binding, typename Request, typename Key>
+struct static_route {
+  static constexpr route_choice choice =
+      select_route(Binding::descriptor, Binding::published,
+                   request_traits<Request, Key>::descriptor, Binding::exposed);
+  static constexpr request_plan value =
+      choice.term == no_term
+          ? request_plan{}
+          : plan_request(plan_completion(Binding::published.items[choice.term]),
+                         choice);
+  static constexpr value_category category =
+      choice.term == no_term ? value_category::prvalue
+      : choice.created_count == 0
+          ? Binding::published.items[choice.term].category
+          : info(choice.created[choice.created_count - 1].form).to_category;
+};
+
 // The local static bindings of a binding, nothing without any.
 template <typename Locals> struct static_locals {
   local_static_backend_t<Locals> locals;
@@ -499,9 +519,8 @@ public:
       return false;
     } else {
       using binding = pack_at_t<index, Bindings...>;
-      return select_term(binding::published,
-                         request_traits<Request, Key>::descriptor,
-                         binding::exposed) != no_term;
+      return detail::static_route<binding, Request, Key>::choice.term !=
+             no_term;
     }
   }
 
@@ -632,17 +651,16 @@ private:
             typename Resolver>
   DINGO_ALWAYS_INLINE Request resolve_from(Resolver &resolver) {
     using binding = pack_at_t<Index, Bindings...>;
-    constexpr std::size_t selected =
-        select_term(binding::published,
-                    request_traits<Request, Key>::descriptor, binding::exposed);
+    using route = detail::static_route<binding, Request, Key>;
+    constexpr std::size_t selected = route::choice.term;
     static_assert(require<selected != no_term, diag::type_not_convertible,
                           Request, typename binding::stored_type>());
     static_assert(walk_supported_v<binding, selected>,
                   "the next implementation does not provide the route of the "
                   "requested type yet");
-    using value_type = typename request_traits<Request>::value_type;
     using made_type = typename request_traits<Request>::made_type;
-    constexpr const completion_plan &plan = plan_v<binding, selected>;
+    using value_type = typename request_traits<Request>::value_type;
+    constexpr const request_plan &plan = route::value;
     auto &holder =
         static_cast<detail::static_holder<Index, binding> &>(holders_);
     auto source = [&]() DINGO_INLINE_LAMBDA -> decltype(auto) {
@@ -656,12 +674,19 @@ private:
       }
     };
     auto make = [&]() DINGO_INLINE_LAMBDA -> decltype(auto) {
-      if constexpr (plan.created == 0) {
+      if constexpr (route::choice.created_count != 0 &&
+                    plan.kind == completion::address) {
+        // The request takes the address of the object the binding refers to.
+        return std::addressof(
+            walk_from<binding, selected,
+                      binding::published.items[selected].rule_count>(
+                holder.slot.context(), source));
+      } else if constexpr (plan.created == 0) {
         return walk_from<binding, selected,
                          binding::published.items[selected].rule_count>(
             holder.slot.context(), source);
       } else {
-        using layers = planned_layers_t<made_type, binding, selected>;
+        using layers = planned_layers_t<made_type, route>;
         static_assert(layers::valid &&
                           std::is_same_v<typename layers::boundary,
                                          boundary_t<binding, selected>>,
@@ -673,8 +698,7 @@ private:
       }
     };
     if constexpr (std::is_rvalue_reference_v<Request> &&
-                  binding::published.items[selected].category ==
-                      value_category::rvalue) {
+                  route::category == value_category::rvalue) {
       resolver.retained().enter(resolver.transactions());
       value_type &kept = resolver.retained().template emplace<value_type>(
           [&] { return value_type(make()); });

@@ -215,9 +215,14 @@ public:
   }
 
 private:
+  // Whether a request may borrow the object of a term: one the term refers
+  // to, copies, or takes the address of, or an array, which a request takes
+  // the address of and never by value.
   template <std::size_t Term>
   static constexpr bool borrows =
-      plan_v<Binding, Term>.kind != completion::construct;
+      plan_v<Binding, Term>.kind != completion::construct ||
+      has_properties(kind_of(Binding::published.items[Term].value),
+                     layer_property::immovable);
 
   template <std::size_t Term>
   static void *borrow_term(entry &binding, Resolver &resolver) {
@@ -773,11 +778,13 @@ private:
       if (key_has_value(request.key) && key_value == nullptr) {
         continue;
       }
-      const std::size_t term =
-          select_term(binding->published(), request, binding->exposed());
-      found.add(
-          {binding.get(), term, key_value,
-           term == no_term ? completion::construct : binding->plan(term).kind});
+      const route_choice choice =
+          select_route(binding->descriptor(), binding->published(), request,
+                       binding->exposed());
+      found.add({binding.get(), choice.term, key_value,
+                 choice.term == no_term
+                     ? request_plan{}
+                     : plan_request(binding->plan(choice.term), choice)});
     }
     found.index();
     found.generation = generation_;
@@ -887,7 +894,7 @@ private:
   template <typename Request>
   static Request complete(Resolver &resolver, const candidate_type &found) {
     using value_type = typename request_traits<Request>::value_type;
-    switch (found.kind) {
+    switch (found.plan.kind) {
     case completion::refer:
       if constexpr (std::is_lvalue_reference_v<Request>) {
         return static_cast<Request>(
@@ -912,7 +919,7 @@ private:
     case completion::construct:
       if constexpr (!std::is_lvalue_reference_v<Request>) {
         return construct<Request>(resolver, *found.binding, found.term,
-                                  found.binding->plan(found.term));
+                                  found.plan);
       }
       break;
     }
@@ -924,8 +931,7 @@ private:
   // pointer, outermost first, which the layers of `Made` must have; or
   // returns visit.unsupported().
   template <typename Made, typename Visit>
-  static decltype(auto) visit_layers(const completion_plan &plan,
-                                     Visit &visit) {
+  static decltype(auto) visit_layers(const request_plan &plan, Visit &visit) {
     const route_form *forms = plan.creating;
     switch (plan.created) {
     case 0:
@@ -1000,7 +1006,7 @@ private:
   // otherwise none; the request asks for the qualified one first.
   template <typename Request>
   static Request construct(Resolver &resolver, entry &binding, std::size_t term,
-                           const completion_plan &plan) {
+                           const request_plan &plan) {
     using value_type = typename request_traits<Request>::value_type;
     using made_type = typename request_traits<Request>::made_type;
     constructs_request<Request> constructs{resolver, binding, term};
