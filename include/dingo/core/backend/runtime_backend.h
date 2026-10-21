@@ -419,14 +419,16 @@ struct find_primary_key<First, Rest...> {
 // The positions of the arguments of a registration: the key values and the
 // arguments of the slot.
 template <typename... Args> struct registration_arguments {
-  static constexpr bool keys[] = {is_key_value<std::decay_t<Args>>::value...,
-                                  false};
+  // The arrays name their bounds: Clang 18 reads no element of an array of a
+  // class template whose bound is deduced in a constant expression.
+  static constexpr bool keys[sizeof...(Args) + 1] = {
+      is_key_value<std::decay_t<Args>>::value..., false};
 
   // The runtime key of the first key value, the primary key of the binding.
   using primary_key = typename find_primary_key<Args...>::type;
 
   // Whether each argument is a key value of the primary key type.
-  static constexpr bool primary_keys[] = {
+  static constexpr bool primary_keys[sizeof...(Args) + 1] = {
       (is_key_value<std::decay_t<Args>>::value &&
        std::is_same_v<typename runtime_key_of<std::decay_t<Args>>::type,
                       primary_key>)...,
@@ -441,7 +443,7 @@ template <typename... Args> struct registration_arguments {
   }
 
   // Whether each argument is a key value of an interface.
-  static constexpr bool interface_keys[] = {
+  static constexpr bool interface_keys[sizeof...(Args) + 1] = {
       !std::is_void_v<
           typename key_value_interface<std::decay_t<Args>>::type>...,
       false};

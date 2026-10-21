@@ -106,8 +106,8 @@ SCENARIOS = (
     Scenario(
         name="chain",
         description="a dependency chain of n shared bindings, last resolved",
-        stored="link<{i}>",
-        requests=lambda n: (f"link<{n - 1}> &",),
+        stored="chain_link<{i}>",
+        requests=lambda n: (f"chain_link<{n - 1}> &",),
     ),
 )
 
@@ -123,13 +123,14 @@ template <int I> struct node {
   int value;
 };
 
-template <int I> struct link {
-  explicit link(link<I - 1> &previous) : value(previous.value + 1) {}
+template <int I> struct chain_link {
+  explicit chain_link(chain_link<I - 1> &previous)
+      : value(previous.value + 1) {}
   int value;
 };
 
-template <> struct link<0> {
-  link() : value(0) {}
+template <> struct chain_link<0> {
+  chain_link() : value(0) {}
   int value;
 };
 """

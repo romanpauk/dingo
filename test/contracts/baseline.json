@@ -1,4 +1,511 @@
 {
+  "clang18-x86_64-c++20": {
+    "codegen": {
+      "out_of_line_dingo_functions": 214,
+      "probes": {
+        "probe_runtime_resolution_collection_sum": {
+          "bytes": 463,
+          "calls": 18,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 6
+        },
+        "probe_runtime_resolution_consumer_read": {
+          "bytes": 487,
+          "calls": 14,
+          "dingo_calls": 7,
+          "dingo_throws": 0,
+          "indirect_calls": 2
+        },
+        "probe_runtime_resolution_external_reference_storage": {
+          "bytes": 211,
+          "calls": 10,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_external_value_storage": {
+          "bytes": 211,
+          "calls": 10,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_external_wrapper_storage": {
+          "bytes": 545,
+          "calls": 18,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 3
+        },
+        "probe_runtime_resolution_interface_handle": {
+          "bytes": 325,
+          "calls": 13,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 2
+        },
+        "probe_runtime_resolution_mixed_container_external_reference_storage": {
+          "bytes": 225,
+          "calls": 8,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_mixed_container_external_value_storage": {
+          "bytes": 225,
+          "calls": 8,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_mixed_container_external_wrapper_storage": {
+          "bytes": 973,
+          "calls": 18,
+          "dingo_calls": 8,
+          "dingo_throws": 0,
+          "indirect_calls": 3
+        },
+        "probe_runtime_resolution_optional_config": {
+          "bytes": 229,
+          "calls": 10,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_shared_config": {
+          "bytes": 348,
+          "calls": 13,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 3
+        },
+        "probe_runtime_resolution_shared_reference_config": {
+          "bytes": 471,
+          "calls": 13,
+          "dingo_calls": 7,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_shared_value_config": {
+          "bytes": 225,
+          "calls": 10,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_unique_rvalue_config": {
+          "bytes": 225,
+          "calls": 10,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_unique_value_config": {
+          "bytes": 225,
+          "calls": 10,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_unique_wrapper_config": {
+          "bytes": 240,
+          "calls": 11,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_static_resolution_collection_sum": {
+          "bytes": 1135,
+          "calls": 26,
+          "dingo_calls": 2,
+          "dingo_throws": 0,
+          "indirect_calls": 12
+        },
+        "probe_static_resolution_consumer_read": {
+          "bytes": 6,
+          "calls": 0,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_interface_handle": {
+          "bytes": 203,
+          "calls": 6,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 2
+        },
+        "probe_static_resolution_mixed_container_collection_sum": {
+          "bytes": 431,
+          "calls": 11,
+          "dingo_calls": 3,
+          "dingo_throws": 0,
+          "indirect_calls": 4
+        },
+        "probe_static_resolution_mixed_container_consumer_read": {
+          "bytes": 232,
+          "calls": 7,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_interface_handle": {
+          "bytes": 352,
+          "calls": 11,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 3
+        },
+        "probe_static_resolution_mixed_container_optional_config": {
+          "bytes": 265,
+          "calls": 9,
+          "dingo_calls": 6,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_shared_config": {
+          "bytes": 396,
+          "calls": 12,
+          "dingo_calls": 6,
+          "dingo_throws": 0,
+          "indirect_calls": 2
+        },
+        "probe_static_resolution_mixed_container_shared_reference_config": {
+          "bytes": 221,
+          "calls": 7,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_shared_value_config": {
+          "bytes": 205,
+          "calls": 7,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_unique_rvalue_config": {
+          "bytes": 216,
+          "calls": 7,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_unique_value_config": {
+          "bytes": 200,
+          "calls": 7,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_unique_wrapper_config": {
+          "bytes": 283,
+          "calls": 10,
+          "dingo_calls": 6,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_optional_config": {
+          "bytes": 6,
+          "calls": 0,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_shared_config": {
+          "bytes": 137,
+          "calls": 4,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 2
+        },
+        "probe_static_resolution_shared_reference_config": {
+          "bytes": 6,
+          "calls": 0,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_shared_value_config": {
+          "bytes": 6,
+          "calls": 0,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_unique_rvalue_config": {
+          "bytes": 6,
+          "calls": 0,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_unique_value_config": {
+          "bytes": 6,
+          "calls": 0,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_unique_wrapper_config": {
+          "bytes": 6,
+          "calls": 0,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        }
+      }
+    },
+    "headers": {
+      "dingo/container.h": {
+        "dingo_lines": 14348
+      },
+      "dingo/factory/callable.h": {
+        "dingo_lines": 1795
+      },
+      "dingo/factory/constructor.h": {
+        "dingo_lines": 4095
+      },
+      "dingo/factory/function.h": {
+        "dingo_lines": 1814
+      },
+      "dingo/runtime_container.h": {
+        "dingo_lines": 14348
+      },
+      "dingo/static_container.h": {
+        "dingo_lines": 15035
+      },
+      "dingo/storage/external.h": {
+        "dingo_lines": 5800
+      },
+      "dingo/storage/shared.h": {
+        "dingo_lines": 5892
+      },
+      "dingo/storage/shared_cyclical.h": {
+        "dingo_lines": 5967
+      },
+      "dingo/storage/unique.h": {
+        "dingo_lines": 5778
+      }
+    },
+    "instantiations": {
+      "chain.mixed.1": {
+        "classes": 443,
+        "functions": 221
+      },
+      "chain.mixed.32": {
+        "classes": 9189,
+        "functions": 3793
+      },
+      "chain.mixed.8": {
+        "classes": 2421,
+        "functions": 1033
+      },
+      "chain.runtime.1": {
+        "classes": 457,
+        "functions": 353
+      },
+      "chain.runtime.32": {
+        "classes": 9885,
+        "functions": 6068
+      },
+      "chain.runtime.8": {
+        "classes": 2589,
+        "functions": 1652
+      },
+      "chain.static.1": {
+        "classes": 389,
+        "functions": 137
+      },
+      "chain.static.32": {
+        "classes": 8977,
+        "functions": 3381
+      },
+      "chain.static.8": {
+        "classes": 2329,
+        "functions": 861
+      },
+      "flat_resolved.mixed.1": {
+        "classes": 443,
+        "functions": 221
+      },
+      "flat_resolved.mixed.32": {
+        "classes": 9030,
+        "functions": 3383
+      },
+      "flat_resolved.mixed.8": {
+        "classes": 2382,
+        "functions": 935
+      },
+      "flat_resolved.runtime.1": {
+        "classes": 457,
+        "functions": 353
+      },
+      "flat_resolved.runtime.32": {
+        "classes": 9509,
+        "functions": 5375
+      },
+      "flat_resolved.runtime.8": {
+        "classes": 2501,
+        "functions": 1487
+      },
+      "flat_resolved.static.1": {
+        "classes": 389,
+        "functions": 137
+      },
+      "flat_resolved.static.32": {
+        "classes": 8883,
+        "functions": 3392
+      },
+      "flat_resolved.static.8": {
+        "classes": 2307,
+        "functions": 872
+      },
+      "flat_unresolved.mixed.1": {
+        "classes": 321,
+        "functions": 89
+      },
+      "flat_unresolved.mixed.32": {
+        "classes": 6397,
+        "functions": 1329
+      },
+      "flat_unresolved.mixed.8": {
+        "classes": 1693,
+        "functions": 369
+      },
+      "flat_unresolved.runtime.1": {
+        "classes": 427,
+        "functions": 298
+      },
+      "flat_unresolved.runtime.32": {
+        "classes": 9045,
+        "functions": 4359
+      },
+      "flat_unresolved.runtime.8": {
+        "classes": 2373,
+        "functions": 1215
+      },
+      "flat_unresolved.static.1": {
+        "classes": 284,
+        "functions": 54
+      },
+      "flat_unresolved.static.32": {
+        "classes": 6453,
+        "functions": 1294
+      },
+      "flat_unresolved.static.8": {
+        "classes": 1677,
+        "functions": 334
+      },
+      "wrapper_resolved.mixed.1": {
+        "classes": 499,
+        "functions": 239
+      },
+      "wrapper_resolved.mixed.32": {
+        "classes": 10047,
+        "functions": 3959
+      },
+      "wrapper_resolved.mixed.8": {
+        "classes": 2655,
+        "functions": 1079
+      },
+      "wrapper_resolved.runtime.1": {
+        "classes": 642,
+        "functions": 411
+      },
+      "wrapper_resolved.runtime.32": {
+        "classes": 13941,
+        "functions": 7200
+      },
+      "wrapper_resolved.runtime.8": {
+        "classes": 3645,
+        "functions": 1944
+      },
+      "wrapper_resolved.static.1": {
+        "classes": 444,
+        "functions": 147
+      },
+      "wrapper_resolved.static.32": {
+        "classes": 9868,
+        "functions": 3588
+      },
+      "wrapper_resolved.static.8": {
+        "classes": 2572,
+        "functions": 924
+      }
+    },
+    "object_size": {
+      "flat_resolved.mixed.1": 128,
+      "flat_resolved.mixed.32": 376,
+      "flat_resolved.mixed.8": 184,
+      "flat_resolved.static.1": 16,
+      "flat_resolved.static.32": 264,
+      "flat_resolved.static.8": 72,
+      "runtime": 8,
+      "wrapper_resolved.mixed.1": 144,
+      "wrapper_resolved.mixed.32": 888,
+      "wrapper_resolved.mixed.8": 312,
+      "wrapper_resolved.static.1": 32,
+      "wrapper_resolved.static.32": 776,
+      "wrapper_resolved.static.8": 200
+    },
+    "runtime_cost": {
+      "allocations": {
+        "runtime_handle_reference.first": 1,
+        "runtime_handle_reference.memoized": 0,
+        "runtime_interface_reference.first": 0,
+        "runtime_interface_reference.memoized": 0,
+        "runtime_shared_reference.first": 0,
+        "runtime_shared_reference.memoized": 0,
+        "runtime_unique_value.first": 0,
+        "runtime_unique_value.memoized": 0,
+        "static_interface_reference.first": 0,
+        "static_interface_reference.memoized": 0,
+        "static_shared_reference.first": 0,
+        "static_shared_reference.memoized": 0,
+        "static_unique_value.first": 0,
+        "static_unique_value.memoized": 0
+      },
+      "paths": {
+        "probe_resolve_runtime_handle_reference": {
+          "calls": 2,
+          "dingo_calls": 2,
+          "indirect_calls": 0
+        },
+        "probe_resolve_runtime_interface_reference": {
+          "calls": 2,
+          "dingo_calls": 2,
+          "indirect_calls": 0
+        },
+        "probe_resolve_runtime_shared_reference": {
+          "calls": 3,
+          "dingo_calls": 3,
+          "indirect_calls": 0
+        },
+        "probe_resolve_runtime_unique_value": {
+          "calls": 5,
+          "dingo_calls": 3,
+          "indirect_calls": 1
+        },
+        "probe_resolve_static_interface_reference": {
+          "calls": 0,
+          "dingo_calls": 0,
+          "indirect_calls": 0
+        },
+        "probe_resolve_static_shared_reference": {
+          "calls": 0,
+          "dingo_calls": 0,
+          "indirect_calls": 0
+        },
+        "probe_resolve_static_unique_value": {
+          "calls": 0,
+          "dingo_calls": 0,
+          "indirect_calls": 0
+        }
+      }
+    }
+  },
   "clang22-x86_64-c++20": {
     "codegen": {
       "out_of_line_dingo_functions": 214,
@@ -486,6 +993,563 @@
         "probe_resolve_runtime_unique_value": {
           "calls": 5,
           "dingo_calls": 3,
+          "indirect_calls": 1
+        },
+        "probe_resolve_static_interface_reference": {
+          "calls": 0,
+          "dingo_calls": 0,
+          "indirect_calls": 0
+        },
+        "probe_resolve_static_shared_reference": {
+          "calls": 0,
+          "dingo_calls": 0,
+          "indirect_calls": 0
+        },
+        "probe_resolve_static_unique_value": {
+          "calls": 0,
+          "dingo_calls": 0,
+          "indirect_calls": 0
+        }
+      }
+    }
+  },
+  "gcc13-x86_64-c++20": {
+    "codegen": {
+      "out_of_line_dingo_functions": 363,
+      "probes": {
+        "probe_runtime_resolution_collection_sum": {
+          "bytes": 532,
+          "calls": 14,
+          "dingo_calls": 2,
+          "dingo_throws": 0,
+          "indirect_calls": 6
+        },
+        "probe_runtime_resolution_collection_sum.cold": {
+          "bytes": 47,
+          "calls": 4,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_consumer_read": {
+          "bytes": 449,
+          "calls": 9,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 2
+        },
+        "probe_runtime_resolution_consumer_read.cold": {
+          "bytes": 37,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_runtime_resolution_external_reference_storage": {
+          "bytes": 449,
+          "calls": 8,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_external_reference_storage.cold": {
+          "bytes": 37,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_runtime_resolution_external_value_storage": {
+          "bytes": 465,
+          "calls": 8,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_external_value_storage.cold": {
+          "bytes": 37,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_runtime_resolution_external_wrapper_storage": {
+          "bytes": 605,
+          "calls": 11,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_external_wrapper_storage.cold": {
+          "bytes": 51,
+          "calls": 4,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_runtime_resolution_interface_handle": {
+          "bytes": 506,
+          "calls": 10,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 2
+        },
+        "probe_runtime_resolution_interface_handle.cold": {
+          "bytes": 37,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_mixed_container_external_reference_storage": {
+          "bytes": 519,
+          "calls": 6,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_mixed_container_external_reference_storage.cold": {
+          "bytes": 36,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_mixed_container_external_value_storage": {
+          "bytes": 519,
+          "calls": 6,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_mixed_container_external_value_storage.cold": {
+          "bytes": 36,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_mixed_container_external_wrapper_storage": {
+          "bytes": 717,
+          "calls": 9,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_mixed_container_external_wrapper_storage.cold": {
+          "bytes": 60,
+          "calls": 4,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_optional_config": {
+          "bytes": 204,
+          "calls": 6,
+          "dingo_calls": 2,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_optional_config.cold": {
+          "bytes": 37,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_runtime_resolution_shared_config": {
+          "bytes": 232,
+          "calls": 7,
+          "dingo_calls": 2,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_shared_config.cold": {
+          "bytes": 39,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_runtime_resolution_shared_reference_config": {
+          "bytes": 433,
+          "calls": 8,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_shared_reference_config.cold": {
+          "bytes": 37,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_runtime_resolution_shared_value_config": {
+          "bytes": 204,
+          "calls": 6,
+          "dingo_calls": 2,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_shared_value_config.cold": {
+          "bytes": 37,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_runtime_resolution_unique_rvalue_config": {
+          "bytes": 222,
+          "calls": 6,
+          "dingo_calls": 2,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_unique_rvalue_config.cold": {
+          "bytes": 39,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_runtime_resolution_unique_value_config": {
+          "bytes": 204,
+          "calls": 6,
+          "dingo_calls": 2,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_unique_value_config.cold": {
+          "bytes": 37,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_runtime_resolution_unique_wrapper_config": {
+          "bytes": 227,
+          "calls": 7,
+          "dingo_calls": 2,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_runtime_resolution_unique_wrapper_config.cold": {
+          "bytes": 39,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_collection_sum": {
+          "bytes": 985,
+          "calls": 15,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 4
+        },
+        "probe_static_resolution_collection_sum.cold": {
+          "bytes": 143,
+          "calls": 5,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_consumer_read": {
+          "bytes": 70,
+          "calls": 1,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_interface_handle": {
+          "bytes": 165,
+          "calls": 4,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_static_resolution_interface_handle.cold": {
+          "bytes": 44,
+          "calls": 3,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_collection_sum": {
+          "bytes": 574,
+          "calls": 11,
+          "dingo_calls": 2,
+          "dingo_throws": 0,
+          "indirect_calls": 4
+        },
+        "probe_static_resolution_mixed_container_collection_sum.cold": {
+          "bytes": 56,
+          "calls": 5,
+          "dingo_calls": 2,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_consumer_read": {
+          "bytes": 239,
+          "calls": 3,
+          "dingo_calls": 2,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_consumer_read.cold": {
+          "bytes": 40,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_interface_handle": {
+          "bytes": 268,
+          "calls": 5,
+          "dingo_calls": 2,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_static_resolution_mixed_container_interface_handle.cold": {
+          "bytes": 62,
+          "calls": 4,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_optional_config": {
+          "bytes": 400,
+          "calls": 6,
+          "dingo_calls": 5,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_optional_config.cold": {
+          "bytes": 40,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_shared_config": {
+          "bytes": 426,
+          "calls": 7,
+          "dingo_calls": 5,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_shared_config.cold": {
+          "bytes": 40,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_shared_reference_config": {
+          "bytes": 231,
+          "calls": 3,
+          "dingo_calls": 2,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_shared_reference_config.cold": {
+          "bytes": 40,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_shared_value_config": {
+          "bytes": 330,
+          "calls": 5,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_shared_value_config.cold": {
+          "bytes": 40,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_unique_rvalue_config": {
+          "bytes": 226,
+          "calls": 3,
+          "dingo_calls": 2,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_unique_rvalue_config.cold": {
+          "bytes": 40,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 1
+        },
+        "probe_static_resolution_mixed_container_unique_value_config": {
+          "bytes": 322,
+          "calls": 5,
+          "dingo_calls": 4,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_unique_value_config.cold": {
+          "bytes": 40,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_unique_wrapper_config": {
+          "bytes": 418,
+          "calls": 7,
+          "dingo_calls": 5,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_mixed_container_unique_wrapper_config.cold": {
+          "bytes": 40,
+          "calls": 3,
+          "dingo_calls": 1,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_optional_config": {
+          "bytes": 10,
+          "calls": 0,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_shared_config": {
+          "bytes": 64,
+          "calls": 2,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_shared_reference_config": {
+          "bytes": 63,
+          "calls": 1,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_shared_value_config": {
+          "bytes": 63,
+          "calls": 1,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_unique_rvalue_config": {
+          "bytes": 63,
+          "calls": 1,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_unique_value_config": {
+          "bytes": 62,
+          "calls": 1,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        },
+        "probe_static_resolution_unique_wrapper_config": {
+          "bytes": 10,
+          "calls": 0,
+          "dingo_calls": 0,
+          "dingo_throws": 0,
+          "indirect_calls": 0
+        }
+      }
+    },
+    "headers": {
+      "dingo/container.h": {
+        "dingo_lines": 14571
+      },
+      "dingo/factory/callable.h": {
+        "dingo_lines": 1805
+      },
+      "dingo/factory/constructor.h": {
+        "dingo_lines": 4108
+      },
+      "dingo/factory/function.h": {
+        "dingo_lines": 1824
+      },
+      "dingo/runtime_container.h": {
+        "dingo_lines": 14571
+      },
+      "dingo/static_container.h": {
+        "dingo_lines": 15278
+      },
+      "dingo/storage/external.h": {
+        "dingo_lines": 5829
+      },
+      "dingo/storage/shared.h": {
+        "dingo_lines": 5941
+      },
+      "dingo/storage/shared_cyclical.h": {
+        "dingo_lines": 6026
+      },
+      "dingo/storage/unique.h": {
+        "dingo_lines": 5807
+      }
+    },
+    "object_size": {
+      "flat_resolved.mixed.1": 128,
+      "flat_resolved.mixed.32": 376,
+      "flat_resolved.mixed.8": 184,
+      "flat_resolved.static.1": 16,
+      "flat_resolved.static.32": 264,
+      "flat_resolved.static.8": 72,
+      "runtime": 8,
+      "wrapper_resolved.mixed.1": 144,
+      "wrapper_resolved.mixed.32": 888,
+      "wrapper_resolved.mixed.8": 312,
+      "wrapper_resolved.static.1": 32,
+      "wrapper_resolved.static.32": 776,
+      "wrapper_resolved.static.8": 200
+    },
+    "runtime_cost": {
+      "allocations": {
+        "runtime_handle_reference.first": 1,
+        "runtime_handle_reference.memoized": 0,
+        "runtime_interface_reference.first": 0,
+        "runtime_interface_reference.memoized": 0,
+        "runtime_shared_reference.first": 0,
+        "runtime_shared_reference.memoized": 0,
+        "runtime_unique_value.first": 0,
+        "runtime_unique_value.memoized": 0,
+        "static_interface_reference.first": 0,
+        "static_interface_reference.memoized": 0,
+        "static_shared_reference.first": 0,
+        "static_shared_reference.memoized": 0,
+        "static_unique_value.first": 0,
+        "static_unique_value.memoized": 0
+      },
+      "paths": {
+        "probe_resolve_runtime_handle_reference": {
+          "calls": 1,
+          "dingo_calls": 1,
+          "indirect_calls": 0
+        },
+        "probe_resolve_runtime_interface_reference": {
+          "calls": 1,
+          "dingo_calls": 1,
+          "indirect_calls": 0
+        },
+        "probe_resolve_runtime_shared_reference": {
+          "calls": 1,
+          "dingo_calls": 1,
+          "indirect_calls": 0
+        },
+        "probe_resolve_runtime_unique_value": {
+          "calls": 5,
+          "dingo_calls": 4,
           "indirect_calls": 1
         },
         "probe_resolve_static_interface_reference": {

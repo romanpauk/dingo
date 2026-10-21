@@ -604,9 +604,8 @@ private:
   template <typename Request, typename Key, selection_mode Mode,
             std::size_t Step>
   static constexpr selection_source sole_source() {
-    constexpr const selection_step &step = rule_of(Mode).steps[Step];
     return sole_source_of<Request, Key, Mode, Step>(
-        std::make_index_sequence<step.source_count>());
+        std::make_index_sequence<rule_of(Mode).steps[Step].source_count>());
   }
 
   template <typename Request, typename Key, selection_mode Mode,

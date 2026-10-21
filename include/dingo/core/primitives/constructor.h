@@ -185,6 +185,12 @@ public:
   }
 
 private:
+  // Never viable. Without a second conversion template, GCC 13 binds an
+  // rvalue reference parameter of a class with an explicit constructor through
+  // `operator const Type &` instead of `operator Type`, and rejects it.
+  template <typename Type> struct unnamed {};
+  template <typename Type> operator unnamed<Type>() const = delete;
+
   Resolver &resolver_;
 };
 
