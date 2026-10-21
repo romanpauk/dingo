@@ -6,6 +6,7 @@ spec with one or more entities of every section and mutate it.
 
 from spec.content.route_forms import route_forms as ROUTE_FORMS
 from spec.schema import (
+    CppKindProjection,
     LayerClass,
     SelectionSourceTime,
     SourceTime,
@@ -360,6 +361,10 @@ def sample_spec() -> Spec:
                     spelling="dingo::shared_cyclical",
                     header="dingo/storage/shared_cyclical.h",
                 ),
+            ),
+            kind_projections=tuple(
+                CppKindProjection(id=f"{kind}_tag", kind=kind, spelling=f"dingo::{kind}_kind")
+                for kind in ("val", "ptr", "own", "alt", "array")
             ),
             api_bindings=(
                 CppApiBinding(

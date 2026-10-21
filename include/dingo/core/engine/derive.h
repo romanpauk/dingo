@@ -8,13 +8,17 @@
 #pragma once
 
 // The route engine of the next implementation: registration, lookup, and
-// derivation as constexpr functions over shapes and the generated rule table.
-// It interprets the rules the same way as spec/reference/routes.py, which is
-// its oracle. Static containers evaluate it at compile time and runtime
-// containers at registration, so both serve a request by the same derivation.
+// derivation as constexpr functions over shapes and the route forms. A route
+// is a rule of a leaf or a form of a layer kind, and the engine knows a kind
+// only by its descriptor, its properties and forms, so a kind of the user is
+// derived as one of the library is. It interprets the rules the same way as
+// spec/reference/routes.py, which is its oracle. Static containers evaluate it
+// at compile time and runtime containers at registration, so both serve a
+// request by the same derivation.
 
 #include <dingo/core/primitives/shape.h>
 #include <dingo/core/projection/key.h>
+#include <dingo/core/projection/layer_traits.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
 #include <cstddef>
@@ -25,9 +29,113 @@ namespace dingo::core {
 inline constexpr std::size_t max_interfaces = 8;
 inline constexpr std::size_t max_rules_per_route = 8;
 inline constexpr std::size_t max_terms = 96;
+inline constexpr std::size_t max_kinds = 32;
 
-constexpr layer_kind kind_of(const shape &value, std::size_t index = 0) {
-  return static_cast<layer_kind>(value.nodes[index].kind);
+constexpr const kind_descriptor *kind_of(const shape &value,
+                                         std::size_t index = 0) {
+  return value.nodes[index].kind;
+}
+
+// Whether a kind is of all of the layer_property bits `properties`; the leaf
+// kind is of none.
+constexpr bool has_properties(const kind_descriptor *kind,
+                              std::uint16_t properties) {
+  return kind->layer && (kind->properties & properties) == properties;
+}
+
+constexpr std::uint32_t form_bit(route_form form) {
+  return std::uint32_t(1) << static_cast<unsigned>(form);
+}
+
+constexpr bool has_form(const kind_descriptor *kind, route_form form) {
+  return (kind->forms & form_bit(form)) != 0;
+}
+
+// Whether a kind holds a number of elements: an extent, or one known at
+// runtime.
+constexpr bool holds_elements(const kind_descriptor *kind) {
+  return has_properties(kind, layer_property::extent) ||
+         has_properties(kind, layer_property::unsized);
+}
+
+// A step of a route: a rule of a leaf, of the leaf kind, or a form of a kind.
+struct route_step {
+  route_form form = route_form{};
+  const kind_descriptor *kind = &leaf_kind;
+};
+
+// The kind a step derives from and the one it derives, or the leaf kind for
+// an element.
+constexpr const kind_descriptor *kind_at(const route_step &step,
+                                         form_layer layer) {
+  switch (layer) {
+  case form_layer::kind:
+    return step.kind;
+  case form_layer::target:
+    if ((step.kind->targeted & form_bit(step.form)) != 0) {
+      return step.kind->targets[static_cast<std::size_t>(step.form)];
+    }
+    return &leaf_kind;
+  default:
+    return &leaf_kind;
+  }
+}
+
+constexpr const kind_descriptor *from_kind(const route_step &step) {
+  return kind_at(step, info(step.form).from_layer);
+}
+
+constexpr const kind_descriptor *to_kind(const route_step &step) {
+  return kind_at(step, info(step.form).to_layer);
+}
+
+// The kinds a binding derives with: the layer kinds of the library, then
+// those of the stored shape and the ones their forms lead to.
+struct kind_set {
+  const kind_descriptor *items[max_kinds] = {};
+  std::size_t size = 0;
+
+  constexpr void add(const kind_descriptor *kind) {
+    if (!kind->layer) {
+      return;
+    }
+    for (std::size_t index = 0; index < size; ++index) {
+      if (same_kind(items[index], kind)) {
+        return;
+      }
+    }
+    if (size < max_kinds) {
+      items[size++] = kind;
+      for (std::size_t form = 0; form < max_kind_forms; ++form) {
+        if ((kind->targeted & (std::uint32_t(1) << form)) != 0) {
+          add(kind->targets[form]);
+        }
+      }
+    }
+  }
+};
+
+namespace detail {
+template <typename List> struct library_kind_set;
+
+template <typename... Kinds> struct library_kind_set<type_list<Kinds...>> {
+  static constexpr kind_set make() {
+    kind_set kinds;
+    (kinds.add(&kind_v<Kinds>), ...);
+    return kinds;
+  }
+};
+} // namespace detail
+
+inline constexpr kind_set library_kind_set_v =
+    detail::library_kind_set<library_kinds>::make();
+
+constexpr kind_set kinds_of(const shape &stored) {
+  kind_set kinds = library_kind_set_v;
+  for (std::size_t index = 0; index < stored.size; ++index) {
+    kinds.add(stored.nodes[index].kind);
+  }
+  return kinds;
 }
 
 // A binding as the engine sees it: the stored shape, the scope, and the leaf
@@ -82,7 +190,7 @@ struct request_descriptor {
 struct term {
   shape value;
   value_category category = value_category::lvalue;
-  rule_id rules[max_rules_per_route] = {};
+  route_step rules[max_rules_per_route] = {};
   // For each rule, the argument of the source layer it reached, or for an
   // upcast, the index of the interface it converted to.
   std::uint8_t arguments[max_rules_per_route] = {};
@@ -104,13 +212,17 @@ struct terms {
 
 // Whether the layer at `index` is of a layer class, by the properties of its
 // kind.
-constexpr bool of_class(const shape &value, std::size_t index,
-                        const layer_class &of) {
-  if (kind_of(value, index) == layer_kind::leaf) {
+constexpr bool of_class(const kind_descriptor *kind, const layer_class &of) {
+  if (!kind->layer) {
     return false;
   }
-  const std::uint8_t properties = info(kind_of(value, index)).properties;
-  return (properties & of.has) == of.has && (properties & of.lacks) == 0;
+  return (kind->properties & of.has) == of.has &&
+         (kind->properties & of.lacks) == 0;
+}
+
+constexpr bool of_class(const shape &value, std::size_t index,
+                        const layer_class &of) {
+  return of_class(kind_of(value, index), of);
 }
 
 // The most specific storage form of a stored shape, by the classes of its
@@ -143,54 +255,51 @@ constexpr std::uint8_t exposed_categories(const binding_descriptor &binding) {
 // Shape properties
 
 constexpr bool constructible(const shape &value, std::size_t index = 0) {
-  switch (kind_of(value, index)) {
-  case layer_kind::leaf:
+  const kind_descriptor *kind = kind_of(value, index);
+  if (!kind->layer) {
     return value.nodes[index].constructible;
-  case layer_kind::ref:
-  case layer_kind::array_unbounded:
-    return false;
-  default:
-    return constructible(value, index + 1);
   }
+  return has_properties(kind, layer_property::constructible) &&
+         constructible(value, index + 1);
 }
 
 constexpr std::uint32_t constructed_leaves(const shape &value,
                                            std::size_t index = 0) {
-  switch (kind_of(value, index)) {
-  case layer_kind::leaf:
+  const kind_descriptor *kind = kind_of(value, index);
+  if (!kind->layer) {
     return 1;
-  case layer_kind::array:
-    return value.nodes[index].extent * constructed_leaves(value, index + 1);
-  default:
-    return constructed_leaves(value, index + 1);
   }
+  if (has_properties(kind, layer_property::extent)) {
+    return value.nodes[index].extent * constructed_leaves(value, index + 1);
+  }
+  return constructed_leaves(value, index + 1);
 }
 
+// The leaves a copy of the shape copies: those its layers hold in place.
 constexpr std::uint32_t leaves_held_by_value(const shape &value,
                                              std::size_t index = 0) {
-  switch (kind_of(value, index)) {
-  case layer_kind::leaf:
+  const kind_descriptor *kind = kind_of(value, index);
+  if (!kind->layer) {
     return 1;
-  case layer_kind::ptr:
-  case layer_kind::share:
-  case layer_kind::own:
-  case layer_kind::ref:
-    return 0;
-  case layer_kind::array:
-    return value.nodes[index].extent * leaves_held_by_value(value, index + 1);
-  default:
-    return leaves_held_by_value(value, index + 1);
   }
+  if (!has_properties(kind, layer_property::in_place)) {
+    return 0;
+  }
+  if (has_properties(kind, layer_property::extent)) {
+    return value.nodes[index].extent * leaves_held_by_value(value, index + 1);
+  }
+  return leaves_held_by_value(value, index + 1);
 }
 
+// Whether a shape is an object that can be referred to and pointed to:
+// anything but an address, a layer of a kind of the address form.
 constexpr bool addressable(const shape &value) {
-  return kind_of(value) != layer_kind::ptr;
+  return !has_form(kind_of(value), route_form::address);
 }
 
 constexpr bool holds_in_array(const shape &value) {
   for (std::size_t index = 0; index < value.size; ++index) {
-    layer_kind kind = kind_of(value, index);
-    if (kind == layer_kind::array || kind == layer_kind::array_unbounded) {
+    if (holds_elements(kind_of(value, index))) {
       return true;
     }
   }
@@ -200,50 +309,53 @@ constexpr bool holds_in_array(const shape &value) {
 // The leaf at the end of the first-argument chain.
 constexpr type_id innermost_leaf(const shape &value) {
   std::size_t index = 0;
-  while (kind_of(value, index) != layer_kind::leaf) {
+  while (is_layer(kind_of(value, index))) {
     ++index;
   }
   return value.nodes[index].type;
 }
 
-// Whether a layer that a route creates can be copied.
-constexpr bool created_copyable(layer_kind kind, const shape &argument) {
-  switch (kind) {
-  case layer_kind::ptr:
-  case layer_kind::share:
+// Whether a layer that a route creates can be copied: a layer copied as a
+// handle, or one that holds its element in place and is not immovable, when
+// the element can be copied.
+constexpr bool created_copyable(const kind_descriptor *kind,
+                                const shape &argument) {
+  if (has_properties(kind, layer_property::copyable)) {
     return true;
-  case layer_kind::opt:
-    return argument.nodes[0].copyable;
-  default:
-    return false;
   }
+  if (has_properties(kind, layer_property::in_place) &&
+      !has_properties(kind, layer_property::immovable)) {
+    return argument.nodes[0].copyable;
+  }
+  return false;
 }
 
-constexpr bool is_wrapper_kind(layer_kind kind) {
-  return kind == layer_kind::alt || kind == layer_kind::opt ||
-         kind == layer_kind::own || kind == layer_kind::share;
+constexpr bool is_wrapper(const kind_descriptor *kind) {
+  return has_properties(kind, layer_property::wrapper);
 }
 
 constexpr bool requirements_hold(const binding_descriptor &binding,
-                                 const route_rule &rule, const shape &bound) {
+                                 const route_form_info &rule,
+                                 const shape &bound) {
   auto requires_ = [&](requirement value) {
     return (rule.requires_ & static_cast<std::uint8_t>(value)) != 0;
   };
   if (requires_(requirement::copyable) && !bound.nodes[0].copyable) {
     return false;
   }
-  if (requires_(requirement::array) && kind_of(bound) != layer_kind::array) {
+  if (requires_(requirement::array) &&
+      !has_properties(kind_of(bound), layer_property::extent)) {
     return false;
   }
   if (requires_(requirement::addressable) && !addressable(bound)) {
     return false;
   }
-  if (requires_(requirement::leaf) && kind_of(bound) != layer_kind::leaf) {
+  if (requires_(requirement::leaf) && is_layer(kind_of(bound))) {
     return false;
   }
-  if (rule.id == rule_id::copy &&
+  if (rule.form == route_form::copy &&
       binding.scope.rule == exposure_rule::handle_copies &&
-      !info(kind_of(bound)).sharing) {
+      !has_properties(kind_of(bound), layer_property::sharing)) {
     return false;
   }
   return true;
@@ -263,9 +375,10 @@ constexpr bool seen(const terms &found, const shape &value,
   return false;
 }
 
-constexpr void add(terms &found, const term &from, const route_rule &rule,
+constexpr void add(terms &found, const term &from, const route_step &step,
                    const shape &value, const shape &bound,
                    std::size_t argument) {
+  const route_form_info &rule = info(step.form);
   if (seen(found, value, rule.to_category)) {
     return;
   }
@@ -277,8 +390,8 @@ constexpr void add(terms &found, const term &from, const route_rule &rule,
   derived.value = value;
   derived.category = rule.to_category;
   derived.arguments[derived.rule_count] = static_cast<std::uint8_t>(argument);
-  derived.rules[derived.rule_count++] = rule.id;
-  if (rule.id == rule_id::copy) {
+  derived.rules[derived.rule_count++] = step;
+  if (step.form == route_form::copy) {
     derived.copied = true;
     derived.copied_leaves = leaves_held_by_value(bound);
     // A copy is a new object, without the qualifiers of its source.
@@ -288,17 +401,19 @@ constexpr void add(terms &found, const term &from, const route_rule &rule,
   found.items[found.size++] = derived;
 }
 
-// Applies `rule` to `from` with the pattern variable bound to `bound`, the
-// argument at `argument` of the source shape when the rule starts from a
+// Applies `step` to `from` with the pattern variable bound to `bound`, the
+// argument at `argument` of the source shape when the step starts from a
 // layer.
 constexpr void apply(const binding_descriptor &binding, terms &found,
-                     const term &from, const route_rule &rule,
+                     const term &from, const route_step &step,
                      const shape &bound, std::size_t argument,
                      std::size_t limit) {
+  const route_form_info &rule = info(step.form);
   if (!requirements_hold(binding, rule, bound)) {
     return;
   }
   const shape &source = from.value;
+  const kind_descriptor *to = to_kind(step);
   if (rule.upcast || rule.converts) {
     // Only the stored leaf converts to the declared interfaces, and a user
     // conversion only to the ones it declares one to.
@@ -314,69 +429,91 @@ constexpr void apply(const binding_descriptor &binding, terms &found,
       shape interface = binding.interfaces[index];
       interface.nodes[0].qualifiers =
           rule.converts ? std::uint8_t(0) : bound.nodes[0].qualifiers;
-      shape value =
-          rule.to_layer == layer_kind::leaf
-              ? interface
-              : wrap(static_cast<std::uint8_t>(rule.to_layer),
-                     source.nodes[0].family, source.nodes[0].copyable,
-                     interface, source.nodes[0].extent);
-      add(found, from, rule, value, bound, index);
+      shape value = !is_layer(to)
+                        ? interface
+                        : wrap(to, source.nodes[0].family,
+                               source.nodes[0].copyable, interface,
+                               source.nodes[0].extent);
+      add(found, from, step, value, bound, index);
     }
     return;
   }
   shape value = bound;
+  const kind_descriptor *of = from_kind(step);
   // The element of a layer that holds it in place, an optional or an
   // alternative, has the qualifiers of the layer.
-  if (rule.to_layer == layer_kind::leaf &&
-      (rule.from_layer == layer_kind::opt ||
-       rule.from_layer == layer_kind::alt)) {
+  if (!is_layer(to) && has_properties(of, layer_property::in_place)) {
     value.nodes[0].qualifiers |= source.nodes[0].qualifiers;
   }
-  if (rule.to_layer != layer_kind::leaf) {
+  if (is_layer(to)) {
     type_id family = nullptr;
-    if (is_wrapper_kind(rule.to_layer)) {
-      bool keeps = rule.from_layer != layer_kind::leaf &&
-                   source.nodes[0].family != nullptr;
+    if (is_wrapper(to)) {
+      bool keeps = is_layer(of) && source.nodes[0].family != nullptr;
       family = keeps ? source.nodes[0].family : any_family;
     }
-    value = wrap(static_cast<std::uint8_t>(rule.to_layer), family,
-                 created_copyable(rule.to_layer, bound), bound);
+    value = wrap(to, family, created_copyable(to, bound), bound);
   }
   if (value.size > limit) {
     return;
   }
-  add(found, from, rule, value, bound, argument);
+  add(found, from, step, value, bound, argument);
+}
+
+// Applies `step`, which starts from the layer `from` is, to each argument of
+// it: only a layer of a variadic kind matches any of its arguments.
+constexpr void apply_to_arguments(const binding_descriptor &binding,
+                                  terms &found, const term &from,
+                                  const route_step &step, std::size_t limit) {
+  std::size_t arguments =
+      has_properties(kind_of(from.value), layer_property::variadic)
+          ? from.value.nodes[0].arity
+          : 1;
+  for (std::size_t argument = 0; argument < arguments; ++argument) {
+    shape bound = subtree(from.value, argument_index(from.value, 0, argument));
+    apply(binding, found, from, step, bound, argument, limit);
+  }
 }
 } // namespace detail
 
 namespace detail {
-// Applies every rule to the term at `next` of `found`.
-constexpr void derive_from(const binding_descriptor &binding, terms &found,
+// Applies every form to the term at `next` of `found`, in the order of the
+// algebra: a rule of a leaf to the term, a form of the kind of its layer, and
+// a form that creates a layer of a kind of `kinds`, from the term or from a
+// layer of the kind it leads to.
+constexpr void derive_from(const binding_descriptor &binding,
+                           const kind_set &kinds, terms &found,
                            std::size_t next, std::uint8_t exposed,
                            std::size_t limit) {
   term from = found.items[next];
   if (from.rule_count == max_rules_per_route) {
     return;
   }
-  for (const route_rule &rule : route_rules) {
+  const kind_descriptor *kind = kind_of(from.value);
+  for (const route_form_info &rule : route_forms) {
     if (rule.from_category != from.category ||
         (rule.exposure != 0 && (exposed & rule.exposure) == 0)) {
       continue;
     }
-    if (rule.from_layer == layer_kind::leaf) {
-      apply(binding, found, from, rule, from.value, 0, limit);
-      continue;
-    }
-    if (kind_of(from.value) != rule.from_layer) {
-      continue;
-    }
-    // Only an alternative matches any of its arguments.
-    std::size_t arguments =
-        rule.from_layer == layer_kind::alt ? from.value.nodes[0].arity : 1;
-    for (std::size_t argument = 0; argument < arguments; ++argument) {
-      shape bound =
-          subtree(from.value, argument_index(from.value, 0, argument));
-      apply(binding, found, from, rule, bound, argument, limit);
+    if (!rule.of_kind) {
+      apply(binding, found, from, route_step{rule.form, &leaf_kind}, from.value,
+            0, limit);
+    } else if (rule.from_layer == form_layer::kind) {
+      if (has_form(kind, rule.form)) {
+        apply_to_arguments(binding, found, from, route_step{rule.form, kind},
+                           limit);
+      }
+    } else {
+      for (std::size_t index = 0; index < kinds.size; ++index) {
+        const route_step step{rule.form, kinds.items[index]};
+        if (!has_form(step.kind, rule.form)) {
+          continue;
+        }
+        if (rule.from_layer == form_layer::element) {
+          apply(binding, found, from, step, from.value, 0, limit);
+        } else if (is_layer(kind) && same_kind(from_kind(step), kind)) {
+          apply_to_arguments(binding, found, from, step, limit);
+        }
+      }
     }
   }
 }
@@ -392,8 +529,9 @@ constexpr terms derive(const binding_descriptor &binding) {
   found.items[found.size++] = start;
   std::uint8_t exposed = exposed_categories(binding);
   std::size_t limit = binding.stored.size + 1;
+  const kind_set kinds = kinds_of(binding.stored);
   for (std::size_t next = 0; next < found.size; ++next) {
-    detail::derive_from(binding, found, next, exposed, limit);
+    detail::derive_from(binding, kinds, found, next, exposed, limit);
   }
   return found;
 }
@@ -415,8 +553,8 @@ constexpr bool qualifies(const shape &derived, const shape &requested,
   for (;;) {
     const shape_node &d = derived.nodes[index];
     const shape_node &r = requested.nodes[index];
-    const layer_kind kind = static_cast<layer_kind>(d.kind);
-    if (kind == layer_kind::array || kind == layer_kind::array_unbounded) {
+    const kind_descriptor *kind = d.kind;
+    if (holds_elements(kind)) {
       ++index;
       continue;
     }
@@ -429,12 +567,13 @@ constexpr bool qualifies(const shape &derived, const shape &requested,
       }
       above_const = above_const && (r.qualifiers & const_qualified) != 0;
     }
-    if (kind == layer_kind::ptr) {
+    // An address, a layer of a kind of the address form, refers to a level.
+    if (has_form(kind, route_form::address)) {
       ++index;
       level = true;
       continue;
     }
-    if (kind != layer_kind::leaf) {
+    if (is_layer(kind)) {
       const std::size_t end = index + subtree_size(derived, index);
       for (std::size_t inner = index + 1; inner < end; ++inner) {
         if (derived.nodes[inner].qualifiers !=
@@ -459,8 +598,7 @@ constexpr bool accepts(const request_descriptor &request, const term &candidate,
            exposes(exposed, request_category::lvalue) &&
            addressable(candidate.value);
   }
-  layer_kind kind = kind_of(candidate.value);
-  if (kind == layer_kind::array || kind == layer_kind::array_unbounded) {
+  if (has_properties(kind_of(candidate.value), layer_property::immovable)) {
     return false;
   }
   if (candidate.category == value_category::rvalue) {
@@ -471,7 +609,8 @@ constexpr bool accepts(const request_descriptor &request, const term &candidate,
 }
 
 // Whether `left` is preferred to `right`: fewer rules, then no copy, then the
-// rules that come first in the spec.
+// forms that come first in the order of the algebra, which orders forms and
+// not kinds; of others, the one derived first is.
 constexpr bool preferred(const term &left, const term &right) {
   if (left.rule_count != right.rule_count) {
     return left.rule_count < right.rule_count;
@@ -480,8 +619,8 @@ constexpr bool preferred(const term &left, const term &right) {
     return !left.copied;
   }
   for (std::size_t index = 0; index < left.rule_count; ++index) {
-    if (left.rules[index] != right.rules[index]) {
-      return left.rules[index] < right.rules[index];
+    if (left.rules[index].form != right.rules[index].form) {
+      return left.rules[index].form < right.rules[index].form;
     }
   }
   return false;
@@ -581,11 +720,12 @@ register_status(const binding_descriptor &binding) {
   if (exposed_categories(binding) == 0) {
     return registration_status::form_not_stored;
   }
-  if (!scope.nested_layers && binding.stored.nodes[0].kind != 0) {
+  if (!scope.nested_layers && is_layer(binding.stored.nodes[0].kind)) {
     std::size_t arguments = binding.stored.nodes[0].arity;
     for (std::size_t argument = 0; argument < arguments; ++argument) {
-      if (binding.stored.nodes[argument_index(binding.stored, 0, argument)]
-              .kind != 0) {
+      if (is_layer(
+              binding.stored.nodes[argument_index(binding.stored, 0, argument)]
+                  .kind)) {
         return registration_status::nested_layers;
       }
     }
@@ -600,24 +740,28 @@ register_status(const binding_descriptor &binding) {
     }
     terms found = derive(binding);
     std::uint8_t exposed = exposed_categories(binding);
+    const kind_set kinds = kinds_of(binding.stored);
+    // A binding serves an interface it is requested by reference, or by value
+    // of a handle of any kind: a nullable layer that refers to its element.
+    constexpr layer_class handle{true, layer_property::nullable,
+                                 layer_property::in_place};
     for (std::size_t index = 0; index < binding.interface_count; ++index) {
       const shape &interface = binding.interfaces[index];
-      request_descriptor probes[] = {
-          {request_kind::lvalue_reference, interface, binding.key},
-          {request_kind::value,
-           wrap(static_cast<std::uint8_t>(layer_kind::ptr), nullptr, true,
-                interface),
-           binding.key},
-          {request_kind::value,
-           wrap(static_cast<std::uint8_t>(layer_kind::own), any_family, false,
-                interface),
-           binding.key},
-          {request_kind::value,
-           wrap(static_cast<std::uint8_t>(layer_kind::share), any_family, true,
-                interface),
-           binding.key},
-      };
-      for (const request_descriptor &probe : probes) {
+      if (select_term(found,
+                      {request_kind::lvalue_reference, interface, binding.key},
+                      exposed) != no_term) {
+        return registration_status::registered;
+      }
+      for (std::size_t kind = 0; kind < kinds.size; ++kind) {
+        const kind_descriptor *of = kinds.items[kind];
+        if (!of_class(of, handle)) {
+          continue;
+        }
+        const request_descriptor probe{
+            request_kind::value,
+            wrap(of, is_wrapper(of) ? any_family : nullptr,
+                 created_copyable(of, interface), interface),
+            binding.key};
         if (select_term(found, probe, exposed) != no_term) {
           return registration_status::registered;
         }

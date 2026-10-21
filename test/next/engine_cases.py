@@ -120,7 +120,23 @@ def valid_request(shape, kind):
     return not (abstract and kind != RequestKind.LVALUE_REFERENCE)
 
 
+def steps_of(model):
+    """The route form and the C++ tag of the kind of each route id."""
+    tags = {p.kind: p.spelling for p in model.spec.cpp.kind_projections}
+    kinds = {
+        form.id: kind.id for kind in model.spec.layer_kinds for form in kind.forms
+    }
+    return {
+        route.id: {
+            "form": route.form.value if route.form is not None else route.id,
+            "kind": tags[kinds[route.id]] if route.id in kinds else None,
+        }
+        for route in model.spec.routes
+    }
+
+
 def cases(model):
+    steps = steps_of(model)
     for scope in SCOPES:
         for value, interfaces in BINDING_LEAVES:
             for stored in stored_shapes(value):
@@ -139,7 +155,7 @@ def cases(model):
                             "registered": outcome.registered,
                             "found": outcome.found,
                             "served": outcome.served,
-                            "rules": list(outcome.rules),
+                            "rules": [steps[rule] for rule in outcome.rules],
                         }
 
 

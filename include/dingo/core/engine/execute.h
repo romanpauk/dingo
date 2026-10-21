@@ -9,8 +9,9 @@
 
 // A binding of the next implementation and the execution of its routes. A
 // binding type derives the terms it serves at compile time, and walk applies
-// the rules of one term to the stored object, one C++ operation per rule as
-// the rule table describes it.
+// the rules of one term to the stored object, one C++ operation per form: the
+// operation of the layer_traits of the object, or of the language for an
+// address.
 //
 // The binding applies the rules of a term up to its boundary, and the request
 // completes it: a last copy, address-of, or decay of a borrowed object depends
@@ -68,7 +69,7 @@ constexpr bool keeps_objects(const terms &published) {
   for (std::size_t index = 0; index < published.size; ++index) {
     const term &route = published.items[index];
     for (std::size_t step = 0; step < route.rule_count; ++step) {
-      if (route_rules[static_cast<std::size_t>(route.rules[step])].cached) {
+      if (info(route.rules[step].form).cached) {
         return true;
       }
     }
@@ -173,11 +174,11 @@ template <typename Binding> constexpr bool registers() {
 // not implement yet.
 struct unsupported_route {};
 
-// Whether a rule creates a wrapper layer from a leaf or a language layer: the
-// layer may be of any family, so the request names its wrapper type.
-constexpr bool creates_wrapper(rule_id id) {
-  const route_rule &rule = route_rules[static_cast<std::size_t>(id)];
-  return is_wrapper_kind(rule.to_layer) && !is_wrapper_kind(rule.from_layer);
+// Whether a step creates a wrapper layer from an element or a language layer:
+// the layer may be of any family, so the request names its wrapper type.
+constexpr bool creates_wrapper(const route_step &step) {
+  const kind_descriptor *from = from_kind(step);
+  return is_wrapper(to_kind(step)) && !is_wrapper(from);
 }
 
 // How the request completes a term the binding walked to its boundary: it
@@ -191,8 +192,8 @@ inline constexpr std::size_t max_created_layers = 2;
 struct completion_plan {
   completion kind = completion::construct;
   std::size_t binding_steps = 0;
-  // The creating rules the request applies, innermost first.
-  rule_id creating[max_created_layers] = {};
+  // The creating forms the request applies, innermost first.
+  route_form creating[max_created_layers] = {};
   std::size_t created = 0;
   // Whether the binding converts the pointer it hands over to the interface
   // `upcast_argument`, for an upcast of a handle the request creates.
@@ -210,14 +211,13 @@ constexpr completion_plan plan_completion(const term &route) {
     return plan;
   }
   if (route.rule_count > 0) {
-    switch (route.rules[route.rule_count - 1]) {
-    case rule_id::copy:
+    switch (route.rules[route.rule_count - 1].form) {
+    case route_form::copy:
       plan.kind = completion::copy;
       plan.binding_steps = route.rule_count - 1;
       return plan;
-    case rule_id::address_of:
-    case rule_id::decay_array:
-    case rule_id::decay_unbounded_array:
+    case route_form::address:
+    case route_form::decay:
       plan.kind = completion::address;
       plan.binding_steps = route.rule_count - 1;
       return plan;
@@ -231,13 +231,13 @@ constexpr completion_plan plan_completion(const term &route) {
   }
   plan.binding_steps = step;
   for (; step < route.rule_count; ++step) {
-    const rule_id id = route.rules[step];
-    if (route_rules[static_cast<std::size_t>(id)].upcast && plan.created > 0 &&
-        plan.creating[plan.created - 1] != rule_id::wrap_optional) {
+    const route_step &current = route.rules[step];
+    if (info(current.form).upcast && plan.created > 0 &&
+        plan.creating[plan.created - 1] != route_form::wrap) {
       plan.upcast = true;
       plan.upcast_argument = route.arguments[step];
-    } else if (creates_wrapper(id) && plan.created < max_created_layers) {
-      plan.creating[plan.created++] = id;
+    } else if (creates_wrapper(current) && plan.created < max_created_layers) {
+      plan.creating[plan.created++] = current.form;
     } else {
       plan.supported = false;
     }
@@ -298,9 +298,12 @@ inline constexpr bool has_share_v<
 template <typename Binding, std::size_t Term, std::size_t Steps,
           std::size_t Step>
 struct step {
-  static constexpr const route_rule &rule =
-      route_rules[static_cast<std::size_t>(
-          Binding::published.items[Term].rules[Step])];
+  static constexpr const route_step &current =
+      Binding::published.items[Term].rules[Step];
+  static constexpr const route_form_info &rule = info(current.form);
+  static constexpr route_form form = current.form;
+  // The kind the step derives, or the leaf kind for an element.
+  static constexpr const kind_descriptor *to = to_kind(current);
   // The argument of the source layer the rule reaches, or for an upcast, the
   // index of the interface it converts to.
   static constexpr std::size_t argument =
@@ -350,16 +353,17 @@ decltype(auto) keep_step(Context &context, Value &value) {
 template <typename Binding, typename Step, typename Context, typename Value>
 decltype(auto) upcast_step(Context &context, Value &&value) {
   using interface = interface_t<Step, Binding>;
-  if constexpr (Step::rule.to_layer == layer_kind::leaf ||
-                Step::rule.to_layer == layer_kind::ptr) {
+  // A leaf, or the element of an address, converts to a base of it.
+  constexpr bool to_address = has_form(Step::to, route_form::address);
+  if constexpr (!is_layer(Step::to) || to_address) {
     using leaf = std::remove_pointer_t<remove_cvref_t<Value>>;
     static_assert(require<std::is_convertible_v<leaf *, interface *>,
                           diag::interface_not_derived,
                           typename Binding::stored_type, interface>());
   }
-  if constexpr (Step::rule.to_layer == layer_kind::leaf) {
+  if constexpr (!is_layer(Step::to)) {
     return Step::reach(context, static_cast<interface &>(value));
-  } else if constexpr (Step::rule.to_layer == layer_kind::ptr) {
+  } else if constexpr (to_address) {
     return Step::yield(context,
                        [&] { return static_cast<interface *>(value); });
   } else {
@@ -391,21 +395,38 @@ decltype(auto) convert_step(Context &context, Value &&value) {
   }
 }
 
-// A consumed object moves out of a layer, a sole-owner handle shares its
-// element, or an array hands out its first element or its address.
+// The element of a layer: the argument a step reaches of a layer of a
+// variadic kind, and the one element of another.
+template <typename Step, typename Traits, typename Value>
+decltype(auto) element_of(Value &&value) {
+  if constexpr (has_properties(Step::current.kind, layer_property::variadic)) {
+    return Traits::template element<Step::argument>(std::forward<Value>(value));
+  } else {
+    return Traits::element(std::forward<Value>(value));
+  }
+}
+
+// Whether the object a step starts from is a layer of the kind of the step: a
+// reference is not, as C++ refers to the object it aliases.
+template <typename Step, typename Value>
+inline constexpr bool is_step_layer_v =
+    is_layer_v<Value> && same_kind(layer_kind_v<Value>, Step::current.kind);
+
+// A consumed object moves out of a layer, a handle shares its element, or an
+// array hands out its first element or its address.
 template <typename Step, typename Context, typename Value>
 decltype(auto) consume_step(Context &context, Value &&value) {
   using value_type = remove_cvref_t<Value>;
   using traits = layer_traits<value_type>;
-  constexpr const route_rule &rule = Step::rule;
-  if constexpr (rule.from_layer == layer_kind::alt) {
-    return Step::reach(
-        context, std::move(traits::template element<Step::argument>(value)));
-  } else if constexpr (rule.from_layer == layer_kind::array) {
-    return Step::yield(context, [&] { return &value[0]; });
-  } else if constexpr (rule.to_layer == layer_kind::leaf) {
-    return Step::reach(context, std::move(traits::element(value)));
-  } else if constexpr (rule.to_layer == layer_kind::share) {
+  if constexpr (Step::form == route_form::take) {
+    if constexpr (is_step_layer_v<Step, value_type>) {
+      return Step::reach(context, std::move(element_of<Step, traits>(value)));
+    } else {
+      return Step::reach(context, std::forward<Value>(value));
+    }
+  } else if constexpr (Step::form == route_form::release) {
+    return Step::yield(context, [&] { return traits::first(value); });
+  } else if constexpr (Step::form == route_form::share) {
     if constexpr (has_share_v<traits, value_type>) {
       return Step::yield(context, [&] {
         return traits::share(static_cast<value_type &&>(value));
@@ -413,7 +434,7 @@ decltype(auto) consume_step(Context &context, Value &&value) {
     } else {
       return unsupported_route{};
     }
-  } else if constexpr (rule.to_layer == layer_kind::ptr &&
+  } else if constexpr (Step::form == route_form::release_whole &&
                        std::is_array_v<value_type>) {
     return Step::yield(context, [&] { return std::addressof(value); });
   } else {
@@ -427,22 +448,18 @@ template <typename Step, typename Context, typename Value>
 decltype(auto) borrow_step(Context &context, Value &value) {
   using value_type = remove_cvref_t<Value>;
   using traits = layer_traits<value_type>;
-  constexpr const route_rule &rule = Step::rule;
-  if constexpr (rule.from_layer == layer_kind::ref) {
-    // A reference layer is the object it aliases.
-    return Step::reach(context, value);
-  } else if constexpr (rule.from_layer == layer_kind::alt) {
-    return Step::reach(context,
-                       traits::template element<Step::argument>(value));
-  } else if constexpr (rule.from_layer != layer_kind::leaf &&
-                       rule.to_layer == layer_kind::leaf) {
-    return Step::reach(context, traits::element(value));
-  } else if constexpr (rule.to_layer == layer_kind::leaf) {
+  if constexpr (Step::form == route_form::borrow) {
+    if constexpr (is_step_layer_v<Step, value_type>) {
+      return Step::reach(context, element_of<Step, traits>(value));
+    } else {
+      return Step::reach(context, value);
+    }
+  } else if constexpr (Step::form == route_form::copy) {
     return Step::yield(context, [&] { return value_type(value); });
-  } else if constexpr (rule.from_layer == layer_kind::leaf) {
+  } else if constexpr (Step::form == route_form::address) {
     return Step::yield(context, [&] { return std::addressof(value); });
-  } else if constexpr (rule.to_layer == layer_kind::ptr) {
-    return Step::yield(context, [&] { return &value[0]; });
+  } else if constexpr (Step::form == route_form::decay) {
+    return Step::yield(context, [&] { return traits::first(value); });
   } else {
     return unsupported_route{};
   }
@@ -452,7 +469,7 @@ template <typename Binding, std::size_t Term, std::size_t Steps,
           std::size_t Step, typename Context, typename Value>
 decltype(auto) walk_step(Context &context, Value &&value) {
   using current = step<Binding, Term, Steps, Step>;
-  constexpr const route_rule &rule = current::rule;
+  constexpr const route_form_info &rule = current::rule;
   if constexpr (rule.cached) {
     return keep_step<Binding, current>(context, value);
   } else if constexpr (rule.converts) {
@@ -567,10 +584,10 @@ private:
 } // namespace detail
 
 // How the request makes `Target` from the boundary object, which `make()`
-// returns, by the creating rules `Outer, Inner...`, outermost first:
+// returns, by the creating forms `Outer, Inner...`, outermost first:
 // `boundary` is the type of the boundary object, and `valid` tells whether the
-// rules make `Target`. Every layer constructs its element in place.
-template <typename Target, rule_id... Rules> struct created_layers {
+// forms make `Target`. Every layer constructs its element in place.
+template <typename Target, route_form... Forms> struct created_layers {
   using boundary = Target;
   static constexpr bool valid =
       !std::is_void_v<Target> && !std::is_array_v<Target>;
@@ -578,16 +595,14 @@ template <typename Target, rule_id... Rules> struct created_layers {
   template <typename Make> static auto make(Make &&make) { return make(); }
 };
 
-template <typename Target, rule_id Outer, rule_id... Inner>
+template <typename Target, route_form Outer, route_form... Inner>
 struct created_layers<Target, Outer, Inner...> {
 private:
   using traits = layer_traits<Target>;
   using element = typename detail::first_element<Target>::type;
   using inner = created_layers<element, Inner...>;
-  static constexpr const route_rule &rule =
-      route_rules[static_cast<std::size_t>(Outer)];
-  static constexpr bool wraps = Outer == rule_id::wrap_optional;
-  static constexpr bool kind_matches = traits::kind == rule.to_layer;
+  static constexpr bool wraps = Outer == route_form::wrap;
+  static constexpr bool kind_matches = has_form(layer_kind_v<Target>, Outer);
 
 public:
   using boundary =

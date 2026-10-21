@@ -85,7 +85,7 @@ template <typename T, typename U> struct @STORAGE_TRAITS@<dingo::shared, @H@<T>,
 WRAPPER_TRAITS = """\
 struct api_wrapper_traits_family {};
 template <typename T> struct {name}<@H@<T>> {
-  static constexpr dingo::layer_kind kind = dingo::layer_kind::share;
+  using kind = dingo::shared_kind;
   using family = api_wrapper_traits_family;
   using arguments = dingo::type_list<T>;
   template <typename U> using rebind = @H@<U>;

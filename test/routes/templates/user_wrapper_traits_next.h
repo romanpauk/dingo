@@ -22,7 +22,7 @@ namespace dingo {
 struct probe_user_family {};
 
 template <typename T> struct wrapper_traits<user_shared<T>> {
-  static constexpr layer_kind kind = layer_kind::share;
+  using kind = shared_kind;
   using family = probe_user_family;
   using arguments = type_list<T>;
   template <typename U> using rebind = user_shared<U>;
@@ -44,7 +44,7 @@ template <typename T> struct wrapper_traits<user_shared<T>> {
 };
 
 template <typename T> struct wrapper_traits<user_unique<T>> {
-  static constexpr layer_kind kind = layer_kind::own;
+  using kind = unique_kind;
   using family = probe_user_family;
   using arguments = type_list<T>;
   template <typename U> using rebind = user_unique<U>;
@@ -65,7 +65,7 @@ template <typename T> struct wrapper_traits<user_unique<T>> {
 };
 
 template <typename T> struct wrapper_traits<user_optional<T>> {
-  static constexpr layer_kind kind = layer_kind::opt;
+  using kind = optional_kind;
   using family = probe_user_family;
   using arguments = type_list<T>;
   template <typename U> using rebind = user_optional<U>;

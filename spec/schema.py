@@ -30,6 +30,7 @@ __all__ = [
     "CppApiBinding",
     "CppContractProbe",
     "CppDiagnosticExample",
+    "CppKindProjection",
     "CppProjection",
     "CppScopeProjection",
     "Decoration",
@@ -106,6 +107,17 @@ class LayerTrait(Enum):
     IN_PLACE = "in_place"
     # Holds elements whose number is known only at runtime.
     UNSIZED = "unsized"
+    # A default factory makes a layer from the arguments of its element.
+    CONSTRUCTIBLE = "constructible"
+    # A layer is copied as a handle, whatever its element; a layer that holds
+    # its element in place is copied with its elements unless it is immovable.
+    COPYABLE = "copyable"
+    # A layer is not a value a request takes, only an object it refers to, as
+    # an array of the language is.
+    IMMOVABLE = "immovable"
+    # A layer is a wrapper of a family, rather than a type of the language: a
+    # layer the routes create may be a wrapper of any family of its kind.
+    WRAPPER = "wrapper"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -827,6 +839,15 @@ class CppScopeProjection(Entity):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class CppKindProjection(Entity):
+    """The C++ tag of a layer kind of the library, whose layer_kind_traits
+    declare it as a kind of the user is declared."""
+
+    kind: str  # layer kind id
+    spelling: str
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class CppApiBinding(Entity):
     """The C++ spelling (path, name, or macro) of a public API entry.
 
@@ -879,6 +900,7 @@ class CppDiagnosticExample(Entity):
 class CppProjection:
     capabilities: tuple[Capability, ...] = ()
     scope_projections: tuple[CppScopeProjection, ...] = ()
+    kind_projections: tuple[CppKindProjection, ...] = ()
     api_bindings: tuple[CppApiBinding, ...] = ()
     contract_probes: tuple[CppContractProbe, ...] = ()
     diagnostic_examples: tuple[CppDiagnosticExample, ...] = ()

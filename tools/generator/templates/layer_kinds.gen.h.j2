@@ -1,0 +1,51 @@
+#pragma once
+
+#include <dingo/core/base/mechanics.h>
+#include <dingo/core/vocabulary/vocabulary.gen.h>
+
+#include <cstdint>
+
+// The public tags of the layer kinds of the library, and the
+// layer_kind_traits that make a tag type a layer kind. The library declares
+// its kinds as a user declares a kind of their own: the engine knows a kind
+// only by its properties and its forms.
+
+namespace {{ namespace }} {
+
+using route_form = core::route_form;
+using layer_property = core::layer_property;
+
+// A form of a layer kind: a route form, and the kind the form leads to for a
+// form that leads to another kind, such as the sharing kind a sole-owner
+// handle shares its element with.
+template <route_form Form, typename Target = void> struct kind_form {};
+
+// Makes `Kind` a layer kind. A specialization declares
+//
+//   static constexpr std::uint16_t properties = ...;
+//   using forms = type_list<kind_form<...>, ...>;
+//
+// the layer_property bits of the kind and the forms it has. A wrapper is a
+// layer of the kind its wrapper_traits name.
+template <typename Kind> struct layer_kind_traits;
+{% for kind in kinds %}
+
+// spec: layer_kinds.{{ kind.id }}
+struct {{ kind.name }} {};
+{% endfor %}
+{% for kind in kinds %}
+
+template <> struct layer_kind_traits<{{ kind.name }}> {
+  static constexpr std::uint16_t properties = {% for property in kind.properties %}layer_property::{{ property }}{{ " | " if not loop.last }}{% endfor %}{% if not kind.properties %}0{% endif %};
+  using forms = core::type_list<{% for form in kind.forms %}kind_form<route_form::{{ form.form }}{% if form.target %}, {{ form.target }}{% endif %}>{{ ", " if not loop.last }}{% endfor %}>;
+};
+{% endfor %}
+
+} // namespace {{ namespace }}
+
+namespace dingo::core {
+
+// The layer kinds of the library, in the order of the spec.
+using library_kinds = type_list<{% for kind in kinds %}::{{ namespace }}::{{ kind.name }}{{ ", " if not loop.last }}{% endfor %}>;
+
+} // namespace dingo::core

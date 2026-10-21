@@ -8,10 +8,12 @@
 #pragma once
 
 // The layer kind a C++ type is: the projection of the shape algebra of the spec
-// onto C++ types. Raw pointers, references, and arrays are language layers.
-// Wrappers are classified by layer_traits, which the standard wrappers
-// specialize here and user wrappers through the public extension point; no
-// wrapper gets other treatment.
+// onto C++ types. Raw pointers, references, and arrays are language layers, of
+// the pointer, reference, and array kinds of the library. Wrappers are
+// classified by layer_traits, which the standard wrappers specialize here and
+// user wrappers through the public extension point; no wrapper gets other
+// treatment. A layer kind is a tag whose layer_kind_traits declare its
+// properties and forms, and the library's kinds are declared as a user's are.
 //
 // A specialization names the layer kind, the wrapper family, and the argument
 // types, and provides `rebind`, the same layer of other argument types,
@@ -22,6 +24,7 @@
 
 #include <dingo/core/base/mechanics.h>
 #include <dingo/core/primitives/shape.h>
+#include <dingo/core/vocabulary/layer_kinds.gen.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
 #include <cstddef>
@@ -37,7 +40,9 @@ namespace dingo {
 // The public extension point that makes a wrapper type a layer of the shape
 // algebra. A specialization declares
 //
-//   kind       the layer_kind of the wrapper: own, share, opt, or alt
+//   kind       the layer kind of the wrapper, a tag whose layer_kind_traits
+//              declare it, such as unique_kind, shared_kind, optional_kind,
+//              alternative_kind, or a kind of the user
 //   family     a type naming the family of the wrapper; a route converts a
 //              wrapper only to another wrapper of its family, such as a
 //              sole-owner handle to a sharing handle
@@ -45,19 +50,19 @@ namespace dingo {
 //   rebind     the wrapper of other element types
 //   element    the element of a wrapper object
 //   make       a wrapper object made from the arguments of its element
-//   adopt      for own and share: a wrapper object that takes the ownership
+//   adopt      for a kind of the adopt form: a wrapper object that takes the
+//              ownership
 //              of the element at an address allocated by new; a sharing
 //              wrapper that a scope publishes before its element exists also
 //              adopts an address with the deleter that frees it
-//   share      for own, when its family has a sharing wrapper: the sharing
-//              wrapper object that takes the element of a consumed one
+//   share      for a kind of the share form, when its family has a wrapper of
+//              the kind the form leads to: that wrapper object, which takes
+//              the element of a consumed one
 //
 // A wrapper converts to the wrapper of a base of its element, the route to a
 // declared interface, by its converting constructor. The standard wrappers
 // specialize it below, as a user wrapper does.
 template <typename Wrapper, typename = void> struct wrapper_traits {};
-
-using layer_kind = core::layer_kind;
 
 template <typename... Types> using type_list = core::type_list<Types...>;
 
@@ -65,7 +70,7 @@ template <typename... Types> using type_list = core::type_list<Types...>;
 struct standard_family {};
 
 template <typename Type> struct wrapper_traits<std::unique_ptr<Type>> {
-  static constexpr layer_kind kind = layer_kind::own;
+  using kind = unique_kind;
   using family = standard_family;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = std::unique_ptr<Element>;
@@ -88,7 +93,7 @@ template <typename Type> struct wrapper_traits<std::unique_ptr<Type>> {
 
 // A handle of an array of runtime size: its element is the array.
 template <typename Type> struct wrapper_traits<std::unique_ptr<Type[]>> {
-  static constexpr layer_kind kind = layer_kind::own;
+  using kind = unique_kind;
   using family = standard_family;
   using arguments = type_list<Type[]>;
   template <typename Element> using rebind = std::unique_ptr<Element>;
@@ -100,7 +105,7 @@ template <typename Type> struct wrapper_traits<std::unique_ptr<Type[]>> {
 };
 
 template <typename Type> struct wrapper_traits<std::shared_ptr<Type[]>> {
-  static constexpr layer_kind kind = layer_kind::share;
+  using kind = shared_kind;
   using family = standard_family;
   using arguments = type_list<Type[]>;
   template <typename Element> using rebind = std::shared_ptr<Element>;
@@ -112,7 +117,7 @@ template <typename Type> struct wrapper_traits<std::shared_ptr<Type[]>> {
 };
 
 template <typename Type> struct wrapper_traits<std::shared_ptr<Type>> {
-  static constexpr layer_kind kind = layer_kind::share;
+  using kind = shared_kind;
   using family = standard_family;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = std::shared_ptr<Element>;
@@ -135,7 +140,7 @@ template <typename Type> struct wrapper_traits<std::shared_ptr<Type>> {
 };
 
 template <typename Type> struct wrapper_traits<std::optional<Type>> {
-  static constexpr layer_kind kind = layer_kind::opt;
+  using kind = optional_kind;
   using family = standard_family;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = std::optional<Element>;
@@ -154,7 +159,7 @@ template <typename Type> struct wrapper_traits<std::optional<Type>> {
 };
 
 template <typename... Types> struct wrapper_traits<std::variant<Types...>> {
-  static constexpr layer_kind kind = layer_kind::alt;
+  using kind = alternative_kind;
   using family = standard_family;
   using arguments = type_list<Types...>;
   template <typename... Elements> using rebind = std::variant<Elements...>;
@@ -183,19 +188,61 @@ template <typename... Types> struct wrapper_traits<std::variant<Types...>> {
 
 namespace dingo::core {
 
-// A type that is not a layer is a leaf.
+namespace detail {
+template <typename Kind> constexpr kind_descriptor make_kind();
+} // namespace detail
+
+// The descriptor of the layer kind `Kind`, from its layer_kind_traits.
+template <typename Kind>
+inline constexpr kind_descriptor kind_v = detail::make_kind<Kind>();
+
+namespace detail {
+template <typename Form> struct kind_form_of;
+
+template <route_form Form, typename Target>
+struct kind_form_of<::dingo::kind_form<Form, Target>> {
+  static constexpr void add(kind_descriptor &kind) {
+    kind.forms |= std::uint32_t(1) << static_cast<unsigned>(Form);
+    if constexpr (!std::is_void_v<Target>) {
+      kind.targeted |= std::uint32_t(1) << static_cast<unsigned>(Form);
+      kind.targets[static_cast<std::size_t>(Form)] = &kind_v<Target>;
+    }
+  }
+};
+
+template <typename List> struct kind_forms_of;
+
+template <typename... Forms> struct kind_forms_of<type_list<Forms...>> {
+  static constexpr void add(kind_descriptor &kind) {
+    (kind_form_of<Forms>::add(kind), ...);
+  }
+};
+
+template <typename Kind> constexpr kind_descriptor make_kind() {
+  using traits = ::dingo::layer_kind_traits<Kind>;
+  static_assert(route_form_count <= max_kind_forms);
+  kind_descriptor kind;
+  kind.id = type_id_v<Kind>;
+  kind.layer = true;
+  kind.properties = traits::properties;
+  kind_forms_of<typename traits::forms>::add(kind);
+  return kind;
+}
+} // namespace detail
+
+// A type that is not a layer is a leaf, of no kind.
 template <typename Type, typename = void> struct layer_traits {
-  static constexpr layer_kind kind = layer_kind::leaf;
+  using kind = void;
 };
 
 // A wrapper is the layer its wrapper_traits declare.
 template <typename Type>
 struct layer_traits<Type,
-                    std::void_t<decltype(::dingo::wrapper_traits<Type>::kind)>>
+                    std::void_t<typename ::dingo::wrapper_traits<Type>::kind>>
     : ::dingo::wrapper_traits<Type> {};
 
 template <typename Type> struct layer_traits<Type *> {
-  static constexpr layer_kind kind = layer_kind::ptr;
+  using kind = ::dingo::pointer_kind;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = Element *;
 
@@ -207,25 +254,65 @@ template <typename Type> struct layer_traits<Type *> {
 };
 
 template <typename Type> struct layer_traits<Type &> {
-  static constexpr layer_kind kind = layer_kind::ref;
+  using kind = ::dingo::reference_kind;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = Element &;
 
   static Type &element(Type &value) { return value; }
 };
 
+// An array decays to the address of its first element.
 template <typename Type, std::size_t Extent> struct layer_traits<Type[Extent]> {
-  static constexpr layer_kind kind = layer_kind::array;
+  using kind = ::dingo::array_kind;
   static constexpr std::size_t extent = Extent;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = Element[Extent];
+
+  template <typename Array> static auto first(Array &value) {
+    return &value[0];
+  }
 };
 
 template <typename Type> struct layer_traits<Type[]> {
-  static constexpr layer_kind kind = layer_kind::array_unbounded;
+  using kind = ::dingo::unsized_array_kind;
   using arguments = type_list<Type>;
   template <typename Element> using rebind = Element[];
+
+  template <typename Array> static auto first(Array &value) {
+    return &value[0];
+  }
 };
+
+namespace detail {
+template <typename Kind> struct kind_of_type {
+  static constexpr const kind_descriptor *value = &kind_v<Kind>;
+};
+
+template <> struct kind_of_type<void> {
+  static constexpr const kind_descriptor *value = &leaf_kind;
+};
+} // namespace detail
+
+// The layer kind of a type, or void for a leaf.
+template <typename Type>
+using layer_kind_t = typename layer_traits<std::remove_cv_t<Type>>::kind;
+
+// Whether a type is a layer rather than a leaf.
+template <typename Type>
+inline constexpr bool is_layer_v = !std::is_void_v<layer_kind_t<Type>>;
+
+// The descriptor of the layer kind of a type, or the leaf kind.
+template <typename Type>
+inline constexpr const kind_descriptor *layer_kind_v =
+    detail::kind_of_type<layer_kind_t<Type>>::value;
+
+// Whether a type is a layer of a kind of all of the layer_property bits
+// `Properties`.
+template <typename Type, std::uint16_t Properties>
+inline constexpr bool has_layer_properties_v =
+    is_layer_v<Type> &&
+    (detail::kind_of_type<layer_kind_t<Type>>::value->properties &
+     Properties) == Properties;
 
 namespace detail {
 template <typename Traits, typename = void> struct layer_family {
@@ -269,9 +356,9 @@ template <typename Type> constexpr shape make_shape() {
   using traits = layer_traits<value_type>;
   shape result;
   shape_node &node = result.nodes[0];
-  node.kind = static_cast<std::uint8_t>(traits::kind);
+  node.kind = layer_kind_v<value_type>;
   // Only a leaf has an identity of its own; a layer is its kind and family.
-  if constexpr (traits::kind == layer_kind::leaf) {
+  if constexpr (!is_layer_v<value_type>) {
     node.type = type_id_v<value_type>;
   }
   if constexpr (std::is_reference_v<value_type>) {
@@ -284,14 +371,14 @@ template <typename Type> constexpr shape make_shape() {
       (std::is_const_v<Type> ? const_qualified : 0) |
       (std::is_volatile_v<Type> ? volatile_qualified : 0));
   result.size = 1;
-  if constexpr (traits::kind != layer_kind::leaf) {
+  if constexpr (is_layer_v<value_type>) {
     node.family = layer_family<traits>::value;
     node.extent = layer_extent<traits>::value;
     node.arity = static_cast<std::uint8_t>(traits::arguments::size);
     argument_shapes<typename traits::arguments>::append(result);
     // The elements of an array have the qualifiers of the array.
-    if constexpr (traits::kind == layer_kind::array ||
-                  traits::kind == layer_kind::array_unbounded) {
+    if constexpr (has_layer_properties_v<value_type, layer_property::extent> ||
+                  has_layer_properties_v<value_type, layer_property::unsized>) {
       result.nodes[1].qualifiers |= node.qualifiers;
     }
   }
@@ -317,9 +404,7 @@ struct canonical_rebind<Traits, type_list<Arguments...>> {
 };
 
 template <typename Type>
-struct canonical<Type,
-                 std::enable_if_t<layer_traits<std::remove_cv_t<Type>>::kind !=
-                                  layer_kind::leaf>> {
+struct canonical<Type, std::enable_if_t<is_layer_v<Type>>> {
   using traits = layer_traits<std::remove_cv_t<Type>>;
   using type =
       typename canonical_rebind<traits, typename traits::arguments>::type;
@@ -331,12 +416,13 @@ template <typename Type, typename = void> struct leaf_of {
   using type = Type;
 };
 
-// The leaf a layer holds, through its first argument; an alternative holds
-// several, and is its own leaf.
+// The leaf a layer holds, through its first argument; a layer of a variadic
+// kind holds several, and is its own leaf.
 template <typename Type>
-struct leaf_of<Type,
-               std::enable_if_t<layer_traits<Type>::kind != layer_kind::leaf &&
-                                layer_traits<Type>::kind != layer_kind::alt>> {
+struct leaf_of<
+    Type,
+    std::enable_if_t<is_layer_v<Type> &&
+                     !has_layer_properties_v<Type, layer_property::variadic>>> {
   using type = typename leaf_of<std::remove_cv_t<
       type_list_at_t<0, typename layer_traits<Type>::arguments>>>::type;
 };
@@ -355,8 +441,8 @@ template <typename Type, typename Leaf, typename = void> struct replace_leaf {
 template <typename Type, typename Leaf>
 struct replace_leaf<
     Type, Leaf,
-    std::enable_if_t<layer_traits<Type>::kind != layer_kind::leaf &&
-                     layer_traits<Type>::kind != layer_kind::alt>> {
+    std::enable_if_t<is_layer_v<Type> &&
+                     !has_layer_properties_v<Type, layer_property::variadic>>> {
   using type =
       typename layer_traits<Type>::template rebind<typename replace_leaf<
           type_list_at_t<0, typename layer_traits<Type>::arguments>,

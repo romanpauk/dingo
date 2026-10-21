@@ -259,9 +259,10 @@ public:
 
 private:
   using traits = layer_traits<stored_type>;
-  static constexpr bool handle = traits::kind == layer_kind::share;
+  static constexpr bool handle =
+      has_layer_properties_v<stored_type, layer_property::sharing>;
   static constexpr bool published_while_constructed =
-      traits::kind != layer_kind::alt;
+      !has_layer_properties_v<stored_type, layer_property::variadic>;
 
   template <typename Type, bool Handle> struct published_leaf {
     using type = Type;

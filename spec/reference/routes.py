@@ -8,21 +8,26 @@ are constructed and copied, where the leaf of the result lives, and whether a
 repeated request yields the same leaf. It is the oracle the C++
 implementations are compared against; see test/routes/conform.py.
 
-Layers of the wrapper kinds carry an opaque wrapper family. The spec names no
-concrete wrapper; the family only tells two wrappers of the same kind apart. A
-family of ANY stands for a layer a rule creates, which a wrapper of any family
-that provides the layer kind can serve.
+It names no layer kind: a rule is a form of a kind, and what a layer is, is
+the properties of its kind, so a kind of the user is interpreted as one of the
+library is. Layers of the wrapper kinds carry an opaque wrapper family. The
+spec names no concrete wrapper; the family only tells two wrappers of the same
+kind apart. A family of ANY stands for a layer a rule creates, which a wrapper
+of any family that provides the layer kind can serve.
 """
 
 from dataclasses import dataclass, field, replace
 
+from spec.content.layer_kinds import layer_kinds
 from spec.schema import (
     Access,
     ExposureRule,
+    LayerClass,
     LayerTrait,
     PatternForm,
     Predicate,
     RequestCategory,
+    RouteForm,
     Slot,
     Spec,
     ValueCategory,
@@ -34,8 +39,15 @@ RVALUE = ValueCategory.RVALUE
 PRVALUE = ValueCategory.PRVALUE
 
 ANY = "*"
-# Layer kinds provided by wrappers, as opposed to the language.
-WRAPPER_KINDS = ("alt", "opt", "own", "share")
+# The layers of the kinds of these traits.
+KINDS = {kind.id: kind for kind in layer_kinds}
+# The class of the handles a binding of an interface may serve it by: a
+# nullable layer that refers to its element rather than holding it.
+INTERFACE_HANDLE = LayerClass(has=(LayerTrait.NULLABLE,), lacks=(LayerTrait.IN_PLACE,))
+
+
+def is_wrapper(kinds: dict, kind: str) -> bool:
+    return LayerTrait.WRAPPER in kinds[kind].traits
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +84,7 @@ def leaf(value: Leaf) -> Shape:
 
 
 def layer(kind: str, *args: Shape, extent: int | None = None, family: str | None = None) -> Shape:
-    if family is None and kind in WRAPPER_KINDS:
+    if family is None and is_wrapper(KINDS, kind):
         family = "std"
     return Shape(layer=kind, args=args, extent=extent, family=family)
 
@@ -135,21 +147,40 @@ class Model:
 # Shape properties
 
 
+def has_trait(shape: Shape, trait: LayerTrait) -> bool:
+    return shape.layer is not None and trait in KINDS[shape.layer].traits
+
+
+def has_form(shape: Shape, form: RouteForm) -> bool:
+    return shape.layer is not None and any(
+        kind_form.form is form for kind_form in KINDS[shape.layer].forms
+    )
+
+
+def has_extent(shape: Shape) -> bool:
+    return shape.layer is not None and KINDS[shape.layer].has_extent
+
+
+def is_array(shape: Shape) -> bool:
+    """Whether the outer layer holds a number of elements."""
+    return has_extent(shape) or has_trait(shape, LayerTrait.UNSIZED)
+
+
 def copyable(shape: Shape) -> bool:
     if shape.layer is None:
         return shape.leaf.copyable
-    if shape.layer in ("own", "array", "array_unbounded", "ref"):
-        return False
-    if shape.layer in ("ptr", "share"):
+    if has_trait(shape, LayerTrait.COPYABLE):
         return True
-    return all(copyable(arg) for arg in shape.args)
+    if has_trait(shape, LayerTrait.IN_PLACE) and not has_trait(shape, LayerTrait.IMMOVABLE):
+        return all(copyable(arg) for arg in shape.args)
+    return False
 
 
 def constructible(shape: Shape) -> bool:
     """Whether the default factory can construct the shape."""
     if shape.layer is None:
         return shape.leaf.constructible
-    if shape.layer in ("ref", "array_unbounded"):
+    if not has_trait(shape, LayerTrait.CONSTRUCTIBLE):
         return False
     return constructible(shape.args[0])
 
@@ -158,25 +189,26 @@ def constructed_leaves(shape: Shape) -> int:
     """The leaves the default factory constructs for the shape."""
     if shape.layer is None:
         return 1
-    if shape.layer == "array":
+    if has_extent(shape):
         return shape.extent * constructed_leaves(shape.args[0])
     return constructed_leaves(shape.args[0])
 
 
 def leaves_held_by_value(shape: Shape) -> int:
-    """The leaves a copy of the shape copies."""
+    """The leaves a copy of the shape copies: those a layer holds in place."""
     if shape.layer is None:
         return 1
-    if shape.layer in ("ptr", "share", "own", "ref"):
+    if not has_trait(shape, LayerTrait.IN_PLACE):
         return 0
-    if shape.layer == "array":
+    if has_extent(shape):
         return shape.extent * leaves_held_by_value(shape.args[0])
     return leaves_held_by_value(shape.args[0])
 
 
 def addressable(shape: Shape) -> bool:
-    """Whether a shape is an object that can be referred to and pointed to."""
-    return shape.layer != "ptr"
+    """Whether a shape is an object that can be referred to and pointed to:
+    anything but an address, a layer of a kind of the address form."""
+    return not has_form(shape, RouteForm.ADDRESS)
 
 
 def innermost_leaf(shape: Shape) -> Leaf:
@@ -186,13 +218,9 @@ def innermost_leaf(shape: Shape) -> Leaf:
 
 
 def holds_in_array(shape: Shape) -> bool:
-    if shape.layer in ("array", "array_unbounded"):
+    if is_array(shape):
         return True
     return any(holds_in_array(arg) for arg in shape.args)
-
-
-def has_trait(model: Model, shape: Shape, trait: LayerTrait) -> bool:
-    return shape.layer is not None and trait in model.layers[shape.layer].traits
 
 
 def shapes_match(derived: Shape, requested: Shape) -> bool:
@@ -220,7 +248,7 @@ def match(pattern, shape: Shape, bindings: dict) -> list[dict]:
         return [{**bindings, pattern.name: shape}]
     if pattern.form is not PatternForm.LAYER or shape.layer != pattern.name:
         return []
-    if pattern.name == "alt":
+    if KINDS[pattern.name].variadic:
         # The variadic layer pattern of one argument matches any argument.
         return [m for arg in shape.args for m in match(pattern.args[0], arg, bindings)]
     if len(pattern.args) != len(shape.args):
@@ -236,7 +264,7 @@ def instantiate(pattern, bindings: dict, family: str | None) -> Shape:
         return bindings[pattern.name]
     args = tuple(instantiate(arg, bindings, None) for arg in pattern.args)
     kind = pattern.name
-    return Shape(layer=kind, args=args, family=(family or ANY) if kind in WRAPPER_KINDS else None)
+    return Shape(layer=kind, args=args, family=(family or ANY) if is_wrapper(KINDS, kind) else None)
 
 
 def upcast_leaf(shape: Shape, base: Leaf) -> Shape:
@@ -288,17 +316,18 @@ def exposed_categories(model: Model, scope_id: str, form: str) -> tuple:
     return ()
 
 
-def interface_probes(interfaces: tuple[Leaf, ...]) -> list[Request]:
-    """The requests that show a binding serves its interfaces."""
+def interface_probes(model: Model, interfaces: tuple[Leaf, ...]) -> list[Request]:
+    """The requests that show a binding serves its interfaces: by reference,
+    and by value of a handle of an interface of any kind."""
     probes = []
     for interface in interfaces:
         base = leaf(interface)
-        probes += [
-            Request(RequestKind.LVALUE_REFERENCE, base),
-            Request(RequestKind.VALUE, layer("ptr", base)),
-            Request(RequestKind.VALUE, Shape(layer="own", args=(base,), family=ANY)),
-            Request(RequestKind.VALUE, Shape(layer="share", args=(base,), family=ANY)),
-        ]
+        probes.append(Request(RequestKind.LVALUE_REFERENCE, base))
+        for kind in model.spec.layer_kinds:
+            handle = Shape(layer=kind.id, args=(base,))
+            if layer_class_holds(model, INTERFACE_HANDLE, handle):
+                family = ANY if is_wrapper(model.layers, kind.id) else None
+                probes.append(Request(RequestKind.VALUE, replace(handle, family=family)))
     return probes
 
 
@@ -328,7 +357,7 @@ def register(
             return False, "an array element cannot be exposed as an interface"
         if not any(
             serve(model, scope_id, stored, probe, interfaces) is not None
-            for probe in interface_probes(interfaces)
+            for probe in interface_probes(model, interfaces)
         ):
             return False, "no declared interface can be served"
     return True, ""
@@ -398,14 +427,14 @@ def requirements_hold(model: Model, scope, rule, bindings: dict) -> bool:
         subject = bindings[requirement.subject]
         if requirement.predicate is Predicate.COPYABLE and not copyable(subject):
             return False
-        if requirement.predicate is Predicate.ARRAY and subject.layer != "array":
+        if requirement.predicate is Predicate.ARRAY and not has_extent(subject):
             return False
         if requirement.predicate is Predicate.ADDRESSABLE and not addressable(subject):
             return False
         if requirement.predicate is Predicate.LEAF and subject.layer is not None:
             return False
     if rule.id == "copy" and scope.exposure_rule is ExposureRule.HANDLE_COPIES:
-        if not has_trait(model, bindings["X"], LayerTrait.SHARING):
+        if not has_trait(bindings["X"], LayerTrait.SHARING):
             return False
     return True
 
@@ -419,7 +448,7 @@ def accepts(request: Request, term: Derivation, exposed: set) -> bool:
             and RequestCategory.LVALUE in exposed
             and addressable(term.shape)
         )
-    if term.shape.layer in ("array", "array_unbounded"):
+    if has_trait(term.shape, LayerTrait.IMMOVABLE):
         return False
     if term.category is RVALUE:
         return RequestCategory.RVALUE in exposed
@@ -455,8 +484,13 @@ def serve(model, scope_id, stored, request, interfaces) -> Derivation | None:
     if not candidates:
         return None
     # Prefer the derivation with the fewest rules, then without a copy, then the
-    # one whose rules come first in the spec.
-    order = {rule.id: index for index, rule in enumerate(model.spec.routes)}
+    # one whose rules come first in the order of the algebra, which orders the
+    # forms and not the kinds, then the one derived first.
+    order = {}
+    first = {}
+    for index, rule in enumerate(model.spec.routes):
+        key = rule.form if rule.form is not None else rule.id
+        order[rule.id] = first.setdefault(key, index)
     return min(
         candidates,
         key=lambda t: (len(t.rules), t.copied is not None, [order[r] for r in t.rules]),

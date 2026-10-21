@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 namespace dingo::next_test {
@@ -31,7 +32,7 @@ struct engine_case {
   bool registered;
   bool found;
   bool served;
-  core::rule_id rules[core::max_rules_per_route];
+  core::route_step rules[core::max_rules_per_route];
   std::size_t rule_count;
 };
 
@@ -40,10 +41,14 @@ extern const std::size_t engine_case_count;
 
 namespace {
 
-std::string rules_of(const core::rule_id *rules, std::size_t count) {
+// The steps of a route as the forms and the addresses of the kinds.
+std::string rules_of(const core::route_step *rules, std::size_t count) {
   std::string text;
   for (std::size_t index = 0; index < count; ++index) {
-    text += std::to_string(static_cast<int>(rules[index])) + " ";
+    text +=
+        std::to_string(static_cast<int>(rules[index].form)) + ":" +
+        std::to_string(reinterpret_cast<std::uintptr_t>(rules[index].kind)) +
+        " ";
   }
   return text;
 }

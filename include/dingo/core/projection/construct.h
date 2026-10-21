@@ -80,7 +80,7 @@ private:
 template <typename Stored, typename LeafMaker, typename Resolver>
 Stored make_stored(Resolver &resolver) {
   using traits = layer_traits<Stored>;
-  if constexpr (traits::kind == layer_kind::leaf) {
+  if constexpr (!is_layer_v<Stored>) {
     return LeafMaker::template make<Stored>(resolver);
   } else {
     using element = type_list_at_t<0, typename traits::arguments>;

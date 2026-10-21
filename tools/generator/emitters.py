@@ -133,29 +133,41 @@ def next_overlay(spec):
     return files
 
 
-def pattern_layer(pattern, where):
-    """The layer kind of a rule or form pattern, or "leaf" for a variable.
+def form_layer(pattern, where):
+    """Where a pattern of a route form is: "element" for a variable, "kind"
+    for the kind that has the form, "target" for the kind it leads to.
 
-    Patterns are a variable or one layer kind applied to a variable; anything
-    else needs the generator to grow.
+    Patterns are a variable or one layer applied to a variable; anything else
+    needs the generator to grow.
     """
     if pattern.form.value == "variable":
-        return "leaf"
+        return "element"
     if pattern.form.value != "layer" or len(pattern.args) != 1:
         raise GeneratorError(f"{where}: pattern is not a layer of one argument")
-    return pattern.name
+    if pattern.name == "K":
+        return "kind"
+    if pattern.name == "T":
+        return "target"
+    raise GeneratorError(f"{where}: pattern names the layer kind {pattern.name}")
 
 
-LAYER_PROPERTY_BITS = {
-    "owning": 1,
-    "sharing": 2,
-    "nullable": 4,
-    "borrowable": 8,
-    "in_place": 16,
-    "unsized": 32,
-    "variadic": 64,
-    "extent": 128,
-}
+# The property bits of a layer kind, in the order of LayerTrait, then whether
+# it is variadic and has an extent.
+LAYER_PROPERTIES = (
+    "owning",
+    "sharing",
+    "nullable",
+    "borrowable",
+    "in_place",
+    "unsized",
+    "constructible",
+    "copyable",
+    "immovable",
+    "wrapper",
+    "variadic",
+    "extent",
+)
+LAYER_PROPERTY_BITS = {name: 1 << index for index, name in enumerate(LAYER_PROPERTIES)}
 
 
 def layer_class_fields(layer_class):
@@ -180,14 +192,14 @@ def storage_form_fields(form):
     }
 
 
-def layer_properties(kind):
-    """The property bits of a layer kind."""
+def layer_property_names(kind):
+    """The property names of a layer kind, in the order of their bits."""
     names = {trait.value for trait in kind.traits}
     if kind.variadic:
         names.add("variadic")
     if kind.has_extent:
         names.add("extent")
-    return sum(LAYER_PROPERTY_BITS[name] for name in names)
+    return [name for name in LAYER_PROPERTIES if name in names]
 
 
 REQUEST_CATEGORY_BITS = {"value": 1, "lvalue": 2, "rvalue": 4, "pointer": 8}
@@ -216,16 +228,18 @@ def scope_fields(scope, form_ids):
     }
 
 
-def route_fields(rule):
-    where = f"routes.{rule.id}"
+def form_fields(name, rule, of_kind, where):
+    """The fields of a route form, or of a rule of a leaf, from its template
+    or its route."""
     for pattern in (rule.from_shape, rule.to_shape):
         if pattern.category is None:
             raise GeneratorError(f"{where}: pattern has no value category")
     return {
-        "id": rule.id,
-        "from_layer": pattern_layer(rule.from_shape, where),
+        "id": name,
+        "of_kind": of_kind,
+        "from_layer": form_layer(rule.from_shape, where),
         "from_category": rule.from_shape.category.value,
-        "to_layer": pattern_layer(rule.to_shape, where),
+        "to_layer": form_layer(rule.to_shape, where),
         "to_category": rule.to_shape.category.value,
         "access": rule.access.value,
         "exposure": REQUEST_CATEGORY_BITS[rule.exposure.value] if rule.exposure else 0,
@@ -234,6 +248,29 @@ def route_fields(rule):
         "converts": rule.via is not None and rule.via.value == "convert",
         "cached": rule.cache is not None,
     }
+
+
+def route_form_entries(spec):
+    """The route forms and the rules of a leaf in the order of the algebra,
+    the order of their first routes."""
+    templates = {template.form: template for template in spec.route_forms}
+    entries, seen = [], set()
+    for route in spec.routes:
+        key = route.form if route.form is not None else route.id
+        if key in seen:
+            continue
+        seen.add(key)
+        if route.form is None:
+            entries.append(form_fields(route.id, route, False, f"routes.{route.id}"))
+        else:
+            template = templates[route.form]
+            entries.append(
+                form_fields(route.form.value, template, True, f"route_forms.{template.id}")
+            )
+    for form, template in templates.items():
+        if form not in seen:
+            entries.append(form_fields(form.value, template, True, f"route_forms.{template.id}"))
+    return entries
 
 
 def selection_fields(rule):
@@ -270,24 +307,12 @@ def vocabulary(spec):
         ValueCategory,
     )
 
-    layer_kinds = [
-        {
-            "id": kind.id,
-            "owning": "owning" in {t.value for t in kind.traits},
-            "sharing": "sharing" in {t.value for t in kind.traits},
-            "nullable": "nullable" in {t.value for t in kind.traits},
-            "borrowable": "borrowable" in {t.value for t in kind.traits},
-            "variadic": kind.variadic,
-            "has_extent": kind.has_extent,
-            "properties": layer_properties(kind),
-        }
-        for kind in sorted(spec.layer_kinds, key=lambda k: k.id)
-    ]
     forms = sorted(spec.storage_forms, key=lambda f: f.id)
-    form_ids = [form.id for form in forms]
     content = render(
         "vocabulary.gen.h.j2",
-        layer_kinds=layer_kinds,
+        layer_properties=[
+            {"name": name, "bit": bit} for name, bit in LAYER_PROPERTY_BITS.items()
+        ],
         value_categories=[c.value for c in ValueCategory],
         request_categories=[
             {"name": name, "bit": bit} for name, bit in REQUEST_CATEGORY_BITS.items()
@@ -298,7 +323,7 @@ def vocabulary(spec):
         guards=[g.value for g in RecursionGuard],
         exposure_rules=[r.value for r in ExposureRule],
         requirements=[{"name": name, "bit": bit} for name, bit in REQUIREMENT_BITS.items()],
-        routes=[route_fields(rule) for rule in spec.routes],
+        route_forms=route_form_entries(spec),
         key_kinds=[
             {"id": kind.id, "has_value": kind.value_time is not None}
             for kind in spec.key_kinds
@@ -319,12 +344,44 @@ def vocabulary(spec):
             content=content,
             spec_ids=(
                 "key_kinds",
-                "layer_kinds",
+                "route_forms",
                 "routes",
                 "scopes",
                 "selection_rules",
                 "storage_forms",
             ),
+        )
+    ]
+
+
+def layer_kinds(spec):
+    """include/dingo/core/vocabulary/layer_kinds.gen.h from the layer kinds and
+    cpp.kind_projections: the tag of each layer kind of the library and its
+    layer_kind_traits, the declaration a kind of the user makes too."""
+    spellings = {p.kind: p.spelling for p in spec.cpp.kind_projections}
+    namespaces = {spelling.rpartition("::")[0] for spelling in spellings.values()}
+    if len(namespaces) != 1:
+        raise GeneratorError("cpp.kind_projections: tags span several namespaces")
+    names = {kind: spelling.rpartition("::")[2] for kind, spelling in spellings.items()}
+    kinds = [
+        {
+            "id": kind.id,
+            "name": names[kind.id],
+            "properties": layer_property_names(kind),
+            "forms": [
+                {"form": form.form.value, "target": names.get(form.target)}
+                for form in kind.forms
+            ],
+        }
+        for kind in spec.layer_kinds
+    ]
+    return [
+        GeneratedFile(
+            path="include/dingo/core/vocabulary/layer_kinds.gen.h",
+            content=render(
+                "layer_kinds.gen.h.j2", namespace=namespaces.pop(), kinds=kinds
+            ),
+            spec_ids=("cpp.kind_projections", "layer_kinds"),
         )
     ]
 
@@ -477,6 +534,7 @@ EMITTERS = (
     capabilities,
     variants,
     vocabulary,
+    layer_kinds,
     scope_tags,
     diagnostics,
     diagnostic_tests,

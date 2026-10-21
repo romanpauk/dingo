@@ -22,7 +22,12 @@ layer_kinds: tuple[LayerKind, ...] = (
         description="A value holding exactly one of several alternative shapes.",
         parameters=1,
         variadic=True,
-        traits=(LayerTrait.OWNING, LayerTrait.IN_PLACE),
+        traits=(
+            LayerTrait.OWNING,
+            LayerTrait.IN_PLACE,
+            LayerTrait.CONSTRUCTIBLE,
+            LayerTrait.WRAPPER,
+        ),
         forms=(
             form("select_alternative", RouteForm.BORROW, "Borrows the held alternative."),
             form(
@@ -37,7 +42,12 @@ layer_kinds: tuple[LayerKind, ...] = (
         description="A fixed number of elements of one shape, stored inline.",
         parameters=1,
         has_extent=True,
-        traits=(LayerTrait.OWNING, LayerTrait.IN_PLACE),
+        traits=(
+            LayerTrait.OWNING,
+            LayerTrait.IN_PLACE,
+            LayerTrait.CONSTRUCTIBLE,
+            LayerTrait.IMMOVABLE,
+        ),
         forms=(
             form(
                 "decay_array",
@@ -61,7 +71,7 @@ layer_kinds: tuple[LayerKind, ...] = (
             "an owning or sharing handle can hold it."
         ),
         parameters=1,
-        traits=(LayerTrait.UNSIZED,),
+        traits=(LayerTrait.UNSIZED, LayerTrait.IN_PLACE, LayerTrait.IMMOVABLE),
         forms=(
             form(
                 "decay_unbounded_array",
@@ -76,7 +86,14 @@ layer_kinds: tuple[LayerKind, ...] = (
         id="opt",
         description="A value that may hold one element of a shape or nothing.",
         parameters=1,
-        traits=(LayerTrait.OWNING, LayerTrait.NULLABLE, LayerTrait.BORROWABLE, LayerTrait.IN_PLACE),
+        traits=(
+            LayerTrait.OWNING,
+            LayerTrait.NULLABLE,
+            LayerTrait.BORROWABLE,
+            LayerTrait.IN_PLACE,
+            LayerTrait.CONSTRUCTIBLE,
+            LayerTrait.WRAPPER,
+        ),
         forms=(
             form("borrow_optional", RouteForm.BORROW, "Borrows the element of an optional."),
             form(
@@ -95,7 +112,13 @@ layer_kinds: tuple[LayerKind, ...] = (
         id="own",
         description="A handle that is the only owner of one element of a shape.",
         parameters=1,
-        traits=(LayerTrait.OWNING, LayerTrait.NULLABLE, LayerTrait.BORROWABLE),
+        traits=(
+            LayerTrait.OWNING,
+            LayerTrait.NULLABLE,
+            LayerTrait.BORROWABLE,
+            LayerTrait.CONSTRUCTIBLE,
+            LayerTrait.WRAPPER,
+        ),
         forms=(
             form(
                 "borrow_owned",
@@ -127,7 +150,12 @@ layer_kinds: tuple[LayerKind, ...] = (
         id="ptr",
         description="A non-owning address of one element of a shape.",
         parameters=1,
-        traits=(LayerTrait.NULLABLE, LayerTrait.BORROWABLE),
+        traits=(
+            LayerTrait.NULLABLE,
+            LayerTrait.BORROWABLE,
+            LayerTrait.CONSTRUCTIBLE,
+            LayerTrait.COPYABLE,
+        ),
         forms=(
             form("deref_pointer", RouteForm.BORROW, "Borrows the element a pointer points to."),
             form(
@@ -176,6 +204,9 @@ layer_kinds: tuple[LayerKind, ...] = (
             LayerTrait.SHARING,
             LayerTrait.NULLABLE,
             LayerTrait.BORROWABLE,
+            LayerTrait.CONSTRUCTIBLE,
+            LayerTrait.COPYABLE,
+            LayerTrait.WRAPPER,
         ),
         forms=(
             form(

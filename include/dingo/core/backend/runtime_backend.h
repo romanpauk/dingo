@@ -920,48 +920,48 @@ private:
   }
 
   // Calls `visit` with the created layers of the plan made of `Made`: none,
-  // wrapping into an optional, or adopting a pointer, which may be wrapped
-  // into an optional in turn; or returns visit.unsupported().
+  // or the layers the creating forms make, a wrapped element or an adopted
+  // pointer, outermost first, which the layers of `Made` must have; or
+  // returns visit.unsupported().
   template <typename Made, typename Visit>
   static decltype(auto) visit_layers(const completion_plan &plan,
                                      Visit &visit) {
-    const rule_id *rules = plan.creating;
+    const route_form *forms = plan.creating;
     switch (plan.created) {
     case 0:
       return visit.template apply<created_layers<Made>>();
     case 1:
-      switch (rules[0]) {
-      case rule_id::wrap_optional:
-        return visit
-            .template apply<created_layers<Made, rule_id::wrap_optional>>();
-      case rule_id::adopt_pointer_owned:
-        return visit.template apply<
-            created_layers<Made, rule_id::adopt_pointer_owned>>();
-      case rule_id::adopt_pointer_shared:
-        return visit.template apply<
-            created_layers<Made, rule_id::adopt_pointer_shared>>();
+      return visit_layer<Made>(forms[0], visit);
+    case 2:
+      switch (forms[1]) {
+      case route_form::wrap:
+        return visit_layer<Made, route_form::wrap>(forms[0], visit);
+      case route_form::adopt:
+        return visit_layer<Made, route_form::adopt>(forms[0], visit);
       default:
         break;
-      }
-      break;
-    case 2:
-      if (rules[1] == rule_id::wrap_optional) {
-        switch (rules[0]) {
-        case rule_id::adopt_pointer_owned:
-          return visit.template apply<created_layers<
-              Made, rule_id::wrap_optional, rule_id::adopt_pointer_owned>>();
-        case rule_id::adopt_pointer_shared:
-          return visit.template apply<created_layers<
-              Made, rule_id::wrap_optional, rule_id::adopt_pointer_shared>>();
-        default:
-          break;
-        }
       }
       break;
     default:
       break;
     }
     return visit.unsupported();
+  }
+
+  // Calls `visit` with the created layers of `Outer...` over the layer the
+  // creating form `form` makes.
+  template <typename Made, route_form... Outer, typename Visit>
+  static decltype(auto) visit_layer(route_form form, Visit &visit) {
+    switch (form) {
+    case route_form::wrap:
+      return visit
+          .template apply<created_layers<Made, Outer..., route_form::wrap>>();
+    case route_form::adopt:
+      return visit
+          .template apply<created_layers<Made, Outer..., route_form::adopt>>();
+    default:
+      return visit.unsupported();
+    }
   }
 
   // Whether the binding makes the boundary object of the layers of a plan.

@@ -82,6 +82,7 @@ def validate(spec: Spec) -> list[str]:
     check_graph_rules(spec, errors)
     check_diagnostics(spec, errors)
     check_diagnostic_examples(spec, errors)
+    check_kind_projections(spec, errors)
     check_binding_time_constraints(spec, errors)
     check_variant_points(spec, errors)
     check_contracts(spec, errors)
@@ -483,6 +484,17 @@ def check_diagnostics(spec: Spec, errors: list[str]) -> None:
                 f"{where}: a diagnostic reported when compiled uses each "
                 "placeholder once, in the declared order"
             )
+
+
+def check_kind_projections(spec: Spec, errors: list[str]) -> None:
+    kinds = ids(spec.layer_kinds)
+    projected = [projection.kind for projection in spec.cpp.kind_projections]
+    check_unique(errors, "cpp.kind_projections", "kinds", projected)
+    for kind in kinds:
+        if kind not in projected:
+            errors.append(f"cpp.kind_projections: no C++ tag of the layer kind {kind}")
+    for projection in spec.cpp.kind_projections:
+        require_ref(errors, f"cpp.kind_projections.{projection.id}", "kind", projection.kind, kinds)
 
 
 def check_diagnostic_examples(spec: Spec, errors: list[str]) -> None:

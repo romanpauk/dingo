@@ -1857,21 +1857,30 @@ adopting an owned pointer, sharing an owned handle, taking an address, decaying
 or releasing an array, and upcasting or keeping an interface handle); the rules
 of a leaf, which copy it, upcast it, or convert it; and the value categories.
 Every layer kind is a declaration: a tag type whose public `layer_kind_traits`
-give its properties, owning, sharing, nullable, borrowable, in place, variadic,
-and extent, and its forms, with the kind a form leads to, such as the sharing
-kind of a family. The kinds of the library, unique, shared, optional, variant,
-the arrays, the pointer, and the reference, are generated from the spec as such
-declarations, and `std::` and language types map onto them through
-`wrapper_traits` as a user type does. The engine knows no kind by name: a node
-of a shape holds the identity of its kind, its properties, and its forms, and
-the rules of a derivation are the forms of its kinds. A storage form is a
-classification of the properties of the outer layers, which a scope exposes
-categories for.
+give its properties, owning, sharing, nullable, borrowable, in place, unsized,
+constructible, copyable, immovable, wrapper, variadic, and extent, and its
+forms, with the kind a form leads to, such as the sharing kind of a family. The
+kinds of the library, unique, shared, optional, variant, the arrays, the
+pointer, and the reference, are generated from the spec as such declarations,
+and `std::` and language types map onto them through `wrapper_traits` as a user
+type does. The engine knows no kind by name: a node of a shape holds the
+identity of its kind, its properties, and its forms, and the rules of a
+derivation are the forms of its kinds. A storage form is a classification of the
+properties of the outer layers, which a scope exposes categories for. A
+derivation prefers, of two routes of as many rules, the one whose forms come
+first in the order of the algebra; it orders forms, not kinds, so of routes that
+differ only in their kinds the one derived first is preferred. Neither the route
+table nor the selection table observes the difference from the former order,
+which also ordered the kinds.
 
 A form that creates a layer, wrapping or adopting, applies at the request: a
 binding cannot know every kind requested of it, so a request of a layer whose
 kind wraps or adopts resolves its element and makes the layer of it. A form that
 reaches into a layer or converts it applies at the binding.
+
+Steps 1 and 2 are done. Until step 3, a binding derives the creating forms of
+the kinds of the library and of the kinds of its stored shape, which is the one
+place the engine still has a list of kinds.
 
 Steps, each checked against the route table, which must not change:
 

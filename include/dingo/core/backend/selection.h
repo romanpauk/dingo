@@ -250,12 +250,10 @@ private:
       return false;
     } else {
       using traits = layer_traits<std::remove_cv_t<Type>>;
-      if constexpr (traits::kind == layer_kind::opt ||
-                    traits::kind == layer_kind::own ||
-                    traits::kind == layer_kind::share) {
+      if constexpr (has_layer_properties_v<Type, layer_property::wrapper> &&
+                    !has_layer_properties_v<Type, layer_property::variadic>) {
         using element = type_list_at_t<0, typename traits::arguments>;
-        return layer_traits<element>::kind == layer_kind::leaf &&
-               std::is_copy_constructible_v<element>;
+        return !is_layer_v<element> && std::is_copy_constructible_v<element>;
       } else {
         return false;
       }
