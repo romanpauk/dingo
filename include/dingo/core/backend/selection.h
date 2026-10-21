@@ -27,7 +27,9 @@
 #include <dingo/core/backend/diagnose.h>
 #include <dingo/core/base/mechanics.h>
 #include <dingo/core/engine/request.h>
+#include <dingo/core/primitives/diagnostic_message.h>
 #include <dingo/core/primitives/retained.h>
+#include <dingo/core/projection/annotated.h>
 #include <dingo/core/projection/auto_constructible.h>
 #include <dingo/core/projection/collection.h>
 #include <dingo/core/projection/construct.h>
@@ -212,20 +214,12 @@ public:
   }
 
   // Adds the container's own bindings a collection request names to
-  // `collection`, in the order of the sources of the collection rule.
-  template <typename Collection, typename Key, typename Append>
+  // `collection` through `counted`, a counting_append, by the collection rule
+  // without its parent.
+  template <typename Collection, typename Key, typename Counted>
   void collect_own(Collection &collection, const void *key_value,
-                   Append &append) {
-    constexpr const selection_rule &rule = rule_of(selection_mode::collection);
-    for (std::size_t step = 0; step < rule.step_count; ++step) {
-      for (std::size_t source = 0; source < rule.steps[step].source_count;
-           ++source) {
-        if (rule.steps[step].sources[source] != selection_source::parent) {
-          collect_source<Collection, Key>(rule.steps[step].sources[source],
-                                          collection, key_value, append);
-        }
-      }
-    }
+                   Counted &counted) {
+    collect_steps<Collection, Key, false>(collection, key_value, counted);
   }
 
   // Adds the bindings a collection request names by the collection rule to
@@ -233,14 +227,27 @@ public:
   template <typename Collection, typename Key, typename Counted>
   void collect_into(Collection &collection, const void *key_value,
                     Counted &counted) {
+    collect_steps<Collection, Key, true>(collection, key_value, counted);
+  }
+
+  // Collects by the steps of the collection rule, with or without the
+  // parent, until a step adds a binding when the rule takes the first that
+  // does.
+  template <typename Collection, typename Key, bool WithParent,
+            typename Counted>
+  void collect_steps(Collection &collection, const void *key_value,
+                     Counted &counted) {
     constexpr const selection_rule &rule = rule_of(selection_mode::collection);
     for (std::size_t step = 0; step < rule.step_count; ++step) {
       const bool before = counted.added;
       counted.added = false;
       for (std::size_t source = 0; source < rule.steps[step].source_count;
            ++source) {
-        collect_source<Collection, Key>(rule.steps[step].sources[source],
-                                        collection, key_value, counted);
+        if (WithParent ||
+            rule.steps[step].sources[source] != selection_source::parent) {
+          collect_source<Collection, Key>(rule.steps[step].sources[source],
+                                          collection, key_value, counted);
+        }
       }
       const bool added = counted.added;
       counted.added = before || added;
@@ -304,6 +311,67 @@ private:
 
   static constexpr const selection_rule &singular =
       rule_of(selection_mode::singular);
+
+public:
+  // Whether every dependency without a key the factories of `Bindings`
+  // declare names a binding, unless the container decides only when it is
+  // resolved, which reports a dependency that names none then; one that names
+  // none when the container is compiled is reported then. A binding with
+  // local bindings, which may answer its dependencies, is not checked. spec:
+  // diagnostics.type_not_found_required_by
+  template <typename... Bindings>
+  static constexpr bool
+  declared_dependencies_named(type_list<Bindings...> /*bindings*/) {
+    return (dependencies_named<Bindings>() && ...);
+  }
+
+private:
+  template <typename Binding> static constexpr bool dependencies_named() {
+    using arguments = typename declared_arguments<
+        typename Binding::factory_type,
+        leaf_of_t<typename Binding::stored_type>>::type;
+    if constexpr (std::is_void_v<arguments> ||
+                  !std::is_same_v<typename Binding::locals, type_list<>>) {
+      return true;
+    } else {
+      return arguments_named<Binding>(arguments());
+    }
+  }
+
+  template <typename Binding, typename... Arguments>
+  static constexpr bool arguments_named(type_list<Arguments...> /*arguments*/) {
+    return (argument_named<Binding, Arguments>() && ...);
+  }
+
+  template <typename Binding, typename Argument>
+  static constexpr bool argument_named() {
+    using request = detail::argument_request<Argument>;
+    using type = typename request::type;
+    using key = typename request::key;
+    if constexpr (std::is_same_v<key, no_key> &&
+                  !is_collection_request<type>() &&
+                  names_none_when_compiled<type, key, 0>()) {
+      fail<diag::type_not_found_required_by, type,
+           dependency_path<leaf_of_t<typename Binding::stored_type>>>();
+    }
+    return true;
+  }
+
+  // Whether every step a request takes is known to name no binding when it
+  // is compiled.
+  template <typename Request, typename Key, std::size_t Step>
+  static constexpr bool names_none_when_compiled() {
+    if constexpr (Step == singular.step_count) {
+      return true;
+    } else if constexpr (!meets<Request, Key, true>(
+                             singular.steps[Step].when)) {
+      return names_none_when_compiled<Request, Key, Step + 1>();
+    } else {
+      return known_step_count<Request, Key, selection_mode::singular, Step>() ==
+                 0 &&
+             names_none_when_compiled<Request, Key, Step + 1>();
+    }
+  }
 
   Self &self() { return static_cast<Self &>(*this); }
 

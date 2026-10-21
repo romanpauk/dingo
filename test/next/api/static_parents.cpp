@@ -192,3 +192,52 @@ TEST(next_static_parents,
   EXPECT_EQ(resolved.value, 5);
   EXPECT_EQ(&resolved, &grandparent.resolve<retained_interface &>());
 }
+
+namespace {
+struct declared_dependency {
+  declared_dependency() : value(5) {}
+
+  int value;
+};
+
+struct declared_consumer {
+  explicit declared_consumer(declared_dependency &dependency)
+      : value(dependency.value) {}
+
+  int value;
+};
+
+// An aggregate, which a container constructs when no binding names it.
+struct constructed_dependency {
+  static constexpr int value = 6;
+};
+
+struct declared_value_consumer {
+  explicit declared_value_consumer(constructed_dependency /*dependency*/)
+      : value(constructed_dependency::value) {}
+
+  int value;
+};
+
+// A dependency a static binding declares is decided when the container is
+// compiled: one its parent or auto-construction answers compiles, and one no
+// source names is rejected then (the generated diagnostic test
+// type_not_found_required_by).
+TEST(next_static_parents, a_declared_dependency_answered_when_compiled) {
+  using parent_bindings =
+      bindings<dingo::bind<scope<shared>, storage<declared_dependency>>>;
+  static_container<parent_bindings> parent;
+  static_container<
+      bindings<dingo::bind<scope<shared>, storage<declared_consumer>,
+                           dependencies<declared_dependency &>>>,
+      static_container<parent_bindings>>
+      child(&parent);
+  EXPECT_EQ(child.resolve<declared_consumer &>().value, 5);
+
+  static_container<
+      bindings<dingo::bind<scope<shared>, storage<declared_value_consumer>,
+                           dependencies<constructed_dependency>>>>
+      constructing;
+  EXPECT_EQ(constructing.resolve<declared_value_consumer &>().value, 6);
+}
+} // namespace

@@ -197,6 +197,13 @@ template <typename... Parts> struct registration {
   using dependencies_part =
       typename detail::find_part<::dingo::dependencies, detail::missing_part,
                                  Parts...>::type;
+  static constexpr bool declares_dependencies =
+      !std::is_same_v<dependencies_part, detail::missing_part>;
+  static_assert(
+      core::require<!declares_dependencies ||
+                        std::is_same_v<factory_part, detail::missing_part>,
+                    core::diag::registration_dependencies_twice,
+                    typename storage_part::type>());
   // The factory a factory<> part declares, or the constructor of the types a
   // dependencies<> part declares, or the detected constructor.
   using declared_factory = typename std::conditional_t<
@@ -217,6 +224,10 @@ template <typename... Parts> struct registration {
   template <typename... Args> struct with_arguments {
     using factory =
         typename detail::find_callable_factory<declared_factory, Args...>::type;
+    static_assert(core::require<!declares_dependencies ||
+                                    std::is_same_v<factory, declared_factory>,
+                                core::diag::registration_dependencies_twice,
+                                typename storage_part::type>());
     using runtime = typename detail::find_runtime_key<void, Args...>::type;
     static_assert(
         core::require<

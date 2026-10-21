@@ -841,8 +841,10 @@ struct keyed_collection_service {
   std::vector<typed_dependency *> typed_values;
 };
 
+// A keyed collection holds the local bindings of its key, which shadow the
+// container's, and the container's of a key the local bindings do not hold.
 TEST(next_runtime_registration,
-     keyed_collections_hold_the_local_and_the_container_bindings) {
+     keyed_collections_hold_the_local_bindings_of_their_key) {
   dingo::container<collection_traits> container;
   container
       .register_type<scope<dingo::shared>, storage<associative_dependency>>(
@@ -866,14 +868,14 @@ TEST(next_runtime_registration,
   for (auto *element : service.associative_values) {
     associative.push_back(element->value);
   }
-  EXPECT_EQ(associative, (std::vector<int>{11, 22}));
+  EXPECT_EQ(associative, (std::vector<int>{22}));
   ASSERT_EQ(service.typed_values.size(), 1u);
   EXPECT_EQ(service.typed_values.front()->value, 33);
 }
 
 // In a domain of one, a local runtime binding of a key a local static binding
 // of the registration holds is rejected; a binding of the container is of
-// another level, so a collection holds it and the local one.
+// another level, which the local one shadows.
 domain_dependency make_local_static_dependency() {
   return domain_dependency{22};
 }
@@ -893,9 +895,10 @@ TEST(next_runtime_registration,
       (child->register_type<scope<dingo::shared>, storage<domain_dependency>>(
           dingo::callable([] { return domain_dependency{33}; }))),
       dingo::lookup_already_registered_exception);
+  // The local binding shadows the container's.
   auto &service = container.resolve<collecting_service &>();
-  EXPECT_EQ(service.value, 11);
-  EXPECT_EQ(service.count, 2u);
+  EXPECT_EQ(service.value, 22);
+  EXPECT_EQ(service.count, 1u);
 }
 
 } // namespace

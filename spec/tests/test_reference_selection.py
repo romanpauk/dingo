@@ -94,7 +94,9 @@ def test_local_bindings_shadow_the_container(model):
     local = [Binding("local", ("iface",))]
     assert names(model.select(container, Request("iface"), local)) == ["local"]
     collected = model.select(container, Request("iface"), local, collection=True)
-    assert names(collected) == ["container", "local"]
+    assert names(collected) == ["local"]
+    collected = model.select(container, Request("iface"), (), collection=True)
+    assert names(collected) == ["container"]
 
 
 def test_an_unregistered_type_is_auto_constructed_last(model):

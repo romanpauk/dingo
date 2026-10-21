@@ -553,19 +553,58 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         description=(
             "A lookup backend names its own index of the key values of a "
             "domain, a member template index<Value, Candidate>, which takes "
-            "dingo::index_item values; the built-in backends name theirs."
+            "dingo::index_item values; the backends of the library name theirs "
+            "as a backend of the user does."
         ),
-        cases=("api:lookup_index", "api:index_item"),
+        cases=(
+            "api:lookup_backend",
+            "api:index_item",
+            "diagnostic:lookup_backend_without_index",
+        ),
         baseline=(
-            "A lookup backend names only a map as its storage, and the index "
-            "structures are fixed by the implementation."
+            "A lookup backend names a map as its storage, which the container "
+            "constructs from its allocator and fills by try_emplace, and the "
+            "index structures are fixed by the implementation."
         ),
         now=(
-            "A backend names an index or a map; the index of a request is the "
-            "one of the declaration of its domain, chosen when the request is "
-            "compiled."
+            "A backend names its index, and a backend that names none is "
+            "rejected when it is declared; the index of a request is the one "
+            "of the declaration of its domain, chosen when the request is "
+            "compiled. A map is no longer a backend."
         ),
         decision=DECISION,
+    ),
+    BehaviorChange(
+        id="leaves_are_copied_by_their_copy_constructor",
+        description=(
+            "A request of a value copies the leaf by its copy constructor; a "
+            "type_conversion_traits of a leaf to its own type is not a route."
+        ),
+        cases=("test:next_object_routes.a_leaf_is_copied_by_its_copy_constructor",),
+        baseline=(
+            "A value request copies the leaf by the type_conversion_traits it "
+            "declares to itself, when it declares one."
+        ),
+        now="The leaf is copied by its copy constructor.",
+        decision=SWITCH_DECISION,
+    ),
+    BehaviorChange(
+        id="optional_elements_are_not_converted",
+        description=(
+            "An optional of an interface is not made of a borrowed optional of "
+            "an implementation, which would copy its element into one of the "
+            "interface."
+        ),
+        cases=(
+            "test:next_stored_shapes."
+            "a_pointer_to_an_optional_serves_no_optional_of_its_interface",
+        ),
+        baseline=(
+            "The request is served by an optional of the interface made from "
+            "the element, or an empty one."
+        ),
+        now="The request throws type_not_convertible_exception.",
+        decision=SWITCH_DECISION,
     ),
     BehaviorChange(
         id="empty_elements_are_refused",
@@ -583,6 +622,20 @@ behavior_changes: tuple[BehaviorChange, ...] = (
             "It throws type_not_convertible_exception, the diagnostic "
             "element_not_held; a request of an address is null, as before."
         ),
+        decision=SWITCH_DECISION,
+    ),
+    BehaviorChange(
+        id="dependencies_are_declared_once",
+        description=(
+            "A registration declares the dependencies of its binding by a "
+            "dependencies<> or by its factory, not both."
+        ),
+        cases=("diagnostic:registration_dependencies_twice",),
+        baseline=(
+            "The dependencies<> of a registration with a factory are its "
+            "dependencies, which the factory need not take."
+        ),
+        now="The registration does not compile.",
         decision=SWITCH_DECISION,
     ),
     BehaviorChange(
@@ -613,6 +666,23 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         ),
         baseline="The request of an object that cannot be moved does not compile.",
         now="The request is served.",
+        decision=SWITCH_DECISION,
+    ),
+    BehaviorChange(
+        id="local_bindings_shadow_collections",
+        description=(
+            "The local bindings of a request shadow the bindings of the "
+            "container for a collection, as for one object."
+        ),
+        cases=("test:next_local.shadows_the_collections_of_the_container",),
+        baseline=(
+            "A collection without a key holds the container's and the local "
+            "bindings; one by a key holds only the local bindings of the key."
+        ),
+        now=(
+            "Every collection holds the local bindings of its key when there "
+            "are any, and the container's otherwise."
+        ),
         decision=SWITCH_DECISION,
     ),
 )

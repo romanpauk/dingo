@@ -269,7 +269,6 @@ add_executable(dingo_next_test
     next/primitives/diagnostic_message.cpp
     next/primitives/retained.cpp
     next/primitives/transaction_log.cpp
-    next/primitives/transactions.cpp
     next/primitives/type_name.cpp
     next/projection/request_types.cpp
     next/projection/shape.cpp

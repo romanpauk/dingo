@@ -232,6 +232,74 @@ int main() {
         "left -> right -> left",
     ),
     example(
+        "type_not_found_required_by",
+        STATIC,
+        """
+struct dependency {};
+
+struct service {
+  explicit service(dependency &) {}
+};
+
+int main() {
+  using bindings = dingo::bindings<
+      dingo::bind<dingo::scope<dingo::shared>, dingo::storage<service>,
+                  dingo::dependencies<dependency &>>>;
+  dingo::static_container<bindings> container;
+  (void)container;
+}
+""",
+        "dependency&",
+        "service",
+    ),
+    example(
+        "registration_dependencies_twice",
+        SHARED,
+        CONFIG
+        + """
+struct service {
+  explicit service(config &) {}
+};
+
+service make_service(config &value) { return service(value); }
+
+int main() {
+  dingo::container<> container;
+  container.register_type<dingo::scope<dingo::shared>, dingo::storage<service>,
+                          dingo::dependencies<config &>,
+                          dingo::factory<dingo::function<&make_service>>>();
+}
+""",
+        "service",
+    ),
+    example(
+        "lookup_backend_without_index",
+        SHARED,
+        SERVICE
+        + """
+#include <dingo/lookup/lookup.h>
+
+#include <map>
+
+struct map_backend {
+  template <typename Key, typename Value, typename Cardinality,
+            typename Allocator>
+  using storage = std::map<Key, Value>;
+};
+
+struct traits : dingo::dynamic_container_traits {
+  using lookup_definition_type = dingo::lookups<
+      dingo::associative<int, service, dingo::one, map_backend>>;
+};
+
+int main() {
+  dingo::container<traits> container;
+  (void)container;
+}
+""",
+        "map_backend",
+    ),
+    example(
         "registration_without_scope",
         SHARED,
         CONFIG

@@ -13,6 +13,7 @@
 // only accelerates the lookup and never changes which bindings a request
 // names.
 
+#include <dingo/core/api/lookup/indexes.h>
 #include <dingo/core/api/registration.h>
 #include <dingo/core/backend/index.h>
 #include <dingo/core/base/mechanics.h>
@@ -33,10 +34,9 @@ struct many {};
 
 // A lookup backend indexes the key values of a domain. It is a type with a
 // member template index<Value, Candidate>, an index as core/backend/index.h
-// describes it, or a type with a member template storage<Key, Value,
-// Cardinality, Allocator>, a map, by which the key values are indexed. A
-// backend may name the bound of its key values, `bound`, the size of a dense
-// array. The built-in backends are such types too.
+// describes it, and it may name the bound of its key values, `bound`, the size
+// of a dense array. The backends of the library are such types, as a backend
+// of the user is.
 
 // A candidate of a request with the key value it is found by, which the
 // index of a backend takes.
@@ -75,68 +75,19 @@ struct lookup_interfaces<::dingo::interfaces<Interfaces...>> {
   using type = core::type_list<Interfaces...>;
 };
 
-// The index of a backend that names a map as its storage: the map finds the
-// first candidate of a key value, and each candidate the next one of its key
-// value, so the candidates of a key are visited in the order of registration
-// whatever the order of the map.
-template <typename Backend, typename Cardinality> struct storage_indexing {
-  template <typename Value, typename Candidate> class index {
-    using map =
-        typename Backend::template storage<Value, std::size_t, Cardinality,
-                                           std::allocator<char>>;
-    static constexpr std::size_t none = static_cast<std::size_t>(-1);
+// The indexing of a backend: the backend, which names its index.
+template <typename Backend, typename = void>
+struct names_index : std::false_type {};
 
-  public:
-    void build(const core::index_item<Value, Candidate> *items,
-               std::size_t count) {
-      items_ = items;
-      first_ = map();
-      next_.assign(count, none);
-      std::vector<std::size_t> last(count, none);
-      for (std::size_t position = 0; position < count; ++position) {
-        const auto found = first_.find(items[position].key);
-        if (found == first_.end()) {
-          first_.emplace(items[position].key, position);
-          last[position] = position;
-        } else {
-          next_[last[found->second]] = position;
-          last[found->second] = position;
-        }
-      }
-    }
+template <typename Backend>
+struct names_index<Backend, std::void_t<typename Backend::template index<
+                                int, core::index_item<int, int>>>>
+    : std::true_type {};
 
-    template <typename Visit>
-    void visit(const Value &key, Visit &&visit) const {
-      const auto found = first_.find(key);
-      if (found == first_.end()) {
-        return;
-      }
-      for (std::size_t position = found->second; position != none;
-           position = next_[position]) {
-        if (!visit(items_[position].candidate)) {
-          return;
-        }
-      }
-    }
-
-  private:
-    const core::index_item<Value, Candidate> *items_ = nullptr;
-    map first_;
-    std::vector<std::size_t> next_;
-  };
-};
-
-// The indexing of a backend: the backend, which names its index, or the
-// index of the map it names as its storage.
-template <typename Backend, typename Cardinality, typename = void>
-struct backend_indexing {
-  using type = storage_indexing<Backend, Cardinality>;
-};
-
-template <typename Backend, typename Cardinality>
-struct backend_indexing<Backend, Cardinality,
-                        std::void_t<typename Backend::template index<
-                            int, core::index_item<int, int>>>> {
+template <typename Backend> struct backend_indexing {
+  static_assert(
+      core::require<names_index<Backend>::value,
+                    core::diag::lookup_backend_without_index, Backend>());
   using type = Backend;
 };
 
@@ -152,11 +103,11 @@ struct backend_bound<Backend, std::void_t<decltype(Backend::bound)>> {
 
 template <typename Interface, typename Key, typename Cardinality,
           typename Backend = ordered>
-using lookup_declaration_t = core::lookup_declaration<
-    typename lookup_interfaces<Interface>::type, Key,
-    std::is_same_v<Cardinality, many>,
-    typename backend_indexing<Backend, Cardinality>::type,
-    backend_bound<Backend>::value>;
+using lookup_declaration_t =
+    core::lookup_declaration<typename lookup_interfaces<Interface>::type, Key,
+                             std::is_same_v<Cardinality, many>,
+                             typename backend_indexing<Backend>::type,
+                             backend_bound<Backend>::value>;
 
 template <typename Key, typename Interface, typename Cardinality,
           typename Backend>
@@ -201,10 +152,10 @@ struct associative
 // Every domain no other declaration covers.
 template <typename Cardinality = one, typename Backend = ordered>
 struct base
-    : core::lookup_declaration<
-          core::type_list<>, core::no_key, std::is_same_v<Cardinality, many>,
-          typename detail::backend_indexing<Backend, Cardinality>::type,
-          detail::backend_bound<Backend>::value> {};
+    : core::lookup_declaration<core::type_list<>, core::no_key,
+                               std::is_same_v<Cardinality, many>,
+                               typename detail::backend_indexing<Backend>::type,
+                               detail::backend_bound<Backend>::value> {};
 
 } // namespace dingo
 

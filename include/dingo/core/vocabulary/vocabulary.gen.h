@@ -143,7 +143,7 @@ enum class step_condition : std::uint8_t {
 enum class selection_status : std::uint8_t { ok, ambiguous, not_found };
 
 inline constexpr std::size_t max_selection_steps = 5;
-inline constexpr std::size_t max_step_sources = 4;
+inline constexpr std::size_t max_step_sources = 2;
 
 // The union of the sources of a step, taken when the request meets its
 // condition `when`.
@@ -187,12 +187,15 @@ inline constexpr selection_rule selection_rules[] = {
     // spec: selection_rules.collection
     {selection_mode::collection,
      true,
-     {{{selection_source::container_runtime, selection_source::container_static,
-        selection_source::local_runtime, selection_source::local_static},
-       4,
+     {{{selection_source::local_runtime, selection_source::local_static},
+       2,
+       step_condition::always},
+      {{selection_source::container_runtime,
+        selection_source::container_static},
+       2,
        step_condition::always},
       {{selection_source::parent}, 1, step_condition::always}},
-     2,
+     3,
      selection_status::ok,
      selection_status::ok,
      selection_status::ok},

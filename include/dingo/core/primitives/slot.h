@@ -152,28 +152,19 @@ struct transaction_entry {
   void *context;
 };
 
-// Undoes `entries` in the reverse order they happened.
-inline void undo_entries(transaction_entry *begin,
-                         transaction_entry *end) noexcept {
-  while (end != begin) {
-    --end;
-    end->undo(end->target, end->context);
-  }
-}
-
-// The transaction of a container: the effects on the container of its
-// outermost request in progress, and of the requests it makes of the
-// container, each recorded with the function that undoes it. A request that
-// fails undoes them in the reverse order they happened, and one that returns
-// keeps them. spec: transaction_rules
+// The transaction of a container: the effects on the container of each
+// request in progress, and of the requests it makes of the container, each
+// recorded with the function that undoes it. A request that fails undoes the
+// effects recorded since it began in the reverse order they happened, whether
+// or not the request that made it catches the failure, and one that returns
+// keeps them, for the request that made it to undo if it fails. An effect
+// recorded while effects are undone is undone too. spec: transaction_rules
 //
 // The effects are recorded in the frame of the outermost request, `Inline` of
-// them without allocating, so the container holds only a pointer to them. The
-// outermost request catches its own failure, so one made while another
-// exception unwinds is told apart, and a request that returns checks nothing.
-// Every request calls itself from one place, so a compiler inlines it. A log
-// that never `Grows` records at most `Inline` effects, which its container
-// proves.
+// them without allocating, so the container holds only a pointer to them, and
+// a request begins at the number of effects recorded before it. Every request
+// calls itself from one place, so a compiler inlines it. A log that never
+// `Grows` records at most `Inline` effects, which its container proves.
 template <std::size_t Inline, bool Grows = true> class basic_transaction_log {
 public:
   using undo_function = void (*)(void *, void *) noexcept;
@@ -195,6 +186,7 @@ public:
       frame.entries = frame.inline_entries;
       frame.count = 0;
       frame.capacity = Inline;
+      frame.begin = 0;
       // The guard below forgets the frame before it ends.
 #if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 12
 #pragma GCC diagnostic push
@@ -205,11 +197,14 @@ public:
 #pragma GCC diagnostic pop
 #endif
     }
+    const std::size_t begin = journal_->count;
     struct leave {
       basic_transaction_log &log;
       journal &frame;
+      std::size_t enclosing;
       bool outermost;
       ~leave() {
+        log.journal_->begin = enclosing;
         if (outermost) {
           log.journal_ = nullptr;
           if (frame.entries != frame.inline_entries) {
@@ -217,13 +212,12 @@ public:
           }
         }
       }
-    } guard{*this, frame, outermost};
+    } guard{*this, frame, journal_->begin, outermost};
+    journal_->begin = begin;
     try {
       return request();
     } catch (...) {
-      if (outermost) {
-        undo_entries(frame.entries, frame.entries + frame.count);
-      }
+      undo_since(begin);
       throw;
     }
   }
@@ -242,12 +236,13 @@ public:
     }
   }
 
-  // Records an effect unless the transaction in progress recorded it.
+  // Records an effect unless the request in progress recorded it.
   void record_once(void *target, undo_function undo, void *context = nullptr) {
     if (journal_ == nullptr) {
       return;
     }
-    for (std::size_t index = 0; index < journal_->count; ++index) {
+    for (std::size_t index = journal_->begin; index < journal_->count;
+         ++index) {
       if (journal_->entries[index].target == target &&
           journal_->entries[index].undo == undo) {
         return;
@@ -264,8 +259,19 @@ private:
     transaction_entry *entries;
     std::size_t count;
     std::size_t capacity;
+    // The number of effects recorded before the request in progress began.
+    std::size_t begin;
     transaction_entry inline_entries[Inline];
   };
+
+  // Undoes the effects recorded since `begin`, the last first. An undo may
+  // record an effect, which may grow the log, so each is read before it runs.
+  DINGO_CORE_COLD DINGO_NOINLINE void undo_since(std::size_t begin) noexcept {
+    while (journal_->count != begin) {
+      const transaction_entry entry = journal_->entries[--journal_->count];
+      entry.undo(entry.target, entry.context);
+    }
+  }
 
   DINGO_CORE_COLD DINGO_NOINLINE static void grow(journal &frame) {
     auto *grown = new transaction_entry[frame.capacity * 2];

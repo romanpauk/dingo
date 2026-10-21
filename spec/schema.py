@@ -625,12 +625,13 @@ class TransactionEffect(Enum):
 class TransactionRule(Entity):
     """A request that starts at a container is a transaction of it.
 
-    The outermost request of a container that is in progress, together with
-    the requests it makes of the container, commits when it returns, and when
-    it fails undoes the `undoes` effects it had on the container, in the
-    reverse order they happened. The effects on other containers, a parent or
-    a child, belong to their own transactions. `operations` are the public
-    operations that start one.
+    A request of a container that is in progress, together with the requests
+    it makes of the container, commits to the request that made it when it
+    returns, and when it fails undoes the `undoes` effects it and they had on
+    the container, in the reverse order they happened, whether or not the
+    request that made it catches the failure. The effects on other
+    containers, a parent or a child, belong to their own transactions.
+    `operations` are the public operations that start one.
     """
 
     description: str

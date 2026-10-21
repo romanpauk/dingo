@@ -1238,37 +1238,6 @@ dingo::static_container<source, static_traits> compile_time;
     ),
     name(
         "lookup_backend",
-        "storage",
-        LOOKUP,
-        """\
-struct traits : dingo::dynamic_container_traits {
-  using lookup_definition_type = dingo::lookups<
-      dingo::associative<std::size_t, @P@processor, dingo::many, api_lookup_backend>>;
-};
-dingo::container<traits> container;
-container.register_type<dingo::scope<dingo::shared>, dingo::storage<@P@processor_impl>,
-                        dingo::interfaces<@P@processor>>(
-    dingo::key_value{std::size_t(1)});
-auto all = container.resolve<std::vector<@P@processor *>>(std::size_t(1));
-(void)all;
-""",
-        declarations=LOOKUP_TYPES
-        + """\
-struct api_lookup_backend {
-  template <typename Key, typename Value, typename Cardinality, typename Allocator>
-  using {name} = std::conditional_t<
-      std::is_same_v<Cardinality, dingo::one>,
-      std::map<Key, Value, std::less<Key>,
-               typename std::allocator_traits<Allocator>::template rebind_alloc<
-                   std::pair<const Key, Value>>>,
-      std::multimap<Key, Value, std::less<Key>,
-                    typename std::allocator_traits<Allocator>::template rebind_alloc<
-                        std::pair<const Key, Value>>>>;
-};
-""",
-    ),
-    name(
-        "lookup_index",
         "index",
         LOOKUP,
         """\

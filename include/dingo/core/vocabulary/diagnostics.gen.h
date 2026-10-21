@@ -134,7 +134,10 @@ raise_type_not_found_keyed_required_by(std::string_view request,
 
 // spec: diagnostics.type_not_found_required_by
 // No binding is named by the request of a dependency of an object being
-// constructed.
+// constructed. A dependency the factory of a static binding declares is
+// requested when the container is compiled: a container that decides then that
+// no binding is named by it rejects it then, with the binding that declares it
+// as the path.
 [[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
 raise_type_not_found_required_by(std::string_view request,
                                  std::string_view path) {

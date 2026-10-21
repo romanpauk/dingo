@@ -20,6 +20,9 @@
 
 namespace dingo {
 
+// The lookup backend that orders the key values, see dingo/lookup/lookup.h.
+struct ordered;
+
 struct dynamic_container_traits {
   using rtti_type = rtti<typeid_provider>;
   using allocator_type = std::allocator<char>;
@@ -189,6 +192,8 @@ private:
 
 // The member types of a container of `Traits`.
 template <typename Traits> struct container_member_types {
+  // The backend of the lookups of a domain no lookup declaration names.
+  using default_indexing_type = ::dingo::ordered;
   using traits_type = Traits;
   using lookup_definition_type = typename Traits::lookup_definition_type;
   using rtti_type = typename traits_rtti<Traits>::type;

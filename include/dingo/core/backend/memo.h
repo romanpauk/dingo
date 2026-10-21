@@ -70,7 +70,7 @@ public:
 
 // The memo of a request by a key without a value: every candidate matches.
 // `Indexing` names the index of the candidates of a request by a key value.
-template <typename Entry, typename Key, typename Indexing = default_indexing,
+template <typename Entry, typename Key, typename Indexing,
           bool = key_has_value(Key::descriptor)>
 class request_memo : public memo_base {
 public:

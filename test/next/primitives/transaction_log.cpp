@@ -119,10 +119,10 @@ TEST(next_transaction_log, undoes_more_effects_than_it_records_inline) {
   EXPECT_EQ(effects.values.back(), 100);
 }
 
-TEST(next_transaction_log, only_the_outermost_request_undoes_the_effects) {
+TEST(next_transaction_log, every_request_undoes_its_own_effects) {
   {
     // A nested request that returns keeps its effects only until the
-    // outermost one fails.
+    // request that made it fails.
     transaction_log log;
     undone effects;
     std::vector<int> outer{1};
@@ -141,7 +141,7 @@ TEST(next_transaction_log, only_the_outermost_request_undoes_the_effects) {
   }
   {
     // A nested request that fails, whose failure the outermost one catches,
-    // undoes nothing: the outermost request returns and keeps every effect.
+    // undoes its own effects, and the outermost request keeps its own.
     transaction_log log;
     undone effects;
     std::vector<int> outer{1};
@@ -155,10 +155,32 @@ TEST(next_transaction_log, only_the_outermost_request_undoes_the_effects) {
         });
       } catch (const failure &) {
       }
+      EXPECT_EQ(effects.values, (std::vector<int>{2}));
       return 0;
     });
-    EXPECT_TRUE(effects.values.empty());
+    EXPECT_EQ(effects.values, (std::vector<int>{2}));
   }
+}
+
+TEST(next_transaction_log, records_an_effect_once_per_request) {
+  // A nested request records an effect the request that made it recorded,
+  // so its failure undoes it.
+  transaction_log log;
+  undone effects;
+  int first = 1;
+  int second = 2;
+  log.run([&] {
+    log.record_once(&effects, &undone::undo, &first);
+    try {
+      log.run([&]() -> int {
+        log.record_once(&effects, &undone::undo, &second);
+        throw failure{};
+      });
+    } catch (const failure &) {
+    }
+    return 0;
+  });
+  EXPECT_EQ(effects.values, (std::vector<int>{2}));
 }
 
 TEST(next_transaction_log, the_transactions_of_two_containers_are_their_own) {
@@ -233,10 +255,9 @@ TEST(next_transaction_log, a_container_without_effects_runs_its_requests) {
 }
 
 // An effect recorded while the effects of a failed request are undone, as a
-// destructor that registers into the container records it, is kept, and must
-// not disturb the undoing. Disabled: when the record grows a log whose effects
-// are already out of line, undo_entries walks the freed effects
-// (heap-use-after-free under AddressSanitizer). Finding of the ledger.
+// destructor that registers into the container records it, is undone too,
+// and does not disturb the undoing when it grows a log whose effects are
+// already out of line.
 basic_transaction_log<2> recording_log;
 int recorded_undos = 0;
 
@@ -249,7 +270,7 @@ void record_while_undoing(void * /*target*/, void * /*context*/) noexcept {
   recording_log.record(nullptr, &count_undo);
 }
 
-TEST(next_transaction_log, DISABLED_an_effect_recorded_while_undoing_is_kept) {
+TEST(next_transaction_log, an_effect_recorded_while_undoing_is_undone) {
   recorded_undos = 0;
   EXPECT_THROW(recording_log.run([&]() -> int {
     // Four effects grow the log out of line to its capacity.
@@ -260,7 +281,8 @@ TEST(next_transaction_log, DISABLED_an_effect_recorded_while_undoing_is_kept) {
     throw failure{};
   }),
                failure);
-  EXPECT_EQ(recorded_undos, 4);
+  EXPECT_EQ(recorded_undos, 5);
+  EXPECT_FALSE(recording_log.active());
 }
 
 } // namespace

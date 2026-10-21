@@ -22,6 +22,7 @@
 #include <dingo/core/engine/request.h>
 #include <dingo/core/primitives/diagnostic_message.h>
 #include <dingo/core/primitives/retained.h>
+#include <dingo/core/projection/annotated.h>
 #include <dingo/core/projection/collection.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
@@ -241,24 +242,6 @@ constexpr std::size_t find_binding(const request_descriptor &request) {
 } // namespace detail
 
 namespace detail {
-// The request and the key an argument of a factory is resolved by, as a
-// container resolves it.
-template <typename Argument> struct argument_request {
-  using type = Argument;
-  using key = no_key;
-};
-
-template <typename Type, typename Key>
-struct argument_request<keyed<Type, Key>> {
-  using type = Type;
-  using key = Key;
-};
-
-template <typename Type, typename Tag>
-struct argument_request<::dingo::annotated<Type, Tag>> {
-  using type = Type;
-  using key = annotated_key<Tag, no_key>;
-};
 
 // The dependencies of static bindings that their factories declare: an edge
 // from a binding to the one each argument of its factory resolves. A binding
@@ -397,6 +380,10 @@ constexpr bool within_bound() {
 template <typename LookupTable, typename... Bindings> class static_backend {
   static_assert((registers<Bindings>() && ...));
 
+public:
+  using binding_list = type_list<Bindings...>;
+
+private:
   // Reports the binding a static binding of its key rejects, decided when
   // the container is compiled.
   template <bool Unique> static constexpr bool unique() {

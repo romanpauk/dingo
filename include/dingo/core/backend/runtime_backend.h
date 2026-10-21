@@ -737,9 +737,10 @@ private:
         request_traits<Request, Key>::descriptor;
     using declared = typename declarations::template at<declarations::position(
         innermost_leaf(request.value), request.key)>::indexing;
-    using type = request_memo<entry, Key,
-                              std::conditional_t<std::is_void_v<declared>,
-                                                 default_indexing, declared>>;
+    using type = request_memo<
+        entry, Key,
+        std::conditional_t<std::is_void_v<declared>,
+                           typename Resolver::default_indexing_type, declared>>;
   };
 
   template <typename Request, typename Key>

@@ -58,8 +58,11 @@ template <typename... Subjects> struct kind_forms_malformed_carrier {};
 template <typename... Subjects> struct kind_property_unknown_carrier {};
 template <typename... Subjects> struct layer_kind_undeclared_carrier {};
 template <typename... Subjects> struct lookup_already_registered_carrier {};
+template <typename... Subjects> struct lookup_backend_without_index_carrier {};
 template <typename... Subjects> struct no_default_factory_carrier {};
 template <typename... Subjects> struct no_interface_served_carrier {};
+template <typename... Subjects>
+struct registration_dependencies_twice_carrier {};
 template <typename... Subjects> struct registration_key_twice_carrier {};
 template <typename... Subjects> struct registration_key_values_carrier {};
 template <typename... Subjects> struct registration_without_scope_carrier {};
@@ -99,8 +102,10 @@ enum class diag : std::uint8_t {
   kind_property_unknown,
   layer_kind_undeclared,
   lookup_already_registered,
+  lookup_backend_without_index,
   no_default_factory,
   no_interface_served,
+  registration_dependencies_twice,
   registration_key_twice,
   registration_key_values,
   registration_without_scope,
@@ -113,13 +118,14 @@ enum class diag : std::uint8_t {
   type_not_convertible,
   type_not_found,
   type_not_found_keyed,
+  type_not_found_required_by,
   type_recursion,
 };
 
 // The number of subjects of each diagnostic, one per placeholder.
 inline constexpr std::uint8_t diag_subjects[] = {
-    0, 1, 1, 2, 2, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 3, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 1, 2, 1, 2, 1};
+    0, 1, 1, 2, 2, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    3, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 1, 2, 1, 2, 2, 1};
 
 #if DINGO_HAS_STATIC_ASSERT_MESSAGE
 // The text of a diagnostic around its placeholders, and its carrier.
@@ -292,6 +298,14 @@ template <> struct diag_text<diag::lookup_already_registered> {
       "lookup already registered: interface ", ", storage ", ", key type ", ""};
 };
 
+// spec: diagnostics.lookup_backend_without_index
+template <> struct diag_text<diag::lookup_backend_without_index> {
+  template <typename... Subjects>
+  using carrier = ::dingo::lookup_backend_without_index_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "the lookup backend ", " names no index<Value, Candidate>"};
+};
+
 // spec: diagnostics.no_default_factory
 template <> struct diag_text<diag::no_default_factory> {
   template <typename... Subjects>
@@ -306,6 +320,15 @@ template <> struct diag_text<diag::no_interface_served> {
   using carrier = ::dingo::no_interface_served_carrier<Subjects...>;
   static constexpr std::string_view pieces[] = {"no interface the binding of ",
                                                 " declares can be served"};
+};
+
+// spec: diagnostics.registration_dependencies_twice
+template <> struct diag_text<diag::registration_dependencies_twice> {
+  template <typename... Subjects>
+  using carrier = ::dingo::registration_dependencies_twice_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "the registration of ", " declares its dependencies by a dependencies<> "
+                              "or by its factory, not both"};
 };
 
 // spec: diagnostics.registration_key_twice
@@ -404,6 +427,14 @@ template <> struct diag_text<diag::type_not_found_keyed> {
   using carrier = ::dingo::type_not_found_carrier<Subjects...>;
   static constexpr std::string_view pieces[] = {
       "type not found: ", " (index type: ", ")"};
+};
+
+// spec: diagnostics.type_not_found_required_by
+template <> struct diag_text<diag::type_not_found_required_by> {
+  template <typename... Subjects>
+  using carrier = ::dingo::type_not_found_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "type not found: ", " (required by ", ")"};
 };
 
 // spec: diagnostics.type_recursion
@@ -640,6 +671,17 @@ struct diag_report<diag::lookup_already_registered, Subjects...> {
   }
 };
 
+// spec: diagnostics.lookup_backend_without_index
+template <typename... Subjects>
+struct diag_report<diag::lookup_backend_without_index, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<
+            ::dingo::lookup_backend_without_index_carrier<Subjects...>>,
+        "the lookup backend {backend} names no index<Value, Candidate>");
+  }
+};
+
 // spec: diagnostics.no_default_factory
 template <typename... Subjects>
 struct diag_report<diag::no_default_factory, Subjects...> {
@@ -657,6 +699,18 @@ struct diag_report<diag::no_interface_served, Subjects...> {
     static_assert(
         dependent_false<::dingo::no_interface_served_carrier<Subjects...>>,
         "no interface the binding of {stored} declares can be served");
+  }
+};
+
+// spec: diagnostics.registration_dependencies_twice
+template <typename... Subjects>
+struct diag_report<diag::registration_dependencies_twice, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<
+            ::dingo::registration_dependencies_twice_carrier<Subjects...>>,
+        "the registration of {stored} declares its dependencies by a "
+        "dependencies<> or by its factory, not both");
   }
 };
 
@@ -779,6 +833,15 @@ struct diag_report<diag::type_not_found_keyed, Subjects...> {
   static constexpr void fail() {
     static_assert(dependent_false<::dingo::type_not_found_carrier<Subjects...>>,
                   "type not found: {request} (index type: {key})");
+  }
+};
+
+// spec: diagnostics.type_not_found_required_by
+template <typename... Subjects>
+struct diag_report<diag::type_not_found_required_by, Subjects...> {
+  static constexpr void fail() {
+    static_assert(dependent_false<::dingo::type_not_found_carrier<Subjects...>>,
+                  "type not found: {request} (required by {path})");
   }
 };
 

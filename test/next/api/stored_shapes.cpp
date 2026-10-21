@@ -280,31 +280,20 @@ TEST(next_stored_shapes, a_pointer_to_an_optional_serves_its_interfaces) {
   EXPECT_EQ(custom_container.resolve<plain_interface>().value, 19);
 }
 
-// Finding of the ledger: the current implementation serves an optional of an
-// interface converted from a borrowed optional of the implementation, empty
-// when the stored optional is empty; the next implementation refuses it with
-// type_not_convertible_exception, and no behavior change declares it.
+// An optional of an interface is not made from a borrowed optional of the
+// implementation, which would copy its element into one of the interface:
+// the request is refused.
 TEST(next_stored_shapes,
-     DISABLED_a_pointer_to_an_optional_serves_an_optional_of_its_interface) {
+     a_pointer_to_an_optional_serves_no_optional_of_its_interface) {
   std::optional<implementation> value{std::in_place, 17};
   dingo::container<> container;
   container.register_type<scope<dingo::external>,
                           storage<std::optional<implementation> *>,
                           dingo::interfaces<plain_interface, secondary>>(
       &value);
-  std::optional<plain_interface> converted =
-      container.resolve<std::optional<plain_interface>>();
-  ASSERT_TRUE(converted.has_value());
-  EXPECT_EQ(converted->value, 17);
-
-  std::optional<implementation> empty;
-  dingo::container<> empty_container;
-  empty_container.register_type<scope<dingo::external>,
-                                storage<std::optional<implementation> *>,
-                                dingo::interfaces<plain_interface, secondary>>(
-      &empty);
-  EXPECT_FALSE(
-      empty_container.resolve<std::optional<plain_interface>>().has_value());
+  EXPECT_THROW(container.resolve<std::optional<plain_interface>>(),
+               dingo::type_not_convertible_exception);
+  EXPECT_EQ(container.resolve<plain_interface &>().value, 17);
 
   user_optional<implementation> custom{implementation{19}};
   dingo::container<> custom_container;
@@ -312,10 +301,8 @@ TEST(next_stored_shapes,
                                  storage<user_optional<implementation> *>,
                                  dingo::interfaces<plain_interface, secondary>>(
       &custom);
-  auto custom_converted =
-      custom_container.resolve<user_optional<plain_interface>>();
-  ASSERT_NE(custom_converted.get(), nullptr);
-  EXPECT_EQ(custom_converted.get()->value, 19);
+  EXPECT_THROW(custom_container.resolve<user_optional<plain_interface>>(),
+               dingo::type_not_convertible_exception);
 }
 
 std::optional<int> no_element() { return std::nullopt; }

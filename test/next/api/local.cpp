@@ -119,7 +119,9 @@ struct many_values : dingo::dynamic_container_traits {
   using lookup_definition_type = dingo::lookups<dingo::collection<value>>;
 };
 
-TEST(next_local, extends_the_collections_of_the_container) {
+// The local bindings of a request shadow the container's for a collection,
+// as for one object; the container answers when they name none.
+TEST(next_local, shadows_the_collections_of_the_container) {
   dingo::container<many_values> container;
   container.register_type<scope<dingo::shared>, storage<value>>(
       dingo::callable([] { return value(11); }));
@@ -131,7 +133,15 @@ TEST(next_local, extends_the_collections_of_the_container) {
   child->register_type<scope<dingo::shared>, storage<value>>(
       dingo::callable([] { return value(33); }));
   EXPECT_EQ(container.resolve<collection_service &>().values,
-            (std::vector<int>{11, 33, 22}));
+            (std::vector<int>{33, 22}));
+
+  dingo::container<many_values> without_locals;
+  without_locals.register_type<scope<dingo::shared>, storage<value>>(
+      dingo::callable([] { return value(11); }));
+  without_locals
+      .register_type<scope<dingo::shared>, storage<collection_service>>();
+  EXPECT_EQ(without_locals.resolve<collection_service &>().values,
+            (std::vector<int>{11}));
 }
 
 struct nested_dependency {

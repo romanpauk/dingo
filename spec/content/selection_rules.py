@@ -61,20 +61,24 @@ selection_rules: tuple[SelectionRule, ...] = (
     SelectionRule(
         id="collection",
         description=(
-            "A request of a collection: the bindings of the container and the "
-            "local ones extend each other, in the order of the sources, runtime "
-            "before static, and the parent is asked when they name none. No "
-            "binding is an empty collection."
+            "A request of a collection: the local bindings shadow the "
+            "container, and the container its parent, as for a singular "
+            "request; the bindings of a level are in the order of its sources, "
+            "runtime before static. No binding is an empty collection."
         ),
         mode=SelectionMode.COLLECTION,
         combine=Combine.FIRST_NON_EMPTY,
         steps=(
             SelectionStep(
                 sources=(
-                    SelectionSource.CONTAINER_RUNTIME,
-                    SelectionSource.CONTAINER_STATIC,
                     SelectionSource.LOCAL_RUNTIME,
                     SelectionSource.LOCAL_STATIC,
+                )
+            ),
+            SelectionStep(
+                sources=(
+                    SelectionSource.CONTAINER_RUNTIME,
+                    SelectionSource.CONTAINER_STATIC,
                 )
             ),
             SelectionStep(sources=(SelectionSource.PARENT,)),

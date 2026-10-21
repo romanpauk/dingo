@@ -476,63 +476,52 @@ TEST(next_lookups, a_key_outside_a_dense_array_names_its_key_type) {
   }
 }
 
-// A backend of the user that names a map as its storage, and counts how the
-// map is used.
-struct map_use {
-  int constructions = 0;
-  int finds = 0;
-  int emplaces = 0;
-  int subscripts = 0;
+// A backend of the user whose index keeps the candidates of each key value in
+// a map, and counts how it is used.
+struct index_use {
+  int builds = 0;
+  int visits = 0;
 };
 
-inline map_use map_uses;
+inline index_use index_uses;
 
 struct counting_backend {
-  template <typename Key, typename Value, typename Cardinality,
-            typename Allocator>
-  class storage {
-    using map_type =
-        std::conditional_t<std::is_same_v<Cardinality, dingo::one>,
-                           std::map<Key, Value>, std::multimap<Key, Value>>;
-
+  template <typename Value, typename Candidate> class index {
   public:
-    using iterator = typename map_type::iterator;
-    using const_iterator = typename map_type::const_iterator;
-
-    storage() { ++map_uses.constructions; }
-
-    iterator find(const Key &key) {
-      ++map_uses.finds;
-      return values_.find(key);
-    }
-    const_iterator find(const Key &key) const {
-      ++map_uses.finds;
-      return values_.find(key);
-    }
-    iterator end() { return values_.end(); }
-    const_iterator end() const { return values_.end(); }
-
-    template <typename... Args> auto emplace(Args &&...args) {
-      ++map_uses.emplaces;
-      return values_.emplace(std::forward<Args>(args)...);
+    void build(const dingo::index_item<Value, Candidate> *items,
+               std::size_t count) {
+      ++index_uses.builds;
+      groups_.clear();
+      for (std::size_t at = 0; at < count; ++at) {
+        groups_[items[at].key].push_back(items[at].candidate);
+      }
     }
 
-    Value &operator[](const Key &key) {
-      ++map_uses.subscripts;
-      return values_[key];
+    template <typename Visit>
+    void visit(const Value &key, Visit &&visit) const {
+      ++index_uses.visits;
+      const auto found = groups_.find(key);
+      if (found == groups_.end()) {
+        return;
+      }
+      for (const Candidate &candidate : found->second) {
+        if (!visit(candidate)) {
+          return;
+        }
+      }
     }
 
   private:
-    map_type values_;
+    std::map<Value, std::vector<Candidate>> groups_;
   };
 };
 
-TEST(next_lookups, a_map_of_the_user_indexes_its_domain) {
+TEST(next_lookups, an_index_of_the_user_indexes_its_domain) {
   struct traits : dingo::dynamic_container_traits {
     using lookup_definition_type = dingo::lookups<
         dingo::associative<int, processor, dingo::one, counting_backend>>;
   };
-  map_uses = {};
+  index_uses = {};
   dingo::container<traits> container;
   container
       .register_type<scope<shared>, storage<impl<1>>, interfaces<processor>>(
@@ -544,10 +533,8 @@ TEST(next_lookups, a_map_of_the_user_indexes_its_domain) {
   EXPECT_EQ(container.resolve<processor &>(8).id(), 2);
   EXPECT_THROW(container.resolve<processor &>(9),
                dingo::type_not_found_exception);
-  EXPECT_GT(map_uses.constructions, 0);
-  EXPECT_GT(map_uses.emplaces, 0);
-  EXPECT_GE(map_uses.finds, 3);
-  EXPECT_EQ(map_uses.subscripts, 0);
+  EXPECT_GT(index_uses.builds, 0);
+  EXPECT_GE(index_uses.visits, 3);
 }
 
 TEST(next_lookups, a_default_declaration_names_the_backend_of_other_domains) {
@@ -555,7 +542,7 @@ TEST(next_lookups, a_default_declaration_names_the_backend_of_other_domains) {
     using lookup_definition_type =
         dingo::lookups<dingo::base<dingo::one, counting_backend>>;
   };
-  map_uses = {};
+  index_uses = {};
   dingo::container<traits> container;
   container
       .register_type<scope<shared>, storage<impl<3>>, interfaces<processor>>();
@@ -563,10 +550,10 @@ TEST(next_lookups, a_default_declaration_names_the_backend_of_other_domains) {
       .register_type<scope<shared>, storage<impl<4>>, interfaces<processor>>(
           dingo::key_value{7});
   EXPECT_EQ(container.resolve<processor &>().id(), 3);
-  EXPECT_EQ(map_uses.finds, 0);
+  EXPECT_EQ(index_uses.visits, 0);
   EXPECT_EQ(container.resolve<processor &>(7).id(), 4);
-  EXPECT_GT(map_uses.constructions, 0);
-  EXPECT_GT(map_uses.finds, 0);
+  EXPECT_GT(index_uses.builds, 0);
+  EXPECT_GT(index_uses.visits, 0);
 }
 
 // The baseline searches the index of each container of a chain of parents
@@ -590,9 +577,9 @@ TEST(next_lookups, DISABLED_a_parent_fallback_searches_each_container_once) {
       .register_type<scope<shared>, storage<impl<1>>, interfaces<processor>>(
           dingo::key_value{7});
   processor &first = child.resolve<processor &>(7);
-  map_uses = {};
+  index_uses = {};
   EXPECT_EQ(&child.resolve<processor &>(7), &first);
-  EXPECT_EQ(map_uses.finds, 3);
+  EXPECT_EQ(index_uses.visits, 3);
 }
 
 template <typename Cardinality, typename Backend>

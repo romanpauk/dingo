@@ -246,17 +246,15 @@ TEST(next_object_routes, a_shared_pointer_of_a_failed_request_is_destroyed) {
   EXPECT_EQ(destroy_counted::destructions, 1);
 }
 
-// The baseline copies a leaf by the type_conversion_traits it declares to
-// itself, and the next implementation copies it by its copy constructor, a
-// difference no behavior change declares; see the notes of the coverage
-// ledger (build/ledger/fragments/routes_resolution.md).
-TEST(next_object_routes, DISABLED_a_custom_copy_conversion_copies_the_leaf) {
+// A value request copies the leaf by its copy constructor: a conversion the
+// leaf declares to its own type is not a route.
+TEST(next_object_routes, a_leaf_is_copied_by_its_copy_constructor) {
   dingo::container<> container;
   container.register_type<scope<dingo::shared>, storage<custom_copy>>();
 
   custom_copy &reference = container.resolve<custom_copy &>();
   EXPECT_EQ(container.resolve<custom_copy *>(), &reference);
-  EXPECT_EQ(container.resolve<custom_copy>().value, reference.value + 10);
+  EXPECT_EQ(container.resolve<custom_copy>().value, reference.value);
 }
 
 TEST(next_object_routes, interfaces_are_served_in_place_of_the_leaf) {

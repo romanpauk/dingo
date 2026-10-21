@@ -12,8 +12,7 @@
 // registration returns. The object of the registration resolves its
 // dependencies through a view whose local sources are those bindings, whose
 // container sources are the host's own bindings, and whose parent is the
-// host's parent, so the local bindings shadow the host's for singular
-// requests and extend them for collections.
+// host's parent, so the local bindings shadow the host's.
 
 #include <dingo/core/backend/selection.h>
 #include <dingo/core/base/mechanics.h>
@@ -131,6 +130,7 @@ public:
   using local_runtime_source_type = runtime_backend<local_view>;
   using parent_type = typename Host::parent_type;
   using lookup_definition_type = typename Host::lookup_definition_type;
+  using default_indexing_type = typename Host::default_indexing_type;
 
   local_view(Host &host, local_static_source_type *statics,
              local_runtime_source_type *runtime)

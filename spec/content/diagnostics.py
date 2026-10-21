@@ -31,12 +31,16 @@ diagnostics: tuple[Diagnostic, ...] = (
         id="type_not_found_required_by",
         condition=(
             "No binding is named by the request of a dependency of an object "
-            "being constructed."
+            "being constructed. A dependency the factory of a static binding "
+            "declares is requested when the container is compiled: a container "
+            "that decides then that no binding is named by it rejects it then, "
+            "with the binding that declares it as the path."
         ),
         exception="type_not_found_exception",
         message="type not found: {request} (required by {path})",
         placeholders=("request", "path"),
         fallback_carrier="type_not_found_carrier",
+        reported=BOTH,
     ),
     Diagnostic(
         id="type_not_found_keyed",
@@ -166,6 +170,19 @@ diagnostics: tuple[Diagnostic, ...] = (
         reported=COMPILE,
     ),
     Diagnostic(
+        id="registration_dependencies_twice",
+        condition=(
+            "A registration declares the dependencies of its binding by a "
+            "dependencies<> and by a factory, which declares its own: a "
+            "factory<> or a callable factory it takes."
+        ),
+        exception=None,
+        message="the registration of {stored} declares its dependencies by a dependencies<> or by its factory, not both",
+        placeholders=("stored",),
+        fallback_carrier="registration_dependencies_twice_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
         id="registration_key_values",
         condition=(
             "A registration takes two key values of one interface, or two key "
@@ -196,6 +213,18 @@ diagnostics: tuple[Diagnostic, ...] = (
         message="dingo::key_type of {key} accepts at most one value",
         placeholders=("key",),
         fallback_carrier="key_type_values_carrier",
+        reported=COMPILE,
+    ),
+    Diagnostic(
+        id="lookup_backend_without_index",
+        condition=(
+            "A lookup declaration names a backend that names no index of the "
+            "key values of a domain."
+        ),
+        exception=None,
+        message="the lookup backend {backend} names no index<Value, Candidate>",
+        placeholders=("backend",),
+        fallback_carrier="lookup_backend_without_index_carrier",
         reported=COMPILE,
     ),
     Diagnostic(

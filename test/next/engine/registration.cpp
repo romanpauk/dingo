@@ -56,7 +56,7 @@ TEST(next_engine, a_registration_takes_the_first_part_of_each_kind) {
       scope<dingo::shared>, scope<dingo::unique>, storage<first_leaf>,
       storage<second_leaf>, factory<constructor<first_leaf>>,
       factory<function<&build_from_double_and_cstr>>, interfaces<first_leaf>,
-      interfaces<second_leaf>, dependencies<long>, dependencies<short>>;
+      interfaces<second_leaf>>;
   static_assert(std::is_same_v<registration::scope_part, scope<dingo::shared>>);
   static_assert(
       std::is_same_v<registration::storage_part, storage<first_leaf>>);
@@ -64,8 +64,11 @@ TEST(next_engine, a_registration_takes_the_first_part_of_each_kind) {
                                factory<constructor<first_leaf>>>);
   static_assert(
       std::is_same_v<registration::interfaces_part, interfaces<first_leaf>>);
+  using declaring =
+      dingo::core::registration<scope<dingo::unique>, storage<first_leaf>,
+                                dependencies<long>, dependencies<short>>;
   static_assert(
-      std::is_same_v<registration::dependencies_part, dependencies<long>>);
+      std::is_same_v<declaring::dependencies_part, dependencies<long>>);
 
   // The parts may come in any order.
   using reordered =
@@ -131,28 +134,9 @@ TEST(next_engine, dependencies_declare_the_constructor_of_a_registration) {
   SUCCEED();
 }
 
-struct single_argument {
-  explicit single_argument(int) {}
-};
-
-// The current implementation reports the dependencies<> part of a
-// registration that also declares a factory as its dependencies; the next
-// implementation takes the arguments of the declared factory, see the notes
-// of the ledger.
-TEST(next_engine, a_declared_factory_is_preferred_to_declared_dependencies) {
-  using registration =
-      dingo::core::registration<scope<dingo::unique>, storage<single_argument>,
-                                factory<constructor<single_argument(int)>>,
-                                dependencies<float, bool>>;
-  static_assert(std::is_same_v<registration::dependencies_part,
-                               dependencies<float, bool>>);
-  static_assert(
-      std::is_same_v<
-          dingo::core::declared_arguments<registration::binding::factory_type,
-                                          single_argument>::type,
-          type_list<int>>);
-  SUCCEED();
-}
+// A registration that declares dependencies<> and a factory, which declares
+// its own, is rejected: the generated diagnostic test
+// registration_dependencies_twice.
 
 struct service {
   explicit service(int, float) {}

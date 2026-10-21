@@ -5,10 +5,10 @@
 // SPDX-License-Identifier: MIT
 //
 
-// The requests a request makes of its container belong to the transaction of
-// the outermost one: when the outermost request fails, the objects they
-// constructed are destroyed and their slots forget them; when it returns, it
-// keeps them, even those of a nested request whose failure it caught.
+// Every request of a container is a transaction: when it fails, the objects
+// it and the requests it made constructed are destroyed and their slots forget
+// them, whether or not a request that made it catches the failure; when it
+// returns, the request that made it keeps them until it returns or fails.
 // spec: transaction_rules
 
 #include <dingo/container.h>
@@ -65,7 +65,7 @@ struct needs_tracked {
 };
 
 TEST(next_nested_requests,
-     a_failure_caught_inside_a_request_keeps_its_effects) {
+     a_failure_caught_inside_a_request_undoes_its_effects) {
   tracked<2>::clear();
   dingo::container<> container;
   container.register_type<scope<dingo::shared>, storage<tracked<2>>>();
@@ -73,15 +73,35 @@ TEST(next_nested_requests,
   container.register_type<scope<dingo::shared>, storage<outer>>(
       dingo::callable([&container]() -> outer {
         EXPECT_THROW(container.resolve<needs_tracked &>(), std::runtime_error);
+        // The failed request destroyed the object it constructed.
+        EXPECT_EQ(tracked<2>::destructions, 1);
         return outer{};
       }));
   (void)container.resolve<outer &>();
-  // The nested request failed, but the outermost one returned: the object
-  // the nested request constructed is kept.
   EXPECT_EQ(tracked<2>::constructions, 1);
-  EXPECT_EQ(tracked<2>::destructions, 0);
+  EXPECT_EQ(tracked<2>::destructions, 1);
+  // The slot constructs the object again, and keeps it.
   (void)container.resolve<tracked<2> &>();
-  EXPECT_EQ(tracked<2>::constructions, 1);
+  EXPECT_EQ(tracked<2>::constructions, 2);
+  EXPECT_EQ(tracked<2>::destructions, 1);
+}
+
+// A request that returns keeps its effects for the request that made it,
+// whose failure undoes them.
+TEST(next_nested_requests,
+     a_failure_undoes_the_effects_of_the_requests_that_returned) {
+  tracked<3>::clear();
+  dingo::container<> container;
+  container.register_type<scope<dingo::shared>, storage<tracked<3>>>();
+  container.register_type<scope<dingo::shared>, storage<failure>>(
+      dingo::callable([&container]() -> failure {
+        (void)container.resolve<tracked<3> &>();
+        EXPECT_EQ(tracked<3>::destructions, 0);
+        throw std::runtime_error("failed");
+      }));
+  EXPECT_THROW(container.resolve<failure &>(), std::runtime_error);
+  EXPECT_EQ(tracked<3>::constructions, 1);
+  EXPECT_EQ(tracked<3>::destructions, 1);
 }
 
 } // namespace

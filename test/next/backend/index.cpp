@@ -171,7 +171,7 @@ struct entry {};
 
 template <typename Key> void check_memo_without_a_value() {
   std::vector<entry> entries(3);
-  request_memo<entry, Key> memo;
+  request_memo<entry, Key, dingo::ordered> memo;
   for (std::size_t index = 0; index < entries.size(); ++index) {
     memo.add(candidate<entry>{&entries[index], index, nullptr});
   }

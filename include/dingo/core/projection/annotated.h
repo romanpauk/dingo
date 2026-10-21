@@ -144,4 +144,25 @@ template <typename Tag, typename Key>
 struct key_type_of<annotated_key<Tag, Key>> : key_type_of<Key> {};
 } // namespace detail
 
+namespace detail {
+// The request and the key an argument of a factory is resolved by, as a
+// container resolves it.
+template <typename Argument> struct argument_request {
+  using type = Argument;
+  using key = no_key;
+};
+
+template <typename Type, typename Key>
+struct argument_request<keyed<Type, Key>> {
+  using type = Type;
+  using key = Key;
+};
+
+template <typename Type, typename Tag>
+struct argument_request<::dingo::annotated<Type, Tag>> {
+  using type = Type;
+  using key = annotated_key<Tag, no_key>;
+};
+} // namespace detail
+
 } // namespace dingo::core

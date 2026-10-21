@@ -51,23 +51,43 @@ struct linear {
   using index = dingo::core::linear_index<Value, Candidate>;
 };
 
-// Backends of the user that name a map as their storage: one that keeps the
-// key values in order, and one that keeps equal keys in no order.
-struct ordered_storage {
-  template <typename Key, typename Value, typename Cardinality,
-            typename Allocator>
-  using storage = std::map<Key, Value>;
+// Backends of the user whose indexes keep the candidates of each key value in
+// a map of their own: one that keeps the key values in order, and one that
+// hashes them.
+template <template <typename...> typename Map> struct map_backend {
+  template <typename Value, typename Candidate> class index {
+  public:
+    void build(const dingo::index_item<Value, Candidate> *items,
+               std::size_t count) {
+      groups_.clear();
+      for (std::size_t at = 0; at < count; ++at) {
+        groups_[items[at].key].push_back(items[at].candidate);
+      }
+    }
+
+    template <typename Visit>
+    void visit(const Value &key, Visit &&visit) const {
+      const auto found = groups_.find(key);
+      if (found == groups_.end()) {
+        return;
+      }
+      for (const Candidate &candidate : found->second) {
+        if (!visit(candidate)) {
+          return;
+        }
+      }
+    }
+
+  private:
+    Map<Value, std::vector<Candidate>> groups_;
+  };
 };
 
-struct hashed_storage {
-  template <typename Key, typename Value, typename Cardinality,
-            typename Allocator>
-  using storage = std::unordered_multimap<Key, Value>;
-};
+using ordered_map_backend = map_backend<std::map>;
+using hashed_map_backend = map_backend<std::unordered_map>;
 
 template <typename Backend>
-using indexing_t =
-    typename dingo::detail::backend_indexing<Backend, dingo::many>::type;
+using indexing_t = typename dingo::detail::backend_indexing<Backend>::type;
 
 // Registers candidates of the key values `keys`, indexes them by the index of
 // `Backend`, and compares every key value 0 to `range` with a linear scan.
@@ -114,10 +134,10 @@ TEST(next_memo, every_index_returns_what_a_linear_scan_does) {
   check_backend<linear>(5);
 }
 
-TEST(next_memo, a_map_of_the_user_indexes_in_the_order_of_registration) {
-  check<int, hashed_storage>(keys, 5);
-  check<std::size_t, hashed_storage>(keys, 5);
-  check<int, ordered_storage>(keys, 5);
+TEST(next_memo, an_index_of_the_user_indexes_in_the_order_of_registration) {
+  check<int, hashed_map_backend>(keys, 5);
+  check<std::size_t, hashed_map_backend>(keys, 5);
+  check<int, ordered_map_backend>(keys, 5);
 }
 
 TEST(next_memo, a_key_type_without_an_order_or_a_hash_is_scanned) {
