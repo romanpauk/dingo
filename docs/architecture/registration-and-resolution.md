@@ -8,11 +8,11 @@ selection rules.
 ## Runtime Registration
 
 The public API starts at `container::register_type<...>()` in
-[core/api/container.h](../../include/dingo/core/api/container.h).
+[container.h](../../include/dingo/container.h).
 
 `core::registration<Parts...>::binding_for<Args...>` in
-[core/api/registration.h](../../include/dingo/core/api/registration.h) reduces
-the policies and the arguments of the registration to a `core::binding_type`:
+[registration.h](../../include/dingo/registration.h) reduces the policies and
+the arguments of the registration to a `core::binding_type`:
 
 - scope, which a registration must name, and whose tag must have `scope_traits`
 - storage, which a registration must name
@@ -224,9 +224,9 @@ explicit factory.
 
 These files are useful while reading this flow:
 
-- [include/dingo/core/api/container.h](../../include/dingo/core/api/container.h)
-- [include/dingo/core/api/registration.h](../../include/dingo/core/api/registration.h)
-- [include/dingo/core/api/registration_proxy.h](../../include/dingo/core/api/registration_proxy.h)
+- [include/dingo/container.h](../../include/dingo/container.h)
+- [include/dingo/registration.h](../../include/dingo/registration.h)
+- [include/dingo/registration_proxy.h](../../include/dingo/registration_proxy.h)
 - [include/dingo/core/backend/selection.h](../../include/dingo/core/backend/selection.h)
 - [include/dingo/core/backend/runtime_backend.h](../../include/dingo/core/backend/runtime_backend.h)
 - [include/dingo/core/backend/static_backend.h](../../include/dingo/core/backend/static_backend.h)

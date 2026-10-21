@@ -385,11 +385,10 @@ struct scan {
 ```
 
 The backends of the library, `ordered`, `unordered`, and `array<N>`, name the
-indexes of
-[core/api/lookup/indexes.h](../../include/dingo/core/api/lookup/indexes.h): the
-sorted key values, a hash table, and a dense array, each of which falls back to
-an index the key type can serve. A backend that names no index is rejected with
-the diagnostic `lookup_backend_without_index`. See
+indexes of [lookup/indexes.h](../../include/dingo/lookup/indexes.h): the sorted
+key values, a hash table, and a dense array, each of which falls back to an
+index the key type can serve. A backend that names no index is rejected with the
+diagnostic `lookup_backend_without_index`. See
 [Lookup Resolution](../advanced-topics.md#lookup-resolution) for the
 declarations that take a backend.
 
@@ -422,7 +421,7 @@ declarations that take a backend.
 - [include/dingo/core/vocabulary/scope_tags.gen.h](../../include/dingo/core/vocabulary/scope_tags.gen.h)
 - [include/dingo/core/backend/slot.h](../../include/dingo/core/backend/slot.h)
 - [include/dingo/core/backend/index.h](../../include/dingo/core/backend/index.h)
-- [include/dingo/core/api/lookup/indexes.h](../../include/dingo/core/api/lookup/indexes.h)
+- [include/dingo/lookup/indexes.h](../../include/dingo/lookup/indexes.h)
 - [test/support/custom_wrappers.h](../../test/support/custom_wrappers.h)
 - [test/next/api/scopes.cpp](../../test/next/api/scopes.cpp)
 - [test/next/api/lookups.cpp](../../test/next/api/lookups.cpp)

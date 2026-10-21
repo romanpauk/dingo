@@ -21,11 +21,11 @@
 #include <dingo/type/annotated.h>
 #include <dingo/type/type_conversion_traits.h>
 
-#include <dingo/core/api/registration.h>
 #include <dingo/core/engine/derive.h>
 #include <dingo/core/engine/request.h>
 #include <dingo/core/projection/conversion.h>
 #include <dingo/core/projection/layer_traits.h>
+#include <dingo/registration.h>
 
 #include <gtest/gtest.h>
 

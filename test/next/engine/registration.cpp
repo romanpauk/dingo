@@ -19,10 +19,10 @@
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 
-#include <dingo/core/api/registration.h>
 #include <dingo/core/engine/derive.h>
 #include <dingo/core/engine/request.h>
 #include <dingo/core/projection/construct.h>
+#include <dingo/registration.h>
 
 #include <gtest/gtest.h>
 

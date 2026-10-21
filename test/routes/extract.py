@@ -569,12 +569,8 @@ def provided_headers(implementation):
     """The probed public headers the implementation provides."""
     if implementation == "baseline":
         return PROBED_HEADERS
-    facades = PROJECT_ROOT / "include" / "dingo" / "core" / "api"
-    return tuple(
-        header
-        for header in PROBED_HEADERS
-        if (facades / header[len("dingo/") :]).is_file()
-    )
+    include = PROJECT_ROOT / "include"
+    return tuple(header for header in PROBED_HEADERS if (include / header).is_file())
 
 
 def render(group, indices, guarded, implementation):

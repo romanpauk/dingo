@@ -1,11 +1,11 @@
 """Verifies that the headers form a layered hierarchy.
 
-The library is under include/dingo/core, whose modules are the directories
-under core, layered as LAYERS lists them: a header may include headers of the
-layers below its own and headers of its own module, and modules that share a
-layer are independent of each other. The public include paths, every other
-header under include/dingo, form the topmost layer: each includes the facade
-it forwards to in the API layer, and core never includes one.
+The modules of the library are the directories under include/dingo/core,
+layered as LAYERS lists them, and the API, every other header under
+include/dingo, which forms the topmost layer and holds the public include
+paths. A header may include headers of the layers below its own and headers of
+its own module, and modules that share a layer are independent of each other,
+so core never includes the API.
 """
 
 import argparse
@@ -22,10 +22,8 @@ LAYERS = [
     ("core/projection",),
     ("core/engine",),
     ("core/backend",),
-    ("core/api",),
+    ("api",),
 ]
-
-API = "core/api"
 
 INCLUDE = re.compile(r"^\s*#\s*include\s*<dingo/([^>]+)>")
 
@@ -34,7 +32,7 @@ def module_of(path):
     parts = Path(path).parts
     if parts[0] == "core":
         return "/".join(parts[:2]) if len(parts) > 2 else "core"
-    return "public"
+    return "api"
 
 
 def layer_of(module):
@@ -53,7 +51,7 @@ def check(include_directory):
         source = header.relative_to(root)
         source_module = module_of(source)
         source_layer = layer_of(source_module)
-        if source_module != "public" and source_layer is None:
+        if source_layer is None:
             violations.append(f"{source}: module '{source_module}' has no layer")
             continue
         for number, line in enumerate(header.read_text().splitlines(), 1):
@@ -62,19 +60,6 @@ def check(include_directory):
                 continue
             target = match.group(1)
             target_module = module_of(target)
-            if source_module == "public":
-                if target_module != API:
-                    violations.append(
-                        f"{source}:{number}: the public include path must not "
-                        f"include {target}: it forwards to the API layer"
-                    )
-                continue
-            if target_module == "public":
-                violations.append(
-                    f"{source}:{number}: {source_module} must not include the "
-                    f"public include path {target}"
-                )
-                continue
             target_layer = layer_of(target_module)
             if target_layer is None:
                 violations.append(

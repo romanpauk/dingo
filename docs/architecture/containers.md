@@ -13,8 +13,7 @@ The top-level include set is intentionally small:
 - [include/dingo/static_container.h](../../include/dingo/static_container.h):
   static-only container
 
-Each forwards to its facade under `include/dingo/core/api/`. Everything else is
-the core of the library, described in
+They are the API of the library, over its core, described in
 [Header Layers](overview.md#header-layers).
 
 ## Unified Container
@@ -138,9 +137,9 @@ does recursion through runtime bindings.
 
 The key implementation headers behind this model are:
 
-- [include/dingo/core/api/container.h](../../include/dingo/core/api/container.h)
-- [include/dingo/core/api/static_container.h](../../include/dingo/core/api/static_container.h)
-- [include/dingo/core/api/container_traits.h](../../include/dingo/core/api/container_traits.h)
+- [include/dingo/container.h](../../include/dingo/container.h)
+- [include/dingo/static_container.h](../../include/dingo/static_container.h)
+- [include/dingo/container_traits.h](../../include/dingo/container_traits.h)
 - [include/dingo/core/backend/selection.h](../../include/dingo/core/backend/selection.h)
 - [include/dingo/core/backend/static_backend.h](../../include/dingo/core/backend/static_backend.h)
 - [include/dingo/core/backend/runtime_backend.h](../../include/dingo/core/backend/runtime_backend.h)

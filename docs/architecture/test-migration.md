@@ -423,7 +423,7 @@ mutation-checked. The covered rows were read and assert the same property.
   `next_index.a_domain_is_indexed_by_the_index_of_its_declaration` and
   `next_index.a_default_declaration_indexes_every_other_domain`; tests
   `declaration_list` in `core/engine/lookup.h` and `backend_indexing` in
-  `core/api/lookup/lookup.h`.
+  `dingo/lookup/lookup.h`.
 
 ### test/lookup/index_registration.cpp
 
@@ -1087,7 +1087,7 @@ are not observed through the public API of the baseline and are recorded only:
   `next_stored_shapes.local_static_bindings_resolve_the_dependencies_of_their_registration`.
   The type-level part is replaced by `test/next/engine/registration.cpp`
   `next_engine.local_bindings_are_binding_types_of_the_registration`, which
-  tests `core/api/registration.h` (`binding::locals`)
+  tests `dingo/registration.h` (`binding::locals`)
 - `type_registration_test.conversion_availability_uses_source_access`: a
   conversion is available only when the source access (borrow/consume) allows
   it, for declared conversions, converting constructors, handles, optionals,
@@ -1164,7 +1164,7 @@ are not observed through the public API of the baseline and are recorded only:
   interface. **replaced**: `test/next/engine/routes.cpp`
   `next_engine.interfaces_do_not_rebind_the_stored_shape` (part `two`: one
   descriptor serves `I` and `J`, not `A`); tests `core/engine/derive.h` and
-  `core/api/registration.h`.
+  `dingo/registration.h`.
 - `type_registration_test.recursive_leaf_and_rebind_traits`: leaf and rebind
   traits, request lookup types, qualification matching of requests, and the
   values, references, and pointers each stored shape publishes. **replaced**:
@@ -1250,12 +1250,12 @@ are not observed through the public API of the baseline and are recorded only:
 - `type_registration_test.get_type`: finds the part of a kind in a list of
   registration parts. **replaced**: `test/next/engine/registration.cpp`
   `next_engine.a_registration_takes_the_first_part_of_each_kind`; tests
-  `core/api/registration.h` (`find_part`, via `registration::*_part`)
+  `dingo/registration.h` (`find_part`, via `registration::*_part`)
 - `type_registration_test.registration_basic`: a registration exposes its scope,
   storage, interfaces, and factory parts. **replaced**:
   `test/next/engine/registration.cpp`
   `next_engine.a_registration_takes_the_first_part_of_each_kind` (`reordered`);
-  tests `core/api/registration.h`.
+  tests `dingo/registration.h`.
 - `type_registration_test.registration_prefers_first_explicit_match`: the first
   part of each kind wins. **replaced**: `test/next/engine/registration.cpp`
   `next_engine.a_registration_takes_the_first_part_of_each_kind`. The
@@ -1265,8 +1265,8 @@ are not observed through the public API of the baseline and are recorded only:
   **replaced**: `test/next/engine/registration.cpp`
   `next_engine.a_registration_without_interfaces_is_named_by_its_stored_leaf`
   (an empty interface list names the stored leaf, `detected_factory` is the
-  default); tests `core/api/registration.h`. Deducing storage from `factory<T>`
-  is obsolete: it gave `storage<factory type>`, which names no object for a real
+  default); tests `dingo/registration.h`. Deducing storage from `factory<T>` is
+  obsolete: it gave `storage<factory type>`, which names no object for a real
   factory, and next requires a storage part
   (`test/lit/generated/diagnostics/registration_without_storage.cpp`)
 - `type_registration_test.registration_default_interface_and_conversions`: the
@@ -1296,8 +1296,7 @@ are not observed through the public API of the baseline and are recorded only:
   `constructor<T(double, bool)>`. **replaced**:
   `test/next/engine/registration.cpp`
   `next_engine.dependencies_declare_the_constructor_of_a_registration`; tests
-  `core/api/registration.h` `declared_factory` and
-  `core/projection/construct.h`.
+  `dingo/registration.h` `declared_factory` and `core/projection/construct.h`.
 - `type_registration_test.factory_traits_report_dependencies`: factory_traits
   report the dependencies, explicitness, and compile-time bindability of
   constructor, detected, function, and callable factories. **replaced**:

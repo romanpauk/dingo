@@ -12,13 +12,13 @@ Dingo is easiest to understand when separated into four concerns:
 
 ## Header Layers
 
-The library is under `include/dingo/core/`, whose modules are its directories. A
-header may include headers of the layers below its own and of its own module;
-modules that share a layer do not include each other. The public include paths,
-every other header under `include/dingo/`, form the topmost layer: each is a
-generated forwarder that includes the facade it forwards to in `core/api/`, and
-no header of the core includes one. The `layers-check` target enforces this, and
-the layer list lives in [tools/layers.py](../../tools/layers.py).
+The core of the library is under `include/dingo/core/`, whose modules are its
+directories, and the API is every other header under `include/dingo/`, the
+topmost layer, which holds the public include paths. A header may include
+headers of the layers below its own and of its own module; modules that share a
+layer do not include each other, and no header of the core includes the API. The
+`layers-check` target enforces this, and the layer list lives in
+[tools/layers.py](../../tools/layers.py).
 
 From the lowest layer to the highest:
 
@@ -44,9 +44,9 @@ From the lowest layer to the highest:
    local bindings of a registration, the diagnostics of a backend, and the
    selection, the interpreter of the selection rules over the sources of a
    container.
-7. `core/api/`: the facades of the public include paths, the registration
-   vocabulary, and the lookup declarations and indexes of container traits.
-8. `include/dingo/<path>.h`: the public include paths.
+7. `include/dingo/`: the API: the containers, the registration vocabulary, the
+   container traits with their lookup declarations and indexes, and the public
+   include paths, which include what they declare and define it.
 
 ## Main Owners
 
@@ -60,12 +60,6 @@ The public entry points are:
   runtime-only spelling of the container
 - [include/dingo/static_container.h](../../include/dingo/static_container.h):
   static-only container
-
-Their facades are
-[core/api/container.h](../../include/dingo/core/api/container.h),
-[core/api/runtime_container.h](../../include/dingo/core/api/runtime_container.h),
-and
-[core/api/static_container.h](../../include/dingo/core/api/static_container.h).
 
 `container` is the primary public API. It supports:
 
@@ -96,7 +90,7 @@ container keeps its static backend in place. See
 
 ### Registration
 
-[core/api/registration.h](../../include/dingo/core/api/registration.h) reduces a
+[registration.h](../../include/dingo/registration.h) reduces a
 `register_type<...>()` declaration, and a `bind<...>` entry of `bindings<...>`,
 to a `core::binding_type` of
 [core/engine/execute.h](../../include/dingo/core/engine/execute.h):
@@ -200,9 +194,9 @@ objects it kept for requests since it began are undone in reverse order.
 
 For the core path in source order, start here:
 
-- [include/dingo/core/api/container.h](../../include/dingo/core/api/container.h)
-- [include/dingo/core/api/static_container.h](../../include/dingo/core/api/static_container.h)
-- [include/dingo/core/api/registration.h](../../include/dingo/core/api/registration.h)
+- [include/dingo/container.h](../../include/dingo/container.h)
+- [include/dingo/static_container.h](../../include/dingo/static_container.h)
+- [include/dingo/registration.h](../../include/dingo/registration.h)
 - [include/dingo/core/backend/selection.h](../../include/dingo/core/backend/selection.h)
 - [include/dingo/core/backend/static_backend.h](../../include/dingo/core/backend/static_backend.h)
 - [include/dingo/core/backend/runtime_backend.h](../../include/dingo/core/backend/runtime_backend.h)

@@ -391,7 +391,7 @@ auto pipeline = container.construct<Pipeline>();
 See:
 
 - [include/dingo/lookup/lookup.h](../include/dingo/lookup/lookup.h)
-- [include/dingo/core/api/lookup/indexes.h](../include/dingo/core/api/lookup/indexes.h)
+- [include/dingo/lookup/indexes.h](../include/dingo/lookup/indexes.h)
 - [include/dingo/core/backend/index.h](../include/dingo/core/backend/index.h)
 - [test/next/api/lookups.cpp](../test/next/api/lookups.cpp)
 
@@ -708,7 +708,7 @@ container<dingo::dynamic_container_traits, std::allocator<char>>
 See:
 
 - [include/dingo/core/primitives/allocation.h](../include/dingo/core/primitives/allocation.h)
-- [include/dingo/core/api/container_traits.h](../include/dingo/core/api/container_traits.h)
+- [include/dingo/container_traits.h](../include/dingo/container_traits.h)
 - [test/next/api/allocator.cpp](../test/next/api/allocator.cpp)
 
 ## Runtime Notes

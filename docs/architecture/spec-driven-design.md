@@ -810,7 +810,7 @@ implementation. A CI job builds with the option from the first milestone on and
 runs the cases the new implementation supports so far, together with the
 differential tests and the contract probes. Consumers keep the current
 implementation until the switch, M9.2, which removes it and the option: the
-public include paths are then the facades of the new implementation.
+public include paths are then the API of the new implementation.
 
 The switch happens when the new implementation passes the conformance suite, the
 differential tests with only declared behavior changes, and the contract probes
@@ -1288,11 +1288,11 @@ The runtime backend publishes the terms of a binding at registration with a
 thunk per term, and a request selects with the same engine functions. A last
 copy, address-of, or decay of a borrowed object depends only on the requested
 type, so the runtime thunk returns the borrowed object and the request completes
-it, and a shared value is copied once in both backends. `core/api` holds the
-facade of `dingo/container.h`, `dingo/static_container.h`, and the scope
-headers, with the registration vocabulary and the public exceptions, and the
-scope tags are generated from the spec. `dingo_next_test` exercises it through
-the public include paths. A shared binding constructs its object by the detected
+it, and a shared value is copied once in both backends. The API layer holds
+`dingo/container.h`, `dingo/static_container.h`, and the scope headers, with the
+registration vocabulary and the public exceptions, and the scope tags are
+generated from the spec. `dingo_next_test` exercises it through the public
+include paths. A shared binding constructs its object by the detected
 constructor, resolving each argument from the container through the backend that
 serves the request, and constructs the element of every layer in place.
 
@@ -1821,13 +1821,14 @@ the one of the next implementation, and the codegen probes record the sizes of
 the next implementation where Clang 18 and GCC 13 do not fold its static
 requests as later versions do.
 
-The internals of the current implementation are deleted. The generator emits
-every public include path of the spec as `include/dingo/<path>`, which forwards
-to its facade under `include/dingo/core/api/`, and `include/next`, the
-`dingo_next` target, and `DINGO_IMPLEMENTATION_NEXT` are gone. A public header
-includes only the API layer, which `layers-check` verifies. The matrix asserts
-the behavior of the baseline where a behavior change declares a difference under
-`DINGO_MATRIX_BASELINE`, which a differential build of the baseline defines.
+The internals of the current implementation are deleted. The API layer, which
+was `include/dingo/core/api/`, is `include/dingo/`: its headers are the public
+include paths, which hold what they declare, and `include/next`, the generated
+forwarders, the `dingo_next` target, and `DINGO_IMPLEMENTATION_NEXT` are gone.
+The core never includes the API, which `layers-check` verifies. The matrix
+asserts the behavior of the baseline where a behavior change declares a
+difference under `DINGO_MATRIX_BASELINE`, which a differential build of the
+baseline defines.
 
 #### M9.3: Matrix Migration
 

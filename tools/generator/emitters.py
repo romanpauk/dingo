@@ -102,36 +102,6 @@ def variants(spec):
     ]
 
 
-def public_headers(spec):
-    """include/<path> for every public include path of the spec.
-
-    Each forwards to its facade in the API layer, include/dingo/core/api.
-    """
-    include_paths = {
-        entry.id for entry in spec.public_api if entry.kind.value == "include_path"
-    }
-    files = []
-    for binding in sorted(spec.cpp.api_bindings, key=lambda b: b.spelling):
-        if binding.api not in include_paths:
-            continue
-        include_path = binding.spelling
-        if not include_path.startswith("dingo/"):
-            raise GeneratorError(
-                f"cpp.api_bindings.{binding.id}: {include_path} is not under dingo/"
-            )
-        facade = "dingo/core/api/" + include_path[len("dingo/") :]
-        files.append(
-            GeneratedFile(
-                path=f"include/{include_path}",
-                content=render(
-                    "public_header.h.j2", include_path=include_path, facade=facade
-                ),
-                spec_ids=(f"public_api.{binding.api}",),
-            )
-        )
-    return files
-
-
 def form_layer(pattern, where):
     """Where a pattern of a route form is: "element" for a variable, "kind"
     for the kind that has the form, "target" for the kind it leads to.
@@ -548,5 +518,4 @@ EMITTERS = (
     scope_tags,
     diagnostics,
     diagnostic_tests,
-    public_headers,
 )

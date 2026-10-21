@@ -33,9 +33,8 @@ include/dingo/runtime_container.h  -> runtime-only spelling of the container
 include/dingo/static_container.h   -> static-only container
 ```
 
-These and the other public include paths under `include/dingo/` are generated
-forwarders to the facades under `include/dingo/core/api/`. The library itself is
-`include/dingo/core/`, in the layers described in
+These and the other public include paths under `include/dingo/` are the API of
+the library, over its core, `include/dingo/core/`, in the layers described in
 [Header Layers](overview.md#header-layers).
 
 Both registration modes reduce to one binding type, and both backends serve a
@@ -53,10 +52,10 @@ functions.
 
 The main owners are:
 
-- [include/dingo/core/api/container.h](../../include/dingo/core/api/container.h)
-- [include/dingo/core/api/runtime_container.h](../../include/dingo/core/api/runtime_container.h)
-- [include/dingo/core/api/static_container.h](../../include/dingo/core/api/static_container.h)
-- [include/dingo/core/api/registration.h](../../include/dingo/core/api/registration.h)
+- [include/dingo/container.h](../../include/dingo/container.h)
+- [include/dingo/runtime_container.h](../../include/dingo/runtime_container.h)
+- [include/dingo/static_container.h](../../include/dingo/static_container.h)
+- [include/dingo/registration.h](../../include/dingo/registration.h)
 - [include/dingo/core/engine/derive.h](../../include/dingo/core/engine/derive.h)
 - [include/dingo/core/engine/execute.h](../../include/dingo/core/engine/execute.h)
 - [include/dingo/core/backend/selection.h](../../include/dingo/core/backend/selection.h)

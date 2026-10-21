@@ -10,12 +10,12 @@
 // whether its layers are copied; and the annotated and keyed values a
 // constructor parameter takes.
 
-#include <dingo/core/api/key.h>
 #include <dingo/core/backend/selection.h>
 #include <dingo/core/engine/request.h>
 #include <dingo/core/projection/annotated.h>
 #include <dingo/core/projection/key.h>
 #include <dingo/core/projection/layer_traits.h>
+#include <dingo/key.h>
 #include <dingo/type/annotated.h>
 #include <dingo/type/rebind_type.h>
 

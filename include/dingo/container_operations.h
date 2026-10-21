@@ -10,13 +10,13 @@
 // The operations every container of the next implementation provides on its
 // selection.
 
-#include <dingo/core/api/collection.h>
-#include <dingo/core/api/factory/callable.h>
-#include <dingo/core/api/registration.h>
+#include <dingo/collection.h>
 #include <dingo/core/base/mechanics.h>
 #include <dingo/core/primitives/type_path.h>
 #include <dingo/core/projection/construct.h>
 #include <dingo/core/vocabulary/compile_diagnostics.gen.h>
+#include <dingo/factory/callable.h>
+#include <dingo/registration.h>
 
 #include <functional>
 #include <type_traits>

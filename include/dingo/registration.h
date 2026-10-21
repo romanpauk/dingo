@@ -10,7 +10,7 @@
 // The registration vocabulary of the public API and its reduction to a binding
 // type of the next implementation.
 
-#include <dingo/core/api/collection.h>
+#include <dingo/collection.h>
 #include <dingo/core/base/mechanics.h>
 #include <dingo/core/engine/execute.h>
 #include <dingo/core/vocabulary/compile_diagnostics.gen.h>

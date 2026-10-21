@@ -64,7 +64,7 @@ container.register_type<scope<unique>, storage<std::unique_ptr<A>>>();
 
 See:
 
-- [include/dingo/core/api/registration.h](../include/dingo/core/api/registration.h)
+- [include/dingo/registration.h](../include/dingo/registration.h)
 
 ## Scopes And Storage
 

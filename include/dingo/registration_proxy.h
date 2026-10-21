@@ -11,8 +11,8 @@
 // local to the registration, which its object resolves its dependencies from
 // before the container's, and returns the proxy of each in turn.
 
-#include <dingo/core/api/registration.h>
 #include <dingo/core/backend/local.h>
+#include <dingo/registration.h>
 
 #include <memory>
 #include <utility>
