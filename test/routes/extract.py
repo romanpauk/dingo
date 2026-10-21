@@ -117,6 +117,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from user_kinds import cpp_declarations, kind_probes  # noqa: E402
+from spec.schema import LayerTrait  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # The universe.
@@ -170,6 +176,10 @@ class Shape:
     external_note: str = ""
     # A user wrapper shape: requested through the user wrappers of T.
     user: bool = False
+    # The bases of the requests, as (template, abstract, interface) of the
+    # leaf {T} and of the interface {I}, which only a binding of interfaces
+    # requests; empty for the bases of request_bases.
+    bases: tuple = ()
 
 
 # The wrapper families: the short name, the spelling of the wrapper of {inner},
@@ -271,6 +281,76 @@ USER_SHAPES = (
 )
 
 
+# The kind probes, of the next implementation: a wrapper of each kind of the
+# user of user_kinds.py, requested as the leaf, as itself, and as the wrappers
+# of the kinds its forms lead to; and a leaf or a pointer to one, requested as
+# a wrapper of each kind that a request creates.
+KIND_LEAF_KINDS = (
+    ("leaf", ()),
+    ("move_only_leaf", ()),
+    ("impl", ("iface",)),
+)
+
+
+def kind_spelling(user, element):
+    if user.kind.variadic:
+        return f"{user.wrapper}<{element}, {user.arguments}>"
+    return f"{user.wrapper}<{element}>"
+
+
+def holds_interface(user):
+    """Whether a wrapper of the kind holds an interface, which only a handle
+    does: an abstract element is not held in place."""
+    return LayerTrait.IN_PLACE not in user.kind.traits
+
+
+def kind_bases(user):
+    targets = [
+        other
+        for form in user.kind.forms
+        if form.target is not None
+        for other in kind_probes
+        if other.kind.id == form.target
+    ]
+    bases = [("{T}", False, False), ("{I}", True, True)]
+    for each in (user, *targets):
+        bases.append((kind_spelling(each, "{T}"), False, False))
+        if holds_interface(each):
+            bases.append((kind_spelling(each, "{I}"), False, True))
+    return tuple(bases)
+
+
+def created_bases():
+    bases = []
+    for user in kind_probes:
+        if user.created:
+            bases.append((kind_spelling(user, "{T}"), False, False))
+            if holds_interface(user):
+                bases.append((kind_spelling(user, "{I}"), False, True))
+    return tuple(bases)
+
+
+KIND_SHAPES = (
+    *(
+        Shape(
+            name=user.wrapper,
+            spelling=kind_spelling(user, "{T}"),
+            external=user.instance.replace("{W}", user.wrapper),
+            bases=kind_bases(user),
+        )
+        for user in kind_probes
+    ),
+    Shape("kinds_value", "{T}", "{T}{{}}", bases=created_bases()),
+    Shape(
+        "kinds_pointer",
+        "{T}*",
+        "&owned",
+        declarations=("{T} owned;",),
+        bases=created_bases(),
+    ),
+)
+
+
 def spell(template, leaf):
     return template.replace("{T}", leaf).replace("{{}}", "{}")
 
@@ -312,6 +392,13 @@ def carrier_spellings(base, abstract=False):
 
 def request_bases(shape, leaf, interfaces):
     """The types the carriers are applied to, as (base, abstract) pairs."""
+    if shape.bases:
+        interface = interfaces[0] if interfaces else ""
+        return [
+            (template.replace("{T}", leaf).replace("{I}", interface), abstract)
+            for template, abstract, needs_interface in shape.bases
+            if interfaces or not needs_interface
+        ]
     stored = stored_spelling(shape, leaf)
     layers = [spell(layer, leaf) for layer in shape.layers]
     if interfaces:
@@ -422,6 +509,7 @@ PRELUDE_HEADERS = (
     "probe_run.h",
     "user_wrapper_traits.h",
     "user_wrapper_traits_next.h",
+    "kinded_wrappers_next.h",
 )
 PROBED_HEADERS = (
     "dingo/container.h",
@@ -527,13 +615,16 @@ class Toolchain:
 # ---------------------------------------------------------------------------
 
 
-def build_groups(domains, pattern=None, user_wrappers=True):
+def build_groups(domains, pattern=None, user_wrappers=True, kinds=False):
+    """The groups of the probes; with `kinds`, the kind probes too."""
     groups = []
     for domain, (leaf, interfaces), scope in itertools.product(
         domains, LEAF_KINDS, SCOPES
     ):
         user = user_wrappers and leaf in USER_WRAPPER_LEAVES
         shapes = SHAPES + (USER_SHAPES if user else ())
+        if kinds and (leaf, interfaces) in KIND_LEAF_KINDS:
+            shapes += KIND_SHAPES
         for shape in shapes:
             group = Group(domain, leaf, scope, shape, interfaces)
             group.requests = requests_for(shape, leaf, interfaces)
@@ -561,6 +652,7 @@ class Extraction:
         (self.work_dir / "prelude.h").write_text(prelude)
         for header in PRELUDE_HEADERS:
             (self.work_dir / header).write_text((TEMPLATES / header).read_text())
+        (self.work_dir / "user_kinds_next.h").write_text(cpp_declarations())
         self.errors = {}
 
     def path(self, group, suffix):
@@ -580,7 +672,7 @@ class Extraction:
             return list(pool.map(function, items))
 
     def run(self, domains, pattern=None):
-        groups = build_groups(domains, pattern)
+        groups = build_groups(domains, pattern, kinds=self.implementation == "next")
         for group in groups:
             self.path(group, ".cpp").write_text(
                 render(group, range(len(group.requests)), True, self.implementation)

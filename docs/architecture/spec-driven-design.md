@@ -1883,6 +1883,23 @@ binding cannot know every kind requested of it, so a request of a layer whose
 kind wraps or adopts resolves its element and makes the layer of it. A form that
 reaches into a layer or converts it applies at the binding.
 
+A form may rely on properties of the kinds that have it, which its template
+states and the spec and `layer_kind_traits` check: only an immovable array,
+which a scope allocates for the request, releases its elements, and only a
+copyable handle retains a converted copy of itself. Releasing an array whole
+needs an array of the language, of an extent and immovable.
+
+The kind probes of the route extraction check the kinds of the user the next
+implementation is given: kinds of the properties and forms of library kinds, a
+variant, an array that moves and copies, and mutations that differ from a
+library kind by one form or one property, such as a sole-owner handle that does
+not share, an optional that does not wrap, or a sharing handle that is not
+copied. `test/routes/user_kinds.py` declares each once; the reference
+implementation derives its routes, and the C++ declaration is generated from it,
+over wrappers that provide every operation, so a route a kind does not allow is
+refused because of its declaration. A layer is copied as its kind declares, not
+as its C++ type is.
+
 The steps are done. The public API records `dingo::layer_kind_traits`, and the
 user wrappers of the route probes are of kinds of the user in the next
 implementation, declared with the properties and forms of the kinds they stand

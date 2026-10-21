@@ -55,7 +55,7 @@ from spec.reference.routes import (  # noqa: E402
     resolve,
 )
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from user_kinds import user_kinds  # noqa: E402
+from user_kinds import reference_kinds, user_kinds  # noqa: E402
 
 OBSERVED_DIR = PROJECT_ROOT / "build" / "routes" / "observed"
 
@@ -83,10 +83,15 @@ WRAPPERS = {
     "std::shared_ptr": ("share", "std"),
     "std::optional": ("opt", "std"),
     "std::variant": ("alt", "std"),
-    "user_unique": ("user_own", "user"),
-    "user_shared": ("user_share", "user"),
-    "user_optional": ("user_opt", "user"),
 }
+# The wrappers of the kinds of the user, with the number of their elements.
+EXTENTS = {}
+for _user in user_kinds:
+    WRAPPERS[_user.wrapper] = (
+        _user.kind.id,
+        "user" if _user.template is None else "kinded",
+    )
+    EXTENTS[_user.wrapper] = _user.extent
 
 
 # C++ spellings
@@ -127,7 +132,9 @@ def parse_type(text):
                     break
         arguments = [parse_shape(arg) for arg in split_arguments(text[index + 1 : end])]
         kind, family = WRAPPERS[name]
-        shape = Shape(layer=kind, args=tuple(arguments), family=family)
+        shape = Shape(
+            layer=kind, args=tuple(arguments), family=family, extent=EXTENTS.get(name)
+        )
         rest = text[end + 1 :]
     else:
         shape = Shape(leaf=LEAVES[name])
@@ -303,7 +310,7 @@ def main_with(argv):
         return 2
 
     loaded = spec.load_spec()
-    model = Model(loaded, kinds=user_kinds)
+    model = Model(loaded, kinds=reference_kinds)
     rows = [json.loads(line) for line in observed.read_text().splitlines()]
     differences = compare(rows, model)
 
