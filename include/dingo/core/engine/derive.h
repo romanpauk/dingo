@@ -328,8 +328,10 @@ constexpr bool requirements_hold(const binding_descriptor &binding,
   if (requires_(requirement::copyable) && !bound.nodes[0].copyable) {
     return false;
   }
+  // An array of the language: of an extent, and immovable.
   if (requires_(requirement::array) &&
-      !has_properties(kind_of(bound), layer_property::extent)) {
+      !has_properties(kind_of(bound),
+                      layer_property::extent | layer_property::immovable)) {
     return false;
   }
   if (requires_(requirement::addressable) && !addressable(bound)) {

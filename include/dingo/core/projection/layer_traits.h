@@ -257,6 +257,11 @@ struct kind_forms_of<Kind, type_list<::dingo::kind_form<Forms, Targets>...>> {
               diag::kind_form_takes_no_target, Kind>());
   static_assert(
       require<distinct_forms<Forms...>(), diag::kind_form_repeated, Kind>());
+  static_assert(
+      require<(((::dingo::layer_kind_traits<Kind>::properties &
+                 info(Forms).kind_properties) == info(Forms).kind_properties) &&
+               ...),
+              diag::kind_form_needs_property, Kind>());
 
   static constexpr void add(kind_descriptor &kind) {
     (kind_form_of<Forms, Targets>::add(kind), ...);
@@ -405,6 +410,28 @@ struct argument_shapes<type_list<Arguments...>> {
   }
 };
 
+// Whether the layer `value` is copied: a layer of a kind copied as a handle,
+// or one that holds its elements in place and is not immovable, when every
+// element is copied.
+constexpr bool copies_layer(const shape &value) {
+  const std::uint16_t properties = value.nodes[0].kind->properties;
+  if ((properties & layer_property::copyable) != 0) {
+    return true;
+  }
+  if ((properties & layer_property::in_place) == 0 ||
+      (properties & layer_property::immovable) != 0) {
+    return false;
+  }
+  std::size_t index = 1;
+  for (std::size_t argument = 0; argument < value.nodes[0].arity; ++argument) {
+    if (!value.nodes[index].copyable) {
+      return false;
+    }
+    index += subtree_size(value, index);
+  }
+  return true;
+}
+
 template <typename Type> constexpr shape make_shape() {
   using value_type = std::remove_cv_t<Type>;
   using traits = layer_traits<value_type>;
@@ -415,9 +442,8 @@ template <typename Type> constexpr shape make_shape() {
   if constexpr (!is_layer_v<value_type>) {
     node.type = type_id_v<value_type>;
   }
-  if constexpr (std::is_reference_v<value_type>) {
-    node.copyable = false;
-  } else {
+  // A leaf is copyable as its type is; a layer as its kind declares.
+  if constexpr (!is_layer_v<value_type>) {
     node.copyable = std::is_copy_constructible_v<value_type>;
   }
   node.constructible = !std::is_abstract_v<value_type>;
@@ -430,6 +456,7 @@ template <typename Type> constexpr shape make_shape() {
     node.extent = layer_extent<traits>::value;
     node.arity = static_cast<std::uint8_t>(traits::arguments::size);
     argument_shapes<typename traits::arguments>::append(result);
+    node.copyable = copies_layer(result);
     // The elements of an array have the qualifiers of the array.
     if constexpr (has_layer_properties_v<value_type, layer_property::extent> ||
                   has_layer_properties_v<value_type, layer_property::unsized>) {

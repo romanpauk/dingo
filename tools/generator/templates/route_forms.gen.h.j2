@@ -76,11 +76,13 @@ struct route_form_info {
   // Whether the derived object is kept by the binding, so it can be referred
   // to: the conversion cache.
   bool cached;
+  // The layer_property bits every kind of the form has.
+  std::uint16_t kind_properties;
 };
 
 inline constexpr route_form_info route_forms[] = {
 {% for form in route_forms %}
-    {route_form::{{ form.id }}, {{ form.of_kind | lower }}, form_layer::{{ form.from_layer }}, value_category::{{ form.from_category }}, form_layer::{{ form.to_layer }}, value_category::{{ form.to_category }}, access::{{ form.access }}, {{ form.exposure }}, {{ form.requires }}, {{ form.upcast | lower }}, {{ form.converts | lower }}, {{ form.cached | lower }}},
+    {route_form::{{ form.id }}, {{ form.of_kind | lower }}, form_layer::{{ form.from_layer }}, value_category::{{ form.from_category }}, form_layer::{{ form.to_layer }}, value_category::{{ form.to_category }}, access::{{ form.access }}, {{ form.exposure }}, {{ form.requires }}, {{ form.upcast | lower }}, {{ form.converts | lower }}, {{ form.cached | lower }}, {{ form.kind_properties }}},
 {% endfor %}
 };
 

@@ -17,6 +17,7 @@ from spec.content.patterns import (
 )
 from spec.schema import (
     Access,
+    LayerTrait,
     Predicate,
     RequestCategory,
     Requirement,
@@ -104,6 +105,9 @@ route_forms: tuple[RouteFormTemplate, ...] = (
         to_shape=layer(TARGET, variable("X"), category=PRVALUE),
         access=Access.CONSUME,
         exposure=RequestCategory.POINTER,
+        # Only an array the scope allocated for the request, which is never
+        # a value, hands out its elements: one that moves dies with them.
+        kind_traits=(LayerTrait.IMMOVABLE,),
     ),
     RouteFormTemplate(
         id="release_whole",
@@ -125,5 +129,7 @@ route_forms: tuple[RouteFormTemplate, ...] = (
         requires=LEAF,
         via=Via.UPCAST,
         cache=layer(KIND, leaf_variable(None)),
+        # The kept handle is a copy of the borrowed one.
+        kind_traits=(LayerTrait.COPYABLE,),
     ),
 )

@@ -332,7 +332,7 @@ def interface_probes(model: Model, interfaces: tuple[Leaf, ...]) -> list[Request
     for interface in interfaces:
         base = leaf(interface)
         probes.append(Request(RequestKind.LVALUE_REFERENCE, base))
-        for kind in model.spec.layer_kinds:
+        for kind in model.layers.values():
             handle = Shape(layer=kind.id, args=(base,))
             if layer_class_holds(model, INTERFACE_HANDLE, handle):
                 family = ANY if is_wrapper(model.layers, kind.id) else None
@@ -453,7 +453,9 @@ def requirements_hold(model: Model, scope, rule, bindings: dict) -> bool:
         subject = bindings[requirement.subject]
         if requirement.predicate is Predicate.COPYABLE and not copyable(model, subject):
             return False
-        if requirement.predicate is Predicate.ARRAY and not has_extent(model, subject):
+        if requirement.predicate is Predicate.ARRAY and not (
+            has_extent(model, subject) and has_trait(model, subject, LayerTrait.IMMOVABLE)
+        ):
             return False
         if requirement.predicate is Predicate.ADDRESSABLE and not addressable(model, subject):
             return False

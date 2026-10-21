@@ -247,6 +247,9 @@ def form_fields(name, rule, of_kind, where):
         "upcast": rule.via is not None and rule.via.value == "upcast",
         "converts": rule.via is not None and rule.via.value == "convert",
         "cached": rule.cache is not None,
+        "kind_properties": sum(
+            LAYER_PROPERTY_BITS[t.value] for t in getattr(rule, "kind_traits", ())
+        ),
     }
 
 

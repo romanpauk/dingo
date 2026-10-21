@@ -49,6 +49,7 @@ template <typename... Subjects> struct interface_not_derived_carrier {};
 template <typename... Subjects> struct key_alias_limit_carrier {};
 template <typename... Subjects> struct key_interface_undeclared_carrier {};
 template <typename... Subjects> struct key_type_values_carrier {};
+template <typename... Subjects> struct kind_form_needs_property_carrier {};
 template <typename... Subjects> struct kind_form_needs_target_carrier {};
 template <typename... Subjects> struct kind_form_of_leaf_carrier {};
 template <typename... Subjects> struct kind_form_repeated_carrier {};
@@ -89,6 +90,7 @@ enum class diag : std::uint8_t {
   key_alias_limit,
   key_interface_undeclared,
   key_type_values,
+  kind_form_needs_property,
   kind_form_needs_target,
   kind_form_of_leaf,
   kind_form_repeated,
@@ -116,7 +118,7 @@ enum class diag : std::uint8_t {
 
 // The number of subjects of each diagnostic, one per placeholder.
 inline constexpr std::uint8_t diag_subjects[] = {
-    0, 1, 1, 2, 2, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1,
+    0, 1, 1, 2, 2, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1,
     1, 3, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 1, 2, 1, 2, 1};
 
 #if DINGO_HAS_STATIC_ASSERT_MESSAGE
@@ -212,6 +214,15 @@ template <> struct diag_text<diag::key_type_values> {
   using carrier = ::dingo::key_type_values_carrier<Subjects...>;
   static constexpr std::string_view pieces[] = {"dingo::key_type of ",
                                                 " accepts at most one value"};
+};
+
+// spec: diagnostics.kind_form_needs_property
+template <> struct diag_text<diag::kind_form_needs_property> {
+  template <typename... Subjects>
+  using carrier = ::dingo::kind_form_needs_property_carrier<Subjects...>;
+  static constexpr std::string_view pieces[] = {
+      "the layer kind ",
+      " declares a form that needs a property it does not have"};
 };
 
 // spec: diagnostics.kind_form_needs_target
@@ -530,6 +541,17 @@ struct diag_report<diag::key_type_values, Subjects...> {
     static_assert(
         dependent_false<::dingo::key_type_values_carrier<Subjects...>>,
         "dingo::key_type of {key} accepts at most one value");
+  }
+};
+
+// spec: diagnostics.kind_form_needs_property
+template <typename... Subjects>
+struct diag_report<diag::kind_form_needs_property, Subjects...> {
+  static constexpr void fail() {
+    static_assert(
+        dependent_false<::dingo::kind_form_needs_property_carrier<Subjects...>>,
+        "the layer kind {kind} declares a form that needs a property it does "
+        "not have");
   }
 };
 

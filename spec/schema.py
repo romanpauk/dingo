@@ -296,6 +296,8 @@ class Predicate(Enum):
     STABLE = "stable"
     COPYABLE = "copyable"
     BORROWABLE = "borrowable"
+    # An array of the language: a fixed number of elements, which is not a
+    # value a request takes, so a consumed one hands out its address.
     ARRAY = "array"
     ADDRESSABLE = "addressable"
     LEAF = "leaf"
@@ -363,7 +365,8 @@ class RouteForm(Enum):
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RouteFormTemplate(Entity):
     """The route of a form, whose patterns name the kind that has the form
-    `K` and the kind it leads to `T`."""
+    `K` and the kind it leads to `T`. `kind_traits` are the traits every kind
+    of the form has, which the form relies on."""
 
     form: RouteForm
     from_shape: "ShapePattern"
@@ -373,6 +376,7 @@ class RouteFormTemplate(Entity):
     requires: tuple["Requirement", ...] = ()
     via: "Via | None" = None
     cache: "ShapePattern | None" = None
+    kind_traits: tuple["LayerTrait", ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

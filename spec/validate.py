@@ -387,6 +387,12 @@ def check_kind_forms(spec: Spec, errors: list[str]) -> None:
                 errors.append(f"{where}: the form {kind_form.form.value} takes no target kind")
             if kind_form.target is not None:
                 require_ref(errors, where, "target kind", kind_form.target, kinds)
+            for trait in template.kind_traits:
+                if trait not in kind.traits:
+                    errors.append(
+                        f"{where}: the form {kind_form.form.value} needs a kind "
+                        f"that is {trait.value}"
+                    )
 
 
 def check_route_forms(spec: Spec, errors: list[str]) -> None:

@@ -572,4 +572,11 @@ int main() {
             properties=HANDLE_PROPERTIES + " |\n      std::uint16_t(1) << 15",
         ),
     ),
+    kind_example(
+        "kind_form_needs_property",
+        kind_traits(
+            "dingo::type_list<\n"
+            "      dingo::kind_form<dingo::route_form::release, dingo::pointer_kind>>"
+        ),
+    ),
 )

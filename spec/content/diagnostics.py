@@ -416,4 +416,13 @@ diagnostics: tuple[Diagnostic, ...] = (
         fallback_carrier="kind_property_unknown_carrier",
         reported=COMPILE,
     ),
+    Diagnostic(
+        id="kind_form_needs_property",
+        condition="A layer kind declares a form that needs a property the kind does not have.",
+        exception=None,
+        message="the layer kind {kind} declares a form that needs a property it does not have",
+        placeholders=("kind",),
+        fallback_carrier="kind_form_needs_property_carrier",
+        reported=COMPILE,
+    ),
 )
