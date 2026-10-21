@@ -64,7 +64,7 @@ TEST(next_shared_cyclical, resolves_a_cycle_statically) {
 }
 
 // A cycle of declared dependencies is legal when every binding in it is
-// shared_cyclical; next-static-container-rejects-a-declared-cycle.cpp checks
+// shared_cyclical; static-container-rejects-a-declared-cycle.cpp checks
 // one that is not.
 TEST(next_shared_cyclical, resolves_a_declared_cycle_statically) {
   using bindings = dingo::bindings<

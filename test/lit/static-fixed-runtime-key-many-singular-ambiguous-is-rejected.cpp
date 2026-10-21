@@ -1,4 +1,9 @@
-// RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
+// Two static bindings of a fixed key of a domain declared many make a
+// singular request by that key ambiguous, and it is rejected when it is
+// compiled.
+// REQUIRES: linux
+// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// CHECK: type resolution is ambiguous:
 
 #include <dingo/static_container.h>
 #include <dingo/storage/shared.h>
@@ -29,5 +34,3 @@ int main() {
       dingo::dependency<processor &, dingo::key_type<std::size_t, 0>>>();
   return 0;
 }
-
-// CHECK: static_container cannot resolve an ambiguously bound type

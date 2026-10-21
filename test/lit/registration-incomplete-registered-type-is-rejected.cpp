@@ -1,6 +1,12 @@
-// RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
+// A pointer to an incomplete type cannot be converted to a pointer of an
+// interface, so a binding that stores one with a declared interface is
+// rejected when it is registered.
+// REQUIRES: linux
+// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// CHECK: does not derive from the interface
 
 #include <dingo/container.h>
+#include <dingo/factory/callable.h>
 #include <dingo/storage/unique.h>
 
 struct service_interface {
@@ -16,5 +22,3 @@ int main() {
                           dingo::interfaces<service_interface>>(
       dingo::callable([]() -> incomplete_service * { return nullptr; }));
 }
-
-// CHECK: registered types must be complete

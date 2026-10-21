@@ -1,4 +1,9 @@
-// RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
+// The static bindings of a mixed container are known when the container type
+// is formed, so a cycle among them is rejected then, whatever the container
+// registers at runtime.
+// REQUIRES: linux
+// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// CHECK: recursive dependency detected:
 
 #include <dingo/container.h>
 #include <dingo/storage/shared.h>
@@ -17,5 +22,3 @@ int main() {
   dingo::container<source> instance;
   (void)instance;
 }
-
-// CHECK: container requires a resolvable compile-time binding graph

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extracts the conversion ("route") behavior of the current implementation.
+"""Extracts the conversion ("route") behavior of the library.
 
 For every combination of domain, leaf kind, scope, stored shape, and request the
 extractor records what the library does: whether the registration compiles,
@@ -15,12 +15,14 @@ Usage:
                [--output FILE]
 
     CXX=g++ extract.py --work-dir build/routes
-    extract.py --work-dir build/routes \\
+    extract.py --work-dir build/routes --implementation baseline \\
         --include-dir build/differential/baseline-source/include
 
-The table describes the library whose headers are in --include-dir, include/
-by default; the differential workflow extracts it from the pinned baseline.
-The default output is <work-dir>/observed/<toolchain>.jsonl, where the
+The table describes the library, the next implementation, by default. With
+--implementation baseline it describes the baseline, the library of the commit
+in test/differential/baseline-commit, whose include directory --include-dir
+names. The default output is <work-dir>/observed-next/<toolchain>.jsonl for the
+library and <work-dir>/observed/<toolchain>.jsonl for the baseline, where the
 toolchain key is the one test/contracts/probe.py uses, such as
 gcc16-x86_64-c++20. The table is not committed: it is regenerated from the
 headers. The file is JSON Lines sorted by case id; every line is one case.
@@ -565,7 +567,7 @@ PROBED_HEADERS = (
 
 def provided_headers(implementation):
     """The probed public headers the implementation provides."""
-    if implementation == "current":
+    if implementation == "baseline":
         return PROBED_HEADERS
     facades = PROJECT_ROOT / "include" / "dingo" / "core" / "api"
     return tuple(
@@ -676,7 +678,7 @@ def build_groups(domains, pattern=None, user_wrappers=True, kinds=False):
 
 
 class Extraction:
-    def __init__(self, toolchain, work_dir, jobs, implementation="current"):
+    def __init__(self, toolchain, work_dir, jobs, implementation="next"):
         self.toolchain = toolchain
         self.implementation = implementation
         self.work_dir = work_dir / implementation / toolchain.key
@@ -687,7 +689,7 @@ class Extraction:
             headers=provided_headers(implementation),
             user_wrapper_traits=(
                 "user_wrapper_traits.h"
-                if implementation == "current"
+                if implementation == "baseline"
                 else "user_wrapper_traits_next.h"
             ),
         )
@@ -861,19 +863,20 @@ def main():
     parser.add_argument(
         "--include-dir",
         type=Path,
-        default=PROJECT_ROOT / "include",
-        help="include directory of the library to extract, include/ by default",
+        default=None,
+        help="include directory of the baseline, with --implementation baseline",
     )
     parser.add_argument(
         "--cxx-command",
         help="compiler command including the standard and include flags; by "
-        "default $CXX -std=c++20 -I<include-dir>",
+        "default $CXX -std=c++20 with the include paths of the library",
     )
     parser.add_argument(
         "--implementation",
-        choices=("current", "next"),
-        default="current",
-        help="next probes the next implementation through include/next",
+        choices=("next", "baseline"),
+        default="next",
+        help="baseline probes the baseline, whose include directory "
+        "--include-dir names",
     )
     parser.add_argument(
         "--work-dir",
@@ -896,9 +899,15 @@ def main():
     if unknown:
         parser.error(f"unknown domains: {unknown}")
 
-    include = f"-I{args.include_dir.resolve()}"
-    if args.implementation == "next":
-        include = f"-I{(PROJECT_ROOT / 'include' / 'next').resolve()} {include}"
+    if args.implementation == "baseline":
+        if args.include_dir is None:
+            parser.error("--implementation baseline needs --include-dir")
+        include = f"-I{args.include_dir.resolve()}"
+    else:
+        include = (
+            f"-I{(PROJECT_ROOT / 'include' / 'next').resolve()} "
+            f"-I{(PROJECT_ROOT / 'include').resolve()}"
+        )
     command = args.cxx_command or (os.environ.get("CXX", "c++") + f" -std=c++20 {include}")
     toolchain = Toolchain(command)
     started = time.time()
@@ -906,7 +915,7 @@ def main():
         toolchain, args.work_dir.resolve(), args.jobs, args.implementation
     )
     records = extraction.run(domains, args.filter)
-    observed = "observed" if args.implementation == "current" else "observed-next"
+    observed = "observed" if args.implementation == "baseline" else "observed-next"
     output = args.output or args.work_dir / observed / f"{toolchain.key}.jsonl"
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w") as stream:

@@ -1,6 +1,10 @@
-// clang-format off
-// RUN: not %dingo_cxx -c %s 2>&1 | grep -F "static resolution cannot satisfy a request the storage does not publish"
-// clang-format on
+// A shared binding never serves an rvalue reference, also not to the handle
+// of an interface converted from its handle, so the request is rejected when
+// it is compiled, in a static and in a mixed container.
+// REQUIRES: linux
+// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// RUN: not %dingo_next_cxx -fsyntax-only -DMIXED_ONLY %s 2>&1 | %filecheck %s
+// CHECK: type is not convertible to
 
 #include <dingo/container.h>
 #include <dingo/static_container.h>
@@ -25,10 +29,12 @@ using source = dingo::bindings<dingo::bind<
     dingo::scope<dingo::shared>, dingo::storage<std::shared_ptr<impl>>,
     dingo::interfaces<iface>, dingo::factory<dingo::function<make_impl>>>>;
 
+#ifndef MIXED_ONLY
 void test_static() {
   dingo::static_container<source> container;
   (void)container.resolve<std::shared_ptr<iface> &&>();
 }
+#endif
 
 void test_static_runtime() {
   dingo::container<source> static_runtime;

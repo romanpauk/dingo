@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extracts how the current implementation selects bindings by key.
+"""Extracts how the library selects bindings by key.
 
 For every combination of container domain, bindings, lookup declarations, and
 request the extractor records what the library does: whether each binding can
@@ -11,10 +11,14 @@ selection in spec/reference/selection.py; it describes the code as it is.
 Usage:
 
     extract.py --work-dir build/selection [--jobs N] [--cxx-command CMD]
-               [--include-dir DIR] [--domains runtime,static,mixed,parent]
+               [--implementation baseline --include-dir DIR]
+               [--domains runtime,static,mixed,parent]
                [--filter REGEX] [--output FILE]
 
-The default output is <work-dir>/observed/<toolchain>.jsonl, where the
+The table describes the library, the next implementation, by default. With
+--implementation baseline it describes the baseline, the library of the commit
+in test/differential/baseline-commit, whose include directory --include-dir
+names. The default output is <work-dir>/observed/<toolchain>.jsonl, where the
 toolchain key is the one test/routes/extract.py uses, such as
 gcc16-x86_64-c++20. The file is JSON Lines sorted by case id.
 
@@ -553,15 +557,22 @@ def log(message, count):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
+        "--implementation",
+        choices=("next", "baseline"),
+        default="next",
+        help="baseline probes the baseline, whose include directory "
+        "--include-dir names",
+    )
+    parser.add_argument(
         "--include-dir",
         type=Path,
-        default=PROJECT_ROOT / "include",
-        help="include directory of the library to extract, include/ by default",
+        default=None,
+        help="include directory of the baseline, with --implementation baseline",
     )
     parser.add_argument(
         "--cxx-command",
         help="compiler command including the standard and include flags; by "
-        "default $CXX -std=c++20 -I<include-dir>",
+        "default $CXX -std=c++20 with the include paths of the library",
     )
     parser.add_argument(
         "--work-dir",
@@ -574,9 +585,11 @@ def main():
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument(
         "--mixed-traits",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help="give the mixed container traits, container<bindings<...>, "
-        "Traits>, as the next implementation takes them",
+        "Traits>, as the next implementation takes them; by default for the "
+        "library and not for the baseline",
     )
     parser.add_argument(
         "--filter",
@@ -586,13 +599,25 @@ def main():
     args = parser.parse_args()
 
     global MIXED_TRAITS
-    MIXED_TRAITS = args.mixed_traits
+    MIXED_TRAITS = (
+        args.mixed_traits
+        if args.mixed_traits is not None
+        else args.implementation == "next"
+    )
     domains = args.domains.split(",")
     unknown = [d for d in domains if d not in DOMAINS]
     if unknown:
         parser.error(f"unknown domains: {unknown}")
 
-    include = f"-I{args.include_dir.resolve()}"
+    if args.implementation == "baseline":
+        if args.include_dir is None:
+            parser.error("--implementation baseline needs --include-dir")
+        include = f"-I{args.include_dir.resolve()}"
+    else:
+        include = (
+            f"-I{(PROJECT_ROOT / 'include' / 'next').resolve()} "
+            f"-I{(PROJECT_ROOT / 'include').resolve()}"
+        )
     command = args.cxx_command or (os.environ.get("CXX", "c++") + f" -std=c++20 {include}")
     toolchain = Toolchain(command)
     started = time.time()

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Checks the scope descriptors of the spec against the current implementation.
+"""Checks the scope descriptors of the spec against the baseline.
 
-spec/content/scopes.py records the storage scope policies of the current
-implementation. This script generates a program that prints, for every scope of
+spec/content/scopes.py records the storage scope policies of the baseline, the
+library of the commit in test/differential/baseline-commit. This script generates a program that prints, for every scope of
 the spec, the properties of `dingo::storage_scope_policy` and the request
 categories it exposes for every storage form, compiles and runs it, and
 compares the output with the spec. Every difference must be declared by a
@@ -33,7 +33,7 @@ from spec.schema import (  # noqa: E402
     ValueCategory,
 )
 
-# The storage_form enumerators of the current implementation. The spec names
+# The storage_form enumerators of the baseline. The spec names
 # the form of a storage-held array of runtime size unbounded_array.
 CPP_FORMS = {
     "alternative": "alternative",
@@ -171,9 +171,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--cxx-command",
-        default=os.environ.get("CXX", "c++")
-        + f" -std=c++17 -I{PROJECT_ROOT / 'include'}",
-        help="compiler command including the standard and include flags",
+        required=True,
+        help="compiler command including the standard and the include flag of "
+        "the include directory of the baseline",
     )
     parser.add_argument(
         "--work-dir",

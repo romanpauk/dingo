@@ -1,4 +1,9 @@
-// RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
+// The key values of a registration are keys of every interface the binding
+// declares, whether or not the lookups declare their domain, so a second key
+// value of another type is accepted and finds the same binding.
+// (behavior change keys_apply_to_every_interface; the baseline rejected it)
+// REQUIRES: linux, can-run-built-executables
+// RUN: %dingo_next_cxx %s -o %t && %t
 
 #include <dingo/container.h>
 #include <dingo/storage/shared.h>
@@ -22,7 +27,7 @@ int main() {
                           dingo::storage<processor_impl>,
                           dingo::interfaces<processor>>(
       dingo::key_value{7}, dingo::key_value{std::string{"extra"}});
+  processor &by_value = container.resolve<processor &>(7);
+  processor &by_name = container.resolve<processor &>(std::string{"extra"});
+  return &by_value == &by_name ? 0 : 1;
 }
-
-// CHECK: supplied runtime key value has no matching runtime-key lookup
-// CHECK: definition for the registered interface

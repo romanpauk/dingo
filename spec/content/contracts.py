@@ -38,18 +38,18 @@ def linear(variable: str, unit: str, per: int | None = None) -> Bound:
 
 
 # Preprocessed Dingo lines of each public header, as the maximum over the
-# recorded toolchains (gcc16 and clang22 on x86_64 with C++20).
+# recorded toolchains (gcc13, gcc16, clang18, and clang22 on x86_64 with C++20).
 HEADER_LINES = (
-    ("container", 14571),
-    ("runtime_container", 14571),
-    ("static_container", 15278),
-    ("storage_external", 5829),
-    ("storage_shared", 5941),
-    ("storage_shared_cyclical", 6026),
-    ("storage_unique", 5807),
-    ("factory_callable", 1805),
-    ("factory_constructor", 4108),
-    ("factory_function", 1824),
+    ("container", 7776),
+    ("runtime_container", 7781),
+    ("static_container", 6756),
+    ("storage_external", 4071),
+    ("storage_shared", 4071),
+    ("storage_shared_cyclical", 4071),
+    ("storage_unique", 4071),
+    ("factory_callable", 1756),
+    ("factory_constructor", 4087),
+    ("factory_function", 1747),
 )
 
 contracts: tuple[Contract, ...] = (

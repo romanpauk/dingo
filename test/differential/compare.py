@@ -156,17 +156,14 @@ def load_changes(path):
     return sorted(data["changes"], key=lambda change: change["id"])
 
 
-def load_spec_changes(implementation="next"):
+def load_spec_changes():
     """Returns the behavior changes of the spec that the matrix observes.
 
     A change takes part when one of its case patterns starts with `matrix:`;
     the prefix is removed, and the patterns of other checks are ignored. The
-    changes describe the target semantics, which the next implementation
-    implements, against the baseline; the current implementation is the
-    baseline code and takes none.
+    changes describe the target semantics, which the library implements,
+    against the baseline.
     """
-    if implementation == "current":
-        return []
     project_root = Path(__file__).resolve().parents[2]
     # Importing the spec writes no bytecode into the source tree.
     sys.dont_write_bytecode = True
@@ -404,18 +401,11 @@ def main(argv=None):
         help="use the behavior changes of the spec with matrix: case patterns",
     )
     parser.add_argument("--report", type=Path, help="write all differences as JSON")
-    parser.add_argument(
-        "--implementation",
-        choices=("current", "next"),
-        default="current",
-        help="the implementation of the current records; the spec changes "
-        "apply to the next implementation",
-    )
     args = parser.parse_args(argv)
 
     try:
         if args.spec:
-            changes = load_spec_changes(args.implementation)
+            changes = load_spec_changes()
         else:
             changes = load_changes(args.behavior_changes)
     except ChangesError as error:

@@ -1,4 +1,9 @@
-// RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
+// A static container requests the dependencies its bindings declare when it is
+// compiled, so a container whose binding declares a dependency no binding
+// serves is rejected when it is formed, whether or not it is requested.
+// REQUIRES: linux
+// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// CHECK: type not found:
 
 #include <dingo/static_container.h>
 #include <dingo/storage/unique.h>
@@ -16,6 +21,3 @@ int main() {
   dingo::static_container<source> instance;
   (void)instance;
 }
-
-// CHECK: bindings<...> source requires every declared dependency to map to an
-// interface binding

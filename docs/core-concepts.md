@@ -249,12 +249,6 @@ row_consumer borrowed =
     raw_container
         .construct<row_consumer, constructor<row_consumer(cell (*)[3])>>();
 
-container<> unique_container;
-// Register a fixed-size array in unique scope and resolve it as an owning
-// dynamic array handle.
-unique_container.register_type<scope<unique>, storage<cell[4]>>();
-auto owned = unique_container.resolve<std::unique_ptr<cell[]>>();
-
 container<> shared_container;
 // Register a shared smart array directly.
 shared_container.register_type<scope<shared>, storage<std::shared_ptr<cell[]>>>(
@@ -561,7 +555,7 @@ assert(container.construct<A>(callable<A(int)>(overloaded_factory{})).value ==
 
 See:
 
-- [test/factory/constructor_detection.cpp](../test/factory/constructor_detection.cpp)
+- [test/next/primitives/constructor.cpp](../test/next/primitives/constructor.cpp)
 - [test/matrix/README.md](../test/matrix/README.md)
 - [include/dingo/factory/constructor_detection.h](../include/dingo/factory/constructor_detection.h)
 - [include/dingo/factory/constructor.h](../include/dingo/factory/constructor.h)

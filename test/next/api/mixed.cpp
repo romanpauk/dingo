@@ -115,7 +115,7 @@ struct many_mixed_traits : dingo::dynamic_container_traits {
 };
 
 // Two static bindings of a key make a request by a fixed key ambiguous when
-// it is compiled, which next-mixed-container-rejects-static-ambiguity.cpp
+// it is compiled, which mixed-container-rejects-static-ambiguity.cpp
 // checks; the value of a runtime key picks them when it is resolved.
 TEST(next_mixed, two_static_bindings_of_a_key_are_ambiguous) {
   using bindings = dingo::bindings<

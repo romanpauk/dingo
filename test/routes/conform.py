@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compares the observed route behavior with the reference implementation.
 
-test/routes/extract.py records what the current library does for every scope,
+test/routes/extract.py records what the library, or the baseline, does for every scope,
 stored shape, and request in the runtime, static, and mixed containers. This
 script maps those C++ spellings to the abstract shapes of the spec, computes
 the outcome of every case with the reference implementation in

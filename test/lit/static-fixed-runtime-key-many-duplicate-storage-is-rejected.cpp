@@ -1,9 +1,16 @@
-// RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
+// A domain declared many holds any number of bindings of a key, two of one
+// implementation too, so the static container is formed and a collection of
+// the key holds both.
+// (behavior change duplicates_rejected_in_both_domains; the baseline rejected
+// two bindings of one implementation and key)
+// REQUIRES: linux, can-run-built-executables
+// RUN: %dingo_next_cxx %s -o %t && %t
 
 #include <dingo/static_container.h>
 #include <dingo/storage/shared.h>
 
 #include <cstddef>
+#include <vector>
 
 struct processor {
   virtual ~processor() = default;
@@ -25,9 +32,7 @@ struct traits : dingo::static_container_traits {
 
 int main() {
   dingo::static_container<source, traits> container;
-  (void)container;
-  return 0;
+  auto all = container.construct_collection<std::vector<processor *>>(
+      dingo::key_type<std::size_t, 0>{});
+  return all.size() == 2 && all[0] != all[1] ? 0 : 1;
 }
-
-// CHECK: static_container fixed runtime-key lookup bindings must be
-// CHECK: unique for one lookups and unique by storage for many lookups

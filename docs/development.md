@@ -6,7 +6,11 @@ header-only for consumers.
 ## Development Build
 
 Development builds enable tests, benchmarks, and runnable examples through
-`DINGO_DEVELOPMENT_MODE=ON`.
+`DINGO_DEVELOPMENT_MODE=ON`. They build against the next implementation, whose
+public include paths `include/next` holds, as described in
+[Spec-Driven Design](architecture/spec-driven-design.md#m92-switch-and-removal);
+the current implementation is the baseline of the differential tests, the
+library of the commit in `test/differential/baseline-commit`.
 
 ```bash
 cmake -S . -B build -DDINGO_DEVELOPMENT_MODE=ON
@@ -70,22 +74,21 @@ The spec tests run as `dingo_spec_test` in ctest.
 [`test/spec/public_api_check.py`](../test/spec/public_api_check.py) compiles
 every public include path of the spec alone, and one translation unit that uses
 every public name and extension point and checks every configuration macro. A
-failure names the spec entry. The lit test `public-api.t` runs it. An entry a
-behavior change declares with an `api:` pattern is missing from the current
-implementation, and the check requires it to be. With `--implementation next`,
-the check compiles every entry against the next implementation, which provides
-the target API; the lit test `next-public-api.t` runs it.
+failure names the spec entry. The lit test `public-api.t` runs it. With
+`--implementation baseline` and a `--cxx-command` that names the include
+directory of the pinned baseline, an entry a behavior change declares with an
+`api:` pattern must be missing from the baseline, and the check requires it to
+be.
 
 ### Contract Evaluation
 
 [`test/contracts/evaluate.py`](../test/contracts/evaluate.py) reports, per
-toolchain of a contract baseline, which contracts of the spec the implementation
+toolchain of the contract baseline, which contracts of the spec the library
 satisfies, which it violates, and which no probe observes. It is a report and
 does not fail on a violation.
 
 ```bash
 python3 test/contracts/evaluate.py
-python3 test/contracts/evaluate.py --baseline test/contracts/baseline-next.json
 ```
 
 ### Route Conformance
@@ -99,52 +102,57 @@ The route tools compare what the library does with the route rules of the spec,
   and request against the library and records the outcome, the constructions,
   copies, and moves, and the identity of the result. Stored shapes use the
   standard wrappers and user wrappers defined through the wrapper-traits
-  extension point. The table is written to `build/routes/observed/` and not
-  committed; extracting it takes about eight minutes with 32 jobs.
+  extension point. The table is written to `build/routes/observed-next/` and not
+  committed; extracting it takes about eight minutes with 32 jobs. The C++ of
+  the probes is in the templates under `test/routes/templates/`.
 - [`test/routes/conform.py`](../test/routes/conform.py) compares every case with
-  the reference implementation. Every difference must be declared by a behavior
-  change of the spec, `spec/content/behavior_changes.py`, and every declared
-  change must match a difference. The ctest entry `dingo_routes_conform_test`
-  runs it when a table has been extracted.
-- With `--implementation next`, the extractor probes the next implementation
-  through `include/next` and writes the table to `build/routes/observed-next/`,
-  and `conform.py --exact --observed <table>` requires it to match the reference
-  implementation with no behavior change applied. The C++ of the probes is in
-  the templates under `test/routes/templates/`.
+  the reference implementation. `conform.py --exact --observed <table>` requires
+  the table of the library to match it with no behavior change applied. With
+  `--implementation baseline` and the include directory of the pinned baseline,
+  the extractor writes the table of the baseline to `build/routes/observed/`,
+  which `conform.py` compares without `--exact`: every difference must be
+  declared by a behavior change of the spec, `spec/content/behavior_changes.py`,
+  and every declared change must match a difference. The ctest entry
+  `dingo_routes_conform_test` runs the unit tests of both tools.
 - [`test/routes/messages.py`](../test/routes/messages.py) compares the exception
-  messages of a table of the next implementation with those of the current one,
+  messages of the table of the library with those of the table of the baseline,
   case by case where both throw the same exception. Every difference must be
   declared by a behavior change with a `messages:<case id>` pattern. The
   messages come from the diagnostics section of the spec,
   `spec/content/diagnostics.py`.
 - [`test/routes/summarize.py`](../test/routes/summarize.py) lists where the
   runtime, static, and mixed containers differ from each other.
-- The next implementation is also probed with layer kinds of the user, declared
-  once in [`test/routes/user_kinds.py`](../test/routes/user_kinds.py): kinds of
-  the properties and forms of library kinds, a variant, an array that moves, and
+- The library is also probed with layer kinds of the user, declared once in
+  [`test/routes/user_kinds.py`](../test/routes/user_kinds.py): kinds of the
+  properties and forms of library kinds, a variant, an array that moves, and
   mutations that differ from a library kind by one form or property. The
   extractor generates their C++ declarations, over the wrappers of
   `templates/kinded_wrappers_next.h`.
 - [`test/routes/witness.py`](../test/routes/witness.py) runs the witnesses of
-  the algebra against the next implementation: of the cases of the extractor,
-  the smallest that takes each route, that a scope refuses for each reason, that
-  a mutation refuses where the kind it differs from serves, and that each
-  condition of a route refuses, which the reference implementation finds by
-  relaxing the condition. It compiles one program per container and compares as
+  the algebra against the library: of the cases of the extractor, the smallest
+  that takes each route, that a scope refuses for each reason, that a mutation
+  refuses where the kind it differs from serves, and that each condition of a
+  route refuses, which the reference implementation finds by relaxing the
+  condition. It compiles one program per container and compares as
   `conform.py --exact` does, in about half a minute, and fails on a route or a
   condition without a witness unless it declares why none can have one. The
   ctest entry `dingo_routes_witness_test` runs it; `--list` prints the
   witnesses.
 
-Extract the table of the pinned baseline and check it:
+Extract the table of the library and check it, then the table of the pinned
+baseline and its behavior changes:
 
 ```bash
+CXX=g++ python3 test/routes/extract.py --work-dir build/routes
+python3 test/routes/conform.py --exact \
+    --observed build/routes/observed-next/gcc16-x86_64-c++20.jsonl
 mkdir -p build/routes/baseline
 git archive "$(cat test/differential/baseline-commit)" include \
     | tar -x -C build/routes/baseline
 CXX=g++ python3 test/routes/extract.py --work-dir build/routes \
-    --include-dir build/routes/baseline/include
+    --implementation baseline --include-dir build/routes/baseline/include
 python3 test/routes/conform.py --summary
+python3 test/routes/messages.py
 ```
 
 ### Selection Conformance
@@ -163,33 +171,36 @@ by the reference implementation in `spec/reference/selection.py`.
   written to `build/selection/observed/`; extracting it takes about two and a
   half minutes with 30 jobs.
 - [`test/selection/conform.py`](../test/selection/conform.py) compares every
-  case with the reference implementation. Every difference must be declared by a
-  behavior change of the spec whose `cases` match `selection:<case id>#<field>`,
-  and every declared change must match a difference. The ctest entry
-  `dingo_selection_conform_test` runs its unit tests.
+  case with the reference implementation. With `--exact`, the table of the
+  library must match it without behavior changes. The table of the pinned
+  baseline, which the extractor writes with `--implementation baseline` and its
+  include directory, is compared without `--exact`: every difference must be
+  declared by a behavior change of the spec whose `cases` match
+  `selection:<case id>#<field>`, and every declared change must match a
+  difference. The ctest entry `dingo_selection_conform_test` runs its unit
+  tests.
 
 ```bash
-CXX=g++ python3 test/selection/extract.py --include-dir build/routes/baseline/include
-python3 test/selection/conform.py --summary
-```
-
-Against the next implementation, its table must match the reference
-implementation without behavior changes:
-
-```bash
-python3 test/selection/extract.py --work-dir build/selection-next \
-    --cxx-command "g++ -std=c++20 -I$PWD/include/next -I$PWD/include" \
-    --mixed-traits
+CXX=g++ python3 test/selection/extract.py --work-dir build/selection-next
 python3 test/selection/conform.py --exact \
     --observed build/selection-next/observed/gcc16-x86_64-c++20.jsonl
+CXX=g++ python3 test/selection/extract.py --implementation baseline \
+    --include-dir build/routes/baseline/include
+python3 test/selection/conform.py --summary
 ```
 
 ### Scope Check
 
 [`test/spec/scopes_check.py`](../test/spec/scopes_check.py) generates a program
-that prints the storage scope policies of the current implementation and
-compares them with the scope descriptors of the spec. The lit test
-`spec-scopes.t` runs it.
+that prints the storage scope policies of the pinned baseline and compares them
+with the scope descriptors of the spec; every difference must be declared by a
+behavior change with a `scopes:` pattern. Its `--cxx-command` names the include
+directory of the baseline:
+
+```bash
+python3 test/spec/scopes_check.py --work-dir build/scopes \
+    --cxx-command "g++ -std=c++17 -I$PWD/build/routes/baseline/include"
+```
 
 ## Generated Code
 
@@ -262,7 +273,7 @@ target after changing a diagnostic or an example.
 [`test/contracts/probe.py`](../test/contracts/probe.py) measures the contract
 dimensions described in
 [Spec-Driven Design](architecture/spec-driven-design.md#contracts) on the
-current implementation, or with `--implementation next` on the next one:
+library:
 
 - `instantiations`: Dingo class and function template instantiations of
   generated scaling programs with 1, 8, and 32 bindings in static, mixed, and
@@ -280,20 +291,16 @@ current implementation, or with `--implementation next` on the next one:
 - `headers`: preprocessed lines that come from Dingo headers, per public header
 
 The values are deterministic for a toolchain. They are recorded in
-[`test/contracts/baseline.json`](../test/contracts/baseline.json), and those of
-the next implementation in
-[`test/contracts/baseline-next.json`](../test/contracts/baseline-next.json),
-keyed by compiler family, major version, architecture, and C++ standard. The lit
-tests `contract-baseline.t` and `next-contract-baseline.t` run `probe.py check`,
-which fails when a value exceeds its baseline and reports values that improved.
-A toolchain without a baseline prints its measured values and passes.
+[`test/contracts/baseline.json`](../test/contracts/baseline.json), keyed by
+compiler family, major version, architecture, and C++ standard. The lit test
+`contract-baseline.t` runs `probe.py check`, which fails when a value exceeds
+its baseline and reports values that improved. A toolchain without a baseline
+prints its measured values and passes.
 
 Record the baseline for a toolchain after an intended change:
 
 ```bash
 CXX=clang++ python3 test/contracts/probe.py update --work-dir build/contracts
-CXX=clang++ python3 test/contracts/probe.py update --implementation next \
-    --work-dir build/contracts-next
 ```
 
 List the most instantiated Dingo templates of one scaling program:
@@ -313,7 +320,7 @@ baseline of the library, as described in
 `include/` directory of the commit in
 [`test/differential/baseline-commit`](../test/differential/baseline-commit) and
 builds the generated matrix twice from the working-tree test sources: once
-against `include/`, and once against the extracted baseline through the
+against the library, and once against the extracted baseline through the
 development-only `DINGO_DIFFERENTIAL_INCLUDE_DIR` cache variable. Both builds
 enable `DINGO_MATRIX_RECORD`, which makes every matrix assertion record what it
 observed: the expression, its result, and printable operand values such as
@@ -334,29 +341,16 @@ python3 test/differential/run.py --build-root build/differential --profile porta
 
 The `differential` workflow runs the same command with GCC 14.
 
-With `--implementation next`, the working-tree side is built against the next
-implementation, and the behavior changes of the spec with `matrix:` case
-patterns declare its differences; against the current implementation no
-difference is declared.
-
-```bash
-python3 test/differential/run.py --build-root build/differential-next \
-    --profile portable --implementation next
-```
-
 ### Resolution Benchmarks
 
 [`benchmark/resolve/resolve.cpp`](../benchmark/resolve/resolve.cpp) measures
-resolutions through the public API alone, so it builds against both
-implementations: `dingo_resolve_benchmark` against the current one and
-`dingo_next_resolve_benchmark` against the next one. Build them optimized, in a
-separate build directory:
+resolutions through the public API alone, `dingo_resolve_benchmark`. Build it
+optimized, in a separate build directory:
 
 ```bash
 cmake -S . -B build/release -DDINGO_DEVELOPMENT_MODE=ON -DCMAKE_BUILD_TYPE=Release
-cmake --build build/release -t dingo_resolve_benchmark dingo_next_resolve_benchmark
+cmake --build build/release -t dingo_resolve_benchmark
 build/release/benchmark/dingo_resolve_benchmark
-build/release/benchmark/dingo_next_resolve_benchmark
 ```
 
 ## Compile-Time Profiling

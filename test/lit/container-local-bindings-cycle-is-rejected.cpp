@@ -1,4 +1,8 @@
-// RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
+// The local static bindings of a runtime registration are known when the
+// registration is compiled, so a cycle among them is rejected then.
+// REQUIRES: linux
+// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// CHECK: recursive dependency detected:
 
 #include <dingo/container.h>
 #include <dingo/storage/shared.h>
@@ -23,6 +27,3 @@ int main() {
           dingo::bind<dingo::scope<dingo::shared>, dingo::storage<b>,
                       dingo::dependencies<a &>>>>();
 }
-
-// CHECK: register_type bindings<...> requires a resolvable compile-time binding
-// graph

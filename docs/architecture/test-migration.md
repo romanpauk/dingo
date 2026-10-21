@@ -23,8 +23,6 @@ Each entry has one disposition:
 - **changed**: the behavior changed on purpose. The entry names the behavior
   change and the test of the new behavior.
 - **obsolete**: the behavior no longer exists in any form. The entry says why.
-- **planned** (Group H only): what the switch does with a family, tool, or
-  target. That work is not done yet.
 
 A test is named `Suite.Name`, as GoogleTest names it. The `next_*` suites are in
 `dingo_next_test`, built from `test/next/`. A behavior change is named by its id
@@ -43,16 +41,16 @@ implementation; the entries of Group H are its other families, tools, and
 targets. One entry counts once, a typed test included.
 
 ```text
-Group  kept  ported  replaced  covered  changed  obsolete  planned  total
-A         9      22         9        0        0         2        0     42
-B         0      30         7        4       10         0        0     51
-C         0       5        48        0        0        21        0     74
-D         0       9        17        0        3         0        0     29
-E         0      40        16        3        9         3        0     71
-F         0      11        24        1        5         0        0     41
-G         0      24         0       15        9         3        0     51
-H         0       0         0        0        0         0       26     26
-all       9     141       121       23       36        29       26    385
+Group  kept  ported  replaced  covered  changed  obsolete  total
+A         9      22        11        0        0         0     42
+B         0      30         7        4       10         0     51
+C         0       5        48        0        0        21     74
+D         0       9        17        0        3         0     29
+E         0      40        16        3        9         3     71
+F         0      11        24        1        5         0     41
+G         0      24         0       15        9         3     51
+H        17       0         4        0        4         0     25
+all      26     141       127       23       40        27    384
 ```
 
 ## Unresolved
@@ -71,6 +69,16 @@ The ledger leaves these open:
   bound of the index is undefined behavior. A container cannot reach it, as the
   runtime backend rejects such a key before it indexes it, but a direct use of
   the index can.
+- **The header cost is not checked.** `probe.py check` measures the preprocessed
+  lines of the public headers but does not compare them with the baseline, and
+  the spec test that pins the `header_cost` contracts to the baseline is
+  commented out, until the contracts are revisited.
+- **The contract baselines of GCC 16 and Clang 22 are those of the
+  implementation before the switch.** The baselines of GCC 13 and Clang 18 are
+  recorded after it; the others need `probe.py update` on their toolchains.
+- **MSVC is not built.** The msvc backend of constructor detection is compiled
+  and tested with GCC and Clang only; the next implementation has not been built
+  with MSVC.
 - **Claims not fully confirmed.**
   - `resolution_operation_test.rvalue_source_destroys_materialized_value` is
     covered by `next_unique.retains_the_object_of_an_rvalue_reference`, which
@@ -276,7 +284,10 @@ This file includes old internal headers
 (`dingo/factory/constructor_detection.h`,
 `matrix/fixtures/constructor_detection.h` →
 `dingo/factory/detail/constructor_detection_msvc.hpp`). In next, constructor
-detection lives in `include/dingo/core/primitives/constructor.h`.
+detection lives in `include/dingo/core/primitives/constructor.h` and
+`constructor_detection.h`, with the backends portable and msvc, selected by the
+compiler variant `constructor_detection_msvc`, and the modes shape and
+signature.
 
 - (file-scope `static_assert`s, not a TEST): scalar arity 0, cv-qualified scalar
   same, empty aggregate arity 0, empty derived aggregate arity 1, annotated
@@ -294,14 +305,16 @@ detection lives in `include/dingo/core/primitives/constructor.h`.
   **replaced**: `test/next/primitives/constructor.cpp`
   `next_constructor.takes_the_declared_constructor_arguments` (declared
   `(double, const char*)` and `(int)` lists) and
-  `next_constructor.detects_the_constructor_of_the_largest_arity` (arity 2 / 0);
-  tests `core/primitives/constructor.h`. Next never computes the parameter types
-  of a detected constructor, only its arity.
+  `next_constructor.detects_the_constructor_of_the_largest_arity` (arity 2 / 0),
+  and `next_constructor.the_signature_mode_recovers_the_argument_types` (int,
+  float); tests `core/primitives/constructor.h` and
+  `core/primitives/constructor_detection.h`.
 - `constructor_detection_test.unresolved_signature_arguments_fall_back_to_void`:
   old `detail::constructor_signature_arguments` yields `void` for an argument
-  category it cannot resolve. **obsolete**: next does not work out signature
-  argument types. `constructor_argument` converts each argument at the call, so
-  this fallback is not needed.
+  category it cannot resolve. **replaced**:
+  `test/next/primitives/constructor.cpp`
+  `next_constructor.an_unrecorded_argument_category_is_not_recovered`; tests
+  `core/primitives/constructor_signature.h`.
 - `constructor_detection_test.traits_limit_only_the_public_search`: a per-type
   arity limit bounds the public search but not an explicit search with a higher
   limit. **replaced**: `test/next/primitives/constructor.cpp`
@@ -311,8 +324,11 @@ detection lives in `include/dingo/core/primitives/constructor.h`.
   `DINGO_CONSTRUCTOR_DETECTION_ARGS` (`config_constructor_detection_args`)
 - `constructor_detection_test.public_detection_defaults_to_shape`: the public
   `constructor_detection<T>` is the `constructor_shape` detection mode.
-  **obsolete**: next has one detection (`detected_constructor`) and no detection
-  modes.
+  **replaced**: `test/next/primitives/constructor.cpp`
+  `next_constructor.the_signature_mode_recovers_the_argument_types` (the shape
+  mode reports no argument types) and
+  `next_constructor.the_engine_detects_by_the_selected_backend`; tests
+  `core/primitives/constructor_detection.h`.
 - `constructor_detection_test.auto_construction_uses_public_selection`: an
   auto-constructible dependency is made by its `DINGO_CONSTRUCTOR`-selected
   constructor. **ported**: `test/next/api/construct.cpp`
@@ -1291,7 +1307,7 @@ are not observed through the public API of the baseline and are recorded only:
   at construction, where the old code reported `type_list<>`.
   `has_explicit_dependencies` has no next equivalent. Compile-time bindability
   is the rejection of a callable factory in static bindings:
-  `test/lit/next-static-bindings-callable-factory-is-rejected.cpp`
+  `test/lit/static-bindings-callable-factory-is-rejected.cpp`
   (factory_not_declared)
 - `type_registration_test.registration_specialization`: an interface rebinds
   smart-handle storage only when C++ converts the handle directly; an empty
@@ -1760,7 +1776,7 @@ none can be kept. The file does not compile against next.
   `next_static_graph.a_cycle_of_declared_dependencies_is_found_with_its_path`
   (each binding `registers<>()`, `find()` gives path 0->1->0); tests
   `core/backend/static_backend.h`. Rejecting the container: lit
-  `test/lit/next-static-container-rejects-a-declared-cycle.cpp`.
+  `test/lit/static-container-rejects-a-declared-cycle.cpp`.
 - `static_graph_test.allows_cycles_when_every_cycle_binding_is_shared_cyclical`:
   a cycle made only of shared_cyclical bindings is legal, and a shared owner of
   a node in it resolves. **replaced**:
@@ -1774,8 +1790,7 @@ none can be kept. The file does not compile against next.
   `next_static_graph.a_cycle_through_a_binding_that_is_not_shared_cyclical_is_found`
   (path 1->0->1, starting at the shared binding); tests
   `core/backend/static_backend.h`. Rejecting the container with that exact
-  binding shape: lit
-  `test/lit/next-static-container-rejects-a-declared-cycle.cpp`.
+  binding shape: lit `test/lit/static-container-rejects-a-declared-cycle.cpp`.
 - `static_graph_test.partial_analysis_detects_static_cycles_even_with_runtime_dependencies`:
   a dependency with no static binding (one that runtime registrations could
   answer) does not hide a static cycle. **replaced**:
@@ -2003,7 +2018,7 @@ with the six bodies unchanged.
   (many declared, one static and one runtime binding in the child: throws
   `type_ambiguous_exception` and does not fall back to the parent),
   `next_static_graph.a_second_binding_of_a_key_is_a_duplicate_unless_many`, lit
-  `test/lit/next-static-container-rejects-duplicate-keys.cpp`.
+  `test/lit/static-container-rejects-duplicate-keys.cpp`.
 - `static_parent_container_test.static_child_context_is_sized_for_parent_temporaries`:
   an empty static child resolves a unique destructible type of its static
   parent. **ported**:
@@ -2057,14 +2072,14 @@ follows the default declaration, which is the new behavior of both.
 
 - `collection-missing-traits-specialization.cpp`: a collection request of a type
   without collection_traits is rejected. **ported**:
-  `test/lit/next-collection-missing-traits-specialization.cpp`
+  `test/lit/collection-missing-traits-specialization.cpp`
   (collection_traits_missing). `gen:collection_traits_missing` is the same
   program.
 - `construction-ambiguous-is-rejected.cpp`: `construct<T>()` of a type with two
   single-argument constructors is rejected. **ported**:
-  `test/lit/next-construction-ambiguous-is-rejected.cpp`
-  (constructor_not_detected). `gen:constructor_not_detected` covers a private
-  constructor, not an ambiguous one.
+  `test/lit/construction-ambiguous-is-rejected.cpp` (constructor_not_detected).
+  `gen:constructor_not_detected` covers a private constructor, not an ambiguous
+  one.
 - `construction-bounded-array-rejects-too-many-initializers.cpp`:
   `constructor_traits<int[2]>::construct(1,2,3)` is rejected. **obsolete**: Next
   has no way to build an array from element initializers. A stored array is
@@ -2073,7 +2088,7 @@ follows the default declaration, which is the new behavior of both.
   `constructor_traits` is internal to the old code.
 - `construction-dynamic-array-requires-size-or-initializers.cpp`: building an
   unbounded array needs an explicit size or initializers. **ported**:
-  `test/lit/next-construction-dynamic-array-requires-size-or-initializers.cpp`:
+  `test/lit/construction-dynamic-array-requires-size-or-initializers.cpp`:
   `unique_ptr<int[]>` without a factory gives no_default_factory. The old test
   called internal `detail::make_dynamic_array`.
 - `construction-generic-constructor-requires-explicit-factory.cpp`: a template
@@ -2082,12 +2097,11 @@ follows the default declaration, which is the new behavior of both.
   rejects the old program with constructor_generic too.
 - `container-local-bindings-cycle-is-rejected.cpp`: a cycle in the local
   `bindings<>` of a runtime `register_type` is rejected at compile time.
-  **ported**: `test/lit/next-container-local-bindings-cycle-is-rejected.cpp`
+  **ported**: `test/lit/container-local-bindings-cycle-is-rejected.cpp`
   (type_recursion). `gen:type_recursion` covers only a static container.
 - `container-static-bindings-cycle-is-rejected.cpp`: a cycle among the static
   bindings of a mixed container is rejected when the type is formed. **ported**:
-  `test/lit/next-container-static-bindings-cycle-is-rejected.cpp`
-  (type_recursion)
+  `test/lit/container-static-bindings-cycle-is-rejected.cpp` (type_recursion)
 - `container-static-fixed-runtime-key-selector-is-rejected.cpp`: a mixed
   container rejects a `key_type<K, V>` static binding. **changed**:
   `keys_in_every_container` ("a key in a mixed container"). Next accepts. New
@@ -2095,16 +2109,15 @@ follows the default declaration, which is the new behavior of both.
   `key_type<int, 7>` without lookups, resolved by 7)
 - `harness-container-header-compiles.cpp`: `<dingo/container.h>` alone compiles
   a container and a resolve. **ported**:
-  `test/lit/next-harness-container-header-compiles.cpp` (compile only, as
-  before)
+  `test/lit/harness-container-header-compiles.cpp` (compile only, as before)
 - `index-conflicting-typed-key-selector-is-rejected.cpp`: `typed<K, I, one>` and
   `typed<K, I, many>` for one domain are rejected. **ported**:
-  `test/lit/next-index-conflicting-typed-key-selector-is-rejected.cpp`
+  `test/lit/index-conflicting-typed-key-selector-is-rejected.cpp`
   (lookup_declared_twice). `gen:lookup_declared_twice` declares `single<I>` and
   `collection<I>`, not two typed declarations.
 - `index-duplicate-interface-key-is-rejected.cpp`: two `associative<K, I>`
   declarations of one domain are rejected. **ported**:
-  `test/lit/next-index-duplicate-interface-key-is-rejected.cpp`
+  `test/lit/index-duplicate-interface-key-is-rejected.cpp`
   (lookup_declared_twice: two associative declarations that agree)
 - `index-empty-definition-lookup-is-rejected.cpp`: a request by a runtime key
   value with no declared lookup is rejected at compile time. **changed**:
@@ -2116,8 +2129,8 @@ follows the default declaration, which is the new behavior of both.
 - `index-missing-definition-is-rejected.cpp`: a key value for an interface whose
   domain no lookup declares is rejected. **changed**:
   `keys_apply_to_every_interface`. Next accepts the program. New behavior:
-  `test/lit/next-index-missing-definition-is-rejected.cpp` (runs: found by its
-  key, not found without it)
+  `test/lit/index-missing-definition-is-rejected.cpp` (runs: found by its key,
+  not found without it)
 - `index-no-key-selector-is-rejected.cpp`: `single<I>` and `collection<I>` for
   one domain are rejected. **covered**: `gen:lookup_declared_twice`: the same
   `single<I>` and `collection<I>` declarations, rejected with
@@ -2130,15 +2143,13 @@ follows the default declaration, which is the new behavior of both.
   `dingo::detail` hooks, which next lacks, so next rejects it.
 - `key-invalid-fixed-value-is-rejected.cpp`: `key_type<T, V>` with V not usable
   as `T{V}` is rejected. **ported**:
-  `test/lit/next-key-invalid-fixed-value-is-rejected.cpp`
-  (key_value_not_of_key_type, the old key used by a registration).
-  `gen:key_value_not_of_key_type` rejects forming the key type alone, as the old
-  program did.
+  `test/lit/key-invalid-fixed-value-is-rejected.cpp` (key_value_not_of_key_type,
+  the old key used by a registration). `gen:key_value_not_of_key_type` rejects
+  forming the key type alone, as the old program did.
 - `key-structural-fixed-value-compiles.cpp`: a fixed key of a structural class
   type yields its value. **ported**:
-  `test/lit/next-key-structural-fixed-value-compiles.cpp` (runs; runtime and
-  static, resolve and injection). The old test read internal
-  `detail::key_value_traits`.
+  `test/lit/key-structural-fixed-value-compiles.cpp` (runs; runtime and static,
+  resolve and injection). The old test read internal `detail::key_value_traits`.
 - `registration-array-requires-matching-element-type.cpp`: `storage<int[2]>`
   with `interfaces<float>` is rejected. **covered**: `gen:interface_in_array`:
   an array storage with a declared interface. Next rejects the old program with
@@ -2148,19 +2159,19 @@ follows the default declaration, which is the new behavior of both.
   rejects the old program with interface_in_array.
 - `registration-function-interface-is-rejected.cpp`: `interfaces<int()>` is
   rejected. **ported**:
-  `test/lit/next-registration-function-interface-is-rejected.cpp`
+  `test/lit/registration-function-interface-is-rejected.cpp`
   (no_interface_served). `gen:no_interface_served` covers a consumed optional.
 - `registration-incomplete-interface-type-is-rejected.cpp`: an incomplete
   interface is rejected. **ported**:
-  `test/lit/next-registration-incomplete-interface-type-is-rejected.cpp`
+  `test/lit/registration-incomplete-interface-type-is-rejected.cpp`
   (no_interface_served)
 - `registration-incomplete-registered-type-is-rejected.cpp`:
   `storage<incomplete *>` with an interface is rejected. **ported**:
-  `test/lit/next-registration-incomplete-registered-type-is-rejected.cpp`
+  `test/lit/registration-incomplete-registered-type-is-rejected.cpp`
   (interface_not_derived)
 - `registration-interface-requires-pointer-convertibility.cpp`: a unique binding
   with an unrelated interface is rejected. **ported**:
-  `test/lit/next-registration-interface-requires-pointer-convertibility.cpp`
+  `test/lit/registration-interface-requires-pointer-convertibility.cpp`
   (no_interface_served for unique). `gen:interface_not_derived` covers a shared
   binding.
 - `registration-missing-interface-is-rejected.cpp`: internal `type_registration`
@@ -2176,10 +2187,10 @@ follows the default declaration, which is the new behavior of both.
   (`register_type<scope<shared>>()`)
 - `registration-reference-interface-is-rejected.cpp`: `interfaces<service &>` is
   rejected. **ported**:
-  `test/lit/next-registration-reference-interface-is-rejected.cpp`
+  `test/lit/registration-reference-interface-is-rejected.cpp`
   (no_interface_served)
 - `registration-void-interface-is-rejected.cpp`: `interfaces<void>` is rejected.
-  **ported**: `test/lit/next-registration-void-interface-is-rejected.cpp`
+  **ported**: `test/lit/registration-void-interface-is-rejected.cpp`
   (no_interface_served)
 - `runtime-registration-fixed-key-is-rejected.cpp`: a runtime registration with
   `key_type<K, V>` is rejected. **changed**: `keys_in_every_container` ("a fixed
@@ -2188,7 +2199,7 @@ follows the default declaration, which is the new behavior of both.
   resolved by `key_value{8}`)
 - `runtime-registration-multiple-key-ambiguous-is-rejected.cpp`: one key value
   for a binding of two keyed interfaces compiles. **ported**:
-  `test/lit/next-runtime-registration-multiple-key-ambiguous-is-rejected.cpp`
+  `test/lit/runtime-registration-multiple-key-ambiguous-is-rejected.cpp`
   (compile only, as before. Despite its name, the old test asserts the program
   compiles)
 - `runtime-registration-multiple-key-duplicate-is-rejected.cpp`: two key values
@@ -2198,7 +2209,7 @@ follows the default declaration, which is the new behavior of both.
 - `runtime-registration-multiple-key-extra-is-rejected.cpp`: a key value of a
   type with no declared lookup is rejected. **changed**:
   `keys_apply_to_every_interface`. Next accepts the program. New behavior:
-  `test/lit/next-runtime-registration-multiple-key-extra-is-rejected.cpp` (runs:
+  `test/lit/runtime-registration-multiple-key-extra-is-rejected.cpp` (runs:
   found by 7 and by "extra", same object)
 - `runtime-registration-multiple-key-missing-is-rejected.cpp`: a registration
   must give a key value for every declared key lookup of its interface.
@@ -2207,7 +2218,7 @@ follows the default declaration, which is the new behavior of both.
   `int` and `std::string`, with registration_key_value_missing too.
 - `static-bindings-callable-factory-is-rejected.cpp`: a callable factory is
   rejected in static bindings. **ported**:
-  `test/lit/next-static-bindings-callable-factory-is-rejected.cpp`
+  `test/lit/static-bindings-callable-factory-is-rejected.cpp`
   (factory_not_declared). The old test formed the internal `static/registry.h`;
   the port forms a `static_container`. `gen:factory_not_declared` names a
   function object type, not a `dingo::callable`.
@@ -2215,11 +2226,11 @@ follows the default declaration, which is the new behavior of both.
   registry: two static bindings of one tag key make the selection ambiguous.
   **changed**: `duplicates_rejected_in_both_domains`. In next,
   `static_container` rejects the duplicate when the type is formed. Tested by
-  `test/lit/next-static-container-rejects-duplicate-keys.cpp` and
+  `test/lit/static-container-rejects-duplicate-keys.cpp` and
   `gen:lookup_already_registered`. The old test used internal headers.
 - `static-bindings-missing-dependency-is-rejected.cpp`: a declared dependency no
   binding serves is rejected when the static container is formed. **ported**:
-  `test/lit/next-static-bindings-missing-dependency-is-rejected.cpp`
+  `test/lit/static-bindings-missing-dependency-is-rejected.cpp`
   (type_not_found_required_by; the program plus a request).
   `gen:type_not_found_required_by` rejects the same binding, shared instead of
   unique, when the container is formed, and next rejects the old program
@@ -2227,7 +2238,7 @@ follows the default declaration, which is the new behavior of both.
 - `static-container-ambiguous-keyed-multibinding-is-rejected.cpp`: two static
   bindings of one tag key: resolving by the key is rejected. **covered**:
   `gen:lookup_already_registered` and
-  `test/lit/next-static-container-rejects-duplicate-keys.cpp`: next rejects the
+  `test/lit/static-container-rejects-duplicate-keys.cpp`: next rejects the
   duplicate when the type is formed (`duplicates_rejected_in_both_domains`)
 - `static-container-ambiguous-multibinding-is-rejected.cpp`: two unkeyed static
   bindings of one interface: resolve is rejected. **covered**:
@@ -2235,31 +2246,31 @@ follows the default declaration, which is the new behavior of both.
   formed.
 - `static-container-cycle-is-rejected.cpp`: a declared dependency cycle in a
   static container is rejected. **covered**: `gen:type_recursion` and
-  `test/lit/next-static-container-rejects-a-declared-cycle.cpp`.
+  `test/lit/static-container-rejects-a-declared-cycle.cpp`.
 - `static-fixed-runtime-key-duplicate-is-rejected.cpp`: two static bindings of
   one fixed key in a domain of one are rejected. **covered**:
-  `test/lit/next-static-container-rejects-duplicate-keys.cpp`
-  (`key_type<int, 7>` twice, lookup_already_registered)
+  `test/lit/static-container-rejects-duplicate-keys.cpp` (`key_type<int, 7>`
+  twice, lookup_already_registered)
 - `static-fixed-runtime-key-many-child-singular-ambiguity-is-rejected.cpp`: two
   bindings of a key in a static child make a request ambiguous, though the
   parent binds the key once. **ported**:
-  `test/lit/next-static-fixed-runtime-key-many-child-singular-ambiguity-is-rejected.cpp`
+  `test/lit/static-fixed-runtime-key-many-child-singular-ambiguity-is-rejected.cpp`
   (type_ambiguous)
 - `static-fixed-runtime-key-many-duplicate-storage-is-rejected.cpp`: a static
   domain declared many rejects two bindings of one implementation and key.
   **changed**: `duplicates_rejected_in_both_domains` ("a domain declared many
   accepts any number"). Next accepts the program. New behavior:
-  `test/lit/next-static-fixed-runtime-key-many-duplicate-storage-is-rejected.cpp`
+  `test/lit/static-fixed-runtime-key-many-duplicate-storage-is-rejected.cpp`
   (runs: the collection of the key holds 2 objects)
 - `static-fixed-runtime-key-many-singular-ambiguous-is-rejected.cpp`: a singular
   request by a fixed key bound twice in a domain declared many is rejected.
   **ported**:
-  `test/lit/next-static-fixed-runtime-key-many-singular-ambiguous-is-rejected.cpp`
+  `test/lit/static-fixed-runtime-key-many-singular-ambiguous-is-rejected.cpp`
   (type_ambiguous). `gen:type_ambiguous` covers only the unkeyed case.
 - `static-fixed-runtime-key-many-singular-missing-is-rejected.cpp`: a static
   request by an unbound fixed key, with another key bound, is rejected.
   **ported**:
-  `test/lit/next-static-fixed-runtime-key-many-singular-missing-is-rejected.cpp`
+  `test/lit/static-fixed-runtime-key-many-singular-missing-is-rejected.cpp`
   (type_not_found_keyed). `gen:type_not_found_keyed` covers an empty container
   with a tag key.
 - `static-fixed-runtime-key-selector-is-required.cpp`: a static `key_type<K, V>`
@@ -2271,7 +2282,7 @@ follows the default declaration, which is the new behavior of both.
 - `static-rvalue-interface-wrapper-request-is-rejected.cpp`:
   `shared_ptr<iface> &&` from a shared `shared_ptr<impl>` is rejected in static
   and mixed containers. **ported**:
-  `test/lit/next-static-rvalue-interface-wrapper-request-is-rejected.cpp`
+  `test/lit/static-rvalue-interface-wrapper-request-is-rejected.cpp`
   (type_not_convertible). Two RUN lines, the second for the mixed container
   alone.
 - `storage-header-is-required.cpp`: `scope<dingo::unique>` without
@@ -2279,7 +2290,7 @@ follows the default declaration, which is the new behavior of both.
   `scope_tags_need_no_header`: next accepts the old program. New behavior:
   `test/next/api/scope_headers.cpp`
   `next_scope_headers.the_container_declares_the_scopes_of_the_library`.
-  `test/lit/next-storage-header-is-required.cpp` keeps the old name for another
+  `test/lit/storage-header-is-required.cpp` keeps the old name for another
   program: a scope tag without `dingo::scope_traits` is rejected with
   scope_undeclared, the program of `gen:scope_undeclared`.
 - `storage-missing-materialization-traits-specialization.cpp`: internal
@@ -2290,11 +2301,10 @@ follows the default declaration, which is the new behavior of both.
 - `storage-requirements-are-enforced.cpp`: shared_cyclical rejects an interface
   that is a virtual base. **covered**: `gen:cyclical_virtual_interface` (the
   same program plus a resolve) and
-  `test/lit/next-shared-cyclical-rejects-virtual-interfaces.cpp`.
+  `test/lit/shared-cyclical-rejects-virtual-interfaces.cpp`.
 - `type-conversion-missing-required-access-is-rejected.cpp`: a
   `type_conversion_traits` specialization without `required_access` is rejected.
-  **ported**:
-  `test/lit/next-type-conversion-missing-required-access-is-rejected.cpp`
+  **ported**: `test/lit/type-conversion-missing-required-access-is-rejected.cpp`
   (conversion_access_undeclared), through the public `type_conversion_traits`
   and a converting interface. The old test used internal `detail` and the old
   `type_traits`. `gen:conversion_access_undeclared` is the same program.
@@ -2308,19 +2318,27 @@ follows the default declaration, which is the new behavior of both.
 ## Group H: other tests, tools, and targets
 
 These build or probe the current implementation outside the unit tests and the
-lit tests above. Their dispositions are planned, not done: a disposition "kept
-with next as implementation" means the entry builds against the next
-implementation once the `dingo` target selects it, and "compares against the
-pinned baseline commit" means the entry reads the current implementation from
-the `include/` of the commit in `test/differential/baseline-commit` instead of
-the working tree.
+lit tests above. "Kept with next as implementation" means the entry builds
+against the next implementation, which the `dingo` target of a development build
+selects, and "compares against the baseline" means the entry reads the current
+implementation from the `include/` of the commit in
+`test/differential/baseline-commit` instead of the working tree.
 
 ### Generated matrix (`test/matrix`)
 
 The families of `test/matrix/README.md`, generated by `test/matrix/generate.py`
 into one executable per feature or suite, `dingo_matrix_test_<name>`. They link
-the `dingo` target and build against the next implementation with
-`-DDINGO_IMPLEMENTATION=next` (M9.1).
+the `dingo` target, so they build against the next implementation, and the
+differential tests build them against the baseline too. Where a behavior change
+declares a difference from the baseline, the matrix asserts the behavior of the
+next implementation under `DINGO_IMPLEMENTATION_NEXT` and keeps the assertion of
+the baseline for the baseline side, as M9.1 describes: `lifetime_counts`
+(`stored_objects_are_constructed_in_place`, `consuming_moves_minimally`),
+`local_bindings` (`local_bindings_shadow_collections`),
+`lookup_route_regressions` (`collections_of_a_domain_of_one`),
+`runtime_exception_regressions` (`empty_collections_are_valid`),
+`runtime_lookup_routing_regressions` (`keys_apply_to_every_interface`), and
+`runtime_unique_reference_regressions` (`consumed_objects_are_never_borrowed`).
 
 - registration family (`resolve_concrete`, `resolve_interface`,
   `resolve_wrapper`, `resolve_unique_wrapper`, `custom_wrappers`,
@@ -2331,12 +2349,12 @@ the `dingo` target and build against the next implementation with
   `lifetime_counts`, `mixed_external_dependency`, `mixed_singular_ambiguity`,
   `custom_allocator`, `custom_rtti`, `explicit_dependencies`): registers,
   resolves, constructs, and counts the lifetimes of each feature across the
-  container, scope, stored type, exposed type, and request axes. **planned**:
-  kept with next as implementation.
+  container, scope, stored type, exposed type, and request axes. **kept** with
+  next as implementation.
 - invoke family (`invoke`): dispatches callables (lambdas, `std::function`,
   function pointers, member functions, functors, move-only callables) over the
-  dependency provisionings of the registration family. **planned**: kept with
-  next as implementation.
+  dependency provisionings of the registration family. **kept** with next as
+  implementation.
 - scenario family (`conversion_delivery_regressions`,
   `conversion_qualification_regressions`, `indexed_registration_regressions`,
   `lookup_route_regressions`, `nested_container`,
@@ -2345,110 +2363,113 @@ the `dingo` target and build against the next implementation with
   `runtime_unique_reference_regressions`, `shared_cyclical_regressions`,
   `static_indexed_regressions`, `static_parent_container`): runs complete
   regression and parent-container scenarios on the containers each applies to.
-  **planned**: kept with next as implementation.
+  **kept** with next as implementation.
 - `constructor_detection` family: crosses the detection backends (portable,
-  msvc) and modes (`detail::constructor_shape`, `detail::constructor_signature`)
-  with constructor shapes, and argument storages with conversion categories;
-  `test/matrix/fixtures/constructor_detection.h` includes the old internal
-  `dingo/factory/detail/constructor_detection_msvc.hpp`. **planned**: retired
-  with the old internals, which the differential tests already exclude; the next
-  implementation has one detection, tested by
-  `test/next/primitives/constructor.cpp`, where the argument categories need a
-  counterpart.
+  msvc) and modes (shape, signature) with constructor shapes, and argument
+  storages with conversion categories. **kept**, against the detection of the
+  next implementation (`core/primitives/constructor_detection.h`, the backends
+  `portable_constructor_detection` and `msvc_constructor_detection`, the modes
+  `constructor_shape` and `constructor_signature`): the same axes, the selected
+  shapes spelled by `dingo::dependency<T, key_type<S>>`, and each storage and
+  conversion category checked by the request `core::constructor_argument` makes
+  through `core::invoke_constructor`. It names the core detection, which the
+  baseline lacks, so the differential tests exclude it.
 - `dependency_composition_resolve`, `dependency_composition_invoke` (four
   executables each): resolves and invokes recursive dependency type compositions
-  across registration modes and scopes. **planned**: kept with next as
-  implementation.
+  across registration modes and scopes. **kept** with next as implementation.
 - `shared_cyclical` family: resolves two-node cycles across container,
   registration mode, node storage, and the dependency edge of each direction.
-  **planned**: kept with next as implementation.
+  **kept** with next as implementation.
 - `dingo_matrix_generator_test`: tests the generator in Python
-  (`test/matrix/generator_test.py`) **planned**: kept; it does not depend on the
+  (`test/matrix/generator_test.py`). **kept**; it does not depend on the
   implementation.
-- `test/support/custom_wrappers.h`: user wrappers of the matrix, through the old
-  `dingo::type_traits` or, under the next implementation,
-  `dingo::wrapper_traits`. **planned**: kept with next as implementation,
-  without its branch of the current implementation; the other headers of
-  `test/support/` serve only `dingo_unit_test` and are retired with it.
+- `test/support/custom_wrappers.h`, `test/support/resolution_test_types.h`: user
+  wrappers and types of the matrix. **kept** with next as implementation; the
+  other headers of `test/support/` served only `dingo_unit_test` and are removed
+  with it.
 
 ### Other targets
 
 - FetchContent test (`test/fetchcontent`): builds a program that includes
   `<dingo/container.h>` against dingo v0.2.0 fetched by FetchContent, in CI.
-  **planned**: kept; it builds a released tag, not the working tree, and changes
-  only when its `GIT_TAG` moves to a release with the next implementation.
-- `test/lit/contract-baseline.t`: checks the contract measurements of the
-  current implementation against `test/contracts/baseline.json` for the
-  toolchain under test. **planned**: retired; `next-contract-baseline.t` takes
-  its place.
-- `test/lit/next-contract-baseline.t`: checks the measurements of the next
-  implementation against `test/contracts/baseline-next.json`. **planned**: kept
-  with next as implementation, as the only contract baseline check.
-- `test/lit/public-api.t`: compiles every public include path and name of
-  `spec/content/public_api.py` against the current implementation, which must
-  lack the entries an `api:` behavior change declares. **planned**: retired;
-  `next-public-api.t` takes its place.
-- `test/lit/next-public-api.t`: compiles every entry of the public API against
-  the next implementation. **planned**: kept with next as implementation.
+  **kept**; it builds a released tag, not the working tree, and changes only
+  when its `GIT_TAG` moves to a release with the next implementation.
+- `test/lit/contract-baseline.t` of the current implementation: checks the
+  contract measurements of the current implementation against
+  `test/contracts/baseline.json`. **replaced** by the check of the next
+  implementation, which is now `test/lit/contract-baseline.t`, against the
+  baseline of the next implementation, now `test/contracts/baseline.json`.
+- `test/lit/public-api.t` of the current implementation: compiles every public
+  include path and name of `spec/content/public_api.py` against the current
+  implementation, which must lack the entries an `api:` behavior change
+  declares. **replaced** by the check of the next implementation, which is now
+  `test/lit/public-api.t`; `public_api_check.py --implementation baseline`
+  checks the baseline, which lacks the changed entries.
 - `test/lit/spec-scopes.t` (`test/spec/scopes_check.py`): compares the scope
   descriptors of the spec with the `storage_scope_policy` of the current
-  implementation. **planned**: retired; the scopes of the next implementation
-  are generated from `spec/content/scopes.py`
-  (`core/vocabulary/scope_tags.gen.h`), so no hand-written policy is left to
-  compare.
-- `test/lit/harness-smoke.t`: checks that lit and FileCheck run. **planned**:
-  kept; it does not depend on the implementation.
+  implementation. **changed**: `scopes_check.py` compares against the baseline,
+  with a `--cxx-command` that names its include directory, and is no lit test;
+  the scopes of the next implementation are generated from
+  `spec/content/scopes.py` (`core/vocabulary/scope_tags.gen.h`).
+- `test/lit/codegen-static-probes.cpp`: checks the size and the instructions of
+  representative static and runtime resolutions. **kept** with next as
+  implementation. The limits of Clang 18 and of the mixed probes of GCC 13 are
+  the sizes of the next implementation, which these versions do not fold as
+  later ones do, and Clang 18 skips the checks that a static probe is a tiny
+  branch-free function and smaller than its runtime path; a decision of the
+  user, recorded in the Decision Log of 2026-10-21.
+- `test/lit/harness-smoke.t`: checks that lit and FileCheck run. **kept**; it
+  does not depend on the implementation.
 - `dingo_benchmark` (`benchmark/container/basic.cpp`, `container/dingo.cpp`,
-  `index/index.cpp`, optional `comparison/fruit.cpp`): benchmarks containers,
-  indexes, and, in `container/dingo.cpp`, the old arena, container runtime, and
-  runtime transactions; `basic.cpp` uses the internal
-  `dingo/memory/aligned_storage.h`. **planned**: kept with next as
-  implementation for its public benchmarks; the benchmarks of the old runtime,
-  arena, and transactions are retired, and `basic.cpp` stops using the internal
-  header.
+  `index/index.cpp`, optional `comparison/fruit.cpp`): benchmarks containers and
+  indexes. **kept** with next as implementation; the benchmarks of the old
+  arena, container runtime, and runtime transactions in `container/dingo.cpp`
+  are **obsolete**, as the next implementation has none of them, and `basic.cpp`
+  no longer uses the internal `dingo/memory/aligned_storage.h`.
 - `dingo_resolve_benchmark` (`benchmark/resolve/resolve.cpp`): benchmarks
   resolution through the public API alone, with the requested binding among `N`
-  others. **planned**: kept with next as implementation.
+  others. **kept** with next as implementation.
 - `dingo_next_resolve_benchmark`: the same source against `dingo::next`.
-  **planned**: retired; `dingo_resolve_benchmark` is the same program once next
-  is the implementation.
+  **replaced** by `dingo_resolve_benchmark`, the same program now that next is
+  the implementation.
 - examples (`examples/`, 26 `dingo_example_*` targets): build and run the
   documented examples, through public headers, against the `dingo` target.
-  **planned**: kept with next as implementation.
+  **kept** with next as implementation. `examples/storage/array.cpp` no longer
+  resolves an array leaf as an owning array handle
+  (`arrays_are_not_adopted_into_owning_handles`), and
+  `examples/registration/collection.cpp` builds once the next implementation
+  instantiates no copy of a collection of move-only elements and no default
+  append its traits cannot make.
 
 ### Tools that probe the current implementation
 
 - `test/routes/extract.py`: records, for every domain, leaf kind, scope, stored
-  shape, and request, what the library of `--include-dir` does;
-  `--implementation current` by default, `next` through `include/next`.
-  **planned**: compares against the pinned baseline commit: the default table
-  becomes the one of the next implementation, and the table of the baseline is
-  extracted from the baseline commit.
+  shape, and request, what the library does. **changed**: the next
+  implementation by default; `--implementation baseline` with the
+  `--include-dir` of the baseline extracts the table of the baseline.
 - `test/routes/conform.py`: compares a route table with the reference
-  implementation, every difference declared by a behavior change; `--exact` for
-  a table of the next implementation. **planned**: kept with next as
-  implementation, `--exact` by default.
-- `test/routes/messages.py`: compares the exception messages of a table of the
+  implementation. **kept**: `--exact` for the table of the next implementation,
+  and every difference of the table of the baseline declared by a behavior
+  change.
+- `test/routes/messages.py`: compares the exception messages of the table of the
   next implementation with those of the current one, every difference declared
-  by a `messages:` case. **planned**: compares against the pinned baseline
-  commit, by the table extracted from it.
+  by a `messages:` case. **changed**: compares against the table of the
+  baseline.
 - `test/routes/summarize.py`, `test/routes/witness.py`: summarize the
   differences between the domains of a table; run the witnesses of the algebra
-  against the next implementation. **planned**: kept with next as
-  implementation.
+  against the next implementation. **kept** with next as implementation.
 - `test/selection/extract.py`, `test/selection/conform.py`: record how the
   library selects bindings by key, and compare it with
-  `spec/reference/selection.py`. **planned**: compares against the pinned
-  baseline commit for the baseline table; the default table becomes the one of
-  the next implementation.
+  `spec/reference/selection.py`. **changed**: the next implementation by
+  default, with the traits of the mixed container; `--implementation baseline`
+  with the `--include-dir` of the baseline extracts the table of the baseline.
 - `test/contracts/baseline.json` (`probe.py`, `evaluate.py`): the contract
-  measurements of the current implementation, the default baseline of the probe
-  and of the evaluation. **planned**: retired; `baseline-next.json` becomes the
-  default baseline.
+  measurements of the current implementation. **replaced** by the baseline of
+  the next implementation, now `test/contracts/baseline.json`; `probe.py`
+  measures the next implementation only, and the header cost contracts of the
+  spec are the maximum of its baseline.
 - `test/differential` (`run.py`, `compare.py`, `recorder.cpp`,
   `baseline-commit`): builds the matrix against the working tree and against the
   pinned baseline commit, records every assertion, and requires every difference
-  to be declared by a `matrix:` behavior change. **planned**: compares against
-  the pinned baseline commit in `test/differential/baseline-commit`; the
-  working-tree side is the next implementation, as `--implementation next` does
-  now.
+  to be declared by a `matrix:` behavior change. **kept**: the working-tree side
+  is the next implementation, and `--implementation` is gone.

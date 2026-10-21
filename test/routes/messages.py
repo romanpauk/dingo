@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Compares the exception messages of the next implementation with the current.
+"""Compares the exception messages of the library with those of the baseline.
 
 test/routes/extract.py records the message of every exception a request
 throws. For every case that throws the same exception in both tables, this
-script compares the messages of the next implementation with those of the
-current one. Every difference must be declared by a behavior change of the
+script compares the messages of the library with those of the baseline, the
+table extracted with --implementation baseline from the commit in
+test/differential/baseline-commit. Every difference must be declared by a behavior change of the
 spec whose `cases` match `messages:<case id>`, and every behavior change with a
 `messages:` pattern must match a difference. The exit status is 0 when both
 hold, 1 otherwise.
@@ -65,17 +66,17 @@ def compare(baseline, observed):
     the same exception in both tables with different messages."""
     differences = []
     for case, row in sorted(observed.items()):
-        current = baseline.get(case)
-        if current is None or not row["resolve"].startswith("throws:"):
+        expected = baseline.get(case)
+        if expected is None or not row["resolve"].startswith("throws:"):
             continue
-        if current["resolve"] != row["resolve"]:
+        if expected["resolve"] != row["resolve"]:
             continue
-        if current.get("message") is None or row.get("message") is None:
+        if expected.get("message") is None or row.get("message") is None:
             continue
-        if without_default_arguments(current["message"]) != without_default_arguments(
+        if without_default_arguments(expected["message"]) != without_default_arguments(
             row["message"]
         ):
-            differences.append((case, row["message"], current["message"]))
+            differences.append((case, row["message"], expected["message"]))
     return differences
 
 
@@ -111,7 +112,7 @@ def main(argv):
     for change_id, count in sorted(matched.items()):
         print(f"  {change_id}: {count}")
     for case, have, want in undeclared if args.summary else undeclared[:20]:
-        print(f"UNDECLARED {case}\n    next:    {have}\n    current: {want}")
+        print(f"UNDECLARED {case}\n    library:  {have}\n    baseline: {want}")
     for change_id in stale:
         print(f"STALE {change_id}: its messages: patterns match no difference")
     return 1 if undeclared or stale else 0

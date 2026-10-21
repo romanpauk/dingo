@@ -94,11 +94,11 @@ jobs:
               -DDINGO_DEVELOPMENT_MODE=ON \
               -DDINGO_BENCHMARK_ENABLED=OFF \
               -DDINGO_CCACHE=ON && \
-              cmake --build /workspace/${{ matrix.compiler.build_dir }} --target dingo_unit_test --verbose -j"$(nproc)" && \
+              cmake --build /workspace/${{ matrix.compiler.build_dir }} --target dingo_next_test --verbose -j"$(nproc)" && \
               echo "::group::Smoke build ccache stats" && \
               ccache --show-stats --verbose && \
               echo "::endgroup::" && \
-              ctest --test-dir /workspace/${{ matrix.compiler.build_dir }} --output-on-failure -R "^dingo_unit_test$"'
+              ctest --test-dir /workspace/${{ matrix.compiler.build_dir }} --output-on-failure -R "^dingo_next_test$"'
 
       - name: Upload Failure Artifacts
         if: ${{ failure() }}

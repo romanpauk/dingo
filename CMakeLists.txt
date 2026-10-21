@@ -36,17 +36,12 @@ target_include_directories(dingo INTERFACE
 )
 
 # The next implementation of the spec-driven design. include/next holds the
-# public include paths of the next implementation, generated from the spec.
-# DINGO_IMPLEMENTATION=next makes the dingo target select them; the dingo_next
-# target always does, so the next implementation is built alongside the current
-# one. See docs/architecture/spec-driven-design.md, Development Strategy.
-set(DINGO_IMPLEMENTATION "current" CACHE STRING
-    "Development only: the implementation the public headers select")
-set_property(CACHE DINGO_IMPLEMENTATION PROPERTY STRINGS current next)
+# public include paths of the next implementation, generated from the spec,
+# which the dingo target of a development build selects; a differential build
+# of the baseline builds against the include directory of the baseline alone.
+# The dingo_next target selects them in every development build. See
+# docs/architecture/spec-driven-design.md, M9.2.
 if(DINGO_DEVELOPMENT_MODE)
-    if(NOT DINGO_IMPLEMENTATION MATCHES "^(current|next)$")
-        message(FATAL_ERROR "DINGO_IMPLEMENTATION must be current or next")
-    endif()
     add_library(dingo_next INTERFACE)
     add_library(dingo::next ALIAS dingo_next)
     target_include_directories(dingo_next INTERFACE
@@ -54,11 +49,10 @@ if(DINGO_DEVELOPMENT_MODE)
         "${PROJECT_SOURCE_DIR}/include"
     )
     target_compile_definitions(dingo_next INTERFACE DINGO_IMPLEMENTATION_NEXT=1)
-    if(DINGO_IMPLEMENTATION STREQUAL "next")
+    if(NOT DINGO_DIFFERENTIAL_INCLUDE_DIR)
         target_include_directories(dingo BEFORE INTERFACE
             "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/next>")
         target_compile_definitions(dingo INTERFACE DINGO_IMPLEMENTATION_NEXT=1)
-        message(STATUS "The public headers select the next implementation")
     endif()
 endif()
 
@@ -106,8 +100,6 @@ if(DINGO_DEVELOPMENT_MODE)
     option(DINGO_BENCHMARK_ENABLED "enable benchmarking through googlebenchmark" ON)
     option(DINGO_BENCHMARK_FRUIT_ENABLED "enable fetching of google::fruit for benchmarks" OFF)
     option(DINGO_EXAMPLES_ENABLED "enable building of dingo examples" ON)
-    option(DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION
-        "Run tests with a single representative dynamic container configuration." OFF)
     option(DINGO_TREAT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors." ON)
 
     enable_sanitizers(DINGO)

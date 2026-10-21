@@ -70,7 +70,8 @@ compiler_version_text = read_compiler_output('--version').lower()
 if 'clang' in compiler_version_text:
     config.environment['DINGO_CXX_FAMILY'] = 'clang'
     config.available_features.add('clang')
-elif 'gcc' in compiler_version_text or 'g++' in compiler_version_text:
+elif ('gcc' in compiler_version_text or 'g++' in compiler_version_text
+      or 'free software foundation' in compiler_version_text):
     config.environment['DINGO_CXX_FAMILY'] = 'gcc'
     config.available_features.add('gcc')
 elif cxx_id in ('cl', 'cl.exe') or 'microsoft' in compiler_version_text:
@@ -84,7 +85,9 @@ if compiler_full_version:
 config.substitutions.append(('%python', python))
 if platform.system() == 'Windows':
     config.substitutions.append(
-        ('%dingo_cxx', f'"{cxx}" /std:c++20 /I"{os.path.join(project_root, "include")}"')
+        ('%dingo_cxx', f'"{cxx}" /std:c++20 /DDINGO_IMPLEMENTATION_NEXT=1 '
+                       f'/I"{os.path.join(project_root, "include", "next")}" '
+                       f'/I"{os.path.join(project_root, "include")}"')
     )
 else:
     next_includes = (
@@ -126,7 +129,7 @@ else:
         ('%dingo_next_cxx', f'{cxx} -std=c++20 {next_includes}')
     )
     config.substitutions.append(
-        ('%dingo_cxx', f'{cxx} -std=c++20 -I"{os.path.join(project_root, "include")}"')
+        ('%dingo_cxx', f'{cxx} -std=c++20 -DDINGO_IMPLEMENTATION_NEXT=1 {next_includes}')
     )
 config.substitutions.append(('%dingo_project_root', project_root))
 config.substitutions.append(('%dingo_lit_root', config.test_source_root))

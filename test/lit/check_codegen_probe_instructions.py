@@ -80,6 +80,13 @@ def main() -> int:
         # and use the size checker as the GCC guard.
         return 0
 
+    compiler_major = os.environ.get("DINGO_CXX_VERSION_MAJOR", "")
+    if compiler_major == "18" or "clang++-18" in compiler_id:
+        # Clang 18 keeps the transaction log of a static request of the next
+        # implementation, with the branch that releases a grown log, which
+        # later versions fold away; the size checker guards it.
+        return 0
+
     for symbol, max_non_return in TINY_PROBES.items():
         ops = instructions[symbol]
         significant = [op for op in ops if op not in NOPS and op not in RETURNS]

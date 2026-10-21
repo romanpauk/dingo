@@ -1,37 +1,32 @@
-// RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
+// A dingo::type_conversion_traits specialization declares the access its
+// conversion needs, so a conversion through one that declares no
+// required_access is rejected when it is compiled.
+// REQUIRES: linux
+// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// CHECK: declares no required_access
 
+#include <dingo/container.h>
+#include <dingo/storage/shared.h>
 #include <dingo/type/type_conversion_traits.h>
 
-struct wrapper {
+struct target {
+  explicit target(int initial) : value(initial) {}
   int value;
 };
 
-struct target {
-  explicit target(int &);
+struct source : target {
+  source() : target(5) {}
 };
 
 namespace dingo {
-template <> struct type_traits<wrapper> {
-  static constexpr bool enabled = true;
-  static constexpr bool is_pointer_like = false;
-  static constexpr bool is_value_borrowable = true;
-  static constexpr bool is_owning_handle = false;
-
-  using value_type = int;
-
-  template <typename> static constexpr bool is_handle_rebindable = false;
-  template <typename> static constexpr bool is_rebindable = false;
-
-  static int &borrow(wrapper &source) { return source.value; }
-};
-
-template <> struct type_conversion_traits<target, wrapper> {
-  static target convert(wrapper &);
+template <> struct type_conversion_traits<target, source> {
+  static target convert(const source &from) { return target(from.value * 10); }
 };
 } // namespace dingo
 
-static_assert(dingo::detail::is_type_conversion_available_v<target, wrapper &,
-                                                            dingo::borrow>);
-
-// CHECK: type_conversion_traits specialization must declare
-// CHECK-SAME: required_access<Source> as borrow or consume
+int main() {
+  dingo::container<> container;
+  container.register_type<dingo::scope<dingo::shared>, dingo::storage<source>,
+                          dingo::interfaces<target>>();
+  return container.resolve<target>().value;
+}

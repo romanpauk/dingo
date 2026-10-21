@@ -1,10 +1,14 @@
-// RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
+// The key value of a registration is the key of every interface the binding
+// declares, whether or not the lookups declare its domain, so a key of an
+// interface without a declaration is accepted and finds the binding.
+// (behavior change keys_apply_to_every_interface; the baseline rejected it)
+// REQUIRES: linux, can-run-built-executables
+// RUN: %dingo_next_cxx %s -o %t && %t
 
 #include <dingo/container.h>
 #include <dingo/storage/shared.h>
 
 #include <cstddef>
-#include <type_traits>
 
 struct processor {};
 struct animal {};
@@ -20,7 +24,12 @@ int main() {
       .register_type<dingo::scope<dingo::shared>, dingo::storage<processor>,
                      dingo::interfaces<processor>>(
           dingo::key_value{std::size_t(1)});
+  processor &keyed = container.resolve<processor &>(std::size_t(1));
+  (void)keyed;
+  try {
+    (void)container.resolve<processor &>();
+    return 1;
+  } catch (const dingo::type_not_found_exception &) {
+  }
+  return 0;
 }
-
-// CHECK: supplied runtime key value has no matching runtime-key lookup
-// definition for the registered interface

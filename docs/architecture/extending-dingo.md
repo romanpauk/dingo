@@ -108,7 +108,7 @@ because it aliases the existing object rather than constructing a value.
 ## Extension Example
 
 The best example is already in
-[test/type/type_traits.cpp](../../test/type/type_traits.cpp).
+[test/next/projection/request_types.cpp](../../test/next/projection/request_types.cpp).
 
 That test adds:
 
@@ -141,4 +141,4 @@ correct ownership and deletion semantics for interface use.
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
 - [include/dingo/storage/type_storage_traits.h](../../include/dingo/storage/type_storage_traits.h)
 - [include/dingo/type/type_conversion_traits.h](../../include/dingo/type/type_conversion_traits.h)
-- [test/type/type_traits.cpp](../../test/type/type_traits.cpp)
+- [test/next/projection/request_types.cpp](../../test/next/projection/request_types.cpp)

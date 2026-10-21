@@ -3,10 +3,10 @@
 Every intended difference between the target semantics of the spec and the
 baseline library. A change lists the case paths of the checks that observe it,
 see `BehaviorChange` in spec/schema.py. The route changes are observed by
-test/routes/conform.py, the scope changes by test/spec/scopes_check.py. A
-change no table observes names the test of the next implementation that
-asserts it, `test:<Suite>.<Name>`, or the diagnostic whose generated test
-rejects it, `diagnostic:<id>`.
+test/routes/conform.py, the scope changes by test/spec/scopes_check.py against
+the baseline. A change no table observes names the test of the next
+implementation that asserts it, `test:<Suite>.<Name>`, or the diagnostic whose
+generated test rejects it, `diagnostic:<id>`.
 """
 
 from spec.schema import BehaviorChange
@@ -666,6 +666,26 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         ),
         baseline="The request of an object that cannot be moved does not compile.",
         now="The request is served.",
+        decision=SWITCH_DECISION,
+    ),
+    BehaviorChange(
+        id="arrays_are_not_adopted_into_owning_handles",
+        description=(
+            "An array leaf is served as itself, its rows, and its elements; no "
+            "route adopts it into an owning handle of an array of runtime "
+            "size."
+        ),
+        cases=(
+            "test:next_array_handles."
+            "a_unique_array_is_not_adopted_into_an_owning_handle",
+            "test:next_array_handles."
+            "a_shared_array_is_not_adopted_into_an_owning_handle",
+        ),
+        baseline=(
+            "A request of std::unique_ptr<T[]> of a binding of T[N] is served "
+            "with a handle of a copy of the array."
+        ),
+        now="The request is not convertible.",
         decision=SWITCH_DECISION,
     ),
     BehaviorChange(

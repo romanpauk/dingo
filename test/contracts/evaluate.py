@@ -2,10 +2,9 @@
 """Reports which contracts of the spec an implementation satisfies.
 
 The contracts come from spec/content/contracts.py and the metrics from a
-baseline recorded by probe.py: baseline.json of the current implementation by
-default, or baseline-next.json of the next one. The C++ contract probes of the spec map each
-contract to the metric paths that observe it, or state why it cannot be
-observed. For every recorded toolchain the report classifies each contract:
+baseline recorded by probe.py, baseline.json by default. The C++ contract
+probes of the spec map each contract to the metric paths that observe it, or
+state why it cannot be observed. For every recorded toolchain the report classifies each contract:
 
 - holds: every observing metric satisfies the bound
 - violated: some observing metric does not, with the reason

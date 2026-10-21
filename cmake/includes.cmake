@@ -1,8 +1,17 @@
-file(GLOB_RECURSE DINGO_PUBLIC_HEADERS
+# The headers of the next implementation and its public include paths, which
+# include/next holds; the current implementation is the baseline and is not
+# compiled.
+file(GLOB_RECURSE DINGO_CORE_HEADERS
     CONFIGURE_DEPENDS
     RELATIVE "${PROJECT_SOURCE_DIR}/include"
-    "${PROJECT_SOURCE_DIR}/include/dingo/*.h"
+    "${PROJECT_SOURCE_DIR}/include/dingo/core/*.h"
 )
+file(GLOB_RECURSE DINGO_NEXT_HEADERS
+    CONFIGURE_DEPENDS
+    RELATIVE "${PROJECT_SOURCE_DIR}/include/next"
+    "${PROJECT_SOURCE_DIR}/include/next/dingo/*.h"
+)
+set(DINGO_PUBLIC_HEADERS ${DINGO_CORE_HEADERS} ${DINGO_NEXT_HEADERS})
 list(SORT DINGO_PUBLIC_HEADERS)
 
 set(DINGO_INCLUDES_DIRECTORY

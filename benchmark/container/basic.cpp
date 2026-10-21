@@ -8,7 +8,6 @@
 #include <benchmark/benchmark.h>
 
 #include <dingo/container.h>
-#include <dingo/memory/aligned_storage.h>
 #include <dingo/storage/shared.h>
 #include <dingo/storage/unique.h>
 
@@ -34,7 +33,7 @@ template <typename T> struct basic_unique_factory : basic_factory {
   }
 
 private:
-  dingo::aligned_storage_t<sizeof(T), alignof(T)> storage_;
+  alignas(T) unsigned char storage_[sizeof(T)];
 };
 
 template <typename T> struct basic_shared_factory : basic_factory {

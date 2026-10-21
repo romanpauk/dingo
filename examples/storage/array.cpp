@@ -11,7 +11,6 @@
 #include <dingo/factory/callable.h>
 #include <dingo/factory/constructor.h>
 #include <dingo/storage/shared.h>
-#include <dingo/storage/unique.h>
 
 ////
 using namespace dingo;
@@ -40,12 +39,6 @@ int main() {
       raw_container
           .construct<row_consumer, constructor<row_consumer(cell(*)[3])>>();
 
-  container<> unique_container;
-  // Register a fixed-size array in unique scope and resolve it as an owning
-  // dynamic array handle.
-  unique_container.register_type<scope<unique>, storage<cell[4]>>();
-  auto owned = unique_container.resolve<std::unique_ptr<cell[]>>();
-
   container<> shared_container;
   // Register a shared smart array directly.
   shared_container
@@ -56,6 +49,5 @@ int main() {
   (void)rows;
   (void)exact;
   (void)borrowed;
-  (void)owned;
   (void)shared;
 }

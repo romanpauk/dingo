@@ -1,4 +1,10 @@
-// RUN: not %dingo_cxx -c %s 2>&1 | %filecheck %s
+// The lookups of container traits declare the domain of an interface and a
+// key once, so a typed domain declared both one and many is rejected when the
+// container is compiled.
+// REQUIRES: linux
+// RUN: not %dingo_next_cxx -fsyntax-only %s 2>&1 | %filecheck %s
+// CHECK: the lookup of
+// CHECK-SAME: is declared twice
 
 #include <dingo/container.h>
 #include <dingo/storage/shared.h>
@@ -22,5 +28,3 @@ int main() {
   container.register_type<dingo::scope<dingo::shared>, dingo::storage<dog>,
                           dingo::interfaces<animal>>();
 }
-
-// CHECK: conflicting dingo lookup definitions for interface/key domain

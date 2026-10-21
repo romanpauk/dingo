@@ -137,7 +137,7 @@ jobs:
           foreach ($executable in $executables) {
             $name = [System.IO.Path]::GetFileNameWithoutExtension($executable.Name)
             $path = $executable.FullName.Replace('\', '/')
-            $label = if ($name -eq 'dingo_unit_test') { 'unit' } else { 'runtime' }
+            $label = if ($name -eq 'dingo_next_test') { 'unit' } else { 'runtime' }
             $lines += "add_test([=[$name]=] [=[$path]=])"
             $lines += "set_tests_properties([=[$name]=] PROPERTIES LABELS [=[$label]=])"
           }

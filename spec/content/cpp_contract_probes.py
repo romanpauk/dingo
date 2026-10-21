@@ -2,8 +2,8 @@
 
 Each entry links a contract to the metrics of test/contracts/probe.py that
 observe it, or states why the probes cannot. Metric patterns are fnmatch
-patterns over the metric paths of test/contracts/baseline.json and
-baseline-next.json, such as `object_size/flat_resolved.static.32`.
+patterns over the metric paths of test/contracts/baseline.json, such as
+`object_size/flat_resolved.static.32`.
 
 The runtime cost of a resolution is the cost of the cheapest path through a
 probe function that resolves a request resolved before. It is a lower bound of

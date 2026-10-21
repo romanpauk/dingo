@@ -1690,14 +1690,14 @@ Generate the instantiation, object size, runtime cost, code size, inlining, and
 header cost probes from the contracts, replace the hand-written code size
 limits, and gate CI on them.
 
-The probes measure the next implementation against its own baseline,
-`test/contracts/baseline-next.json`, which the lit test
-`next-contract-baseline.t` checks. The runtime cost probes of
-`test/contracts/runtime_probes.cpp` count the allocations of a first and of a
-repeated resolution, and the calls on the cheapest path through a function that
-resolves a request resolved before, which is the memoized resolution of a
-reference to an object of a stable binding. The size of every codegen probe is
-recorded, so the baseline is the code size limit of each toolchain.
+The probes measure the next implementation against its baseline,
+`test/contracts/baseline.json`, which the lit test `contract-baseline.t` checks.
+The runtime cost probes of `test/contracts/runtime_probes.cpp` count the
+allocations of a first and of a repeated resolution, and the calls on the
+cheapest path through a function that resolves a request resolved before, which
+is the memoized resolution of a reference to an object of a stable binding. The
+size of every codegen probe is recorded, so the baseline is the code size limit
+of each toolchain.
 
 On the recorded baselines, every contract the probes observe holds on the next
 implementation: 22 on Clang 22 and 20 on GCC 16, which records no
@@ -1766,16 +1766,17 @@ The matrix follows the spec where the baseline behavior it tested changes:
   made by a factory.
 
 A request that starts at a container is a transaction of it, as the transaction
-rules of the spec describe: when the outermost one fails, the registrations into
-the container, the objects its slots constructed, and the objects it retained
-during it are undone in reverse order, by the transaction log of the container.
-A construction runs in the log, as do a collection, `construct` by a factory,
-and `invoke`, and a request of the parent runs in the log of the child, so a
-registration into the child that a construction of the parent makes is undone
-with the child's request; a request made of the parent is a transaction of the
-parent. A memoized request of an object that exists constructs nothing and runs
-in no transaction, and a lazy slot is settled, its address kept by a memo, only
-outside a transaction.
+rules of the spec describe: when one fails, the registrations into the
+container, the objects its slots constructed, and the objects it retained since
+it began are undone in reverse order, by the transaction log of the container,
+whether or not the request that made it catches the failure. A construction runs
+in the log, as do a collection, `construct` by a factory, and `invoke`, and a
+request of the parent runs in the log of the child, so a registration into the
+child that a construction of the parent makes is undone with the child's
+request; a request made of the parent is a transaction of the parent. A memoized
+request of an object that exists constructs nothing and runs in no transaction,
+and a lazy slot is settled, its address kept by a memo, only outside a
+transaction.
 
 A runtime container allocates its bindings by its allocator, aligned by padding
 the bytes the allocator gives. A registration names the key value of one
@@ -1794,10 +1795,30 @@ by its detected constructor, which no matrix case observes.
 
 #### M9.2: Switch And Removal
 
-Status: not started.
+Status: in progress.
 
 Make the new implementation the only one, delete the current internals and the
 development option, and move the baseline.
+
+The coverage ledger, [test-migration.md](test-migration.md), has one entry for
+each test case of the current implementation the switch removes or changes, and
+names where its property is tested now, or why it no longer exists. The defects
+the ported tests found in the next implementation are fixed, and the differences
+from the baseline the switch keeps are declared by behavior changes of the spec
+with the decision of 2026-10-21.
+
+A development build builds every test, example, and benchmark against the next
+implementation. The current implementation is the baseline: the differential
+tests build it from the commit in `test/differential/baseline-commit`, and the
+route, selection, scope, and public API tools probe it from the include
+directory of that commit with `--implementation baseline`. The unit tests and
+lit tests of the current implementation are removed, the contract baseline is
+the one of the next implementation, and the codegen probes record the sizes of
+the next implementation where Clang 18 and GCC 13 do not fold its static
+requests as later versions do.
+
+Remaining: delete the internals of the current implementation, make the facades
+of `include/next` the public headers, and remove `DINGO_IMPLEMENTATION_NEXT`.
 
 #### M9.3: Matrix Migration
 
@@ -1959,6 +1980,26 @@ its bindings are known, which the selection rule asks at a declared step.
   `alternative_not_held`, a `type_not_convertible_exception`, in every container
   and scope, as the baseline refused it as not convertible; a request no route
   serves is refused as the rules say.
+
+- 2026-10-21: The coverage ledger of the switch. Every test case of the current
+  implementation that the switch removes has an entry in
+  [test-migration.md](test-migration.md), and the switch keeps these differences
+  from the baseline, each declared by a behavior change: a value request copies
+  a leaf by its copy constructor; an optional of an interface is not made from
+  an optional of an implementation, which would slice; the element of an empty
+  optional is refused; a registration that declares dependencies and a factory,
+  which declares its own, is rejected; a mixed container without static bindings
+  moves; a request of an rvalue reference to an object that cannot be moved
+  refers to the object the container keeps; an array leaf is not adopted into an
+  owning handle of an array of runtime size; the local bindings of a request
+  shadow the container's for a collection as for one object; the tags of the
+  scopes of the library need no header; and a lookup backend names its index,
+  the one extension point of the indexes, so the indexes of the library are no
+  more special than one of the user. Every request is a transaction that undoes
+  its own effects when it fails. Accepted as limits: a static chain of 69 links
+  on Clang 18 and 52 on GCC 13 at the default template depth, the slow paths the
+  inlining contract reports on Clang 18 and GCC 13, and the static requests
+  Clang 18 does not fold.
 
 - 2026-10-20: Users can extend almost everything. A user-extensible concept is
   an open schema in the spec, and the library reaches its members through types

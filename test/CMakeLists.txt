@@ -222,6 +222,7 @@ add_custom_command(
 add_executable(dingo_next_test
     next/api/allocator.cpp
     next/api/annotated.cpp
+    next/api/array_handles.cpp
     next/api/collections.cpp
     next/api/construct.cpp
     next/api/construction.cpp
@@ -280,73 +281,6 @@ target_include_directories(dingo_next_test PRIVATE
 target_link_libraries(dingo_next_test PRIVATE dingo::next gtest_main)
 add_test(NAME dingo_next_test COMMAND dingo_next_test)
 set_tests_properties(dingo_next_test PROPERTIES LABELS "unit;next")
-
-add_executable(dingo_unit_test
-    container/construct_dependency.cpp
-    container/container_move.cpp
-    container/dependency_chain.cpp
-    container/dingo.cpp
-    container/incomplete_resolve.cpp
-    container/incomplete_resolve_fixture.cpp
-    container/parent_container_resolution.cpp
-    container/recursion.cpp
-    factory/constructor_detection.cpp
-    lookup/associative_backends.cpp
-    lookup/index_injection.cpp
-    lookup/index_registration.cpp
-    lookup/index_runtime.cpp
-    lookup/index_typed.cpp
-    lookup/index_unkeyed.cpp
-    lookup/lookup_index.cpp
-    memory/arena_allocator.cpp
-    memory/object_store.cpp
-    registration/binding_graph.cpp
-    registration/object_routes.cpp
-    registration/object_sizes.cpp
-    registration/registration_traits.cpp
-    registration/runtime_registration.cpp
-    registration/static_bindings_source.cpp
-    registration/static_parent_container.cpp
-    registration/type_registration.cpp
-    resolution/cache.cpp
-    runtime/container_runtime.cpp
-    runtime/transaction.cpp
-    resolution/resolution_operation.cpp
-    container/construct_common.h
-    lookup/index_common.h
-    registration/type_registration_common.h
-    support/assert.h
-    support/class.h
-    support/containers.h
-    support/test.h
-    type/type_identity.cpp
-    type/type_identity_fixture.cpp
-    type/type_identity_shared.h
-    type/type_list.cpp
-    type/type_name.cpp
-    type/type_traits.cpp
-)
-set_source_files_properties(
-    lookup/index_injection.cpp
-    lookup/index_registration.cpp
-    lookup/index_runtime.cpp
-    lookup/index_typed.cpp
-    lookup/index_unkeyed.cpp
-    PROPERTIES COMPILE_OPTIONS
-    "$<$<OR:$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-O0>")
-add_test(NAME dingo_unit_test COMMAND dingo_unit_test)
-set_tests_properties(dingo_unit_test PROPERTIES LABELS "unit")
-target_link_libraries(dingo_unit_test dingo::dingo gtest_main)
-target_include_directories(dingo_unit_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_compile_definitions(dingo_unit_test PRIVATE
-    $<$<BOOL:${DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION}>:
-        DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION=1>
-)
-
-target_compile_options(dingo_unit_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
-
-# Force-include windows.h to each test to make sure library builds with windows.h included
-target_compile_options(dingo_unit_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/FI windows.h /DNOMINMAX>)
 
 add_custom_target(dingo_matrix_test
     DEPENDS ${DINGO_MATRIX_TEST_TARGETS})
@@ -410,19 +344,6 @@ foreach(DINGO_MATRIX_TEST_TARGET IN LISTS DINGO_MATRIX_TEST_TARGETS)
             $<TARGET_OBJECTS:${DINGO_MATRIX_DIAGNOSTIC_TARGET}>)
     endforeach()
 endforeach()
-
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
-    # The unit test binary still carries some template-heavy coverage
-    # from the old integration tests. Keep this runner's executable
-    # linkable in GCC Release builds.
-    target_compile_definitions(dingo_unit_test PRIVATE
-        $<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Release>>:
-            DINGO_TEST_SINGLE_DYNAMIC_CONTAINER_CONFIGURATION=1>
-    )
-    target_compile_options(dingo_unit_test PRIVATE
-        $<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Release>>:-Os>
-    )
-endif()
 
 option(DINGO_LIT_TESTS_ENABLED "Enable lit-based tests for static assertions and diagnostics." ON)
 if(DINGO_LIT_TESTS_ENABLED)

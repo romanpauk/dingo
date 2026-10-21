@@ -13,6 +13,12 @@ are turned into translation units that are compiled with -fsyntax-only:
 - configuration macros: one translation unit that checks that every macro is
   defined after including dingo/container.h
 
+Every entry compiles against the library. With --implementation baseline, the
+command names the include directory of the baseline, the commit of
+test/differential/baseline-commit, which lacks the entries a behavior change
+declares with an `api:` case pattern, and the check requires them to fail
+there.
+
 A failure is reported with the id of the public API entry. When a combined
 translation unit fails, its entries are compiled one by one to find the ones
 that fail. The exit status is nonzero when anything fails. The units are
@@ -77,7 +83,10 @@ class Failure:
 
 
 def default_cxx_command():
-    return os.environ.get("CXX", "c++") + f" -std=c++17 -I{PROJECT_ROOT / 'include'}"
+    return os.environ.get("CXX", "c++") + (
+        f" -std=c++17 -DDINGO_IMPLEMENTATION_NEXT=1"
+        f" -I{PROJECT_ROOT / 'include' / 'next'} -I{PROJECT_ROOT / 'include'}"
+    )
 
 
 def syntax_only_flags(command):
@@ -215,7 +224,7 @@ def changed_entries(loaded):
     with an `api:<entry id>` case pattern.
 
     The spec records the target public API. A changed entry is not provided by
-    the current implementation, so the check requires it to fail there.
+    the baseline, so the check requires it to fail there.
     """
     changed = {}
     for change in loaded.behavior_changes:
@@ -226,12 +235,12 @@ def changed_entries(loaded):
     return changed
 
 
-def check(loaded, command, work_dir, jobs, implementation="current"):
-    """Returns (number of entries checked, failures). The next implementation
-    provides the target public API, so every entry, the changed ones too, must
-    compile against it."""
+def check(loaded, command, work_dir, jobs, implementation="next"):
+    """Returns (number of entries checked, failures). The library provides the
+    target public API, so every entry, the changed ones too, must compile
+    against it; the baseline lacks the changed ones."""
     includes, code, macros = collect_units(loaded)
-    changed = changed_entries(loaded) if implementation == "current" else {}
+    changed = changed_entries(loaded) if implementation == "baseline" else {}
     work_dir.mkdir(parents=True, exist_ok=True)
     checker = Checker(command, work_dir, jobs)
     prelude = names_prelude(declaring_headers(loaded))
@@ -265,7 +274,7 @@ def main():
         "--cxx-command",
         default=default_cxx_command(),
         help="compiler command including the standard and include flags "
-        "(default: $CXX -std=c++17 -I<repo>/include)",
+        "(default: $CXX -std=c++17 with the include paths of the library)",
     )
     parser.add_argument(
         "--work-dir",
@@ -276,10 +285,10 @@ def main():
     parser.add_argument("--jobs", type=int, default=min(os.cpu_count() or 1, 8))
     parser.add_argument(
         "--implementation",
-        choices=("current", "next"),
-        default="current",
-        help="next checks the target public API, changed entries included, "
-        "against the next implementation, given by --cxx-command",
+        choices=("next", "baseline"),
+        default="next",
+        help="baseline checks the public API of the baseline, given by "
+        "--cxx-command, which lacks the entries a behavior change declares",
     )
     args = parser.parse_args()
 
