@@ -47,6 +47,15 @@ struct runtime_exception_regression_scenario {
       ASSERT_STREQ(exception.what(), expected.c_str());
     }
 
+#if defined(DINGO_IMPLEMENTATION_NEXT)
+    // A collection request that names no binding is a query that yields an
+    // empty collection, as the behavior change empty_collections_are_valid of
+    // the spec declares; the baseline throws type_not_found_exception.
+    auto collection =
+        container
+            .template construct_collection<std::vector<interface_type *>>();
+    ASSERT_TRUE(collection.empty());
+#else
     try {
       (void)container
           .template construct_collection<std::vector<interface_type *>>();
@@ -59,6 +68,7 @@ struct runtime_exception_regression_scenario {
       expected += ")";
       ASSERT_STREQ(exception.what(), expected.c_str());
     }
+#endif
   }
 };
 

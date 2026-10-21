@@ -127,9 +127,21 @@ void exercise_single_lookup_route() {
   ASSERT_EQ(std::addressof(before), std::addressof(again));
   ASSERT_EQ(before.id(), 1);
   ASSERT_EQ(first_type::constructions, 1);
+#if defined(DINGO_IMPLEMENTATION_NEXT)
+  // A collection of a domain declared one is a query over its bindings, which
+  // yields the binding the domain holds, as the behavior change
+  // collections_of_a_domain_of_one of the spec declares; the baseline throws
+  // type_not_found_exception.
+  auto collected =
+      Route::template resolve<std::vector<element_interface *>>(container);
+  ASSERT_EQ(collected.size(), 1u);
+  ASSERT_EQ(collected[0], std::addressof(before));
+  ASSERT_EQ(first_type::constructions, 1);
+#else
   ASSERT_THROW(
       (Route::template resolve<std::vector<element_interface *>>(container)),
       type_not_found_exception);
+#endif
 
   ASSERT_THROW((Route::template register_binding<first_type>(container)),
                lookup_already_registered_exception);

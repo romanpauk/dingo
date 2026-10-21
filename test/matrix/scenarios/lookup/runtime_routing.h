@@ -243,7 +243,17 @@ template <typename Family> void exercise_indexed_and_normal_routing() {
       dingo::key_value<int>{7});
   ASSERT_EQ(container.template resolve<routing_processor &>(7).processor_id(),
             9);
+#if defined(DINGO_IMPLEMENTATION_NEXT)
+  // The key value of a registration is the key of every interface the binding
+  // declares, whether or not the lookups declare its domain, as the behavior
+  // change keys_apply_to_every_interface of the spec declares; the baseline
+  // finds the interface whose domain is not declared without a key.
+  ASSERT_EQ(container.template resolve<routing_animal &>(7).animal_id(), 4);
+  ASSERT_THROW((container.template resolve<routing_animal &>()),
+               dingo::type_not_found_exception);
+#else
   ASSERT_EQ(container.template resolve<routing_animal &>().animal_id(), 4);
+#endif
 }
 
 struct runtime_lookup_routing_scenario {

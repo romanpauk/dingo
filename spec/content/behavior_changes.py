@@ -692,7 +692,10 @@ behavior_changes: tuple[BehaviorChange, ...] = (
             "The local bindings of a request shadow the bindings of the "
             "container for a collection, as for one object."
         ),
-        cases=("test:next_local.shadows_the_collections_of_the_container",),
+        cases=(
+            "test:next_local.shadows_the_collections_of_the_container",
+            "matrix:dingo_matrix_test_local_bindings/*_local_collection_value_type_*",
+        ),
         baseline=(
             "A collection without a key holds the container's and the local "
             "bindings; one by a key holds only the local bindings of the key."
