@@ -425,4 +425,16 @@ diagnostics: tuple[Diagnostic, ...] = (
         fallback_carrier="kind_form_needs_property_carrier",
         reported=COMPILE,
     ),
+    Diagnostic(
+        id="alternative_not_held",
+        condition=(
+            "A request is served by a route through an alternative of a "
+            "variadic layer, whose object holds another alternative."
+        ),
+        exception="type_not_convertible_exception",
+        message="{type} holds another alternative than the one the request is routed through",
+        placeholders=("type",),
+        fallback_carrier="alternative_not_held_carrier",
+        reported=(BindingTime.RUNTIME,),
+    ),
 )

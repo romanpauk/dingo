@@ -871,7 +871,8 @@ private:
       return found.resolved;
     }
     void *address = found.binding->borrow(found.term, resolver);
-    if (found.binding->settled(resolver)) {
+    if (found.binding->settled(resolver) &&
+        !found.binding->plan(found.term).rechecked) {
       found.resolved = address;
     }
     return address;

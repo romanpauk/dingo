@@ -40,6 +40,14 @@ RVALUE = ValueCategory.RVALUE
 PRVALUE = ValueCategory.PRVALUE
 
 ANY = "*"
+# The binding of a variadic layer pattern to the argument it matched.
+ARGUMENT = "@argument"
+# The alternative an object of a variadic layer holds: its first, which the
+# default factory makes, and which the instances of the probes hold. A route
+# through another alternative is not served, which the next implementation
+# finds when it walks the route.
+HELD_ALTERNATIVE = 0
+ALTERNATIVE_NOT_HELD = "the object holds another alternative than the route takes"
 # The layer kinds of the library, which name the family of a wrapper shape
 # made without a model.
 KINDS = {kind.id: kind for kind in layer_kinds}
@@ -131,6 +139,8 @@ class Derivation:
     shape: Shape
     category: ValueCategory
     rules: tuple[str, ...] = ()
+    # For each rule, the argument of a variadic layer it reached, else 0.
+    arguments: tuple[int, ...] = ()
     copied: Shape | None = None  # the shape the copy rule copied
     consumed: bool = False
 
@@ -264,8 +274,13 @@ def match(model: "Model", pattern, shape: Shape, bindings: dict) -> list[dict]:
     if pattern.form is not PatternForm.LAYER or shape.layer != pattern.name:
         return []
     if model.layers[pattern.name].variadic:
-        # The variadic layer pattern of one argument matches any argument.
-        return [m for arg in shape.args for m in match(model, pattern.args[0], arg, bindings)]
+        # The variadic layer pattern of one argument matches any argument,
+        # which the bindings record.
+        return [
+            m
+            for index, arg in enumerate(shape.args)
+            for m in match(model, pattern.args[0], arg, {**bindings, ARGUMENT: index})
+        ]
     if len(pattern.args) != len(shape.args):
         return []
     results = [bindings]
@@ -431,6 +446,7 @@ def derive(
                         shape,
                         category,
                         rules=(*term.rules, rule.id),
+                        arguments=(*term.arguments, bindings.get(ARGUMENT, 0)),
                         copied=bindings.get("X") if rule.id == "copy" else term.copied,
                         consumed=term.consumed or rule.access is Access.CONSUME,
                     )
@@ -554,6 +570,7 @@ def created(model: "Model", scope, terms, goal: Shape, exposed: set, bound: int,
                             shape,
                             rule.to_shape.category or term.category,
                             rules=(*term.rules, rule.id),
+                            arguments=(*term.arguments, 0),
                             copied=term.copied,
                             consumed=term.consumed or rule.access is Access.CONSUME,
                         )
@@ -584,6 +601,18 @@ def serve(model: "Model", scope_id, stored, request, interfaces) -> Derivation |
     )
 
 
+def holds_alternatives(model: Model, term: Derivation) -> bool:
+    """Whether the objects of the variadic layers a route reaches into hold
+    the alternatives it takes."""
+    for rule_id, argument in zip(term.rules, term.arguments):
+        rule = next(r for r in model.routes if r.id == rule_id)
+        source = rule.from_shape
+        if source.form is PatternForm.LAYER and model.layers[source.name].variadic:
+            if argument != HELD_ALTERNATIVE:
+                return False
+    return True
+
+
 def leaf_location(model: "Model", term: Derivation) -> str:
     if term.consumed:
         return "new"
@@ -607,6 +636,8 @@ def resolve(
     term = serve(model, scope_id, stored, request, interfaces)
     if term is None:
         return Outcome(registered=True, found=True)
+    if not holds_alternatives(model, term):
+        return Outcome(registered=True, found=True, reason=ALTERNATIVE_NOT_HELD)
 
     scope = model.scopes[scope_id]
     lazily_constructed = scope.slot is not Slot.EXTERNAL_REF

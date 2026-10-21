@@ -234,6 +234,7 @@ add_executable(dingo_next_test
     next/api/shared_cyclical.cpp
     next/api/transactions.cpp
     next/api/unique.cpp
+    next/api/variants.cpp
     next/backend/memo.cpp
     next/base/mechanics.cpp
     next/engine/engine_conformance.cpp

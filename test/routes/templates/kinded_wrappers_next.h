@@ -235,6 +235,10 @@ struct wrapper_traits<kinded_variant<Kind, Types...>> {
     return std::get<Index>(std::move(value).native());
   }
 
+  static std::size_t index(const kinded_variant<Kind, Types...> &value) {
+    return value.native().index();
+  }
+
   template <typename... Args>
   static kinded_variant<Kind, Types...> make(Args &&...args) {
     return kinded_variant<Kind, Types...>(std::in_place_index<0>,

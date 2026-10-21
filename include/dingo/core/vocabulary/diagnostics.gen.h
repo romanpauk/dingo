@@ -22,6 +22,17 @@
 
 namespace dingo::core {
 
+// spec: diagnostics.alternative_not_held
+// A request is served by a route through an alternative of a variadic layer,
+// whose object holds another alternative.
+[[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
+raise_alternative_not_held(std::string_view type) {
+  throw ::dingo::type_not_convertible_exception(
+      format_message("{type} holds another alternative than the one the "
+                     "request is routed through",
+                     {{"type", type}}));
+}
+
 // spec: diagnostics.lookup_already_registered
 // A binding is registered with a key that a binding of a common interface
 // already holds, in a domain declared with cardinality one.

@@ -204,8 +204,9 @@ public_api: tuple[PublicApiEntry, ...] = (
         EXTENSION,
         "Makes a wrapper type a layer of the shape algebra: declares its layer "
         "kind, its family, and its element types, and how to rebind it, reach "
-        "its element, make it, adopt an element it owns, and share the element "
-        "of a sole-owner handle.",
+        "its element, make it, adopt an element it owns, share the element of "
+        "a sole-owner handle, and tell which alternative a wrapper of a "
+        "variadic kind holds, which a route through another does not reach.",
     ),
     entry(
         "layer_kind_traits",

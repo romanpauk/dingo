@@ -347,6 +347,20 @@ KIND_SHAPES = (
         )
         for user in kind_probes
     ),
+    # A variant whose second alternative leads to the leaf too, which holds
+    # its first: a request routed through the second is not served.
+    Shape(
+        name="kind_variant_of_unique",
+        spelling="kind_variant<{T}, std::unique_ptr<{T}>>",
+        external="kind_variant<{T}, std::unique_ptr<{T}>>(std::in_place_index<0>)",
+        bases=(
+            ("{T}", False, False),
+            ("{I}", True, True),
+            ("kind_variant<{T}, std::unique_ptr<{T}>>", False, False),
+            ("std::unique_ptr<{T}>", False, False),
+            ("std::unique_ptr<{I}>", False, True),
+        ),
+    ),
     Shape("kinds_value", "{T}", "{T}{{}}", bases=created_bases()),
     Shape(
         "kinds_pointer",

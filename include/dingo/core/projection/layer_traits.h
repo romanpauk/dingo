@@ -49,7 +49,10 @@ namespace dingo {
 //              sole-owner handle to a sharing handle
 //   arguments  the element types, as a type_list
 //   rebind     the wrapper of other element types
-//   element    the element of a wrapper object
+//   element    the element of a wrapper object; for a variadic kind,
+//              element<Index>, the alternative `Index` of it
+//   index      for a variadic kind: the alternative a wrapper object holds,
+//              which a route through another does not reach
 //   make       a wrapper object made from the arguments of its element
 //   adopt      for a kind of the adopt form: a wrapper object that takes the
 //              ownership
@@ -176,6 +179,10 @@ template <typename... Types> struct wrapper_traits<std::variant<Types...>> {
   template <std::size_t Index>
   static auto &&element(std::variant<Types...> &&value) {
     return std::get<Index>(std::move(value));
+  }
+
+  static std::size_t index(const std::variant<Types...> &value) {
+    return value.index();
   }
 
   template <typename... Args>

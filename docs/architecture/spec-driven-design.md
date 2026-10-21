@@ -1883,6 +1883,14 @@ binding cannot know every kind requested of it, so a request of a layer whose
 kind wraps or adopts resolves its element and makes the layer of it. A form that
 reaches into a layer or converts it applies at the binding.
 
+A route through an alternative of a variadic layer, chosen when the route is
+derived, is served only when the object holds that alternative: the traits of a
+variadic kind tell which alternative an object holds, and a request routed
+through another fails with the diagnostic `alternative_not_held`, which a
+runtime container checks on every request, as it keeps no address borrowed
+through a variant. The reference implementation takes an object of a variadic
+layer to hold its first alternative, as the default factory makes it.
+
 A form may rely on properties of the kinds that have it, which its template
 states and the spec and `layer_kind_traits` check: only an immovable array,
 which a scope allocates for the request, releases its elements, and only a

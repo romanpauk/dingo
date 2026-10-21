@@ -24,11 +24,13 @@
 #include <dingo/core/engine/derive.h>
 #include <dingo/core/primitives/retained.h>
 #include <dingo/core/primitives/shape.h>
+#include <dingo/core/primitives/type_name.h>
 #include <dingo/core/projection/annotated.h>
 #include <dingo/core/projection/construct.h>
 #include <dingo/core/projection/conversion.h>
 #include <dingo/core/projection/layer_traits.h>
 #include <dingo/core/vocabulary/compile_diagnostics.gen.h>
+#include <dingo/core/vocabulary/diagnostics.gen.h>
 #include <dingo/core/vocabulary/scope_tags.gen.h>
 #include <dingo/core/vocabulary/vocabulary.gen.h>
 
@@ -185,11 +187,19 @@ enum class completion : std::uint8_t { refer, copy, address, construct };
 struct completion_plan {
   completion kind = completion::construct;
   std::size_t binding_steps = 0;
+  // Whether the route reaches into a variadic layer, whose held alternative
+  // a request checks each time, so the address it borrows is not kept.
+  bool rechecked = false;
 };
 
 constexpr completion_plan plan_completion(const term &route) {
   completion_plan plan;
   plan.binding_steps = route.rule_count;
+  for (std::size_t step = 0; step < route.rule_count; ++step) {
+    plan.rechecked =
+        plan.rechecked ||
+        has_properties(from_kind(route.rules[step]), layer_property::variadic);
+  }
   if (route.category == value_category::lvalue) {
     plan.kind = completion::refer;
     return plan;
@@ -392,10 +402,14 @@ decltype(auto) convert_step(Context &context, Value &&value) {
 }
 
 // The element of a layer: the argument a step reaches of a layer of a
-// variadic kind, and the one element of another.
+// variadic kind, which the object must hold, and the one element of another.
 template <typename Step, typename Traits, typename Value>
 decltype(auto) element_of(Value &&value) {
   if constexpr (has_properties(Step::current.kind, layer_property::variadic)) {
+    if (Traits::index(std::as_const(value)) != Step::argument) {
+      raise_alternative_not_held(
+          type_name_of<std::remove_cv_t<std::remove_reference_t<Value>>>());
+    }
     return Traits::template element<Step::argument>(std::forward<Value>(value));
   } else {
     return Traits::element(std::forward<Value>(value));
