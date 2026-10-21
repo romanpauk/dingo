@@ -94,7 +94,12 @@ constexpr bool conflicts_in(const lookup_table &table,
            !holds_many(table, interface, key);
   };
   if (added.interface_count == 0) {
-    return conflict_on(innermost_leaf(added.stored));
+    for (std::size_t index = 0; index < added.leaves.size; ++index) {
+      if (conflict_on(added.leaves.items[index])) {
+        return true;
+      }
+    }
+    return false;
   }
   for (std::size_t index = 0; index < added.interface_count; ++index) {
     if (conflict_on(added.interfaces[index].nodes[0].type)) {
@@ -119,8 +124,8 @@ constexpr bool conflicts(const lookup_table &table,
 }
 
 // The bound of the key values of the domain of a binding: the least bound of
-// the declarations of the domains of its interfaces, or of its leaf without
-// interfaces.
+// the declarations of the domains of its interfaces, or of the leaves its
+// stored shape names without interfaces.
 constexpr std::size_t key_bound(const lookup_table &table,
                                 const binding_descriptor &binding) {
   auto bound_of = [&](type_id interface) {
@@ -133,10 +138,14 @@ constexpr std::size_t key_bound(const lookup_table &table,
     }
     return unbounded;
   };
-  if (binding.interface_count == 0) {
-    return bound_of(innermost_leaf(binding.stored));
-  }
   std::size_t bound = unbounded;
+  if (binding.interface_count == 0) {
+    for (std::size_t index = 0; index < binding.leaves.size; ++index) {
+      const std::size_t of = bound_of(binding.leaves.items[index]);
+      bound = of < bound ? of : bound;
+    }
+    return bound;
+  }
   for (std::size_t index = 0; index < binding.interface_count; ++index) {
     const std::size_t of = bound_of(binding.interfaces[index].nodes[0].type);
     bound = of < bound ? of : bound;

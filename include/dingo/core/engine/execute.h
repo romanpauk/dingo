@@ -112,6 +112,7 @@ struct binding_type {
   static constexpr binding_descriptor make_descriptor() {
     binding_descriptor binding;
     binding.stored = shape_v<Stored>;
+    binding.leaves = named_leaves(binding.stored);
     binding.scope = scope;
     binding.declared_factory = !std::is_same_v<Factory, detected_factory>;
     binding.key = Key::descriptor;
@@ -300,6 +301,25 @@ inline constexpr bool has_share_v<
     Traits, Value,
     std::void_t<decltype(Traits::share(std::declval<Value &&>()))>> = true;
 
+// The context of a walk to the address of the object a term borrows: the
+// walk yields the address of the object its last rule reaches, along the
+// route it takes by the alternatives the objects hold, which is null, when
+// `null_allowed`, for the element of a layer that holds none.
+template <typename Context> struct address_walk {
+  Context &context;
+  bool null_allowed;
+
+  template <typename Type, typename Make>
+  Type &get_or_emplace(const void *key, Make &&make) {
+    return context.template get_or_emplace<Type>(key, std::forward<Make>(make));
+  }
+};
+
+template <typename Context> inline constexpr bool is_address_walk_v = false;
+
+template <typename Context>
+inline constexpr bool is_address_walk_v<address_walk<Context>> = true;
+
 // Step `Step` of the walk of the first `Steps` rules of term `Term`.
 template <typename Binding, std::size_t Term, std::size_t Steps,
           std::size_t Step>
@@ -314,11 +334,15 @@ struct step {
   // index of the interface it converts to.
   static constexpr std::size_t argument =
       Binding::published.items[Term].arguments[Step];
+  static constexpr bool last = Step + 1 == Steps;
 
-  // Passes on an lvalue the step reaches; the last step returns it.
+  // Passes on an lvalue the step reaches; the last step returns it, or its
+  // address in a walk to an address.
   template <typename Context, typename Reached>
   static decltype(auto) reach(Context &context, Reached &&reached) {
-    if constexpr (Step + 1 == Steps) {
+    if constexpr (last && is_address_walk_v<Context>) {
+      return std::addressof(reached);
+    } else if constexpr (last) {
       return static_cast<Reached &&>(reached);
     } else {
       return walk_step<Binding, Term, Steps, Step + 1>(
@@ -499,6 +523,26 @@ decltype(auto) consume_step(Context &context, Value &&value) {
   }
 }
 
+// A borrowed layer reaches the element it holds, which a nullable layer that
+// holds it in place must hold; the last step of a walk to an address yields a
+// null address for none, when the walk allows it.
+template <typename Step, typename Traits, typename Context, typename Value>
+decltype(auto) borrow_element(Context &context, Value &value) {
+  using value_type = remove_cvref_t<Value>;
+  if constexpr (checks_element_v<Step, Traits, value_type>) {
+    if (!Traits::has_element(std::as_const(value))) {
+      if constexpr (Step::last && is_address_walk_v<Context>) {
+        if (context.null_allowed) {
+          return decltype(std::addressof(element_of<Step, Traits>(value)))(
+              nullptr);
+        }
+      }
+      raise_element_not_held(type_name_of<value_type>());
+    }
+  }
+  return Step::reach(context, element_of<Step, Traits>(value));
+}
+
 // A borrowed object reaches the object a layer holds, or is copied, or its
 // address is taken, or it decays.
 template <typename Step, typename Context, typename Value>
@@ -507,12 +551,7 @@ decltype(auto) borrow_step(Context &context, Value &value) {
   using traits = layer_traits<value_type>;
   if constexpr (Step::form == route_form::borrow) {
     if constexpr (is_step_layer_v<Step, value_type>) {
-      if constexpr (checks_element_v<Step, traits, value_type>) {
-        if (!traits::has_element(std::as_const(value))) {
-          raise_element_not_held(type_name_of<value_type>());
-        }
-      }
-      return Step::reach(context, element_of<Step, traits>(value));
+      return borrow_element<Step, traits>(context, value);
     } else {
       return Step::reach(context, value);
     }
@@ -661,35 +700,19 @@ constexpr bool reaches_held_element() {
 // The address of the object the first `Steps` rules of term `Term` reach from
 // the stored object `source()` yields, which they borrow. When the last rule
 // reaches the element of a layer that holds none, the address is null if
-// `null_allowed`, and the request is refused otherwise.
+// `null_allowed`, and the request is refused otherwise. The last rule is the
+// one of the route the walk takes: a sibling the object holds the alternative
+// of may reach its object from a layer of another type.
 template <typename Binding, std::size_t Term, std::size_t Steps,
           typename Context, typename Source>
 DINGO_ALWAYS_INLINE auto address_from(Context &context, Source &&source,
                                       bool null_allowed) {
   using pointer = decltype(std::addressof(
       walk_from<Binding, Term, Steps>(context, source)));
-  if constexpr (detail::reaches_held_element<Binding, Term, Steps>()) {
-    using current = detail::step<Binding, Term, Steps, Steps - 1>;
-    using layer =
-        decltype(walk_from<Binding, Term, Steps - 1>(context, source));
-    using value_type = detail::remove_cvref_t<layer>;
-    using traits = layer_traits<value_type>;
-    if constexpr (std::is_lvalue_reference_v<layer> &&
-                  detail::is_step_layer_v<current, value_type> &&
-                  detail::checks_element_v<current, traits, value_type>) {
-      auto &object = walk_from<Binding, Term, Steps - 1>(context, source);
-      if (!traits::has_element(std::as_const(object))) {
-        if (null_allowed) {
-          return pointer(nullptr);
-        }
-        raise_element_not_held(type_name_of<value_type>());
-      }
-      return pointer(
-          std::addressof(detail::element_of<current, traits>(object)));
-    } else {
-      return pointer(
-          std::addressof(walk_from<Binding, Term, Steps>(context, source)));
-    }
+  if constexpr (detail::reaches_held_element<Binding, Term, Steps>() &&
+                std::is_lvalue_reference_v<decltype(source())>) {
+    detail::address_walk<Context> walk_context{context, null_allowed};
+    return pointer(walk<Binding, Term, Steps>(walk_context, source()));
   } else {
     return pointer(
         std::addressof(walk_from<Binding, Term, Steps>(context, source)));

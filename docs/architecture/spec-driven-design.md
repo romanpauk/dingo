@@ -1893,8 +1893,12 @@ takes it, so nothing is made twice, and a request fails with the diagnostic
 `alternative_not_held` only when no sibling takes the alternative held. The
 traits of a variadic kind tell which alternative an object holds. A runtime
 container walks such a route on every request, keeping no address borrowed
-through a variant. The reference implementation takes an object of a variadic
-layer to hold its first alternative, as the default factory makes it.
+through a variant. A binding without declared interfaces is named by the leaf of
+every alternative of a variadic layer of its stored shape, whichever its object
+holds, so a request of an alternative that is not held finds the binding and
+fails with `alternative_not_held` rather than not finding it. The reference
+implementation takes an object of a variadic layer to hold its first
+alternative, as the default factory makes it.
 
 A form may rely on properties of the kinds that have it, which its template
 states and the spec and `layer_kind_traits` check: only an immovable array,
@@ -1946,6 +1950,12 @@ A container's traits may add selection sources, a type per source with the time
 its bindings are known, which the selection rule asks at a declared step.
 
 ## Decision Log
+
+- 2026-10-21: A binding of a variant names its alternatives. A request of an
+  alternative the object does not hold finds the binding and fails with
+  `alternative_not_held`, a `type_not_convertible_exception`, in every container
+  and scope, as the baseline refused it as not convertible; a request no route
+  serves is refused as the rules say.
 
 - 2026-10-20: Users can extend almost everything. A user-extensible concept is
   an open schema in the spec, and the library reaches its members through types

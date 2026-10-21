@@ -55,11 +55,11 @@ Universe (the tables below):
   combinations user_X<std_Y<T>> and std_Y<user_X<T>> for X, Y in {unique,
   shared, optional}.
 - requests: the carriers value, &, const &, &&, *, const * applied to T,
-  unique_ptr<T>, shared_ptr<T>, optional<T>, the stored type, and every
-  wrapper layer of the stored type, deduplicated. The spelling in the case id
-  is the one written in the generated C++ with single spaces: "leaf&",
-  "const leaf&", "leaf const*" only after a pointer ("leaf* const&"),
-  "leaf(&)[2]" for arrays.
+  unique_ptr<T>, shared_ptr<T>, optional<T>, other_leaf for the variant, the
+  stored type, and every wrapper layer of the stored type, deduplicated. The
+  spelling in the case id is the one written in the generated C++ with single
+  spaces: "leaf&", "const leaf&", "leaf const*" only after a pointer
+  ("leaf* const&"), "leaf(&)[2]" for arrays.
 
 A case id is "<domain>/<leaf>/<scope>/<stored>/<request>"; for impl the leaf is
 followed by its interface list in brackets, "impl[iface,other_iface]". A record
@@ -455,11 +455,15 @@ def request_bases(shape, leaf, interfaces):
             (stored, False),
             *((layer, False) for layer in layers),
         ]
+    # The variant holds its first alternative; a request of the other one is
+    # found and refused, as a binding names every alternative.
+    alternatives = [("other_leaf", False)] if shape.name == "variant" else []
     return [
         (leaf, False),
         (f"std::unique_ptr<{leaf}>", False),
         (f"std::shared_ptr<{leaf}>", False),
         (f"std::optional<{leaf}>", False),
+        *alternatives,
         (stored, False),
         *((layer, False) for layer in layers),
     ]

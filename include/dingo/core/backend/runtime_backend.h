@@ -558,7 +558,7 @@ public:
       // A key value outside the bound of a dense array is never stored.
       const std::size_t bound = key_bound(*table_, Binding::descriptor);
       if (bound != unbounded) {
-        for_each_interface(Binding::descriptor, [&](type_id interface) {
+        for_each_interface<Binding>([&](type_id interface) {
           if (!key_store<typename Binding::key_type>::within(
                   added->key_value_for(interface), bound)) {
             raise_out_of_range<Binding>();
@@ -664,16 +664,24 @@ public:
 private:
   using candidate_type = candidate<entry>;
 
-  // Calls `visit` with every interface a binding serves: its declared ones,
-  // or its leaf.
-  template <typename Visit>
-  static void for_each_interface(const binding_descriptor &binding,
-                                 Visit &&visit) {
-    if (binding.interface_count == 0) {
-      visit(innermost_leaf(binding.stored));
-    }
-    for (std::size_t index = 0; index < binding.interface_count; ++index) {
-      visit(binding.interfaces[index].nodes[0].type);
+  template <typename Binding, typename Visit, std::size_t... Indices>
+  static void visit_leaves(Visit &visit,
+                           std::index_sequence<Indices...> /*leaves*/) {
+    (visit(Binding::descriptor.leaves.items[Indices]), ...);
+  }
+
+  // Calls `visit` with every interface a binding of type `Binding` serves:
+  // its declared ones, or the leaves its stored shape names.
+  template <typename Binding, typename Visit>
+  static void for_each_interface(Visit &&visit) {
+    constexpr const binding_descriptor &binding = Binding::descriptor;
+    if constexpr (binding.interface_count == 0) {
+      visit_leaves<Binding>(
+          visit, std::make_index_sequence<Binding::descriptor.leaves.size>());
+    } else {
+      for (std::size_t index = 0; index < binding.interface_count; ++index) {
+        visit(binding.interfaces[index].nodes[0].type);
+      }
     }
   }
 
@@ -705,7 +713,7 @@ private:
       return false;
     }
     bool found = false;
-    for_each_interface(Binding::descriptor, [&](type_id interface) {
+    for_each_interface<Binding>([&](type_id interface) {
       if (found || !serves_interface(existing.descriptor(), interface) ||
           holds_many(*table_, interface, Key::descriptor)) {
         return;

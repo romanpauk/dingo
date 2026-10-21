@@ -59,6 +59,7 @@ TEST(engine, computes_what_the_reference_computes) {
     const engine_case &expected = engine_cases[index];
     core::binding_descriptor binding;
     binding.stored = *expected.stored;
+    binding.leaves = core::named_leaves(binding.stored);
     binding.scope = *expected.scope;
     for (std::size_t i = 0; i < expected.interface_count; ++i) {
       binding.interfaces[i] = *expected.interfaces[i];

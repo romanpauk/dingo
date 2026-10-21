@@ -45,7 +45,8 @@ ARGUMENT = "@argument"
 # The alternative an object of a variadic layer holds: its first, which the
 # default factory makes, and which the instances of the probes hold. A route
 # through another alternative is not served, which the next implementation
-# finds when it walks the route.
+# finds when it walks the route: the binding is named by every alternative,
+# so the request is found and refused as ALTERNATIVE_NOT_HELD.
 HELD_ALTERNATIVE = 0
 ALTERNATIVE_NOT_HELD = "the object holds another alternative than the route takes"
 # The layer kinds of the library, which name the family of a wrapper shape
@@ -591,13 +592,29 @@ def accepts(model: "Model", request: Request, term: Derivation, exposed: set) ->
     return request.kind == RequestKind.VALUE and term.category is PRVALUE
 
 
-def finds(stored: Shape, request: Request, interfaces: tuple[Leaf, ...]) -> bool:
+def named_leaves(model: "Model", shape: Shape) -> tuple[Leaf, ...]:
+    """The leaves a stored shape names its binding by: the leaf its layers
+    hold, and through a layer of a variadic kind, the leaf of each of its
+    alternatives, whichever the object holds."""
+    if shape.layer is None:
+        return (shape.leaf,)
+    if not model.layers[shape.layer].variadic:
+        return named_leaves(model, shape.args[0])
+    leaves = []
+    for arg in shape.args:
+        leaves.extend(found for found in named_leaves(model, arg) if found not in leaves)
+    return tuple(leaves)
+
+
+def finds(
+    model: "Model", stored: Shape, request: Request, interfaces: tuple[Leaf, ...]
+) -> bool:
     """Whether the request names the binding: its leaf is a declared interface,
-    or the stored leaf when no interface is declared."""
+    or a leaf the stored shape names when no interface is declared."""
     requested = innermost_leaf(request.shape)
     if interfaces:
         return requested in interfaces
-    return requested == innermost_leaf(stored)
+    return requested in named_leaves(model, stored)
 
 
 def derivation_bound(stored: Shape) -> int:
@@ -713,7 +730,7 @@ def resolve(
     registered, reason = register(model, scope_id, stored, interfaces)
     if not registered:
         return Outcome(registered=False, reason=reason)
-    if not finds(stored, request, interfaces):
+    if not finds(model, stored, request, interfaces):
         return Outcome(registered=True)
     term = serve(model, scope_id, stored, request, interfaces)
     if term is None:

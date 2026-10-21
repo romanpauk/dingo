@@ -139,10 +139,38 @@ constexpr bool same_key_domain(const key_descriptor &left,
   return left.type == right.type;
 }
 
+// A set of leaves, in the order they are added.
+struct leaf_set {
+  type_id items[shape_capacity] = {};
+  std::size_t size = 0;
+
+  constexpr bool contains(type_id leaf) const {
+    // Most shapes name one leaf.
+    if (size == 1) {
+      return items[0] == leaf;
+    }
+    for (std::size_t index = 0; index < size; ++index) {
+      if (items[index] == leaf) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  constexpr void add(type_id leaf) {
+    if (!contains(leaf)) {
+      items[size++] = leaf;
+    }
+  }
+};
+
 inline constexpr std::size_t max_key_aliases = 4;
 
 struct binding_descriptor {
   shape stored;
+  // The leaves the stored shape names the binding by without declared
+  // interfaces, named_leaves(stored).
+  leaf_set leaves = {};
   key_descriptor key;
   // The keys of other domains the binding is also found by, each of a key
   // type of its own.
@@ -312,6 +340,33 @@ constexpr type_id innermost_leaf(const shape &value) {
     ++index;
   }
   return value.nodes[index].type;
+}
+
+namespace detail {
+constexpr void add_named_leaves(const shape &value, std::size_t index,
+                                leaf_set &leaves) {
+  const kind_descriptor *kind = kind_of(value, index);
+  if (!is_layer(kind)) {
+    leaves.add(value.nodes[index].type);
+  } else if (!has_properties(kind, layer_property::variadic)) {
+    add_named_leaves(value, index + 1, leaves);
+  } else {
+    for (std::size_t argument = 0; argument < value.nodes[index].arity;
+         ++argument) {
+      add_named_leaves(value, argument_index(value, index, argument), leaves);
+    }
+  }
+}
+} // namespace detail
+
+// The leaves a stored shape names its binding by without declared interfaces:
+// the leaf its layers hold, and through a layer of a variadic kind, the leaf of
+// each of its alternatives, whichever the object holds.
+// spec: lookup_filters.binding_filter
+constexpr leaf_set named_leaves(const shape &value) {
+  leaf_set leaves;
+  detail::add_named_leaves(value, 0, leaves);
+  return leaves;
 }
 
 // Whether a layer that a route creates can be copied: a layer copied as a
@@ -820,14 +875,12 @@ constexpr route_choice select_route(const binding_descriptor &binding,
   return best;
 }
 
-// Whether the request names the binding: its leaf is a declared interface, or
-// the stored leaf when no interface is declared.
 // Whether a binding serves the interface a request names: its declared
-// interfaces, or its stored leaf without them.
+// interfaces, or the leaves its stored shape names without them.
 constexpr bool serves_interface(const binding_descriptor &binding,
                                 type_id requested) {
   if (binding.interface_count == 0) {
-    return requested == innermost_leaf(binding.stored);
+    return binding.leaves.contains(requested);
   }
   for (std::size_t index = 0; index < binding.interface_count; ++index) {
     if (binding.interfaces[index].nodes[0].type == requested) {
@@ -871,7 +924,12 @@ constexpr bool share_domain(const binding_descriptor &left,
     return false;
   }
   if (right.interface_count == 0) {
-    return serves_interface(left, innermost_leaf(right.stored));
+    for (std::size_t index = 0; index < right.leaves.size; ++index) {
+      if (serves_interface(left, right.leaves.items[index])) {
+        return true;
+      }
+    }
+    return false;
   }
   for (std::size_t index = 0; index < right.interface_count; ++index) {
     if (serves_interface(left, right.interfaces[index].nodes[0].type)) {

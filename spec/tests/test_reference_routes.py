@@ -311,3 +311,20 @@ def test_an_unknown_factory_kind_is_rejected(model):
 
     with pytest.raises(ValueError):
         register(model, "shared", leaf(COPYABLE), factory="missing")
+
+
+@pytest.mark.parametrize("scope", SCOPES)
+def test_a_variant_names_every_alternative(model, scope):
+    from spec.reference.routes import ALTERNATIVE_NOT_HELD
+
+    stored = layer("alt", leaf(COPYABLE), leaf(OTHER))
+    if scope == "external":
+        stored = layer("ref", stored)
+    kind = RequestKind.VALUE if scope == "unique" else RequestKind.LVALUE_REFERENCE
+    held = resolve(model, scope, stored, Request(kind, leaf(COPYABLE)))
+    assert held.served
+    other = resolve(model, scope, stored, Request(kind, leaf(OTHER)))
+    assert other.found and not other.served
+    assert other.reason == ALTERNATIVE_NOT_HELD
+    absent = resolve(model, scope, stored, Request(kind, leaf(MOVE_ONLY)))
+    assert absent.registered and not absent.found
