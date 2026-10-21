@@ -47,6 +47,26 @@ inline constexpr std::size_t unknown_count = static_cast<std::size_t>(-1);
 // Adds an element by `append` and records that it added one, and how many
 // it added. One is made by the outermost collection request and passed to
 // every level, so a level of any depth instantiates the same functions.
+// The steps after a request a container answers alone: none.
+struct nothing_further {};
+
+// The steps of a child after its parent, which the parent takes when no
+// ancestor names a binding.
+template <typename Request> class selection_rest {
+public:
+  template <typename Rest>
+  explicit selection_rest(Rest &rest)
+      : rest_(&rest), call_([](void *erased) -> Request {
+          return (*static_cast<Rest *>(erased))();
+        }) {}
+
+  Request operator()() const { return call_(rest_); }
+
+private:
+  void *rest_;
+  Request (*call_)(void *);
+};
+
 template <typename Append> struct counting_append {
   Append &append;
   bool added = false;
@@ -198,6 +218,14 @@ public:
   template <typename Request, typename Key>
   Request resolve_inherited(const void *key_value) {
     return select<Request, Key, false>(key_value);
+  }
+
+  // Resolves a request from this container or its ancestors, without
+  // auto-construction, and by `otherwise` when none of them names a binding.
+  template <typename Request, typename Key>
+  Request select_inherited(const void *key_value,
+                           selection_rest<Request> &otherwise) {
+    return select<Request, Key, false>(key_value, otherwise);
   }
 
   // The number of bindings a request names among the container's own
@@ -707,10 +735,10 @@ private:
   // Answers step `Step`, whose one possible source is a runtime backend, in
   // one visit of the backend; a step that names nothing goes on to the next.
   template <typename Request, typename Key, bool Outermost, selection_mode Mode,
-            std::size_t Step>
-  DINGO_ALWAYS_INLINE Request select_sole(const void *key_value) {
+            std::size_t Step, typename Rest>
+  DINGO_ALWAYS_INLINE Request select_sole(const void *key_value, Rest &rest) {
     auto otherwise = [&]() -> Request {
-      return select<Request, Key, Outermost, Mode, Step + 1>(key_value);
+      return select<Request, Key, Outermost, Mode, Step + 1>(key_value, rest);
     };
     if constexpr (sole_source<Request, Key, Mode, Step>() ==
                   selection_source::container_runtime) {
@@ -855,21 +883,28 @@ private:
 
   // Answers a request by the rule of `Mode` from step `Step`; only the
   // outermost container takes a conditional step, auto-construction or the
-  // factory, and collects a collection no binding stores.
+  // factory, and collects a collection no binding stores. A request a child
+  // asks of its parent answers by `rest`, the steps of the child after its
+  // parent, when no step names a binding.
   template <typename Request, typename Key, bool Outermost,
             selection_mode Mode = selection_mode::singular,
-            std::size_t Step = 0>
-  DINGO_ALWAYS_INLINE Request select(const void *key_value) {
+            std::size_t Step = 0, typename Rest = nothing_further>
+  DINGO_ALWAYS_INLINE Request select(const void *key_value,
+                                     Rest &&rest = Rest()) {
     if constexpr (Step == rule_of(Mode).step_count) {
-      return nothing_selected<Request, Key, Outermost, Mode>(key_value);
+      if constexpr (std::is_same_v<std::decay_t<Rest>, nothing_further>) {
+        return nothing_selected<Request, Key, Outermost, Mode>(key_value);
+      } else {
+        return rest();
+      }
     } else if constexpr (!meets<Request, Key, Outermost>(
                              rule_of(Mode).steps[Step].when)) {
-      return select<Request, Key, Outermost, Mode, Step + 1>(key_value);
+      return select<Request, Key, Outermost, Mode, Step + 1>(key_value, rest);
     } else {
       constexpr std::size_t known =
           known_step_count<Request, Key, Mode, Step>();
       if constexpr (known == 0) {
-        return select<Request, Key, Outermost, Mode, Step + 1>(key_value);
+        return select<Request, Key, Outermost, Mode, Step + 1>(key_value, rest);
       } else if constexpr (known == 1) {
         return resolve_step<Request, Key, Mode, Step>(key_value);
       } else if constexpr (known != unknown_count ||
@@ -886,14 +921,21 @@ private:
                     diag::type_ambiguous, Request>());
         raise_ambiguous<Request>();
       } else if constexpr (possible_sources<Request, Key, Mode, Step>() == 1 &&
+                           sole_source<Request, Key, Mode, Step>() ==
+                               selection_source::parent) {
+        return select_parent<Request, Key, Outermost, Mode, Step>(key_value,
+                                                                  rest);
+      } else if constexpr (possible_sources<Request, Key, Mode, Step>() == 1 &&
                            is_runtime_source(
                                sole_source<Request, Key, Mode, Step>())) {
-        return select_sole<Request, Key, Outermost, Mode, Step>(key_value);
+        return select_sole<Request, Key, Outermost, Mode, Step>(key_value,
+                                                                rest);
       } else {
         const std::size_t count =
             step_count<Request, Key, Mode, Step>(key_value);
         if (count == 0) {
-          return select<Request, Key, Outermost, Mode, Step + 1>(key_value);
+          return select<Request, Key, Outermost, Mode, Step + 1>(key_value,
+                                                                 rest);
         }
         if (count > 1) {
           raise_ambiguous<Request>();
@@ -901,6 +943,28 @@ private:
         return resolve_step<Request, Key, Mode, Step>(key_value);
       }
     }
+  }
+
+  // Answers step `Step`, whose one possible source is the parent, by the
+  // parent, which goes on to the steps of the container after it when no
+  // ancestor names a binding, so that each ancestor is searched once. A
+  // request of the parent is part of the transaction of the container.
+  template <typename Request, typename Key, bool Outermost, selection_mode Mode,
+            std::size_t Step, typename Rest>
+  Request select_parent(const void *key_value, Rest &rest) {
+    auto otherwise = [&]() -> Request {
+      return select<Request, Key, Outermost, Mode, Step + 1>(key_value, rest);
+    };
+    if (self().parent() == nullptr) {
+      return otherwise();
+    }
+    // The rest is passed by its type erased, as a parent may be of the type
+    // of its child.
+    selection_rest<Request> erased(otherwise);
+    return self().transactions().run([&]() -> Request {
+      return self().parent()->template select_inherited<Request, Key>(key_value,
+                                                                      erased);
+    });
   }
 
   template <typename Request, typename Key, bool Outermost, selection_mode Mode>

@@ -556,11 +556,9 @@ TEST(next_lookups, a_default_declaration_names_the_backend_of_other_domains) {
   EXPECT_GT(index_uses.visits, 0);
 }
 
-// The baseline searches the index of each container of a chain of parents
-// once for a request; the next implementation searches an ancestor again for
-// each container between it and the request (here the grandparent three
-// times and the parent twice); see the ledger finding.
-TEST(next_lookups, DISABLED_a_parent_fallback_searches_each_container_once) {
+// A request that falls back to the parent searches the index of each
+// container of the chain of parents once.
+TEST(next_lookups, a_parent_fallback_searches_each_container_once) {
   struct traits : dingo::dynamic_container_traits {
     using lookup_definition_type = dingo::lookups<
         dingo::associative<int, processor, dingo::one, counting_backend>>;
