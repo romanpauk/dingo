@@ -286,6 +286,28 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         decision=DECISION,
     ),
     BehaviorChange(
+        id="layer_kind_extension_point",
+        description=(
+            "A layer kind is a declaration: a tag type whose public "
+            "dingo::layer_kind_traits give its properties and forms, as the "
+            "kinds of the library are declared, so a user adds a kind of a "
+            "wrapper the library has none of."
+        ),
+        cases=("api:layer_kind_traits",),
+        baseline=(
+            "The kinds of handles are fixed by the implementation: a user "
+            "wrapper behaves as a unique, shared, or optional handle at most."
+        ),
+        now=(
+            "dingo::layer_kind_traits declares the layer_property bits and the "
+            "forms of a kind, each a dingo::route_form with the kind it leads "
+            "to; the library's unique_kind, shared_kind, optional_kind, "
+            "alternative_kind, array_kind, unsized_array_kind, pointer_kind, "
+            "and reference_kind are declared so too."
+        ),
+        decision=DECISION,
+    ),
+    BehaviorChange(
         id="static_external_instances",
         description=(
             "A static or mixed container accepts an external binding, whose "

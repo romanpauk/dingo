@@ -54,6 +54,8 @@ from spec.reference.routes import (  # noqa: E402
     Shape,
     resolve,
 )
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from user_kinds import user_kinds  # noqa: E402
 
 OBSERVED_DIR = PROJECT_ROOT / "build" / "routes" / "observed"
 
@@ -74,15 +76,16 @@ LEAVES = {
 }
 
 # The wrappers the extractor uses, with the layer kind and the wrapper family
-# they map to through the wrapper-traits extension point.
+# they map to through the wrapper-traits extension point; the user wrappers
+# are of the kinds of the user of user_kinds.py.
 WRAPPERS = {
     "std::unique_ptr": ("own", "std"),
     "std::shared_ptr": ("share", "std"),
     "std::optional": ("opt", "std"),
     "std::variant": ("alt", "std"),
-    "user_unique": ("own", "user"),
-    "user_shared": ("share", "user"),
-    "user_optional": ("opt", "user"),
+    "user_unique": ("user_own", "user"),
+    "user_shared": ("user_share", "user"),
+    "user_optional": ("user_opt", "user"),
 }
 
 
@@ -300,7 +303,7 @@ def main_with(argv):
         return 2
 
     loaded = spec.load_spec()
-    model = Model(loaded)
+    model = Model(loaded, kinds=user_kinds)
     rows = [json.loads(line) for line in observed.read_text().splitlines()]
     differences = compare(rows, model)
 

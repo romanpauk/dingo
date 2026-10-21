@@ -116,6 +116,34 @@ def path(api: str, spelling: str) -> CppApiBinding:
     return CppApiBinding(id=f"{api}_cpp", api=api, spelling=spelling)
 
 
+# A sharing kind of the user and a handle of it, for the layer kind entry.
+LAYER_KIND_TRAITS = """\
+struct @P@kind {};
+template <> struct {name}<@P@kind> {
+  static constexpr std::uint16_t properties =
+      dingo::layer_property::owning | dingo::layer_property::sharing |
+      dingo::layer_property::nullable | dingo::layer_property::borrowable |
+      dingo::layer_property::constructible | dingo::layer_property::copyable |
+      dingo::layer_property::wrapper;
+  using forms = dingo::type_list<
+      dingo::kind_form<dingo::route_form::borrow>,
+      dingo::kind_form<dingo::route_form::adopt, dingo::pointer_kind>,
+      dingo::kind_form<dingo::route_form::upcast_copied>>;
+};
+struct @P@family {};
+template <typename T> struct dingo::wrapper_traits<@H@<T>> {
+  using kind = @P@kind;
+  using family = @P@family;
+  using arguments = dingo::type_list<T>;
+  template <typename U> using rebind = @H@<U>;
+  static T &element(const @H@<T> &wrapper) { return *wrapper.get(); }
+  template <typename... Args> static @H@<T> make(Args &&...args) {
+    return @H@<T>(std::make_shared<T>(std::forward<Args>(args)...));
+  }
+  static @H@<T> adopt(T *element) { return @H@<T>(std::shared_ptr<T>(element)); }
+};
+"""
+
 def name(
     api: str,
     spelling: str,
@@ -1059,6 +1087,26 @@ service &borrowed = container.resolve<service &>();
 """,
         ),
         declarations=wrapper(HANDLE_CLASS + WRAPPER_TRAITS),
+    ),
+    name(
+        "layer_kind_traits",
+        "dingo::layer_kind_traits",
+        TYPE_TRAITS,
+        TYPES
+        + handle(
+            "layer_kind_traits",
+            """\
+dingo::container<> container;
+container.register_type<dingo::scope<dingo::shared>, dingo::storage<@H@<service>>>();
+service &borrowed = container.resolve<service &>();
+@H@<service> &handle = container.resolve<@H@<service> &>();
+@H@<service> copy = container.resolve<@H@<service>>();
+(void)borrowed;
+(void)handle;
+(void)copy;
+""",
+        ),
+        declarations=handle("layer_kind_traits", HANDLE_CLASS + LAYER_KIND_TRAITS),
     ),
     name(
         "conversion_traits",

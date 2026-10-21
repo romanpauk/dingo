@@ -19,6 +19,7 @@ of any family that provides the layer kind can serve.
 from dataclasses import dataclass, field, replace
 
 from spec.content.layer_kinds import layer_kinds
+from spec.content.routes import routes_of
 from spec.schema import (
     Access,
     ExposureRule,
@@ -39,7 +40,8 @@ RVALUE = ValueCategory.RVALUE
 PRVALUE = ValueCategory.PRVALUE
 
 ANY = "*"
-# The layers of the kinds of these traits.
+# The layer kinds of the library, which name the family of a wrapper shape
+# made without a model.
 KINDS = {kind.id: kind for kind in layer_kinds}
 # The class of the handles a binding of an interface may serve it by: a
 # nullable layer that refers to its element rather than holding it.
@@ -135,80 +137,87 @@ class Derivation:
 
 @dataclass
 class Model:
+    """The spec, with the layer kinds of a user beside those of the library,
+    which the model derives the routes of as it does those of the library."""
+
     spec: Spec
+    kinds: tuple = ()
     layers: dict = field(init=False)
     scopes: dict = field(init=False)
+    routes: tuple = field(init=False)
 
     def __post_init__(self):
-        self.layers = {kind.id: kind for kind in self.spec.layer_kinds}
+        kinds = (*self.spec.layer_kinds, *self.kinds)
+        self.layers = {kind.id: kind for kind in kinds}
         self.scopes = {scope.id: scope for scope in self.spec.scopes}
+        self.routes = routes_of(kinds) if self.kinds else self.spec.routes
 
 
 # Shape properties
 
 
-def has_trait(shape: Shape, trait: LayerTrait) -> bool:
-    return shape.layer is not None and trait in KINDS[shape.layer].traits
+def has_trait(model: "Model", shape: Shape, trait: LayerTrait) -> bool:
+    return shape.layer is not None and trait in model.layers[shape.layer].traits
 
 
-def has_form(shape: Shape, form: RouteForm) -> bool:
+def has_form(model: "Model", shape: Shape, form: RouteForm) -> bool:
     return shape.layer is not None and any(
-        kind_form.form is form for kind_form in KINDS[shape.layer].forms
+        kind_form.form is form for kind_form in model.layers[shape.layer].forms
     )
 
 
-def has_extent(shape: Shape) -> bool:
-    return shape.layer is not None and KINDS[shape.layer].has_extent
+def has_extent(model: "Model", shape: Shape) -> bool:
+    return shape.layer is not None and model.layers[shape.layer].has_extent
 
 
-def is_array(shape: Shape) -> bool:
+def is_array(model: "Model", shape: Shape) -> bool:
     """Whether the outer layer holds a number of elements."""
-    return has_extent(shape) or has_trait(shape, LayerTrait.UNSIZED)
+    return has_extent(model, shape) or has_trait(model, shape, LayerTrait.UNSIZED)
 
 
-def copyable(shape: Shape) -> bool:
+def copyable(model: "Model", shape: Shape) -> bool:
     if shape.layer is None:
         return shape.leaf.copyable
-    if has_trait(shape, LayerTrait.COPYABLE):
+    if has_trait(model, shape, LayerTrait.COPYABLE):
         return True
-    if has_trait(shape, LayerTrait.IN_PLACE) and not has_trait(shape, LayerTrait.IMMOVABLE):
-        return all(copyable(arg) for arg in shape.args)
+    if has_trait(model, shape, LayerTrait.IN_PLACE) and not has_trait(model, shape, LayerTrait.IMMOVABLE):
+        return all(copyable(model, arg) for arg in shape.args)
     return False
 
 
-def constructible(shape: Shape) -> bool:
+def constructible(model: "Model", shape: Shape) -> bool:
     """Whether the default factory can construct the shape."""
     if shape.layer is None:
         return shape.leaf.constructible
-    if not has_trait(shape, LayerTrait.CONSTRUCTIBLE):
+    if not has_trait(model, shape, LayerTrait.CONSTRUCTIBLE):
         return False
-    return constructible(shape.args[0])
+    return constructible(model, shape.args[0])
 
 
-def constructed_leaves(shape: Shape) -> int:
+def constructed_leaves(model: "Model", shape: Shape) -> int:
     """The leaves the default factory constructs for the shape."""
     if shape.layer is None:
         return 1
-    if has_extent(shape):
-        return shape.extent * constructed_leaves(shape.args[0])
-    return constructed_leaves(shape.args[0])
+    if has_extent(model, shape):
+        return shape.extent * constructed_leaves(model, shape.args[0])
+    return constructed_leaves(model, shape.args[0])
 
 
-def leaves_held_by_value(shape: Shape) -> int:
+def leaves_held_by_value(model: "Model", shape: Shape) -> int:
     """The leaves a copy of the shape copies: those a layer holds in place."""
     if shape.layer is None:
         return 1
-    if not has_trait(shape, LayerTrait.IN_PLACE):
+    if not has_trait(model, shape, LayerTrait.IN_PLACE):
         return 0
-    if has_extent(shape):
-        return shape.extent * leaves_held_by_value(shape.args[0])
-    return leaves_held_by_value(shape.args[0])
+    if has_extent(model, shape):
+        return shape.extent * leaves_held_by_value(model, shape.args[0])
+    return leaves_held_by_value(model, shape.args[0])
 
 
-def addressable(shape: Shape) -> bool:
+def addressable(model: "Model", shape: Shape) -> bool:
     """Whether a shape is an object that can be referred to and pointed to:
     anything but an address, a layer of a kind of the address form."""
-    return not has_form(shape, RouteForm.ADDRESS)
+    return not has_form(model, shape, RouteForm.ADDRESS)
 
 
 def innermost_leaf(shape: Shape) -> Leaf:
@@ -217,10 +226,10 @@ def innermost_leaf(shape: Shape) -> Leaf:
     return shape.leaf
 
 
-def holds_in_array(shape: Shape) -> bool:
-    if is_array(shape):
+def holds_in_array(model: "Model", shape: Shape) -> bool:
+    if is_array(model, shape):
         return True
-    return any(holds_in_array(arg) for arg in shape.args)
+    return any(holds_in_array(model, arg) for arg in shape.args)
 
 
 def shapes_match(derived: Shape, requested: Shape) -> bool:
@@ -239,7 +248,7 @@ def shapes_match(derived: Shape, requested: Shape) -> bool:
 # Patterns
 
 
-def match(pattern, shape: Shape, bindings: dict) -> list[dict]:
+def match(model: "Model", pattern, shape: Shape, bindings: dict) -> list[dict]:
     """Every way the pattern matches the shape, as variable bindings."""
     if pattern.form is PatternForm.VARIABLE:
         bound = bindings.get(pattern.name)
@@ -248,23 +257,23 @@ def match(pattern, shape: Shape, bindings: dict) -> list[dict]:
         return [{**bindings, pattern.name: shape}]
     if pattern.form is not PatternForm.LAYER or shape.layer != pattern.name:
         return []
-    if KINDS[pattern.name].variadic:
+    if model.layers[pattern.name].variadic:
         # The variadic layer pattern of one argument matches any argument.
-        return [m for arg in shape.args for m in match(pattern.args[0], arg, bindings)]
+        return [m for arg in shape.args for m in match(model, pattern.args[0], arg, bindings)]
     if len(pattern.args) != len(shape.args):
         return []
     results = [bindings]
     for sub, arg in zip(pattern.args, shape.args):
-        results = [m for b in results for m in match(sub, arg, b)]
+        results = [m for b in results for m in match(model, sub, arg, b)]
     return results
 
 
-def instantiate(pattern, bindings: dict, family: str | None) -> Shape:
+def instantiate(model: "Model", pattern, bindings: dict, family: str | None) -> Shape:
     if pattern.form is PatternForm.VARIABLE:
         return bindings[pattern.name]
-    args = tuple(instantiate(arg, bindings, None) for arg in pattern.args)
+    args = tuple(instantiate(model, arg, bindings, None) for arg in pattern.args)
     kind = pattern.name
-    return Shape(layer=kind, args=args, family=(family or ANY) if is_wrapper(KINDS, kind) else None)
+    return Shape(layer=kind, args=args, family=(family or ANY) if is_wrapper(model.layers, kind) else None)
 
 
 def upcast_leaf(shape: Shape, base: Leaf) -> Shape:
@@ -350,10 +359,10 @@ def register(
     if not scope.nested_layers and stored.layer is not None:
         if any(arg.layer is not None for arg in stored.args):
             return False, f"{scope_id} does not store nested layers"
-    if "instance" not in scope.needs and factory is None and not constructible(stored):
+    if "instance" not in scope.needs and factory is None and not constructible(model, stored):
         return False, "the stored shape has no default factory"
     if interfaces:
-        if holds_in_array(stored):
+        if holds_in_array(model, stored):
             return False, "an array element cannot be exposed as an interface"
         if not any(
             serve(model, scope_id, stored, probe, interfaces) is not None
@@ -397,17 +406,17 @@ def derive(
     results = [start]
     while queue:
         term = queue.pop(0)
-        for rule in model.spec.routes:
+        for rule in model.routes:
             if creates(model, rule):
                 continue
             if rule.from_shape.category not in (None, term.category):
                 continue
             if rule.exposure is not None and rule.exposure not in exposed:
                 continue
-            for bindings in match(rule.from_shape, term.shape, {}):
+            for bindings in match(model, rule.from_shape, term.shape, {}):
                 if not requirements_hold(model, scope, rule, bindings):
                     continue
-                for shape in derived_shapes(rule, bindings, term.shape, interfaces):
+                for shape in derived_shapes(model, rule, bindings, term.shape, interfaces):
                     category = rule.to_shape.category or term.category
                     if shape.size() > bound or (shape, category) in seen:
                         continue
@@ -424,11 +433,11 @@ def derive(
     return results
 
 
-def derived_shapes(rule, bindings: dict, source: Shape, interfaces: tuple[Leaf, ...]):
+def derived_shapes(model: "Model", rule, bindings: dict, source: Shape, interfaces: tuple[Leaf, ...]):
     keeps_family = (
         rule.from_shape.form is PatternForm.LAYER and rule.to_shape.form is PatternForm.LAYER
     )
-    shape = instantiate(rule.to_shape, bindings, source.family if keeps_family else None)
+    shape = instantiate(model, rule.to_shape, bindings, source.family if keeps_family else None)
     if rule.via is None:
         yield shape
         return
@@ -442,30 +451,30 @@ def derived_shapes(rule, bindings: dict, source: Shape, interfaces: tuple[Leaf, 
 def requirements_hold(model: Model, scope, rule, bindings: dict) -> bool:
     for requirement in rule.requires:
         subject = bindings[requirement.subject]
-        if requirement.predicate is Predicate.COPYABLE and not copyable(subject):
+        if requirement.predicate is Predicate.COPYABLE and not copyable(model, subject):
             return False
-        if requirement.predicate is Predicate.ARRAY and not has_extent(subject):
+        if requirement.predicate is Predicate.ARRAY and not has_extent(model, subject):
             return False
-        if requirement.predicate is Predicate.ADDRESSABLE and not addressable(subject):
+        if requirement.predicate is Predicate.ADDRESSABLE and not addressable(model, subject):
             return False
         if requirement.predicate is Predicate.LEAF and subject.layer is not None:
             return False
     if rule.id == "copy" and scope.exposure_rule is ExposureRule.HANDLE_COPIES:
-        if not has_trait(bindings["X"], LayerTrait.SHARING):
+        if not has_trait(model, bindings["X"], LayerTrait.SHARING):
             return False
     return True
 
 
-def accepts(request: Request, term: Derivation, exposed: set) -> bool:
+def accepts(model: "Model", request: Request, term: Derivation, exposed: set) -> bool:
     if not shapes_match(term.shape, request.shape):
         return False
     if request.kind == RequestKind.LVALUE_REFERENCE:
         return (
             term.category is LVALUE
             and RequestCategory.LVALUE in exposed
-            and addressable(term.shape)
+            and addressable(model, term.shape)
         )
-    if has_trait(term.shape, LayerTrait.IMMOVABLE):
+    if has_trait(model, term.shape, LayerTrait.IMMOVABLE):
         return False
     if term.category is RVALUE:
         return RequestCategory.RVALUE in exposed
@@ -494,29 +503,29 @@ def derivation_bound(stored: Shape) -> int:
 MAX_CREATED_LAYERS = 2
 
 
-def created(model, scope, terms, goal: Shape, exposed: set, bound: int, depth: int):
+def created(model: "Model", scope, terms, goal: Shape, exposed: set, bound: int, depth: int):
     """The terms a request of the shape `goal` creates from the terms of a
     binding, by the creating forms of the kind of its outer layer, and of the
     layers it creates under it."""
     if goal.layer is None or depth == 0 or not goal.args:
         return []
     results = []
-    for rule in model.spec.routes:
+    for rule in model.routes:
         if not creates(model, rule) or rule.to_shape.name != goal.layer:
             continue
         if rule.exposure is not None and rule.exposure not in exposed:
             continue
         # The element the form creates the layer of, as the request names it,
         # which a binding term or a layer the request creates under it is.
-        inner_goal = instantiate(rule.from_shape, {"X": goal.args[0], "A": goal.args[0]}, None)
+        inner_goal = instantiate(model, rule.from_shape, {"X": goal.args[0], "A": goal.args[0]}, None)
         sources = [*terms, *created(model, scope, terms, inner_goal, exposed, bound, depth - 1)]
         for term in sources:
             if rule.from_shape.category not in (None, term.category):
                 continue
-            for bindings in match(rule.from_shape, term.shape, {}):
+            for bindings in match(model, rule.from_shape, term.shape, {}):
                 if not requirements_hold(model, scope, rule, bindings):
                     continue
-                for shape in derived_shapes(rule, bindings, term.shape, ()):
+                for shape in derived_shapes(model, rule, bindings, term.shape, ()):
                     if shape.size() > bound:
                         continue
                     results.append(
@@ -531,13 +540,13 @@ def created(model, scope, terms, goal: Shape, exposed: set, bound: int, depth: i
     return results
 
 
-def serve(model, scope_id, stored, request, interfaces) -> Derivation | None:
+def serve(model: "Model", scope_id, stored, request, interfaces) -> Derivation | None:
     exposed = set(exposed_categories(model, scope_id, storage_form(model, stored)))
     bound = derivation_bound(stored)
     terms = derive(model, scope_id, stored, interfaces, bound)
     scope = model.scopes[scope_id]
     made = created(model, scope, terms, request.shape, exposed, bound, MAX_CREATED_LAYERS)
-    candidates = [term for term in (*terms, *made) if accepts(request, term, exposed)]
+    candidates = [term for term in (*terms, *made) if accepts(model, request, term, exposed)]
     if not candidates:
         return None
     # Prefer the derivation with the fewest rules, then without a copy, then the
@@ -545,7 +554,7 @@ def serve(model, scope_id, stored, request, interfaces) -> Derivation | None:
     # forms and not the kinds, then the one derived first.
     order = {}
     first = {}
-    for index, rule in enumerate(model.spec.routes):
+    for index, rule in enumerate(model.routes):
         key = rule.form if rule.form is not None else rule.id
         order[rule.id] = first.setdefault(key, index)
     return min(
@@ -554,10 +563,10 @@ def serve(model, scope_id, stored, request, interfaces) -> Derivation | None:
     )
 
 
-def leaf_location(term: Derivation) -> str:
+def leaf_location(model: "Model", term: Derivation) -> str:
     if term.consumed:
         return "new"
-    if term.copied is not None and leaves_held_by_value(term.copied) > 0:
+    if term.copied is not None and leaves_held_by_value(model, term.copied) > 0:
         return "new"
     return "stored"
 
@@ -581,10 +590,10 @@ def resolve(
     scope = model.scopes[scope_id]
     lazily_constructed = scope.slot is not Slot.EXTERNAL_REF
     per_request = scope.source_access.value == "consume"
-    built = constructed_leaves(stored) if lazily_constructed else 0
+    built = constructed_leaves(model, stored) if lazily_constructed else 0
     constructions = (built, built if per_request else 0)
 
-    location = leaf_location(term)
+    location = leaf_location(model, term)
     if request.kind == RequestKind.VALUE and request.shape.layer is None:
         identity = (None, None)
     elif location == "new":
@@ -592,7 +601,7 @@ def resolve(
     else:
         identity = ("new" if lazily_constructed else "existing", "existing")
     stable = location == "stored" and identity != (None, None)
-    copies = leaves_held_by_value(term.copied) if term.copied is not None else 0
+    copies = leaves_held_by_value(model, term.copied) if term.copied is not None else 0
     return Outcome(
         registered=True,
         found=True,

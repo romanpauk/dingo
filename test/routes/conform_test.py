@@ -31,9 +31,9 @@ LEAF = leaf(conform.LEAVES["leaf"])
         ("std::unique_ptr<std::optional<leaf>>*", RequestKind.VALUE,
          layer("ptr", layer("own", layer("opt", LEAF)))),
         ("user_shared<leaf>&", RequestKind.LVALUE_REFERENCE,
-         layer("share", LEAF, family="user")),
+         layer("user_share", LEAF, family="user")),
         ("std::shared_ptr<user_optional<leaf>>", RequestKind.VALUE,
-         layer("share", layer("opt", LEAF, family="user"))),
+         layer("share", layer("user_opt", LEAF, family="user"))),
         ("const iface*", RequestKind.VALUE, layer("ptr", leaf(conform.LEAVES["iface"]))),
     ],
 )

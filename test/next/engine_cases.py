@@ -131,7 +131,7 @@ def steps_of(model):
             "form": route.form.value if route.form is not None else route.id,
             "kind": tags[kinds[route.id]] if route.id in kinds else None,
         }
-        for route in model.spec.routes
+        for route in model.routes
     }
 
 

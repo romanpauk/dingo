@@ -1849,7 +1849,7 @@ of the baseline.
 
 #### M10.3: Layer Kinds And Routes
 
-Status: in progress.
+Status: done.
 
 The shape algebra is the only built-in: its rule forms, each executed by one
 operation of a wrapper's traits (reaching the element, taking it, wrapping it,
@@ -1878,11 +1878,15 @@ binding cannot know every kind requested of it, so a request of a layer whose
 kind wraps or adopts resolves its element and makes the layer of it. A form that
 reaches into a layer or converts it applies at the binding.
 
-Steps 1 to 3 are done. A binding derives its terms by the forms that do not
-create a layer, so it needs no kind but those of its stored shape and the ones
-their forms lead to. A request takes a term, or makes one by up to two layers of
-its own kinds, each by a creating form, from a term of the binding: the route of
-`[adopt_pointer_owned, upcast_owned]` became
+The steps are done. The public API records `dingo::layer_kind_traits`, and the
+user wrappers of the route probes are of kinds of the user in the next
+implementation, declared with the properties and forms of the kinds they stand
+in for, which the reference implementation derives the routes of as it does
+those of the library; the route table does not change. A binding derives its
+terms by the forms that do not create a layer, so it needs no kind but those of
+its stored shape and the ones their forms lead to. A request takes a term, or
+makes one by up to two layers of its own kinds, each by a creating form, from a
+term of the binding: the route of `[adopt_pointer_owned, upcast_owned]` became
 `[upcast_consumed_pointer, adopt_pointer_owned]`, which no observation tells
 apart. Registration asks whether a binding serves an interface by reference or
 by value of a handle of any kind; the handles of the kinds of the binding and

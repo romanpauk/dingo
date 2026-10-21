@@ -208,6 +208,14 @@ public_api: tuple[PublicApiEntry, ...] = (
         "of a sole-owner handle.",
     ),
     entry(
+        "layer_kind_traits",
+        EXTENSION,
+        "Makes a tag type a layer kind: declares its properties and its "
+        "forms, each a route form with the kind it leads to, as the library "
+        "declares its own kinds, such as the unique and the shared kind. A "
+        "wrapper of the kind behaves as its properties and forms say.",
+    ),
+    entry(
         "conversion_traits",
         EXTENSION,
         "Builds a target wrapper from a source wrapper and declares the access "

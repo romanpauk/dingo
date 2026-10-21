@@ -50,8 +50,10 @@ Universe (the tables below):
   type_conversion_traits specializations, as test/support/custom_wrappers.h
   does; their storage_traits are written like the built-in cells of the
   matching std handle, so a wrapped wrapper is published as well, and no
-  storage_traits exist for shared_cyclical), and the combinations user_X<std_Y<T>> and std_Y<user_X<T>> for X, Y in
-  {unique, shared, optional}.
+  storage_traits exist for shared_cyclical; the next implementation declares
+  each of a layer kind of the user instead, see user_kinds.py), and the
+  combinations user_X<std_Y<T>> and std_Y<user_X<T>> for X, Y in {unique,
+  shared, optional}.
 - requests: the carriers value, &, const &, &&, *, const * applied to T,
   unique_ptr<T>, shared_ptr<T>, optional<T>, the stored type, and every
   wrapper layer of the stored type, deduplicated. The spelling in the case id
