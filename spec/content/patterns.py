@@ -1,8 +1,8 @@
-"""The shape patterns of the routes and their forms, a helper of the content
-modules: a variable binds any shape, a layer applies a kind to its arguments.
+"""The type tree patterns of the routes and their forms, a helper of the content
+modules: a variable binds any type tree, a wrapper applies a kind to its arguments.
 """
 
-from spec.schema import PatternForm, ShapePattern, ValueCategory
+from spec.schema import PatternForm, TypeTreePattern, ValueCategory
 
 LVALUE = ValueCategory.LVALUE
 RVALUE = ValueCategory.RVALUE
@@ -14,11 +14,11 @@ TARGET = "T"
 
 
 def variable(name, category=None):
-    return ShapePattern(form=PatternForm.VARIABLE, name=name, category=category)
+    return TypeTreePattern(form=PatternForm.VARIABLE, name=name, category=category)
 
 
-def layer(name, *args, category=None):
-    return ShapePattern(form=PatternForm.LAYER, name=name, args=args, category=category)
+def wrapper(name, *args, category=None):
+    return TypeTreePattern(form=PatternForm.SEMANTICS, name=name, args=args, category=category)
 
 
 def leaf_variable(category):
@@ -26,12 +26,12 @@ def leaf_variable(category):
 
 
 def substitute(pattern, names):
-    """The pattern with the layer names of `names` replaced."""
+    """The pattern with the wrapper names of `names` replaced."""
     if pattern is None:
         return None
-    if pattern.form is not PatternForm.LAYER:
+    if pattern.form is not PatternForm.SEMANTICS:
         return pattern
-    return ShapePattern(
+    return TypeTreePattern(
         form=pattern.form,
         name=names.get(pattern.name, pattern.name),
         args=tuple(substitute(arg, names) for arg in pattern.args),

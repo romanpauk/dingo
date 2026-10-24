@@ -79,11 +79,11 @@ struct detected_arguments<Type, constructor_signature, Backend,
   using type = typename signature_of<Type, Backend, Arity>::type;
   static_assert(!std::is_void_v<type>,
                 "constructor signature detection recovers the arguments of "
-                "every concrete constructor that shape detection finds");
+                "every concrete constructor that type_tree detection finds");
 };
 } // namespace detail
 
-template <typename Type, typename Mode = constructor_shape,
+template <typename Type, typename Mode = constructor_arity,
           typename Backend = default_constructor_detection,
           std::size_t Arity = DINGO_CONSTRUCTOR_DETECTION_ARGS>
 struct constructor_detection {

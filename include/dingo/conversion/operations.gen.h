@@ -11,7 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 
-// The shape algebra of the spec as constexpr data: the value categories, the
+// The conversion rules of the spec as constexpr data: the value categories, the
 // properties of wrapper semantics, and the operations with the rules of a leaf.
 // The wrapper semantics themselves are declarations, see
 // wrapper_semantics.gen.h.
@@ -89,9 +89,9 @@ enum class requirement : std::uint8_t {
 // kind that has the form; or the wrapper of the kind the form leads to.
 enum class type_position : std::uint8_t { element, wrapper, target };
 
-// A operation derives the term (to_position(X), to_category) from the term
-// (from_position(X), from_category). A rule of a leaf is a form of no kind,
-// between elements.
+// A operation derives the reachable type (to_position(X), to_category) from the
+// reachable type (from_position(X), from_category). A rule of a leaf is a form
+// of no kind, between elements.
 struct operation_info {
   operation form;
   bool of_semantics;

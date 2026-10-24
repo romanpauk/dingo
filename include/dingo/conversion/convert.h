@@ -8,17 +8,17 @@
 #pragma once
 
 // A binding of the next implementation and the execution of its routes. A
-// binding type derives the terms it serves at compile time, and walk applies
-// the rules of one term to the stored object, one C++ operation per form: the
-// operation of the wrapper_traits of the object, or of the language for an
-// address.
+// binding type derives the reachable types it serves at compile time, and walk
+// applies the rules of one reachable type to the stored object, one C++
+// operation per form: the operation of the wrapper_traits of the object, or of
+// the language for an address.
 //
-// The binding applies the rules of a term up to its boundary, and the request
-// completes it: a last copy, address-of, or decay of a borrowed object depends
-// only on the requested type, and a wrapper a rule creates from a leaf or a
-// pointer may be of any family, whose wrapper type only the request names. A
-// runtime container erases the binding at the boundary, and a static
-// container completes the term in the same way.
+// The binding applies the rules of a reachable type up to its boundary, and the
+// request completes it: a last copy, address-of, or decay of a borrowed object
+// depends only on the requested type, and a wrapper a rule creates from a leaf
+// or a pointer may be of any family, whose wrapper type only the request names.
+// A runtime container erases the binding at the boundary, and a static
+// container completes the reachable type in the same way.
 
 #include <dingo/base/mechanics.h>
 #include <dingo/conversion/annotated.h>
@@ -30,8 +30,8 @@
 #include <dingo/primitives/compile_diagnostics.gen.h>
 #include <dingo/primitives/diagnostics.gen.h>
 #include <dingo/primitives/retained.h>
-#include <dingo/primitives/shape.h>
 #include <dingo/primitives/type_name.h>
+#include <dingo/primitives/type_tree.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -41,18 +41,18 @@
 
 namespace dingo::core {
 
-// The shapes of the declared interfaces of a binding of the stored leaf
+// The type trees of the declared interfaces of a binding of the stored leaf
 // `Leaf`, and the ones the leaf declares a user conversion to.
-template <typename Leaf, typename List> struct interface_shapes;
+template <typename Leaf, typename List> struct interface_type_trees;
 
 template <typename Leaf, typename... Interfaces>
-struct interface_shapes<Leaf, type_list<Interfaces...>> {
+struct interface_type_trees<Leaf, type_list<Interfaces...>> {
   static_assert(require<sizeof...(Interfaces) <= max_interfaces,
                         diag::interface_limit, Leaf>());
 
   static constexpr binding_descriptor apply(binding_descriptor binding) {
     std::size_t index = 0;
-    ((binding.interfaces[index++] = interface_shape_v<Interfaces>), ...);
+    ((binding.interfaces[index++] = interface_type_tree_v<Interfaces>), ...);
     binding.interface_count = sizeof...(Interfaces);
     index = 0;
     ((binding.converted |=
@@ -65,10 +65,10 @@ struct interface_shapes<Leaf, type_list<Interfaces...>> {
   }
 };
 
-// Whether a term derives an object by a cached rule.
-constexpr bool keeps_objects(const terms &published) {
+// Whether a reachable type derives an object by a cached rule.
+constexpr bool keeps_objects(const reachable_types &published) {
   for (std::size_t index = 0; index < published.size; ++index) {
-    const term &route = published.items[index];
+    const reachable_type &route = published.items[index];
     for (std::size_t step = 0; step < route.rule_count; ++step) {
       if (info(route.rules[step].form).cached) {
         return true;
@@ -110,13 +110,13 @@ struct binding_type {
 
   static constexpr binding_descriptor make_descriptor() {
     binding_descriptor binding;
-    binding.stored = shape_v<Stored>;
+    binding.stored = type_tree_v<Stored>;
     binding.leaves = named_leaves(binding.stored);
     binding.scope = scope;
     binding.declared_factory = !std::is_same_v<Factory, detected_factory>;
     binding.key = Key::descriptor;
     set_aliases(binding, KeyAliases());
-    return interface_shapes<leaf_of_t<Stored>, Interfaces>::apply(binding);
+    return interface_type_trees<leaf_of_t<Stored>, Interfaces>::apply(binding);
   }
 
   template <typename... Aliases>
@@ -129,9 +129,10 @@ struct binding_type {
 
   static constexpr binding_descriptor descriptor = make_descriptor();
   static constexpr registration_status status = register_status(descriptor);
-  static constexpr terms published = derive(descriptor);
+  static constexpr reachable_types published = derive(descriptor);
   static constexpr std::uint8_t exposed = exposed_categories(descriptor);
-  // Whether a term keeps an object it derives, in the context of the walk.
+  // Whether a reachable type keeps an object it derives, in the context of the
+  // walk.
   static constexpr bool keeps = keeps_objects(published);
   using context_type = std::conditional_t<keeps, kept_objects, no_kept_objects>;
 };
@@ -176,14 +177,14 @@ template <typename Binding> constexpr bool registers() {
 // not implement yet.
 struct unsupported_route {};
 
-// How the request completes a term the binding walked to its boundary: it
-// refers to the borrowed object, copies it, takes its address or decays it;
-// or the binding constructs the boundary object and the request makes the
-// requested object from it.
+// How the request completes a reachable type the binding walked to its
+// boundary: it refers to the borrowed object, copies it, takes its address or
+// decays it; or the binding constructs the boundary object and the request
+// makes the requested object from it.
 enum class completion : std::uint8_t { refer, copy, address, construct };
 
-// How the binding walks a term: the completion of the term, and the rules it
-// applies before the request completes it.
+// How the binding walks a reachable type: the completion of the reachable type,
+// and the rules it applies before the request completes it.
 struct completion_plan {
   completion kind = completion::construct;
   std::size_t binding_steps = 0;
@@ -192,7 +193,7 @@ struct completion_plan {
   bool rechecked = false;
 };
 
-constexpr completion_plan plan_completion(const term &route) {
+constexpr completion_plan plan_completion(const reachable_type &route) {
   completion_plan plan;
   plan.binding_steps = route.rule_count;
   for (std::size_t step = 0; step < route.rule_count; ++step) {
@@ -221,20 +222,20 @@ constexpr completion_plan plan_completion(const term &route) {
   return plan;
 }
 
-// How a request completes the route it takes: by the completion of the term,
-// or by taking the address of the object the binding refers to, or by making
-// the wrappers it creates, innermost first, of the object the binding
-// constructs.
+// How a request completes the route it takes: by the completion of the
+// reachable type, or by taking the address of the object the binding refers to,
+// or by making the wrappers it creates, innermost first, of the object the
+// binding constructs.
 struct request_plan {
   completion kind = completion::construct;
   operation creating[max_created_wrappers] = {};
   std::size_t created = 0;
 };
 
-constexpr request_plan plan_request(const completion_plan &term,
+constexpr request_plan plan_request(const completion_plan &reachable_type,
                                     const route_choice &choice) {
   request_plan plan;
-  plan.kind = term.kind;
+  plan.kind = reachable_type.kind;
   if (choice.created_count == 0) {
     return plan;
   }
@@ -251,42 +252,44 @@ constexpr request_plan plan_request(const completion_plan &term,
   return plan;
 }
 
-template <typename Binding, std::size_t Term>
+template <typename Binding, std::size_t ReachableType>
 inline constexpr completion_plan plan_v =
-    plan_completion(Binding::published.items[Term]);
+    plan_completion(Binding::published.items[ReachableType]);
 
 namespace detail {
 template <typename Type>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<Type>>;
 
-template <typename Binding, std::size_t Term, std::size_t Steps,
+template <typename Binding, std::size_t ReachableType, std::size_t Steps,
           std::size_t Step, typename Context, typename Value>
 decltype(auto) walk_step(Context &context, Value &&value);
 
 // Continues the walk with the result of a step that yields a value: the last
 // step returns it directly, so it is constructed in place by the caller.
-template <typename Binding, std::size_t Term, std::size_t Steps,
+template <typename Binding, std::size_t ReachableType, std::size_t Steps,
           std::size_t Step, typename Context, typename Make>
 decltype(auto) continue_with(Context &context, Make &&make) {
   if constexpr (Step + 1 == Steps) {
     return make();
   } else {
-    return walk_step<Binding, Term, Steps, Step + 1>(context, make());
+    return walk_step<Binding, ReachableType, Steps, Step + 1>(context, make());
   }
 }
 } // namespace detail
 
-// Applies the first `Steps` rules of term `Term` of `Binding` to `value`, the
-// stored object. A route that ends in an lvalue yields a reference, any other
-// a value. `context` keeps the objects the cached rules derive.
-template <typename Binding, std::size_t Term,
-          std::size_t Steps = Binding::published.items[Term].rule_count,
-          typename Context, typename Value>
+// Applies the first `Steps` rules of reachable type `Reachable type` of
+// `Binding` to `value`, the stored object. A route that ends in an lvalue
+// yields a reference, any other a value. `context` keeps the objects the cached
+// rules derive.
+template <
+    typename Binding, std::size_t ReachableType,
+    std::size_t Steps = Binding::published.items[ReachableType].rule_count,
+    typename Context, typename Value>
 decltype(auto) walk(Context &context, Value &&value) {
   if constexpr (Steps == 0) {
     return static_cast<Value &&>(value);
   } else {
-    return detail::walk_step<Binding, Term, Steps, 0>(
+    return detail::walk_step<Binding, ReachableType, Steps, 0>(
         context, std::forward<Value>(value));
   }
 }
@@ -300,8 +303,8 @@ inline constexpr bool has_share_v<
     Traits, Value,
     std::void_t<decltype(Traits::share(std::declval<Value &&>()))>> = true;
 
-// The context of a walk to the address of the object a term borrows: the
-// walk yields the address of the object its last rule reaches, along the
+// The context of a walk to the address of the object a reachable type borrows:
+// the walk yields the address of the object its last rule reaches, along the
 // route it takes by the alternatives the objects hold, which is null, when
 // `null_allowed`, for the element of a wrapper that holds none.
 template <typename Context> struct address_walk {
@@ -319,12 +322,13 @@ template <typename Context> inline constexpr bool is_address_walk_v = false;
 template <typename Context>
 inline constexpr bool is_address_walk_v<address_walk<Context>> = true;
 
-// Step `Step` of the walk of the first `Steps` rules of term `Term`.
-template <typename Binding, std::size_t Term, std::size_t Steps,
+// Step `Step` of the walk of the first `Steps` rules of reachable type
+// `Reachable type`.
+template <typename Binding, std::size_t ReachableType, std::size_t Steps,
           std::size_t Step>
 struct step {
   static constexpr const route_step &current =
-      Binding::published.items[Term].rules[Step];
+      Binding::published.items[ReachableType].rules[Step];
   static constexpr const operation_info &rule = info(current.form);
   static constexpr operation form = current.form;
   // The kind the step derives, or the leaf kind for an element.
@@ -332,7 +336,7 @@ struct step {
   // The argument of the source wrapper the rule reaches, or for an upcast, the
   // index of the interface it converts to.
   static constexpr std::size_t argument =
-      Binding::published.items[Term].arguments[Step];
+      Binding::published.items[ReachableType].arguments[Step];
   static constexpr bool last = Step + 1 == Steps;
 
   // Passes on an lvalue the step reaches; the last step returns it, or its
@@ -344,15 +348,15 @@ struct step {
     } else if constexpr (last) {
       return static_cast<Reached &&>(reached);
     } else {
-      return walk_step<Binding, Term, Steps, Step + 1>(
+      return walk_step<Binding, ReachableType, Steps, Step + 1>(
           context, static_cast<Reached &&>(reached));
     }
   }
 
   template <typename Context, typename Make>
   static decltype(auto) yield(Context &context, Make &&make) {
-    return continue_with<Binding, Term, Steps, Step>(context,
-                                                     std::forward<Make>(make));
+    return continue_with<Binding, ReachableType, Steps, Step>(
+        context, std::forward<Make>(make));
   }
 };
 
@@ -566,87 +570,90 @@ decltype(auto) borrow_step(Context &context, Value &value) {
   }
 }
 
-// The sibling of term `Term` that takes alternative `Alternative` at its step
-// `Step`, or no_term.
-template <typename Binding, std::size_t Term, std::size_t Step,
+// The sibling of reachable type `Reachable type` that takes alternative
+// `Alternative` at its step `Step`, or no_reachable_type.
+template <typename Binding, std::size_t ReachableType, std::size_t Step,
           std::size_t Alternative>
 inline constexpr std::size_t sibling_v = [] {
-  const terms &published = Binding::published;
+  const reachable_types &published = Binding::published;
   for (std::size_t index = 0; index < published.size; ++index) {
-    const term &item = published.items[index];
-    if (item.sibling && item.primary == Term && item.branch == Step &&
+    const reachable_type &item = published.items[index];
+    if (item.sibling && item.primary == ReachableType && item.branch == Step &&
         item.arguments[Step] == Alternative) {
       return index;
     }
   }
-  return no_term;
+  return no_reachable_type;
 }();
 
-// Whether term `Term` has a sibling that parts from it at its step `Step`.
-template <typename Binding, std::size_t Term, std::size_t Step>
+// Whether reachable type `Reachable type` has a sibling that parts from it at
+// its step `Step`.
+template <typename Binding, std::size_t ReachableType, std::size_t Step>
 inline constexpr bool branches_v = [] {
-  const terms &published = Binding::published;
+  const reachable_types &published = Binding::published;
   for (std::size_t index = 0; index < published.size; ++index) {
-    const term &item = published.items[index];
-    if (item.sibling && item.primary == Term && item.branch == Step) {
+    const reachable_type &item = published.items[index];
+    if (item.sibling && item.primary == ReachableType && item.branch == Step) {
       return true;
     }
   }
   return false;
 }();
 
-template <typename Binding, std::size_t Term, std::size_t Steps,
+template <typename Binding, std::size_t ReachableType, std::size_t Steps,
           std::size_t Step, typename Context, typename Value>
 decltype(auto) take_step(Context &context, Value &&value);
 
-// Continues the walk of term `Term` at its step `Step`, into a variadic wrapper
-// whose object holds the alternative `held`, along the sibling that takes it
-// from there, as many steps short of its end as the walk of `Term` is; or
-// along `Term`, which reports that the object holds another alternative.
-template <typename Binding, std::size_t Term, std::size_t Steps,
+// Continues the walk of reachable type `Reachable type` at its step `Step`,
+// into a variadic wrapper whose object holds the alternative `held`, along the
+// sibling that takes it from there, as many steps short of its end as the walk
+// of `Reachable type` is; or along `Reachable type`, which reports that the
+// object holds another alternative.
+template <typename Binding, std::size_t ReachableType, std::size_t Steps,
           std::size_t Step, std::size_t Alternative, typename Context,
           typename Value>
 decltype(auto) branch(std::size_t held, Context &context, Value &&value) {
   using arguments = typename wrapper_traits<remove_cvref_t<Value>>::arguments;
   if constexpr (Alternative == arguments::size) {
-    return take_step<Binding, Term, Steps, Step>(context,
-                                                 std::forward<Value>(value));
+    return take_step<Binding, ReachableType, Steps, Step>(
+        context, std::forward<Value>(value));
   } else {
-    constexpr std::size_t sibling = sibling_v<Binding, Term, Step, Alternative>;
-    if constexpr (sibling != no_term) {
+    constexpr std::size_t sibling =
+        sibling_v<Binding, ReachableType, Step, Alternative>;
+    if constexpr (sibling != no_reachable_type) {
       if (held == Alternative) {
         constexpr std::size_t short_of =
-            Binding::published.items[Term].rule_count - Steps;
+            Binding::published.items[ReachableType].rule_count - Steps;
         return walk_step<
             Binding, sibling,
             Binding::published.items[sibling].rule_count - short_of, Step>(
             context, std::forward<Value>(value));
       }
     }
-    return branch<Binding, Term, Steps, Step, Alternative + 1>(
+    return branch<Binding, ReachableType, Steps, Step, Alternative + 1>(
         held, context, std::forward<Value>(value));
   }
 }
 
-template <typename Binding, std::size_t Term, std::size_t Steps,
+template <typename Binding, std::size_t ReachableType, std::size_t Steps,
           std::size_t Step, typename Context, typename Value>
 decltype(auto) walk_step(Context &context, Value &&value) {
-  if constexpr (branches_v<Binding, Term, Step>) {
+  if constexpr (branches_v<Binding, ReachableType, Step>) {
     using traits = wrapper_traits<remove_cvref_t<Value>>;
     const std::size_t held = traits::index(std::as_const(value));
-    if (held != step<Binding, Term, Steps, Step>::argument) {
-      return branch<Binding, Term, Steps, Step, 0>(held, context,
-                                                   std::forward<Value>(value));
+    if (held != step<Binding, ReachableType, Steps, Step>::argument) {
+      return branch<Binding, ReachableType, Steps, Step, 0>(
+          held, context, std::forward<Value>(value));
     }
   }
-  return take_step<Binding, Term, Steps, Step>(context,
-                                               std::forward<Value>(value));
+  return take_step<Binding, ReachableType, Steps, Step>(
+      context, std::forward<Value>(value));
 }
 
-template <typename Binding, std::size_t Term, std::size_t Steps,
+template <typename Binding, std::size_t ReachableType, std::size_t Steps,
           std::size_t Step, typename Context, typename Value>
 decltype(auto) take_step(Context &context, Value &&value) {
-  using current = step<Binding, Term, Steps, Step>;
+  using current = step<Binding, ReachableType, Steps, Step>;
   constexpr const operation_info &rule = current::rule;
   if constexpr (rule.cached) {
     return keep_step<Binding, current>(context, value);
@@ -662,34 +669,37 @@ decltype(auto) take_step(Context &context, Value &&value) {
 }
 } // namespace detail
 
-// Walks the first `Steps` rules of term `Term` from the stored object that
-// `source()` yields: a reference to the object of a borrowing scope, or the
-// object a consuming scope constructs for the request. A walk from a
-// constructed object returns a value, which outlives the object.
-template <typename Binding, std::size_t Term, std::size_t Steps,
+// Walks the first `Steps` rules of reachable type `Reachable type` from the
+// stored object that `source()` yields: a reference to the object of a
+// borrowing scope, or the object a consuming scope constructs for the request.
+// A walk from a constructed object returns a value, which outlives the object.
+template <typename Binding, std::size_t ReachableType, std::size_t Steps,
           typename Context, typename Source>
 DINGO_ALWAYS_INLINE decltype(auto) walk_from(Context &context,
                                              Source &&source) {
   if constexpr (std::is_lvalue_reference_v<decltype(source())>) {
-    return walk<Binding, Term, Steps>(context, source());
+    return walk<Binding, ReachableType, Steps>(context, source());
   } else if constexpr (Steps == 0) {
     return source();
   } else {
-    using result = detail::remove_cvref_t<decltype(walk<Binding, Term, Steps>(
-        context, source()))>;
-    return result(walk<Binding, Term, Steps>(context, source()));
+    using result =
+        detail::remove_cvref_t<decltype(walk<Binding, ReachableType, Steps>(
+            context, source()))>;
+    return result(walk<Binding, ReachableType, Steps>(context, source()));
   }
 }
 
 namespace detail {
-// Whether the last of the first `Steps` rules of term `Term` borrows the
-// element of a nullable wrapper that holds it in place, which may hold none.
-template <typename Binding, std::size_t Term, std::size_t Steps>
+// Whether the last of the first `Steps` rules of reachable type `Reachable
+// type` borrows the element of a nullable wrapper that holds it in place, which
+// may hold none.
+template <typename Binding, std::size_t ReachableType, std::size_t Steps>
 constexpr bool reaches_held_element() {
   if constexpr (Steps == 0) {
     return false;
   } else {
-    const route_step &last = Binding::published.items[Term].rules[Steps - 1];
+    const route_step &last =
+        Binding::published.items[ReachableType].rules[Steps - 1];
     return last.form == operation::borrow &&
            has_properties(last.kind, property::nullable) &&
            has_properties(last.kind, property::in_place);
@@ -697,54 +707,58 @@ constexpr bool reaches_held_element() {
 }
 } // namespace detail
 
-// The address of the object the first `Steps` rules of term `Term` reach from
-// the stored object `source()` yields, which they borrow. When the last rule
-// reaches the element of a wrapper that holds none, the address is null if
-// `null_allowed`, and the request is refused otherwise. The last rule is the
-// one of the route the walk takes: a sibling the object holds the alternative
-// of may reach its object from a wrapper of another type.
-template <typename Binding, std::size_t Term, std::size_t Steps,
+// The address of the object the first `Steps` rules of reachable type
+// `Reachable type` reach from the stored object `source()` yields, which they
+// borrow. When the last rule reaches the element of a wrapper that holds none,
+// the address is null if `null_allowed`, and the request is refused otherwise.
+// The last rule is the one of the route the walk takes: a sibling the object
+// holds the alternative of may reach its object from a wrapper of another type.
+template <typename Binding, std::size_t ReachableType, std::size_t Steps,
           typename Context, typename Source>
 DINGO_ALWAYS_INLINE auto address_from(Context &context, Source &&source,
                                       bool null_allowed) {
   using pointer = decltype(std::addressof(
-      walk_from<Binding, Term, Steps>(context, source)));
-  if constexpr (detail::reaches_held_element<Binding, Term, Steps>() &&
+      walk_from<Binding, ReachableType, Steps>(context, source)));
+  if constexpr (detail::reaches_held_element<Binding, ReachableType, Steps>() &&
                 std::is_lvalue_reference_v<decltype(source())>) {
     detail::address_walk<Context> walk_context{context, null_allowed};
-    return pointer(walk<Binding, Term, Steps>(walk_context, source()));
+    return pointer(walk<Binding, ReachableType, Steps>(walk_context, source()));
   } else {
-    return pointer(
-        std::addressof(walk_from<Binding, Term, Steps>(context, source)));
+    return pointer(std::addressof(
+        walk_from<Binding, ReachableType, Steps>(context, source)));
   }
 }
 
-// The object the binding hands over at the boundary of term `Term`.
-template <typename Binding, std::size_t Term, typename Context, typename Source>
+// The object the binding hands over at the boundary of reachable type
+// `Reachable type`.
+template <typename Binding, std::size_t ReachableType, typename Context,
+          typename Source>
 DINGO_ALWAYS_INLINE decltype(auto) walk_to_boundary(Context &context,
                                                     Source &&source) {
-  return walk_from<Binding, Term, plan_v<Binding, Term>.binding_steps>(context,
-                                                                       source);
+  return walk_from<Binding, ReachableType,
+                   plan_v<Binding, ReachableType>.binding_steps>(context,
+                                                                 source);
 }
 
 namespace detail {
 // The type of the boundary object, computed from the walk instantiations that
 // walk_to_boundary uses, so it instantiates no other function.
-template <typename Binding, std::size_t Term> struct boundary {
+template <typename Binding, std::size_t ReachableType> struct boundary {
   using type = remove_cvref_t<
-      decltype(walk<Binding, Term, plan_v<Binding, Term>.binding_steps>(
+      decltype(walk<Binding, ReachableType,
+                    plan_v<Binding, ReachableType>.binding_steps>(
           std::declval<typename Binding::context_type &>(),
           std::declval<typename Binding::yielded_type>()))>;
 };
 } // namespace detail
 
-template <typename Binding, std::size_t Term>
-using boundary_t = typename detail::boundary<Binding, Term>::type;
+template <typename Binding, std::size_t ReachableType>
+using boundary_t = typename detail::boundary<Binding, ReachableType>::type;
 
-// Whether the binding walks term `Term` to its boundary.
-template <typename Binding, std::size_t Term>
+// Whether the binding walks reachable type `Reachable type` to its boundary.
+template <typename Binding, std::size_t ReachableType>
 inline constexpr bool walk_supported_v =
-    !std::is_same_v<boundary_t<Binding, Term>, unsupported_route>;
+    !std::is_same_v<boundary_t<Binding, ReachableType>, unsupported_route>;
 
 namespace detail {
 template <typename Type, typename = void> struct first_element {

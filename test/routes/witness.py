@@ -93,9 +93,9 @@ class Case:
         return (group.scope, group.leaf, group.interfaces, group.stored, self.request)
 
     def size(self):
-        """The order of the smallest case: its shapes, then its spelling."""
-        stored = conform.parse_shape(self.group.stored).size()
-        request = conform.parse_request(self.request).shape.size()
+        """The order of the smallest case: its type trees, then its spelling."""
+        stored = conform.parse_type_tree(self.group.stored).size()
+        request = conform.parse_request(self.request).type_tree.size()
         return (
             stored + request,
             len(self.group.interfaces),
@@ -111,7 +111,7 @@ def universe(model):
     reference implementation predicts."""
     cases = []
     for group in extract.build_groups(("runtime",), kinds=True):
-        stored = conform.parse_shape(group.stored)
+        stored = conform.parse_type_tree(group.stored)
         interfaces = tuple(conform.LEAVES[name] for name in group.interfaces)
         for index, request in enumerate(group.requests):
             outcome = resolve(
@@ -127,7 +127,7 @@ def witnessed_routes(model):
     kinds = {kind.id for kind in model.spec.wrapper_semantics}
     kinds |= {user.kind.id for user in kind_probes}
     owners = {
-        form.id: kind.id for kind in model.layers.values() for form in kind.forms
+        form.id: kind.id for kind in model.semantics_by_id.values() for form in kind.forms
     }
     return [
         route.id
@@ -175,7 +175,7 @@ def decided_by(condition, refused):
         outcome = resolve(
             model,
             scope,
-            conform.parse_shape(stored),
+            conform.parse_type_tree(stored),
             conform.parse_request(request),
             tuple(conform.LEAVES[name] for name in interfaces),
         )
@@ -262,10 +262,10 @@ def choose(model, cases, jobs):
 
 
 def case_fields(case, domain, index):
-    group = extract.Group(domain, case.group.leaf, case.group.scope, case.group.shape, case.group.interfaces)
+    group = extract.Group(domain, case.group.leaf, case.group.scope, case.group.type_tree, case.group.interfaces)
     group.requests = case.group.requests
     external = (
-        extract.spell(group.shape.external, group.leaf) if group.scope == "external" else ""
+        extract.spell(group.type_tree.external, group.leaf) if group.scope == "external" else ""
     )
     return {
         "index": index,
@@ -276,7 +276,7 @@ def case_fields(case, domain, index):
         "stored": group.stored,
         "leaf": group.leaf,
         "interfaces": list(group.interfaces),
-        "declarations": [extract.spell(d, group.leaf) for d in group.shape.declarations],
+        "declarations": [extract.spell(d, group.leaf) for d in group.type_tree.declarations],
         "external_argument": external,
         "request": case.request,
     }

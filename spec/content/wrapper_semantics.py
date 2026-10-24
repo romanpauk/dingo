@@ -1,7 +1,7 @@
-"""Content of the shape algebra wrapper semantics section.
+"""Content of the conversion rules wrapper semantics section.
 
-A stored or requested shape is a leaf wrapped in zero or more layers. The leaf
-itself is not a layer: a shape without layers is the leaf value.
+A stored or requested type tree is a leaf wrapped in zero or more wrappers. The leaf
+itself is not a wrapper: a type tree without wrappers is the leaf value.
 
 Wrapper semantics are classes of handles defined by their traits and the route
 forms they have. These are the kinds of the library, declarations as a kind of
@@ -19,7 +19,7 @@ def form(rule_id, op, description, target=None):
 wrapper_semantics: tuple[WrapperSemantics, ...] = (
     WrapperSemantics(
         id="alt",
-        description="A value holding exactly one of several alternative shapes.",
+        description="A value holding exactly one of several alternative type trees.",
         parameters=1,
         variadic=True,
         traits=(
@@ -39,7 +39,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
     ),
     WrapperSemantics(
         id="array",
-        description="A fixed number of elements of one shape, stored inline.",
+        description="A fixed number of elements of one type tree, stored inline.",
         parameters=1,
         has_extent=True,
         traits=(
@@ -67,7 +67,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
     WrapperSemantics(
         id="array_unbounded",
         description=(
-            "Elements of one shape whose number is known only at runtime; only "
+            "Elements of one type_tree whose number is known only at runtime; only "
             "an owning or sharing handle can hold it."
         ),
         parameters=1,
@@ -84,7 +84,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
     ),
     WrapperSemantics(
         id="opt",
-        description="A value that may hold one element of a shape or nothing.",
+        description="A value that may hold one element of a type tree or nothing.",
         parameters=1,
         traits=(
             Property.OWNING,
@@ -110,7 +110,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
     ),
     WrapperSemantics(
         id="own",
-        description="A handle that is the only owner of one element of a shape.",
+        description="A handle that is the only owner of one element of a type tree.",
         parameters=1,
         traits=(
             Property.OWNING,
@@ -148,7 +148,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
     ),
     WrapperSemantics(
         id="ptr",
-        description="A non-owning address of one element of a shape.",
+        description="A non-owning address of one element of a type tree.",
         parameters=1,
         traits=(
             Property.NULLABLE,
@@ -184,7 +184,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
     ),
     WrapperSemantics(
         id="ref",
-        description="A non-owning, non-null alias of one element of a shape.",
+        description="A non-owning, non-null alias of one element of a type tree.",
         parameters=1,
         traits=(Property.BORROWABLE,),
         forms=(
@@ -197,7 +197,7 @@ wrapper_semantics: tuple[WrapperSemantics, ...] = (
     ),
     WrapperSemantics(
         id="share",
-        description="A handle that shares the ownership of one element of a shape.",
+        description="A handle that shares the ownership of one element of a type tree.",
         parameters=1,
         traits=(
             Property.OWNING,

@@ -7,8 +7,8 @@
 
 #pragma once
 
-// The wrapper semantics a C++ type is: the projection of the shape algebra of
-// the spec onto C++ types. Raw pointers, references, and arrays are language
+// The wrapper semantics a C++ type is: the projection of the conversion rules
+// of the spec onto C++ types. Raw pointers, references, and arrays are language
 // wrappers, of the pointer, reference, and array kinds of the library. Wrappers
 // are classified by wrapper_traits, which the standard wrappers specialize here
 // and user wrappers through the public extension point; no wrapper gets other
@@ -28,7 +28,7 @@
 #include <dingo/conversion/wrapper_semantics.gen.h>
 #include <dingo/primitives/compile_diagnostics.gen.h>
 #include <dingo/primitives/constructor.h>
-#include <dingo/primitives/shape.h>
+#include <dingo/primitives/type_tree.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -40,8 +40,8 @@
 
 namespace dingo {
 
-// The public extension point that makes a wrapper type a wrapper of the shape
-// algebra. A specialization declares
+// The public extension point that makes a wrapper type a wrapper of the type
+// tree algebra. A specialization declares
 //
 //   kind       the wrapper semantics of the wrapper, a tag whose
 //   wrapper_semantics
@@ -433,17 +433,18 @@ struct wrapper_extent<Traits, std::void_t<decltype(Traits::extent)>> {
   static constexpr std::uint32_t value = Traits::extent;
 };
 
-template <typename Type> constexpr shape make_shape();
+template <typename Type> constexpr type_tree make_type_tree();
 
-template <typename List> struct argument_shapes;
+template <typename List> struct argument_type_trees;
 
 template <typename... Arguments>
-struct argument_shapes<type_list<Arguments...>> {
-  static constexpr void append(shape &result) {
-    (append_one(result, make_shape<Arguments>()), ...);
+struct argument_type_trees<type_list<Arguments...>> {
+  static constexpr void append(type_tree &result) {
+    (append_one(result, make_type_tree<Arguments>()), ...);
   }
 
-  static constexpr void append_one(shape &result, const shape &argument) {
+  static constexpr void append_one(type_tree &result,
+                                   const type_tree &argument) {
     for (std::size_t index = 0; index < argument.size; ++index) {
       result.nodes[result.size + index] = argument.nodes[index];
     }
@@ -454,7 +455,7 @@ struct argument_shapes<type_list<Arguments...>> {
 // Whether the wrapper `value` is copied: a wrapper of a kind copied as a
 // handle, or one that holds its elements in place and is not immovable, when
 // every element is copied.
-constexpr bool copies_wrapper(const shape &value) {
+constexpr bool copies_wrapper(const type_tree &value) {
   const std::uint16_t properties = value.nodes[0].kind->properties;
   if ((properties & property::copyable) != 0) {
     return true;
@@ -473,11 +474,11 @@ constexpr bool copies_wrapper(const shape &value) {
   return true;
 }
 
-template <typename Type> constexpr shape make_shape() {
+template <typename Type> constexpr type_tree make_type_tree() {
   using value_type = std::remove_cv_t<Type>;
   using traits = wrapper_traits<value_type>;
-  shape result;
-  shape_node &node = result.nodes[0];
+  type_tree result;
+  type_tree_node &node = result.nodes[0];
   node.kind = wrapper_semantics_v<value_type>;
   // Only a leaf has an identity of its own; a wrapper is its kind and family.
   if constexpr (!is_wrapper_v<value_type>) {
@@ -505,7 +506,7 @@ template <typename Type> constexpr shape make_shape() {
     node.family = wrapper_family<traits>::value;
     node.extent = wrapper_extent<traits>::value;
     node.arity = static_cast<std::uint8_t>(traits::arguments::size);
-    argument_shapes<typename traits::arguments>::append(result);
+    argument_type_trees<typename traits::arguments>::append(result);
     node.copyable = copies_wrapper(result);
     // The elements of an array have the qualifiers of the array.
     if constexpr (has_properties_v<value_type, property::extent> ||
@@ -517,9 +518,9 @@ template <typename Type> constexpr shape make_shape() {
 }
 } // namespace detail
 
-// The shape of a C++ type, with the cv-qualifiers of its objects.
+// The type tree of a C++ type, with the cv-qualifiers of its objects.
 template <typename Type>
-inline constexpr shape shape_v = detail::make_shape<Type>();
+inline constexpr type_tree type_tree_v = detail::make_type_tree<Type>();
 
 namespace detail {
 template <typename Type, typename = void> struct canonical {
@@ -585,8 +586,8 @@ struct replace_leaf<
 template <typename Type, typename Leaf>
 using replace_leaf_t = typename detail::replace_leaf<Type, Leaf>::type;
 
-// The type a shape describes: the type with cv-qualification removed at every
-// wrapper. Two types of the same shape have the same canonical type.
+// The type a type tree describes: the type with cv-qualification removed at
+// every wrapper. Two types of the same type tree have the same canonical type.
 template <typename Type>
 using canonical_t = typename detail::canonical<Type>::type;
 

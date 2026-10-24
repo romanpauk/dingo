@@ -1,6 +1,6 @@
 """Content of the routes section.
 
-The routes are the rules of the algebra of shapes: the rules of a leaf, which
+The routes are the rules of the algebra of type trees: the rules of a leaf, which
 copy it, upcast it to a declared interface, or convert it to one, and the
 operations of the wrapper semantics, each a form of operations with the kind and
 the kind it leads to filled in. A kind of the user has its routes as a kind of
@@ -38,8 +38,8 @@ LEAF = (Requirement(predicate=Predicate.LEAF, subject="L"),)
 COPY = Rule(
     id="copy",
     description="Copies a borrowed object.",
-    from_shape=variable("X", LVALUE),
-    to_shape=variable("X", PRVALUE),
+    from_type_tree=variable("X", LVALUE),
+    to_type_tree=variable("X", PRVALUE),
     access=Access.BORROW,
     exposure=RequestCategory.VALUE,
     requires=(Requirement(predicate=Predicate.COPYABLE, subject="X"),),
@@ -47,8 +47,8 @@ COPY = Rule(
 UPCAST_REFERENCE = Rule(
     id="upcast_reference",
     description="Refers to a borrowed leaf as one of its interfaces.",
-    from_shape=leaf_variable(LVALUE),
-    to_shape=leaf_variable(LVALUE),
+    from_type_tree=leaf_variable(LVALUE),
+    to_type_tree=leaf_variable(LVALUE),
     access=Access.INHERIT,
     requires=LEAF,
     via=Via.UPCAST,
@@ -59,8 +59,8 @@ CONVERT_BORROWED = Rule(
         "Makes an object of an interface from a borrowed leaf by the conversion "
         "the leaf declares to it."
     ),
-    from_shape=leaf_variable(LVALUE),
-    to_shape=leaf_variable(PRVALUE),
+    from_type_tree=leaf_variable(LVALUE),
+    to_type_tree=leaf_variable(PRVALUE),
     access=Access.BORROW,
     exposure=RequestCategory.VALUE,
     requires=LEAF,
@@ -72,8 +72,8 @@ CONVERT_CONSUMED = Rule(
         "Makes an object of an interface from a consumed leaf by the conversion "
         "the leaf declares to it."
     ),
-    from_shape=leaf_variable(RVALUE),
-    to_shape=leaf_variable(PRVALUE),
+    from_type_tree=leaf_variable(RVALUE),
+    to_type_tree=leaf_variable(PRVALUE),
     access=Access.CONSUME,
     requires=LEAF,
     via=Via.CONVERT,
@@ -113,8 +113,8 @@ def semantics_rules(kinds, form):
             yield Rule(
                 id=op.id,
                 description=op.description,
-                from_shape=substitute(template.from_shape, names),
-                to_shape=substitute(template.to_shape, names),
+                from_type_tree=substitute(template.from_type_tree, names),
+                to_type_tree=substitute(template.to_type_tree, names),
                 access=template.access,
                 exposure=template.exposure,
                 requires=template.requires,

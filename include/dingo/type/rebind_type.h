@@ -29,7 +29,7 @@ template <typename Type, typename Leaf>
 using rebind_type_t = typename rebind_type<Type, Leaf>::type;
 
 // A request of `Type` that names the wrapper exactly; the routes of the next
-// implementation always match the requested shape exactly.
+// implementation always match the requested type tree exactly.
 template <typename Type> struct exact_lookup {
   using type = Type;
 };

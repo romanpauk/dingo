@@ -6,7 +6,7 @@
 //
 
 // The construction of an unregistered object: inside the wrappers of its
-// shape, by a named constructor of a leaf that converts to the stored one,
+// type tree, by a named constructor of a leaf that converts to the stored one,
 // and with a dependency constructed by the constructor its type declares.
 
 #include <dingo/container.h>
@@ -31,7 +31,7 @@ struct selected_alternative {
 
 struct unselected_alternative {};
 
-TEST(next_construct, constructs_a_named_alternative_inside_layers) {
+TEST(next_construct, constructs_a_named_alternative_inside_wrappers) {
   using alternative =
       std::variant<selected_alternative, unselected_alternative>;
   using nested = std::optional<alternative>;

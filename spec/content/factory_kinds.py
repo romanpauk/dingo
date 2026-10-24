@@ -13,7 +13,7 @@ factory_kinds: tuple[FactoryKind, ...] = (
             "never selected. A leaf that also accepts arguments converting to "
             "nothing has a generic constructor and needs a declared factory. "
             "Every argument resolves the type its parameter asks for, and every "
-            "layer of the stored shape is made from its element, constructed in "
+            "wrapper of the stored type tree is made from its element, constructed in "
             "place."
         ),
         dependencies=DependencyVisibility.DETECTED,

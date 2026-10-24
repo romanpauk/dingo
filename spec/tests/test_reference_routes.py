@@ -9,9 +9,9 @@ from spec.reference.routes import (
     Leaf,
     Model,
     Request,
-    RequestKind,
-    Shape,
-    layer,
+    RequestForm,
+    TypeTree,
+    wrapper,
     leaf,
     resolve,
 )
@@ -22,7 +22,7 @@ OTHER = Leaf("other_leaf")
 
 WRAPPERS = ("own", "share", "opt")
 SCOPES = ("external", "shared", "shared_cyclical", "unique")
-KINDS = (RequestKind.VALUE, RequestKind.LVALUE_REFERENCE, RequestKind.RVALUE_REFERENCE)
+KINDS = (RequestForm.VALUE, RequestForm.LVALUE_REFERENCE, RequestForm.RVALUE_REFERENCE)
 
 
 @pytest.fixture(scope="module")
@@ -30,42 +30,42 @@ def model():
     return Model(spec.load_spec())
 
 
-def stored_shapes(value):
+def stored_type_trees(value):
     base = leaf(value)
     yield base
-    yield layer("ptr", base)
-    yield layer("ref", base)
-    yield layer("array", base, extent=2)
-    yield layer("alt", base, leaf(OTHER))
+    yield wrapper("ptr", base)
+    yield wrapper("ref", base)
+    yield wrapper("array", base, extent=2)
+    yield wrapper("alt", base, leaf(OTHER))
     for outer in WRAPPERS:
-        yield layer(outer, base)
-        yield layer(outer, layer("array_unbounded", base))
+        yield wrapper(outer, base)
+        yield wrapper(outer, wrapper("array_unbounded", base))
         for inner in WRAPPERS:
-            yield layer(outer, layer(inner, base))
+            yield wrapper(outer, wrapper(inner, base))
 
 
-def request_shapes(stored):
-    """The leaf, the standard wrappers of it, the stored shape and its layers,
+def request_type_trees(stored):
+    """The leaf, the standard wrappers of it, the stored type tree and its wrappers,
     and pointers to each."""
     value = stored
-    while value.layer is not None:
+    while value.wrapper is not None:
         value = value.args[0]
-    shapes = {value, stored}
-    for wrapper in WRAPPERS:
-        shapes.add(layer(wrapper, value))
+    type_trees = {value, stored}
+    for semantics in WRAPPERS:
+        type_trees.add(wrapper(semantics, value))
     inner = stored
-    while inner.layer is not None:
-        shapes.add(inner)
+    while inner.wrapper is not None:
+        type_trees.add(inner)
         inner = inner.args[0]
-    return shapes | {layer("ptr", shape) for shape in shapes}
+    return type_trees | {wrapper("ptr", type_tree) for type_tree in type_trees}
 
 
 def cases():
     for value in (COPYABLE, MOVE_ONLY):
-        for stored in stored_shapes(value):
-            for shape in request_shapes(stored):
+        for stored in stored_type_trees(value):
+            for type_tree in request_type_trees(stored):
                 for kind in KINDS:
-                    yield stored, Request(kind, shape)
+                    yield stored, Request(kind, type_tree)
 
 
 ALL_CASES = list(cases())
@@ -83,13 +83,13 @@ def test_the_universe_is_large(model):
 @pytest.mark.parametrize("scope", ["external", "shared", "shared_cyclical"])
 def test_borrowing_never_serves_rvalue_references(model, scope):
     for stored, request, outcome in outcomes(model, scope):
-        if request.kind == RequestKind.RVALUE_REFERENCE:
+        if request.kind == RequestForm.RVALUE_REFERENCE:
             assert not outcome.served, (stored, request)
 
 
 def test_consuming_never_serves_lvalue_references(model):
     for stored, request, outcome in outcomes(model, "unique"):
-        if request.kind == RequestKind.LVALUE_REFERENCE:
+        if request.kind == RequestForm.LVALUE_REFERENCE:
             assert not outcome.served, (stored, request)
 
 
@@ -103,7 +103,7 @@ def test_an_unregistered_binding_serves_nothing(model, scope):
 @pytest.mark.parametrize("scope", ["external", "shared", "shared_cyclical"])
 def test_borrowed_references_refer_to_the_stored_object(model, scope):
     for stored, request, outcome in outcomes(model, scope):
-        if outcome.served and request.kind == RequestKind.LVALUE_REFERENCE:
+        if outcome.served and request.kind == RequestForm.LVALUE_REFERENCE:
             assert outcome.copies == 0, (stored, request)
             assert outcome.stable, (stored, request)
             assert outcome.identity[1] == "existing", (stored, request)
@@ -132,69 +132,69 @@ def test_move_only_leaves_are_never_copied(model):
 def test_arrays_are_never_handed_out_as_values(model):
     for scope in SCOPES:
         for stored, request, outcome in outcomes(model, scope):
-            if request.shape.layer in ("array", "array_unbounded"):
-                if request.kind != RequestKind.LVALUE_REFERENCE:
+            if request.type_tree.wrapper in ("array", "array_unbounded"):
+                if request.kind != RequestForm.LVALUE_REFERENCE:
                     assert not outcome.served, (scope, stored, request)
 
 
 def test_the_stored_pointer_is_never_referred_to(model):
     for scope in SCOPES:
         for stored, request, outcome in outcomes(model, scope):
-            if request.shape.layer == "ptr" and request.kind == RequestKind.LVALUE_REFERENCE:
+            if request.type_tree.wrapper == "ptr" and request.kind == RequestForm.LVALUE_REFERENCE:
                 assert not outcome.served, (scope, stored, request)
 
 
 def test_constructions_follow_the_slot(model):
     stored = leaf(COPYABLE)
-    request = Request(RequestKind.VALUE, stored)
+    request = Request(RequestForm.VALUE, stored)
     assert resolve(model, "external", stored, request).constructions == (0, 0)
     assert resolve(model, "shared", stored, request).constructions == (1, 0)
     assert resolve(model, "unique", stored, request).constructions == (1, 1)
 
 
 CASES = [
-    # scope, stored, request kind, request shape, served, rules
-    ("shared", leaf(COPYABLE), RequestKind.VALUE, leaf(COPYABLE), True, ("copy",)),
-    ("shared", leaf(MOVE_ONLY), RequestKind.VALUE, leaf(MOVE_ONLY), False, ()),
-    ("unique", leaf(COPYABLE), RequestKind.LVALUE_REFERENCE, leaf(COPYABLE), False, ()),
+    # scope, stored, request kind, request type tree, served, rules
+    ("shared", leaf(COPYABLE), RequestForm.VALUE, leaf(COPYABLE), True, ("copy",)),
+    ("shared", leaf(MOVE_ONLY), RequestForm.VALUE, leaf(MOVE_ONLY), False, ()),
+    ("unique", leaf(COPYABLE), RequestForm.LVALUE_REFERENCE, leaf(COPYABLE), False, ()),
     (
         "unique",
-        layer("own", leaf(COPYABLE)),
-        RequestKind.VALUE,
-        layer("share", leaf(COPYABLE)),
+        wrapper("own", leaf(COPYABLE)),
+        RequestForm.VALUE,
+        wrapper("share", leaf(COPYABLE)),
         True,
         ("share_owned",),
     ),
     (
         "unique",
-        layer("array", leaf(COPYABLE), extent=2),
-        RequestKind.VALUE,
-        layer("share", leaf(COPYABLE)),
+        wrapper("array", leaf(COPYABLE), extent=2),
+        RequestForm.VALUE,
+        wrapper("share", leaf(COPYABLE)),
         False,
         (),
     ),
     (
         "shared",
-        layer("share", layer("opt", leaf(COPYABLE))),
-        RequestKind.LVALUE_REFERENCE,
+        wrapper("share", wrapper("opt", leaf(COPYABLE))),
+        RequestForm.LVALUE_REFERENCE,
         leaf(COPYABLE),
         True,
         ("borrow_shared", "borrow_optional"),
     ),
     (
         "shared",
-        layer("array", leaf(COPYABLE), extent=2),
-        RequestKind.VALUE,
-        layer("ptr", leaf(COPYABLE)),
+        wrapper("array", leaf(COPYABLE), extent=2),
+        RequestForm.VALUE,
+        wrapper("ptr", leaf(COPYABLE)),
         True,
         ("decay_array",),
     ),
 ]
 
 
-@pytest.mark.parametrize("scope, stored, kind, shape, served, rules", CASES)
-def test_cases(model, scope, stored, kind, shape, served, rules):
-    outcome = resolve(model, scope, stored, Request(kind, shape))
+@pytest.mark.parametrize("scope, stored, kind, type_tree, served, rules", CASES)
+def test_cases(model, scope, stored, kind, type_tree, served, rules):
+    outcome = resolve(model, scope, stored, Request(kind, type_tree))
     assert outcome.served is served
     assert outcome.rules == rules
 
@@ -202,17 +202,17 @@ def test_cases(model, scope, stored, kind, shape, served, rules):
 @pytest.mark.parametrize(
     "scope, stored, registered",
     [
-        ("shared_cyclical", layer("share", layer("share", leaf(COPYABLE))), False),
-        ("shared_cyclical", layer("ptr", leaf(COPYABLE)), False),
-        ("shared_cyclical", layer("share", leaf(COPYABLE)), True),
-        ("shared", layer("ref", leaf(COPYABLE)), False),
-        ("external", layer("ref", leaf(COPYABLE)), True),
-        ("shared", layer("share", layer("array_unbounded", leaf(COPYABLE))), False),
-        ("external", layer("share", layer("array_unbounded", leaf(COPYABLE))), True),
+        ("shared_cyclical", wrapper("share", wrapper("share", leaf(COPYABLE))), False),
+        ("shared_cyclical", wrapper("ptr", leaf(COPYABLE)), False),
+        ("shared_cyclical", wrapper("share", leaf(COPYABLE)), True),
+        ("shared", wrapper("ref", leaf(COPYABLE)), False),
+        ("external", wrapper("ref", leaf(COPYABLE)), True),
+        ("shared", wrapper("share", wrapper("array_unbounded", leaf(COPYABLE))), False),
+        ("external", wrapper("share", wrapper("array_unbounded", leaf(COPYABLE))), True),
     ],
 )
 def test_registration(model, scope, stored, registered):
-    outcome = resolve(model, scope, stored, Request(RequestKind.VALUE, stored))
+    outcome = resolve(model, scope, stored, Request(RequestForm.VALUE, stored))
     assert outcome.registered is registered
 
 
@@ -222,42 +222,42 @@ OTHER_IFACE = Leaf("other_iface", copyable=False, constructible=False)
 
 
 def test_a_binding_with_interfaces_is_found_only_by_them(model):
-    stored = layer("share", leaf(IMPL))
-    by_impl = resolve(model, "shared", stored, Request(RequestKind.LVALUE_REFERENCE, leaf(IMPL)), (IFACE,))
-    by_iface = resolve(model, "shared", stored, Request(RequestKind.LVALUE_REFERENCE, leaf(IFACE)), (IFACE,))
+    stored = wrapper("share", leaf(IMPL))
+    by_impl = resolve(model, "shared", stored, Request(RequestForm.LVALUE_REFERENCE, leaf(IMPL)), (IFACE,))
+    by_iface = resolve(model, "shared", stored, Request(RequestForm.LVALUE_REFERENCE, leaf(IFACE)), (IFACE,))
     assert not by_impl.found and not by_impl.served
     assert by_iface.served and by_iface.rules == ("borrow_shared", "upcast_reference")
 
 
 def test_an_undeclared_interface_is_not_found(model):
     stored = leaf(IMPL)
-    request = Request(RequestKind.LVALUE_REFERENCE, leaf(OTHER_IFACE))
+    request = Request(RequestForm.LVALUE_REFERENCE, leaf(OTHER_IFACE))
     assert not resolve(model, "shared", stored, request, (IFACE,)).found
 
 
 @pytest.mark.parametrize(
-    "stored, request_shape, rules",
+    "stored, request_type_tree, rules",
     [
-        (layer("share", leaf(IMPL)), layer("share", leaf(IFACE)), ("copy", "upcast_copied_shared")),
-        (layer("ptr", leaf(IMPL)), layer("ptr", leaf(IFACE)), ("copy", "upcast_pointer")),
+        (wrapper("share", leaf(IMPL)), wrapper("share", leaf(IFACE)), ("copy", "upcast_copied_shared")),
+        (wrapper("ptr", leaf(IMPL)), wrapper("ptr", leaf(IFACE)), ("copy", "upcast_pointer")),
     ],
 )
-def test_borrowed_interfaces_convert(model, stored, request_shape, rules):
-    outcome = resolve(model, "shared", stored, Request(RequestKind.VALUE, request_shape), (IFACE,))
+def test_borrowed_interfaces_convert(model, stored, request_type_tree, rules):
+    outcome = resolve(model, "shared", stored, Request(RequestForm.VALUE, request_type_tree), (IFACE,))
     assert outcome.served and outcome.rules == rules
 
 
 def test_a_shared_interface_handle_is_retained(model):
-    stored = layer("share", leaf(IMPL))
-    request = Request(RequestKind.LVALUE_REFERENCE, layer("share", leaf(IFACE)))
+    stored = wrapper("share", leaf(IMPL))
+    request = Request(RequestForm.LVALUE_REFERENCE, wrapper("share", leaf(IFACE)))
     outcome = resolve(model, "shared", stored, request, (IFACE, OTHER_IFACE))
     assert outcome.served and outcome.rules == ("retain_shared_upcast",)
     assert outcome.stable
 
 
 def test_consumed_interfaces_convert(model):
-    stored = layer("own", leaf(IMPL))
-    request = Request(RequestKind.VALUE, layer("share", leaf(IFACE)))
+    stored = wrapper("own", leaf(IMPL))
+    request = Request(RequestForm.VALUE, wrapper("share", leaf(IFACE)))
     outcome = resolve(model, "unique", stored, request, (IFACE,))
     assert outcome.served
 
@@ -266,29 +266,29 @@ def test_consumed_interfaces_convert(model):
     "scope, stored, registered",
     [
         ("unique", leaf(IMPL), False),
-        ("shared", layer("array", leaf(IMPL), extent=2), False),
-        ("shared", layer("opt", leaf(IMPL)), True),
-        ("unique", layer("share", layer("share", leaf(IMPL))), False),
-        ("unique", layer("own", leaf(IMPL)), True),
+        ("shared", wrapper("array", leaf(IMPL), extent=2), False),
+        ("shared", wrapper("opt", leaf(IMPL)), True),
+        ("unique", wrapper("share", wrapper("share", leaf(IMPL))), False),
+        ("unique", wrapper("own", leaf(IMPL)), True),
     ],
 )
 def test_interface_registration(model, scope, stored, registered):
-    outcome = resolve(model, scope, stored, Request(RequestKind.VALUE, stored), (IFACE,))
+    outcome = resolve(model, scope, stored, Request(RequestForm.VALUE, stored), (IFACE,))
     assert outcome.registered is registered
 
 
 def test_a_converted_handle_keeps_its_family(model):
-    stored = layer("own", leaf(COPYABLE), family="user")
-    user = Request(RequestKind.VALUE, layer("share", leaf(COPYABLE), family="user"))
-    std = Request(RequestKind.VALUE, layer("share", leaf(COPYABLE), family="std"))
+    stored = wrapper("own", leaf(COPYABLE), family="user")
+    user = Request(RequestForm.VALUE, wrapper("share", leaf(COPYABLE), family="user"))
+    std = Request(RequestForm.VALUE, wrapper("share", leaf(COPYABLE), family="std"))
     assert resolve(model, "unique", stored, user).served
     assert not resolve(model, "unique", stored, std).served
 
 
-def test_a_created_layer_may_be_of_any_family(model):
+def test_a_created_wrapper_may_be_of_any_family(model):
     stored = leaf(COPYABLE)
     for family in ("std", "user"):
-        request = Request(RequestKind.VALUE, layer("opt", leaf(COPYABLE), family=family))
+        request = Request(RequestForm.VALUE, wrapper("opt", leaf(COPYABLE), family=family))
         assert resolve(model, "unique", stored, request).served
 
 
@@ -299,10 +299,10 @@ ABSTRACT = Leaf("abstract", constructible=False)
 def test_a_declared_factory_makes_an_abstract_leaf(model, scope):
     from spec.reference.routes import register
 
-    stored = leaf(ABSTRACT) if scope == "shared_cyclical" else layer("own", leaf(ABSTRACT))
+    stored = leaf(ABSTRACT) if scope == "shared_cyclical" else wrapper("own", leaf(ABSTRACT))
     if scope == "unique":
-        stored = layer("ptr", leaf(ABSTRACT))
-    assert register(model, scope, stored) == (False, "the stored shape has no default factory")
+        stored = wrapper("ptr", leaf(ABSTRACT))
+    assert register(model, scope, stored) == (False, "the stored type tree has no default factory")
     assert register(model, scope, stored, factory="function") == (True, "")
 
 
@@ -317,10 +317,10 @@ def test_an_unknown_factory_kind_is_rejected(model):
 def test_a_variant_names_every_alternative(model, scope):
     from spec.reference.routes import ALTERNATIVE_NOT_HELD
 
-    stored = layer("alt", leaf(COPYABLE), leaf(OTHER))
+    stored = wrapper("alt", leaf(COPYABLE), leaf(OTHER))
     if scope == "external":
-        stored = layer("ref", stored)
-    kind = RequestKind.VALUE if scope == "unique" else RequestKind.LVALUE_REFERENCE
+        stored = wrapper("ref", stored)
+    kind = RequestForm.VALUE if scope == "unique" else RequestForm.LVALUE_REFERENCE
     held = resolve(model, scope, stored, Request(kind, leaf(COPYABLE)))
     assert held.served
     other = resolve(model, scope, stored, Request(kind, leaf(OTHER)))

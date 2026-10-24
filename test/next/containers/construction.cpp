@@ -90,7 +90,7 @@ TEST(next_construction, injects_constructor_arguments_statically) {
   check_graph(container);
 }
 
-TEST(next_construction, constructs_the_element_of_a_layer_in_place) {
+TEST(next_construction, constructs_the_element_of_a_wrapper_in_place) {
   dingo::container<> container;
   container.register_type<scope<dingo::shared>, storage<config>>();
   container

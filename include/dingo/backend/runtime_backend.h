@@ -7,10 +7,10 @@
 
 #pragma once
 
-// The runtime backend: a binding is registered at runtime with the terms it
-// serves, derived at compile time, and a thunk per term that walks it. A
-// request finds its binding and selects its term with the same engine
-// functions as the static backend.
+// The runtime backend: a binding is registered at runtime with the reachable
+// types it serves, derived at compile time, and a thunk per reachable type that
+// walks it. A request finds its binding and selects its reachable type with the
+// same engine functions as the static backend.
 
 #include <dingo/backend/diagnose.h>
 #include <dingo/backend/local.h>
@@ -26,10 +26,10 @@
 #include <dingo/primitives/diagnostics.gen.h>
 #include <dingo/primitives/exceptions.h>
 #include <dingo/primitives/retained.h>
-#include <dingo/primitives/shape.h>
 #include <dingo/primitives/slot.h>
 #include <dingo/primitives/type_name.h>
 #include <dingo/primitives/type_path.h>
+#include <dingo/primitives/type_tree.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -46,7 +46,7 @@ namespace dingo::core {
 
 template <typename Resolver> class runtime_entry;
 
-// Walks a term to its boundary and returns the boundary object.
+// Walks a reachable type to its boundary and returns the boundary object.
 template <typename Boundary, typename Resolver> struct boundary_maker {
   Boundary (*make)(runtime_entry<Resolver> &, Resolver &);
 };
@@ -55,17 +55,18 @@ template <typename Boundary, typename Resolver> struct boundary_maker {
 // container, resolves.
 template <typename Resolver> class runtime_entry {
 public:
-  // Walks a term to its boundary and returns the address of the borrowed
-  // object, or null for the element of a wrapper that holds none when the
-  // request takes its address, `null_allowed`.
+  // Walks a reachable type to its boundary and returns the address of the
+  // borrowed object, or null for the element of a wrapper that holds none when
+  // the request takes its address, `null_allowed`.
   using thunk = void *(*)(runtime_entry &, Resolver &, bool);
 
   using name_function = void (*)(std::string &);
 
-  runtime_entry(const binding_descriptor &descriptor, const terms &published,
-                std::uint8_t exposed, const completion_plan *plans,
-                const void *const *boundaries, const thunk *thunks,
-                const void *const *makers, name_function stored_name)
+  runtime_entry(const binding_descriptor &descriptor,
+                const reachable_types &published, std::uint8_t exposed,
+                const completion_plan *plans, const void *const *boundaries,
+                const thunk *thunks, const void *const *makers,
+                name_function stored_name)
       : stored_name_(stored_name), descriptor_(descriptor),
         published_(published), exposed_(exposed), plans_(plans),
         boundaries_(boundaries), thunks_(thunks), makers_(makers) {}
@@ -90,36 +91,38 @@ public:
   virtual bool settled(Resolver &resolver) const = 0;
 
   const binding_descriptor &descriptor() const { return descriptor_; }
-  const terms &published() const { return published_; }
+  const reachable_types &published() const { return published_; }
   std::uint8_t exposed() const { return exposed_; }
-  const completion_plan &plan(std::size_t term) const { return plans_[term]; }
+  const completion_plan &plan(std::size_t reachable_type) const {
+    return plans_[reachable_type];
+  }
 
   // Appends the name of the stored type, for diagnostics.
   void append_stored_name(std::string &text) const { stored_name_(text); }
 
-  void *borrow(std::size_t term, Resolver &resolver,
+  void *borrow(std::size_t reachable_type, Resolver &resolver,
                bool null_allowed = false) {
-    return thunks_[term](*this, resolver, null_allowed);
+    return thunks_[reachable_type](*this, resolver, null_allowed);
   }
 
   // Whether the binding constructs a boundary object of type `Boundary` for
-  // a term.
-  template <typename Boundary> bool makes(std::size_t term) const {
-    return boundaries_[term] == type_address_v<Boundary>;
+  // a reachable type.
+  template <typename Boundary> bool makes(std::size_t reachable_type) const {
+    return boundaries_[reachable_type] == type_address_v<Boundary>;
   }
 
-  // The boundary object of a term, whose type `makes` confirmed.
+  // The boundary object of a reachable type, whose type `makes` confirmed.
   template <typename Boundary>
-  Boundary make(std::size_t term, Resolver &resolver) {
+  Boundary make(std::size_t reachable_type, Resolver &resolver) {
     return static_cast<const boundary_maker<Boundary, Resolver> *>(
-               makers_[term])
+               makers_[reachable_type])
         ->make(*this, resolver);
   }
 
 private:
   name_function stored_name_;
   const binding_descriptor &descriptor_;
-  const terms &published_;
+  const reachable_types &published_;
   std::uint8_t exposed_;
   const completion_plan *plans_;
   const void *const *boundaries_;
@@ -136,23 +139,28 @@ template <typename Binding, typename Resolver>
 class runtime_binding final : public runtime_entry<Resolver> {
   using entry = runtime_entry<Resolver>;
   using thunk = typename entry::thunk;
-  using terms_sequence = std::make_index_sequence<Binding::published.size>;
+  using reachable_types_sequence =
+      std::make_index_sequence<Binding::published.size>;
   using key_store_type = key_store<typename Binding::key_type>;
 
 public:
   template <typename... Args>
   explicit runtime_binding(without_key_value /*key*/, Args &&...args)
       : entry(Binding::descriptor, Binding::published, Binding::exposed,
-              plans(terms_sequence()), boundaries(terms_sequence()),
-              thunks(terms_sequence()), makers(terms_sequence()),
+              plans(reachable_types_sequence()),
+              boundaries(reachable_types_sequence()),
+              thunks(reachable_types_sequence()),
+              makers(reachable_types_sequence()),
               &append_type_name<typename Binding::stored_type>),
         slot_(std::forward<Args>(args)...) {}
 
   template <typename Key, typename... Args>
   runtime_binding(with_key_value /*key*/, const Key &key, Args &&...args)
       : entry(Binding::descriptor, Binding::published, Binding::exposed,
-              plans(terms_sequence()), boundaries(terms_sequence()),
-              thunks(terms_sequence()), makers(terms_sequence()),
+              plans(reachable_types_sequence()),
+              boundaries(reachable_types_sequence()),
+              thunks(reachable_types_sequence()),
+              makers(reachable_types_sequence()),
               &append_type_name<typename Binding::stored_type>),
         key_(key), slot_(std::forward<Args>(args)...) {}
 
@@ -217,26 +225,29 @@ public:
   }
 
 private:
-  // Whether a request may borrow the object of a term: one the term refers
-  // to, copies, or takes the address of, or an array, which a request takes
-  // the address of and never by value.
-  template <std::size_t Term>
+  // Whether a request may borrow the object of a reachable type: one the
+  // reachable type refers to, copies, or takes the address of, or an array,
+  // which a request takes the address of and never by value.
+  template <std::size_t ReachableType>
   static constexpr bool borrows =
-      plan_v<Binding, Term>.kind != completion::construct ||
-      has_properties(semantics_of(Binding::published.items[Term].value),
-                     property::immovable);
+      plan_v<Binding, ReachableType>.kind != completion::construct ||
+      has_properties(
+          semantics_of(Binding::published.items[ReachableType].value),
+          property::immovable);
 
-  template <std::size_t Term>
-  static void *borrow_term(entry &binding, Resolver &resolver,
-                           bool null_allowed) {
-    if constexpr (!walk_supported_v<Binding, Term> || !borrows<Term>) {
+  template <std::size_t ReachableType>
+  static void *borrow_reachable_type(entry &binding, Resolver &resolver,
+                                     bool null_allowed) {
+    if constexpr (!walk_supported_v<Binding, ReachableType> ||
+                  !borrows<ReachableType>) {
       throw std::logic_error(
           "the next implementation does not provide this route yet");
     } else {
       auto &self = static_cast<runtime_binding &>(binding);
       auto view = self.view(resolver);
       const auto address =
-          address_from<Binding, Term, plan_v<Binding, Term>.binding_steps>(
+          address_from<Binding, ReachableType,
+                       plan_v<Binding, ReachableType>.binding_steps>(
               self.slot_.context(),
               [&]() -> decltype(auto) { return self.slot_.get(view); },
               null_allowed);
@@ -246,65 +257,69 @@ private:
     }
   }
 
-  template <std::size_t Term>
-  static boundary_t<Binding, Term> make_term(entry &binding,
-                                             Resolver &resolver) {
+  template <std::size_t ReachableType>
+  static boundary_t<Binding, ReachableType>
+  make_reachable_type(entry &binding, Resolver &resolver) {
     auto &self = static_cast<runtime_binding &>(binding);
     auto view = self.view(resolver);
-    return walk_to_boundary<Binding, Term>(
+    return walk_to_boundary<Binding, ReachableType>(
         self.slot_.context(),
         [&]() -> decltype(auto) { return self.slot_.get(view); });
   }
 
-  // Whether the binding constructs a boundary object for a term; an array is
-  // never a boundary object, as no request takes one by value.
-  template <std::size_t Term>
+  // Whether the binding constructs a boundary object for a reachable type; an
+  // array is never a boundary object, as no request takes one by value.
+  template <std::size_t ReachableType>
   static constexpr bool constructs =
-      walk_supported_v<Binding, Term> && !borrows<Term> &&
-      !std::is_array_v<boundary_t<Binding, Term>>;
+      walk_supported_v<Binding, ReachableType> && !borrows<ReachableType> &&
+      !std::is_array_v<boundary_t<Binding, ReachableType>>;
 
-  template <std::size_t Term> static constexpr const void *boundary_of() {
-    if constexpr (constructs<Term>) {
-      return type_address_v<boundary_t<Binding, Term>>;
+  template <std::size_t ReachableType>
+  static constexpr const void *boundary_of() {
+    if constexpr (constructs<ReachableType>) {
+      return type_address_v<boundary_t<Binding, ReachableType>>;
     } else {
       return nullptr;
     }
   }
 
-  template <std::size_t Term>
-  static constexpr boundary_maker<boundary_t<Binding, Term>, Resolver> maker{
-      &make_term<Term>};
+  template <std::size_t ReachableType>
+  static constexpr boundary_maker<boundary_t<Binding, ReachableType>, Resolver>
+      maker{&make_reachable_type<ReachableType>};
 
-  template <std::size_t Term> static constexpr const void *maker_of() {
-    if constexpr (constructs<Term>) {
-      return &maker<Term>;
+  template <std::size_t ReachableType> static constexpr const void *maker_of() {
+    if constexpr (constructs<ReachableType>) {
+      return &maker<ReachableType>;
     } else {
       return nullptr;
     }
   }
 
-  template <std::size_t... Terms>
-  static const completion_plan *plans(std::index_sequence<Terms...>) {
-    static constexpr completion_plan table[] = {plan_v<Binding, Terms>...,
-                                                completion_plan{}};
+  template <std::size_t... ReachableTypes>
+  static const completion_plan *plans(std::index_sequence<ReachableTypes...>) {
+    static constexpr completion_plan table[] = {
+        plan_v<Binding, ReachableTypes>..., completion_plan{}};
     return table;
   }
 
-  template <std::size_t... Terms>
-  static const void *const *boundaries(std::index_sequence<Terms...>) {
-    static constexpr const void *table[] = {boundary_of<Terms>()..., nullptr};
+  template <std::size_t... ReachableTypes>
+  static const void *const *boundaries(std::index_sequence<ReachableTypes...>) {
+    static constexpr const void *table[] = {boundary_of<ReachableTypes>()...,
+                                            nullptr};
     return table;
   }
 
-  template <std::size_t... Terms>
-  static const thunk *thunks(std::index_sequence<Terms...>) {
-    static constexpr thunk table[] = {&borrow_term<Terms>..., nullptr};
+  template <std::size_t... ReachableTypes>
+  static const thunk *thunks(std::index_sequence<ReachableTypes...>) {
+    static constexpr thunk table[] = {&borrow_reachable_type<ReachableTypes>...,
+                                      nullptr};
     return table;
   }
 
-  template <std::size_t... Terms>
-  static const void *const *makers(std::index_sequence<Terms...>) {
-    static constexpr const void *table[] = {maker_of<Terms>()..., nullptr};
+  template <std::size_t... ReachableTypes>
+  static const void *const *makers(std::index_sequence<ReachableTypes...>) {
+    static constexpr const void *table[] = {maker_of<ReachableTypes>()...,
+                                            nullptr};
     return table;
   }
 
@@ -671,7 +686,7 @@ private:
   }
 
   // Calls `visit` with every interface a binding of type `Binding` serves:
-  // its declared ones, or the leaves its stored shape names.
+  // its declared ones, or the leaves its stored type tree names.
   template <typename Binding, typename Visit>
   static void for_each_interface(Visit &&visit) {
     constexpr const binding_descriptor &binding = Binding::descriptor;
@@ -805,10 +820,11 @@ private:
       const route_choice choice =
           select_route(binding->descriptor(), binding->published(), request,
                        binding->exposed());
-      found.add({binding.get(), choice.term, key_value,
-                 choice.term == no_term
-                     ? request_plan{}
-                     : plan_request(binding->plan(choice.term), choice)});
+      found.add(
+          {binding.get(), choice.reachable_type, key_value,
+           choice.reachable_type == no_reachable_type
+               ? request_plan{}
+               : plan_request(binding->plan(choice.reachable_type), choice)});
     }
     found.index();
     found.generation = generation_;
@@ -870,7 +886,8 @@ private:
   DINGO_ALWAYS_INLINE static Request resolve_from(Resolver &resolver,
                                                   const candidate_type &found) {
     if constexpr (std::is_lvalue_reference_v<Request>) {
-      // Only the term of a lvalue reference request keeps its address.
+      // Only the reachable type of a lvalue reference request keeps its
+      // address.
       using value_type = typename request_traits<Request>::value_type;
       if (found.resolved != nullptr) {
         return static_cast<Request>(*static_cast<value_type *>(found.resolved));
@@ -882,22 +899,23 @@ private:
   template <typename Request>
   DINGO_NOINLINE static Request
   resolve_completing(Resolver &resolver, const candidate_type &found) {
-    if (found.term == no_term) {
+    if (found.reachable_type == no_reachable_type) {
       raise_not_convertible<Request>(*found.binding);
     }
     return complete<Request>(resolver, found);
   }
 
-  // The address the term of `found` borrows, kept once its binding is
+  // The address the reachable type of `found` borrows, kept once its binding is
   // settled.
   static void *borrowed(Resolver &resolver, const candidate_type &found,
                         bool null_allowed = false) {
     if (found.resolved != nullptr) {
       return found.resolved;
     }
-    void *address = found.binding->borrow(found.term, resolver, null_allowed);
+    void *address =
+        found.binding->borrow(found.reachable_type, resolver, null_allowed);
     if (found.binding->settled(resolver) &&
-        !found.binding->plan(found.term).rechecked) {
+        !found.binding->plan(found.reachable_type).rechecked) {
       found.resolved = address;
     }
     return address;
@@ -946,12 +964,13 @@ private:
       break;
     case completion::construct:
       if constexpr (!std::is_lvalue_reference_v<Request>) {
-        return construct<Request>(resolver, *found.binding, found.term,
-                                  found.plan);
+        return construct<Request>(resolver, *found.binding,
+                                  found.reachable_type, found.plan);
       }
       break;
     }
-    throw std::logic_error("the selected term does not complete the request");
+    throw std::logic_error(
+        "the selected reachable_type does not complete the request");
   }
 
   // Calls `visit` with the created wrappers of the plan made of `Made`: none,
@@ -1001,11 +1020,12 @@ private:
   // Whether the binding makes the boundary object of the wrappers of a plan.
   struct makes_boundary {
     entry &binding;
-    std::size_t term;
+    std::size_t reachable_type;
 
     template <typename Wrappers> bool apply() const {
       if constexpr (Wrappers::valid) {
-        return binding.template makes<typename Wrappers::boundary>(term);
+        return binding.template makes<typename Wrappers::boundary>(
+            reachable_type);
       } else {
         return false;
       }
@@ -1017,29 +1037,32 @@ private:
   template <typename Request> struct constructs_request {
     Resolver &resolver;
     entry &binding;
-    std::size_t term;
+    std::size_t reachable_type;
 
     template <typename Wrappers> Request apply() const {
-      return construct_with<Request, Wrappers>(resolver, binding, term);
+      return construct_with<Request, Wrappers>(resolver, binding,
+                                               reachable_type);
     }
 
     [[noreturn]] static Request unsupported() {
-      throw std::logic_error("the selected term does not complete the request");
+      throw std::logic_error(
+          "the selected reachable_type does not complete the request");
     }
   };
 
   // Makes the request from the boundary object by the creating rules of the
-  // plan. The binding makes the boundary object of the type of its term,
-  // which has the qualifiers of the request when the request names them, and
-  // otherwise none; the request asks for the qualified one first.
+  // plan. The binding makes the boundary object of the type of its reachable
+  // type, which has the qualifiers of the request when the request names them,
+  // and otherwise none; the request asks for the qualified one first.
   template <typename Request>
-  static Request construct(Resolver &resolver, entry &binding, std::size_t term,
+  static Request construct(Resolver &resolver, entry &binding,
+                           std::size_t reachable_type,
                            const request_plan &plan) {
     using value_type = typename request_traits<Request>::value_type;
     using made_type = typename request_traits<Request>::made_type;
-    constructs_request<Request> constructs{resolver, binding, term};
+    constructs_request<Request> constructs{resolver, binding, reachable_type};
     if constexpr (!std::is_same_v<value_type, made_type>) {
-      makes_boundary qualified{binding, term};
+      makes_boundary qualified{binding, reachable_type};
       if (visit_wrappers<value_type>(plan, qualified)) {
         return visit_wrappers<value_type>(plan, constructs);
       }
@@ -1048,11 +1071,11 @@ private:
   }
 
   // Makes the request by the created wrappers `Wrappers` from the boundary
-  // object of the term; the wrappers a request cannot be made of are not
-  // instantiated.
+  // object of the reachable type; the wrappers a request cannot be made of are
+  // not instantiated.
   template <typename Request, typename Wrappers>
   static Request construct_with(Resolver &resolver, entry &binding,
-                                std::size_t term) {
+                                std::size_t reachable_type) {
     if constexpr (Wrappers::valid) {
       using made = decltype(Wrappers::make(
           std::declval<typename Wrappers::boundary (&)()>()));
@@ -1065,23 +1088,26 @@ private:
                                          std::remove_cv_t<value_type>> ||
                               std::is_constructible_v<value_type, made>
                         : detail::casts_to_v<made, Request>) {
-        return make_with<Request, Wrappers>(resolver, binding, term);
+        return make_with<Request, Wrappers>(resolver, binding, reachable_type);
       }
     }
-    throw std::logic_error("the selected term does not complete the request");
+    throw std::logic_error(
+        "the selected reachable_type does not complete the request");
   }
 
   template <typename Request, typename Wrappers>
   static Request make_with(Resolver &resolver, entry &binding,
-                           std::size_t term) {
+                           std::size_t reachable_type) {
     using value_type = typename request_traits<Request>::value_type;
     using boundary = typename Wrappers::boundary;
-    if (!binding.template makes<boundary>(term)) {
-      throw std::logic_error("the selected term does not complete the request");
+    if (!binding.template makes<boundary>(reachable_type)) {
+      throw std::logic_error(
+          "the selected reachable_type does not complete the request");
     }
     auto make = [&] {
-      return Wrappers::make(
-          [&] { return binding.template make<boundary>(term, resolver); });
+      return Wrappers::make([&] {
+        return binding.template make<boundary>(reachable_type, resolver);
+      });
     };
     if constexpr (std::is_rvalue_reference_v<Request>) {
       resolver.retained().enter(resolver.transactions());

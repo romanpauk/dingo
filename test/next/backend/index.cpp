@@ -178,13 +178,13 @@ template <typename Key> void check_memo_without_a_value() {
   memo.index();
   std::vector<std::size_t> found;
   memo.visit(nullptr, [&](const candidate<entry> &each) {
-    found.push_back(each.term);
+    found.push_back(each.reachable_type);
     return true;
   });
   EXPECT_EQ(found, (std::vector<std::size_t>{0, 1, 2}));
   std::vector<std::size_t> first;
   memo.visit(nullptr, [&](const candidate<entry> &each) {
-    first.push_back(each.term);
+    first.push_back(each.reachable_type);
     return false;
   });
   EXPECT_EQ(first, (std::vector<std::size_t>{0}));

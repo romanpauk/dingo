@@ -5,11 +5,12 @@
 // SPDX-License-Identifier: MIT
 //
 
-// The requests a binding serves of the shapes it stores: pointers to wrappers,
-// const and volatile objects, smart pointers to const objects, alternatives,
-// arrays of arrays, and the conversions of its leaf and of its handles to
-// the declared interfaces. Ported from the registration traits tests of the
-// current implementation, which checked them on its internal binding model.
+// The requests a binding serves of the type trees it stores: pointers to
+// wrappers, const and volatile objects, smart pointers to const objects,
+// alternatives, arrays of arrays, and the conversions of its leaf and of its
+// handles to the declared interfaces. Ported from the registration traits tests
+// of the current implementation, which checked them on its internal binding
+// model.
 
 #include <dingo/container.h>
 #include <dingo/factory/callable.h>
@@ -155,7 +156,8 @@ struct type_conversion_traits<
 namespace {
 
 // spec: routes, a borrowing scope reaches the objects behind a pointer
-TEST(next_stored_shapes, a_pointer_to_a_layer_serves_the_layer_and_a_copy) {
+TEST(next_stored_type_trees,
+     a_pointer_to_a_wrapper_serves_the_wrapper_and_a_copy) {
   std::optional<service> optional{service{7}};
   dingo::container<> container;
   container
@@ -180,7 +182,7 @@ TEST(next_stored_shapes, a_pointer_to_a_layer_serves_the_layer_and_a_copy) {
   EXPECT_EQ(handle_container.resolve<std::shared_ptr<service>>(), handle);
 }
 
-TEST(next_stored_shapes, a_pointer_to_a_move_only_object_serves_no_copy) {
+TEST(next_stored_type_trees, a_pointer_to_a_move_only_object_serves_no_copy) {
   move_only_service value{10};
   dingo::container<> container;
   container.register_type<scope<dingo::external>, storage<move_only_service *>>(
@@ -201,7 +203,7 @@ TEST(next_stored_shapes, a_pointer_to_a_move_only_object_serves_no_copy) {
   EXPECT_EQ(optional->value, 12);
 }
 
-TEST(next_stored_shapes, a_null_external_pointer_is_served_as_null) {
+TEST(next_stored_type_trees, a_null_external_pointer_is_served_as_null) {
   using alternatives = std::variant<int, float>;
   const alternatives *null = nullptr;
   dingo::container<> container;
@@ -211,7 +213,8 @@ TEST(next_stored_shapes, a_null_external_pointer_is_served_as_null) {
   EXPECT_EQ(container.resolve<const alternatives *>(), nullptr);
 }
 
-TEST(next_stored_shapes, a_shared_pointer_to_a_const_layer_is_one_object) {
+TEST(next_stored_type_trees,
+     a_shared_pointer_to_a_const_wrapper_is_one_object) {
   dingo::container<> container;
   container.register_type<scope<dingo::shared>,
                           storage<const std::optional<service> *>>(
@@ -227,7 +230,8 @@ TEST(next_stored_shapes, a_shared_pointer_to_a_const_layer_is_one_object) {
   EXPECT_EQ(&container.resolve<const std::optional<service> &>(), pointer);
 }
 
-TEST(next_stored_shapes, a_unique_pointer_to_a_layer_is_adopted_by_handles) {
+TEST(next_stored_type_trees,
+     a_unique_pointer_to_a_wrapper_is_adopted_by_handles) {
   dingo::container<> container;
   container.register_type<scope<dingo::unique>,
                           storage<std::optional<service> *>>(
@@ -256,7 +260,7 @@ struct implementation : plain_interface, secondary {
   explicit implementation(int init) { value = init; }
 };
 
-TEST(next_stored_shapes, a_pointer_to_an_optional_serves_its_interfaces) {
+TEST(next_stored_type_trees, a_pointer_to_an_optional_serves_its_interfaces) {
   std::optional<implementation> value{std::in_place, 17};
   dingo::container<> container;
   container.register_type<scope<dingo::external>,
@@ -283,7 +287,7 @@ TEST(next_stored_shapes, a_pointer_to_an_optional_serves_its_interfaces) {
 // An optional of an interface is not made from a borrowed optional of the
 // implementation, which would copy its element into one of the interface:
 // the request is refused.
-TEST(next_stored_shapes,
+TEST(next_stored_type_trees,
      a_pointer_to_an_optional_serves_no_optional_of_its_interface) {
   std::optional<implementation> value{std::in_place, 17};
   dingo::container<> container;
@@ -310,7 +314,7 @@ std::optional<int> no_element() { return std::nullopt; }
 // The element of an empty optional is a null address, and is refused to any
 // other request, which has nothing to refer to or copy; once the optional
 // holds an element, the requests are served by it.
-TEST(next_stored_shapes, the_element_of_an_empty_optional_is_null) {
+TEST(next_stored_type_trees, the_element_of_an_empty_optional_is_null) {
   std::optional<int> optional;
   dingo::container<> container;
   container
@@ -334,7 +338,7 @@ TEST(next_stored_shapes, the_element_of_an_empty_optional_is_null) {
                dingo::type_not_convertible_exception);
 }
 
-TEST(next_stored_shapes, const_storage_serves_only_const_access) {
+TEST(next_stored_type_trees, const_storage_serves_only_const_access) {
   const int value = 7;
   dingo::container<> container;
   container.register_type<scope<dingo::external>, storage<const int &>>(value);
@@ -368,7 +372,7 @@ TEST(next_stored_shapes, const_storage_serves_only_const_access) {
   EXPECT_EQ(custom_container.resolve<const int *>(), custom.get());
 }
 
-TEST(next_stored_shapes, const_nested_layers_serve_only_const_access) {
+TEST(next_stored_type_trees, const_nested_wrappers_serve_only_const_access) {
   using nested = std::optional<std::variant<int, float>>;
   const nested value{std::in_place, std::in_place_type<int>, 17};
   dingo::container<> container;
@@ -392,7 +396,7 @@ TEST(next_stored_shapes, const_nested_layers_serve_only_const_access) {
   EXPECT_EQ(doubly_container.resolve<const int *>(), &std::get<int>(**doubly));
 }
 
-TEST(next_stored_shapes, a_const_alternative_serves_only_const_access) {
+TEST(next_stored_type_trees, a_const_alternative_serves_only_const_access) {
   using alternatives = std::variant<int, float>;
   const alternatives value{std::in_place_type<int>, 13};
   dingo::container<> container;
@@ -408,7 +412,7 @@ TEST(next_stored_shapes, a_const_alternative_serves_only_const_access) {
                dingo::type_not_convertible_exception);
 }
 
-TEST(next_stored_shapes, volatile_storage_keeps_the_volatile_qualifier) {
+TEST(next_stored_type_trees, volatile_storage_keeps_the_volatile_qualifier) {
   volatile int value = 3;
   dingo::container<> container;
   container.register_type<scope<dingo::external>, storage<volatile int &>>(
@@ -433,7 +437,8 @@ struct polymorphic_service : polymorphic_interface {
   int value;
 };
 
-TEST(next_stored_shapes, a_handle_of_a_const_object_serves_only_const_access) {
+TEST(next_stored_type_trees,
+     a_handle_of_a_const_object_serves_only_const_access) {
   const std::shared_ptr<const service> shared =
       std::make_shared<const service>(service{23});
   dingo::container<> container;
@@ -470,7 +475,7 @@ TEST(next_stored_shapes, a_handle_of_a_const_object_serves_only_const_access) {
 
 // A const object serves its declared interfaces as const ones, through a
 // handle, a reference, or an address.
-TEST(next_stored_shapes,
+TEST(next_stored_type_trees,
      a_handle_of_a_const_object_serves_only_const_interfaces) {
   const std::shared_ptr<const polymorphic_service> shared =
       std::make_shared<const polymorphic_service>(31);
@@ -531,7 +536,7 @@ TEST(next_stored_shapes,
   EXPECT_EQ(variant_container.resolve<const int *>(), &std::get<int>(value));
 }
 
-TEST(next_stored_shapes, an_array_of_arrays_serves_its_rows_and_itself) {
+TEST(next_stored_type_trees, an_array_of_arrays_serves_its_rows_and_itself) {
   dingo::container<> container;
   container.register_type<scope<dingo::shared>, storage<int[2][3]>>();
   int (*rows)[3] = container.resolve<int (*)[3]>();
@@ -561,7 +566,7 @@ struct handle_implementation : handle_interface {
   int value() const override { return 7; }
 };
 
-TEST(next_stored_shapes, a_consumed_user_handle_converts_by_its_traits) {
+TEST(next_stored_type_trees, a_consumed_user_handle_converts_by_its_traits) {
   dingo::container<> container;
   container.register_type<scope<dingo::unique>,
                           storage<user_shared<handle_implementation>>,
@@ -573,7 +578,8 @@ TEST(next_stored_shapes, a_consumed_user_handle_converts_by_its_traits) {
   EXPECT_FALSE(resolved.converted_from_const());
 }
 
-TEST(next_stored_shapes, a_borrowed_user_handle_converts_from_a_const_source) {
+TEST(next_stored_type_trees,
+     a_borrowed_user_handle_converts_from_a_const_source) {
   dingo::container<> container;
   container.register_type<scope<dingo::shared>,
                           storage<user_shared<handle_implementation>>,
@@ -627,7 +633,8 @@ template <> struct type_conversion_traits<copy_target, copy_source> {
 
 namespace {
 
-TEST(next_stored_shapes, a_borrowed_leaf_converts_to_a_new_interface_value) {
+TEST(next_stored_type_trees,
+     a_borrowed_leaf_converts_to_a_new_interface_value) {
   move_source moved;
   dingo::container<> container;
   container.register_type<scope<dingo::external>, storage<move_source *>,
@@ -661,7 +668,7 @@ struct local_service {
   int value;
 };
 
-TEST(next_stored_shapes,
+TEST(next_stored_type_trees,
      local_static_bindings_resolve_the_dependencies_of_their_registration) {
   dingo::container<> container;
   container.register_type<

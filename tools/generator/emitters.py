@@ -112,7 +112,7 @@ def type_position(pattern, where):
     """
     if pattern.form.value == "variable":
         return "element"
-    if pattern.form.value != "layer" or len(pattern.args) != 1:
+    if pattern.form.value != "semantics" or len(pattern.args) != 1:
         raise GeneratorError(f"{where}: pattern is not a wrapper of one argument")
     if pattern.name == "K":
         return "wrapper"
@@ -201,16 +201,16 @@ def scope_fields(scope, form_ids):
 def form_fields(name, rule, of_semantics, where):
     """The fields of a operation, or of a rule of a leaf, from its template
     or its route."""
-    for pattern in (rule.from_shape, rule.to_shape):
+    for pattern in (rule.from_type_tree, rule.to_type_tree):
         if pattern.category is None:
             raise GeneratorError(f"{where}: pattern has no value category")
     return {
         "id": name,
         "of_semantics": of_semantics,
-        "from_position": type_position(rule.from_shape, where),
-        "from_category": rule.from_shape.category.value,
-        "to_position": type_position(rule.to_shape, where),
-        "to_category": rule.to_shape.category.value,
+        "from_position": type_position(rule.from_type_tree, where),
+        "from_category": rule.from_type_tree.category.value,
+        "to_position": type_position(rule.to_type_tree, where),
+        "to_category": rule.to_type_tree.category.value,
         "access": rule.access.value,
         "exposure": REQUEST_CATEGORY_BITS[rule.exposure.value] if rule.exposure else 0,
         "requires": sum(REQUIREMENT_BITS[r.predicate.value] for r in rule.requires),

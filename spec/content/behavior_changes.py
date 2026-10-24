@@ -35,7 +35,7 @@ behavior_changes: tuple[BehaviorChange, ...] = (
     BehaviorChange(
         id="borrowing_is_compositional",
         description=(
-            "A borrowing scope reaches every object its stored shape holds, through "
+            "A borrowing scope reaches every object its stored type tree holds, through "
             "any combination of wrappers, and copies every copyable one."
         ),
         cases=tuple(
@@ -150,9 +150,9 @@ behavior_changes: tuple[BehaviorChange, ...] = (
         decision=DECISION,
     ),
     BehaviorChange(
-        id="shared_cyclical_stores_flat_shapes",
+        id="shared_cyclical_stores_flat_type_trees",
         description=(
-            "shared_cyclical stores only shapes whose element is a leaf, because "
+            "shared_cyclical stores only type trees whose element is a leaf, because "
             "the element must exist before it is published."
         ),
         cases=("routes:*/*/shared_cyclical/std::shared_ptr<*<*>>/*#registration",),
@@ -244,12 +244,12 @@ behavior_changes: tuple[BehaviorChange, ...] = (
     BehaviorChange(
         id="interfaces_do_not_rebind_storage",
         description=(
-            "A binding with one interface stores the same shape as one with "
+            "A binding with one interface stores the same type tree as one with "
             "several, and reaches the interface by conversion."
         ),
         cases=("routes:*/impl[[]iface]/*/std::unique_ptr<impl>/*std::unique_ptr<iface>*#served",),
         baseline=(
-            "With exactly one interface, the stored shape is rebound to it, so a "
+            "With exactly one interface, the stored type tree is rebound to it, so a "
             "reference to a sole-owner handle of the interface is served, while with "
             "several interfaces it is not."
         ),
@@ -596,7 +596,7 @@ behavior_changes: tuple[BehaviorChange, ...] = (
             "interface."
         ),
         cases=(
-            "test:next_stored_shapes."
+            "test:next_stored_type_trees."
             "a_pointer_to_an_optional_serves_no_optional_of_its_interface",
         ),
         baseline=(
@@ -613,7 +613,7 @@ behavior_changes: tuple[BehaviorChange, ...] = (
             "in place, whose object holds none, is a null address when the "
             "request is of an address, and is refused otherwise."
         ),
-        cases=("test:next_stored_shapes.the_element_of_an_empty_optional_is_null",),
+        cases=("test:next_stored_type_trees.the_element_of_an_empty_optional_is_null",),
         baseline=(
             "A request of a reference or a value through an empty std::optional "
             "throws std::bad_optional_access."

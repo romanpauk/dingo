@@ -7,7 +7,7 @@
 
 // The execution of the routes of a binding: a binding keeps the objects its
 // cached rules derive only when one of its routes takes such a rule, however
-// deeply the rule is nested in the stored shape; a declared conversion
+// deeply the rule is nested in the stored type tree; a declared conversion
 // constructs its target from what it returns; and a request the stored object
 // cannot serve is refused when it is resolved, not when it is compiled.
 // spec: routes
@@ -53,7 +53,7 @@ inline constexpr bool keeps_nothing_v =
 
 TEST(next_execute, a_binding_keeps_objects_only_for_a_retaining_route) {
   // A borrowed sharing handle converted to the handle of an interface is
-  // kept, at whatever depth of the stored shape the handle is.
+  // kept, at whatever depth of the stored type tree the handle is.
   static_assert(
       keeps_objects_v<binding<dingo::shared, std::shared_ptr<impl>, iface>>);
   static_assert(

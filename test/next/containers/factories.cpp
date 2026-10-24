@@ -65,7 +65,7 @@ struct impl : iface {
   int run() const override { return 11; }
 };
 
-TEST(next_factories, constructs_the_declared_leaf_inside_the_stored_layers) {
+TEST(next_factories, constructs_the_declared_leaf_inside_the_stored_wrappers) {
   dingo::container<> container;
   container.register_type<scope<dingo::shared>, storage<std::unique_ptr<iface>>,
                           dingo::factory<dingo::constructor<impl>>>();

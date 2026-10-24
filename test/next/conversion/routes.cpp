@@ -7,8 +7,8 @@
 
 // The requests a binding serves, as the route engine decides them from the
 // descriptors of the binding and of the request when the request is
-// compiled: the routes its stored shape derives, the qualifiers a request may
-// add, the leaf a request names, the objects a binding keeps, and the
+// compiled: the routes its stored type tree derives, the qualifiers a request
+// may add, the leaf a request names, the objects a binding keeps, and the
 // conversions the conversion traits declare. Replaces the registration traits
 // tests of the current implementation, which checked the published routes of
 // its binding model and its conversion paths.
@@ -68,7 +68,7 @@ template <typename Binding, typename Request> constexpr bool serves() {
          core::finds(Binding::descriptor, request) &&
          core::select_route(Binding::descriptor, Binding::published, request,
                             Binding::exposed)
-                 .term != core::no_term;
+                 .reachable_type != core::no_reachable_type;
 }
 
 struct I {
@@ -209,7 +209,7 @@ TEST(next_engine, a_borrowing_scope_does_not_move_its_object) {
   SUCCEED();
 }
 
-TEST(next_engine, a_layer_of_the_requested_type_is_not_wrapped_again) {
+TEST(next_engine, a_wrapper_of_the_requested_type_is_not_wrapped_again) {
   using exact =
       binding_t<external, std::optional<copy_only> &, std::optional<copy_only>>;
   static_assert(serves<exact, std::optional<copy_only>>());
@@ -284,10 +284,10 @@ TEST(next_engine, a_request_adds_qualifiers_only_below_const_levels) {
 
   // A level may gain const below levels that are all const, as A** converts
   // to const A *const * but not to const A **.
-  static_assert(core::qualifies(core::shape_v<A **>,
-                                core::shape_v<const A *const *>, false));
-  static_assert(
-      !core::qualifies(core::shape_v<A **>, core::shape_v<const A **>, false));
+  static_assert(core::qualifies(core::type_tree_v<A **>,
+                                core::type_tree_v<const A *const *>, false));
+  static_assert(!core::qualifies(core::type_tree_v<A **>,
+                                 core::type_tree_v<const A **>, false));
   using double_pointer = binding_t<external, A **>;
   static_assert(serves<double_pointer, const A *const *>());
   static_assert(!serves<double_pointer, const A **>());
@@ -304,7 +304,7 @@ TEST(next_engine, a_request_adds_qualifiers_only_below_const_levels) {
 struct annotation_tag {};
 
 // spec: request descriptor
-TEST(next_engine, a_request_names_the_leaf_through_its_layers) {
+TEST(next_engine, a_request_names_the_leaf_through_its_wrappers) {
   using core::innermost_leaf;
   using core::request_traits;
   using core::type_id_v;
@@ -342,23 +342,24 @@ TEST(next_engine, a_request_names_the_leaf_through_its_layers) {
   // A reference request refers to an object the binding keeps; a value, an
   // rvalue reference, and a pointer request do not.
   static_assert(request_traits<A &>::kind ==
-                core::request_kind::lvalue_reference);
+                core::request_form::lvalue_reference);
   static_assert(request_traits<const A &>::kind ==
-                core::request_kind::lvalue_reference);
+                core::request_form::lvalue_reference);
   static_assert(request_traits<A &&>::kind ==
-                core::request_kind::rvalue_reference);
-  static_assert(request_traits<A>::kind == core::request_kind::value);
-  static_assert(request_traits<A *>::kind == core::request_kind::value);
-  static_assert(request_traits<const A *>::kind == core::request_kind::value);
+                core::request_form::rvalue_reference);
+  static_assert(request_traits<A>::kind == core::request_form::value);
+  static_assert(request_traits<A *>::kind == core::request_form::value);
+  static_assert(request_traits<const A *>::kind == core::request_form::value);
   static_assert(std::is_same_v<request_traits<const A *>::made_type, A *>);
   SUCCEED();
 }
 
 // spec: behavior_changes.interfaces_do_not_rebind_storage
-TEST(next_engine, interfaces_do_not_rebind_the_stored_shape) {
+TEST(next_engine, interfaces_do_not_rebind_the_stored_type_tree) {
   using one = binding_t<shared, std::shared_ptr<A>, I>;
   static_assert(std::is_same_v<one::stored_type, std::shared_ptr<A>>);
-  static_assert(one::descriptor.stored == core::shape_v<std::shared_ptr<A>>);
+  static_assert(one::descriptor.stored ==
+                core::type_tree_v<std::shared_ptr<A>>);
   static_assert(serves<one, I &>());
   static_assert(serves<one, std::shared_ptr<I>>());
   static_assert(serves<one, std::shared_ptr<I> &>());

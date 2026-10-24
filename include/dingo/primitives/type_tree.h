@@ -7,13 +7,13 @@
 
 #pragma once
 
-// Shapes of C++ types as constexpr values. A shape is a leaf wrapped in
-// wrappers; it is stored in preorder, so a wrapper is followed by the shapes of
-// its arguments. A wrapper is of a wrapper semantics, which the shapes know by
-// its descriptor: its identity, properties, and forms. Every wrapper of a
-// wrapper carries the identity of the wrapper's family, so two wrappers of the
-// same kind stay apart, while a family of any_family stands for a wrapper a
-// route creates.
+// Type trees of C++ types as constexpr values. A type tree is a leaf wrapped in
+// wrappers; it is stored in preorder, so a wrapper is followed by the type
+// trees of its arguments. A wrapper is of a wrapper semantics, which the type
+// trees know by its descriptor: its identity, properties, and forms. Every
+// wrapper of a wrapper carries the identity of the wrapper's family, so two
+// wrappers of the same kind stay apart, while a family of any_family stands for
+// a wrapper a route creates.
 
 #include <dingo/base/mechanics.h>
 
@@ -85,7 +85,7 @@ inline constexpr type_id type_id_v = detail::type_id_of<Type>::value;
 struct any_family_tag {};
 inline constexpr type_id any_family = type_id_v<any_family_tag>;
 
-inline constexpr std::size_t shape_capacity = 16;
+inline constexpr std::size_t type_tree_capacity = 16;
 inline constexpr std::size_t max_semantics_operations = 32;
 
 // A wrapper semantics: the identity of its tag, its property bits, the
@@ -117,7 +117,7 @@ constexpr bool same_semantics(const semantics_descriptor *left,
   return left->id == right->id;
 }
 
-struct shape_node {
+struct type_tree_node {
   // The kind of a wrapper, or the leaf kind.
   const semantics_descriptor *kind = &leaf_semantics;
   std::uint8_t arity = 0;
@@ -136,13 +136,13 @@ struct shape_node {
 inline constexpr std::uint8_t const_qualified = 1;
 inline constexpr std::uint8_t volatile_qualified = 2;
 
-struct shape {
-  shape_node nodes[shape_capacity] = {};
+struct type_tree {
+  type_tree_node nodes[type_tree_capacity] = {};
   std::size_t size = 0;
 };
 
 // The number of nodes of the subtree that starts at `index`.
-constexpr std::size_t subtree_size(const shape &value, std::size_t index) {
+constexpr std::size_t subtree_size(const type_tree &value, std::size_t index) {
   std::size_t end = index + 1;
   for (std::size_t pending = value.nodes[index].arity; pending > 0; --pending) {
     end += subtree_size(value, end);
@@ -151,7 +151,7 @@ constexpr std::size_t subtree_size(const shape &value, std::size_t index) {
 }
 
 // The subtree of argument `argument` of the wrapper at `index`.
-constexpr std::size_t argument_index(const shape &value, std::size_t index,
+constexpr std::size_t argument_index(const type_tree &value, std::size_t index,
                                      std::size_t argument) {
   std::size_t position = index + 1;
   for (std::size_t skipped = 0; skipped < argument; ++skipped) {
@@ -160,8 +160,8 @@ constexpr std::size_t argument_index(const shape &value, std::size_t index,
   return position;
 }
 
-constexpr shape subtree(const shape &value, std::size_t index) {
-  shape result;
+constexpr type_tree subtree(const type_tree &value, std::size_t index) {
+  type_tree result;
   result.size = subtree_size(value, index);
   for (std::size_t offset = 0; offset < result.size; ++offset) {
     result.nodes[offset] = value.nodes[index + offset];
@@ -171,13 +171,14 @@ constexpr shape subtree(const shape &value, std::size_t index) {
 
 // Whether `derived` serves `requested`: the same nodes, where any_family
 // matches any family.
-constexpr bool shapes_match(const shape &derived, const shape &requested) {
+constexpr bool type_trees_match(const type_tree &derived,
+                                const type_tree &requested) {
   if (derived.size != requested.size) {
     return false;
   }
   for (std::size_t index = 0; index < derived.size; ++index) {
-    const shape_node &d = derived.nodes[index];
-    const shape_node &r = requested.nodes[index];
+    const type_tree_node &d = derived.nodes[index];
+    const type_tree_node &r = requested.nodes[index];
     if (!same_semantics(d.kind, r.kind) || d.arity != r.arity ||
         d.extent != r.extent) {
       return false;
@@ -194,13 +195,13 @@ constexpr bool shapes_match(const shape &derived, const shape &requested) {
   return true;
 }
 
-constexpr bool operator==(const shape &left, const shape &right) {
+constexpr bool operator==(const type_tree &left, const type_tree &right) {
   if (left.size != right.size) {
     return false;
   }
   for (std::size_t index = 0; index < left.size; ++index) {
-    const shape_node &l = left.nodes[index];
-    const shape_node &r = right.nodes[index];
+    const type_tree_node &l = left.nodes[index];
+    const type_tree_node &r = right.nodes[index];
     if (!same_semantics(l.kind, r.kind) || l.arity != r.arity ||
         l.extent != r.extent || l.family != r.family || l.type != r.type ||
         l.copyable != r.copyable || l.constructible != r.constructible ||
@@ -211,27 +212,28 @@ constexpr bool operator==(const shape &left, const shape &right) {
   return true;
 }
 
-constexpr bool operator!=(const shape &left, const shape &right) {
+constexpr bool operator!=(const type_tree &left, const type_tree &right) {
   return !(left == right);
 }
 
 // A wrapper of `kind` of `family` applied to `argument`.
-constexpr shape wrap(const semantics_descriptor *kind, type_id family,
-                     bool copyable, const shape &argument,
-                     std::uint32_t extent = 0) {
-  shape result;
+constexpr type_tree wrap(const semantics_descriptor *kind, type_id family,
+                         bool copyable, const type_tree &argument,
+                         std::uint32_t extent = 0) {
+  type_tree result;
   result.size = argument.size + 1;
   result.nodes[0] =
-      shape_node{kind, 1, extent, family, nullptr, copyable, true, 0};
+      type_tree_node{kind, 1, extent, family, nullptr, copyable, true, 0};
   for (std::size_t index = 0; index < argument.size; ++index) {
     result.nodes[index + 1] = argument.nodes[index];
   }
   return result;
 }
 
-// The shape with the leaf of its first-argument chain replaced by `leaf`.
-constexpr shape replace_leaf(const shape &value, const shape &leaf) {
-  shape result;
+// The type tree with the leaf of its first-argument chain replaced by `leaf`.
+constexpr type_tree replace_leaf(const type_tree &value,
+                                 const type_tree &leaf) {
+  type_tree result;
   std::size_t index = 0;
   while (is_wrapper(value.nodes[index].kind)) {
     result.nodes[index] = value.nodes[index];

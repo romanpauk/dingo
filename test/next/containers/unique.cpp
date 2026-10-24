@@ -76,7 +76,7 @@ TEST(next_unique, retains_the_object_of_an_rvalue_reference) {
   EXPECT_EQ(counted::live, 0);
 }
 
-TEST(next_unique, moves_the_element_out_of_a_layer) {
+TEST(next_unique, moves_the_element_out_of_a_wrapper) {
   dingo::container<> container;
   container
       .register_type<scope<dingo::unique>, storage<std::optional<counted>>>();

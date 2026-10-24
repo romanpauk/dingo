@@ -16,7 +16,7 @@
 #include <dingo/conversion/key.h>
 #include <dingo/conversion/route.h>
 #include <dingo/primitives/compile_diagnostics.gen.h>
-#include <dingo/primitives/shape.h>
+#include <dingo/primitives/type_tree.h>
 
 #include <cstddef>
 
@@ -125,7 +125,7 @@ constexpr bool conflicts(const lookup_table &table,
 
 // The bound of the key values of the domain of a binding: the least bound of
 // the declarations of the domains of its interfaces, or of the leaves its
-// stored shape names without interfaces.
+// stored type tree names without interfaces.
 constexpr std::size_t key_bound(const lookup_table &table,
                                 const binding_descriptor &binding) {
   auto bound_of = [&](type_id interface) {

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generates the engine cases of the next implementation from the reference.
 
-For every scope, leaf kind, declared interfaces, stored shape of up to two
-layers in the standard and a user wrapper family, and request, the reference
+For every scope, leaf kind, declared interfaces, stored type_tree of up to two
+wrappers in the standard and a user wrapper family, and request, the reference
 implementation in spec/reference/routes.py computes whether the binding
 registers, whether the request finds it, whether it is served, and by which
 rules. test/next/templates/conversion_cases.cpp.j2 lays the cases out as C++, and
@@ -30,8 +30,8 @@ from spec.reference.routes import (  # noqa: E402
     Leaf,
     Model,
     Request,
-    RequestKind,
-    Shape,
+    RequestForm,
+    TypeTree,
     resolve,
 )
 
@@ -54,70 +54,70 @@ BINDING_LEAVES = (
 FAMILIES = ("std", "user")
 WRAPPERS = ("own", "share", "opt")
 SCOPES = ("external", "shared", "shared_cyclical", "unique")
-KINDS = (RequestKind.VALUE, RequestKind.LVALUE_REFERENCE, RequestKind.RVALUE_REFERENCE)
+KINDS = (RequestForm.VALUE, RequestForm.LVALUE_REFERENCE, RequestForm.RVALUE_REFERENCE)
 
 
 def leaf(value):
-    return Shape(leaf=value)
+    return TypeTree(leaf=value)
 
 
-def layer(kind, *args, family=None, extent=None):
-    return Shape(layer=kind, args=args, family=family, extent=extent)
+def wrapper(kind, *args, family=None, extent=None):
+    return TypeTree(wrapper=kind, args=args, family=family, extent=extent)
 
 
-def stored_shapes(value):
+def stored_type_trees(value):
     base = leaf(value)
     yield base
-    yield layer("ptr", base)
-    yield layer("ref", base)
-    yield layer("array", base, extent=2)
-    yield layer("alt", base, leaf(OTHER), family="std")
+    yield wrapper("ptr", base)
+    yield wrapper("ref", base)
+    yield wrapper("array", base, extent=2)
+    yield wrapper("alt", base, leaf(OTHER), family="std")
     for family in FAMILIES:
         for outer in WRAPPERS:
-            yield layer(outer, base, family=family)
+            yield wrapper(outer, base, family=family)
             if outer != "opt":
-                yield layer(outer, layer("array_unbounded", base), family=family)
+                yield wrapper(outer, wrapper("array_unbounded", base), family=family)
             for inner in WRAPPERS:
-                yield layer(outer, layer(inner, base, family="std"), family=family)
+                yield wrapper(outer, wrapper(inner, base, family="std"), family=family)
 
 
-def chain(shape):
-    while shape.layer is not None:
-        yield shape
-        shape = shape.args[0]
-    yield shape
+def chain(type_tree):
+    while type_tree.wrapper is not None:
+        yield type_tree
+        type_tree = type_tree.args[0]
+    yield type_tree
 
 
-def request_shapes(stored, interfaces):
+def request_type_trees(stored, interfaces):
     value = list(chain(stored))[-1]
     leaves = [value, *[leaf(interface) for interface in interfaces]]
-    shapes = set(chain(stored))
+    type_trees = set(chain(stored))
     for target in leaves:
-        shapes.add(target)
+        type_trees.add(target)
         for family in FAMILIES:
-            for wrapper in WRAPPERS:
-                if wrapper == "opt" and not target.leaf.constructible:
+            for semantics in WRAPPERS:
+                if semantics == "opt" and not target.leaf.constructible:
                     continue
-                shapes.add(layer(wrapper, target, family=family))
-    shapes = {s for s in shapes if s.layer != "array_unbounded"}
-    return sorted(shapes | {layer("ptr", s) for s in shapes if s.layer != "ref"}, key=repr)
+                type_trees.add(wrapper(semantics, target, family=family))
+    type_trees = {s for s in type_trees if s.wrapper != "array_unbounded"}
+    return sorted(type_trees | {wrapper("ptr", s) for s in type_trees if s.wrapper != "ref"}, key=repr)
 
 
-def as_data(shape):
+def as_data(type_tree):
     return {
-        "layer": shape.layer,
-        "family": shape.family,
-        "leaf": shape.leaf.name if shape.leaf else None,
-        "extent": shape.extent,
-        "args": [as_data(arg) for arg in shape.args],
+        "wrapper": type_tree.wrapper,
+        "family": type_tree.family,
+        "leaf": type_tree.leaf.name if type_tree.leaf else None,
+        "extent": type_tree.extent,
+        "args": [as_data(arg) for arg in type_tree.args],
     }
 
 
-def valid_request(shape, kind):
-    if shape.layer == "ref":
+def valid_request(type_tree, kind):
+    if type_tree.wrapper == "ref":
         return False
-    abstract = shape.layer is None and not shape.leaf.constructible
-    return not (abstract and kind != RequestKind.LVALUE_REFERENCE)
+    abstract = type_tree.wrapper is None and not type_tree.leaf.constructible
+    return not (abstract and kind != RequestForm.LVALUE_REFERENCE)
 
 
 def steps_of(model):
@@ -139,19 +139,19 @@ def cases(model):
     steps = steps_of(model)
     for scope in SCOPES:
         for value, interfaces in BINDING_LEAVES:
-            for stored in stored_shapes(value):
-                for request_shape in request_shapes(stored, interfaces):
+            for stored in stored_type_trees(value):
+                for request_type_tree in request_type_trees(stored, interfaces):
                     for kind in KINDS:
-                        if not valid_request(request_shape, kind):
+                        if not valid_request(request_type_tree, kind):
                             continue
-                        request = Request(kind, request_shape)
+                        request = Request(kind, request_type_tree)
                         outcome = resolve(model, scope, stored, request, interfaces)
                         yield {
                             "scope": scope,
                             "interfaces": [i.name for i in interfaces],
                             "stored": as_data(stored),
                             "kind": kind,
-                            "request": as_data(request_shape),
+                            "request": as_data(request_type_tree),
                             "registered": outcome.registered,
                             "found": outcome.found,
                             "served": outcome.served,

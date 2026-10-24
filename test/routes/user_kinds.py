@@ -44,7 +44,7 @@ class UserKind:
     # The expression of an object of the wrapper of {T}, for an external
     # binding.
     instance: str = ""
-    # Whether a request creates a layer of the kind, wrapping or adopting.
+    # Whether a request creates a wrapper of the kind, wrapping or adopting.
     created: bool = False
     # The kind of the probes a mutation differs from by one form or property.
     mutates: str | None = None
@@ -179,7 +179,7 @@ reference_kinds = tuple(user.kind for user in user_kinds)
 kind_probes = tuple(user for user in user_kinds if user.template is not None)
 by_wrapper = {user.wrapper: user for user in user_kinds}
 
-# The bits of the C++ layer properties, in the order of the spec.
+# The bits of the C++ wrapper properties, in the order of the spec.
 PROPERTY_NAMES = {trait: trait.value for trait in Property}
 
 

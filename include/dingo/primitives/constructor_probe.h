@@ -11,7 +11,7 @@
 // a detected constructor, the detection modes and backends, and the arguments
 // that probe a constructor.
 //
-// A detection mode says what a detection reports. constructor_shape reports
+// A detection mode says what a detection reports. constructor_arity reports
 // the kind and the arity of the detected constructor, and
 // constructor_signature additionally recovers its argument types.
 //
@@ -33,7 +33,7 @@ namespace dingo::core {
 enum class constructor_kind : std::uint8_t { concrete, generic, invalid };
 
 // Reports the kind and the arity of the detected constructor.
-struct constructor_shape {};
+struct constructor_arity {};
 
 // Additionally recovers the argument types of the detected constructor.
 struct constructor_signature {};

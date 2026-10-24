@@ -104,7 +104,7 @@ CONSTRUCTOR_DETECTION_BACKENDS = (
 CONSTRUCTOR_DETECTION_MODES = (
     ConstructorDetectionMode(
         name="shape",
-        type_name="dingo::core::constructor_shape",
+        type_name="dingo::core::constructor_arity",
     ),
     ConstructorDetectionMode(
         name="signature",

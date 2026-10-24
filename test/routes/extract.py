@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Extracts the conversion ("route") behavior of the library.
 
-For every combination of domain, leaf kind, scope, stored shape, and request the
+For every combination of domain, leaf kind, scope, stored type_tree, and request the
 extractor records what the library does: whether the registration compiles,
 whether the resolution compiles, throws, or succeeds, and for a successful
 resolution the constructions it performed and the identity of the leaf it
@@ -43,7 +43,7 @@ Universe (the tables below):
 - scopes: shared, unique, external, shared_cyclical. External registrations
   pass an instance; the static and mixed containers cannot take one, which
   shows as a registration compile error.
-- stored shapes: T, T*, T&, unique_ptr/shared_ptr of T and T[], optional<T>,
+- stored type_trees: T, T*, T&, unique_ptr/shared_ptr of T and T[], optional<T>,
   T[2], variant<T, other_leaf>, and the nine {unique_ptr, shared_ptr, optional}
   of {unique_ptr<T>, shared_ptr<T>, optional<T>} combinations. The leaf and
   move_only_leaf kinds have 21 more: the user wrappers user_unique<T>,
@@ -58,7 +58,7 @@ Universe (the tables below):
   shared, optional}.
 - requests: the carriers value, &, const &, &&, *, const * applied to T,
   unique_ptr<T>, shared_ptr<T>, optional<T>, other_leaf for the variant, the
-  stored type, and every wrapper layer of the stored type, deduplicated. The
+  stored type, and every wrapper wrapper of the stored type, deduplicated. The
   spelling in the case id is the one written in the generated C++ with single
   spaces: "leaf&", "const leaf&", "leaf const*" only after a pointer
   ("leaf* const&"), "leaf(&)[2]" for arrays.
@@ -141,7 +141,7 @@ LEAF_KINDS = (
     ("impl", ("iface", "other_iface")),
 )
 
-# Leaf kinds that also have the user wrapper shapes.
+# Leaf kinds that also have the user wrapper type trees.
 USER_WRAPPER_LEAVES = ("leaf", "move_only_leaf")
 
 SCOPES = ("shared", "unique", "external", "shared_cyclical")
@@ -164,19 +164,19 @@ EXCEPTIONS = (
 
 
 @dataclass(frozen=True)
-class Shape:
-    """A stored shape. {T} is the leaf; the external expression builds the
+class TypeTree:
+    """A stored type_tree. {T} is the leaf; the external expression builds the
     instance an external registration is given; declarations are objects the
     probe owns for it."""
 
     name: str
     spelling: str
     external: str
-    layers: tuple = ()
+    wrappers: tuple = ()
     declarations: tuple = ()
     # Registered without an instance in a scope that constructs.
     external_note: str = ""
-    # A user wrapper shape: requested through the user wrappers of T.
+    # A user wrapper type tree: requested through the user wrappers of T.
     user: bool = False
     # The bases of the requests, as (template, abstract, interface) of the
     # leaf {T} and of the interface {I}, which only a binding of interfaces
@@ -225,26 +225,26 @@ STD_WRAPPERS = ("std::unique_ptr", "std::shared_ptr", "std::optional")
 USER_WRAPPERS = ("user_unique", "user_shared", "user_optional")
 
 
-def _wrapper_shapes(outers, inners, user):
-    """The shapes outer<inner<T>> for every outer and inner wrapper."""
+def _wrapper_type_trees(outers, inners, user):
+    """The type trees outer<inner<T>> for every outer and inner wrapper."""
     for outer, inner in itertools.product(outers, inners):
         o_name, o_spelling, o_make = WRAPPERS[outer]
         i_name, i_spelling, i_make = WRAPPERS[inner]
         inner_type = i_spelling.format(inner="{T}")
         inner_expression = i_make("{T}", "")
-        yield Shape(
+        yield TypeTree(
             name=f"{o_name}_of_{i_name}",
             spelling=o_spelling.format(inner=inner_type),
             external=o_make(inner_type, inner_expression),
-            layers=(inner_type,),
+            wrappers=(inner_type,),
             user=user,
         )
 
 
-def _single_wrapper_shapes(wrappers, user):
+def _single_wrapper_type_trees(wrappers, user):
     for wrapper in wrappers:
         name, spelling, make = WRAPPERS[wrapper]
-        yield Shape(
+        yield TypeTree(
             name=name,
             spelling=spelling.format(inner="{T}"),
             external=make("{T}", ""),
@@ -252,34 +252,34 @@ def _single_wrapper_shapes(wrappers, user):
         )
 
 
-SHAPES = (
-    Shape("value", "{T}", "{T}{{}}"),
-    Shape("pointer", "{T}*", "&owned", declarations=("{T} owned;",)),
-    Shape("reference", "{T}&", "owned", declarations=("{T} owned;",)),
-    Shape("unique_ptr", "std::unique_ptr<{T}>", "std::make_unique<{T}>()"),
-    Shape("shared_ptr", "std::shared_ptr<{T}>", "std::make_shared<{T}>()"),
-    Shape("optional", "std::optional<{T}>", "std::optional<{T}>(std::in_place)"),
-    Shape("array", "{T}[2]", "owned", declarations=("{T} owned[2];",)),
-    Shape("unique_ptr_array", "std::unique_ptr<{T}[]>", "std::make_unique<{T}[]>(2)"),
-    Shape(
+TYPE_TREES = (
+    TypeTree("value", "{T}", "{T}{{}}"),
+    TypeTree("pointer", "{T}*", "&owned", declarations=("{T} owned;",)),
+    TypeTree("reference", "{T}&", "owned", declarations=("{T} owned;",)),
+    TypeTree("unique_ptr", "std::unique_ptr<{T}>", "std::make_unique<{T}>()"),
+    TypeTree("shared_ptr", "std::shared_ptr<{T}>", "std::make_shared<{T}>()"),
+    TypeTree("optional", "std::optional<{T}>", "std::optional<{T}>(std::in_place)"),
+    TypeTree("array", "{T}[2]", "owned", declarations=("{T} owned[2];",)),
+    TypeTree("unique_ptr_array", "std::unique_ptr<{T}[]>", "std::make_unique<{T}[]>(2)"),
+    TypeTree(
         "shared_ptr_array",
         "std::shared_ptr<{T}[]>",
         "std::shared_ptr<{T}[]>(new {T}[2])",
     ),
-    Shape(
+    TypeTree(
         "variant",
         "std::variant<{T}, other_leaf>",
         "std::variant<{T}, other_leaf>(std::in_place_index<0>)",
     ),
-    *_wrapper_shapes(STD_WRAPPERS, STD_WRAPPERS, user=False),
+    *_wrapper_type_trees(STD_WRAPPERS, STD_WRAPPERS, user=False),
 )
 
 # The user wrappers of T and their combinations with the std wrappers, both
 # ways round.
-USER_SHAPES = (
-    *_single_wrapper_shapes(USER_WRAPPERS, user=True),
-    *_wrapper_shapes(USER_WRAPPERS, STD_WRAPPERS, user=True),
-    *_wrapper_shapes(STD_WRAPPERS, USER_WRAPPERS, user=True),
+USER_TYPE_TREES = (
+    *_single_wrapper_type_trees(USER_WRAPPERS, user=True),
+    *_wrapper_type_trees(USER_WRAPPERS, STD_WRAPPERS, user=True),
+    *_wrapper_type_trees(STD_WRAPPERS, USER_WRAPPERS, user=True),
 )
 
 
@@ -339,9 +339,9 @@ def created_bases():
     return tuple(bases)
 
 
-KIND_SHAPES = (
+KIND_TYPE_TREES = (
     *(
-        Shape(
+        TypeTree(
             name=user.wrapper,
             spelling=kind_spelling(user, "{T}"),
             external=user.instance.replace("{W}", user.wrapper),
@@ -351,7 +351,7 @@ KIND_SHAPES = (
     ),
     # A variant whose second alternative leads to the leaf too, which holds
     # its first: a request routed through the second is not served.
-    Shape(
+    TypeTree(
         name="kind_variant_of_unique",
         spelling="kind_variant<{T}, std::unique_ptr<{T}>>",
         external="kind_variant<{T}, std::unique_ptr<{T}>>(std::in_place_index<0>)",
@@ -366,7 +366,7 @@ KIND_SHAPES = (
     # A variant whose shortest route to the leaf takes the second
     # alternative while it holds the first: the route through the first, a
     # sibling of it, serves the request.
-    Shape(
+    TypeTree(
         name="kind_variant_held_unique",
         spelling="kind_variant<std::unique_ptr<{T}>, {T}>",
         external=(
@@ -380,8 +380,8 @@ KIND_SHAPES = (
             ("std::unique_ptr<{T}>", False, False),
         ),
     ),
-    Shape("kinds_value", "{T}", "{T}{{}}", bases=created_bases()),
-    Shape(
+    TypeTree("kinds_value", "{T}", "{T}{{}}", bases=created_bases()),
+    TypeTree(
         "kinds_pointer",
         "{T}*",
         "&owned",
@@ -395,8 +395,8 @@ def spell(template, leaf):
     return template.replace("{T}", leaf).replace("{{}}", "{}")
 
 
-def stored_spelling(shape, leaf):
-    return spell(shape.spelling, leaf)
+def stored_spelling(type_tree, leaf):
+    return spell(type_tree.spelling, leaf)
 
 
 ARRAY_RE = re.compile(r"^(.*)\[(\d+)\]$")
@@ -430,17 +430,17 @@ def carrier_spellings(base, abstract=False):
     return spellings[1:] if abstract else spellings
 
 
-def request_bases(shape, leaf, interfaces):
+def request_bases(type_tree, leaf, interfaces):
     """The types the carriers are applied to, as (base, abstract) pairs."""
-    if shape.bases:
+    if type_tree.bases:
         interface = interfaces[0] if interfaces else ""
         return [
             (template.replace("{T}", leaf).replace("{I}", interface), abstract)
-            for template, abstract, needs_interface in shape.bases
+            for template, abstract, needs_interface in type_tree.bases
             if interfaces or not needs_interface
         ]
-    stored = stored_spelling(shape, leaf)
-    layers = [spell(layer, leaf) for layer in shape.layers]
+    stored = stored_spelling(type_tree, leaf)
+    wrappers = [spell(wrapper, leaf) for wrapper in type_tree.wrappers]
     if interfaces:
         return [
             *((i, True) for i in interfaces),
@@ -448,18 +448,18 @@ def request_bases(shape, leaf, interfaces):
             *((f"std::shared_ptr<{i}>", False) for i in interfaces),
             (leaf, False),
             (stored, False),
-            *((layer, False) for layer in layers),
+            *((wrapper, False) for wrapper in wrappers),
         ]
-    if shape.user:
+    if type_tree.user:
         return [
             (leaf, False),
             *((f"{wrapper}<{leaf}>", False) for wrapper in USER_WRAPPERS),
             (stored, False),
-            *((layer, False) for layer in layers),
+            *((wrapper, False) for wrapper in wrappers),
         ]
     # The variant holds its first alternative; a request of the other one is
     # found and refused, as a binding names every alternative.
-    alternatives = [("other_leaf", False)] if shape.name == "variant" else []
+    alternatives = [("other_leaf", False)] if type_tree.name == "variant" else []
     return [
         (leaf, False),
         (f"std::unique_ptr<{leaf}>", False),
@@ -467,14 +467,14 @@ def request_bases(shape, leaf, interfaces):
         (f"std::optional<{leaf}>", False),
         *alternatives,
         (stored, False),
-        *((layer, False) for layer in layers),
+        *((wrapper, False) for wrapper in wrappers),
     ]
 
 
-def requests_for(shape, leaf, interfaces=()):
-    """The deduplicated request spellings for a (leaf, stored shape)."""
+def requests_for(type_tree, leaf, interfaces=()):
+    """The deduplicated request spellings for a (leaf, stored type tree)."""
     requests = []
-    for base, abstract in request_bases(shape, leaf, interfaces):
+    for base, abstract in request_bases(type_tree, leaf, interfaces):
         for _, request in carrier_spellings(base, abstract):
             if request not in requests:
                 requests.append(request)
@@ -502,13 +502,13 @@ class Group:
     domain: str
     leaf: str
     scope: str
-    shape: Shape
+    type_tree: TypeTree
     interfaces: tuple = ()
     requests: list = field(default_factory=list)
 
     @property
     def stored(self):
-        return stored_spelling(self.shape, self.leaf)
+        return stored_spelling(self.type_tree, self.leaf)
 
     @property
     def label(self):
@@ -522,7 +522,7 @@ class Group:
     @property
     def name(self):
         leaf = "+".join((self.leaf, *self.interfaces))
-        return f"{leaf}-{self.scope}-{self.shape.name}"
+        return f"{leaf}-{self.scope}-{self.type_tree.name}"
 
     @property
     def directory(self):
@@ -585,9 +585,9 @@ def render(group, indices, guarded, implementation):
         "scope": group.scope,
         "stored": group.stored,
         "interfaces": list(group.interfaces),
-        "declarations": [spell(d, group.leaf) for d in group.shape.declarations],
+        "declarations": [spell(d, group.leaf) for d in group.type_tree.declarations],
         "external_argument": (
-            spell(group.shape.external, group.leaf)
+            spell(group.type_tree.external, group.leaf)
             if group.scope == "external"
             and (
                 group.domain == "runtime"
@@ -662,12 +662,12 @@ def build_groups(domains, pattern=None, user_wrappers=True, kinds=False):
         domains, LEAF_KINDS, SCOPES
     ):
         user = user_wrappers and leaf in USER_WRAPPER_LEAVES
-        shapes = SHAPES + (USER_SHAPES if user else ())
+        type_trees = TYPE_TREES + (USER_TYPE_TREES if user else ())
         if kinds and (leaf, interfaces) in KIND_LEAF_KINDS:
-            shapes += KIND_SHAPES
-        for shape in shapes:
-            group = Group(domain, leaf, scope, shape, interfaces)
-            group.requests = requests_for(shape, leaf, interfaces)
+            type_trees += KIND_TYPE_TREES
+        for type_tree in type_trees:
+            group = Group(domain, leaf, scope, type_tree, interfaces)
+            group.requests = requests_for(type_tree, leaf, interfaces)
             if pattern is None or re.search(pattern, group.key):
                 groups.append(group)
     return groups

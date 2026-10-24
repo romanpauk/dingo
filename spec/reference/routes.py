@@ -1,18 +1,18 @@
 """The reference implementation of registration and route derivation.
 
 It interprets the storage forms, scope descriptors, wrapper semantics, and route
-rules of the spec over abstract shapes, and computes, for a binding and a
+rules of the spec over abstract type_trees, and computes, for a binding and a
 request, whether the binding can be registered, whether the request finds the
 binding and is served, and what serving it observably does: how many leaves
 are constructed and copied, where the leaf of the result lives, and whether a
 repeated request yields the same leaf. It is the oracle the C++
 implementations are compared against; see test/routes/conform.py.
 
-It names no wrapper semantics: a rule is a form of a kind, and what a layer is, is
+It names no wrapper semantics: a rule is a form of a kind, and what a wrapper is, is
 the properties of its kind, so a kind of the user is interpreted as one of the
-library is. Layers of the wrapper kinds carry an opaque wrapper family. The
+library is. Wrappers of a mapped semantics carry an opaque wrapper family. The
 spec names no concrete wrapper; the family only tells two wrappers of the same
-kind apart. A family of ANY stands for a layer a rule creates, which a wrapper
+kind apart. A family of ANY stands for a wrapper a rule creates, which a wrapper
 of any family that provides the wrapper semantics can serve.
 """
 
@@ -40,20 +40,20 @@ RVALUE = ValueCategory.RVALUE
 PRVALUE = ValueCategory.PRVALUE
 
 ANY = "*"
-# The binding of a variadic layer pattern to the argument it matched.
+# The binding of a variadic wrapper pattern to the argument it matched.
 ARGUMENT = "@argument"
-# The alternative an object of a variadic layer holds: its first, which the
+# The alternative an object of a variadic wrapper holds: its first, which the
 # default factory makes, and which the instances of the probes hold. A route
 # through another alternative is not served, which the next implementation
 # finds when it walks the route: the binding is named by every alternative,
 # so the request is found and refused as ALTERNATIVE_NOT_HELD.
 HELD_ALTERNATIVE = 0
 ALTERNATIVE_NOT_HELD = "the object holds another alternative than the route takes"
-# The wrapper semantics of the library, which name the family of a wrapper shape
+# The wrapper semantics of the library, which name the family of a wrapper type tree
 # made without a model.
 KINDS = {kind.id: kind for kind in wrapper_semantics}
 # The class of the handles a binding of an interface may serve it by: a
-# nullable layer that refers to its element rather than holding it.
+# nullable wrapper that refers to its element rather than holding it.
 INTERFACE_HANDLE = PropertyClass(has=(Property.NULLABLE,), lacks=(Property.IN_PLACE,))
 
 
@@ -77,11 +77,11 @@ class Leaf:
 
 
 @dataclass(frozen=True, slots=True)
-class Shape:
-    """A leaf (`layer` is None) or a wrapper semantics applied to argument shapes."""
+class TypeTree:
+    """A leaf (`wrapper` is None) or a wrapper semantics applied to argument type trees."""
 
-    layer: str | None = None
-    args: tuple["Shape", ...] = ()
+    wrapper: str | None = None
+    args: tuple["TypeTree", ...] = ()
     leaf: Leaf | None = None
     extent: int | None = None
     family: str | None = None
@@ -90,17 +90,17 @@ class Shape:
         return 1 + sum(arg.size() for arg in self.args)
 
 
-def leaf(value: Leaf) -> Shape:
-    return Shape(leaf=value)
+def leaf(value: Leaf) -> TypeTree:
+    return TypeTree(leaf=value)
 
 
-def layer(kind: str, *args: Shape, extent: int | None = None, family: str | None = None) -> Shape:
+def wrapper(kind: str, *args: TypeTree, extent: int | None = None, family: str | None = None) -> TypeTree:
     if family is None and is_mapped(KINDS, kind):
         family = "std"
-    return Shape(layer=kind, args=args, extent=extent, family=family)
+    return TypeTree(wrapper=kind, args=args, extent=extent, family=family)
 
 
-class RequestKind:
+class RequestForm:
     LVALUE_REFERENCE = "lvalue_reference"
     RVALUE_REFERENCE = "rvalue_reference"
     VALUE = "value"
@@ -109,7 +109,7 @@ class RequestKind:
 @dataclass(frozen=True, slots=True)
 class Request:
     kind: str  # a RequestKind
-    shape: Shape
+    type_tree: TypeTree
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,18 +135,18 @@ class Outcome:
 
 @dataclass
 class Derivation:
-    """A derived term and how it was reached."""
+    """A derived reachable type and how it was reached."""
 
-    shape: Shape
+    type_tree: TypeTree
     category: ValueCategory
     rules: tuple[str, ...] = ()
-    # For each rule, the argument of a variadic layer it reached, else 0.
+    # For each rule, the argument of a variadic wrapper it reached, else 0.
     arguments: tuple[int, ...] = ()
-    copied: Shape | None = None  # the shape the copy rule copied
+    copied: TypeTree | None = None  # the type tree the copy rule copied
     consumed: bool = False
-    # The routes to the same term through other alternatives of a variadic
-    # layer: each takes the route of the term up to the step `branch` of it,
-    # there another alternative, and reaches the term on its own. A walk
+    # The routes to the same reachable type through other alternatives of a variadic
+    # wrapper: each takes the route of the reachable type up to the step `branch` of it,
+    # there another alternative, and reaches the reachable type on its own. A walk
     # continues from the object of the step along the one the object holds.
     siblings: list = field(default_factory=list)
     branch: int | None = None
@@ -165,13 +165,13 @@ class Model:
     # a sharing handle in a scope that copies handles. A test relaxes the
     # algebra so to find the cases a condition decides.
     relaxed: frozenset = frozenset()
-    layers: dict = field(init=False)
+    semantics_by_id: dict = field(init=False)
     scopes: dict = field(init=False)
     rules: tuple = field(init=False)
 
     def __post_init__(self):
         kinds = (*self.spec.wrapper_semantics, *self.kinds)
-        self.layers = {kind.id: kind for kind in kinds}
+        self.semantics_by_id = {kind.id: kind for kind in kinds}
         self.scopes = {scope.id: scope for scope in self.spec.scopes}
         self.rules = rules_of(kinds) if self.kinds else self.spec.rules
         self.rules_by_id = {route.id: route for route in self.rules}
@@ -180,148 +180,148 @@ class Model:
         return self.rules_by_id[route_id]
 
 
-# Shape properties
+# Type tree properties
 
 
-def has_trait(model: "Model", shape: Shape, trait: Property) -> bool:
-    return shape.layer is not None and trait in model.layers[shape.layer].traits
+def has_trait(model: "Model", type_tree: TypeTree, trait: Property) -> bool:
+    return type_tree.wrapper is not None and trait in model.semantics_by_id[type_tree.wrapper].traits
 
 
-def has_form(model: "Model", shape: Shape, form: Operation) -> bool:
-    return shape.layer is not None and any(
-        op.form is form for op in model.layers[shape.layer].forms
+def has_form(model: "Model", type_tree: TypeTree, form: Operation) -> bool:
+    return type_tree.wrapper is not None and any(
+        op.form is form for op in model.semantics_by_id[type_tree.wrapper].forms
     )
 
 
-def has_extent(model: "Model", shape: Shape) -> bool:
-    return shape.layer is not None and model.layers[shape.layer].has_extent
+def has_extent(model: "Model", type_tree: TypeTree) -> bool:
+    return type_tree.wrapper is not None and model.semantics_by_id[type_tree.wrapper].has_extent
 
 
-def is_array(model: "Model", shape: Shape) -> bool:
-    """Whether the outer layer holds a number of elements."""
-    return has_extent(model, shape) or has_trait(model, shape, Property.UNSIZED)
+def is_array(model: "Model", type_tree: TypeTree) -> bool:
+    """Whether the outer wrapper holds a number of elements."""
+    return has_extent(model, type_tree) or has_trait(model, type_tree, Property.UNSIZED)
 
 
-def copyable(model: "Model", shape: Shape) -> bool:
-    if shape.layer is None:
-        return shape.leaf.copyable
-    if has_trait(model, shape, Property.COPYABLE):
+def copyable(model: "Model", type_tree: TypeTree) -> bool:
+    if type_tree.wrapper is None:
+        return type_tree.leaf.copyable
+    if has_trait(model, type_tree, Property.COPYABLE):
         return True
-    if has_trait(model, shape, Property.IN_PLACE) and not has_trait(model, shape, Property.IMMOVABLE):
-        return all(copyable(model, arg) for arg in shape.args)
+    if has_trait(model, type_tree, Property.IN_PLACE) and not has_trait(model, type_tree, Property.IMMOVABLE):
+        return all(copyable(model, arg) for arg in type_tree.args)
     return False
 
 
-def constructible(model: "Model", shape: Shape) -> bool:
-    """Whether the default factory can construct the shape."""
-    if shape.layer is None:
-        return shape.leaf.constructible
-    if not has_trait(model, shape, Property.CONSTRUCTIBLE):
+def constructible(model: "Model", type_tree: TypeTree) -> bool:
+    """Whether the default factory can construct the type tree."""
+    if type_tree.wrapper is None:
+        return type_tree.leaf.constructible
+    if not has_trait(model, type_tree, Property.CONSTRUCTIBLE):
         return False
-    return constructible(model, shape.args[0])
+    return constructible(model, type_tree.args[0])
 
 
-def constructed_leaves(model: "Model", shape: Shape) -> int:
-    """The leaves the default factory constructs for the shape."""
-    if shape.layer is None:
+def constructed_leaves(model: "Model", type_tree: TypeTree) -> int:
+    """The leaves the default factory constructs for the type tree."""
+    if type_tree.wrapper is None:
         return 1
-    if has_extent(model, shape):
-        return shape.extent * constructed_leaves(model, shape.args[0])
-    return constructed_leaves(model, shape.args[0])
+    if has_extent(model, type_tree):
+        return type_tree.extent * constructed_leaves(model, type_tree.args[0])
+    return constructed_leaves(model, type_tree.args[0])
 
 
-def leaves_held_by_value(model: "Model", shape: Shape) -> int:
-    """The leaves a copy of the shape copies: those a layer holds in place."""
-    if shape.layer is None:
+def leaves_held_by_value(model: "Model", type_tree: TypeTree) -> int:
+    """The leaves a copy of the type tree copies: those a wrapper holds in place."""
+    if type_tree.wrapper is None:
         return 1
-    if not has_trait(model, shape, Property.IN_PLACE):
+    if not has_trait(model, type_tree, Property.IN_PLACE):
         return 0
-    if has_extent(model, shape):
-        return shape.extent * leaves_held_by_value(model, shape.args[0])
-    return leaves_held_by_value(model, shape.args[0])
+    if has_extent(model, type_tree):
+        return type_tree.extent * leaves_held_by_value(model, type_tree.args[0])
+    return leaves_held_by_value(model, type_tree.args[0])
 
 
-def addressable(model: "Model", shape: Shape) -> bool:
-    """Whether a shape is an object that can be referred to and pointed to:
-    anything but an address, a layer of a kind of the address form."""
-    return not has_form(model, shape, Operation.ADDRESS)
+def addressable(model: "Model", type_tree: TypeTree) -> bool:
+    """Whether a type tree is an object that can be referred to and pointed to:
+    anything but an address, a wrapper of a kind of the address form."""
+    return not has_form(model, type_tree, Operation.ADDRESS)
 
 
-def innermost_leaf(shape: Shape) -> Leaf:
-    while shape.layer is not None:
-        shape = shape.args[0]
-    return shape.leaf
+def innermost_leaf(type_tree: TypeTree) -> Leaf:
+    while type_tree.wrapper is not None:
+        type_tree = type_tree.args[0]
+    return type_tree.leaf
 
 
-def holds_in_array(model: "Model", shape: Shape) -> bool:
-    if is_array(model, shape):
+def holds_in_array(model: "Model", type_tree: TypeTree) -> bool:
+    if is_array(model, type_tree):
         return True
-    return any(holds_in_array(model, arg) for arg in shape.args)
+    return any(holds_in_array(model, arg) for arg in type_tree.args)
 
 
-def shapes_match(derived: Shape, requested: Shape) -> bool:
-    """Whether a derived shape serves a requested one; ANY matches any family."""
-    if derived.layer != requested.layer or derived.extent != requested.extent:
+def type_trees_match(derived: TypeTree, requested: TypeTree) -> bool:
+    """Whether a derived type_tree serves a requested one; ANY matches any family."""
+    if derived.wrapper != requested.wrapper or derived.extent != requested.extent:
         return False
-    if derived.layer is None:
+    if derived.wrapper is None:
         return derived.leaf == requested.leaf
     if ANY not in (derived.family, requested.family) and derived.family != requested.family:
         return False
     return len(derived.args) == len(requested.args) and all(
-        shapes_match(d, r) for d, r in zip(derived.args, requested.args)
+        type_trees_match(d, r) for d, r in zip(derived.args, requested.args)
     )
 
 
 # Patterns
 
 
-def match(model: "Model", pattern, shape: Shape, bindings: dict) -> list[dict]:
-    """Every way the pattern matches the shape, as variable bindings."""
+def match(model: "Model", pattern, type_tree: TypeTree, bindings: dict) -> list[dict]:
+    """Every way the pattern matches the type tree, as variable bindings."""
     if pattern.form is PatternForm.VARIABLE:
         bound = bindings.get(pattern.name)
-        if bound is not None and bound != shape:
+        if bound is not None and bound != type_tree:
             return []
-        return [{**bindings, pattern.name: shape}]
-    if pattern.form is not PatternForm.LAYER or shape.layer != pattern.name:
+        return [{**bindings, pattern.name: type_tree}]
+    if pattern.form is not PatternForm.SEMANTICS or type_tree.wrapper != pattern.name:
         return []
-    if model.layers[pattern.name].variadic:
-        # The variadic layer pattern of one argument matches any argument,
+    if model.semantics_by_id[pattern.name].variadic:
+        # The variadic wrapper pattern of one argument matches any argument,
         # which the bindings record.
         return [
             m
-            for index, arg in enumerate(shape.args)
+            for index, arg in enumerate(type_tree.args)
             for m in match(model, pattern.args[0], arg, {**bindings, ARGUMENT: index})
         ]
-    if len(pattern.args) != len(shape.args):
+    if len(pattern.args) != len(type_tree.args):
         return []
     results = [bindings]
-    for sub, arg in zip(pattern.args, shape.args):
+    for sub, arg in zip(pattern.args, type_tree.args):
         results = [m for b in results for m in match(model, sub, arg, b)]
     return results
 
 
-def instantiate(model: "Model", pattern, bindings: dict, family: str | None) -> Shape:
+def instantiate(model: "Model", pattern, bindings: dict, family: str | None) -> TypeTree:
     if pattern.form is PatternForm.VARIABLE:
         return bindings[pattern.name]
     args = tuple(instantiate(model, arg, bindings, None) for arg in pattern.args)
     kind = pattern.name
-    return Shape(layer=kind, args=args, family=(family or ANY) if is_mapped(model.layers, kind) else None)
+    return TypeTree(wrapper=kind, args=args, family=(family or ANY) if is_mapped(model.semantics_by_id, kind) else None)
 
 
-def upcast_leaf(shape: Shape, base: Leaf) -> Shape:
-    if shape.layer is None:
+def upcast_leaf(type_tree: TypeTree, base: Leaf) -> TypeTree:
+    if type_tree.wrapper is None:
         return leaf(base)
-    return replace(shape, args=(upcast_leaf(shape.args[0], base), *shape.args[1:]))
+    return replace(type_tree, args=(upcast_leaf(type_tree.args[0], base), *type_tree.args[1:]))
 
 
 # Registration
 
 
-def property_class_holds(model: Model, property_class, shape: Shape) -> bool:
-    """Whether the outer layer of a shape is of a layer class."""
-    if shape.layer is None:
+def property_class_holds(model: Model, property_class, type_tree: TypeTree) -> bool:
+    """Whether the outer wrapper of a type tree is of a wrapper class."""
+    if type_tree.wrapper is None:
         return False
-    kind = model.layers[shape.layer]
+    kind = model.semantics_by_id[type_tree.wrapper]
     traits = set(kind.traits)
     return (
         all(trait in traits for trait in property_class.has)
@@ -331,17 +331,17 @@ def property_class_holds(model: Model, property_class, shape: Shape) -> bool:
     )
 
 
-def storage_form(model: Model, shape: Shape) -> str:
-    """The most specific storage form the shape is of, by the properties of
-    the kinds of its outer layers."""
+def storage_form(model: Model, type_tree: TypeTree) -> str:
+    """The most specific storage form the type tree is of, by the properties of
+    the kinds of its outer wrappers."""
     best, depth = "plain", 0
     for form in model.spec.storage_forms:
-        if form.outer is None or not property_class_holds(model, form.outer, shape):
+        if form.outer is None or not property_class_holds(model, form.outer, type_tree):
             continue
         if form.inner is None:
             if depth < 1:
                 best, depth = form.id, 1
-        elif len(shape.args) == 1 and property_class_holds(model, form.inner, shape.args[0]):
+        elif len(type_tree.args) == 1 and property_class_holds(model, form.inner, type_tree.args[0]):
             best, depth = form.id, 2
     return best
 
@@ -363,19 +363,19 @@ def interface_probes(model: Model, interfaces: tuple[Leaf, ...]) -> list[Request
     probes = []
     for interface in interfaces:
         base = leaf(interface)
-        probes.append(Request(RequestKind.LVALUE_REFERENCE, base))
-        for kind in model.layers.values():
-            handle = Shape(layer=kind.id, args=(base,))
+        probes.append(Request(RequestForm.LVALUE_REFERENCE, base))
+        for kind in model.semantics_by_id.values():
+            handle = TypeTree(wrapper=kind.id, args=(base,))
             if property_class_holds(model, INTERFACE_HANDLE, handle):
-                family = ANY if is_mapped(model.layers, kind.id) else None
-                probes.append(Request(RequestKind.VALUE, replace(handle, family=family)))
+                family = ANY if is_mapped(model.semantics_by_id, kind.id) else None
+                probes.append(Request(RequestForm.VALUE, replace(handle, family=family)))
     return probes
 
 
 def register(
     model: Model,
     scope_id: str,
-    stored: Shape,
+    stored: TypeTree,
     interfaces: tuple[Leaf, ...] = (),
     factory: str | None = None,
 ) -> tuple[bool, str]:
@@ -388,11 +388,11 @@ def register(
     form = storage_form(model, stored)
     if not exposed_categories(model, scope_id, form):
         return False, f"{scope_id} does not store the {form} form"
-    if not scope.nested_wrappers and stored.layer is not None:
-        if any(arg.layer is not None for arg in stored.args):
-            return False, f"{scope_id} does not store nested layers"
+    if not scope.nested_wrappers and stored.wrapper is not None:
+        if any(arg.wrapper is not None for arg in stored.args):
+            return False, f"{scope_id} does not store nested wrappers"
     if "instance" not in scope.needs and factory is None and not constructible(model, stored):
-        return False, "the stored shape has no default factory"
+        return False, "the stored type tree has no default factory"
     if interfaces:
         if holds_in_array(model, stored):
             return False, "an array element cannot be exposed as an interface"
@@ -408,15 +408,15 @@ def register(
 
 
 def creates(model: Model, rule) -> bool:
-    """Whether a route creates a layer of its kind, from an element or from a
-    layer of the kind it leads from: wrapping, adopting, or taking an address.
+    """Whether a route creates a wrapper of its kind, from an element or from a
+    wrapper of the kind it leads from: wrapping, adopting, or taking an address.
     A creating form applies at the request, which names the kind it creates."""
     if rule.form is None:
         return False
     template = next(t for t in model.spec.operations if t.form is rule.form)
-    to_semantics = template.to_shape.form is PatternForm.LAYER and template.to_shape.name == "K"
+    to_semantics = template.to_type_tree.form is PatternForm.SEMANTICS and template.to_type_tree.name == "K"
     from_semantics = (
-        template.from_shape.form is PatternForm.LAYER and template.from_shape.name == "K"
+        template.from_type_tree.form is PatternForm.SEMANTICS and template.from_type_tree.name == "K"
     )
     return to_semantics and not from_semantics
 
@@ -424,11 +424,11 @@ def creates(model: Model, rule) -> bool:
 def derive(
     model: Model,
     scope_id: str,
-    stored: Shape,
+    stored: TypeTree,
     interfaces: tuple[Leaf, ...],
     bound: int,
 ) -> list[Derivation]:
-    """The terms a binding derives by the routes that do not create a layer."""
+    """The reachable types a binding derives by the routes that do not create a wrapper."""
     scope = model.scopes[scope_id]
     form = storage_form(model, stored)
     exposed = set(exposed_categories(model, scope_id, form))
@@ -437,59 +437,59 @@ def derive(
     queue = [start]
     results = [start]
     while queue:
-        term = queue.pop(0)
+        reachable_type = queue.pop(0)
         for rule in model.rules:
             if creates(model, rule):
                 continue
-            if rule.from_shape.category not in (None, term.category):
+            if rule.from_type_tree.category not in (None, reachable_type.category):
                 continue
             if exposure_refuses(model, rule, exposed):
                 continue
-            for bindings in match(model, rule.from_shape, term.shape, {}):
+            for bindings in match(model, rule.from_type_tree, reachable_type.type_tree, {}):
                 if not requirements_hold(model, scope, rule, bindings):
                     continue
-                for shape in derived_shapes(model, rule, bindings, term.shape, interfaces):
-                    category = rule.to_shape.category or term.category
-                    if shape.size() > bound:
+                for type_tree in derived_type_trees(model, rule, bindings, reachable_type.type_tree, interfaces):
+                    category = rule.to_type_tree.category or reachable_type.category
+                    if type_tree.size() > bound:
                         continue
                     derived = Derivation(
-                        shape,
+                        type_tree,
                         category,
-                        rules=(*term.rules, rule.id),
-                        arguments=(*term.arguments, bindings.get(ARGUMENT, 0)),
-                        copied=bindings.get("X") if rule.id == "copy" else term.copied,
-                        consumed=term.consumed or rule.access is Access.CONSUME,
+                        rules=(*reachable_type.rules, rule.id),
+                        arguments=(*reachable_type.arguments, bindings.get(ARGUMENT, 0)),
+                        copied=bindings.get("X") if rule.id == "copy" else reachable_type.copied,
+                        consumed=reachable_type.consumed or rule.access is Access.CONSUME,
                     )
-                    primary = primaries.get((shape, category))
+                    primary = primaries.get((type_tree, category))
                     if primary is not None:
                         add_sibling(model, primary, derived)
                         continue
-                    primaries[(shape, category)] = derived
+                    primaries[(type_tree, category)] = derived
                     results.append(derived)
                     queue.append(derived)
     return results
 
 
 def variadic_route(model: Model, rule_id: str) -> bool:
-    """Whether a route reaches into a layer of a variadic kind."""
-    source = model.route(rule_id).from_shape
-    return source.form is PatternForm.LAYER and model.layers[source.name].variadic
+    """Whether a route reaches into a wrapper of a variadic kind."""
+    source = model.route(rule_id).from_type_tree
+    return source.form is PatternForm.SEMANTICS and model.semantics_by_id[source.name].variadic
 
 
-def completion_class(model: Model, term: Derivation) -> str:
-    """How a request completes a term: by copying, decaying, or neither."""
-    if not term.rules:
+def completion_class(model: Model, reachable_type: Derivation) -> str:
+    """How a request completes a reachable type: by copying, decaying, or neither."""
+    if not reachable_type.rules:
         return "none"
-    last = model.route(term.rules[-1])
+    last = model.route(reachable_type.rules[-1])
     if last.id == "copy":
         return "copy"
     return "decay" if last.form is Operation.DECAY else "other"
 
 
 def add_sibling(model: Model, primary: Derivation, derived: Derivation) -> None:
-    """Keeps `derived` as a sibling of `primary`, the term of its shape and
+    """Keeps `derived` as a sibling of `primary`, the reachable_type of its type_tree and
     category derived first, when their routes part at a step into a variadic
-    layer, by its alternatives, and are completed alike; one per step and
+    wrapper, by its alternatives, and are completed alike; one per step and
     alternative."""
     steps = zip(zip(primary.rules, primary.arguments), zip(derived.rules, derived.arguments))
     for position, (taken, other) in enumerate(steps):
@@ -507,18 +507,18 @@ def add_sibling(model: Model, primary: Derivation, derived: Derivation) -> None:
         return
 
 
-def walked(model: Model, term: Derivation) -> Derivation | None:
-    """The route a walk of the term takes by the alternatives the objects of
-    its variadic layers hold: the term's, or at the first step into an object
+def walked(model: Model, reachable_type: Derivation) -> Derivation | None:
+    """The route a walk of the reachable_type takes by the alternatives the objects of
+    its variadic wrappers hold: the reachable_type's, or at the first step into an object
     that holds another alternative, the sibling that takes it; or None when
     none does, or the route reaches an object holding another later on."""
-    for position, (rule_id, argument) in enumerate(zip(term.rules, term.arguments)):
+    for position, (rule_id, argument) in enumerate(zip(reachable_type.rules, reachable_type.arguments)):
         if argument == HELD_ALTERNATIVE or not variadic_route(model, rule_id):
             continue
         sibling = next(
             (
                 s
-                for s in term.siblings
+                for s in reachable_type.siblings
                 if s.branch == position and s.arguments[position] == HELD_ALTERNATIVE
             ),
             None,
@@ -526,22 +526,22 @@ def walked(model: Model, term: Derivation) -> Derivation | None:
         if sibling is None or not holds_alternatives(model, sibling):
             return None
         return sibling
-    return term
+    return reachable_type
 
 
-def derived_shapes(model: "Model", rule, bindings: dict, source: Shape, interfaces: tuple[Leaf, ...]):
+def derived_type_trees(model: "Model", rule, bindings: dict, source: TypeTree, interfaces: tuple[Leaf, ...]):
     keeps_family = (
-        rule.from_shape.form is PatternForm.LAYER and rule.to_shape.form is PatternForm.LAYER
+        rule.from_type_tree.form is PatternForm.SEMANTICS and rule.to_type_tree.form is PatternForm.SEMANTICS
     )
-    shape = instantiate(model, rule.to_shape, bindings, source.family if keeps_family else None)
+    type_tree = instantiate(model, rule.to_type_tree, bindings, source.family if keeps_family else None)
     if rule.via is None:
-        yield shape
+        yield type_tree
         return
     stored_leaf = bindings["L"].leaf
     targets = stored_leaf.bases if rule.via is Via.UPCAST else stored_leaf.converts
     for interface in interfaces:
         if interface.name in targets:
-            yield upcast_leaf(shape, interface)
+            yield upcast_leaf(type_tree, interface)
 
 
 def exposure_refuses(model: Model, rule, exposed: set) -> bool:
@@ -564,7 +564,7 @@ def requirements_hold(model: Model, scope, rule, bindings: dict) -> bool:
             return False
         if requirement.predicate is Predicate.ADDRESSABLE and not addressable(model, subject):
             return False
-        if requirement.predicate is Predicate.LEAF and subject.layer is not None:
+        if requirement.predicate is Predicate.LEAF and subject.wrapper is not None:
             return False
     if (
         rule.id == "copy"
@@ -576,105 +576,105 @@ def requirements_hold(model: Model, scope, rule, bindings: dict) -> bool:
     return True
 
 
-def accepts(model: "Model", request: Request, term: Derivation, exposed: set) -> bool:
-    if not shapes_match(term.shape, request.shape):
+def accepts(model: "Model", request: Request, reachable_type: Derivation, exposed: set) -> bool:
+    if not type_trees_match(reachable_type.type_tree, request.type_tree):
         return False
-    if request.kind == RequestKind.LVALUE_REFERENCE:
+    if request.kind == RequestForm.LVALUE_REFERENCE:
         return (
-            term.category is LVALUE
+            reachable_type.category is LVALUE
             and RequestCategory.LVALUE in exposed
-            and addressable(model, term.shape)
+            and addressable(model, reachable_type.type_tree)
         )
-    if has_trait(model, term.shape, Property.IMMOVABLE):
+    if has_trait(model, reachable_type.type_tree, Property.IMMOVABLE):
         return False
-    if term.category is RVALUE:
+    if reachable_type.category is RVALUE:
         return RequestCategory.RVALUE in exposed
-    return request.kind == RequestKind.VALUE and term.category is PRVALUE
+    return request.kind == RequestForm.VALUE and reachable_type.category is PRVALUE
 
 
-def named_leaves(model: "Model", shape: Shape) -> tuple[Leaf, ...]:
-    """The leaves a stored shape names its binding by: the leaf its layers
-    hold, and through a layer of a variadic kind, the leaf of each of its
+def named_leaves(model: "Model", type_tree: TypeTree) -> tuple[Leaf, ...]:
+    """The leaves a stored type tree names its binding by: the leaf its wrappers
+    hold, and through a wrapper of a variadic kind, the leaf of each of its
     alternatives, whichever the object holds."""
-    if shape.layer is None:
-        return (shape.leaf,)
-    if not model.layers[shape.layer].variadic:
-        return named_leaves(model, shape.args[0])
+    if type_tree.wrapper is None:
+        return (type_tree.leaf,)
+    if not model.semantics_by_id[type_tree.wrapper].variadic:
+        return named_leaves(model, type_tree.args[0])
     leaves = []
-    for arg in shape.args:
+    for arg in type_tree.args:
         leaves.extend(found for found in named_leaves(model, arg) if found not in leaves)
     return tuple(leaves)
 
 
 def finds(
-    model: "Model", stored: Shape, request: Request, interfaces: tuple[Leaf, ...]
+    model: "Model", stored: TypeTree, request: Request, interfaces: tuple[Leaf, ...]
 ) -> bool:
     """Whether the request names the binding: its leaf is a declared interface,
-    or a leaf the stored shape names when no interface is declared."""
-    requested = innermost_leaf(request.shape)
+    or a leaf the stored type tree names when no interface is declared."""
+    requested = innermost_leaf(request.type_tree)
     if interfaces:
         return requested in interfaces
     return requested in named_leaves(model, stored)
 
 
-def derivation_bound(stored: Shape) -> int:
-    """Routes derive shapes at most one layer larger than the stored shape.
+def derivation_bound(stored: TypeTree) -> int:
+    """Routes derive type trees at most one wrapper larger than the stored type tree.
 
-    The bound depends on the binding only, so a binding can publish every term
+    The bound depends on the binding only, so a binding can publish every reachable type
     it serves before any request is known.
     """
     return stored.size() + 1
 
 
-# The layers a request creates at most, each by a creating form of its kind.
-MAX_CREATED_LAYERS = 2
+# The wrappers a request creates at most, each by a creating form of its kind.
+MAX_CREATED_WRAPPERS = 2
 
 
-def created(model: "Model", scope, terms, goal: Shape, exposed: set, bound: int, depth: int):
-    """The terms a request of the shape `goal` creates from the terms of a
-    binding, by the creating forms of the kind of its outer layer, and of the
-    layers it creates under it."""
-    if goal.layer is None or depth == 0 or not goal.args:
+def created(model: "Model", scope, reachable_types, goal: TypeTree, exposed: set, bound: int, depth: int):
+    """The reachable types a request of the type tree `goal` creates from the reachable types of a
+    binding, by the creating forms of the kind of its outer wrapper, and of the
+    wrappers it creates under it."""
+    if goal.wrapper is None or depth == 0 or not goal.args:
         return []
     results = []
     for rule in model.rules:
-        if not creates(model, rule) or rule.to_shape.name != goal.layer:
+        if not creates(model, rule) or rule.to_type_tree.name != goal.wrapper:
             continue
         if exposure_refuses(model, rule, exposed):
             continue
-        # The element the form creates the layer of, as the request names it,
-        # which a binding term or a layer the request creates under it is.
-        inner_goal = instantiate(model, rule.from_shape, {"X": goal.args[0], "A": goal.args[0]}, None)
-        sources = [*terms, *created(model, scope, terms, inner_goal, exposed, bound, depth - 1)]
-        for term in sources:
-            if rule.from_shape.category not in (None, term.category):
+        # The element the form creates the wrapper of, as the request names it,
+        # which a binding reachable type or a wrapper the request creates under it is.
+        inner_goal = instantiate(model, rule.from_type_tree, {"X": goal.args[0], "A": goal.args[0]}, None)
+        sources = [*reachable_types, *created(model, scope, reachable_types, inner_goal, exposed, bound, depth - 1)]
+        for reachable_type in sources:
+            if rule.from_type_tree.category not in (None, reachable_type.category):
                 continue
-            for bindings in match(model, rule.from_shape, term.shape, {}):
+            for bindings in match(model, rule.from_type_tree, reachable_type.type_tree, {}):
                 if not requirements_hold(model, scope, rule, bindings):
                     continue
-                for shape in derived_shapes(model, rule, bindings, term.shape, ()):
-                    if shape.size() > bound:
+                for type_tree in derived_type_trees(model, rule, bindings, reachable_type.type_tree, ()):
+                    if type_tree.size() > bound:
                         continue
                     results.append(
                         Derivation(
-                            shape,
-                            rule.to_shape.category or term.category,
-                            rules=(*term.rules, rule.id),
-                            arguments=(*term.arguments, 0),
+                            type_tree,
+                            rule.to_type_tree.category or reachable_type.category,
+                            rules=(*reachable_type.rules, rule.id),
+                            arguments=(*reachable_type.arguments, 0),
                             siblings=[
                                 replace(
                                     sibling,
-                                    shape=shape,
-                                    category=rule.to_shape.category or term.category,
+                                    type_tree=type_tree,
+                                    category=rule.to_type_tree.category or reachable_type.category,
                                     rules=(*sibling.rules, rule.id),
                                     arguments=(*sibling.arguments, 0),
                                     consumed=sibling.consumed or rule.access is Access.CONSUME,
                                     siblings=[],
                                 )
-                                for sibling in term.siblings
+                                for sibling in reachable_type.siblings
                             ],
-                            copied=term.copied,
-                            consumed=term.consumed or rule.access is Access.CONSUME,
+                            copied=reachable_type.copied,
+                            consumed=reachable_type.consumed or rule.access is Access.CONSUME,
                         )
                     )
     return results
@@ -683,10 +683,10 @@ def created(model: "Model", scope, terms, goal: Shape, exposed: set, bound: int,
 def serve(model: "Model", scope_id, stored, request, interfaces) -> Derivation | None:
     exposed = set(exposed_categories(model, scope_id, storage_form(model, stored)))
     bound = derivation_bound(stored)
-    terms = derive(model, scope_id, stored, interfaces, bound)
+    reachable_types = derive(model, scope_id, stored, interfaces, bound)
     scope = model.scopes[scope_id]
-    made = created(model, scope, terms, request.shape, exposed, bound, MAX_CREATED_LAYERS)
-    candidates = [term for term in (*terms, *made) if accepts(model, request, term, exposed)]
+    made = created(model, scope, reachable_types, request.type_tree, exposed, bound, MAX_CREATED_WRAPPERS)
+    candidates = [reachable_type for reachable_type in (*reachable_types, *made) if accepts(model, request, reachable_type, exposed)]
     if not candidates:
         return None
     # Prefer the derivation with the fewest rules, then without a copy, then the
@@ -703,19 +703,19 @@ def serve(model: "Model", scope_id, stored, request, interfaces) -> Derivation |
     )
 
 
-def holds_alternatives(model: Model, term: Derivation) -> bool:
-    """Whether the objects of the variadic layers a route reaches into hold
+def holds_alternatives(model: Model, reachable_type: Derivation) -> bool:
+    """Whether the objects of the variadic wrappers a route reaches into hold
     the alternatives it takes."""
     return all(
         argument == HELD_ALTERNATIVE or not variadic_route(model, rule_id)
-        for rule_id, argument in zip(term.rules, term.arguments)
+        for rule_id, argument in zip(reachable_type.rules, reachable_type.arguments)
     )
 
 
-def leaf_location(model: "Model", term: Derivation) -> str:
-    if term.consumed:
+def leaf_location(model: "Model", reachable_type: Derivation) -> str:
+    if reachable_type.consumed:
         return "new"
-    if term.copied is not None and leaves_held_by_value(model, term.copied) > 0:
+    if reachable_type.copied is not None and leaves_held_by_value(model, reachable_type.copied) > 0:
         return "new"
     return "stored"
 
@@ -723,7 +723,7 @@ def leaf_location(model: "Model", term: Derivation) -> str:
 def resolve(
     model: Model,
     scope_id: str,
-    stored: Shape,
+    stored: TypeTree,
     request: Request,
     interfaces: tuple[Leaf, ...] = (),
 ) -> Outcome:
@@ -732,11 +732,11 @@ def resolve(
         return Outcome(registered=False, reason=reason)
     if not finds(model, stored, request, interfaces):
         return Outcome(registered=True)
-    term = serve(model, scope_id, stored, request, interfaces)
-    if term is None:
+    reachable_type = serve(model, scope_id, stored, request, interfaces)
+    if reachable_type is None:
         return Outcome(registered=True, found=True)
-    term = walked(model, term)
-    if term is None:
+    reachable_type = walked(model, reachable_type)
+    if reachable_type is None:
         return Outcome(registered=True, found=True, reason=ALTERNATIVE_NOT_HELD)
 
     scope = model.scopes[scope_id]
@@ -745,20 +745,20 @@ def resolve(
     built = constructed_leaves(model, stored) if lazily_constructed else 0
     constructions = (built, built if per_request else 0)
 
-    location = leaf_location(model, term)
-    if request.kind == RequestKind.VALUE and request.shape.layer is None:
+    location = leaf_location(model, reachable_type)
+    if request.kind == RequestForm.VALUE and request.type_tree.wrapper is None:
         identity = (None, None)
     elif location == "new":
         identity = ("new", "new")
     else:
         identity = ("new" if lazily_constructed else "existing", "existing")
     stable = location == "stored" and identity != (None, None)
-    copies = leaves_held_by_value(model, term.copied) if term.copied is not None else 0
+    copies = leaves_held_by_value(model, reachable_type.copied) if reachable_type.copied is not None else 0
     return Outcome(
         registered=True,
         found=True,
         served=True,
-        rules=term.rules,
+        rules=reachable_type.rules,
         copies=copies,
         constructions=constructions,
         identity=identity,

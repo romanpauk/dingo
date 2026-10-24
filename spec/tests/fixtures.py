@@ -54,7 +54,7 @@ from spec.schema import (
     SelectionRule,
     SelectionSource,
     SelectionStep,
-    ShapePattern,
+    TypeTreePattern,
     Slot,
     SourceAccess,
     Spec,
@@ -69,11 +69,11 @@ from spec.schema import (
 
 
 def variable(name):
-    return ShapePattern(form=PatternForm.VARIABLE, name=name)
+    return TypeTreePattern(form=PatternForm.VARIABLE, name=name)
 
 
-def layer(name, *args):
-    return ShapePattern(form=PatternForm.LAYER, name=name, args=args)
+def wrapper(name, *args):
+    return TypeTreePattern(form=PatternForm.SEMANTICS, name=name, args=args)
 
 
 def sample_spec() -> Spec:
@@ -131,18 +131,18 @@ def sample_spec() -> Spec:
             Rule(
                 id="address_of",
                 description="Takes the address of a stable lvalue.",
-                from_shape=ShapePattern(
+                from_type_tree=TypeTreePattern(
                     form=PatternForm.VARIABLE, name="X", category=ValueCategory.LVALUE
                 ),
-                to_shape=layer("ptr", variable("X")),
+                to_type_tree=wrapper("ptr", variable("X")),
                 access=Access.BORROW,
                 requires=(Requirement(predicate=Predicate.STABLE, subject="X"),),
             ),
             Rule(
                 id="deref",
                 description="Dereferences a pointer.",
-                from_shape=layer("ptr", variable("X")),
-                to_shape=ShapePattern(
+                from_type_tree=wrapper("ptr", variable("X")),
+                to_type_tree=TypeTreePattern(
                     form=PatternForm.ROUTE, args=(variable("X"),)
                 ),
                 access=Access.INHERIT,
@@ -150,18 +150,18 @@ def sample_spec() -> Spec:
             Rule(
                 id="wrapper_borrow",
                 description="Borrows from a wrapper.",
-                from_shape=ShapePattern(
+                from_type_tree=TypeTreePattern(
                     form=PatternForm.WRAPPER, name="W", args=(variable("X"),)
                 ),
-                to_shape=ShapePattern(form=PatternForm.ROUTE, args=(variable("X"),)),
+                to_type_tree=TypeTreePattern(form=PatternForm.ROUTE, args=(variable("X"),)),
                 access=Access.INHERIT,
                 where=(Requirement(predicate=Predicate.BORROWABLE, subject="W"),),
             ),
             Rule(
                 id="retain",
                 description="Converts and caches.",
-                from_shape=variable("S"),
-                to_shape=variable("T"),
+                from_type_tree=variable("S"),
+                to_type_tree=variable("T"),
                 access=Access.BORROW,
                 via=Via.CONVERT,
                 cache=variable("T"),
@@ -337,7 +337,7 @@ def sample_spec() -> Spec:
         ),
         public_api=(
             PublicApiEntry(id="container_header", kind=ApiKind.INCLUDE_PATH, description="The container."),
-            PublicApiEntry(id="shared_ptr_shape", kind=ApiKind.NAME, description="A name."),
+            PublicApiEntry(id="shared_ptr_type_tree", kind=ApiKind.NAME, description="A name."),
         ),
         cpp=CppProjection(
             capabilities=(
@@ -375,8 +375,8 @@ def sample_spec() -> Spec:
                     spelling="dingo/container.h",
                 ),
                 CppApiBinding(
-                    id="shared_ptr_shape_name",
-                    api="shared_ptr_shape",
+                    id="shared_ptr_type_tree_name",
+                    api="shared_ptr_type_tree",
                     spelling="std::shared_ptr",
                     header="dingo/container.h",
                     usage="{name}<int> pointer;",

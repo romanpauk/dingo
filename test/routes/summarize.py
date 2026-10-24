@@ -24,12 +24,12 @@ Each pattern lists its cases as one line per (leaf, scope, stored) with the
 requests; --examples N limits the lines per pattern (0 lists them all).
 
 With --compare-user-wrappers the summary instead pairs every case of a user
-wrapper shape (user_unique, user_shared, user_optional anywhere in the stored
+wrapper type_tree (user_unique, user_shared, user_optional anywhere in the stored
 type or the request) with the case of the same domain, leaf, and scope in which
 each user wrapper is replaced by its std counterpart (std::unique_ptr,
 std::shared_ptr, std::optional) in both the stored type and the request, and
 prints how the outcome or observations differ. Pairs are grouped into patterns
-by the wrapper-agnostic shape of the stored type and the request (the leaf is
+by the wrapper-agnostic type_tree of the stored type and the request (the leaf is
 written T, a wrapper by its kind: unique, shared, optional), the two results,
 and the scope; the patterns are ranked by whether the availability changes
 (an "ok" against anything else), then by the number of cases. --top N limits
@@ -170,9 +170,9 @@ def to_std(text):
     return USER_WRAPPER_RE.sub(lambda m: STD_WRAPPER[m.group(1)], text)
 
 
-def generic_shape(text, leaf):
+def generic_type_tree(text, leaf):
     """The type with the leaf written T and every std wrapper by its kind, so
-    that the shape reads the same for every leaf; a user wrapper keeps its
+    that the type_tree reads the same for every leaf; a user wrapper keeps its
     name."""
     text = re.sub(rf"\b{re.escape(leaf)}\b", "T", text)
     for std, kind in KIND_NAME.items():
@@ -239,10 +239,10 @@ def compare_user_wrappers(records, top, examples):
             o.startswith("registration:") for o in (std_outcome, user_outcome)
         )
         pattern = (
-            generic_shape(record["stored"], leaf),
+            generic_type_tree(record["stored"], leaf),
             "(any)"
             if registration
-            else generic_shape(request_base(record["request"]), leaf),
+            else generic_type_tree(request_base(record["request"]), leaf),
             std_outcome,
             user_outcome,
             fields,
@@ -251,7 +251,7 @@ def compare_user_wrappers(records, top, examples):
     differing = sum(len(v) for v in patterns.values())
     print(
         f"\nuser wrappers against std wrappers: {pairs} paired cases, "
-        f"{differing} differ in {len(patterns)} patterns (stored shape and request "
+        f"{differing} differ in {len(patterns)} patterns (stored type tree and request "
         f"type modulo carrier, both outcomes), {unmatched} without a std "
         f"counterpart"
     )
@@ -316,7 +316,7 @@ def main():
     parser.add_argument(
         "--compare-user-wrappers",
         action="store_true",
-        help="compare the user wrapper shapes with their std counterparts",
+        help="compare the user wrapper type trees with their std counterparts",
     )
     parser.add_argument(
         "--top", type=int, default=10, help="patterns shown by --compare-user-wrappers"

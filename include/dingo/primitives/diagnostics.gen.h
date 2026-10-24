@@ -83,7 +83,7 @@ raise_type_index_out_of_range(std::string_view key) {
 }
 
 // spec: diagnostics.type_not_convertible
-// The binding the request names serves no term it accepts.
+// The binding the request names serves no reachable type it accepts.
 [[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
 raise_type_not_convertible(std::string_view request, std::string_view stored) {
   throw ::dingo::type_not_convertible_exception(
@@ -93,7 +93,7 @@ raise_type_not_convertible(std::string_view request, std::string_view stored) {
 
 // spec: diagnostics.type_not_convertible_required_by
 // The binding the request of a dependency of an object being constructed names
-// serves no term it accepts.
+// serves no reachable type it accepts.
 [[noreturn]] DINGO_CORE_COLD DINGO_NOINLINE inline void
 raise_type_not_convertible_required_by(std::string_view request,
                                        std::string_view stored,

@@ -108,7 +108,7 @@ diagnostics: tuple[Diagnostic, ...] = (
     ),
     Diagnostic(
         id="type_not_convertible",
-        condition="The binding the request names serves no term it accepts.",
+        condition="The binding the request names serves no reachable type it accepts.",
         exception="type_not_convertible_exception",
         message="type is not convertible to {request} from {stored}",
         placeholders=("request", "stored"),
@@ -119,7 +119,7 @@ diagnostics: tuple[Diagnostic, ...] = (
         id="type_not_convertible_required_by",
         condition=(
             "The binding the request of a dependency of an object being "
-            "constructed names serves no term it accepts."
+            "constructed names serves no reachable type it accepts."
         ),
         exception="type_not_convertible_exception",
         message="type is not convertible to {request} from {stored} (required by {type})",
@@ -254,7 +254,7 @@ diagnostics: tuple[Diagnostic, ...] = (
     ),
     Diagnostic(
         id="alternatives_repeated",
-        condition="A variadic wrapper of a stored shape names an alternative twice.",
+        condition="A variadic wrapper of a stored type tree names an alternative twice.",
         exception=None,
         message="{wrapper} names an alternative twice",
         placeholders=("wrapper",),

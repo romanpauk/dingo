@@ -2,8 +2,8 @@
 """Compares the observed route behavior with the reference implementation.
 
 test/routes/extract.py records what the library, or the baseline, does for every scope,
-stored shape, and request in the runtime, static, and mixed containers. This
-script maps those C++ spellings to the abstract shapes of the spec, computes
+stored type tree, and request in the runtime, static, and mixed containers. This
+script maps those C++ spellings to the abstract type trees of the spec, computes
 the outcome of every case with the reference implementation in
 spec/reference/routes.py, and compares them:
 
@@ -50,8 +50,8 @@ from spec.reference.routes import (  # noqa: E402
     Leaf,
     Model,
     Request,
-    RequestKind,
-    Shape,
+    RequestForm,
+    TypeTree,
     resolve,
 )
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -112,7 +112,7 @@ def split_arguments(text):
 
 
 def parse_type(text):
-    """Parses a C++ type spelling into (request kind or None, Shape)."""
+    """Parses a C++ type spelling into (request kind or None, Type tree)."""
     text = text.strip()
     if text.startswith("const "):
         text = text[len("const ") :]
@@ -130,58 +130,58 @@ def parse_type(text):
                 depth -= 1
                 if depth == 0:
                     break
-        arguments = [parse_shape(arg) for arg in split_arguments(text[index + 1 : end])]
+        arguments = [parse_type_tree(arg) for arg in split_arguments(text[index + 1 : end])]
         kind, family = WRAPPERS[name]
-        shape = Shape(
-            layer=kind, args=tuple(arguments), family=family, extent=EXTENTS.get(name)
+        type_tree = TypeTree(
+            wrapper=kind, args=tuple(arguments), family=family, extent=EXTENTS.get(name)
         )
         rest = text[end + 1 :]
     else:
-        shape = Shape(leaf=LEAVES[name])
+        type_tree = TypeTree(leaf=LEAVES[name])
         rest = text[index:]
-    return parse_declarator(shape, rest.replace(" ", ""))
+    return parse_declarator(type_tree, rest.replace(" ", ""))
 
 
-def parse_declarator(shape, rest):
+def parse_declarator(type_tree, rest):
     kind = None
     while rest:
         if rest.startswith("const"):
             rest = rest[len("const") :]
         elif rest.startswith("&&"):
-            kind, rest = RequestKind.RVALUE_REFERENCE, rest[2:]
+            kind, rest = RequestForm.RVALUE_REFERENCE, rest[2:]
         elif rest.startswith("&"):
-            kind, rest = RequestKind.LVALUE_REFERENCE, rest[1:]
+            kind, rest = RequestForm.LVALUE_REFERENCE, rest[1:]
         elif rest.startswith("*"):
-            shape, rest = Shape(layer="ptr", args=(shape,)), rest[1:]
+            type_tree, rest = TypeTree(wrapper="ptr", args=(type_tree,)), rest[1:]
         elif rest.startswith("[]"):
-            shape, rest = Shape(layer="array_unbounded", args=(shape,)), rest[2:]
+            type_tree, rest = TypeTree(wrapper="array_unbounded", args=(type_tree,)), rest[2:]
         elif rest.startswith("["):
             end = rest.index("]")
-            shape = Shape(layer="array", args=(shape,), extent=int(rest[1:end]))
+            type_tree = TypeTree(wrapper="array", args=(type_tree,), extent=int(rest[1:end]))
             rest = rest[end + 1 :]
         elif rest.startswith("("):
             end = rest.index(")")
             inner, after = rest[1:end], rest[end + 1 :]
             close = after.index("]")
-            shape = Shape(layer="array", args=(shape,), extent=int(after[1:close]))
+            type_tree = TypeTree(wrapper="array", args=(type_tree,), extent=int(after[1:close]))
             rest = inner + after[close + 1 :]
         else:
             raise ValueError(f"cannot parse declarator {rest!r}")
-    return kind, shape
+    return kind, type_tree
 
 
-def parse_shape(text):
-    kind, shape = parse_type(text)
-    if kind == RequestKind.LVALUE_REFERENCE:
-        return Shape(layer="ref", args=(shape,))
+def parse_type_tree(text):
+    kind, type_tree = parse_type(text)
+    if kind == RequestForm.LVALUE_REFERENCE:
+        return TypeTree(wrapper="ref", args=(type_tree,))
     if kind is not None:
-        raise ValueError(f"{text!r} is not a storable shape")
-    return shape
+        raise ValueError(f"{text!r} is not a storable type tree")
+    return type_tree
 
 
 def parse_request(text):
-    kind, shape = parse_type(text)
-    return Request(kind or RequestKind.VALUE, shape)
+    kind, type_tree = parse_type(text)
+    return Request(kind or RequestForm.VALUE, type_tree)
 
 
 # Comparison
@@ -240,7 +240,7 @@ def compare(rows, model):
     differences = []
     served_counts = collections.defaultdict(dict)
     for row in rows:
-        stored = parse_shape(row["stored"])
+        stored = parse_type_tree(row["stored"])
         request = parse_request(row["request"])
         interfaces = tuple(
             LEAVES[name] for name in row.get("interfaces", "").split(",") if name

@@ -3,8 +3,8 @@
 The specification is the language-agnostic source of truth described in
 docs/architecture/spec-driven-design.md. Every entity has a snake_case `id`
 that is unique within its section. The semantic sections (everything outside
-`CppProjection`) contain no C++ text: shapes are abstract constructors,
-scopes are descriptors, and routes are rules over shape patterns. C++
+`CppProjection`) contain no C++ text: type trees are abstract constructors,
+scopes are descriptors, and routes are rules over type tree patterns. C++
 spellings live only in `CppProjection`.
 
 All types are frozen dataclasses and every collection is a tuple, so a
@@ -68,7 +68,7 @@ __all__ = [
     "SelectionSource",
     "SelectionSourceTime",
     "SelectionStep",
-    "ShapePattern",
+    "TypeTreePattern",
     "Slot",
     "SourceAccess",
     "SourceTime",
@@ -92,7 +92,7 @@ class Entity:
     id: str
 
 
-# Shape algebra
+# Conversion rules
 
 
 class Property(Enum):
@@ -125,9 +125,9 @@ class Property(Enum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WrapperSemantics(Entity):
-    """An abstract shape constructor such as Val, Ptr, Own, or Array.
+    """An abstract type tree constructor such as Val, Ptr, Own, or Array.
 
-    `parameters` is the number of shape arguments. `has_extent` marks a
+    `parameters` is the number of type tree arguments. `has_extent` marks a
     constructor that also takes a constant size.
     """
 
@@ -153,11 +153,11 @@ class Slot(Enum):
 
 
 class ValueCategory(Enum):
-    """The category of a stored value or of a term a route derives.
+    """The category of a stored value or of a reachable type a route derives.
 
     A scope materializes its stored value as an LVALUE, an object requests
     borrow, or an RVALUE, an object requests consume. Routes also derive
-    PRVALUE terms: fresh values, such as copies and addresses, that serve value
+    PRVALUE reachable types: fresh values, such as copies and addresses, that serve value
     requests but never rvalue reference requests.
     """
 
@@ -175,7 +175,7 @@ class SourceAccess(Enum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PropertyClass:
-    """A class of layers by the properties of their kinds: the traits a kind
+    """A class of wrappers by the properties of their kinds: the traits a kind
     has and lacks, and whether it is variadic or has an extent, None for
     either."""
 
@@ -187,11 +187,11 @@ class PropertyClass:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class StorageForm(Entity):
-    """A class of stored shapes that storage exposure distinguishes.
+    """A class of stored type_trees that storage exposure distinguishes.
 
-    `outer` classifies the outer layer of a stored shape and `inner`, when
-    given, the layer of its element; the most specific form a shape is of
-    applies. The plain form, without a class, is a shape no other form is.
+    `outer` classifies the outer wrapper of a stored type_tree and `inner`, when
+    given, the wrapper of its element; the most specific form a type_tree is of
+    applies. The plain form, without a class, is a type_tree no other form is.
     """
 
     description: str
@@ -220,7 +220,7 @@ class ExposureRule(Enum):
     """How a scope restricts the routes of its exposed categories.
 
     FORM applies every route of the exposed categories. HANDLE_COPIES applies
-    them too, except that a copy is made only of a shape whose outer layer is
+    them too, except that a copy is made only of a type tree whose outer wrapper is
     sharing: the object of such a scope may be published before it is
     complete, so it is never copied, while a sharing handle to it is.
     """
@@ -243,7 +243,7 @@ class Scope(Entity):
 
     `exposures` lists every storage form the scope can store; a form that is
     not listed cannot be registered in the scope. Without `nested_wrappers`, the
-    shape under the outer layer of a stored form must be a leaf.
+    type_tree under the outer wrapper of a stored form must be a leaf.
     """
 
     description: str
@@ -273,25 +273,25 @@ class Access(Enum):
 
 
 class PatternForm(Enum):
-    """The form of a node of a shape pattern.
+    """The form of a node of a type tree pattern.
 
-    VARIABLE binds any shape (`name` is the variable). LAYER applies the layer
-    kind `name` to `args`. WRAPPER applies a user wrapper variable `name` to
-    its single argument. ROUTE stands for the shape derived by routing its
-    single argument again.
+    VARIABLE binds any type tree (`name` is the variable). SEMANTICS applies the
+    wrapper semantics `name` to `args`. WRAPPER applies a user wrapper variable
+    `name` to its single argument. ROUTE stands for the type tree derived by
+    routing its single argument again.
     """
 
     VARIABLE = "variable"
-    LAYER = "layer"
+    SEMANTICS = "semantics"
     WRAPPER = "wrapper"
     ROUTE = "route"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ShapePattern:
+class TypeTreePattern:
     form: PatternForm
     name: str | None = None
-    args: tuple["ShapePattern", ...] = ()
+    args: tuple["TypeTreePattern", ...] = ()
     category: ValueCategory | None = None
 
 
@@ -317,7 +317,7 @@ class Requirement:
 class Via(Enum):
     """The operation a route performs when it is not a structural rewrite.
 
-    UPCAST replaces the leaf `L` of the derived shape with each interface the
+    UPCAST replaces the leaf `L` of the derived type tree with each interface the
     binding declares for it. CONVERT does so for each declared interface the
     leaf declares a conversion to, a user conversion that makes the interface
     object from the leaf.
@@ -328,39 +328,39 @@ class Via(Enum):
 
 
 class Operation(Enum):
-    """The forms of the routes of a layer, each executed by one operation of
-    the traits of a layer of the kind. The forms, the rules of a leaf, and the
-    value categories are the algebra of shapes; a wrapper semantics, of the library or
+    """The forms of the routes of a wrapper, each executed by one operation of
+    the traits of a wrapper of the kind. The forms, the rules of a leaf, and the
+    value categories are the algebra of type_trees; a wrapper semantics, of the library or
     of the user, is a declaration of the forms it has."""
 
-    # A borrowed layer reaches its element (element).
+    # A borrowed wrapper reaches its element (element).
     BORROW = "borrow"
-    # A consumed layer gives up its element (element).
+    # A consumed wrapper gives up its element (element).
     TAKE = "take"
-    # A consumed element is wrapped into a layer of the kind (make).
+    # A consumed element is wrapped into a wrapper of the kind (make).
     WRAP = "wrap"
-    # A consumed layer of the target kind, a pointer, is adopted by a layer of
+    # A consumed wrapper of the target kind, a pointer, is adopted by a wrapper of
     # the kind (adopt).
     ADOPT = "adopt"
-    # A consumed layer hands its element to a layer of the target kind, the
-    # sharing layer of its family (share).
+    # A consumed wrapper hands its element to a wrapper of the target kind, the
+    # sharing wrapper of its family (share).
     SHARE = "share"
-    # The address of a borrowed object is a layer of the kind, a pointer.
+    # The address of a borrowed object is a wrapper of the kind, a pointer.
     ADDRESS = "address"
-    # A borrowed layer decays to a layer of the target kind, a pointer to its
+    # A borrowed wrapper decays to a wrapper of the target kind, a pointer to its
     # first element.
     DECAY = "decay"
-    # A consumed layer hands out a layer of the target kind, a pointer to its
+    # A consumed wrapper hands out a wrapper of the target kind, a pointer to its
     # first element, whose ownership passes to the caller.
     RELEASE = "release"
-    # A consumed array is handed out as a layer of the kind, a pointer, whose
+    # A consumed array is handed out as a wrapper of the kind, a pointer, whose
     # ownership passes to the caller.
     RELEASE_WHOLE = "release_whole"
-    # A copied layer converts to the layer of a declared interface (rebind).
+    # A copied wrapper converts to the wrapper of a declared interface (rebind).
     UPCAST_COPIED = "upcast_copied"
-    # A consumed layer converts to the layer of a declared interface (rebind).
+    # A consumed wrapper converts to the wrapper of a declared interface (rebind).
     UPCAST_CONSUMED = "upcast_consumed"
-    # A borrowed layer converts to the layer of a declared interface, which
+    # A borrowed wrapper converts to the wrapper of a declared interface, which
     # the binding keeps (rebind).
     RETAIN = "retain"
 
@@ -372,13 +372,13 @@ class OperationTemplate(Entity):
     of the form has, which the form relies on."""
 
     form: Operation
-    from_shape: "ShapePattern"
-    to_shape: "ShapePattern"
+    from_type_tree: "TypeTreePattern"
+    to_type_tree: "TypeTreePattern"
     access: "Access"
     exposure: "RequestCategory | None" = None
     requires: tuple["Requirement", ...] = ()
     via: "Via | None" = None
-    cache: "ShapePattern | None" = None
+    cache: "TypeTreePattern | None" = None
     kind_traits: tuple["Property", ...] = ()
 
 
@@ -394,23 +394,23 @@ class SemanticsOperation(Entity):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Rule(Entity):
-    """A route rule: a derivation from one shape pattern to another.
+    """A route rule: a derivation from one type_tree pattern to another.
 
-    The `category` of `from_shape` is the category of the term the rule
-    applies to, and the `category` of `to_shape` that of the term it derives.
+    The `category` of `from_type_tree` is the category of the reachable_type the rule
+    applies to, and the `category` of `to_type_tree` that of the reachable_type it derives.
     `exposure` is the request category a scope must expose for the stored form
     for the rule to apply; a rule without one always applies.
     """
 
     description: str
-    from_shape: ShapePattern
-    to_shape: ShapePattern
+    from_type_tree: TypeTreePattern
+    to_type_tree: TypeTreePattern
     access: Access
     exposure: RequestCategory | None = None
     requires: tuple[Requirement, ...] = ()
     where: tuple[Requirement, ...] = ()
     via: Via | None = None
-    cache: ShapePattern | None = None
+    cache: TypeTreePattern | None = None
     # The form a route of a wrapper semantics is of; None for a rule of a leaf.
     form: Operation | None = None
 

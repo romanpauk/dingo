@@ -11,11 +11,11 @@ A shape is a leaf wrapped in layers. `core::shape_v<T>`, of
 [conversion/wrapper_traits.h](../../include/dingo/conversion/wrapper_traits.h),
 describes the shape of `T` as a `constexpr` value: an array of nodes in
 preorder, defined in
-[primitives/shape.h](../../include/dingo/primitives/shape.h), so a layer is
-followed by the shapes of its arguments. A node of a layer holds the descriptor
-of its wrapper semantics, the family of its wrapper, and its cv-qualifiers; a
-node of a leaf holds the identity of the leaf type, the address of a per-type
-tag.
+[primitives/type_tree.h](../../include/dingo/primitives/type_tree.h), so a layer
+is followed by the shapes of its arguments. A node of a layer holds the
+descriptor of its wrapper semantics, the family of its wrapper, and its
+cv-qualifiers; a node of a leaf holds the identity of the leaf type, the address
+of a per-type tag.
 
 ### Layer
 
@@ -143,6 +143,6 @@ The shape algebra is what allows those three parts to compose.
 - [include/dingo/type/rebind_type.h](../../include/dingo/type/rebind_type.h)
 - [include/dingo/type/type_traits.h](../../include/dingo/type/type_traits.h)
 - [include/dingo/conversion/wrapper_traits.h](../../include/dingo/conversion/wrapper_traits.h)
-- [include/dingo/primitives/shape.h](../../include/dingo/primitives/shape.h)
+- [include/dingo/primitives/type_tree.h](../../include/dingo/primitives/type_tree.h)
 - [include/dingo/conversion/route.h](../../include/dingo/conversion/route.h)
 - [include/dingo/conversion/request.h](../../include/dingo/conversion/request.h)

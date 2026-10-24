@@ -202,7 +202,7 @@ public_api: tuple[PublicApiEntry, ...] = (
     entry(
         "wrapper_traits",
         EXTENSION,
-        "Makes a wrapper type a layer of the shape algebra: declares its layer "
+        "Makes a wrapper type a wrapper of the conversion rules: declares its wrapper "
         "kind, its family, and its element types, and how to rebind it, reach "
         "its element, make it, adopt an element it owns, share the element of "
         "a sole-owner handle, and tell which alternative a wrapper of a "

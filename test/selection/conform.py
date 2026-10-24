@@ -466,8 +466,8 @@ def main_with(argv):
             groups[pattern[:4] if args.coarse else pattern].append(difference)
         for pattern, members in sorted(groups.items(), key=lambda g: (-len(g[1]), g[0])):
             setting, name, have, want = pattern[:4]
-            shape = f" {pattern[4]}" if len(pattern) > 4 else ""
-            print(f"{len(members):5} {setting}{shape} {name}: observed {have}, reference {want}")
+            type_tree = f" {pattern[4]}" if len(pattern) > 4 else ""
+            print(f"{len(members):5} {setting}{type_tree} {name}: observed {have}, reference {want}")
             for case, _, have_value, want_value in examples(members, args.examples):
                 print(
                     f"        {case}: observed {json.dumps(have_value)}, "

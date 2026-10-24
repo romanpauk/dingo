@@ -1,6 +1,6 @@
 """Content of the contracts section.
 
-Contracts bind the operations and components of the design, in terms of
+Contracts bind the operations and components of the design, in reachable types of
 abstract operations, constructs, and variables. Nothing here names a C++
 entity or a toolchain, except where noted: the header cost limits are the
 largest preprocessed sizes over the toolchains recorded in
@@ -130,10 +130,10 @@ contracts: tuple[Contract, ...] = (
     ),
     Contract(
         id="compile_route_plan",
-        description="A route plan is instantiated once per distinct shape, not once per binding.",
+        description="A route plan is instantiated once per distinct type tree, not once per binding.",
         operation="container",
         dimension=COMPILE_COST,
-        bound=linear("distinct_shapes", "instantiations", per=1),
+        bound=linear("distinct_type_trees", "instantiations", per=1),
         construct="route_plan",
     ),
     Contract(

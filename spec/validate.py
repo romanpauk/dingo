@@ -5,7 +5,7 @@ error starts with the section and the entity id it concerns. The checks are:
 
 - ids are snake_case and unique within their section
 - references between sections resolve
-- shape patterns use known wrapper semantics with the right number of arguments,
+- type tree patterns use known wrapper semantics with the right number of arguments,
   and requirements name pattern variables
 - scope inheritance has no cycle
 - diagnostic message placeholders match the declared placeholders
@@ -37,7 +37,7 @@ from spec.schema import (
     CppProjection,
     SelectionMode,
     SelectionSource,
-    ShapePattern,
+    TypeTreePattern,
     PatternForm,
     Spec,
     StepCondition,
@@ -117,7 +117,7 @@ def check_unique(errors: list[str], where: str, what: str, values: Iterable) -> 
 
 
 def property_class_holds(property_class, kind) -> bool:
-    """Whether a wrapper semantics is of a layer class."""
+    """Whether a wrapper semantics is of a wrapper class."""
     traits = set(kind.traits)
     return (
         all(trait in traits for trait in property_class.has)
@@ -136,7 +136,7 @@ def check_storage_forms(spec: Spec, errors: list[str]) -> None:
     )
     if sum(form.outer is None for form in spec.storage_forms) != 1:
         errors.append("storage_forms: one form, the plain one, has no class")
-    # A layer of a kind, and of a kind over one, is of one form at each depth.
+    # A wrapper of a kind, and of a kind over one, is of one form at each depth.
     for outer in spec.wrapper_semantics:
         single = [
             form.id
@@ -209,7 +209,7 @@ def check_wrapper_semantics(spec: Spec, errors: list[str]) -> None:
         check_unique(errors, where, "traits", kind.traits)
 
 
-def pattern_variables(pattern: ShapePattern) -> Iterator[str]:
+def pattern_variables(pattern: TypeTreePattern) -> Iterator[str]:
     if pattern.form in (PatternForm.VARIABLE, PatternForm.WRAPPER) and pattern.name:
         yield pattern.name
     for arg in pattern.args:
@@ -217,19 +217,19 @@ def pattern_variables(pattern: ShapePattern) -> Iterator[str]:
 
 
 def check_pattern(
-    pattern: ShapePattern, where: str, layers: dict[str, object], errors: list[str]
+    pattern: TypeTreePattern, where: str, semantics_by_id: dict[str, object], errors: list[str]
 ) -> None:
     form = pattern.form
-    if form is PatternForm.LAYER:
-        layer = layers.get(pattern.name)
-        if layer is None:
+    if form is PatternForm.SEMANTICS:
+        wrapper = semantics_by_id.get(pattern.name)
+        if wrapper is None:
             errors.append(f"{where}: wrapper semantics {pattern.name!r} does not exist")
-        elif layer.variadic and len(pattern.args) < layer.parameters:
+        elif wrapper.variadic and len(pattern.args) < wrapper.parameters:
             errors.append(
-                f"{where}: {pattern.name} takes at least {layer.parameters} arguments"
+                f"{where}: {pattern.name} takes at least {wrapper.parameters} arguments"
             )
-        elif not layer.variadic and len(pattern.args) != layer.parameters:
-            errors.append(f"{where}: {pattern.name} takes {layer.parameters} arguments")
+        elif not wrapper.variadic and len(pattern.args) != wrapper.parameters:
+            errors.append(f"{where}: {pattern.name} takes {wrapper.parameters} arguments")
     elif form is PatternForm.VARIABLE:
         if not (pattern.name and PATTERN_VARIABLE.match(pattern.name)):
             errors.append(f"{where}: pattern variable {pattern.name!r} is malformed")
@@ -246,20 +246,20 @@ def check_pattern(
         if len(pattern.args) != 1:
             errors.append(f"{where}: route pattern takes one argument")
     for arg in pattern.args:
-        check_pattern(arg, where, layers, errors)
+        check_pattern(arg, where, semantics_by_id, errors)
 
 
 def check_rules(spec: Spec, errors: list[str]) -> None:
-    layers = {kind.id: kind for kind in spec.wrapper_semantics}
+    semantics_by_id = {kind.id: kind for kind in spec.wrapper_semantics}
     for route in spec.rules:
         where = f"routes.{route.id}"
-        patterns = [route.from_shape, route.to_shape]
+        patterns = [route.from_type_tree, route.to_type_tree]
         if route.cache is not None:
             patterns.append(route.cache)
         for pattern in patterns:
-            check_pattern(pattern, where, layers, errors)
-        bound = set(pattern_variables(route.from_shape)) | set(
-            pattern_variables(route.to_shape)
+            check_pattern(pattern, where, semantics_by_id, errors)
+        bound = set(pattern_variables(route.from_type_tree)) | set(
+            pattern_variables(route.to_type_tree)
         )
         for requirement in (*route.requires, *route.where):
             if requirement.subject not in bound:
@@ -347,8 +347,8 @@ def check_selection_rules(spec: Spec, errors: list[str]) -> None:
 def operation_signature(route) -> tuple:
     """A route without its wrapper semantics, which the routes of a form share."""
     return (
-        route.from_shape.category,
-        route.to_shape.category,
+        route.from_type_tree.category,
+        route.to_type_tree.category,
         route.access,
         route.exposure,
         tuple(requirement.predicate for requirement in route.requires),
@@ -378,8 +378,8 @@ def check_semantics_operations(spec: Spec, errors: list[str]) -> None:
             template = templates.get(op.form)
             if template is None:
                 continue
-            targets = names_target(template.from_shape) or names_target(
-                template.to_shape
+            targets = names_target(template.from_type_tree) or names_target(
+                template.to_type_tree
             )
             if targets and op.target is None:
                 errors.append(f"{where}: the form {op.form.value} needs a target kind")

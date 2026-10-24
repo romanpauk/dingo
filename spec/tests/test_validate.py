@@ -20,7 +20,7 @@ from spec.schema import (
     PatternForm,
     Requirement,
     Predicate,
-    ShapePattern,
+    TypeTreePattern,
     SelectionMode,
     SelectionOutcome,
     SelectionSource,
@@ -30,7 +30,7 @@ from spec.schema import (
     VariantKind,
     VariantPoint,
 )
-from spec.tests.fixtures import layer, sample_spec, variable
+from spec.tests.fixtures import wrapper, sample_spec, variable
 
 
 def errors_of(spec):
@@ -131,23 +131,23 @@ def test_wrapper_semantics_unique():
 
 
 def test_route_unknown_wrapper_semantics():
-    spec = replace_first(sample_spec(), "rules", to_shape=layer("missing", variable("X")))
+    spec = replace_first(sample_spec(), "rules", to_type_tree=wrapper("missing", variable("X")))
     assert_one_error(spec, "wrapper semantics 'missing' does not exist")
 
 
-def test_route_layer_argument_count():
-    spec = replace_first(sample_spec(), "rules", to_shape=layer("ptr"))
+def test_route_wrapper_argument_count():
+    spec = replace_first(sample_spec(), "rules", to_type_tree=wrapper("ptr"))
     assert_one_error(spec, "ptr takes 1 arguments")
-    spec = replace_first(sample_spec(), "rules", to_shape=layer("val", variable("X")))
+    spec = replace_first(sample_spec(), "rules", to_type_tree=wrapper("val", variable("X")))
     assert_one_error(spec, "val takes 0 arguments")
 
 
-def test_route_variadic_layer_needs_minimum_arguments():
+def test_route_variadic_wrapper_needs_minimum_arguments():
     ok = replace_first(
-        sample_spec(), "rules", to_shape=layer("alt", variable("X"), variable("Y"))
+        sample_spec(), "rules", to_type_tree=wrapper("alt", variable("X"), variable("Y"))
     )
     assert errors_of(ok) == []
-    bad = replace_first(sample_spec(), "rules", to_shape=layer("alt"))
+    bad = replace_first(sample_spec(), "rules", to_type_tree=wrapper("alt"))
     assert_one_error(bad, "alt takes at least 1 arguments")
 
 
@@ -155,17 +155,17 @@ def test_route_pattern_forms_are_well_formed():
     spec = replace_first(
         sample_spec(),
         "rules",
-        from_shape=ShapePattern(form=PatternForm.VARIABLE, name="lower"),
+        from_type_tree=TypeTreePattern(form=PatternForm.VARIABLE, name="lower"),
     )
     assert_one_error(spec, "pattern variable 'lower' is malformed")
     spec = replace_first(
         sample_spec(),
         "rules",
-        from_shape=ShapePattern(form=PatternForm.WRAPPER, name="W"),
+        from_type_tree=TypeTreePattern(form=PatternForm.WRAPPER, name="W"),
     )
     assert_one_error(spec, "wrapper 'W' takes one argument")
     spec = replace_first(
-        sample_spec(), "rules", to_shape=ShapePattern(form=PatternForm.ROUTE)
+        sample_spec(), "rules", to_type_tree=TypeTreePattern(form=PatternForm.ROUTE)
     )
     assert_one_error(spec, "route pattern takes one argument")
 
@@ -180,7 +180,7 @@ def test_route_requirement_subject_must_be_bound():
 
 
 def test_route_cache_pattern_is_checked():
-    spec = replace_first(sample_spec(), "rules", cache=layer("missing"))
+    spec = replace_first(sample_spec(), "rules", cache=wrapper("missing"))
     assert_one_error(spec, "wrapper semantics 'missing' does not exist")
 
 
@@ -217,7 +217,7 @@ def test_lookup_declarations_are_checked():
     assert_one_error(spec, "cardinalities are one or many")
 
 
-def test_selection_rule_shape():
+def test_selection_rule_type_tree():
     spec = replace_first(sample_spec(), "selection_rules", steps=())
     assert_one_error(spec, "no steps")
     spec = replace_first(sample_spec(), "selection_rules", combine=Combine.CONCAT)
@@ -470,7 +470,7 @@ def test_every_section_is_checked_for_ids():
     assert names == expected
 
 
-def test_transaction_rule_shape():
+def test_transaction_rule_type_tree():
     spec = replace_first(sample_spec(), "transaction_rules", undoes=())
     assert_one_error(spec, "undoes no effect")
     spec = replace_first(sample_spec(), "transaction_rules", operations=())

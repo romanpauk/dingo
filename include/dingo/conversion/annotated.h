@@ -14,7 +14,7 @@
 
 #include <dingo/conversion/key.h>
 #include <dingo/conversion/wrapper_traits.h>
-#include <dingo/primitives/shape.h>
+#include <dingo/primitives/type_tree.h>
 
 #include <type_traits>
 #include <utility>
@@ -116,16 +116,17 @@ struct interface_object<::dingo::annotated<Interface, Tag>> {
 template <typename Interface>
 using interface_object_t = typename interface_object<Interface>::type;
 
-// The shape of a declared interface: the shape of its objects, whose leaf has
-// the identity of the interface.
-template <typename Interface> constexpr shape interface_shape() {
-  shape value = shape_v<interface_object_t<Interface>>;
+// The type tree of a declared interface: the type tree of its objects, whose
+// leaf has the identity of the interface.
+template <typename Interface> constexpr type_tree interface_type_tree() {
+  type_tree value = type_tree_v<interface_object_t<Interface>>;
   value.nodes[0].type = type_id_v<Interface>;
   return value;
 }
 
 template <typename Interface>
-inline constexpr shape interface_shape_v = interface_shape<Interface>();
+inline constexpr type_tree interface_type_tree_v =
+    interface_type_tree<Interface>();
 
 // The key of a request annotated by `Tag`: the key `Key` of the request,
 // with the annotation that names the interface.

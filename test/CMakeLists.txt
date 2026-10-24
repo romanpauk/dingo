@@ -247,7 +247,7 @@ add_executable(dingo_next_test
     next/containers/shared_cyclical.cpp
     next/containers/static_bindings.cpp
     next/containers/static_parents.cpp
-    next/containers/stored_shapes.cpp
+    next/containers/stored_type_trees.cpp
     next/containers/transactions.cpp
     next/containers/unique.cpp
     next/containers/variants.cpp
@@ -272,7 +272,7 @@ add_executable(dingo_next_test
     next/primitives/transaction_log.cpp
     next/primitives/type_name.cpp
     next/conversion/request_types.cpp
-    next/conversion/shape.cpp
+    next/conversion/type_tree.cpp
     "${DINGO_NEXT_GENERATED_DIR}/conversion_cases.cpp"
 )
 target_include_directories(dingo_next_test PRIVATE

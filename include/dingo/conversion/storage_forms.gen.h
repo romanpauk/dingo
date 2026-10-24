@@ -54,8 +54,8 @@ struct property_class {
   std::uint16_t lacks;
 };
 
-// A storage form: the class of the outer wrapper of a stored shape, and of the
-// wrapper of its element; a form of no outer class is the plain one.
+// A storage form: the class of the outer wrapper of a stored type tree, and of
+// the wrapper of its element; a form of no outer class is the plain one.
 struct storage_form_info {
   storage_form form;
   property_class outer;

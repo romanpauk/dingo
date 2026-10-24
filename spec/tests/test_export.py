@@ -1,4 +1,4 @@
-"""Tests of the JSON export: determinism, shape, and round trip."""
+"""Tests of the JSON export: determinism, type tree, and round trip."""
 
 import json
 import shutil
@@ -47,7 +47,7 @@ def test_keys_are_sorted_at_every_level():
     check(json.loads(to_json(sample_spec())))
 
 
-def test_top_level_shape_matches_the_schema():
+def test_top_level_type_tree_matches_the_schema():
     data = json.loads(to_json(load_spec()))
     expected = set(Spec.__dataclass_fields__)
     assert set(data) == expected
@@ -81,7 +81,7 @@ def test_enums_export_as_values_and_tuples_as_lists():
     assert scope["phases"] == ["publish", "complete"]
     assert isinstance(data["rules"], list)
     route = data["rules"][0]
-    assert route["from_shape"] == {
+    assert route["from_type_tree"] == {
         "args": [],
         "category": "lvalue",
         "form": "variable",

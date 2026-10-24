@@ -13,8 +13,8 @@
 
 #include <dingo/conversion/key_kinds.gen.h>
 #include <dingo/primitives/compile_diagnostics.gen.h>
-#include <dingo/primitives/shape.h>
 #include <dingo/primitives/type_name.h>
+#include <dingo/primitives/type_tree.h>
 
 #include <string>
 #include <type_traits>

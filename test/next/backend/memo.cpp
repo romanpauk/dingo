@@ -112,7 +112,7 @@ void check(const std::vector<int> &keys, int range) {
     }
     std::vector<std::size_t> found;
     memo.visit(&value, [&](const candidate<entry> &each) {
-      found.push_back(each.term);
+      found.push_back(each.reachable_type);
       return true;
     });
     EXPECT_EQ(found, expected) << "key " << key;

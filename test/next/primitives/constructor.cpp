@@ -146,15 +146,15 @@ TEST(next_constructor,
 
 template <typename Type, typename Backend> constexpr bool detects_as_default() {
   using detection =
-      constructor_detection<Type, dingo::core::constructor_shape, Backend>;
+      constructor_detection<Type, dingo::core::constructor_arity, Backend>;
   return detection::kind == detected_constructor<Type>::kind &&
          detection::arity == detected_constructor<Type>::arity;
 }
 
-// The detection that the engine uses is the shape detection of the backend
+// The detection that the engine uses is the type tree detection of the backend
 // that variant_points.constructor_detection_msvc selects, and both backends
 // agree on it. The matrix family constructor_detection crosses the backends and
-// modes with the constructor shapes.
+// modes with the constructor type trees.
 TEST(next_constructor, the_engine_detects_by_the_selected_backend) {
   using dingo::core::msvc_constructor_detection;
   using dingo::core::portable_constructor_detection;
@@ -178,19 +178,19 @@ TEST(next_constructor, the_engine_detects_by_the_selected_backend) {
 }
 
 // The signature mode recovers the argument types of the detected constructor;
-// the shape mode reports them only for a constructor without arguments.
+// the type tree mode reports them only for a constructor without arguments.
 TEST(next_constructor, the_signature_mode_recovers_the_argument_types) {
-  using dingo::core::constructor_shape;
+  using dingo::core::constructor_arity;
   using dingo::core::constructor_signature;
   static_assert(
       std::is_same_v<
           constructor_detection<two_values, constructor_signature>::arguments,
           type_list<int, float>>);
   static_assert(std::is_same_v<
-                constructor_detection<two_values, constructor_shape>::arguments,
+                constructor_detection<two_values, constructor_arity>::arguments,
                 void>);
   static_assert(std::is_same_v<
-                constructor_detection<defaulted, constructor_shape>::arguments,
+                constructor_detection<defaulted, constructor_arity>::arguments,
                 type_list<>>);
   static_assert(
       std::is_same_v<

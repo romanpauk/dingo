@@ -7,32 +7,32 @@
 #include <dingo/conversion/scopes.gen.h>
 
 #include <cstddef>
-{% macro spell(shape) -%}
-{%- if shape.layer is none -%}{{ shape.leaf }}
-{%- elif shape.layer == "ptr" and shape.args[0].layer == "array" -%}{{ spell(shape.args[0].args[0]) }}(*)[{{ shape.args[0].extent }}]
-{%- elif shape.layer == "ptr" -%}{{ spell(shape.args[0]) }}*
-{%- elif shape.layer == "ref" -%}{{ spell(shape.args[0]) }}&
-{%- elif shape.layer == "array" -%}{{ spell(shape.args[0]) }}[{{ shape.extent }}]
-{%- elif shape.layer == "array_unbounded" -%}{{ spell(shape.args[0]) }}[]
-{%- elif shape.layer == "alt" -%}std::variant<{% for arg in shape.args %}{{ spell(arg) }}{{ ", " if not loop.last }}{% endfor %}>
-{%- elif shape.family == "user" -%}user_{{ {"own": "unique", "share": "shared", "opt": "optional"}[shape.layer] }}<{{ spell(shape.args[0]) }}>
-{%- else -%}std::{{ {"own": "unique_ptr", "share": "shared_ptr", "opt": "optional"}[shape.layer] }}<{{ spell(shape.args[0]) }}>
+{% macro spell(type_tree) -%}
+{%- if type_tree.wrapper is none -%}{{ type_tree.leaf }}
+{%- elif type_tree.wrapper == "ptr" and type_tree.args[0].wrapper == "array" -%}{{ spell(type_tree.args[0].args[0]) }}(*)[{{ type_tree.args[0].extent }}]
+{%- elif type_tree.wrapper == "ptr" -%}{{ spell(type_tree.args[0]) }}*
+{%- elif type_tree.wrapper == "ref" -%}{{ spell(type_tree.args[0]) }}&
+{%- elif type_tree.wrapper == "array" -%}{{ spell(type_tree.args[0]) }}[{{ type_tree.extent }}]
+{%- elif type_tree.wrapper == "array_unbounded" -%}{{ spell(type_tree.args[0]) }}[]
+{%- elif type_tree.wrapper == "alt" -%}std::variant<{% for arg in type_tree.args %}{{ spell(arg) }}{{ ", " if not loop.last }}{% endfor %}>
+{%- elif type_tree.family == "user" -%}user_{{ {"own": "unique", "share": "shared", "opt": "optional"}[type_tree.wrapper] }}<{{ spell(type_tree.args[0]) }}>
+{%- else -%}std::{{ {"own": "unique_ptr", "share": "shared_ptr", "opt": "optional"}[type_tree.wrapper] }}<{{ spell(type_tree.args[0]) }}>
 {%- endif -%}
 {%- endmacro %}
 
 namespace dingo::next_test {
 
 using core::operation;
-using core::shape_v;
+using core::type_tree_v;
 
 struct conversion_case {
   const char *name;
-  const core::shape *stored;
+  const core::type_tree *stored;
   const core::scope_info *scope;
-  const core::shape *interfaces[core::max_interfaces];
+  const core::type_tree *interfaces[core::max_interfaces];
   std::size_t interface_count;
-  core::request_kind kind;
-  const core::shape *request;
+  core::request_form kind;
+  const core::type_tree *request;
   bool registered;
   bool found;
   bool served;
@@ -42,7 +42,7 @@ struct conversion_case {
 
 extern const conversion_case conversion_cases[] = {
 {% for case in cases %}
-    {"{{ case.scope }} {{ case.interfaces | join(",") }} {{ spell(case.stored) }} {{ case.kind }} {{ spell(case.request) }}", &shape_v<{{ spell(case.stored) }}>, &::dingo::scope_traits<::dingo::{{ case.scope }}>::descriptor, { {% for interface in case.interfaces %}&shape_v<{{ interface }}>{{ ", " if not loop.last }}{% endfor %} }, {{ case.interfaces | length }}, core::request_kind::{{ case.kind }}, &shape_v<{{ spell(case.request) }}>, {{ case.registered | lower }}, {{ case.found | lower }}, {{ case.served | lower }}, { {% for rule in case.rules %}{operation::{{ rule.form }}, {% if rule.kind %}&core::semantics_v<::{{ rule.kind }}>{% else %}&core::leaf_semantics{% endif %}}{{ ", " if not loop.last }}{% endfor %} }, {{ case.rules | length }}},
+    {"{{ case.scope }} {{ case.interfaces | join(",") }} {{ spell(case.stored) }} {{ case.kind }} {{ spell(case.request) }}", &type_tree_v<{{ spell(case.stored) }}>, &::dingo::scope_traits<::dingo::{{ case.scope }}>::descriptor, { {% for interface in case.interfaces %}&type_tree_v<{{ interface }}>{{ ", " if not loop.last }}{% endfor %} }, {{ case.interfaces | length }}, core::request_form::{{ case.kind }}, &type_tree_v<{{ spell(case.request) }}>, {{ case.registered | lower }}, {{ case.found | lower }}, {{ case.served | lower }}, { {% for rule in case.rules %}{operation::{{ rule.form }}, {% if rule.kind %}&core::semantics_v<::{{ rule.kind }}>{% else %}&core::leaf_semantics{% endif %}}{{ ", " if not loop.last }}{% endfor %} }, {{ case.rules | length }}},
 {% endfor %}
 };
 

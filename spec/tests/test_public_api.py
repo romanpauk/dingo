@@ -65,7 +65,7 @@ def test_binding_without_entry_is_reported():
 
 def test_entry_with_two_bindings_is_reported():
     spec = sample_spec()
-    twin = replace(binding_of(spec, "shared_ptr_shape"), id="twin")
+    twin = replace(binding_of(spec, "shared_ptr_type_tree"), id="twin")
     spec = with_bindings(spec, (*spec.cpp.api_bindings, twin))
     assert_error(spec, "public API entries has duplicates")
 
@@ -89,14 +89,14 @@ def test_entry_description_is_required():
     ],
 )
 def test_name_binding_rules(changes, fragment):
-    spec = replace_binding(sample_spec(), "shared_ptr_shape", **changes)
+    spec = replace_binding(sample_spec(), "shared_ptr_type_tree", **changes)
     assert_error(spec, fragment)
 
 
 def test_declarations_may_use_the_name():
     spec = replace_binding(
         sample_spec(),
-        "shared_ptr_shape",
+        "shared_ptr_type_tree",
         usage="int x;",
         declarations="using alias = {name}<int>;",
     )
@@ -240,7 +240,7 @@ def test_units_follow_the_kinds(checker):
     includes, code, macros = checker.collect_units(sample_spec())
     assert [unit.api for unit in includes] == ["container_header"]
     assert includes[0].code == "#include <dingo/container.h>\n"
-    assert [unit.api for unit in code] == ["shared_ptr_shape"]
+    assert [unit.api for unit in code] == ["shared_ptr_type_tree"]
     assert macros == []
 
 
@@ -280,10 +280,10 @@ def test_check_passes_with_a_compiler_that_accepts(checker, tmp_path):
 
 def test_check_reports_the_failing_entry(checker, tmp_path):
     command = write_fake_compiler(tmp_path / "cxx")
-    spec = replace_binding(sample_spec(), "shared_ptr_shape", usage="{name}<BAD> pointer;")
+    spec = replace_binding(sample_spec(), "shared_ptr_type_tree", usage="{name}<BAD> pointer;")
     checked, failures = checker.check(spec, command, tmp_path / "work", 2)
     assert checked == 2
-    assert [f.api for f in failures] == ["shared_ptr_shape"]
+    assert [f.api for f in failures] == ["shared_ptr_type_tree"]
     assert failures[0].spelling == "std::shared_ptr"
     assert "BAD is not declared" in failures[0].output
 

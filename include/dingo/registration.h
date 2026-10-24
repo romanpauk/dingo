@@ -156,7 +156,7 @@ template <typename... Types> constexpr bool distinct_types() {
   return true;
 }
 
-// The first variadic wrapper of a stored shape that names an alternative
+// The first variadic wrapper of a stored type tree that names an alternative
 // twice, or void.
 template <typename Type, typename = void> struct repeated_alternatives {
   using type = void;

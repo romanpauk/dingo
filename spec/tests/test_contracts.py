@@ -202,7 +202,7 @@ def test_the_design_contracts_are_present():
     }
     per = {
         "descriptor": "distinct_types",
-        "route_plan": "distinct_shapes",
+        "route_plan": "distinct_type_trees",
         "binding_facts": "bindings",
         "selection": "request_types",
         "kernel": "used_routes",

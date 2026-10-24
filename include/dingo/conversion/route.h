@@ -8,7 +8,7 @@
 #pragma once
 
 // The route engine of the next implementation: registration, lookup, and
-// derivation as constexpr functions over shapes and the operations. A route
+// derivation as constexpr functions over type trees and the operations. A route
 // is a rule of a leaf or a form of a wrapper semantics, and the engine knows a
 // kind only by its descriptor, its properties and forms, so a kind of the user
 // is derived as one of the library is. It interprets the rules the same way as
@@ -21,7 +21,7 @@
 #include <dingo/conversion/scopes.gen.h>
 #include <dingo/conversion/storage_forms.gen.h>
 #include <dingo/conversion/wrapper_traits.h>
-#include <dingo/primitives/shape.h>
+#include <dingo/primitives/type_tree.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -30,10 +30,10 @@ namespace dingo::core {
 
 inline constexpr std::size_t max_interfaces = 8;
 inline constexpr std::size_t max_rules_per_route = 8;
-inline constexpr std::size_t max_terms = 96;
+inline constexpr std::size_t max_reachable_types = 96;
 inline constexpr std::size_t max_semantics = 32;
 
-constexpr const semantics_descriptor *semantics_of(const shape &value,
+constexpr const semantics_descriptor *semantics_of(const type_tree &value,
                                                    std::size_t index = 0) {
   return value.nodes[index].kind;
 }
@@ -116,8 +116,8 @@ struct semantics_set {
   }
 };
 
-// The kinds of a stored shape and the ones their forms lead to.
-constexpr semantics_set semantics_in(const shape &stored) {
+// The kinds of a stored type tree and the ones their forms lead to.
+constexpr semantics_set semantics_in(const type_tree &stored) {
   semantics_set kinds;
   for (std::size_t index = 0; index < stored.size; ++index) {
     kinds.add(stored.nodes[index].kind);
@@ -125,11 +125,10 @@ constexpr semantics_set semantics_in(const shape &stored) {
   return kinds;
 }
 
-// A binding as the engine sees it: the stored shape, the scope, and the leaf
-// shapes of the declared interfaces.
-// Whether two keys are of one domain: keys without a value of the same kind,
-// or keys with a value of the same type, whether fixed or supplied at
-// runtime.
+// A binding as the engine sees it: the stored type tree, the scope, and the
+// leaf type trees of the declared interfaces. Whether two keys are of one
+// domain: keys without a value of the same kind, or keys with a value of the
+// same type, whether fixed or supplied at runtime.
 constexpr bool same_key_domain(const key_descriptor &left,
                                const key_descriptor &right) {
   if (has_value(left.kind) != has_value(right.kind)) {
@@ -143,11 +142,11 @@ constexpr bool same_key_domain(const key_descriptor &left,
 
 // A set of leaves, in the order they are added.
 struct leaf_set {
-  type_id items[shape_capacity] = {};
+  type_id items[type_tree_capacity] = {};
   std::size_t size = 0;
 
   constexpr bool contains(type_id leaf) const {
-    // Most shapes name one leaf.
+    // Most type trees name one leaf.
     if (size == 1) {
       return items[0] == leaf;
     }
@@ -169,8 +168,8 @@ struct leaf_set {
 inline constexpr std::size_t max_key_aliases = 4;
 
 struct binding_descriptor {
-  shape stored;
-  // The leaves the stored shape names the binding by without declared
+  type_tree stored;
+  // The leaves the stored type tree names the binding by without declared
   // interfaces, named_leaves(stored).
   leaf_set leaves = {};
   key_descriptor key;
@@ -180,7 +179,7 @@ struct binding_descriptor {
   std::size_t alias_count = 0;
   // The descriptor of the scope of the binding.
   scope_info scope = {};
-  shape interfaces[max_interfaces] = {};
+  type_tree interfaces[max_interfaces] = {};
   std::size_t interface_count = 0;
   // Whether the binding declares its factory, so its leaf need not be
   // constructible.
@@ -189,21 +188,21 @@ struct binding_descriptor {
   std::uint32_t converted = 0;
 };
 
-enum class request_kind : std::uint8_t {
+enum class request_form : std::uint8_t {
   lvalue_reference,
   rvalue_reference,
   value
 };
 
 struct request_descriptor {
-  request_kind kind = request_kind::value;
-  shape value;
+  request_form kind = request_form::value;
+  type_tree value;
   key_descriptor key;
 };
 
-// A derived term and how it was reached.
-struct term {
-  shape value;
+// A derived reachable type and how it was reached.
+struct reachable_type {
+  type_tree value;
   value_category category = value_category::lvalue;
   route_step rules[max_rules_per_route] = {};
   // For each rule, the argument of the source wrapper it reached, or for an
@@ -214,26 +213,27 @@ struct term {
   // The leaves the copy rule of the route copied.
   std::uint32_t copied_leaves = 0;
   bool consumed = false;
-  // Whether the term is a sibling of the term `primary`, the term of its value
-  // and category derived first: it takes the route of the primary up to the
-  // step `branch`, there another alternative of a variadic wrapper, and reaches
-  // the value on its own. A sibling is neither derived from nor selected; a
-  // walk of the primary continues along it from the object of the step when
-  // the object holds its alternative.
+  // Whether the reachable type is a sibling of the reachable type `primary`,
+  // the reachable type of its value and category derived first: it takes the
+  // route of the primary up to the step `branch`, there another alternative of
+  // a variadic wrapper, and reaches the value on its own. A sibling is neither
+  // derived from nor selected; a walk of the primary continues along it from
+  // the object of the step when the object holds its alternative.
   bool sibling = false;
   std::uint8_t primary = 0;
   std::uint8_t branch = 0;
   // The wrapper the last rule started from: its kind, qualifiers, and extent,
-  // which a request that copies or decays the term borrows.
+  // which a request that copies or decays the reachable type borrows.
   const semantics_descriptor *source_semantics = &leaf_semantics;
   std::uint8_t source_qualifiers = 0;
   std::uint32_t source_extent = 0;
 };
 
-struct terms {
-  term items[max_terms] = {};
+struct reachable_types {
+  reachable_type items[max_reachable_types] = {};
   std::size_t size = 0;
-  // A derivation produced more terms than fit; its result is incomplete.
+  // A derivation produced more reachable types than fit; its result is
+  // incomplete.
   bool overflow = false;
 };
 
@@ -250,14 +250,14 @@ constexpr bool of_class(const semantics_descriptor *kind,
          (kind->properties & of.lacks) == 0;
 }
 
-constexpr bool of_class(const shape &value, std::size_t index,
+constexpr bool of_class(const type_tree &value, std::size_t index,
                         const property_class &of) {
   return of_class(semantics_of(value, index), of);
 }
 
-// The most specific storage form of a stored shape, by the classes of its
+// The most specific storage form of a stored type tree, by the classes of its
 // outer wrappers.
-constexpr storage_form storage_form_of(const shape &stored) {
+constexpr storage_form storage_form_of(const type_tree &stored) {
   storage_form best = storage_form::plain;
   int depth = 0;
   for (const storage_form_info &form : storage_forms) {
@@ -282,9 +282,9 @@ constexpr std::uint8_t exposed_categories(const binding_descriptor &binding) {
       .exposures[static_cast<std::size_t>(storage_form_of(binding.stored))];
 }
 
-// Shape properties
+// Type tree properties
 
-constexpr bool constructible(const shape &value, std::size_t index = 0) {
+constexpr bool constructible(const type_tree &value, std::size_t index = 0) {
   const semantics_descriptor *kind = semantics_of(value, index);
   if (!kind->wrapper) {
     return value.nodes[index].constructible;
@@ -293,7 +293,7 @@ constexpr bool constructible(const shape &value, std::size_t index = 0) {
          constructible(value, index + 1);
 }
 
-constexpr std::uint32_t constructed_leaves(const shape &value,
+constexpr std::uint32_t constructed_leaves(const type_tree &value,
                                            std::size_t index = 0) {
   const semantics_descriptor *kind = semantics_of(value, index);
   if (!kind->wrapper) {
@@ -305,8 +305,8 @@ constexpr std::uint32_t constructed_leaves(const shape &value,
   return constructed_leaves(value, index + 1);
 }
 
-// The leaves a copy of the shape copies: those its wrappers hold in place.
-constexpr std::uint32_t leaves_held_by_value(const shape &value,
+// The leaves a copy of the type tree copies: those its wrappers hold in place.
+constexpr std::uint32_t leaves_held_by_value(const type_tree &value,
                                              std::size_t index = 0) {
   const semantics_descriptor *kind = semantics_of(value, index);
   if (!kind->wrapper) {
@@ -321,13 +321,13 @@ constexpr std::uint32_t leaves_held_by_value(const shape &value,
   return leaves_held_by_value(value, index + 1);
 }
 
-// Whether a shape is an object that can be referred to and pointed to:
+// Whether a type tree is an object that can be referred to and pointed to:
 // anything but an address, a wrapper of a kind of the address form.
-constexpr bool addressable(const shape &value) {
+constexpr bool addressable(const type_tree &value) {
   return !has_form(semantics_of(value), operation::address);
 }
 
-constexpr bool holds_in_array(const shape &value) {
+constexpr bool holds_in_array(const type_tree &value) {
   for (std::size_t index = 0; index < value.size; ++index) {
     if (holds_elements(semantics_of(value, index))) {
       return true;
@@ -337,7 +337,7 @@ constexpr bool holds_in_array(const shape &value) {
 }
 
 // The leaf at the end of the first-argument chain.
-constexpr type_id innermost_leaf(const shape &value) {
+constexpr type_id innermost_leaf(const type_tree &value) {
   std::size_t index = 0;
   while (is_wrapper(semantics_of(value, index))) {
     ++index;
@@ -346,7 +346,7 @@ constexpr type_id innermost_leaf(const shape &value) {
 }
 
 namespace detail {
-constexpr void add_named_leaves(const shape &value, std::size_t index,
+constexpr void add_named_leaves(const type_tree &value, std::size_t index,
                                 leaf_set &leaves) {
   const semantics_descriptor *kind = semantics_of(value, index);
   if (!is_wrapper(kind)) {
@@ -362,11 +362,11 @@ constexpr void add_named_leaves(const shape &value, std::size_t index,
 }
 } // namespace detail
 
-// The leaves a stored shape names its binding by without declared interfaces:
-// the leaf its wrappers hold, and through a wrapper of a variadic kind, the
-// leaf of each of its alternatives, whichever the object holds. spec:
+// The leaves a stored type tree names its binding by without declared
+// interfaces: the leaf its wrappers hold, and through a wrapper of a variadic
+// kind, the leaf of each of its alternatives, whichever the object holds. spec:
 // lookup_filters.binding_filter
-constexpr leaf_set named_leaves(const shape &value) {
+constexpr leaf_set named_leaves(const type_tree &value) {
   leaf_set leaves;
   detail::add_named_leaves(value, 0, leaves);
   return leaves;
@@ -376,7 +376,7 @@ constexpr leaf_set named_leaves(const shape &value) {
 // handle, or one that holds its element in place and is not immovable, when
 // the element can be copied.
 constexpr bool created_copyable(const semantics_descriptor *kind,
-                                const shape &argument) {
+                                const type_tree &argument) {
   if (has_properties(kind, property::copyable)) {
     return true;
   }
@@ -393,7 +393,7 @@ constexpr bool is_mapped(const semantics_descriptor *kind) {
 
 constexpr bool requirements_hold(const binding_descriptor &binding,
                                  const operation_info &rule,
-                                 const shape &bound) {
+                                 const type_tree &bound) {
   auto requires_ = [&](requirement value) {
     return (rule.requires_ & static_cast<std::uint8_t>(value)) != 0;
   };
@@ -423,20 +423,22 @@ constexpr bool requirements_hold(const binding_descriptor &binding,
 // Derivation
 
 namespace detail {
-// The term of a value and category that is no sibling, or max_terms.
-constexpr std::size_t primary_of(const terms &found, const shape &value,
+// The reachable type of a value and category that is no sibling, or
+// max_reachable_types.
+constexpr std::size_t primary_of(const reachable_types &found,
+                                 const type_tree &value,
                                  value_category category) {
   for (std::size_t index = 0; index < found.size; ++index) {
-    const term &item = found.items[index];
+    const reachable_type &item = found.items[index];
     if (!item.sibling && item.category == category && item.value == value) {
       return index;
     }
   }
-  return max_terms;
+  return max_reachable_types;
 }
 
-// How a request completes a term: by copying, decaying, or neither.
-constexpr int completion_class(const term &route) {
+// How a request completes a reachable type: by copying, decaying, or neither.
+constexpr int completion_class(const reachable_type &route) {
   if (route.rule_count == 0) {
     return 0;
   }
@@ -444,20 +446,22 @@ constexpr int completion_class(const term &route) {
   return last == operation::copy ? 1 : last == operation::decay ? 2 : 3;
 }
 
-// Whether two terms a request completes by copying or decaying borrow alike:
-// the wrappers their last rules start from are of one kind, qualifiers, and
-// extent, so a walk to them yields one type.
-constexpr bool borrow_alike(const term &left, const term &right) {
+// Whether two reachable types a request completes by copying or decaying borrow
+// alike: the wrappers their last rules start from are of one kind, qualifiers,
+// and extent, so a walk to them yields one type.
+constexpr bool borrow_alike(const reachable_type &left,
+                            const reachable_type &right) {
   return same_semantics(left.source_semantics, right.source_semantics) &&
          left.source_qualifiers == right.source_qualifiers &&
          left.source_extent == right.source_extent;
 }
 
-// Keeps `derived` as a sibling of the term `primary` when their routes part at
-// a step into a variadic wrapper, by its alternatives, and they are completed
-// alike; one per step and alternative.
-constexpr void add_sibling(terms &found, std::size_t primary, term derived) {
-  const term &first = found.items[primary];
+// Keeps `derived` as a sibling of the reachable type `primary` when their
+// routes part at a step into a variadic wrapper, by its alternatives, and they
+// are completed alike; one per step and alternative.
+constexpr void add_sibling(reachable_types &found, std::size_t primary,
+                           reachable_type derived) {
+  const reachable_type &first = found.items[primary];
   const std::size_t common = first.rule_count < derived.rule_count
                                  ? first.rule_count
                                  : derived.rule_count;
@@ -475,13 +479,13 @@ constexpr void add_sibling(terms &found, std::size_t primary, term derived) {
       return;
     }
     for (std::size_t index = 0; index < found.size; ++index) {
-      const term &item = found.items[index];
+      const reachable_type &item = found.items[index];
       if (item.sibling && item.primary == primary && item.branch == position &&
           item.arguments[position] == derived.arguments[position]) {
         return;
       }
     }
-    if (found.size == max_terms) {
+    if (found.size == max_reachable_types) {
       found.overflow = true;
       return;
     }
@@ -493,13 +497,13 @@ constexpr void add_sibling(terms &found, std::size_t primary, term derived) {
   }
 }
 
-// The term `step` derives from `from`, of the value `value`, with the pattern
-// variable bound to `bound`.
-constexpr term extend(const term &from, const route_step &step,
-                      const shape &value, const shape &bound,
-                      std::size_t argument) {
+// The reachable type `step` derives from `from`, of the value `value`, with the
+// pattern variable bound to `bound`.
+constexpr reachable_type extend(const reachable_type &from,
+                                const route_step &step, const type_tree &value,
+                                const type_tree &bound, std::size_t argument) {
   const operation_info &rule = info(step.form);
-  term derived = from;
+  reachable_type derived = from;
   derived.source_semantics = from.value.nodes[0].kind;
   derived.source_qualifiers = from.value.nodes[0].qualifiers;
   derived.source_extent = from.value.nodes[0].extent;
@@ -517,14 +521,14 @@ constexpr term extend(const term &from, const route_step &step,
   return derived;
 }
 
-constexpr void add(terms &found, const term &derived) {
+constexpr void add(reachable_types &found, const reachable_type &derived) {
   const std::size_t primary =
       primary_of(found, derived.value, derived.category);
-  if (primary != max_terms) {
+  if (primary != max_reachable_types) {
     add_sibling(found, primary, derived);
     return;
   }
-  if (found.size == max_terms) {
+  if (found.size == max_reachable_types) {
     found.overflow = true;
     return;
   }
@@ -534,9 +538,10 @@ constexpr void add(terms &found, const term &derived) {
 // The value a step that is no upcast or conversion derives from `from` with
 // the pattern variable bound to `bound`, or false when it is larger than
 // `limit`.
-constexpr bool step_value(const term &from, const route_step &step,
-                          const shape &bound, std::size_t limit, shape &value) {
-  const shape &source = from.value;
+constexpr bool step_value(const reachable_type &from, const route_step &step,
+                          const type_tree &bound, std::size_t limit,
+                          type_tree &value) {
+  const type_tree &source = from.value;
   const semantics_descriptor *to = to_semantics(step);
   const semantics_descriptor *of = from_semantics(step);
   value = bound;
@@ -557,17 +562,17 @@ constexpr bool step_value(const term &from, const route_step &step,
 }
 
 // Applies `step` to `from` with the pattern variable bound to `bound`, the
-// argument at `argument` of the source shape when the step starts from a
+// argument at `argument` of the source type tree when the step starts from a
 // wrapper.
-constexpr void apply(const binding_descriptor &binding, terms &found,
-                     const term &from, const route_step &step,
-                     const shape &bound, std::size_t argument,
+constexpr void apply(const binding_descriptor &binding, reachable_types &found,
+                     const reachable_type &from, const route_step &step,
+                     const type_tree &bound, std::size_t argument,
                      std::size_t limit) {
   const operation_info &rule = info(step.form);
   if (!requirements_hold(binding, rule, bound)) {
     return;
   }
-  const shape &source = from.value;
+  const type_tree &source = from.value;
   const semantics_descriptor *to = to_semantics(step);
   if (rule.upcast || rule.converts) {
     // Only the stored leaf converts to the declared interfaces, and a user
@@ -581,10 +586,10 @@ constexpr void apply(const binding_descriptor &binding, terms &found,
       }
       // An upcast keeps the qualifiers of the leaf; a conversion makes a new
       // object.
-      shape interface = binding.interfaces[index];
+      type_tree interface = binding.interfaces[index];
       interface.nodes[0].qualifiers =
           rule.converts ? std::uint8_t(0) : bound.nodes[0].qualifiers;
-      shape value = !is_wrapper(to)
+      type_tree value = !is_wrapper(to)
                         ? interface
                         : wrap(to, source.nodes[0].family,
                                source.nodes[0].copyable, interface,
@@ -593,7 +598,7 @@ constexpr void apply(const binding_descriptor &binding, terms &found,
     }
     return;
   }
-  shape value;
+  type_tree value;
   if (step_value(from, step, bound, limit, value)) {
     add(found, extend(from, step, value, bound, argument));
   }
@@ -602,14 +607,16 @@ constexpr void apply(const binding_descriptor &binding, terms &found,
 // Applies `step`, which starts from the wrapper `from` is, to each argument of
 // it: only a wrapper of a variadic kind matches any of its arguments.
 constexpr void apply_to_arguments(const binding_descriptor &binding,
-                                  terms &found, const term &from,
+                                  reachable_types &found,
+                                  const reachable_type &from,
                                   const route_step &step, std::size_t limit) {
   std::size_t arguments =
       has_properties(semantics_of(from.value), property::variadic)
           ? from.value.nodes[0].arity
           : 1;
   for (std::size_t argument = 0; argument < arguments; ++argument) {
-    shape bound = subtree(from.value, argument_index(from.value, 0, argument));
+    type_tree bound =
+        subtree(from.value, argument_index(from.value, 0, argument));
     apply(binding, found, from, step, bound, argument, limit);
   }
 }
@@ -624,13 +631,13 @@ constexpr bool creates(const operation_info &rule) {
 }
 
 namespace detail {
-// Applies every form that does not create a wrapper to the term at `next` of
-// `found`, in the order of the algebra: a rule of a leaf to the term, and a
-// form of the kind of its wrapper.
-constexpr void derive_from(const binding_descriptor &binding, terms &found,
-                           std::size_t next, std::uint8_t exposed,
-                           std::size_t limit) {
-  term from = found.items[next];
+// Applies every form that does not create a wrapper to the reachable type at
+// `next` of `found`, in the order of the algebra: a rule of a leaf to the
+// reachable type, and a form of the kind of its wrapper.
+constexpr void derive_from(const binding_descriptor &binding,
+                           reachable_types &found, std::size_t next,
+                           std::uint8_t exposed, std::size_t limit) {
+  reachable_type from = found.items[next];
   if (from.rule_count == max_rules_per_route) {
     return;
   }
@@ -652,17 +659,19 @@ constexpr void derive_from(const binding_descriptor &binding, terms &found,
 }
 } // namespace detail
 
-// Routes derive shapes at most one wrapper larger than the stored shape, so a
-// binding can publish every term it serves before any request is known.
+// Routes derive type trees at most one wrapper larger than the stored type
+// tree, so a binding can publish every reachable type it serves before any
+// request is known.
 constexpr std::size_t derivation_bound(const binding_descriptor &binding) {
   return binding.stored.size + 1;
 }
 
-// The terms a binding derives by the forms that do not create a wrapper.
-constexpr terms derive(const binding_descriptor &binding) {
+// The reachable types a binding derives by the forms that do not create a
+// wrapper.
+constexpr reachable_types derive(const binding_descriptor &binding) {
   const scope_info &scope = binding.scope;
-  terms found;
-  term start;
+  reachable_types found;
+  reachable_type start;
   start.value = binding.stored;
   start.category = scope.materializes;
   start.consumed = scope.materializes == value_category::rvalue;
@@ -686,14 +695,14 @@ constexpr terms derive(const binding_descriptor &binding) {
 // const. A request by value copies its top-level object, whose qualifiers do
 // not count. An array has the qualifiers of its elements, and the arguments of
 // a wrapper are part of its type.
-constexpr bool qualifies(const shape &derived, const shape &requested,
+constexpr bool qualifies(const type_tree &derived, const type_tree &requested,
                          bool refers) {
   std::size_t index = 0;
   bool level = refers;
   bool above_const = true;
   for (;;) {
-    const shape_node &d = derived.nodes[index];
-    const shape_node &r = requested.nodes[index];
+    const type_tree_node &d = derived.nodes[index];
+    const type_tree_node &r = requested.nodes[index];
     const semantics_descriptor *kind = d.kind;
     if (holds_elements(kind)) {
       ++index;
@@ -727,14 +736,14 @@ constexpr bool qualifies(const shape &derived, const shape &requested,
   }
 }
 
-constexpr bool accepts(const request_descriptor &request, const term &candidate,
-                       std::uint8_t exposed) {
-  if (!shapes_match(candidate.value, request.value) ||
+constexpr bool accepts(const request_descriptor &request,
+                       const reachable_type &candidate, std::uint8_t exposed) {
+  if (!type_trees_match(candidate.value, request.value) ||
       !qualifies(candidate.value, request.value,
-                 request.kind != request_kind::value)) {
+                 request.kind != request_form::value)) {
     return false;
   }
-  if (request.kind == request_kind::lvalue_reference) {
+  if (request.kind == request_form::lvalue_reference) {
     return candidate.category == value_category::lvalue &&
            exposes(exposed, request_category::lvalue) &&
            addressable(candidate.value);
@@ -745,14 +754,15 @@ constexpr bool accepts(const request_descriptor &request, const term &candidate,
   if (candidate.category == value_category::rvalue) {
     return exposes(exposed, request_category::rvalue);
   }
-  return request.kind == request_kind::value &&
+  return request.kind == request_form::value &&
          candidate.category == value_category::prvalue;
 }
 
 // Whether `left` is preferred to `right`: fewer rules, then no copy, then the
 // forms that come first in the order of the algebra, which orders forms and
 // not kinds; of others, the one derived first is.
-constexpr bool preferred(const term &left, const term &right) {
+constexpr bool preferred(const reachable_type &left,
+                         const reachable_type &right) {
   if (left.rule_count != right.rule_count) {
     return left.rule_count < right.rule_count;
   }
@@ -767,31 +777,32 @@ constexpr bool preferred(const term &left, const term &right) {
   return false;
 }
 
-inline constexpr std::size_t no_term = static_cast<std::size_t>(-1);
+inline constexpr std::size_t no_reachable_type = static_cast<std::size_t>(-1);
 inline constexpr std::size_t max_created_wrappers = 2;
 
-// The route a request takes: a term of the binding, or no_term, and the
-// wrappers the request creates of its object, innermost first, each by a
-// creating form of the kind of a wrapper of the request.
+// The route a request takes: a reachable type of the binding, or
+// no_reachable_type, and the wrappers the request creates of its object,
+// innermost first, each by a creating form of the kind of a wrapper of the
+// request.
 struct route_choice {
-  std::size_t term = no_term;
+  std::size_t reachable_type = no_reachable_type;
   route_step created[max_created_wrappers] = {};
   std::size_t created_count = 0;
 };
 
 namespace detail {
-// The term the creating form `step` derives from `from`, into `made`; false
-// when it derives none.
-constexpr bool create(const binding_descriptor &binding, const term &from,
-                      const route_step &step, std::uint8_t exposed,
-                      term &made) {
+// The reachable type the creating form `step` derives from `from`, into `made`;
+// false when it derives none.
+constexpr bool create(const binding_descriptor &binding,
+                      const reachable_type &from, const route_step &step,
+                      std::uint8_t exposed, reachable_type &made) {
   const operation_info &rule = info(step.form);
   if (from.rule_count == max_rules_per_route ||
       rule.from_category != from.category ||
       (rule.exposure != 0 && (exposed & rule.exposure) == 0)) {
     return false;
   }
-  shape bound = from.value;
+  type_tree bound = from.value;
   if (rule.from_position == type_position::target) {
     // A wrapper of the kind the form leads from, whose element is the one of
     // the created wrapper.
@@ -804,7 +815,7 @@ constexpr bool create(const binding_descriptor &binding, const term &from,
   if (!requirements_hold(binding, rule, bound)) {
     return false;
   }
-  shape value;
+  type_tree value;
   if (!step_value(from, step, bound, derivation_bound(binding), value)) {
     return false;
   }
@@ -815,7 +826,7 @@ constexpr bool create(const binding_descriptor &binding, const term &from,
 // The kind of the wrapper a creating form of `step` makes its wrapper of: the
 // kind it leads from, or that of the element of the request at `request`.
 constexpr const semantics_descriptor *created_inner(const route_step &step,
-                                                    const shape &request) {
+                                                    const type_tree &request) {
   if (info(step.form).from_position == type_position::target) {
     return from_semantics(step);
   }
@@ -823,18 +834,20 @@ constexpr const semantics_descriptor *created_inner(const route_step &step,
 }
 } // namespace detail
 
-// The route that serves the request, of the terms `found` of `binding`: a
-// term the request accepts, or one the request makes by creating up to
-// max_created_wrappers wrappers, the preferred one; or none.
+// The route that serves the request, of the reachable types `found` of
+// `binding`: a reachable type the request accepts, or one the request makes by
+// creating up to max_created_wrappers wrappers, the preferred one; or none.
 constexpr route_choice select_route(const binding_descriptor &binding,
-                                    const terms &found,
+                                    const reachable_types &found,
                                     const request_descriptor &request,
                                     std::uint8_t exposed) {
   route_choice best;
-  term best_route;
-  auto consider = [&](const term &candidate, const route_choice &choice) {
+  reachable_type best_route;
+  auto consider = [&](const reachable_type &candidate,
+                      const route_choice &choice) {
     if (accepts(request, candidate, exposed) &&
-        (best.term == no_term || preferred(candidate, best_route))) {
+        (best.reachable_type == no_reachable_type ||
+         preferred(candidate, best_route))) {
       best = choice;
       best_route = candidate;
     }
@@ -850,7 +863,7 @@ constexpr route_choice select_route(const binding_descriptor &binding,
       continue;
     }
     const route_step step{rule.form, outer};
-    term made;
+    reachable_type made;
     for (std::size_t index = 0; index < found.size; ++index) {
       if (!found.items[index].sibling &&
           detail::create(binding, found.items[index], step, exposed, made)) {
@@ -865,7 +878,7 @@ constexpr route_choice select_route(const binding_descriptor &binding,
         continue;
       }
       const route_step inner_step{inner_rule.form, inner};
-      term middle;
+      reachable_type middle;
       for (std::size_t index = 0; index < found.size; ++index) {
         if (!found.items[index].sibling &&
             detail::create(binding, found.items[index], inner_step, exposed,
@@ -880,7 +893,7 @@ constexpr route_choice select_route(const binding_descriptor &binding,
 }
 
 // Whether a binding serves the interface a request names: its declared
-// interfaces, or the leaves its stored shape names without them.
+// interfaces, or the leaves its stored type tree names without them.
 constexpr bool serves_interface(const binding_descriptor &binding,
                                 type_id requested) {
   if (binding.interface_count == 0) {
@@ -960,18 +973,19 @@ enum class registration_status : std::uint8_t {
 // handle that adopts its element adopts an address the binding serves. A const
 // leaf serves its interfaces as const ones.
 constexpr bool serves_an_interface(const binding_descriptor &binding,
-                                   const terms &found, std::uint8_t exposed) {
+                                   const reachable_types &found,
+                                   std::uint8_t exposed) {
   semantics_set kinds = semantics_in(binding.stored);
   kinds.add(address_semantics_v);
   constexpr property_class handle{true, property::nullable, property::in_place};
   for (std::size_t index = 0; index < binding.interface_count; ++index) {
     for (const std::uint8_t qualifiers : {std::uint8_t(0), const_qualified}) {
-      shape interface = binding.interfaces[index];
+      type_tree interface = binding.interfaces[index];
       interface.nodes[0].qualifiers |= qualifiers;
       if (select_route(binding, found,
-                       {request_kind::lvalue_reference, interface, binding.key},
+                       {request_form::lvalue_reference, interface, binding.key},
                        exposed)
-              .term != no_term) {
+              .reachable_type != no_reachable_type) {
         return true;
       }
       for (std::size_t kind = 0; kind < kinds.size; ++kind) {
@@ -980,11 +994,12 @@ constexpr bool serves_an_interface(const binding_descriptor &binding,
           continue;
         }
         const request_descriptor probe{
-            request_kind::value,
+            request_form::value,
             wrap(of, is_mapped(of) ? any_family : nullptr,
                  created_copyable(of, interface), interface),
             binding.key};
-        if (select_route(binding, found, probe, exposed).term != no_term) {
+        if (select_route(binding, found, probe, exposed).reachable_type !=
+            no_reachable_type) {
           return true;
         }
       }
@@ -1017,7 +1032,7 @@ register_status(const binding_descriptor &binding) {
     if (holds_in_array(binding.stored)) {
       return registration_status::interface_in_array;
     }
-    terms found = derive(binding);
+    reachable_types found = derive(binding);
     std::uint8_t exposed = exposed_categories(binding);
     if (serves_an_interface(binding, found, exposed)) {
       return registration_status::registered;

@@ -55,7 +55,7 @@ struct declared_constructor<Type,
 };
 
 // The constructor a factory calls for `Type`, as the default backend detects
-// it in the shape mode of constructor_detection.h.
+// it in the type tree mode of constructor_detection.h.
 template <typename Type> struct detected_constructor {
 private:
   using search =

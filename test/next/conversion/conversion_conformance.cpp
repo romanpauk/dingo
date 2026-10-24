@@ -23,12 +23,12 @@ namespace dingo::next_test {
 
 struct conversion_case {
   const char *name;
-  const core::shape *stored;
+  const core::type_tree *stored;
   const core::scope_info *scope;
-  const core::shape *interfaces[core::max_interfaces];
+  const core::type_tree *interfaces[core::max_interfaces];
   std::size_t interface_count;
-  core::request_kind kind;
-  const core::shape *request;
+  core::request_form kind;
+  const core::type_tree *request;
   bool registered;
   bool found;
   bool served;
@@ -73,16 +73,18 @@ TEST(engine, computes_what_the_reference_computes) {
     bool served = false;
     std::string rules;
     if (found) {
-      core::terms terms = core::derive(binding);
-      ASSERT_FALSE(terms.overflow) << expected.name;
+      core::reachable_types reachable_types = core::derive(binding);
+      ASSERT_FALSE(reachable_types.overflow) << expected.name;
       const core::route_choice choice = core::select_route(
-          binding, terms, request, core::exposed_categories(binding));
-      served = choice.term != core::no_term;
+          binding, reachable_types, request, core::exposed_categories(binding));
+      served = choice.reachable_type != core::no_reachable_type;
       if (served) {
-        // The rules of the term, then the wrappers the request creates.
-        rules = rules_of(terms.items[choice.term].rules,
-                         terms.items[choice.term].rule_count) +
-                rules_of(choice.created, choice.created_count);
+        // The rules of the reachable type, then the wrappers the request
+        // creates.
+        rules =
+            rules_of(reachable_types.items[choice.reachable_type].rules,
+                     reachable_types.items[choice.reachable_type].rule_count) +
+            rules_of(choice.created, choice.created_count);
       }
     }
     std::string expected_rules = rules_of(expected.rules, expected.rule_count);

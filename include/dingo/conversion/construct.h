@@ -7,12 +7,12 @@
 
 #pragma once
 
-// The factories of a stored shape. A constructor factory constructs the leaf,
-// by its detected or its declared constructor, whose arguments the resolver
-// resolves, and every wrapper is made by its wrapper traits from an argument
-// that converts to its element; the element is made at that conversion, so a
-// wrapper constructs it in place. A function or callable factory returns the
-// stored object.
+// The factories of a stored type tree. A constructor factory constructs the
+// leaf, by its detected or its declared constructor, whose arguments the
+// resolver resolves, and every wrapper is made by its wrapper traits from an
+// argument that converts to its element; the element is made at that
+// conversion, so a wrapper constructs it in place. A function or callable
+// factory returns the stored object.
 
 #include <dingo/base/mechanics.h>
 #include <dingo/conversion/wrapper_traits.h>
@@ -26,9 +26,9 @@
 
 namespace dingo::core {
 
-// How a factory makes the leaf of a stored shape: by its detected constructor,
-// or by list-initializing it from the declared argument types, each resolved
-// as the type it names.
+// How a factory makes the leaf of a stored type tree: by its detected
+// constructor, or by list-initializing it from the declared argument types,
+// each resolved as the type it names.
 struct detected_leaf {
   template <typename Leaf, typename Resolver>
   static Leaf make(Resolver &resolver) {
@@ -74,8 +74,8 @@ private:
 };
 } // namespace detail
 
-// The stored shape: the leaf made by `LeafMaker` inside the wrappers, each made
-// from its element.
+// The stored type tree: the leaf made by `LeafMaker` inside the wrappers, each
+// made from its element.
 template <typename Stored, typename LeafMaker, typename Resolver>
 Stored make_stored(Resolver &resolver) {
   using traits = wrapper_traits<Stored>;
@@ -105,11 +105,12 @@ private:
 } // namespace detail
 
 // A factory that constructs a leaf of type `Leaf`, or of the stored leaf when
-// it is void, by `LeafMaker` inside the wrappers of the stored shape. A shape
-// of another leaf converts to the stored one, such as a handle of a leaf to one
-// of its interface; when it does not, every wrapper of the stored shape down to
-// a variadic one is made by its wrapper traits from its element, and the
-// variadic wrapper, or the stored leaf, converts from the leaf made.
+// it is void, by `LeafMaker` inside the wrappers of the stored type tree. A
+// type tree of another leaf converts to the stored one, such as a handle of a
+// leaf to one of its interface; when it does not, every wrapper of the stored
+// type tree down to a variadic one is made by its wrapper traits from its
+// element, and the variadic wrapper, or the stored leaf, converts from the leaf
+// made.
 template <typename LeafMaker, typename Leaf = void> struct constructor_factory {
   template <typename Stored, typename Resolver>
   Stored make(Resolver &resolver) const {
@@ -365,7 +366,7 @@ template <typename Arguments, typename Callable>
 struct is_callable_factory<callable_factory<Arguments, Callable>>
     : std::true_type {};
 
-// Constructs the stored shape at `where` by `factory`; arrays are
+// Constructs the stored type tree at `where` by `factory`; arrays are
 // value-initialized in place.
 template <typename Stored, typename Factory, typename Resolver>
 void construct_stored(void *where, Factory &factory, Resolver &resolver) {

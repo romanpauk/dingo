@@ -8,8 +8,8 @@
 #pragma once
 
 // The static backend: the bindings are known when the container type is
-// formed, the engine selects the binding and the term of a request at compile
-// time, and the term is walked and completed directly.
+// formed, the engine selects the binding and the reachable type of a request at
+// compile time, and the reachable type is walked and completed directly.
 
 #include <dingo/backend/diagnose.h>
 #include <dingo/backend/local.h>
@@ -44,14 +44,15 @@ struct static_route {
       select_route(Binding::descriptor, Binding::published,
                    request_traits<Request, Key>::descriptor, Binding::exposed);
   static constexpr request_plan value =
-      choice.term == no_term
+      choice.reachable_type == no_reachable_type
           ? request_plan{}
-          : plan_request(plan_completion(Binding::published.items[choice.term]),
+          : plan_request(plan_completion(
+                             Binding::published.items[choice.reachable_type]),
                          choice);
   static constexpr value_category category =
-      choice.term == no_term ? value_category::prvalue
+      choice.reachable_type == no_reachable_type ? value_category::prvalue
       : choice.created_count == 0
-          ? Binding::published.items[choice.term].category
+          ? Binding::published.items[choice.reachable_type].category
           : info(choice.created[choice.created_count - 1].form).to_category;
 };
 
@@ -498,7 +499,7 @@ public:
   }
 
   // Whether the one binding a request by a key known when the request is
-  // compiled names serves it, a term of it the request accepts.
+  // compiled names serves it, a reachable type of it the request accepts.
   template <typename Request, typename Key>
   static constexpr bool serves_named() {
     constexpr std::size_t index = detail::find_binding<Key, Bindings...>(
@@ -507,8 +508,8 @@ public:
       return false;
     } else {
       using binding = pack_at_t<index, Bindings...>;
-      return detail::static_route<binding, Request, Key>::choice.term !=
-             no_term;
+      return detail::static_route<binding, Request, Key>::choice
+                 .reachable_type != no_reachable_type;
     }
   }
 
@@ -639,16 +640,17 @@ private:
     }
   }
 
-  // The term is selected by the descriptor of the request by `Key`, which
-  // carries the annotation of an annotated request.
+  // The reachable type is selected by the descriptor of the request by `Key`,
+  // which carries the annotation of an annotated request.
   template <typename Request, typename Key, std::size_t Index,
             typename Resolver>
   DINGO_ALWAYS_INLINE Request resolve_from(Resolver &resolver) {
     using binding = pack_at_t<Index, Bindings...>;
     using route = detail::static_route<binding, Request, Key>;
-    constexpr std::size_t selected = route::choice.term;
-    static_assert(require<selected != no_term, diag::type_not_convertible,
-                          Request, typename binding::stored_type>());
+    constexpr std::size_t selected = route::choice.reachable_type;
+    static_assert(
+        require<selected != no_reachable_type, diag::type_not_convertible,
+                Request, typename binding::stored_type>());
     static_assert(walk_supported_v<binding, selected>,
                   "the next implementation does not provide the route of the "
                   "requested type yet");

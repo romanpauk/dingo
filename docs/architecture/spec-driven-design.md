@@ -1235,18 +1235,18 @@ the thunk shape. Add the layer rule to `layers-check`.
 Done when no primitive header refers to a scope, shape kind, rule, or
 diagnostic.
 
-`primitives/shape.h` describes the shape of a C++ type as a constexpr preorder
-array of nodes, comparable in constant expressions, without knowing the layer
-kinds of the spec. `conversion/wrapper_traits.h`, a layer between the vocabulary
-and the engine, classifies C++ types into wrapper semantics: pointers,
-references, and arrays as language layers, and the standard wrappers through the
-same `wrapper_traits` a user wrapper specializes. `primitives/slot.h` holds the
-lazy and external lifetime slots; the lazy slot reports a recursion while its
-object is being constructed and is empty again after a failed construction.
-`primitives/constructor.h` detects the constructor of a type and calls it with
-arguments that resolve their parameter types, the `detected_constructor` factory
-kind of the spec, or by the constructor a type declares with
-`DINGO_CONSTRUCTOR`. Its detection is the shape mode of
+`primitives/type_tree.h` describes the shape of a C++ type as a constexpr
+preorder array of nodes, comparable in constant expressions, without knowing the
+layer kinds of the spec. `conversion/wrapper_traits.h`, a layer between the
+vocabulary and the engine, classifies C++ types into wrapper semantics:
+pointers, references, and arrays as language layers, and the standard wrappers
+through the same `wrapper_traits` a user wrapper specializes.
+`primitives/slot.h` holds the lazy and external lifetime slots; the lazy slot
+reports a recursion while its object is being constructed and is empty again
+after a failed construction. `primitives/constructor.h` detects the constructor
+of a type and calls it with arguments that resolve their parameter types, the
+`detected_constructor` factory kind of the spec, or by the constructor a type
+declares with `DINGO_CONSTRUCTOR`. Its detection is the shape mode of
 `primitives/constructor_detection.h`, which has a portable and an msvc backend,
 selected by the compiler variant `constructor_detection_msvc`, and a signature
 mode that recovers the argument types of the detected constructor.

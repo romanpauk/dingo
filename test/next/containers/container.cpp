@@ -79,7 +79,7 @@ TEST(next_container, reports_requests_it_cannot_serve) {
   EXPECT_NO_THROW(container.resolve<counted &>());
 }
 
-TEST(next_container, borrows_through_layers) {
+TEST(next_container, borrows_through_wrappers) {
   dingo::container<> container;
   container.register_type<scope<dingo::shared>,
                           storage<std::shared_ptr<std::optional<counted>>>>();

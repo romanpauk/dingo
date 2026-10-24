@@ -353,7 +353,7 @@ with each backend:
 
 ### Constructor Detection Mode
 
-- `shape`: `core::constructor_shape`, reports constructor kind and arity
+- `shape`: `core::constructor_arity`, reports constructor kind and arity
   without retaining argument types.
 - `signature`: `core::constructor_signature`, reports kind and arity and
   recovers the selected argument types.

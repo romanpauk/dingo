@@ -9,8 +9,8 @@
 
 // The memo of a request type in a runtime backend: the candidates of its
 // domain, the bindings it finds before their keys are compared, in the order
-// of registration, each with the term that serves the request. A memo is
-// valid until the next registration. A memo of a request by a key value also
+// of registration, each with the reachable type that serves the request. A memo
+// is valid until the next registration. A memo of a request by a key value also
 // indexes its candidates by their key values, by the index the lookup
 // declaration of its domain names, see index.h. spec: index_structures
 
@@ -48,13 +48,14 @@ DINGO_ALWAYS_INLINE std::size_t request_id() {
 
 inline constexpr std::size_t no_generation = static_cast<std::size_t>(-1);
 
-// A binding a memo holds: the entry, the term that serves the request, or
-// no_term, and the value of its key. `plan` is how the request completes the
-// term, and `resolved` the address the term borrows once the binding is
-// settled, so a resolution after it makes no call.
+// A binding a memo holds: the entry, the reachable type that serves the
+// request, or no_reachable_type, and the value of its key. `plan` is how the
+// request completes the reachable type, and `resolved` the address the
+// reachable type borrows once the binding is settled, so a resolution after it
+// makes no call.
 template <typename Entry> struct candidate {
   Entry *binding;
-  std::size_t term;
+  std::size_t reachable_type;
   const void *key_value;
   request_plan plan = {};
   mutable void *resolved = nullptr;

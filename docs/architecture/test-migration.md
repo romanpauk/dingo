@@ -326,7 +326,7 @@ signature.
   `primitives/constructor.h`. The only limit in next is
   `DINGO_CONSTRUCTOR_DETECTION_ARGS` (`config_constructor_detection_args`)
 - `constructor_detection_test.public_detection_defaults_to_shape`: the public
-  `constructor_detection<T>` is the `constructor_shape` detection mode.
+  `constructor_detection<T>` is the `constructor_arity` detection mode.
   **replaced**: `test/next/primitives/constructor.cpp`
   `next_constructor.the_signature_mode_recovers_the_argument_types` (the shape
   mode reports no argument types) and
@@ -936,7 +936,7 @@ obsolete.
   `type_identity_fixture.cpp` + `type_identity_shared.h`
   `next_type_identity.the_identity_of_a_type_is_one_across_units` (also
   static_asserts on equality during constant evaluation); tests
-  `primitives/shape.h` `type_id_v`, `base/mechanics.h`
+  `primitives/type_tree.h` `type_id_v`, `base/mechanics.h`
   `type_tag`/`named_type_ids`. Passes with the default variant and with
   `-DDINGO_VARIANT_NAMED_TYPE_ID=1`.
 - `type_identity_test.descriptors_of_different_types_compare_unequal`:
@@ -2373,7 +2373,7 @@ which a differential build of the baseline defines, as M9.2 describes:
   storages with conversion categories. **kept**, against the detection of the
   next implementation (`primitives/constructor_detection.h`, the backends
   `portable_constructor_detection` and `msvc_constructor_detection`, the modes
-  `constructor_shape` and `constructor_signature`): the same axes, the selected
+  `constructor_arity` and `constructor_signature`): the same axes, the selected
   shapes spelled by `dingo::dependency<T, key_type<S>>`, and each storage and
   conversion category checked by the request `core::constructor_argument` makes
   through `core::invoke_constructor`. It names the core detection, which the

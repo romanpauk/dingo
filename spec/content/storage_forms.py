@@ -1,7 +1,7 @@
 """Content of the storage forms section.
 
-A storage form classifies a stored shape by the properties of the kinds of its
-outer layers, so a wrapper semantics of the user is of a form as a kind of the
+A storage form classifies a stored type tree by the properties of the kinds of its
+outer wrappers, so a wrapper semantics of the user is of a form as a kind of the
 library is. The scopes publish request lists per form, see
 spec/content/scopes.py. The forms are those of the current implementation's
 storage_form, described in include/dingo/storage/storage_scope_policy.h, plus
@@ -24,7 +24,7 @@ ARRAY = PropertyClass(has=(UNSIZED,))
 storage_forms: tuple[StorageForm, ...] = (
     StorageForm(
         id="alternative",
-        description="An alternative of several shapes.",
+        description="An alternative of several type trees.",
         outer=PropertyClass(variadic=True),
     ),
     StorageForm(
@@ -39,7 +39,7 @@ storage_forms: tuple[StorageForm, ...] = (
     ),
     StorageForm(
         id="plain",
-        description="The leaf value itself, or a shape no other form matches.",
+        description="The leaf value itself, or a type tree no other form matches.",
     ),
     StorageForm(
         id="pointer",
